@@ -14,6 +14,7 @@
 
   claudeToken = redact.file "/run/secrets/airlock-claude-token";
   codexToken = redact.file "/run/secrets/airlock-codex-token";
+  controlToken = redact.file "/run/secrets/airlock-control-token";
   harnessToken = redact.file "/run/secrets/airlock-harness-token";
   zaiKey = redact.file "/run/secrets/airlock-zai-key";
   # A fixed stateDir, since each backend defaults it under its own root.
@@ -24,6 +25,11 @@
       clients.harness = {
         grants = ["anthropic" "other-anthropic"];
         token = harnessToken;
+      };
+      control = {
+        enable = true;
+        port = 8401;
+        token = controlToken;
       };
       credentials = {
         claude = {
@@ -86,12 +92,15 @@
       };
     };
   };
-  evaluate = backend: ai:
+  evaluateSample = instance: backend: ai:
     (
       if backend == "hm"
       then evalHm
       else evalDevenv
-    ) {ai = lib.recursiveUpdate {airlock.instances.main = sample;} ai;};
+    ) {ai = lib.recursiveUpdate {airlock.instances.main = instance;} ai;};
+  evaluate = evaluateSample sample;
+  withoutControl = backend:
+    evaluateSample (sample // {settings = builtins.removeAttrs sample.settings ["control"];}) backend {};
   fileOf = result: result.config.ai.services.airlock-main.files.config;
   hm = fileOf (evaluate "hm" {});
   managed = backend:
@@ -132,6 +141,10 @@
   checkedManagedWithFile = pkgs.writeText "airlock-config-managed-with-file.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (managedWithFile "hm").secrets) (managedWithFile "hm").content);
   checkedOverride = pkgs.writeText "airlock-config-override.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (override "hm").secrets) (override "hm").content);
   checkedUsage = pkgs.writeText "airlock-config-usage.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (usage "hm").secrets) (usage "hm").content);
+  checkedWithoutControl = backend: let
+    file = fileOf (withoutControl backend);
+  in
+    pkgs.writeText "airlock-config-without-control-${backend}.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") file.secrets) file.content);
 in {
   checks =
     {
@@ -142,6 +155,10 @@ in {
         airlock check-config --config ${checkedManaged}
         airlock check-config --config ${checkedOverride}
         airlock check-config --config ${checkedUsage}
+        airlock check-config --config ${checkedWithoutControl "hm"}
+        airlock check-config --config ${checkedWithoutControl "devenv"}
+        grep -F -- 'serve --config "$AIRLOCK_CONFIG" --web-root ' ${builtins.head (evaluate "hm" {}).config.ai.services.airlock-main.command}
+        grep -F -- 'serve --config "$AIRLOCK_CONFIG" --web-root ' ${builtins.head (evaluate "devenv" {}).config.ai.services.airlock-main.command}
         if airlock check-config --config ${checkedManagedWithFile}; then
           echo "managed OAuth unexpectedly accepted a file" >&2
           exit 1
@@ -171,14 +188,25 @@ in {
           && file.secrets
           == {
             AIRLOCK_CLIENTS_HARNESS_TOKEN_FILE = asFile harnessToken;
+            AIRLOCK_CONTROL_READ_TOKEN_FILE = asFile controlToken;
             AIRLOCK_CREDENTIALS_CLAUDE_AUTH_FILE = asFile claudeToken;
             AIRLOCK_CREDENTIALS_OTHER_AUTH_FILE = asFile zaiKey;
             AIRLOCK_CREDENTIALS_ZAI_AUTH_FILE = asFile zaiKey;
           }
           && (usage backend).secrets.AIRLOCK_CREDENTIALS_CODEX_AUTH_FILE == asFile codexToken
+          && (builtins.fromJSON file.content).control.listen == "127.0.0.1:8401"
+          && !(builtins.hasAttr "control" (builtins.fromJSON (fileOf (withoutControl backend)).content))
           && (builtins.fromJSON file.content).state_dir == sample.stateDir
           && result.config.ai.claims.port."8400" == ["airlock:airlock-main.ports.main"]
+          && result.config.ai.claims.port."8401" == ["airlock:airlock-main.ports.control"]
           && failures result == []
+          # Control needs its dedicated secret and cannot share CONNECT's port.
+          && failures (evaluate backend {airlock.instances.main.settings.control.token = null;})
+          == ["ai.airlock.instances.main.settings.control.token is required when control is enabled."]
+          && failures (evaluate backend {airlock.instances.main.settings.control.port = 8400;})
+          == [
+            "ai.claims.port.8400: claimed by airlock:airlock-main.ports.control and airlock:airlock-main.ports.main"
+          ]
           # Another owner's service on the instance's port.
           && failures (evaluate backend {cliproxyapi.instances.main.port = 8400;})
           == [

@@ -1,0 +1,146 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT group_id, credentials.provider_id AS provider_id, request_events.client_id,\n               request_events.credential_id,\n               CAST(occurred_at_unix / ? AS INTEGER) * ? AS \"bucket_start_unix!: i64\",\n               model_id, outcome, COUNT(*) AS \"events!: i64\",\n               SUM(CASE WHEN usage_complete THEN 1 ELSE 0 END)\n                 AS \"complete_events!: i64\",\n               SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END)\n                 AS \"error_events!: i64\",\n               SUM(CASE WHEN status_code BETWEEN 200 AND 299 THEN 1 ELSE 0 END)\n                 AS \"successful_events!: i64\",\n               SUM(request_bytes) AS \"request_bytes!: i64\",\n               SUM(response_bytes) AS \"response_bytes!: i64\",\n               SUM(latency_ms) AS \"latency_ms!: i64\",\n               SUM(input_tokens) AS \"input_tokens?: i64\",\n               SUM(output_tokens) AS \"output_tokens?: i64\",\n               SUM(cache_read_tokens) AS \"cache_read_tokens?: i64\",\n               SUM(cache_write_tokens) AS \"cache_write_tokens?: i64\",\n               SUM(CASE WHEN input_tokens IS NULL THEN 1 ELSE 0 END)\n                 AS \"missing_input_tokens!: i64\",\n               SUM(CASE WHEN output_tokens IS NULL THEN 1 ELSE 0 END)\n                 AS \"missing_output_tokens!: i64\",\n               SUM(CASE WHEN cache_read_tokens IS NULL THEN 1 ELSE 0 END)\n                 AS \"missing_cache_read_tokens!: i64\",\n               SUM(CASE WHEN cache_write_tokens IS NULL THEN 1 ELSE 0 END)\n                 AS \"missing_cache_write_tokens!: i64\"\n        FROM request_events\n        JOIN credentials ON credentials.id = request_events.credential_id\n        WHERE occurred_at_unix >= ? AND occurred_at_unix < ?\n          AND (? = 0 OR client_id IS ?)\n          AND (? IS NULL OR credential_id = ?)\n          AND (? IS NULL OR group_id = ?)\n          AND (? IS NULL OR model_id = ?)\n          AND (? IS NULL OR outcome = ?)\n          AND (? IS NULL OR credentials.provider_id = ?)\n        GROUP BY group_id, credentials.provider_id, request_events.client_id,\n                 request_events.credential_id,\n                 CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome\n        ORDER BY group_id, credentials.provider_id, request_events.client_id,\n                 request_events.credential_id,\n                 CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome\n        LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "group_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "client_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "credential_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "bucket_start_unix!: i64",
+        "ordinal": 4,
+        "type_info": "Null"
+      },
+      {
+        "name": "model_id",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "outcome",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "events!: i64",
+        "ordinal": 7,
+        "type_info": "Null"
+      },
+      {
+        "name": "complete_events!: i64",
+        "ordinal": 8,
+        "type_info": "Null"
+      },
+      {
+        "name": "error_events!: i64",
+        "ordinal": 9,
+        "type_info": "Null"
+      },
+      {
+        "name": "successful_events!: i64",
+        "ordinal": 10,
+        "type_info": "Null"
+      },
+      {
+        "name": "request_bytes!: i64",
+        "ordinal": 11,
+        "type_info": "Null"
+      },
+      {
+        "name": "response_bytes!: i64",
+        "ordinal": 12,
+        "type_info": "Null"
+      },
+      {
+        "name": "latency_ms!: i64",
+        "ordinal": 13,
+        "type_info": "Null"
+      },
+      {
+        "name": "input_tokens?: i64",
+        "ordinal": 14,
+        "type_info": "Null"
+      },
+      {
+        "name": "output_tokens?: i64",
+        "ordinal": 15,
+        "type_info": "Null"
+      },
+      {
+        "name": "cache_read_tokens?: i64",
+        "ordinal": 16,
+        "type_info": "Null"
+      },
+      {
+        "name": "cache_write_tokens?: i64",
+        "ordinal": 17,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_input_tokens!: i64",
+        "ordinal": 18,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_output_tokens!: i64",
+        "ordinal": 19,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_cache_read_tokens!: i64",
+        "ordinal": 20,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_cache_write_tokens!: i64",
+        "ordinal": 21,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 21
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      null,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "cae140e0aec02d8828a87d1fc6e5eb7b2c8cb51d17b85d4993ddbf7488d2d323"
+}

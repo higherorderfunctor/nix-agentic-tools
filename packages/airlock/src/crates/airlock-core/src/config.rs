@@ -16,6 +16,7 @@ use crate::{
 #[derive(Clone)]
 pub struct Config {
     clients: BTreeMap<ClientId, ClientConfig>,
+    control: Option<ControlConfig>,
     credentials: BTreeMap<CredentialId, CredentialConfig>,
     groups: BTreeMap<GroupId, GroupConfig>,
     listen: SocketAddr,
@@ -29,6 +30,25 @@ pub struct Config {
 struct ClientConfig {
     grants: Vec<GroupId>,
     token_file: SecretFile,
+}
+
+/// Optional loopback read-only control listener.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ControlConfig {
+    listen: SocketAddr,
+    read_token_file: SecretFile,
+}
+
+impl ControlConfig {
+    #[must_use]
+    pub fn listen(&self) -> SocketAddr {
+        self.listen
+    }
+
+    #[must_use]
+    pub fn read_token_file(&self) -> &SecretFile {
+        &self.read_token_file
+    }
 }
 
 #[derive(Clone)]
@@ -109,6 +129,8 @@ pub enum UnknownHosts {
 #[serde(deny_unknown_fields)]
 pub struct RawConfig {
     pub clients: BTreeMap<String, RawClient>,
+    #[serde(default)]
+    pub control: Option<RawControl>,
     pub credentials: BTreeMap<String, RawCredential>,
     pub groups: BTreeMap<String, RawGroup>,
     pub listen: String,
@@ -125,6 +147,13 @@ pub struct RawConfig {
 pub struct RawClient {
     pub grants: Vec<String>,
     pub token_file: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawControl {
+    pub listen: String,
+    pub read_token_file: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
@@ -223,6 +252,35 @@ impl Config {
     #[must_use]
     pub fn listen(&self) -> SocketAddr {
         self.listen
+    }
+
+    #[must_use]
+    pub fn control(&self) -> Option<ControlConfig> {
+        self.control.clone()
+    }
+
+    /// Loads the dedicated control token and rejects reuse of a proxy client token.
+    ///
+    /// Only client token files are opened. In particular, ungranted credential and group auth
+    /// files remain unread so the control plane cannot destroy lazy secret loading.
+    ///
+    /// # Errors
+    /// Returns the first secret-loading error, or `ControlTokenReuse` when material matches.
+    pub fn load_control_token(&self) -> Result<crate::secret::Secret, crate::error::SecretError> {
+        let control = self
+            .control
+            .as_ref()
+            .ok_or(crate::error::SecretError::ControlNotConfigured)?;
+        let token = control.read_token_file.load_bounded_regular(8192)?;
+        for (_, client_token) in self.client_token_files() {
+            if client_token
+                .load_bounded_regular(8192)?
+                .matches(token.as_str().as_bytes())
+            {
+                return Err(crate::error::SecretError::ControlTokenReuse);
+            }
+        }
+        Ok(token)
     }
 
     #[must_use]
@@ -582,6 +640,7 @@ impl TryFrom<RawConfig> for Config {
             }
         };
 
+        let control = parse_control(&raw, listen, &mut errors);
         let providers = parse_providers(&raw, &mut errors);
         let credentials = parse_credentials(&raw, &mut errors);
         let groups = parse_groups(&raw, &mut errors);
@@ -589,17 +648,20 @@ impl TryFrom<RawConfig> for Config {
         let usage_credentials = parse_usage(&raw, &mut errors);
         validate_references(&raw, &providers, &mut errors);
 
-        match (listen, state_dir, unknown_hosts) {
-            (Some(listen), Some(state_dir), Some(unknown_hosts)) if errors.is_empty() => Ok(Self {
-                clients,
-                credentials,
-                groups,
-                listen,
-                providers,
-                state_dir,
-                unknown_hosts,
-                usage_credentials,
-            }),
+        match (listen, state_dir, unknown_hosts, control) {
+            (Some(listen), Some(state_dir), Some(unknown_hosts), control) if errors.is_empty() => {
+                Ok(Self {
+                    clients,
+                    control,
+                    credentials,
+                    groups,
+                    listen,
+                    providers,
+                    state_dir,
+                    unknown_hosts,
+                    usage_credentials,
+                })
+            }
             _ => Err(ConfigErrors(errors)),
         }
     }
@@ -676,6 +738,55 @@ fn parse_clients(
         }
     }
     clients
+}
+
+fn parse_control(
+    raw: &RawConfig,
+    listen: Option<SocketAddr>,
+    errors: &mut Vec<ConfigError>,
+) -> Option<ControlConfig> {
+    let raw_control = raw.control.as_ref()?;
+    let control_listen = match raw_control.listen.parse::<SocketAddr>() {
+        Ok(address)
+            if address.ip() == std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+                && address.port() != 0 =>
+        {
+            Some(address)
+        }
+        Ok(address) if address.ip() == std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST) => {
+            errors.push(ConfigError::ControlListenPortZero);
+            None
+        }
+        Ok(address) => {
+            errors.push(ConfigError::NonLoopbackControlListen { address });
+            None
+        }
+        Err(_) => {
+            errors.push(ConfigError::InvalidControlListen {
+                value: raw_control.listen.clone(),
+            });
+            None
+        }
+    };
+    let read_token_file = SecretFile::try_from(raw_control.read_token_file.clone())
+        .map_err(|_| {
+            errors.push(ConfigError::RelativeControlTokenFile {
+                path: raw_control.read_token_file.clone(),
+            });
+        })
+        .ok();
+    if let (Some(control_listen), Some(read_token_file)) = (control_listen, read_token_file) {
+        if listen.is_some_and(|gateway_listen| gateway_listen.port() == control_listen.port()) {
+            errors.push(ConfigError::ControlListenConflict {
+                port: control_listen.port(),
+            });
+        }
+        return Some(ControlConfig {
+            listen: control_listen,
+            read_token_file,
+        });
+    }
+    None
 }
 
 fn parse_usage(raw: &RawConfig, errors: &mut Vec<ConfigError>) -> BTreeSet<CredentialId> {

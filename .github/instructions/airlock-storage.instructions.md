@@ -8,9 +8,11 @@ applyTo: "packages/airlock/**"
 # airlock storage
 
 > **Last verified:** 2026-10-25 — client-owned managed OAuth and bounded request
-> usage, typed provider history, and a read-only report share the pre-release
-> 0001 SQLite schema; all snapshot producers share bounded loss recovery and
-> report reset changes only between observed samples.
+> usage, typed provider history, bounded control reads, and a read-only report
+> share migrations 0001 and 0002; all snapshot producers share bounded loss
+> recovery, control history is window-bounded, and reports reset changes only
+> between observed samples. Control shutdown closes its private reader before
+> the main storage owner closes.
 
 ## Scope
 
@@ -89,6 +91,20 @@ credential is known are only in the request audit, since attributing them to a
 provider would invent a serving identity. Rows with an unknown client use SQL
 null; a configured client named `legacy-unknown` remains distinct from them.
 
+Control reads use a separate read-only connection. Every control query installs
+a 250 ms SQLite progress deadline and converts an interrupted database query to
+retryable `query_budget_exceeded`. Completed attempts remove the progress
+handler. Cancellation interrupts the query; the next bounded read replaces its
+handler, or closing the connection destroys it. Useful bounded reads must stay
+under that budget: migration 0002 adds the covering
+`request_events_dropped_cover_idx` used by the global request-loss sum, so a
+bounded request table or provider view is not priced by a full request history.
+An intentionally exhaustive aggregate may still return the budget gap instead of
+truncating. Measured locally with two million request rows and 1,001 snapshots,
+a 200-row request page took about 109 ms and a 1,000-snapshot provider view
+about 219 ms; those near-budget timings are host-sensitive, while the tests
+enforce the query plan and the 250 ms boundary.
+
 Aggregation uses caller-selected time buckets and groups by provider, client,
 served credential, model, and outcome. It counts HTTP 2xx successes, 4xx/5xx
 errors and complete observations, and sums known latency, bytes, and token
@@ -97,60 +113,16 @@ dimension. It fetches at most 10,001 groups and returns `UsageRangeIncomplete`
 when a range has more than 10,000 groups, rather than silently truncating the
 result.
 
-Provider snapshots are append-only history. A header records fetch time,
-provider, account ID, source (`out_of_band_fetch` or `response_headers`),
-surface, success/gap status, and a bounded gap reason. Child rows represent
-typed quota pools, credit pools in minor units, labelled metrics with units,
-scoped Claude limits, and primary response header windows. Raw provider
-responses and arbitrary provider fields are not stored. A failed fetch appends a
-gap without treating missing quota as zero. Claude Console balance remains an
-explicit gap until a verified `ant auth login` source is available. The OAuth
-`extra_usage` and `wattle_ember` pools retain their source labels; neither is
-called the Console credit grant.
+Identified usage-series history loads its page and same-filter reset predecessor
+in one SQLite transaction. The query applies both `since_unix` and exclusive
+`until_unix`, then limits rows; snapshots at or after the window end cannot
+crowd the page or become its predecessor. A same-time row from another source or
+surface is excluded. The reset detector keys prior quota and credit pools by
+credential and surface, so two relevant observations without an intervening
+sample are required before a reset is reported.
 
-The daemon fetches Claude subscription usage, z.ai quota, and explicitly
-selected Codex rate limits every five minutes, starting immediately. Each
-attempt has a 25-second deadline and 256 KiB response cap. File-backed usage
-tokens must be regular files of at most 16 KiB, with no symlinks; special files
-and larger files produce a gap before any provider request. It uses fixed hosts,
-paths, TLS verification, and no redirects. Managed Claude access-token expiry
-produces `oauth_refresh_needed`; the harness owns refresh. Provider response
-schema gaps remain visible rather than estimated. Known nullable Claude quota
-dimensions become typed partial gaps. Claude's OAuth-app and cinder-cove windows
-and scoped limits are retained, without treating a scoped limit as global
-exhaustion. Subscription profile and UI mappings remain explicit gaps. Failed
-snapshot writes and a full or closed primary-header queue increment one shared,
-bounded in-memory pending count. A collected snapshot enters one owned write
-task. If its caller is cancelled before the task takes the storage connection,
-it counts the observation as lost; after append begins, cancellation leaves the
-task to resolve the transaction result, avoiding a double count on commit. Only
-one task may be active; a second observation counts as lost immediately. Clean
-shutdown drains the task and header queue, then writes pending loss to one
-durable, unattributed row when SQLite accepts writes again. Losses before
-recovery remain visible only in a reason-only warning. A credit-only Claude
-response preserves its typed balance; without a quota window, capacity remains
-unavailable.
-
-`airlock usage --config <path> [--json]` opens an existing SQLite database
-read-only, without migration or identity seeding. Its versioned JSON includes
-credential and model eligibility, the latest fetch status and
-`global_quota_complete`, separately aged primary header observations,
-append-only snapshots, derived reset events, request aggregates, and separate
-request/snapshot loss totals. Freshness means a successful fetch at most 900
-seconds old; a gap is unavailable and an older success is stale.
-`global_quota_complete` reports whether the global quota dimensions are known;
-an unknown Claude five-hour or seven-day window makes it false. A consumer
-combines this flag with freshness and global exhaustion. Scoped model limits
-remain separate so an unrelated model stays eligible. Default history starts
-seven days ago and returns at most 100 snapshots per provider; callers can
-request 1–1,000. The report caps total snapshots at 1,000, aggregates at 10,000,
-credentials and groups at 64 each, returning an error if a total cap is
-exceeded. Each typed child query reads at most its storage cap plus one row and
-refuses excess rows, even when SQLite's structural check passes. Latest fetch
-and primary-header state are queried independently of history limits. History
-reports truncation and the oldest returned time. Reset events describe changes
-between observed samples; the report never claims complete reset coverage from
-the requested boundary.
+Provider snapshot and read-only report semantics are documented in
+`docs/usage-storage.md`.
 
 ## Build and verification
 

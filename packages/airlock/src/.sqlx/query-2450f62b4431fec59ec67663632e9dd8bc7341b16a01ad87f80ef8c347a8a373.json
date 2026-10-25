@@ -1,0 +1,33 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT snapshot_id, label, value, unit FROM quota_metrics\n        WHERE snapshot_id IN (SELECT value FROM json_each(?))\n        ORDER BY snapshot_id, ordinal LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "snapshot_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "label",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "value",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "unit",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [false, false, false, false]
+  },
+  "hash": "2450f62b4431fec59ec67663632e9dd8bc7341b16a01ad87f80ef8c347a8a373"
+}

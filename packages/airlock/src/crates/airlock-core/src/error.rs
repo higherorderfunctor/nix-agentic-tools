@@ -33,6 +33,10 @@ pub enum SecretFileError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SecretError {
+    #[error("control listener is not configured")]
+    ControlNotConfigured,
+    #[error("control read token must differ from every proxy client token")]
+    ControlTokenReuse,
     #[error("secret file {path} is empty after trimming one trailing newline")]
     Empty { path: PathBuf },
     #[error("could not read secret file {path}: {source}")]
@@ -48,6 +52,16 @@ pub enum SecretError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    #[error("control listener cannot share gateway port {port}")]
+    ControlListenConflict { port: u16 },
+    #[error("control listen port must be explicit and nonzero")]
+    ControlListenPortZero,
+    #[error("control listen address {value:?} is not a valid socket address")]
+    InvalidControlListen { value: String },
+    #[error("control listen address {address} is not loopback")]
+    NonLoopbackControlListen { address: SocketAddr },
+    #[error("control read token file {path:?} must be absolute")]
+    RelativeControlTokenFile { path: PathBuf },
     #[error("usage route projection exceeds {limit} {dimension}")]
     UsageProjectionLimit {
         dimension: &'static str,

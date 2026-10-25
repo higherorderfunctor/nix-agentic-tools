@@ -7,8 +7,8 @@ applyTo: "packages/airlock/**"
 
 # airlock
 
-> **Last verified:** 2026-10-25 — Airlock scope, security boundary, and
-> integration links reflect the M08 usage collector and CLI.
+> **Last verified:** 2026-10-25 — Airlock scope, control plane, security
+> boundary, and web/Rust package composition.
 
 ## Scope
 
@@ -18,7 +18,9 @@ gh/glab, guarded web and git+ssh. CLIProxyAPI coexists for now.
 ## Transport and routing
 
 The CONNECT, TLS, model routing, quota-header, and response forwarding contracts
-live in `docs/routing.md`.
+live in `docs/routing.md`. The separately enabled control listener serves the
+static dashboard and authenticated usage APIs; its Nix and protocol contract
+lives in `docs/control.md`, with storage query bounds in `docs/storage.md`.
 
 ## Not a security boundary yet
 
@@ -30,9 +32,20 @@ environment and config, not out of its reach.
 
 ## Configuration and Claude integration
 
-The configuration, launcher, and primary OAuth contracts live in
-`docs/integration.md`. SQLite's durable-state contract lives in
-`docs/storage.md`, including provider history and the read-only usage report.
+The configuration and launcher contracts live in `docs/integration.md`; managed
+primary OAuth lives in `docs/oauth.md`. SQLite's durable-state contract lives in
+`docs/storage.md`, with provider history and the read-only usage report in
+`docs/usage-storage.md`.
+
+## Package composition
+
+The public Nix package joins the Cargo-built `raw` executable and an independent
+`frontend` built from `web/package-lock.json` with Node 24. Its launcher
+forwards the caller's arguments and defaults `--web-root` to the immutable
+frontend store path for `serve` when the caller supplies no root. The two
+derivations are exposed as package passthru for checks; changing web assets does
+not rebuild Rust. Raw developer builds must pass their own web root when serving
+the dashboard.
 
 ## Settled — do not relitigate
 

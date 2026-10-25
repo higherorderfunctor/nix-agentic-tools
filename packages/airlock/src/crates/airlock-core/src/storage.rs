@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -62,6 +62,8 @@ pub enum StorageError {
     StoredIdentity { credential: CredentialId },
     #[error("usage range produces more than 10000 aggregate groups")]
     UsageRangeIncomplete,
+    #[error("control query exceeded its 250 ms execution budget")]
+    QueryBudgetExceeded,
     #[error("provider snapshot report exceeds its 1000-row bound")]
     SnapshotRangeIncomplete,
     #[error("request usage storage is unavailable")]
@@ -252,6 +254,12 @@ pub struct RequestUsageAggregate {
     pub successful_events: u64,
 }
 
+#[derive(Debug)]
+pub struct RequestSeriesAggregate {
+    pub aggregate: RequestUsageAggregate,
+    pub group: GroupId,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotFetchStatus {
     Gap,
@@ -330,7 +338,7 @@ impl SnapshotFetchStatus {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuotaPool {
     pub label: String,
     pub limit: u64,
@@ -338,7 +346,7 @@ pub struct QuotaPool {
     pub utilized: u64,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreditPool {
     pub label: String,
     pub limit_minor_units: u64,
@@ -347,14 +355,14 @@ pub struct CreditPool {
     pub used_minor_units: u64,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuotaMetric {
     pub label: String,
     pub unit: String,
     pub value: u64,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClaudeLimit {
     pub kind: String,
     pub group: Option<String>,
@@ -423,7 +431,7 @@ pub struct ResponseHeaderWindow {
     pub utilization_milli: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProviderSnapshot {
     pub account_id: String,
     pub client: Option<ClientId>,
@@ -454,7 +462,7 @@ impl ProviderSnapshot {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SnapshotQuery {
     pub limit: NonZeroU64,
     pub provider: ProviderId,
@@ -465,6 +473,67 @@ pub struct SnapshotQuery {
 pub struct SnapshotPage {
     pub snapshots: Vec<ProviderSnapshot>,
     pub truncated: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct IdentifiedSnapshot {
+    pub id: i64,
+    pub snapshot: ProviderSnapshot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ControlMetadata {
+    pub provider_snapshot_loss_total: u64,
+    pub request_loss_total: u64,
+}
+
+#[derive(Debug)]
+pub struct IdentifiedSnapshotPage {
+    pub metadata: ControlMetadata,
+    /// Chronological returned snapshots.
+    pub snapshots: Vec<IdentifiedSnapshot>,
+    /// One older same-filter snapshot used to derive cross-page resets.
+    pub predecessor: Option<IdentifiedSnapshot>,
+    /// Older matching history in the requested window was omitted.
+    pub truncated: bool,
+}
+
+#[derive(Debug)]
+pub struct RequestRow {
+    pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub client: Option<ClientId>,
+    pub credential: CredentialId,
+    pub group: GroupId,
+    pub id: i64,
+    pub input_tokens: Option<u64>,
+    pub latency_ms: u64,
+    pub model: String,
+    pub occurred_at_unix: i64,
+    pub outcome: RequestOutcome,
+    pub output_tokens: Option<u64>,
+    pub provider: ProviderId,
+    pub request_bytes: u64,
+    pub response_bytes: u64,
+    pub status_code: u16,
+    pub usage_complete: bool,
+}
+
+#[derive(Debug)]
+pub struct RequestRowPage {
+    pub metadata: ControlMetadata,
+    /// Chronological rows matching the bounded page.
+    pub rows: Vec<RequestRow>,
+    /// Cursor to the next older immutable page.
+    pub next_before: Option<RequestRowCursor>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RequestRowCursor {
+    pub cutoff_id: i64,
+    pub occurred_at_unix: i64,
+    pub row_id: i64,
 }
 
 pub trait Storage {
@@ -629,6 +698,22 @@ impl ReadOnlyStorage {
     ///
     /// # Errors
     /// Propagates integrity and SQLite errors.
+    /// Converts the existing private read-only connection into the control reader.
+    ///
+    /// The control plane owns this persistent connection so its bounded transactions never share
+    /// the CLI lifecycle and never use the forwarding writer.
+    #[must_use]
+    pub fn into_control_reader(self) -> ControlReader {
+        ControlReader {
+            connection: self.connection,
+            database_path: self.database_path,
+        }
+    }
+
+    /// Reads the latest snapshot for an identified quota series.
+    ///
+    /// # Errors
+    /// Propagates bounded-query, integrity, and SQLite errors.
     pub async fn latest_provider_snapshot(
         &mut self,
         provider: ProviderId,
@@ -649,6 +734,357 @@ impl ReadOnlyStorage {
         .await?;
         Ok(page.snapshots.into_iter().next())
     }
+}
+
+pub struct ControlReader {
+    connection: SqliteConnection,
+    database_path: PathBuf,
+}
+
+struct ReadBudget {
+    cancelled: Arc<AtomicBool>,
+    deadline: std::time::Instant,
+}
+
+impl Drop for ReadBudget {
+    fn drop(&mut self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+}
+
+/// One bounded read transaction for the complete HTTP report.
+pub struct ControlReport<'a> {
+    budget: ReadBudget,
+    database_path: &'a Path,
+    transaction: Transaction<'a, Sqlite>,
+}
+
+impl ControlReader {
+    const QUERY_BUDGET: std::time::Duration = std::time::Duration::from_millis(250);
+
+    /// Closes the control reader after its socket and report tasks have drained.
+    ///
+    /// # Errors
+    /// Returns the underlying SQLite close error.
+    pub async fn close(self) -> Result<(), StorageError> {
+        self.connection.close().await?;
+        Ok(())
+    }
+
+    async fn deadline(&mut self) -> Result<ReadBudget, StorageError> {
+        let deadline = std::time::Instant::now() + Self::QUERY_BUDGET;
+        let mut handle = self.connection.lock_handle().await?;
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let observed = Arc::clone(&cancelled);
+        handle.set_progress_handler(1_000, move || {
+            !observed.load(Ordering::Acquire) && std::time::Instant::now() < deadline
+        });
+        Ok(ReadBudget {
+            cancelled,
+            deadline,
+        })
+    }
+
+    async fn clear_deadline(&mut self) -> Result<(), StorageError> {
+        let mut handle = self.connection.lock_handle().await?;
+        handle.remove_progress_handler();
+        Ok(())
+    }
+
+    fn bounded<T>(budget: &ReadBudget, result: Result<T, StorageError>) -> Result<T, StorageError> {
+        match result {
+            Ok(_) if std::time::Instant::now() >= budget.deadline => {
+                Err(StorageError::QueryBudgetExceeded)
+            }
+            Ok(value) => Ok(value),
+            Err(error)
+                if std::time::Instant::now() >= budget.deadline
+                    && matches!(error, StorageError::Database(_)) =>
+            {
+                Err(StorageError::QueryBudgetExceeded)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn read<T>(
+        &mut self,
+        operation: impl for<'a> FnOnce(
+            &'a mut SqliteConnection,
+            &'a Path,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, StorageError>> + Send + 'a>,
+        >,
+    ) -> Result<T, StorageError> {
+        let budget = self.deadline().await?;
+        let result = operation(&mut self.connection, &self.database_path).await;
+        let result = Self::bounded(&budget, result);
+        let cleanup = self.clear_deadline().await;
+        match result {
+            Ok(value) => {
+                cleanup?;
+                Ok(value)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Reads an identified snapshot page and its reset predecessor in one transaction.
+    ///
+    /// # Errors
+    /// Returns bounded-query, integrity, and SQLite errors without retaining SQL work.
+    pub async fn identified_snapshot_page(
+        &mut self,
+        query: SnapshotQuery,
+        until_unix: i64,
+        credential: CredentialId,
+        source: SnapshotSource,
+        surface: SnapshotSurface,
+    ) -> Result<IdentifiedSnapshotPage, StorageError> {
+        validate_time(query.since_unix, "snapshot history start")?;
+        if query.limit.get() > MAX_SNAPSHOT_HISTORY {
+            return Err(StorageError::Input {
+                field: "snapshot history limit exceeds 1000",
+            });
+        }
+        self.read(move |connection, path| {
+            Box::pin(read_identified_snapshot_transaction(
+                connection,
+                path,
+                query,
+                until_unix,
+                (credential, source, surface),
+            ))
+        })
+        .await
+    }
+
+    /// Reads every overview credential's latest observations in one transaction.
+    ///
+    /// # Errors
+    /// Returns bounded-query, integrity, and SQLite errors without retaining SQL work.
+    pub async fn overview(
+        &mut self,
+        credentials: Vec<OverviewCredentialQuery>,
+    ) -> Result<OverviewPage, StorageError> {
+        if credentials.len() > 64 {
+            return Err(StorageError::Input {
+                field: "usage credential count exceeds 64",
+            });
+        }
+        self.read(move |connection, path| {
+            Box::pin(read_overview_transaction(connection, path, credentials))
+        })
+        .await
+    }
+
+    /// Starts one deadline for every section of an HTTP report.
+    ///
+    /// # Errors
+    /// Returns SQLite errors while acquiring the read transaction.
+    pub async fn report_transaction(&mut self) -> Result<ControlReport<'_>, StorageError> {
+        let budget = self.deadline().await?;
+        let transaction = self.connection.begin().await?;
+        Ok(ControlReport {
+            budget,
+            database_path: &self.database_path,
+            transaction,
+        })
+    }
+
+    /// Reads filtered request aggregates and totals in one transaction.
+    ///
+    /// # Errors
+    /// Returns bounded-query, range, integrity, and SQLite errors without retaining SQL work.
+    pub async fn request_series(
+        &mut self,
+        query: RequestSeriesQuery,
+    ) -> Result<RequestSeriesPage, StorageError> {
+        validate_time(query.since_unix, "request series start")?;
+        validate_time(query.until_unix, "request series end")?;
+        if query.since_unix >= query.until_unix {
+            return Err(StorageError::Input {
+                field: "request series start must precede end",
+            });
+        }
+        self.read(move |connection, path| {
+            Box::pin(read_request_series_transaction(connection, path, query))
+        })
+        .await
+    }
+
+    /// Reads a stable request row page and its totals in one transaction.
+    ///
+    /// # Errors
+    /// Returns bounded-query, integrity, and SQLite errors without retaining SQL work.
+    pub async fn request_row_page(
+        &mut self,
+        query: RequestRowQuery,
+    ) -> Result<RequestRowPage, StorageError> {
+        validate_time(query.since_unix, "request history start")?;
+        validate_time(query.until_unix, "request history end")?;
+        if query.since_unix >= query.until_unix {
+            return Err(StorageError::Input {
+                field: "request history start must precede end",
+            });
+        }
+        self.read(move |connection, path| {
+            Box::pin(read_request_row_transaction(connection, path, query))
+        })
+        .await
+    }
+}
+
+impl ControlReport<'_> {
+    /// Releases the read snapshot and removes its SQLite progress callback.
+    ///
+    /// # Errors
+    /// Returns the report error, query deadline, or SQLite cleanup failure.
+    pub async fn finish<T>(self, result: Result<T, StorageError>) -> Result<T, StorageError> {
+        let result = ControlReader::bounded(&self.budget, result);
+        let mut transaction = self.transaction;
+        let cleanup = async {
+            let mut handle = transaction.lock_handle().await?;
+            handle.remove_progress_handler();
+            drop(handle);
+            transaction.rollback().await
+        }
+        .await;
+        match result {
+            Ok(value) => {
+                cleanup?;
+                Ok(value)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Reads report history independently of the control plane.
+    ///
+    /// # Errors
+    /// Propagates bounded-query, integrity, and SQLite errors.
+    pub async fn report_provider_snapshot_page(
+        &mut self,
+        query: SnapshotQuery,
+    ) -> Result<SnapshotPage, StorageError> {
+        read_provider_snapshot_page(&mut self.transaction, self.database_path, query, None).await
+    }
+
+    /// Reads the latest report snapshot for an identified quota series.
+    ///
+    /// # Errors
+    /// Propagates bounded-query, integrity, and SQLite errors.
+    pub async fn report_latest_provider_snapshot(
+        &mut self,
+        provider: ProviderId,
+        credential: CredentialId,
+        source: SnapshotSource,
+        surface: SnapshotSurface,
+    ) -> Result<Option<ProviderSnapshot>, StorageError> {
+        let page = read_provider_snapshot_page(
+            &mut self.transaction,
+            self.database_path,
+            SnapshotQuery {
+                limit: NonZeroU64::MIN,
+                provider,
+                since_unix: 1,
+            },
+            Some((credential, source, surface)),
+        )
+        .await?;
+        Ok(page.snapshots.into_iter().next())
+    }
+
+    /// Reads bounded report aggregates.
+    ///
+    /// # Errors
+    /// Propagates bounded-query, range, integrity, and SQLite errors.
+    pub async fn report_request_usage(
+        &mut self,
+        query: RequestUsageQuery,
+    ) -> Result<Vec<RequestUsageAggregate>, StorageError> {
+        read_request_usage(&mut self.transaction, self.database_path, query).await
+    }
+
+    /// Reads the durable global count of dropped request events.
+    ///
+    /// # Errors
+    /// Propagates integrity and SQLite errors.
+    pub async fn report_request_usage_loss_total(&mut self) -> Result<u64, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT COALESCE(SUM(dropped_events), 0) AS "total!: i64" FROM request_events"#
+        )
+        .fetch_one(&mut *self.transaction)
+        .await?;
+        stored_count(row.total, self.database_path)
+    }
+
+    /// Reads the durable global count of lost provider snapshots.
+    ///
+    /// # Errors
+    /// Propagates integrity and SQLite errors.
+    pub async fn report_provider_snapshot_loss_total(&mut self) -> Result<u64, StorageError> {
+        let row =
+            sqlx::query_scalar!("SELECT lost_snapshots FROM provider_snapshot_losses WHERE id = 1")
+                .fetch_optional(&mut *self.transaction)
+                .await?;
+        stored_count(row.unwrap_or(0), self.database_path)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RequestSeriesQuery {
+    pub bucket_seconds: NonZeroU64,
+    pub client: Option<Option<ClientId>>,
+    pub credential: Option<CredentialId>,
+    pub group: Option<GroupId>,
+    pub model: Option<String>,
+    pub outcome: Option<RequestOutcome>,
+    pub provider: Option<ProviderId>,
+    pub since_unix: i64,
+    pub until_unix: i64,
+}
+
+#[derive(Debug)]
+pub struct RequestSeriesPage {
+    pub aggregates: Vec<RequestSeriesAggregate>,
+    pub metadata: ControlMetadata,
+}
+
+#[derive(Debug)]
+pub struct OverviewCredentialQuery {
+    pub credential: CredentialId,
+    pub fetch_source: SnapshotSource,
+    pub fetch_surface: SnapshotSurface,
+    pub header_surface: SnapshotSurface,
+    pub provider: ProviderId,
+}
+
+#[derive(Debug)]
+pub struct OverviewCredentialSnapshots {
+    pub credential: CredentialId,
+    pub latest_fetch: Option<ProviderSnapshot>,
+    pub latest_header: Option<ProviderSnapshot>,
+}
+
+#[derive(Debug)]
+pub struct OverviewPage {
+    pub credentials: Vec<OverviewCredentialSnapshots>,
+    pub metadata: ControlMetadata,
+}
+
+#[derive(Debug, Clone)]
+pub struct RequestRowQuery {
+    pub before: Option<RequestRowCursor>,
+    pub client: Option<Option<ClientId>>,
+    pub credential: Option<CredentialId>,
+    pub group: Option<GroupId>,
+    pub limit: u64,
+    pub model: Option<String>,
+    pub outcome: Option<RequestOutcome>,
+    pub provider: Option<ProviderId>,
+    pub since_unix: i64,
+    pub until_unix: i64,
 }
 
 impl SqliteStorage {
@@ -904,7 +1340,7 @@ impl Storage for SqliteStorage {
         let credential_id = credential.as_ref();
         let provider_id = provider.as_ref();
         let record = sqlx::query!(
-            r#"
+            r"
             SELECT mappings.client_id, mappings.credential_id, credentials.provider_id,
                    mappings.generation, mappings.fake_access_token, mappings.fake_refresh_token,
                    mappings.fake_access_expires_at_unix,
@@ -920,7 +1356,7 @@ impl Storage for SqliteStorage {
               ON tokens.credential_id = mappings.credential_id
             WHERE mappings.client_id = ? AND mappings.credential_id = ?
               AND credentials.provider_id = ?
-            "#,
+            ",
             client_id,
             credential_id,
             provider_id,
@@ -992,13 +1428,13 @@ impl Storage for SqliteStorage {
         let mut connection = self.connection.lock().await;
         let mut transaction = connection.begin().await?;
         let owned = sqlx::query!(
-            r#"
+            r"
             SELECT mappings.generation, mappings.fake_refresh_token
             FROM oauth_mappings AS mappings
             JOIN credentials ON credentials.id = mappings.credential_id
             WHERE mappings.client_id = ? AND mappings.credential_id = ?
               AND credentials.provider_id = ?
-            "#,
+            ",
             client_id,
             credential_id,
             provider_id,
@@ -1329,6 +1765,623 @@ async fn read_request_usage(
     Ok(aggregates)
 }
 
+async fn control_metadata(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+) -> Result<ControlMetadata, StorageError> {
+    let request_loss_total = sqlx::query!(
+        r#"SELECT COALESCE(SUM(dropped_events), 0) AS "total!: i64" FROM request_events"#
+    )
+    .fetch_one(&mut *connection)
+    .await?;
+    let provider_loss_total =
+        sqlx::query_scalar!("SELECT lost_snapshots FROM provider_snapshot_losses WHERE id = 1")
+            .fetch_optional(&mut *connection)
+            .await?;
+    Ok(ControlMetadata {
+        provider_snapshot_loss_total: stored_count(
+            provider_loss_total.unwrap_or(0),
+            database_path,
+        )?,
+        request_loss_total: stored_count(request_loss_total.total, database_path)?,
+    })
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "compile-checked aggregate SQL and its validated projection share this boundary"
+)]
+async fn read_request_series_transaction(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+    query: RequestSeriesQuery,
+) -> Result<RequestSeriesPage, StorageError> {
+    let bucket_seconds =
+        i64::try_from(query.bucket_seconds.get()).map_err(|_| StorageError::Input {
+            field: "request bucket seconds is too large",
+        })?;
+    let aggregate_limit =
+        i64::try_from(MAX_AGGREGATE_ROWS + 1).map_err(|_| StorageError::Input {
+            field: "usage aggregate limit is too large",
+        })?;
+    let client_filter = query.client.is_some();
+    let client_value = query.client.flatten().map(|id| id.as_ref().to_owned());
+    let client_value = client_value.as_deref();
+    let credential = query.credential.as_ref().map(AsRef::as_ref);
+    let group = query.group.as_ref().map(AsRef::as_ref);
+    let model = query.model.as_deref();
+    let outcome = query.outcome.map(RequestOutcome::as_storage);
+    let provider = query.provider.as_ref().map(AsRef::as_ref);
+    let mut transaction = connection.begin().await?;
+    let rows = sqlx::query!(
+        r#"
+        SELECT group_id, credentials.provider_id AS provider_id, request_events.client_id,
+               request_events.credential_id,
+               CAST(occurred_at_unix / ? AS INTEGER) * ? AS "bucket_start_unix!: i64",
+               model_id, outcome, COUNT(*) AS "events!: i64",
+               SUM(CASE WHEN usage_complete THEN 1 ELSE 0 END)
+                 AS "complete_events!: i64",
+               SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END)
+                 AS "error_events!: i64",
+               SUM(CASE WHEN status_code BETWEEN 200 AND 299 THEN 1 ELSE 0 END)
+                 AS "successful_events!: i64",
+               SUM(request_bytes) AS "request_bytes!: i64",
+               SUM(response_bytes) AS "response_bytes!: i64",
+               SUM(latency_ms) AS "latency_ms!: i64",
+               SUM(input_tokens) AS "input_tokens?: i64",
+               SUM(output_tokens) AS "output_tokens?: i64",
+               SUM(cache_read_tokens) AS "cache_read_tokens?: i64",
+               SUM(cache_write_tokens) AS "cache_write_tokens?: i64",
+               SUM(CASE WHEN input_tokens IS NULL THEN 1 ELSE 0 END)
+                 AS "missing_input_tokens!: i64",
+               SUM(CASE WHEN output_tokens IS NULL THEN 1 ELSE 0 END)
+                 AS "missing_output_tokens!: i64",
+               SUM(CASE WHEN cache_read_tokens IS NULL THEN 1 ELSE 0 END)
+                 AS "missing_cache_read_tokens!: i64",
+               SUM(CASE WHEN cache_write_tokens IS NULL THEN 1 ELSE 0 END)
+                 AS "missing_cache_write_tokens!: i64"
+        FROM request_events
+        JOIN credentials ON credentials.id = request_events.credential_id
+        WHERE occurred_at_unix >= ? AND occurred_at_unix < ?
+          AND (? = 0 OR client_id IS ?)
+          AND (? IS NULL OR credential_id = ?)
+          AND (? IS NULL OR group_id = ?)
+          AND (? IS NULL OR model_id = ?)
+          AND (? IS NULL OR outcome = ?)
+          AND (? IS NULL OR credentials.provider_id = ?)
+        GROUP BY group_id, credentials.provider_id, request_events.client_id,
+                 request_events.credential_id,
+                 CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome
+        ORDER BY group_id, credentials.provider_id, request_events.client_id,
+                 request_events.credential_id,
+                 CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome
+        LIMIT ?
+        "#,
+        bucket_seconds,
+        bucket_seconds,
+        query.since_unix,
+        query.until_unix,
+        client_filter,
+        client_value,
+        credential,
+        credential,
+        group,
+        group,
+        model,
+        model,
+        outcome,
+        outcome,
+        provider,
+        provider,
+        bucket_seconds,
+        bucket_seconds,
+        bucket_seconds,
+        bucket_seconds,
+        aggregate_limit,
+    )
+    .fetch_all(&mut *transaction)
+    .await?;
+    if rows.len() > MAX_AGGREGATE_ROWS {
+        return Err(StorageError::UsageRangeIncomplete);
+    }
+    let mut aggregates = Vec::with_capacity(rows.len());
+    for row in rows {
+        let credential =
+            CredentialId::try_from(row.credential_id).map_err(|error| StorageError::StoredId {
+                kind: "credential",
+                value: error.into_name(),
+            })?;
+        let client = row
+            .client_id
+            .map(|id| {
+                ClientId::try_from(id).map_err(|error| StorageError::StoredId {
+                    kind: "client",
+                    value: error.into_name(),
+                })
+            })
+            .transpose()?;
+        let group = GroupId::try_from(row.group_id).map_err(|error| StorageError::StoredId {
+            kind: "group",
+            value: error.into_name(),
+        })?;
+        let provider =
+            ProviderId::try_from(row.provider_id).map_err(|error| StorageError::StoredId {
+                kind: "provider",
+                value: error.into_name(),
+            })?;
+        let outcome =
+            RequestOutcome::from_storage(&row.outcome).ok_or_else(|| StorageError::Integrity {
+                path: database_path.to_owned(),
+            })?;
+        let aggregate = RequestUsageAggregate {
+            bucket_start_unix: if row.bucket_start_unix >= 0 {
+                row.bucket_start_unix
+            } else {
+                return Err(StorageError::Integrity {
+                    path: database_path.to_owned(),
+                });
+            },
+            cache_read_tokens: complete_sum(
+                row.cache_read_tokens,
+                row.missing_cache_read_tokens,
+                database_path,
+            )?,
+            cache_write_tokens: complete_sum(
+                row.cache_write_tokens,
+                row.missing_cache_write_tokens,
+                database_path,
+            )?,
+            client,
+            complete_events: stored_count(row.complete_events, database_path)?,
+            credential,
+            error_events: stored_count(row.error_events, database_path)?,
+            events: stored_count(row.events, database_path)?,
+            input_tokens: complete_sum(row.input_tokens, row.missing_input_tokens, database_path)?,
+            latency_ms: stored_count(row.latency_ms, database_path)?,
+            model: row.model_id,
+            outcome,
+            output_tokens: complete_sum(
+                row.output_tokens,
+                row.missing_output_tokens,
+                database_path,
+            )?,
+            provider,
+            request_bytes: stored_count(row.request_bytes, database_path)?,
+            response_bytes: stored_count(row.response_bytes, database_path)?,
+            successful_events: stored_count(row.successful_events, database_path)?,
+        };
+        aggregates.push(RequestSeriesAggregate { aggregate, group });
+    }
+    let metadata = control_metadata(&mut transaction, database_path).await?;
+    transaction.rollback().await?;
+    Ok(RequestSeriesPage {
+        aggregates,
+        metadata,
+    })
+}
+
+async fn read_overview_transaction(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+    credentials: Vec<OverviewCredentialQuery>,
+) -> Result<OverviewPage, StorageError> {
+    let mut transaction = connection.begin().await?;
+    let mut views = Vec::with_capacity(credentials.len());
+    for credential in credentials {
+        let query = SnapshotQuery {
+            limit: NonZeroU64::MIN,
+            provider: credential.provider,
+            since_unix: 1,
+        };
+        let latest_fetch = read_provider_snapshot_page(
+            &mut transaction,
+            database_path,
+            query.clone(),
+            Some((
+                credential.credential.clone(),
+                credential.fetch_source,
+                credential.fetch_surface,
+            )),
+        )
+        .await?
+        .snapshots
+        .into_iter()
+        .next();
+        let latest_header = read_provider_snapshot_page(
+            &mut transaction,
+            database_path,
+            query,
+            Some((
+                credential.credential.clone(),
+                SnapshotSource::ResponseHeaders,
+                credential.header_surface,
+            )),
+        )
+        .await?
+        .snapshots
+        .into_iter()
+        .next();
+        views.push(OverviewCredentialSnapshots {
+            credential: credential.credential,
+            latest_fetch,
+            latest_header,
+        });
+    }
+    let metadata = control_metadata(&mut transaction, database_path).await?;
+    transaction.rollback().await?;
+    Ok(OverviewPage {
+        credentials: views,
+        metadata,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn provider_snapshot_from_header(
+    fetched_at_unix: i64,
+    provider_id: String,
+    client_id: Option<String>,
+    group_id: Option<String>,
+    credential_id: String,
+    account_id: String,
+    source: &str,
+    surface: &str,
+    fetch_status: &str,
+    gap_reason: Option<String>,
+    pools: Vec<QuotaPool>,
+    credits: Vec<CreditPool>,
+    metrics: Vec<QuotaMetric>,
+    claude_limits: Vec<ClaudeLimit>,
+    header_windows: Vec<ResponseHeaderWindow>,
+    database_path: &Path,
+) -> Result<ProviderSnapshot, StorageError> {
+    let provider = ProviderId::try_from(provider_id).map_err(|error| StorageError::StoredId {
+        kind: "provider",
+        value: error.into_name(),
+    })?;
+    let client = client_id
+        .map(ClientId::try_from)
+        .transpose()
+        .map_err(|error| StorageError::StoredId {
+            kind: "client",
+            value: error.into_name(),
+        })?;
+    let group = group_id
+        .map(GroupId::try_from)
+        .transpose()
+        .map_err(|error| StorageError::StoredId {
+            kind: "group",
+            value: error.into_name(),
+        })?;
+    let credential =
+        CredentialId::try_from(credential_id).map_err(|error| StorageError::StoredId {
+            kind: "credential",
+            value: error.into_name(),
+        })?;
+    let source = SnapshotSource::from_storage(source).ok_or_else(|| StorageError::Integrity {
+        path: database_path.to_owned(),
+    })?;
+    let surface =
+        SnapshotSurface::from_storage(surface).ok_or_else(|| StorageError::Integrity {
+            path: database_path.to_owned(),
+        })?;
+    let fetch_status =
+        SnapshotFetchStatus::from_storage(fetch_status).ok_or_else(|| StorageError::Integrity {
+            path: database_path.to_owned(),
+        })?;
+    Ok(ProviderSnapshot {
+        account_id,
+        client,
+        claude_limits,
+        credential,
+        credits,
+        fetched_at_unix,
+        fetch_status,
+        gap_reason,
+        group,
+        header_windows,
+        metrics,
+        pools,
+        provider,
+        source,
+        surface,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn request_row_from_header(
+    id: i64,
+    occurred_at_unix: i64,
+    client_id: Option<String>,
+    group_id: String,
+    credential_id: String,
+    provider_id: String,
+    model_id: String,
+    outcome: &str,
+    status_code: i64,
+    latency_ms: i64,
+    request_bytes: i64,
+    response_bytes: i64,
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    cache_read_tokens: Option<i64>,
+    cache_write_tokens: Option<i64>,
+    usage_complete: i64,
+    database_path: &Path,
+) -> Result<RequestRow, StorageError> {
+    let client = client_id
+        .map(ClientId::try_from)
+        .transpose()
+        .map_err(|error| StorageError::StoredId {
+            kind: "client",
+            value: error.into_name(),
+        })?;
+    let group = GroupId::try_from(group_id).map_err(|error| StorageError::StoredId {
+        kind: "group",
+        value: error.into_name(),
+    })?;
+    let credential =
+        CredentialId::try_from(credential_id).map_err(|error| StorageError::StoredId {
+            kind: "credential",
+            value: error.into_name(),
+        })?;
+    let provider = ProviderId::try_from(provider_id).map_err(|error| StorageError::StoredId {
+        kind: "provider",
+        value: error.into_name(),
+    })?;
+    let outcome = RequestOutcome::from_storage(outcome).ok_or_else(|| StorageError::Integrity {
+        path: database_path.to_owned(),
+    })?;
+    if !(0..=65535).contains(&status_code) {
+        return Err(StorageError::Integrity {
+            path: database_path.to_owned(),
+        });
+    }
+    Ok(RequestRow {
+        cache_read_tokens: stored_optional_count(cache_read_tokens, database_path)?,
+        cache_write_tokens: stored_optional_count(cache_write_tokens, database_path)?,
+        client,
+        credential,
+        group,
+        id,
+        input_tokens: stored_optional_count(input_tokens, database_path)?,
+        latency_ms: stored_count(latency_ms, database_path)?,
+        model: model_id,
+        occurred_at_unix,
+        outcome,
+        output_tokens: stored_optional_count(output_tokens, database_path)?,
+        provider,
+        request_bytes: stored_count(request_bytes, database_path)?,
+        response_bytes: stored_count(response_bytes, database_path)?,
+        status_code: u16::try_from(status_code).map_err(|_| StorageError::Integrity {
+            path: database_path.to_owned(),
+        })?,
+        usage_complete: usage_complete != 0,
+    })
+}
+
+async fn read_identified_snapshot_transaction(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+    query: SnapshotQuery,
+    until_unix: i64,
+    filter: (CredentialId, SnapshotSource, SnapshotSurface),
+) -> Result<IdentifiedSnapshotPage, StorageError> {
+    let mut transaction = connection.begin().await?;
+    let limit = usize::try_from(query.limit.get()).map_err(|_| StorageError::Input {
+        field: "snapshot history limit is too large",
+    })?;
+    let fetch_limit = i64::try_from(limit.saturating_add(1)).map_err(|_| StorageError::Input {
+        field: "snapshot history limit is too large",
+    })?;
+    let (credential, source, surface) = filter;
+    let provider_id = query.provider.as_ref();
+    let credential_id = credential.as_ref();
+    let source_id = source.as_storage();
+    let surface_id = surface.as_storage();
+    let mut headers = sqlx::query!(
+        r#"
+        SELECT id AS "id!: i64", fetched_at_unix, provider_id, client_id, group_id,
+               credential_id, account_id, source, surface, fetch_status, gap_reason
+        FROM provider_snapshots
+        WHERE provider_id = ? AND fetched_at_unix < ?
+          AND credential_id = ? AND source = ? AND surface = ?
+        ORDER BY fetched_at_unix DESC, id DESC
+        LIMIT ?
+        "#,
+        provider_id,
+        until_unix,
+        credential_id,
+        source_id,
+        surface_id,
+        fetch_limit,
+    )
+    .fetch_all(&mut *transaction)
+    .await?;
+    let visible = headers
+        .iter()
+        .take(limit)
+        .take_while(|header| header.fetched_at_unix >= query.since_unix)
+        .count();
+    let truncated = headers
+        .get(limit)
+        .is_some_and(|header| header.fetched_at_unix >= query.since_unix);
+    headers.truncate(visible + usize::from(headers.len() > visible));
+    let ids = headers.iter().map(|header| header.id).collect::<Vec<_>>();
+    let mut quota_pools = quota_pools_many(&mut transaction, &ids, database_path).await?;
+    let mut credit_pools = credit_pools_many(&mut transaction, &ids, database_path).await?;
+    let mut quota_metrics = quota_metrics_many(&mut transaction, &ids, database_path).await?;
+    let mut claude_limits = claude_limits_many(&mut transaction, &ids, database_path).await?;
+    let mut response_windows = response_windows_many(&mut transaction, &ids, database_path).await?;
+    let mut snapshots = Vec::with_capacity(headers.len());
+    for header in headers {
+        let pools = quota_pools.remove(&header.id).unwrap_or_default();
+        let credits = credit_pools.remove(&header.id).unwrap_or_default();
+        let metrics = quota_metrics.remove(&header.id).unwrap_or_default();
+        let claude_limits = claude_limits.remove(&header.id).unwrap_or_default();
+        let header_windows = response_windows.remove(&header.id).unwrap_or_default();
+        snapshots.push(IdentifiedSnapshot {
+            id: header.id,
+            snapshot: provider_snapshot_from_header(
+                header.fetched_at_unix,
+                header.provider_id,
+                header.client_id,
+                header.group_id,
+                header.credential_id,
+                header.account_id,
+                &header.source,
+                &header.surface,
+                &header.fetch_status,
+                header.gap_reason,
+                pools,
+                credits,
+                metrics,
+                claude_limits,
+                header_windows,
+                database_path,
+            )?,
+        });
+    }
+    let metadata = control_metadata(&mut transaction, database_path).await?;
+    transaction.rollback().await?;
+    let predecessor = if snapshots.len() > visible {
+        snapshots.pop()
+    } else {
+        None
+    };
+    snapshots.reverse();
+    Ok(IdentifiedSnapshotPage {
+        metadata,
+        snapshots,
+        predecessor,
+        truncated,
+    })
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one transaction loads request rows and freezes the page cursor together"
+)]
+async fn read_request_row_transaction(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+    query: RequestRowQuery,
+) -> Result<RequestRowPage, StorageError> {
+    if query.limit == 0 || query.limit > 200 {
+        return Err(StorageError::Input {
+            field: "request page limit must be 1..=200",
+        });
+    }
+    let mut transaction = connection.begin().await?;
+    let limit = usize::try_from(query.limit).map_err(|_| StorageError::Input {
+        field: "request page limit is too large",
+    })?;
+    let fetch_limit = i64::try_from(limit.saturating_add(1)).map_err(|_| StorageError::Input {
+        field: "request page limit is too large",
+    })?;
+    let client_filter = query.client.is_some();
+    let client_value = query.client.flatten().map(|id| id.as_ref().to_owned());
+    let client_value = client_value.as_deref();
+    let credential = query.credential.as_ref().map(AsRef::as_ref);
+    let group = query.group.as_ref().map(AsRef::as_ref);
+    let model = query.model.as_deref();
+    let outcome = query.outcome.map(RequestOutcome::as_storage);
+    let provider = query.provider.as_ref().map(AsRef::as_ref);
+    let cursor = query.before;
+    let committed_cutoff =
+        sqlx::query!(r#"SELECT COALESCE(MAX(id), 0) AS "cutoff!: i64" FROM request_events"#)
+            .fetch_one(&mut *transaction)
+            .await?
+            .cutoff;
+    let cursor_cutoff = cursor.map(|value| value.cutoff_id.max(value.row_id));
+    let cursor_time = cursor.map(|value| value.occurred_at_unix);
+    let cursor_id = cursor.map(|value| value.row_id);
+    let rows = sqlx::query!(
+        r#"
+        SELECT request_events.id AS "id!: i64", occurred_at_unix, client_id, group_id,
+               credential_id, credentials.provider_id AS "provider_id!: String", model_id,
+               outcome, status_code AS "status_code!: i64", latency_ms AS "latency_ms!: i64",
+               request_bytes AS "request_bytes!: i64", response_bytes AS "response_bytes!: i64",
+               input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+               usage_complete AS "usage_complete!: i64"
+        FROM request_events
+        JOIN credentials ON credentials.id = request_events.credential_id
+        WHERE occurred_at_unix >= ? AND occurred_at_unix < ?
+          AND (? = 0 OR client_id IS ?)
+          AND (? IS NULL OR credential_id = ?)
+          AND (? IS NULL OR group_id = ?)
+          AND (? IS NULL OR model_id = ?)
+          AND (? IS NULL OR outcome = ?)
+          AND (? IS NULL OR credentials.provider_id = ?)
+          AND (? IS NULL OR request_events.id <= ?)
+          AND (? IS NULL OR occurred_at_unix < ? OR (occurred_at_unix = ? AND request_events.id < ?))
+        ORDER BY occurred_at_unix DESC, request_events.id DESC
+        LIMIT ?
+        "#,
+        query.since_unix,
+        query.until_unix,
+        client_filter,
+        client_value,
+        credential,
+        credential,
+        group,
+        group,
+        model,
+        model,
+        outcome,
+        outcome,
+        provider,
+        provider,
+        cursor_cutoff,
+        cursor_cutoff,
+        cursor_time,
+        cursor_time,
+        cursor_time,
+        cursor_id,
+        fetch_limit,
+    )
+    .fetch_all(&mut *transaction)
+    .await?;
+    let metadata = control_metadata(&mut transaction, database_path).await?;
+    transaction.rollback().await?;
+    let has_more = rows.len() > limit;
+    let mut records = rows;
+    records.truncate(limit);
+    let next_before = records.last().map(|row| RequestRowCursor {
+        cutoff_id: cursor.map_or(committed_cutoff, |value| value.cutoff_id.max(value.row_id)),
+        occurred_at_unix: row.occurred_at_unix,
+        row_id: row.id,
+    });
+    let mut mapped = Vec::with_capacity(records.len());
+    for row in records {
+        mapped.push(request_row_from_header(
+            row.id,
+            row.occurred_at_unix,
+            row.client_id,
+            row.group_id,
+            row.credential_id,
+            row.provider_id,
+            row.model_id,
+            &row.outcome,
+            row.status_code,
+            row.latency_ms,
+            row.request_bytes,
+            row.response_bytes,
+            row.input_tokens,
+            row.output_tokens,
+            row.cache_read_tokens,
+            row.cache_write_tokens,
+            row.usage_complete,
+            database_path,
+        )?);
+    }
+    Ok(RequestRowPage {
+        metadata,
+        rows: mapped,
+        next_before,
+        has_more,
+    })
+}
+
 async fn read_provider_snapshots(
     connection: &mut SqliteConnection,
     database_path: &Path,
@@ -1341,10 +2394,6 @@ async fn read_provider_snapshots(
     )
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "bounded page loading keeps header and typed children together"
-)]
 async fn read_provider_snapshot_page(
     connection: &mut SqliteConnection,
     database_path: &Path,
@@ -1397,70 +2446,37 @@ async fn read_provider_snapshot_page(
     })?;
     let truncated = headers.len() > limit_usize;
     headers.truncate(limit_usize);
+    let ids = headers.iter().map(|header| header.id).collect::<Vec<_>>();
+    let mut quota_pools = quota_pools_many(connection, &ids, database_path).await?;
+    let mut credit_pools = credit_pools_many(connection, &ids, database_path).await?;
+    let mut quota_metrics = quota_metrics_many(connection, &ids, database_path).await?;
+    let mut claude_limits = claude_limits_many(connection, &ids, database_path).await?;
+    let mut response_windows = response_windows_many(connection, &ids, database_path).await?;
     let mut snapshots = Vec::with_capacity(headers.len());
     for header in headers {
-        let pools = quota_pools(connection, header.id, database_path).await?;
-        let credits = credit_pools(connection, header.id, database_path).await?;
-        let metrics = quota_metrics(connection, header.id, database_path).await?;
-        let claude_limits = claude_limits(connection, header.id, database_path).await?;
-        let header_windows = response_windows(connection, header.id, database_path).await?;
-        let provider =
-            ProviderId::try_from(header.provider_id).map_err(|error| StorageError::StoredId {
-                kind: "provider",
-                value: error.into_name(),
-            })?;
-        let client = header
-            .client_id
-            .map(ClientId::try_from)
-            .transpose()
-            .map_err(|error| StorageError::StoredId {
-                kind: "client",
-                value: error.into_name(),
-            })?;
-        let group = header
-            .group_id
-            .map(GroupId::try_from)
-            .transpose()
-            .map_err(|error| StorageError::StoredId {
-                kind: "group",
-                value: error.into_name(),
-            })?;
-        let credential = CredentialId::try_from(header.credential_id).map_err(|error| {
-            StorageError::StoredId {
-                kind: "credential",
-                value: error.into_name(),
-            }
-        })?;
-        let source = SnapshotSource::from_storage(&header.source).ok_or_else(|| {
-            StorageError::Integrity {
-                path: database_path.to_owned(),
-            }
-        })?;
-        snapshots.push(ProviderSnapshot {
-            account_id: header.account_id,
-            client,
-            claude_limits,
-            credential,
-            credits,
-            fetched_at_unix: header.fetched_at_unix,
-            fetch_status: SnapshotFetchStatus::from_storage(&header.fetch_status).ok_or_else(
-                || StorageError::Integrity {
-                    path: database_path.to_owned(),
-                },
-            )?,
-            gap_reason: header.gap_reason,
-            group,
-            header_windows,
-            metrics,
+        let pools = quota_pools.remove(&header.id).unwrap_or_default();
+        let credits = credit_pools.remove(&header.id).unwrap_or_default();
+        let metrics = quota_metrics.remove(&header.id).unwrap_or_default();
+        let claude_limits = claude_limits.remove(&header.id).unwrap_or_default();
+        let header_windows = response_windows.remove(&header.id).unwrap_or_default();
+        snapshots.push(provider_snapshot_from_header(
+            header.fetched_at_unix,
+            header.provider_id,
+            header.client_id,
+            header.group_id,
+            header.credential_id,
+            header.account_id,
+            &header.source,
+            &header.surface,
+            &header.fetch_status,
+            header.gap_reason,
             pools,
-            provider,
-            source,
-            surface: SnapshotSurface::from_storage(&header.surface).ok_or_else(|| {
-                StorageError::Integrity {
-                    path: database_path.to_owned(),
-                }
-            })?,
-        });
+            credits,
+            metrics,
+            claude_limits,
+            header_windows,
+            database_path,
+        )?);
     }
     snapshots.reverse();
     Ok(SnapshotPage {
@@ -1508,12 +2524,12 @@ async fn persist_oauth_pair(
     })?;
     if exists {
         let updated = sqlx::query!(
-            r#"
+            r"
             UPDATE oauth_mappings
             SET generation = ?, fake_access_token = ?, fake_refresh_token = ?,
                 fake_access_expires_at_unix = ?, updated_at_unix = ?
             WHERE client_id = ? AND credential_id = ? AND generation = ?
-            "#,
+            ",
             generation,
             fake_access_token,
             fake_refresh_token,
@@ -1725,150 +2741,166 @@ async fn insert_response_windows(
     Ok(())
 }
 
-async fn quota_pools(
+async fn quota_pools_many(
     connection: &mut SqliteConnection,
-    snapshot_id: i64,
+    snapshot_ids: &[i64],
     path: &Path,
-) -> Result<Vec<QuotaPool>, StorageError> {
-    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
+) -> Result<BTreeMap<i64, Vec<QuotaPool>>, StorageError> {
+    let (snapshot_ids, fetch_limit) = snapshot_child_query(snapshot_ids, MAX_SNAPSHOT_CHILDREN);
     let rows = sqlx::query!(
-        r#"
-        SELECT label, utilized, limit_value, reset_at_unix FROM quota_pools
-        WHERE snapshot_id = ?
-        ORDER BY ordinal LIMIT ?
-        "#,
-        snapshot_id,
+        r"
+        SELECT snapshot_id, label, utilized, limit_value, reset_at_unix FROM quota_pools
+        WHERE snapshot_id IN (SELECT value FROM json_each(?))
+        ORDER BY snapshot_id, ordinal LIMIT ?
+        ",
+        snapshot_ids,
         fetch_limit,
     )
     .fetch_all(connection)
     .await?;
-    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
-    rows.into_iter()
+    let values = rows
+        .into_iter()
         .map(|row| {
-            Ok(QuotaPool {
-                label: row.label,
-                limit: stored_count(row.limit_value, path)?,
-                reset_at_unix: row.reset_at_unix,
-                utilized: stored_count(row.utilized, path)?,
-            })
+            Ok((
+                row.snapshot_id,
+                QuotaPool {
+                    label: row.label,
+                    limit: stored_count(row.limit_value, path)?,
+                    reset_at_unix: row.reset_at_unix,
+                    utilized: stored_count(row.utilized, path)?,
+                },
+            ))
         })
-        .collect()
+        .collect::<Result<Vec<_>, StorageError>>()?;
+    bounded_grouped_children(values, MAX_SNAPSHOT_CHILDREN, path)
 }
 
-async fn credit_pools(
+async fn credit_pools_many(
     connection: &mut SqliteConnection,
-    snapshot_id: i64,
+    snapshot_ids: &[i64],
     path: &Path,
-) -> Result<Vec<CreditPool>, StorageError> {
-    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
+) -> Result<BTreeMap<i64, Vec<CreditPool>>, StorageError> {
+    let (snapshot_ids, fetch_limit) = snapshot_child_query(snapshot_ids, MAX_SNAPSHOT_CHILDREN);
     let rows = sqlx::query!(
-        r#"
-        SELECT label, used_minor_units, remaining_minor_units, limit_minor_units, reset_at_unix
+        r"
+        SELECT snapshot_id, label, used_minor_units, remaining_minor_units, limit_minor_units, reset_at_unix
         FROM credit_pools
-        WHERE snapshot_id = ?
-        ORDER BY ordinal LIMIT ?
-        "#,
-        snapshot_id,
+        WHERE snapshot_id IN (SELECT value FROM json_each(?))
+        ORDER BY snapshot_id, ordinal LIMIT ?
+        ",
+        snapshot_ids,
         fetch_limit,
     )
     .fetch_all(connection)
     .await?;
-    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
-    rows.into_iter()
+    let values = rows
+        .into_iter()
         .map(|row| {
-            Ok(CreditPool {
-                label: row.label,
-                limit_minor_units: stored_count(row.limit_minor_units, path)?,
-                remaining_minor_units: stored_count(row.remaining_minor_units, path)?,
-                reset_at_unix: row.reset_at_unix,
-                used_minor_units: stored_count(row.used_minor_units, path)?,
-            })
+            Ok((
+                row.snapshot_id,
+                CreditPool {
+                    label: row.label,
+                    limit_minor_units: stored_count(row.limit_minor_units, path)?,
+                    remaining_minor_units: stored_count(row.remaining_minor_units, path)?,
+                    reset_at_unix: row.reset_at_unix,
+                    used_minor_units: stored_count(row.used_minor_units, path)?,
+                },
+            ))
         })
-        .collect()
+        .collect::<Result<Vec<_>, StorageError>>()?;
+    bounded_grouped_children(values, MAX_SNAPSHOT_CHILDREN, path)
 }
 
-async fn quota_metrics(
+async fn quota_metrics_many(
     connection: &mut SqliteConnection,
-    snapshot_id: i64,
+    snapshot_ids: &[i64],
     path: &Path,
-) -> Result<Vec<QuotaMetric>, StorageError> {
-    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
+) -> Result<BTreeMap<i64, Vec<QuotaMetric>>, StorageError> {
+    let (snapshot_ids, fetch_limit) = snapshot_child_query(snapshot_ids, MAX_SNAPSHOT_CHILDREN);
     let rows = sqlx::query!(
-        r#"
-        SELECT label, value, unit FROM quota_metrics
-        WHERE snapshot_id = ?
-        ORDER BY ordinal LIMIT ?
-        "#,
-        snapshot_id,
+        r"
+        SELECT snapshot_id, label, value, unit FROM quota_metrics
+        WHERE snapshot_id IN (SELECT value FROM json_each(?))
+        ORDER BY snapshot_id, ordinal LIMIT ?
+        ",
+        snapshot_ids,
         fetch_limit,
     )
     .fetch_all(connection)
     .await?;
-    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
-    rows.into_iter()
+    let values = rows
+        .into_iter()
         .map(|row| {
-            Ok(QuotaMetric {
-                label: row.label,
-                unit: row.unit,
-                value: stored_count(row.value, path)?,
-            })
+            Ok((
+                row.snapshot_id,
+                QuotaMetric {
+                    label: row.label,
+                    unit: row.unit,
+                    value: stored_count(row.value, path)?,
+                },
+            ))
         })
-        .collect()
+        .collect::<Result<Vec<_>, StorageError>>()?;
+    bounded_grouped_children(values, MAX_SNAPSHOT_CHILDREN, path)
 }
 
-async fn claude_limits(
+async fn claude_limits_many(
     connection: &mut SqliteConnection,
-    snapshot_id: i64,
+    snapshot_ids: &[i64],
     path: &Path,
-) -> Result<Vec<ClaudeLimit>, StorageError> {
-    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
+) -> Result<BTreeMap<i64, Vec<ClaudeLimit>>, StorageError> {
+    let (snapshot_ids, fetch_limit) = snapshot_child_query(snapshot_ids, MAX_SNAPSHOT_CHILDREN);
     let rows = sqlx::query!(
-        r#"
-        SELECT kind, group_name, percent_milli, reset_at_unix, severity, is_active,
+        r"
+        SELECT snapshot_id, kind, group_name, percent_milli, reset_at_unix, severity, is_active,
                model_display_name, surface_display_name
-        FROM claude_limits WHERE snapshot_id = ? ORDER BY ordinal LIMIT ?
-        "#,
-        snapshot_id,
+        FROM claude_limits WHERE snapshot_id IN (SELECT value FROM json_each(?)) ORDER BY snapshot_id, ordinal LIMIT ?
+        ",
+        snapshot_ids,
         fetch_limit,
     )
     .fetch_all(connection)
     .await?;
-    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
-    rows.into_iter()
+    let values = rows
+        .into_iter()
         .map(|row| {
-            Ok(ClaudeLimit {
-                kind: row.kind,
-                group: row.group_name,
-                percent_milli: stored_count(row.percent_milli, path)?,
-                reset_at_unix: row.reset_at_unix,
-                severity: row.severity,
-                is_active: row.is_active != 0,
-                model_display_name: row.model_display_name,
-                surface_display_name: row.surface_display_name,
-            })
+            Ok((
+                row.snapshot_id,
+                ClaudeLimit {
+                    kind: row.kind,
+                    group: row.group_name,
+                    percent_milli: stored_count(row.percent_milli, path)?,
+                    reset_at_unix: row.reset_at_unix,
+                    severity: row.severity,
+                    is_active: row.is_active != 0,
+                    model_display_name: row.model_display_name,
+                    surface_display_name: row.surface_display_name,
+                },
+            ))
         })
-        .collect()
+        .collect::<Result<Vec<_>, StorageError>>()?;
+    bounded_grouped_children(values, MAX_SNAPSHOT_CHILDREN, path)
 }
 
-async fn response_windows(
+async fn response_windows_many(
     connection: &mut SqliteConnection,
-    snapshot_id: i64,
+    snapshot_ids: &[i64],
     path: &Path,
-) -> Result<Vec<ResponseHeaderWindow>, StorageError> {
-    let fetch_limit = child_query_limit(MAX_RESPONSE_WINDOWS);
+) -> Result<BTreeMap<i64, Vec<ResponseHeaderWindow>>, StorageError> {
+    let (snapshot_ids, fetch_limit) = snapshot_child_query(snapshot_ids, MAX_RESPONSE_WINDOWS);
     let rows = sqlx::query!(
-        r#"
-        SELECT label, utilization_milli, reset_at_unix, status FROM response_header_windows
-        WHERE snapshot_id = ?
-        ORDER BY label LIMIT ?
-        "#,
-        snapshot_id,
+        r"
+        SELECT snapshot_id, label, utilization_milli, reset_at_unix, status FROM response_header_windows
+        WHERE snapshot_id IN (SELECT value FROM json_each(?))
+        ORDER BY snapshot_id, label LIMIT ?
+        ",
+        snapshot_ids,
         fetch_limit,
     )
     .fetch_all(connection)
     .await?;
-    let rows = bounded_snapshot_children(rows, MAX_RESPONSE_WINDOWS, path)?;
-    rows.into_iter()
+    let values = rows
+        .into_iter()
         .map(|row| {
             let integrity = || StorageError::Integrity {
                 path: path.to_owned(),
@@ -1880,31 +2912,55 @@ async fn response_windows(
                     ResponseWindowStatus::from_storage(value.as_str()).ok_or_else(integrity)
                 })
                 .transpose()?;
-            Ok(ResponseHeaderWindow {
-                label,
-                reset_at_unix: row.reset_at_unix,
-                status,
-                utilization_milli: u32::try_from(row.utilization_milli).map_err(|_| integrity())?,
-            })
+            Ok((
+                row.snapshot_id,
+                ResponseHeaderWindow {
+                    label,
+                    reset_at_unix: row.reset_at_unix,
+                    status,
+                    utilization_milli: u32::try_from(row.utilization_milli)
+                        .map_err(|_| integrity())?,
+                },
+            ))
         })
-        .collect()
+        .collect::<Result<Vec<_>, StorageError>>()?;
+    bounded_grouped_children(values, MAX_RESPONSE_WINDOWS, path)
+}
+
+fn snapshot_child_query(snapshot_ids: &[i64], max: usize) -> (String, i64) {
+    let ids = snapshot_ids
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    // Fetching one beyond the page-wide maximum guarantees that any corrupt
+    // per-snapshot excess is visible to bounded_grouped_children.
+    (
+        format!("[{ids}]"),
+        child_query_limit(snapshot_ids.len().saturating_mul(max)),
+    )
+}
+
+fn bounded_grouped_children<T>(
+    values: Vec<(i64, T)>,
+    max: usize,
+    path: &Path,
+) -> Result<BTreeMap<i64, Vec<T>>, StorageError> {
+    let mut grouped = BTreeMap::<i64, Vec<T>>::new();
+    for (snapshot_id, value) in values {
+        let children = grouped.entry(snapshot_id).or_default();
+        children.push(value);
+        if children.len() > max {
+            return Err(StorageError::Integrity {
+                path: path.to_owned(),
+            });
+        }
+    }
+    Ok(grouped)
 }
 
 fn child_query_limit(max: usize) -> i64 {
     i64::try_from(max.saturating_add(1)).unwrap_or(i64::MAX)
-}
-
-fn bounded_snapshot_children<T>(
-    rows: Vec<T>,
-    max: usize,
-    path: &Path,
-) -> Result<Vec<T>, StorageError> {
-    if rows.len() > max {
-        return Err(StorageError::Integrity {
-            path: path.to_owned(),
-        });
-    }
-    Ok(rows)
 }
 
 async fn request_usage_worker(
@@ -2032,6 +3088,10 @@ fn complete_sum(
     if missing > 0 {
         return Ok(None);
     }
+    value.map(|value| stored_count(value, path)).transpose()
+}
+
+fn stored_optional_count(value: Option<i64>, path: &Path) -> Result<Option<u64>, StorageError> {
     value.map(|value| stored_count(value, path)).transpose()
 }
 
@@ -3432,6 +4492,407 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn identified_history_bounds_windows_and_predecessor_follows_filter() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        for timestamp in [10, 11, 12, 13, 14, 15] {
+            storage
+                .append_provider_snapshot(snapshot(timestamp))
+                .await
+                .expect("target snapshot");
+        }
+        let mut noisy = snapshot(11);
+        noisy.source = SnapshotSource::ResponseHeaders;
+        noisy.surface = SnapshotSurface::ResponseHeaders;
+        storage
+            .append_provider_snapshot(noisy)
+            .await
+            .expect("other surface");
+
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("read-only storage")
+            .into_control_reader();
+        let page = reader
+            .identified_snapshot_page(
+                SnapshotQuery {
+                    limit: NonZeroU64::new(2).expect("limit"),
+                    provider: provider("claude"),
+                    since_unix: 1,
+                },
+                13,
+                credential("claude"),
+                SnapshotSource::OutOfBandFetch,
+                SnapshotSurface::ClaudeSubscription,
+            )
+            .await
+            .expect("filtered page");
+        let timestamps = page
+            .snapshots
+            .iter()
+            .map(|snapshot| snapshot.snapshot.fetched_at_unix)
+            .collect::<Vec<_>>();
+        assert_eq!(timestamps, [11, 12]);
+        let predecessor = page.predecessor.expect("same-filter predecessor");
+        assert_eq!(predecessor.snapshot.fetched_at_unix, 10);
+        assert!(page.truncated);
+        let boundary = reader
+            .identified_snapshot_page(
+                SnapshotQuery {
+                    limit: NonZeroU64::new(10).expect("limit"),
+                    provider: provider("claude"),
+                    since_unix: 11,
+                },
+                13,
+                credential("claude"),
+                SnapshotSource::OutOfBandFetch,
+                SnapshotSurface::ClaudeSubscription,
+            )
+            .await
+            .expect("boundary page");
+        assert_eq!(
+            boundary
+                .snapshots
+                .iter()
+                .map(|row| row.snapshot.fetched_at_unix)
+                .collect::<Vec<_>>(),
+            [11, 12]
+        );
+        assert_eq!(
+            boundary
+                .predecessor
+                .expect("outside-window predecessor")
+                .snapshot
+                .fetched_at_unix,
+            10
+        );
+        assert!(!boundary.truncated);
+        reader
+            .connection
+            .close()
+            .await
+            .expect("close control reader");
+        close(storage).await;
+    }
+
+    async fn persisted_control_budget_directory() -> tempfile::TempDir {
+        const SNAPSHOTS: i64 = 1_001;
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        for timestamp in 1..=SNAPSHOTS {
+            storage
+                .append_provider_snapshot(snapshot(timestamp))
+                .await
+                .expect("bounded provider history");
+        }
+        let mut connection = test_connection(&directory.path().join(DATABASE_FILE)).await;
+        sqlx::query(
+            r"
+            WITH RECURSIVE sequence(value) AS (
+                SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 2000000
+            )
+            INSERT INTO request_events (
+              occurred_at_unix, client_id, group_id, credential_id, model_id, outcome,
+              status_code, request_bytes, response_bytes, latency_ms, input_tokens,
+              output_tokens, cache_read_tokens, cache_write_tokens, usage_complete,
+              dropped_events
+            )
+            SELECT value, 'harness', 'anthropic', 'claude', 'model-' || value, 'completed',
+                   200, 100, 200, 25, 11, 13, 7, NULL, 1, 0
+            FROM sequence
+            ",
+        )
+        .execute(&mut connection)
+        .await
+        .expect("persisted request history");
+        connection.close().await.expect("close fixture connection");
+        close(storage).await;
+        directory
+    }
+
+    #[tokio::test]
+    async fn persisted_large_history_measures_control_view_query_budgets() {
+        use sqlx::Row as _;
+
+        const REQUEST_ROWS: i64 = 2_000_000;
+        const SNAPSHOTS: i64 = 1_001;
+        let directory = persisted_control_budget_directory().await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("control reader storage")
+            .into_control_reader();
+        let request_started = std::time::Instant::now();
+        let request_error = reader
+            .request_series(RequestSeriesQuery {
+                bucket_seconds: NonZeroU64::new(60).expect("bucket"),
+                client: None,
+                credential: None,
+                group: None,
+                model: None,
+                outcome: None,
+                provider: None,
+                since_unix: 1,
+                until_unix: REQUEST_ROWS + 1,
+            })
+            .await
+            .expect_err("large aggregate is bounded");
+        let request_elapsed = request_started.elapsed();
+        assert!(
+            matches!(request_error, StorageError::QueryBudgetExceeded),
+            "request aggregate error: {request_error}"
+        );
+
+        let table_started = std::time::Instant::now();
+        let table_page = reader
+            .request_row_page(RequestRowQuery {
+                before: None,
+                client: None,
+                credential: None,
+                group: None,
+                limit: 200,
+                model: None,
+                outcome: None,
+                provider: None,
+                since_unix: 1,
+                until_unix: REQUEST_ROWS + 1,
+            })
+            .await
+            .expect("bounded request table view");
+        let table_elapsed = table_started.elapsed();
+        assert_eq!(table_page.rows.len(), 200);
+
+        let mut plan = test_connection(&directory.path().join(DATABASE_FILE)).await;
+        let query_plan = sqlx::query(
+            "EXPLAIN QUERY PLAN SELECT COALESCE(SUM(dropped_events), 0) FROM request_events",
+        )
+        .fetch_all(&mut plan)
+        .await
+        .expect("request loss query plan");
+        let rendered_plan = query_plan
+            .iter()
+            .map(|row| row.get::<String, _>("detail"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        plan.close().await.expect("close plan connection");
+        assert!(
+            rendered_plan.contains("COVERING INDEX request_events_dropped_cover_idx"),
+            "request loss sum must use the covering index: {rendered_plan}"
+        );
+
+        let provider_started = std::time::Instant::now();
+        let provider_page = reader
+            .identified_snapshot_page(
+                SnapshotQuery {
+                    limit: NonZeroU64::new(1_000).expect("provider limit"),
+                    provider: provider("claude"),
+                    since_unix: 1,
+                },
+                SNAPSHOTS + 1,
+                credential("claude"),
+                SnapshotSource::OutOfBandFetch,
+                SnapshotSurface::ClaudeSubscription,
+            )
+            .await
+            .expect("bounded provider view");
+        let provider_elapsed = provider_started.elapsed();
+        assert_eq!(provider_page.snapshots.len(), 1_000);
+
+        println!(
+            "persisted control budgets: full aggregate {request_elapsed:?} (refused), request table {table_elapsed:?}, provider view {provider_elapsed:?}"
+        );
+        assert!(
+            table_elapsed < ControlReader::QUERY_BUDGET,
+            "request table view exceeded its budget: {table_elapsed:?}"
+        );
+        assert!(
+            provider_elapsed < ControlReader::QUERY_BUDGET,
+            "provider view exceeded its budget: {provider_elapsed:?}"
+        );
+        reader
+            .connection
+            .close()
+            .await
+            .expect("close control reader");
+    }
+    #[tokio::test]
+    async fn cancelled_control_sql_and_queued_acquisition_allow_immediate_reuse() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        let started = std::time::Instant::now();
+        {
+            let mut report = reader.report_transaction().await.expect("HTTP transaction");
+            let heavy = sqlx::query("WITH RECURSIVE n(v) AS (SELECT 1 UNION ALL SELECT v+1 FROM n WHERE v<200000000) SELECT SUM(v) FROM n")
+                .fetch_all(&mut *report.transaction);
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(10), heavy)
+                    .await
+                    .is_err()
+            );
+            // Dropping the HTTP view cancels executing SQL and queues transaction rollback.
+        }
+        tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            reader.overview(vec![]),
+        )
+        .await
+        .expect("WS immediately reuses reader")
+        .expect("fresh WS budget");
+        let mut report = reader
+            .report_transaction()
+            .await
+            .expect("HTTP immediately reuses reader");
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT 42")
+                .fetch_one(&mut *report.transaction)
+                .await
+                .expect("live HTTP transaction"),
+            42
+        );
+        report.finish(Ok(())).await.expect("HTTP cleanup");
+        assert!(
+            started.elapsed() < ControlReader::QUERY_BUDGET,
+            "cancelled SQL must not run until its original budget"
+        );
+        assert!(!reader.connection.is_in_transaction());
+
+        let shared_reader = Arc::new(tokio::sync::Mutex::new(reader));
+        let held = shared_reader.lock().await;
+        let pending_reader = Arc::clone(&shared_reader);
+        let queued =
+            tokio::spawn(async move { pending_reader.lock().await.overview(vec![]).await });
+        tokio::task::yield_now().await;
+        queued.abort();
+        assert!(
+            queued
+                .await
+                .expect_err("cancelled queued reader")
+                .is_cancelled()
+        );
+        drop(held);
+        let mut reader = shared_reader.lock().await;
+        tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            reader.overview(vec![]),
+        )
+        .await
+        .expect("WS after queued cancellation")
+        .expect("WS page");
+        let report = reader
+            .report_transaction()
+            .await
+            .expect("HTTP after queued cancellation");
+        report
+            .finish(Ok(()))
+            .await
+            .expect("HTTP cleanup after queued cancellation");
+        drop(reader);
+        let reader = Arc::try_unwrap(shared_reader)
+            .ok()
+            .expect("sole reader owner")
+            .into_inner();
+        tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            reader.connection.close(),
+        )
+        .await
+        .expect("bounded reader shutdown")
+        .expect("reader closes");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn http_report_sections_share_one_sqlite_snapshot() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        let mut report = reader
+            .report_transaction()
+            .await
+            .expect("report transaction");
+        assert_eq!(
+            report
+                .report_request_usage_loss_total()
+                .await
+                .expect("first section"),
+            0
+        );
+        let mut event = request(RequestOutcome::Completed, 10);
+        event.dropped_events = 3;
+        storage
+            .try_append_request_event(event)
+            .await
+            .expect("concurrent durable writer");
+        assert_eq!(
+            report
+                .report_request_usage_loss_total()
+                .await
+                .expect("second section"),
+            0
+        );
+        report.finish(Ok(())).await.expect("finish report");
+        let mut next = reader.report_transaction().await.expect("next report");
+        assert_eq!(
+            next.report_request_usage_loss_total()
+                .await
+                .expect("next snapshot"),
+            3
+        );
+        next.finish(Ok(())).await.expect("finish next report");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn control_progress_deadline_interrupts_work_and_clears_afterward() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("read-only storage")
+            .into_control_reader();
+        let heavy_fixture = r"
+            WITH RECURSIVE sequence(value) AS (
+                SELECT 1
+                UNION ALL
+                SELECT value + 1 FROM sequence WHERE value < 20000000
+            )
+            SELECT COUNT(*), SUM(value) FROM sequence
+        ";
+
+        let deadline = reader.deadline().await.expect("install progress handler");
+        let interrupted = sqlx::query(heavy_fixture)
+            .fetch_all(&mut reader.connection)
+            .await;
+        assert!(
+            matches!(
+                ControlReader::bounded(&deadline, interrupted.map_err(StorageError::from)),
+                Err(StorageError::QueryBudgetExceeded)
+            ),
+            "the progress handler must interrupt after 250 milliseconds"
+        );
+        reader
+            .clear_deadline()
+            .await
+            .expect("clear progress handler");
+        sqlx::query(heavy_fixture)
+            .fetch_all(&mut reader.connection)
+            .await
+            .expect("same synthetic fixture completes without the deadline");
+        reader
+            .connection
+            .close()
+            .await
+            .expect("close control reader");
+        close(storage).await;
+    }
+
+    #[tokio::test]
     async fn child_reads_reject_quick_check_clean_rows_above_each_bound() {
         let directory = tempfile::tempdir().expect("state directory");
         let storage = open(directory.path()).await;
@@ -3461,20 +4922,24 @@ mod tests {
             .await
             .expect("structurally valid SQLite");
         for excess_result in [
-            quota_pools(&mut connection, snapshot_id, &storage.database_path)
+            quota_pools_many(&mut connection, &[snapshot_id], &storage.database_path)
                 .await
                 .map(|_| ()),
-            credit_pools(&mut connection, snapshot_id, &storage.database_path)
+            credit_pools_many(&mut connection, &[snapshot_id], &storage.database_path)
                 .await
                 .map(|_| ()),
-            quota_metrics(&mut connection, snapshot_id, &storage.database_path)
+            quota_metrics_many(&mut connection, &[snapshot_id], &storage.database_path)
                 .await
                 .map(|_| ()),
-            claude_limits(&mut connection, snapshot_id, &storage.database_path)
+            claude_limits_many(&mut connection, &[snapshot_id], &storage.database_path)
                 .await
                 .map(|_| ()),
-            bounded_snapshot_children(vec![0, 1, 2], MAX_RESPONSE_WINDOWS, &storage.database_path)
-                .map(|_| ()),
+            bounded_grouped_children(
+                vec![(1, 0), (1, 1), (1, 2)],
+                MAX_RESPONSE_WINDOWS,
+                &storage.database_path,
+            )
+            .map(|_| ()),
         ] {
             assert!(matches!(excess_result, Err(StorageError::Integrity { .. })));
         }
@@ -3845,5 +5310,149 @@ mod tests {
                 .expect("loss total"),
             0
         );
+    }
+
+    #[tokio::test]
+    async fn control_client_null_filter_differs_from_omitted_filter() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let known = request(RequestOutcome::Completed, 10);
+        storage
+            .try_append_request_event(known.clone())
+            .await
+            .expect("known client event");
+        storage
+            .try_append_request_event(known)
+            .await
+            .expect("second known client event");
+        let mut connection = test_connection(&directory.path().join(DATABASE_FILE)).await;
+        sqlx::query("UPDATE request_events SET client_id = NULL WHERE rowid = (SELECT MAX(id) FROM request_events)")
+            .execute(&mut connection)
+            .await
+            .expect("historical unknown fixture");
+        connection.close().await.expect("close fixture connection");
+        close(storage).await;
+
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("control reader storage")
+            .into_control_reader();
+        let base_series = RequestSeriesQuery {
+            bucket_seconds: NonZeroU64::new(60).expect("bucket"),
+            client: None,
+            credential: None,
+            group: None,
+            model: None,
+            outcome: None,
+            provider: None,
+            since_unix: 1,
+            until_unix: 20,
+        };
+        let omitted = reader
+            .request_series(base_series.clone())
+            .await
+            .expect("omitted client series");
+        assert_eq!(omitted.aggregates.len(), 2);
+        let unknown_series = reader
+            .request_series(RequestSeriesQuery {
+                client: Some(None),
+                ..base_series.clone()
+            })
+            .await
+            .expect("explicit unknown client series");
+        assert_eq!(unknown_series.aggregates.len(), 1);
+        assert!(unknown_series.aggregates[0].aggregate.client.is_none());
+
+        let base_rows = RequestRowQuery {
+            before: None,
+            client: None,
+            credential: None,
+            group: None,
+            limit: 200,
+            model: None,
+            outcome: None,
+            provider: None,
+            since_unix: 1,
+            until_unix: 20,
+        };
+        let omitted_rows = reader
+            .request_row_page(base_rows.clone())
+            .await
+            .expect("omitted client rows");
+        assert_eq!(omitted_rows.rows.len(), 2);
+        let unknown_rows = reader
+            .request_row_page(RequestRowQuery {
+                client: Some(None),
+                ..base_rows
+            })
+            .await
+            .expect("explicit unknown client rows");
+        assert_eq!(unknown_rows.rows.len(), 1);
+        assert!(unknown_rows.rows[0].client.is_none());
+    }
+
+    #[tokio::test]
+    async fn late_backdated_event_cannot_cross_frozen_request_cutoff() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        storage
+            .try_append_request_event(request(RequestOutcome::Completed, 10))
+            .await
+            .expect("first historical event");
+        storage
+            .try_append_request_event(request(RequestOutcome::Completed, 10))
+            .await
+            .expect("second historical event");
+
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("control reader storage")
+            .into_control_reader();
+        let first = reader
+            .request_row_page(RequestRowQuery {
+                before: None,
+                client: None,
+                credential: None,
+                group: None,
+                limit: 1,
+                model: None,
+                outcome: None,
+                provider: None,
+                since_unix: 1,
+                until_unix: 20,
+            })
+            .await
+            .expect("first page");
+        assert_eq!(first.rows.len(), 1);
+        assert_eq!(first.rows[0].id, 2);
+        let frozen = first.next_before.expect("first page cursor").cutoff_id;
+        assert_eq!(frozen, 2);
+
+        storage
+            .try_append_request_event(request(RequestOutcome::Completed, 10))
+            .await
+            .expect("late backdated event");
+        let second = reader
+            .request_row_page(RequestRowQuery {
+                before: Some(RequestRowCursor {
+                    cutoff_id: frozen,
+                    occurred_at_unix: 10,
+                    row_id: 2,
+                }),
+                client: None,
+                credential: None,
+                group: None,
+                limit: 1,
+                model: None,
+                outcome: None,
+                provider: None,
+                since_unix: 1,
+                until_unix: 20,
+            })
+            .await
+            .expect("frozen historical page");
+        assert_eq!(second.rows.len(), 1);
+        assert_eq!(second.rows[0].id, 1);
+        close(storage).await;
     }
 }
