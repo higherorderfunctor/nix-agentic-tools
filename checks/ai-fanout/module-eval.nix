@@ -23,25 +23,39 @@ in {
       };
       hm = evalHm declaration;
       devenv = evalDevenv declaration;
+      roots = devenv.config.ai.internal.roots;
+      expectedSkills = roots.stacked-workflows-content.passthru.skills;
+      expectedRules = import ../../packages/stacked-workflows/router.nix {
+        inherit lib;
+        pkgs = pkgs // roots;
+      };
       poolWarnings = evaluated: builtins.filter (lib.hasInfix "ai.copilot.github.") evaluated.config.warnings;
       observation = {
         rules = builtins.attrNames hm.config.ai.copilot.github.rules;
-        skills = hm.config.ai.copilot.github ? skills;
+        skills = builtins.attrNames hm.config.ai.copilot.github.skills;
         warnings = poolWarnings hm;
         definitions = map (definition: definition.file) hm.options.ai.copilot.github.rules.definitionsWithLocations;
       };
-      consumer = evalHm (lib.recursiveUpdate declaration {ai.copilot.github.rules.consumer.text = "Consumer guidance.";});
+      consumer = evalHm (lib.recursiveUpdate declaration {
+        ai.copilot.github = {
+          rules.consumer.text = "Consumer guidance.";
+          skills.consumer = ../../packages/copilot-cli/checks/fixtures/committed-skill;
+        };
+      });
+      warns = pool: lib.any (lib.hasPrefix "ai.copilot.github.${pool} is set but hm does not deliver it to copilot") (poolWarnings consumer);
     in
       (mkTest "package-copilot-backend-gate" (
         observation.rules
         == []
-        && !observation.skills
+        && observation.skills == []
         && observation.warnings == []
-        && !(devenv.config.ai.copilot.github ? skills)
-        && devenv.config.ai.copilot.github.rules ? stacked-workflows-router
+        && devenv.config.ai.copilot.github.skills == expectedSkills
+        && builtins.attrNames devenv.config.ai.copilot.github.rules == builtins.attrNames expectedRules
+        && lib.all (name: devenv.config.ai.copilot.github.rules.${name}.text == expectedRules.${name}.text) (builtins.attrNames expectedRules)
         && poolWarnings devenv == []
         && consumer.config.ai.copilot.github.rules ? consumer
-        && poolWarnings consumer != []
+        && consumer.config.ai.copilot.github.skills ? consumer
+        && lib.all warns ["rules" "skills"]
       ))
       // {passthru = {inherit observation;};};
 

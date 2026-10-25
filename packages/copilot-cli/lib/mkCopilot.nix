@@ -2,8 +2,8 @@
 # that read a repository's committed tree.
 #
 # One record carries two option namespaces. `ai.copilot.github` holds the
-# pools github.com reads: context (the shared AGENTS.md) and rules
-# (`.github/instructions/`). Agents and skills declare gaps below.
+# pools github.com reads: context (the shared AGENTS.md), rules
+# (`.github/instructions/`) and skills (`.github/skills/`). Agents declare a gap.
 # `ai.copilot.cli` is reserved for the Copilot CLI's
 # launcher, which this module does not ship: the record has no package, so
 # the launcher namespace declares nothing and `ai.copilot.enable` is the
@@ -23,6 +23,7 @@
 }: let
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   docs = path: "https://docs.github.com/en/copilot/${path}";
+  helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   homeManagerReason = surface: "github.com Copilot reads ${surface} from a repository's committed tree, and Home Manager has no repository to write. Configure it through the devenv module. See ${docs "reference/custom-instructions-support"}.";
   # Where each unit lands, shared by the staged entries and `contentTargets`.
   instructionPath = cfg: name: "${cfg.github.projectDir}/instructions/${name}.instructions.md";
@@ -89,15 +90,15 @@ in
         reason = "github.com Copilot runs in GitHub's cloud environment, set up by .github/workflows/copilot-setup-steps.yml; a repository file cannot select its shell. See ${docs "how-tos/use-copilot-agents/cloud-agent/customize-the-agent-environment"}.";
       };
       skills = {
-        backends = [];
-        reason = "github.com Copilot reads committed skills, where Nix store symlinks dangle, and this module does not copy skill trees. Commit real files under .github/skills instead. See ${docs "how-tos/use-copilot-agents/cloud-agent/create-skills"}.";
+        backends = ["devenv"];
+        reason = homeManagerReason "skills";
       };
     };
     options.github.projectDir = lib.mkOption {
       type = lib.types.str;
       default = ".github";
       description = ''
-        Directory github.com Copilot reads instructions from,
+        Directory github.com Copilot reads instructions and skills from,
         relative to the devenv root. Home Manager has no project root
         and rejects overrides.
       '';
@@ -106,6 +107,7 @@ in
       backend,
       cfg,
       mergedRules,
+      mergedSkills,
       ...
     }:
       lib.mkMerge [
@@ -125,19 +127,25 @@ in
         })
         (lib.optionalAttrs (backend == "devenv") {
           # github.com reads the COMMITTED tree, where a store symlink
-          # dangles, so instruction files are read-only copies.
-          ai.copilot._generatedFiles =
-            lib.mapAttrs (_path: text: {
-              content = {inherit text;};
-              format = "markdown";
+          # dangles, so instructions and skill files are read-only copies.
+          ai.copilot._generatedFiles = lib.mkMerge [
+            (lib.mapAttrs (_path: text: {
+                content = {inherit text;};
+                format = "markdown";
+                method = "ro";
+                surface = "rules";
+              }) (aiCommon.renderRules {
+                path = instructionPath cfg;
+                rules = mergedRules;
+                runtime = "copilot";
+                transformer = lib.ai.transformers.copilot.copilotTransformer;
+              }))
+            (helpers.mkSkillFiles {
+              configDir = cfg.github.projectDir;
               method = "ro";
-              surface = "rules";
-            }) (aiCommon.renderRules {
-              path = instructionPath cfg;
-              rules = mergedRules;
-              runtime = "copilot";
-              transformer = lib.ai.transformers.copilot.copilotTransformer;
-            });
+              skills = mergedSkills;
+            })
+          ];
         })
       ];
     # The context joins the repository AGENTS.md through its one owner.

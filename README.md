@@ -377,7 +377,7 @@ instruction building.
 | GitLab CLI credentials | Manual env vars | `redact.file`, `redact.command`, or `redact.concat` | `redact.file`, `redact.command`, or `redact.concat` |
 | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
 | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
-| Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro) | Same; github.com Copilot warns because committed store links dangle |
+| Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro); explicit Copilot requests warn because Home Manager has no repository | Same, plus Copilot's committed `.github/skills/` copies |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Kimchi) | Same; Kimchi's lands in its project harness settings (see below). Kiro has only per-model native effort |
 | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Kimchi + Kiro) | Same; project-native paths. github.com Copilot warns because code review never reads `.github/agents` |
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
@@ -441,24 +441,25 @@ resolves trust separately.
 
 `ai.copilot` configures github.com Copilot: the cloud agent and code review read
 a repository's committed tree. Its pools live under `ai.copilot.github`, and
-only devenv writes them. Instructions land as read-only copies, since a
-committed store link dangles on github.com:
+only devenv writes them. Instructions and skills land as read-only copies, since
+a committed store link dangles on github.com:
 
-| Pool    | devenv delivery                                                                 |
-| ------- | ------------------------------------------------------------------------------- |
-| Context | root `AGENTS.md`, shared with Codex and Kiro                                    |
-| Rules   | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes |
+| Pool    | devenv delivery                                                                        |
+| ------- | -------------------------------------------------------------------------------------- |
+| Context | root `AGENTS.md`, shared with Codex and Kiro                                           |
+| Rules   | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes        |
+| Skills  | `.github/skills/<name>/`, with nested references, assets and executable bits preserved |
 
-Agents warn on both backends: github.com code review never reads
-`.github/agents`. Skills warn on both backends: committed store links dangle and
-the module does not copy skill trees. Commit real files under `.github/skills`.
-Home Manager has no repository, so a value set there warns. Environment
-variables, hooks, MCP servers, settings and the shell warn on both backends,
-each with the reason and a link to GitHub's documentation: github.com reads none
-of them from a file this module writes, and its MCP servers are a repository
-setting on github.com. `ai.copilot.cli` is reserved for the Copilot CLI
-launcher, which this module does not ship; the `copilot-cli` package is still
-built.
+Copilot skills use the shared `mkSkillFiles` helper with `method = "ro"`. File
+symlinks become real copies; directory symlinks are refused. Home Manager has no
+repository, so explicit context, rule and skill requests warn there; package
+defaults contribute none of those pools there. Agents warn on both backends:
+github.com code review never reads `.github/agents`. Environment variables,
+hooks, MCP servers, settings and the shell warn on both backends, each with the
+reason and a link to GitHub's documentation: github.com reads none of them from
+a file this module writes, and its MCP servers are a repository setting on
+github.com. `ai.copilot.cli` is reserved for the Copilot CLI launcher, which
+this module does not ship; the `copilot-cli` package is still built.
 
 ## Configuration
 

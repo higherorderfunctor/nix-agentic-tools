@@ -1,17 +1,19 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-10-16 — Kiro steering uses engine copies; Codex skill
+> **Last verified:** 2026-10-25 — Kiro steering uses engine copies; Codex skill
 > discovery was re-probed on 0.161.0; skills are staged entries the ai-module
 > files engine walks. Codex declares its skill migration through activation,
 > before linkCheck on both backends. The repository's committed instruction
 > files are read-only copies the files engine writes, never `files.*` symlinks.
 > Kiro and Kimchi settings and Codex daemon settings are owned copies; Copilot
-> writes repository instructions only; its agents and skills declare gaps; the
-> files engine writes Claude's project rules. Identical copy bytes with changed
-> permissions are corrected without a backup. Recursive leaf links target one
-> source-tree store root while retaining per-file input contexts. The symlink
-> guard uses devenv's final file target and runs after engine pruning and before
-> native file creation. Recursive expansion belongs only to the files engine.
+> writes repository instructions and selected skills as owned copies; its agents
+> declare a gap; recursive `ro` skills retain the engine's directory-symlink
+> refusal and file-symlink dereference; the files engine writes Claude's project
+> rules. Identical copy bytes with changed permissions are corrected without a
+> backup. Recursive leaf links target one source-tree store root while retaining
+> per-file input contexts. The symlink guard uses devenv's final file target and
+> runs after engine pruning and before native file creation. Recursive expansion
+> belongs only to the files engine.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -175,7 +177,14 @@ Key behaviors:
 The implementation lives in `packages/ai-module/lib/files/default.nix:walk`. A
 producer stages one recursive directory source; the files engine expands it into
 leaves for both backends. `mkSkillFiles` uses that staging path. There is no
-separate backend walker.
+separate backend walker. `mkSkillFiles` accepts `method`, defaulting to
+`"symlink"`; Copilot selects `"ro"` on devenv so the same leaf expansion reaches
+the owned-copy engine instead of native `files.*` links. Each delivered leaf is
+a real file, including a file-symlink source's bytes, and executable bits are
+preserved. A directory-symlink source is refused, not followed. Removing a
+selected skill or disabling Copilot retires its owned copies through the same
+state as instructions, preserving unmanaged siblings and backing up edited
+copies.
 
 The walk separates traversal identity from target identity. It traverses the
 original source, interpolates that directory once, and points every native leaf

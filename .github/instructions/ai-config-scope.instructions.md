@@ -7,10 +7,10 @@ applyTo: "dev/ai.nix,devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/
 
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-10-15 — devenv's Codex launcher runs without the
+> **Last verified:** 2026-10-25 — devenv's Codex launcher runs without the
 > shared app-server daemon, so Codex's tool calls keep the launch environment;
 > `ai.copilot` is github.com Copilot, launches nothing locally and declares gaps
-> for agents and skills.
+> for agents; devenv skills are committed copies through `mkSkillFiles`.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
@@ -70,7 +70,7 @@ under `ai.copilot.cli`.
 | --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `claude`  | `~/.claude/`        | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md`                                                               | native project scope — the CLI merges user + project itself |
 | `codex`   | `~/.codex/`         | `<repo>/.codex/config.toml`                                                                                            | native project scope — the CLI merges user + project itself |
-| `copilot` | none                | root `AGENTS.md`, `.github/instructions/`                                                                              | committed copies github.com reads; no local launcher        |
+| `copilot` | none                | root `AGENTS.md`, `.github/instructions/`, `.github/skills/`                                                           | committed copies github.com reads; no local launcher        |
 | `kimchi`  | `~/.config/kimchi/` | root `AGENTS.md`, `.kimchi/config.json`, `.kimchi/mcp.json`, `.kimchi/skills/`, `.config/kimchi/harness/settings.json` | native project scope; see trust boundary below              |
 | `kiro`    | `~/.kiro/`          | `<repo>/.kiro/{steering,hooks,agents,settings}/`                                                                       | native project scope via a repo-relative `configDir`        |
 

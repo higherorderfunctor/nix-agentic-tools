@@ -1,12 +1,10 @@
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-16 — every package is opt-in (no factory enable
-> default, no harness quieting); final file and activation names; `mkSkillFiles`
-> stages skills in `ai.<runtime>._generatedFiles`, and the files engine walks
-> each tree into per-leaf links on both backends; runtime surfaceSupport
-> declarations own normalized backend reach and nested delivery diagnostics;
-> package skills and rules require the backend and follow its reach; Copilot
-> declares a skill gap because the module does not copy skill trees.
+> **Last verified:** 2026-10-25 — `mkSkillFiles` selects the existing files
+> engine method: native symlinks by default, owned `ro` copies for Copilot's
+> committed devenv skills. Copilot's Home Manager surface remains unsupported;
+> package contributions follow backend reach. The repository suppresses its
+> local-session skills with per-runtime null entries.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -14,18 +12,21 @@
 Every runtime's factory writes its skills through the shared helper
 `helpers.mkSkillFiles`, never through a native `programs.<cli>.skills` option.
 Claude, Kimchi, and Kiro preserve Layout B: a real skill directory containing
-per-file store symlinks. Copilot declares skills unsupported: committed store
-links dangle and the module does not copy skill trees. Codex's scanner discovers
-Layout A, where the skill directory itself is a symlink.
+per-file store symlinks. Copilot uses the same recursive helper with
+`method = "ro"` on devenv, yielding real files that can be committed under
+`.github/skills`. Home Manager has no repository to write, so explicit Copilot
+skill requests warn there. Codex's scanner discovers Layout A, where the skill
+directory itself is a symlink.
 
 ### Backend pattern
 
-| Branch | HM route                             | Native directories                           | Layout |
-| ------ | ------------------------------------ | -------------------------------------------- | ------ |
-| Claude | `mkSkillFiles`                       | `.claude/skills`                             | B      |
-| Codex  | `mkSkillFiles` (`recursive = false`) | `.agents/skills`                             | A      |
-| Kimchi | `mkSkillFiles`                       | HM `harness/skills`; devenv `.kimchi/skills` | B      |
-| Kiro   | `mkSkillFiles`                       | `.kiro/skills`                               | B      |
+| Branch  | Delivery route                                | Native directories                           | Layout      |
+| ------- | --------------------------------------------- | -------------------------------------------- | ----------- |
+| Claude  | `mkSkillFiles`                                | `.claude/skills`                             | B           |
+| Codex   | `mkSkillFiles` (`recursive = false`)          | `.agents/skills`                             | A           |
+| Copilot | `mkSkillFiles` (`method = "ro"`, devenv only) | `.github/skills`                             | real copies |
+| Kimchi  | `mkSkillFiles`                                | HM `harness/skills`; devenv `.kimchi/skills` | B           |
+| Kiro    | `mkSkillFiles`                                | `.kiro/skills`                               | B           |
 
 Codex 0.161.0 was re-probed on 2026-10-08 with both shapes: a whole-directory
 symlink appeared in `skills/list`, while a real directory whose `SKILL.md` was a
@@ -66,6 +67,10 @@ replace them without following the old link.
   them to `ai.<runtime>.files` and the files engine. `recursive = true` is
   Layout B, and `recursive = false` with a directory source is Codex's Layout A.
   A consumer's own `ai.<runtime>.files.<path>` beats the staged default.
+- Set `method = "ro"` when a reader needs repository-committable files. The
+  engine preserves nested paths and executable bits, dereferences file symlinks
+  to regular copies, and refuses directory symlinks. Bundle those directories as
+  real source files before using this route; do not add another tree copier.
 - Do not add a second writer for a native skills path.
 - Keep module-eval coverage for both root and per-runtime skill contributions.
 
@@ -124,9 +129,13 @@ per-runtime content inside the callbacks. Every spec must name its `backend`
 (`"hm"` or `"devenv"`); the shared factory contributes skills and rules only
 where that backend delivers them, using the runtime record's declared backend
 reach, and writes each at the pool's path from `option-paths.nix` (under
-`ai.copilot.github` for Copilot rules). Copilot on Home Manager therefore
-receives no package skill or router rule, and no warning about a pool the
-consumer never set. Explicit consumer values always warn.
+`ai.copilot.github` for Copilot rules and skills). Copilot on Home Manager
+therefore receives no package skill or router rule, and no warning about a pool
+the consumer never set. Explicit consumer values warn there. Copilot on devenv
+receives enabled package skills as copies; a consumer can suppress inherited
+root skills with `ai.copilot.github.skills.<name> = null`. This repository uses
+that existing pool override for every local-session skill, so enabling the
+consumer capability adds no default committed skill payload.
 
 This controls whether the package writes its existing
 `ai.<runtime>.{skills,rules}` entries; it does not move those entries to the
