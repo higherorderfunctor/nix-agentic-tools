@@ -588,7 +588,8 @@ set model and effort for each.
 
 ### Local limits
 
-On this machine, run at most two external CLI delegates at once.
+On this machine, run at most two external CLI delegates at once. This is not a
+parallelism limit for native subagents or workflow nodes.
 
 ### Orchestrator session
 

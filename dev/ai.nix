@@ -114,7 +114,7 @@ in {
               effort = "token-hungry thinking; keep the default effort";
               match = "glm-*-flash";
               tier = "mid";
-              useFor = "code to a spec; the writer in a writer-judge loop with glm; image or document input";
+              useFor = "code to a spec; image or document input";
             };
           };
         };
@@ -133,12 +133,20 @@ in {
           claude = {
             extraRuntimes = ["codex"];
             manualExternalDelegates = ["kimchi" "kiro"];
+            models = [
+              {vendors = ["anthropic"];}
+              {families = ["glm" "glm-flash"];}
+            ];
             routing."Pool drain" = {
               after = ["Size the work"];
               always = true;
               source = ./house-rules/pool-drain.md;
             };
           };
+          codex.models = [
+            {vendors = ["openai"];}
+            {families = ["glm" "glm-flash"];}
+          ];
           kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
           # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
           # only, and not Fable, which this account does not have.

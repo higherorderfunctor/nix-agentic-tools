@@ -1,7 +1,7 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-24 — tool selection preserves configured model ids
-> beyond the Agent enum.
+> **Last verified:** 2026-10-24 — repository model selection preserves native
+> families alongside routed families.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -71,10 +71,11 @@ keep a terminal step last when inserting a new step, give the new step a
 `before` edge to that terminal step.
 
 This repository enables "Orchestrator session" in `dev/ai.nix`. Its portable
-"Local limits" entry caps external CLI delegates at two. Its Claude-only "Pool
-drain" entry follows "Size the work" and asks for usage before each batch of
-delegates, choosing allowance left per hour until reset. These house entries are
-consumer policy, not shipped defaults.
+"Local limits" entry caps external CLI delegates at two while leaving native
+parallelism uncapped. Its Claude-only "Pool drain" entry follows "Size the work"
+and asks for usage before each batch of delegates, then applies the operator's
+pool allocation and vendor separation. These house entries are consumer policy,
+not shipped defaults.
 
 ## Families and runtime capabilities
 
