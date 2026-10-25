@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT generation FROM oauth_mappings WHERE credential_id = ?",
+  "query": "SELECT generation FROM oauth_mappings WHERE client_id = ? AND credential_id = ?",
   "describe": {
     "columns": [
       {
@@ -10,9 +10,9 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 2
     },
     "nullable": [false]
   },
-  "hash": "930231944d3edeba2bb7992f64789d1ea2422ddf79cd638133a0209f1d8a2e3a"
+  "hash": "50adde4ddd294e6be0bd6bd371ad9b2554c33e7474f414798f7aab1c357baaea"
 }

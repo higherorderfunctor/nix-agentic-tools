@@ -7,11 +7,9 @@ applyTo: "packages/airlock/**"
 
 # airlock
 
-> **Last verified:** 2026-10-25 — Anthropic groups route by model; the z.ai
-> preset aliases `ToolSearch` in requests and restores it in JSON and SSE
-> responses. Primary quota headers replace non-primary display headers.
-> Model-list requests stay on the primary; picker credentials follow Claude's
-> CONNECT host. OpenAI and managed OAuth remain gated.
+> **Last verified:** 2026-10-25 — CONNECT transport, model routing, ToolSearch,
+> and quota-header substitution are checked against the M06 primary OAuth path.
+> Claude integration and OAuth lifecycle live in `docs/integration.md`.
 
 ## Scope
 
@@ -107,58 +105,11 @@ secret files the launcher writes there. Until airlock runs under a separate uid
 or outside the harness's VM, it keeps real credentials out of the harness's
 environment and config, not out of its reach.
 
-## Nix wiring
+## Configuration and Claude integration
 
-`modules/instances.nix` is one module for both backends, through
-`packages/ai-module/lib/instances.nix`. Each instance is the `ai.services` entry
-`airlock-<name>` running `airlock serve --config "$AIRLOCK_CONFIG"`; its port
-and service name are claimed by the helper.
-
-`settings` mirrors Rust's `RawConfig`: the render renames `stateDir` →
-`state_dir`, `unknownHosts` → `unknown_hosts`, and client `token` →
-`token_file`, while omitting null `preset` and managed-OAuth `file`. Rust checks
-IDs, references, URLs, protocols, primary and model ownership for direct JSON
-and Nix output; `airlock-config-roundtrip` passes a rendered sample to
-`check-config`, and raw structs deny unknown fields.
-
-`providers.<id>` holds a `claude` or `zai` preset plus optional protocol-keyed
-endpoint overrides. Rust expands the preset once: Claude Anthropic resolves to
-`https://api.anthropic.com`; z.ai Anthropic to `https://api.z.ai/api/anthropic`,
-and z.ai OpenAI to `https://api.z.ai/api/coding/paas/v4`. No Codex endpoint is
-asserted yet. `credentials.<id>` names a provider and auth mode; `groups.<id>`
-names one protocol, its first-party intercept hosts, a primary credential and
-member credentials with exact model IDs. A client grants whole groups. The
-primary owns undeclared models; non-primary members need explicit IDs. A
-duplicate ID within a group is invalid.
-
-Client tokens and file-backed credentials use `redact.types.secretFile`; the
-launcher writes each value to a 0600 runtime file and renders only its absolute
-path. `oauth_managed` has no file and is shape-checked for the future primary
-OAuth flow. Active managed OAuth and OpenAI make `serve` fail before secret
-loading. Endpoint overrides may include a port for local tests.
-
-## Harness selection
-
-Claude selects an airlock instance through the existing proxy fields,
-`ai.claude.proxy = { instance = "<airlock instance>"; clientKey = "<client>"; }`.
-CPA and airlock instance names share one claims group, so a name resolves to one
-owner, and that owner decides the transport. Only Claude supports airlock; any
-other runtime selecting it fails evaluation. On Linux the jail is required;
-config-only and non-Linux surfaces warn and get no launcher.
-
-At launch the harness reads its client's `token_file` from the service-rendered
-config, exports a percent-encoded `HTTPS_PROXY`, and clears every other proxy
-variable. It holds a fake OAuth token, and its route overlay blanks the CPA base
-URL and `apiKeyHelper`. Picker IDs come only from the selected client's granted
-Anthropic group intercepting `api.anthropic.com`, including explicit primary
-declarations. Home Manager writes those rows to user settings, while devenv
-passes them in its `--settings` overlay. Only the managed settings scope loads
-(user on Home Manager, project on devenv), so no other scope can override the
-route; managed admin policy is outside this contract. The jail gets system roots
-plus the current `ca.pem` as one read-only bundle over
-`/etc/ssl/certs/ca-certificates.crt` through an unlinked descriptor, rebuilt per
-launch. A missing token, config, roots or CA fails the launch: no wait, no CPA
-or direct fallback.
+The configuration, launcher, and primary OAuth contracts live in
+`docs/integration.md`. SQLite's durable-state contract lives in
+`docs/storage.md`.
 
 ## Settled — do not relitigate
 

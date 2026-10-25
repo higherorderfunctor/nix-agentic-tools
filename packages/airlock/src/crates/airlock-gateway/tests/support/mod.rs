@@ -4,6 +4,7 @@
 use std::{
     io::{self, Write},
     net::SocketAddr,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -13,6 +14,7 @@ use std::{
 };
 
 use airlock_core::config::{Config, RawConfig};
+use airlock_core::storage::SqliteStorage;
 use airlock_gateway::{Error, Gateway};
 use base64::{Engine as _, prelude::BASE64_STANDARD};
 use http_body_util::BodyExt;
@@ -115,6 +117,7 @@ pub struct Running {
     pub capture: Capture,
     pub directory: TempDir,
     pub shutdown: oneshot::Sender<()>,
+    pub storage: Option<Arc<SqliteStorage>>,
     pub task: JoinHandle<Result<(), Error>>,
 }
 
@@ -202,13 +205,74 @@ impl Running {
         Self::start_config(directory, config, ca_directory, roots).await
     }
 
+    pub async fn start_managed(roots: RootCertStore, upstream_port: u16) -> Self {
+        let directory = tempfile::tempdir().expect("tempdir");
+        Self::start_managed_in(directory, roots, upstream_port).await
+    }
+
+    pub async fn start_managed_in(
+        directory: TempDir,
+        roots: RootCertStore,
+        upstream_port: u16,
+    ) -> Self {
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("private state directory");
+        std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("client token");
+        std::fs::write(
+            directory.path().join("stranger-token"),
+            "fake-STRANGER-token\n",
+        )
+        .expect("other client token");
+        std::fs::write(directory.path().join("spare-key"), "fake-SPARE-key\n")
+            .expect("other group credential");
+        let config = Config::try_from(serde_json::from_value::<RawConfig>(json!({
+            "clients": {
+                "harness": {"grants": ["anthropic"], "token_file": directory.path().join("token")},
+                "stranger": {"grants": ["other"], "token_file": directory.path().join("stranger-token")}
+            },
+            "credentials": {
+                "claude": {"auth": {"type": "oauth_managed"}, "provider": "claude"},
+                "spare": {"auth": {"file": directory.path().join("spare-key"), "type": "api_key"}, "provider": "claude"}
+            },
+            "groups": {
+                "anthropic": {"intercept": ["localhost", "platform.claude.com"], "members": {
+                    "claude": {"models": []}
+                }, "primary": "claude", "protocol": "anthropic"},
+                "other": {"intercept": ["other.invalid"], "members": {
+                    "spare": {"models": []}
+                }, "primary": "spare", "protocol": "anthropic"}
+            },
+            "listen": "127.0.0.1:0",
+            "providers": {"claude": {"preset": "claude", "endpoints": {"anthropic": format!("https://localhost:{upstream_port}")}}},
+            "state_dir": directory.path(),
+            "unknown_hosts": "deny"
+        })).expect("raw managed config")).expect("managed config");
+        let storage = Arc::new(
+            SqliteStorage::open(config.state_dir(), config.storage_identities(1))
+                .await
+                .expect("managed storage"),
+        );
+        let ca_directory = directory.path().join("ca");
+        Self::start_config_with_storage(directory, config, ca_directory, roots, Some(storage)).await
+    }
+
     async fn start_config(
         directory: TempDir,
         config: Config,
         ca_directory: PathBuf,
         roots: RootCertStore,
     ) -> Self {
-        let gateway = Gateway::bind(config, &ca_directory, roots)
+        Self::start_config_with_storage(directory, config, ca_directory, roots, None).await
+    }
+
+    async fn start_config_with_storage(
+        directory: TempDir,
+        config: Config,
+        ca_directory: PathBuf,
+        roots: RootCertStore,
+        storage: Option<Arc<SqliteStorage>>,
+    ) -> Self {
+        let gateway = Gateway::bind_with_storage(config, &ca_directory, roots, storage.clone())
             .await
             .expect("bind gateway");
         let address = gateway.local_addr();
@@ -234,6 +298,7 @@ impl Running {
             capture,
             directory,
             shutdown,
+            storage,
             task,
         }
     }
@@ -257,17 +322,30 @@ impl Running {
     }
 
     pub async fn stop(self) -> Vec<Value> {
+        self.stop_with_directory().await.1
+    }
+
+    pub async fn stop_with_directory(self) -> (TempDir, Vec<Value>) {
         self.shutdown.send(()).expect("request shutdown");
         timeout(Duration::from_secs(7), self.task)
             .await
             .expect("bounded shutdown")
             .expect("server task")
             .expect("serve");
-        self.capture
+        if let Some(storage) = self.storage {
+            Arc::try_unwrap(storage)
+                .unwrap_or_else(|_| panic!("gateway retained managed storage after shutdown"))
+                .close()
+                .await
+                .expect("close managed storage");
+        }
+        let events = self
+            .capture
             .events()
             .into_iter()
             .filter(|event| event["fields"]["message"] == "CONNECT closed")
-            .collect()
+            .collect();
+        (self.directory, events)
     }
 
     pub async fn request(
@@ -580,6 +658,21 @@ pub enum UpstreamMode {
     Metadata,
     Quota(Arc<QuotaFixture>),
     Models,
+    Oauth,
+    OauthDelayedReply {
+        body: &'static [u8],
+        delay: Duration,
+    },
+    OauthRefreshReply {
+        initial: Option<&'static [u8]>,
+        refresh: &'static [u8],
+    },
+    OauthWithoutNewRefresh,
+    OauthReply {
+        body: &'static [u8],
+        status: StatusCode,
+    },
+    OauthStall(Arc<StallGates>),
     Sse(Arc<Notify>),
     ToolSearchSse {
         release: Arc<Notify>,
@@ -628,7 +721,15 @@ async fn serve_raw_upgrade(
 async fn request_body(mode: &UpstreamMode, mut body: Incoming) -> (Bytes, u64, usize) {
     let echo = matches!(
         mode,
-        UpstreamMode::Echo | UpstreamMode::Fixed { .. } | UpstreamMode::ToolSearchSse { .. }
+        UpstreamMode::Echo
+            | UpstreamMode::Fixed { .. }
+            | UpstreamMode::Oauth
+            | UpstreamMode::OauthDelayedReply { .. }
+            | UpstreamMode::OauthRefreshReply { .. }
+            | UpstreamMode::OauthWithoutNewRefresh
+            | UpstreamMode::OauthReply { .. }
+            | UpstreamMode::OauthStall(_)
+            | UpstreamMode::ToolSearchSse { .. }
     );
     let mut collected = Vec::new();
     let mut hash = FNV_OFFSET;
@@ -710,6 +811,89 @@ fn model_list_response(path: &str, query: Option<&str>) -> Response<ReceiverBody
         .expect("model-list response")
 }
 
+fn oauth_response(path: &str, body: &Bytes, omit_refresh: bool) -> Response<ReceiverBody> {
+    let response: &'static [u8] = if path == "/v1/oauth/token"
+        && body.windows(18).any(|part| part == b"authorization_code")
+    {
+        br#"{"access_token":"fake-REAL-access-one","refresh_token":"fake-REAL-refresh-one","expires_in":3600,"refresh_token_expires_in":2592000,"scope":"user:inference user:profile","account":{"uuid":"fake-account"}}"#
+    } else if path == "/v1/oauth/token" && omit_refresh {
+        br#"{"access_token":"fake-REAL-access-two","expires_in":3600,"scope":"user:inference user:profile"}"#
+    } else if path == "/v1/oauth/token" {
+        br#"{"access_token":"fake-REAL-access-two","refresh_token":"fake-REAL-refresh-two","expires_in":3600,"refresh_token_expires_in":2592000,"scope":"user:inference user:profile"}"#
+    } else if path == "/v1/oauth/token/revoke" {
+        b""
+    } else {
+        br#"{"ok":true}"#
+    };
+    Response::builder()
+        .header("content-type", "application/json")
+        .body(queued_body(Bytes::from_static(response)))
+        .expect("OAuth response")
+}
+
+fn oauth_reply(body: &'static [u8], status: StatusCode) -> Response<ReceiverBody> {
+    Response::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(queued_body(Bytes::from_static(body)))
+        .expect("OAuth fixture response")
+}
+
+fn oauth_delayed_reply(body: &'static [u8], delay: Duration) -> Response<ReceiverBody> {
+    let (sender, receiver) = mpsc::channel(1);
+    tokio::spawn(async move {
+        tokio::time::sleep(delay).await;
+        let _ = sender.send(Ok(Frame::data(Bytes::from_static(body)))).await;
+    });
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        .body(ReceiverBody::new(receiver))
+        .expect("delayed OAuth response")
+}
+
+fn oauth_stalled_response(gates: Arc<StallGates>) -> Response<ReceiverBody> {
+    let (sender, receiver) = mpsc::channel(1);
+    tokio::spawn(async move {
+        gates.response_started.notify_one();
+        gates.backpressure.notified().await;
+        drop(sender);
+    });
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-length", "1")
+        .body(ReceiverBody::new(receiver))
+        .expect("stalled OAuth response")
+}
+
+fn oauth_refresh_response(
+    path: &str,
+    request_body: &Bytes,
+    initial: Option<&'static [u8]>,
+    refresh: &'static [u8],
+) -> Response<ReceiverBody> {
+    if path == "/v1/oauth/token"
+        && request_body
+            .windows(b"refresh_token".len())
+            .any(|part| part == b"refresh_token")
+    {
+        oauth_reply(refresh, StatusCode::OK)
+    } else if let Some(initial) = initial {
+        oauth_reply(initial, StatusCode::OK)
+    } else {
+        oauth_response(path, request_body, false)
+    }
+}
+
+async fn gated_response(release: Arc<Notify>, path: &str) -> Response<ReceiverBody> {
+    if path == "/blocked" {
+        release.notified().await;
+    } else {
+        release.notify_one();
+    }
+    Response::new(queued_body(Bytes::from_static(b"released")))
+}
+
 async fn upstream_response(
     mode: UpstreamMode,
     path: &str,
@@ -750,14 +934,7 @@ async fn upstream_response(
                 .body(queued_body(Bytes::from_static(body)))
                 .expect("fixed response")
         }
-        UpstreamMode::Gate(release) => {
-            if path == "/blocked" {
-                release.notified().await;
-            } else {
-                release.notify_one();
-            }
-            Response::new(queued_body(Bytes::from_static(b"released")))
-        }
+        UpstreamMode::Gate(release) => gated_response(release, path).await,
         UpstreamMode::HashUpload => Response::new(queued_body(Bytes::from(body_hash.to_string()))),
         UpstreamMode::Metadata => Response::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)
@@ -768,6 +945,14 @@ async fn upstream_response(
             .expect("metadata response"),
         UpstreamMode::Quota(fixture) => quota_response(&fixture),
         UpstreamMode::Models => model_list_response(path, query),
+        UpstreamMode::Oauth => oauth_response(path, &body, false),
+        UpstreamMode::OauthDelayedReply { body, delay } => oauth_delayed_reply(body, delay),
+        UpstreamMode::OauthRefreshReply { initial, refresh } => {
+            oauth_refresh_response(path, &body, initial, refresh)
+        }
+        UpstreamMode::OauthWithoutNewRefresh => oauth_response(path, &body, true),
+        UpstreamMode::OauthReply { body, status } => oauth_reply(body, status),
+        UpstreamMode::OauthStall(gates) => oauth_stalled_response(gates),
         UpstreamMode::Sse(release) => {
             let (sender, receiver) = mpsc::channel(2);
             tokio::spawn(async move {
@@ -1099,6 +1284,10 @@ pub fn full_body(bytes: &'static [u8]) -> ReceiverBody {
         .try_send(Ok(Frame::data(Bytes::from_static(bytes))))
         .expect("queue body");
     ReceiverBody::new(receiver)
+}
+
+pub fn owned_body(bytes: Vec<u8>) -> ReceiverBody {
+    queued_body(Bytes::from(bytes))
 }
 
 pub fn streaming_body(

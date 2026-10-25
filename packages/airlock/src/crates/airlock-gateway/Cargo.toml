@@ -10,6 +10,7 @@ base64.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
+percent-encoding.workspace = true
 rcgen.workspace = true
 rustix = { workspace = true, features = ["process"] }
 rustls.workspace = true
@@ -24,6 +25,7 @@ tracing.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+sqlx.workspace = true
 tracing-subscriber.workspace = true
 x509-parser.workspace = true
 

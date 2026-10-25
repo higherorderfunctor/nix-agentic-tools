@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO clients (id, inserted_at_unix) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "dc999795d3dc85c403c2c9ebcf3574ce98eff97b2a0c24f97ca3bfaf39d765de"
+}

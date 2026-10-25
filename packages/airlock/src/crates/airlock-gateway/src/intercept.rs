@@ -13,10 +13,14 @@ use std::{
 
 use airlock_core::{
     config::Config,
-    ids::{ClientId, CredentialId, GroupId, HostName},
+    ids::{ClientId, CredentialId, GroupId, HostName, ProviderId},
+    storage::{
+        OauthPairRecord, OauthPairReplacement, OauthPairRetirement, SqliteStorage, Storage,
+        TokenMaterial,
+    },
     target::ConnectTarget,
 };
-use http_body_util::BodyExt;
+use http_body_util::{BodyExt, Full};
 use hyper::{
     Method, Request, Response, StatusCode,
     body::{Body, Bytes, Frame, Incoming, SizeHint},
@@ -31,11 +35,13 @@ use hyper::{
     upgrade::OnUpgrade,
 };
 use hyper_util::rt::{TokioExecutor, TokioIo};
+use percent_encoding::percent_decode_str;
 use rustls::{
     ClientConfig, RootCertStore, ServerConfig, crypto::CryptoProvider, pki_types::ServerName,
     server::Acceptor, sign::SingleCertAndKey,
 };
 use serde::Deserialize;
+use serde_json::Value;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf},
     net::TcpStream,
@@ -44,7 +50,7 @@ use tokio::{
     time::timeout,
 };
 use tokio_rustls::{LazyConfigAcceptor, StartHandshake, TlsConnector, client, server};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
     Audit, AuthKind, CONNECT_TIMEOUT, Error, LoadedCredential, Reply, ca::Authority,
@@ -56,6 +62,8 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const X_API_KEY: HeaderName = HeaderName::from_static("x-api-key");
 // Anthropic's Messages API limits request bodies to 32 MiB.
 const MODEL_BODY_LIMIT: usize = 32 << 20;
+const OAUTH_BODY_LIMIT: usize = 64 << 10;
+const OAUTH_EXCHANGE_TIMEOUT: Duration = Duration::from_secs(30);
 // Only Anthropic rate-limit fields identify the primary account; retry-after belongs to the
 // selected provider's response and is never part of the cached snapshot.
 const QUOTA_HEADER_PREFIX: &str = "anthropic-ratelimit-";
@@ -63,6 +71,19 @@ const QUOTA_HEADER_LIMIT: usize = 64;
 const QUOTA_SNAPSHOT_LIMIT: usize = 16 << 10;
 
 type QuotaCache = Arc<Mutex<BTreeMap<QuotaCacheKey, QuotaSnapshot>>>;
+type OauthLocks = tokio::sync::Mutex<BTreeMap<CredentialId, Arc<tokio::sync::Mutex<()>>>>;
+
+async fn oauth_lock_for(
+    locks: &OauthLocks,
+    credential: &CredentialId,
+) -> Arc<tokio::sync::Mutex<()>> {
+    locks
+        .lock()
+        .await
+        .entry(credential.clone())
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone()
+}
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 struct QuotaCacheKey {
@@ -163,6 +184,122 @@ fn inspection_error_status(reason: &str) -> StatusCode {
     }
 }
 
+fn token_path(method: &Method, path: &str) -> bool {
+    method == Method::POST && matches!(path, "/v1/oauth/token" | "/v1/oauth/token/revoke")
+}
+
+fn creates_api_key(path: &str) -> bool {
+    // Encoded segments and trailing path components can resolve to the same
+    // credential-creation endpoint after the provider normalizes the URI.
+    let Ok(decoded) = percent_decode_str(path).decode_utf8() else {
+        return true;
+    };
+    decoded.starts_with("/api/oauth/claude_cli/create_api_key")
+}
+
+fn zeroize_json(value: &mut Value) {
+    match value {
+        Value::String(text) => text.zeroize(),
+        Value::Array(items) => items.iter_mut().for_each(zeroize_json),
+        Value::Object(map) => {
+            for (mut key, mut value) in std::mem::take(map) {
+                key.zeroize();
+                zeroize_json(&mut value);
+            }
+        }
+        _ => {}
+    }
+}
+
+struct SensitiveJson(Value);
+
+impl SensitiveJson {
+    fn parse(bytes: &[u8]) -> Result<Self, &'static str> {
+        serde_json::from_slice(bytes)
+            .map(Self)
+            .map_err(|_| "invalid_oauth_json")
+    }
+
+    fn field(&self, name: &str) -> Option<&str> {
+        self.0.get(name)?.as_str()
+    }
+
+    fn replace(&mut self, name: &str, token: &TokenMaterial) -> Result<(), &'static str> {
+        let Some(Value::String(current)) = self.0.get_mut(name) else {
+            if let Some(slot @ Value::Null) = self.0.get_mut(name) {
+                *slot = Value::String(token.as_str().to_owned());
+                return Ok(());
+            }
+            return Err("invalid_oauth_json");
+        };
+        current.zeroize();
+        token.as_str().clone_into(current);
+        Ok(())
+    }
+
+    fn take_token(&mut self, name: &str) -> Result<TokenMaterial, &'static str> {
+        let Some(value) = self.0.get_mut(name) else {
+            return Err("invalid_oauth_response");
+        };
+        let Value::String(token) = std::mem::take(value) else {
+            return Err("invalid_oauth_response");
+        };
+        TokenMaterial::new(token).map_err(|_| "invalid_oauth_response")
+    }
+
+    fn encode(&self) -> Result<Zeroizing<Vec<u8>>, &'static str> {
+        serde_json::to_vec(&self.0)
+            .map(Zeroizing::new)
+            .map_err(|_| "invalid_oauth_json")
+    }
+}
+
+impl Drop for SensitiveJson {
+    fn drop(&mut self) {
+        zeroize_json(&mut self.0);
+    }
+}
+
+fn fake_token(prefix: &str) -> Result<TokenMaterial, &'static str> {
+    use std::io::Read;
+    let mut random = Zeroizing::new([0_u8; 32]);
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut file| file.read_exact(&mut *random))
+        .map_err(|_| "oauth_entropy_unavailable")?;
+    let mut text = Zeroizing::new(String::with_capacity(prefix.len() + 64));
+    text.push_str(prefix);
+    for byte in random.iter() {
+        use std::fmt::Write as _;
+        write!(&mut *text, "{byte:02x}").map_err(|_| "oauth_entropy_unavailable")?;
+    }
+    TokenMaterial::new(std::mem::take(&mut *text)).map_err(|_| "oauth_entropy_unavailable")
+}
+
+fn unix_now() -> Result<i64, &'static str> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| i64::try_from(duration.as_secs()).ok())
+        .ok_or("oauth_clock_unavailable")
+}
+
+fn json_reply(status: StatusCode, body: &Zeroizing<Vec<u8>>) -> Reply {
+    let mut reply = Response::new(
+        Full::new(Bytes::copy_from_slice(body))
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    *reply.status_mut() = status;
+    reply
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    reply.headers_mut().insert(
+        hyper::header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store"),
+    );
+    reply
+}
+
 fn invalid_model_id(model: &str) -> bool {
     model.is_empty()
         || model.len() > 128
@@ -175,8 +312,9 @@ fn append_inference_chunk(
     bytes: &mut Zeroizing<Vec<u8>>,
     chunk: &[u8],
     fixed_capacity: bool,
+    limit: usize,
 ) -> Result<(), &'static str> {
-    if chunk.len() > MODEL_BODY_LIMIT - bytes.len() {
+    if chunk.len() > limit.saturating_sub(bytes.len()) {
         return Err("request_too_large");
     }
     let needed = bytes.len() + chunk.len();
@@ -184,7 +322,7 @@ fn append_inference_chunk(
         if fixed_capacity {
             return Err("request_body_error");
         }
-        let capacity = MODEL_BODY_LIMIT.min((2 * bytes.len()).max(needed));
+        let capacity = limit.min((2 * bytes.len()).max(needed));
         let mut replacement = Zeroizing::new(Vec::with_capacity(capacity));
         replacement.extend_from_slice(bytes);
         *bytes = replacement;
@@ -193,12 +331,13 @@ fn append_inference_chunk(
     Ok(())
 }
 
-async fn inference_body(
+async fn bounded_body(
     mut body: Incoming,
     content_length: Option<u64>,
-) -> Result<(RequestBody, Option<String>), &'static str> {
+    limit: usize,
+) -> Result<Zeroizing<Vec<u8>>, &'static str> {
     let capacity = match content_length {
-        Some(length) if length > MODEL_BODY_LIMIT as u64 => return Err("request_too_large"),
+        Some(length) if length > limit as u64 => return Err("request_too_large"),
         Some(length) => usize::try_from(length).map_err(|_| "request_too_large")?,
         None => 0,
     };
@@ -207,7 +346,7 @@ async fn inference_body(
         let frame = frame.map_err(|_| "request_body_error")?;
         match frame.into_data() {
             Ok(chunk) => {
-                append_inference_chunk(&mut bytes, &chunk, content_length.is_some())?;
+                append_inference_chunk(&mut bytes, &chunk, content_length.is_some(), limit)?;
             }
             Err(frame) => {
                 // Claude's Messages requests never carry trailers; reject rather than replay them.
@@ -219,16 +358,16 @@ async fn inference_body(
             }
         }
     }
-    let model = parse_model(&bytes)?;
-    Ok((RequestBody::Buffered { bytes, offset: 0 }, model))
+    Ok(bytes)
 }
 
 async fn inspect_request(
     request: Request<Incoming>,
     inference: bool,
+    oauth: bool,
 ) -> Result<(Request<RequestBody>, Option<String>), &'static str> {
     let (parts, incoming) = request.into_parts();
-    let (body, model) = if inference {
+    let (body, model) = if inference || oauth {
         let content_length = parts
             .headers
             .get(CONTENT_LENGTH)
@@ -240,7 +379,22 @@ async fn inspect_request(
                     .ok_or("request_body_error")
             })
             .transpose()?;
-        inference_body(incoming, content_length).await?
+        let bytes = bounded_body(
+            incoming,
+            content_length,
+            if oauth {
+                OAUTH_BODY_LIMIT
+            } else {
+                MODEL_BODY_LIMIT
+            },
+        )
+        .await?;
+        let model = if inference {
+            parse_model(&bytes)?
+        } else {
+            None
+        };
+        (RequestBody::Buffered { bytes, offset: 0 }, model)
     } else {
         (RequestBody::Incoming(incoming), None)
     };
@@ -251,6 +405,8 @@ pub(crate) struct Interceptor {
     authority: Authority,
     provider: Arc<CryptoProvider>,
     quota_cache: QuotaCache,
+    oauth_locks: OauthLocks,
+    storage: Option<Arc<SqliteStorage>>,
     upstream: Arc<ClientConfig>,
 }
 
@@ -646,7 +802,9 @@ impl Body for LeasedBody {
                         Poll::Pending => return Poll::Pending,
                         Poll::Ready(Some(Ok(frame))) => match frame.into_data() {
                             Ok(chunk) => {
-                                if append_inference_chunk(bytes, &chunk, false).is_err() {
+                                if append_inference_chunk(bytes, &chunk, false, MODEL_BODY_LIMIT)
+                                    .is_err()
+                                {
                                     *done = true;
                                     return Poll::Ready(Some(Err(body_error(
                                         "toolsearch_response_too_large",
@@ -732,7 +890,11 @@ impl Body for LeasedBody {
 }
 
 impl Interceptor {
-    pub(crate) fn new(ca_directory: &Path, upstream_roots: RootCertStore) -> Result<Self, Error> {
+    pub(crate) fn new(
+        ca_directory: &Path,
+        upstream_roots: RootCertStore,
+        storage: Option<Arc<SqliteStorage>>,
+    ) -> Result<Self, Error> {
         if upstream_roots.is_empty() {
             return Err(Error::NoUpstreamRoots);
         }
@@ -745,6 +907,8 @@ impl Interceptor {
             authority: Authority::open(ca_directory, provider.clone())?,
             provider,
             quota_cache: Arc::new(Mutex::new(BTreeMap::new())),
+            oauth_locks: tokio::sync::Mutex::new(BTreeMap::new()),
+            storage,
             upstream: Arc::new(upstream),
         })
     }
@@ -1183,6 +1347,441 @@ fn quota_context(
     }
 }
 
+async fn stored_pair(
+    state: &ForwardState,
+    credential: &CredentialId,
+    provider: &ProviderId,
+) -> Result<OauthPairRecord, &'static str> {
+    let storage = state
+        .interceptor
+        .storage
+        .as_ref()
+        .ok_or("oauth_storage_unavailable")?;
+    storage
+        .oauth_pair(&state.client, credential, provider)
+        .await
+        .map_err(|error| match error {
+            airlock_core::storage::StorageError::MissingOauthPair { .. } => {
+                "oauth_mapping_unavailable"
+            }
+            _ => "oauth_storage_unavailable",
+        })
+}
+
+fn client_fake_access(
+    request: &Request<RequestBody>,
+    pair: &OauthPairRecord,
+) -> Result<(), &'static str> {
+    let now = unix_now()?;
+    if now >= pair.fake_access_expires_at_unix || now >= pair.real_access_expires_at_unix {
+        return Err("oauth_access_expired");
+    }
+    let mut headers = request.headers().get_all(AUTHORIZATION).iter();
+    let header = headers.next().ok_or("oauth_access_unknown")?;
+    if headers.next().is_some() {
+        return Err("oauth_access_unknown");
+    }
+    let supplied = header
+        .as_bytes()
+        .strip_prefix(b"Bearer ")
+        .ok_or("oauth_access_unknown")?;
+    if !pair.fake_access_token.matches(supplied) {
+        return Err("oauth_access_unknown");
+    }
+    Ok(())
+}
+
+fn real_access_header(token: &TokenMaterial) -> Result<HeaderValue, &'static str> {
+    let bearer = Zeroizing::new(format!("Bearer {}", token.as_str()));
+    let mut value = HeaderValue::from_str(&bearer).map_err(|_| "oauth_access_invalid")?;
+    value.set_sensitive(true);
+    Ok(value)
+}
+
+async fn managed_access(
+    mut request: Request<RequestBody>,
+    state: &ForwardState,
+    credential: &CredentialId,
+    provider: &ProviderId,
+) -> Result<Request<RequestBody>, &'static str> {
+    if !state
+        .route
+        .config
+        .managed_host_allowed(&state.route.group, state.route.target.host())
+    {
+        return Err("oauth_host_unavailable");
+    }
+    let pair = stored_pair(state, credential, provider).await?;
+    client_fake_access(&request, &pair)?;
+    request.headers_mut().remove(AUTHORIZATION);
+    request.headers_mut().remove(X_API_KEY);
+    let value = real_access_header(&pair.real_access_token)?;
+    request.headers_mut().insert(AUTHORIZATION, value);
+    Ok(request)
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "the token exchange and durable acknowledgement are one serialized transaction"
+)]
+async fn forward_managed_token(
+    mut request: Request<RequestBody>,
+    state: &ForwardState,
+    credential: &CredentialId,
+    provider: &ProviderId,
+    mut completion: RequestCompletion,
+) -> Reply {
+    let lock = oauth_lock_for(&state.interceptor.oauth_locks, credential).await;
+    let _guard = lock.lock().await;
+    let Some(storage) = state.interceptor.storage.as_ref() else {
+        completion.outcome = Some("oauth_storage_unavailable");
+        completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+        return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_storage_unavailable");
+    };
+    let revoke = request.uri().path() == "/v1/oauth/token/revoke";
+    let RequestBody::Buffered { bytes, .. } = request.body() else {
+        completion.finish(StatusCode::BAD_REQUEST);
+        return crate::response(StatusCode::BAD_REQUEST, "invalid_oauth_json");
+    };
+    let mut json = match SensitiveJson::parse(bytes) {
+        Ok(json) if json.0.is_object() => json,
+        _ => {
+            completion.finish(StatusCode::BAD_REQUEST);
+            return crate::response(StatusCode::BAD_REQUEST, "invalid_oauth_json");
+        }
+    };
+    let grant = if revoke {
+        "revoke"
+    } else {
+        match json.field("grant_type") {
+            Some("authorization_code") => "authorization_code",
+            Some("refresh_token") => "refresh_token",
+            _ => {
+                completion.finish(StatusCode::BAD_REQUEST);
+                return crate::response(StatusCode::BAD_REQUEST, "invalid_oauth_grant");
+            }
+        }
+    };
+    let previous = match storage
+        .oauth_pair(&state.client, credential, provider)
+        .await
+    {
+        Ok(pair) => Some(pair),
+        Err(airlock_core::storage::StorageError::MissingOauthPair { .. }) => None,
+        Err(_) => {
+            completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+            return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_storage_unavailable");
+        }
+    };
+    if grant != "authorization_code" {
+        let Some(pair) = previous.as_ref() else {
+            completion.finish(StatusCode::UNAUTHORIZED);
+            return crate::response(StatusCode::UNAUTHORIZED, "oauth_refresh_unknown");
+        };
+        let now = match unix_now() {
+            Ok(now) => now,
+            Err(reason) => {
+                completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+                return crate::response(StatusCode::SERVICE_UNAVAILABLE, reason);
+            }
+        };
+        if pair
+            .real_refresh_expires_at_unix
+            .is_some_and(|expiry| now >= expiry)
+        {
+            completion.finish(StatusCode::UNAUTHORIZED);
+            return crate::response(StatusCode::UNAUTHORIZED, "oauth_refresh_expired");
+        }
+        let field = if revoke { "token" } else { "refresh_token" };
+        if !json
+            .field(field)
+            .is_some_and(|candidate| pair.fake_refresh_token.matches(candidate.as_bytes()))
+        {
+            completion.finish(StatusCode::UNAUTHORIZED);
+            return crate::response(StatusCode::UNAUTHORIZED, "oauth_refresh_unknown");
+        }
+        if json.replace(field, &pair.real_refresh_token).is_err() {
+            completion.finish(StatusCode::BAD_REQUEST);
+            return crate::response(StatusCode::BAD_REQUEST, "invalid_oauth_json");
+        }
+        let Ok(rewritten) = json.encode() else {
+            completion.finish(StatusCode::BAD_REQUEST);
+            return crate::response(StatusCode::BAD_REQUEST, "invalid_oauth_json");
+        };
+        request.headers_mut().insert(
+            CONTENT_LENGTH,
+            HeaderValue::from_str(&rewritten.len().to_string())
+                .unwrap_or_else(|_| HeaderValue::from_static("0")),
+        );
+        *request.body_mut() = RequestBody::Buffered {
+            bytes: rewritten,
+            offset: 0,
+        };
+    }
+    request.headers_mut().remove(AUTHORIZATION);
+    request.headers_mut().remove(X_API_KEY);
+    request
+        .headers_mut()
+        .insert(ACCEPT_ENCODING, HeaderValue::from_static("identity"));
+    let Some((_, endpoint)) = state.route.config.route(&state.route.group, None) else {
+        completion.finish(StatusCode::FORBIDDEN);
+        return crate::response(StatusCode::FORBIDDEN, "route unavailable");
+    };
+    let Ok(request_started_at) = unix_now() else {
+        completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+        return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_clock_unavailable");
+    };
+    let exchange = timeout(OAUTH_EXCHANGE_TIMEOUT, async {
+        let selected = select_upstream(state, endpoint, true, false)
+            .await
+            .map_err(|_| "upstream connection failed")?;
+        let request =
+            prepare_request(request, &selected, true).map_err(|_| "invalid upstream request")?;
+        let response = selected
+            .sender
+            .send_request(request)
+            .await
+            .map_err(|_| "upstream connection failed")?;
+        let status = response.status();
+        let content_length = response
+            .headers()
+            .get(CONTENT_LENGTH)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse().ok());
+        let bytes = bounded_body(response.into_body(), content_length, OAUTH_BODY_LIMIT)
+            .await
+            .map_err(|_| "invalid_oauth_response")?;
+        Ok::<_, &'static str>((status, bytes))
+    })
+    .await;
+    let (status, bytes) = match exchange {
+        Ok(Ok(result)) => result,
+        Ok(Err(reason)) => {
+            completion.finish(StatusCode::BAD_GATEWAY);
+            return crate::response(StatusCode::BAD_GATEWAY, reason);
+        }
+        Err(_) => {
+            completion.finish(StatusCode::GATEWAY_TIMEOUT);
+            return crate::response(StatusCode::GATEWAY_TIMEOUT, "oauth_exchange_timeout");
+        }
+    };
+    if !status.is_success() {
+        completion.finish(status);
+        // OAuth error codes are protocol values; forwarding arbitrary upstream
+        // JSON could echo a credential in an error description.
+        let code = SensitiveJson::parse(&bytes)
+            .ok()
+            .and_then(|json| json.field("error").map(str::to_owned))
+            .filter(|code| {
+                matches!(
+                    code.as_str(),
+                    "access_denied"
+                        | "authorization_pending"
+                        | "invalid_client"
+                        | "invalid_grant"
+                        | "invalid_request"
+                        | "invalid_scope"
+                        | "server_error"
+                        | "slow_down"
+                        | "temporarily_unavailable"
+                        | "unauthorized_client"
+                        | "unsupported_grant_type"
+                        | "unsupported_response_type"
+                )
+            })
+            .unwrap_or_else(|| "oauth_upstream_error".to_owned());
+        return json_reply(
+            status,
+            &Zeroizing::new(format!(r#"{{"error":"{code}"}}"#).into_bytes()),
+        );
+    }
+    if revoke {
+        let Some(pair) = previous else {
+            completion.finish(StatusCode::UNAUTHORIZED);
+            return crate::response(StatusCode::UNAUTHORIZED, "oauth_refresh_unknown");
+        };
+        let result = storage
+            .retire_oauth_pair(OauthPairRetirement {
+                client: state.client.clone(),
+                credential: credential.clone(),
+                expected_generation: pair.generation,
+                fake_refresh_token: pair.fake_refresh_token,
+                provider: provider.clone(),
+            })
+            .await;
+        if result.is_err() {
+            completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+            return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_storage_unavailable");
+        }
+        completion.finish(status);
+        return json_reply(status, &Zeroizing::new(Vec::new()));
+    }
+    let mut upstream = match SensitiveJson::parse(&bytes) {
+        Ok(json) if json.0.is_object() => json,
+        _ => {
+            completion.finish(StatusCode::BAD_GATEWAY);
+            return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+        }
+    };
+    let Some(expires_in) = upstream.0.get("expires_in").and_then(Value::as_u64) else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    };
+    let Some(real_ttl) = i64::try_from(expires_in).ok().filter(|ttl| *ttl > 0) else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    };
+    let Ok(now) = unix_now() else {
+        completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+        return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_clock_unavailable");
+    };
+    let Some(real_access_expiry) = request_started_at.checked_add(real_ttl) else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    };
+    let Some(fake_access_expiry) = request_started_at.checked_add(real_ttl.min(3600)) else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    };
+    if now >= fake_access_expiry {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    }
+    let real_access = match upstream.take_token("access_token") {
+        Ok(token) => token,
+        Err(reason) => {
+            completion.finish(StatusCode::BAD_GATEWAY);
+            return crate::response(StatusCode::BAD_GATEWAY, reason);
+        }
+    };
+    if real_access_header(&real_access).is_err() {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    }
+    let new_refresh = upstream.0.get("refresh_token").is_some();
+    if grant == "authorization_code" && !new_refresh {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    }
+    let real_refresh = if new_refresh {
+        match upstream.take_token("refresh_token") {
+            Ok(token) => token,
+            Err(reason) => {
+                completion.finish(StatusCode::BAD_GATEWAY);
+                return crate::response(StatusCode::BAD_GATEWAY, reason);
+            }
+        }
+    } else if let Some(pair) = previous.as_ref() {
+        pair.real_refresh_token.clone()
+    } else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    };
+    let response_refresh_expiry = match upstream.0.get("refresh_token_expires_in") {
+        Some(value) => match value
+            .as_u64()
+            .and_then(|seconds| i64::try_from(seconds).ok())
+            .and_then(|seconds| request_started_at.checked_add(seconds))
+        {
+            Some(expiry) if expiry > now => Some(expiry),
+            _ => {
+                completion.finish(StatusCode::BAD_GATEWAY);
+                return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+            }
+        },
+        None => None,
+    };
+    let refresh_expiry = if new_refresh {
+        response_refresh_expiry
+    } else {
+        let previous_expiry = previous
+            .as_ref()
+            .and_then(|pair| pair.real_refresh_expires_at_unix);
+        match (previous_expiry, response_refresh_expiry) {
+            (Some(old), Some(new)) => Some(old.min(new)),
+            (old, new) => old.or(new),
+        }
+    };
+    if refresh_expiry.is_some_and(|expiry| now >= expiry) {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    }
+    let Ok(fake_access) = fake_token("sk-ant-oat01-airlock-") else {
+        completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+        return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_entropy_unavailable");
+    };
+    let fake_refresh = if new_refresh || previous.is_none() {
+        match fake_token("airlock-refresh-") {
+            Ok(token) => token,
+            Err(reason) => {
+                completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+                return crate::response(StatusCode::SERVICE_UNAVAILABLE, reason);
+            }
+        }
+    } else if let Some(pair) = previous.as_ref() {
+        pair.fake_refresh_token.clone()
+    } else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    };
+    if upstream.replace("access_token", &fake_access).is_err()
+        || (new_refresh && upstream.replace("refresh_token", &fake_refresh).is_err())
+    {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    }
+    if storage
+        .replace_oauth_pair(OauthPairReplacement {
+            client: state.client.clone(),
+            credential: credential.clone(),
+            expected_generation: previous.as_ref().map_or(0, |pair| pair.generation),
+            fake_access_token: fake_access,
+            fake_access_expires_at_unix: fake_access_expiry,
+            fake_refresh_token: fake_refresh,
+            real_access_token: real_access,
+            real_access_expires_at_unix: real_access_expiry,
+            real_refresh_token: real_refresh,
+            real_refresh_expires_at_unix: refresh_expiry,
+            updated_at_unix: now,
+        })
+        .await
+        .is_err()
+    {
+        completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+        return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_storage_unavailable");
+    }
+    let Ok(acknowledged_at) = unix_now() else {
+        completion.finish(StatusCode::SERVICE_UNAVAILABLE);
+        return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_clock_unavailable");
+    };
+    if acknowledged_at >= fake_access_expiry
+        || refresh_expiry.is_some_and(|expiry| acknowledged_at >= expiry)
+    {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    }
+    if let Some(object) = upstream.0.as_object_mut() {
+        object.insert(
+            "expires_in".to_owned(),
+            Value::from(fake_access_expiry - acknowledged_at),
+        );
+        if let Some(expiry) = refresh_expiry {
+            object.insert(
+                "refresh_token_expires_in".to_owned(),
+                Value::from(expiry - acknowledged_at),
+            );
+        } else {
+            object.remove("refresh_token_expires_in");
+        }
+    }
+    let Ok(fake_response) = upstream.encode() else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "invalid_oauth_response");
+    };
+    completion.finish(status);
+    json_reply(status, &fake_response)
+}
+
 async fn finish_response(
     mut response: Response<Incoming>,
     shim: bool,
@@ -1263,6 +1862,10 @@ async fn finish_response(
     })
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the request gate keeps selection, authorization, and forwarding in one ordered path"
+)]
 async fn forward(
     mut request: Request<Incoming>,
     state: ForwardState,
@@ -1275,7 +1878,8 @@ async fn forward(
     let upgrading = is_upgrade_request(request.headers());
     strip_hop_by_hop(request.headers_mut(), upgrading);
     let inference = method == Method::POST && path == "/v1/messages";
-    let (mut request, model) = match inspect_request(request, inference).await {
+    let oauth = token_path(&method, &path);
+    let (mut request, model) = match inspect_request(request, inference, oauth).await {
         Ok(result) => result,
         Err(reason) => {
             let status = inspection_error_status(reason);
@@ -1295,18 +1899,62 @@ async fn forward(
     let credential_id = credential_id.clone();
     let has_model = model.is_some();
     completion.selected(credential_id.clone(), model);
-    let Some(credential) = state.route.credentials.get(&credential_id) else {
-        completion.finish(StatusCode::FORBIDDEN);
-        return Ok(crate::response(
-            StatusCode::FORBIDDEN,
-            "credential unavailable",
-        ));
-    };
     let Some((primary_id, _)) = state.route.config.route(&state.route.group, None) else {
         completion.finish(StatusCode::FORBIDDEN);
         return Ok(crate::response(StatusCode::FORBIDDEN, "route unavailable"));
     };
     let primary = *primary_id == credential_id;
+    let managed = state.route.config.managed_provider(&credential_id).cloned();
+    if let Some(provider) = managed.as_ref() {
+        if !state
+            .route
+            .config
+            .managed_host_allowed(&state.route.group, state.route.target.host())
+        {
+            completion.outcome = Some("oauth_host_unavailable");
+            completion.finish(StatusCode::FORBIDDEN);
+            return Ok(crate::response(
+                StatusCode::FORBIDDEN,
+                "oauth_host_unavailable",
+            ));
+        }
+        if creates_api_key(&path) {
+            completion.outcome = Some("managed_api_key_creation_unsupported");
+            completion.finish(StatusCode::FORBIDDEN);
+            return Ok(crate::response(
+                StatusCode::FORBIDDEN,
+                "managed_api_key_creation_unsupported",
+            ));
+        }
+        if oauth {
+            if !state
+                .route
+                .config
+                .oauth_token_host_allowed(&state.route.group, state.route.target.host())
+            {
+                completion.finish(StatusCode::FORBIDDEN);
+                return Ok(crate::response(
+                    StatusCode::FORBIDDEN,
+                    "oauth_token_host_unavailable",
+                ));
+            }
+            return Ok(forward_managed_token(
+                request,
+                &state,
+                &credential_id,
+                provider,
+                completion,
+            )
+            .await);
+        }
+        if state.route.target.host().as_ref() == "platform.claude.com" {
+            completion.finish(StatusCode::FORBIDDEN);
+            return Ok(crate::response(
+                StatusCode::FORBIDDEN,
+                "oauth_platform_path_unavailable",
+            ));
+        }
+    }
     let zai = inference
         && state
             .route
@@ -1339,12 +1987,31 @@ async fn forward(
             "invalid upstream request",
         ));
     };
-    let Ok(request) = swap_credential(request, credential) else {
-        completion.finish(StatusCode::INTERNAL_SERVER_ERROR);
-        return Ok(crate::response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "credential could not be encoded",
-        ));
+    let swapped = if let Some(provider) = managed.as_ref() {
+        managed_access(request, &state, &credential_id, provider).await
+    } else if let Some(credential) = state.route.credentials.get(&credential_id) {
+        swap_credential(request, credential).map_err(|_| "credential could not be encoded")
+    } else {
+        Err("credential unavailable")
+    };
+    let request = match swapped {
+        Ok(request) => request,
+        Err(reason) => {
+            let status = if managed.is_some()
+                && matches!(
+                    reason,
+                    "oauth_storage_unavailable" | "oauth_clock_unavailable"
+                ) {
+                StatusCode::SERVICE_UNAVAILABLE
+            } else if managed.is_some() {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            completion.outcome = Some(reason);
+            completion.finish(status);
+            return Ok(crate::response(status, reason));
+        }
     };
     let Ok(response) = selected.sender.clone().send_request(request).await else {
         completion.finish(StatusCode::BAD_GATEWAY);
@@ -1458,6 +2125,23 @@ fn strip_hop_by_hop(headers: &mut hyper::HeaderMap, upgrading: bool) {
 mod tests {
     use super::*;
     use airlock_core::secret::SecretFile;
+
+    #[tokio::test]
+    async fn stalled_primary_oauth_exchange_does_not_block_another_primary() {
+        let locks = OauthLocks::default();
+        let stalled_id = CredentialId::try_from("stalled").expect("credential ID");
+        let ready_id = CredentialId::try_from("ready").expect("credential ID");
+        let stalled = oauth_lock_for(&locks, &stalled_id).await;
+        let _provider_wait = stalled.lock().await;
+        assert!(
+            oauth_lock_for(&locks, &stalled_id)
+                .await
+                .try_lock()
+                .is_err()
+        );
+        let ready = oauth_lock_for(&locks, &ready_id).await;
+        let _other_exchange = ready.try_lock().expect("other primary may exchange");
+    }
 
     #[test]
     fn every_sse_split_boundary_and_multiple_events_are_framed() {
@@ -1738,7 +2422,7 @@ mod tests {
                 0
             }));
             for chunk in body.chunks(1003) {
-                append_inference_chunk(&mut retained, chunk, fixed_capacity)
+                append_inference_chunk(&mut retained, chunk, fixed_capacity, MODEL_BODY_LIMIT)
                     .expect("exact limit fits");
                 assert!(retained.capacity() <= MODEL_BODY_LIMIT);
             }

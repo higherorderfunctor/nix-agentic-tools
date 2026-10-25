@@ -50,6 +50,8 @@ enum Error {
     Storage(#[from] airlock_core::storage::StorageError),
     #[error("the system clock is before the Unix epoch")]
     SystemTimeBeforeEpoch,
+    #[error("gateway retained storage after serving stopped")]
+    StorageOwnership,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -155,18 +157,30 @@ async fn run() -> Result<(), Error> {
             let mut terminate = signal(SignalKind::terminate())?;
             let ca_directory =
                 ca_directory(env::var_os("XDG_RUNTIME_DIR"), config.listen().port())?;
-            let _storage =
+            let storage = std::sync::Arc::new(
                 SqliteStorage::open(config.state_dir(), config.storage_identities(now_unix()?))
-                    .await?;
-            Gateway::bind(config, &ca_directory, upstream_roots())
-                .await?
+                    .await?,
+            );
+            let gateway = Gateway::bind_with_storage(
+                config,
+                &ca_directory,
+                upstream_roots(),
+                Some(std::sync::Arc::clone(&storage)),
+            )
+            .await?;
+            let served = gateway
                 .serve(async move {
                     tokio::select! {
                         _ = interrupt.recv() => {},
                         _ = terminate.recv() => {},
                     }
                 })
+                .await;
+            std::sync::Arc::try_unwrap(storage)
+                .map_err(|_| Error::StorageOwnership)?
+                .close()
                 .await?;
+            served?;
         }
     }
     Ok(())
