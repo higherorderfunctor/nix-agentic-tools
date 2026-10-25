@@ -647,6 +647,7 @@
             if hasContent
             then true
             else lib.mkDefault false;
+          audiences = lib.genAttrs (lib.attrNames (index // rules)) (_: [appRecord.name]);
           inherit index rules;
         }
         // lib.optionalAttrs (shared.hasOnDemandIndex or false) {hasOnDemandIndex = true;}

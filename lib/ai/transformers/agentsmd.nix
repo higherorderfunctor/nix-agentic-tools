@@ -59,7 +59,12 @@ in rec {
     hasOnDemandIndex = lib.any (
       rule: builtins.elem rule.inclusion ["auto" "manual"]
     ) (lib.attrValues indexedRules);
-    index = lib.mapAttrs renderIndexEntry indexedRules;
+    # Keep trigger data until the shared composer renders the final index.
+    index =
+      lib.mapAttrs (_name: rule: {
+        inherit (rule) description inclusion matcher references;
+      })
+      indexedRules;
     rules = lib.mapAttrs (mkRuleBody readContent) (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) routedRules);
   };
 
@@ -90,6 +95,92 @@ in rec {
     + "  - Read:\n"
     + lib.concatMapStrings (path: item "[${code path}](${path})") references;
 
+  # One extra manual index level, only when it reduces the root index's bytes.
+  # Plain relative file links can be rebased by directory depth; URLs, anchors,
+  # query strings and Markdown-escaped paths stay in the root unchanged.
+  tierIndex = {
+    filename,
+    audiences,
+    hasOnDemandIndex,
+    index,
+  }: let
+    isRelativeFile = ref: builtins.match "([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+" ref != null;
+    rootPrefix = lib.concatStrings (lib.replicate (builtins.length (lib.splitString "/" filename) - 1) "../");
+    rootIndex = lib.mapAttrs (_: entry:
+      entry
+      // {
+        references = map (ref:
+          if isRelativeFile ref
+          then rootPrefix + ref
+          else ref)
+        entry.references;
+      })
+    index;
+    eligible = lib.filterAttrs (_: entry:
+      entry.inclusion
+      == "fileMatch"
+      && entry.references != []
+      && lib.all isRelativeFile entry.references
+      && builtins.length (lib.unique (map builtins.dirOf entry.references)) == 1)
+    index;
+    candidates = lib.groupBy (name: builtins.dirOf (builtins.head eligible.${name}.references)) (lib.attrNames eligible);
+    # Only a literal directory followed by /** proves coverage by prefix.
+    # Wildcard-bearing directory prefixes are not a glob-subsumption proof.
+    rootMatchers = names: let
+      matchers = lib.sort builtins.lessThan (lib.unique (lib.concatMap (name: index.${name}.matcher) names));
+      broad = lib.filter (glob: lib.hasSuffix "/**" glob && builtins.match "[A-Za-z0-9._/-]+" (lib.removeSuffix "/**" glob) != null) matchers;
+    in
+      lib.filter (glob: !(lib.any (cover: cover != glob && lib.hasPrefix (lib.removeSuffix "**" cover) glob) broad)) matchers;
+    renderIndex = state:
+      renderKeyed {
+        inherit audiences hasOnDemandIndex;
+        inherit (state) index indexGroups;
+      };
+    grouped =
+      lib.foldl' (state: parent: let
+        names = candidates.${parent};
+        entries = lib.getAttrs names index;
+        # Full digest: no truncated-ID collision assumption or path escaping.
+        groupId = builtins.hashString "sha256" parent;
+        childName = "${builtins.baseNameOf filename}.rules/${groupId}.md";
+        childPath = "${filename}.rules/${groupId}.md";
+        group = {
+          name = parent;
+          audiences = lib.sort builtins.lessThan (lib.unique (lib.concatMap (name: audiences.${name} or []) names));
+          entry = {
+            description = "";
+            inclusion = "fileMatch";
+            matcher = rootMatchers names;
+            references = [childName];
+          };
+        };
+        next = {
+          index = removeAttrs state.index names;
+          indexGroups = state.indexGroups ++ [group];
+          children =
+            state.children
+            // {
+              ${childPath} =
+                "Match globs use the same workspace-relative paths as the parent index. Document links below are relative to this file.\n\n"
+                + renderKeyed {
+                  audiences = builtins.intersectAttrs entries audiences;
+                  index = lib.mapAttrs (_: entry: entry // {references = map (ref: "../${rootPrefix}${ref}") entry.references;}) entries;
+                };
+            };
+        };
+      in
+        if builtins.length names >= 2 && builtins.stringLength (renderIndex next) < builtins.stringLength (renderIndex state)
+        then next
+        else state)
+      {
+        index = rootIndex;
+        indexGroups = [];
+        children = {};
+      }
+      (lib.attrNames candidates);
+  in
+    grouped;
+
   # Render the shared AGENTS.md target from named units: the path-scoped
   # index, then the inlined rules, each in attribute-name order, then the
   # context body. The compact, always-applicable units go FIRST because a
@@ -100,13 +191,26 @@ in rec {
   # comments keep key provenance without introducing frontmatter or another
   # metadata schema.
   renderKeyed = {
+    audiences ? {},
     context ? null,
     hasOnDemandIndex ? false,
     index ? {},
+    indexGroups ? [],
     rules ? {},
   }: let
+    audienceNames = names: lib.concatMapStringsSep ", " (runtime: "`${runtime}`") names;
+    entries = lib.sort (a: b: a.name < b.name) (
+      lib.mapAttrsToList (name: entry: {
+        inherit entry name;
+        audiences = audiences.${name} or [];
+      })
+      index
+      ++ indexGroups
+    );
+    indexAudiences = lib.unique (map (entry: entry.audiences) entries);
+    uniformAudience = builtins.length indexAudiences == 1 && builtins.head indexAudiences != [];
     units =
-      lib.optional (index != {}) (
+      lib.optional (entries != []) (
         (
           if hasOnDemandIndex
           then ''
@@ -124,10 +228,32 @@ in rec {
 
           ''
         )
-        + lib.concatStrings (lib.attrValues index)
+        + lib.optionalString (audiences != {}) (
+          (
+            if uniformAudience
+            then "This fallback index applies only to: ${audienceNames (builtins.head indexAudiences)}.\n"
+            else "This fallback index applies only to the runtimes named in each entry.\n"
+          )
+          + ''
+            Runtimes with native rule injection already receive their applicable
+            rules; do not follow this fallback index to load additional guidance.
+          ''
+          + (
+            if uniformAudience
+            then "If your runtime is not named, skip this index.\n\n"
+            else "If your runtime is not named, skip the entry.\n\n"
+          )
+        )
+        + lib.concatMapStrings (entry:
+          renderIndexEntry entry.name entry.entry
+          + lib.optionalString (!uniformAudience && entry.audiences != []) "  - Audience: ${audienceNames entry.audiences}\n")
+        entries
       )
       ++ lib.mapAttrsToList (
-        name: body: "<!-- rule: ${name} -->\n\n${body}"
+        name: body:
+          "<!-- rule: ${name} -->\n\n"
+          + lib.optionalString (audiences ? ${name}) "Apply this rule only in: ${audienceNames audiences.${name}}.\n\n"
+          + body
       )
       rules
       ++ lib.optional (context != null && context != "") context;

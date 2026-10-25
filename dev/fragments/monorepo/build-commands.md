@@ -1,7 +1,8 @@
 ## Build & Validation Commands
 
-> **Last verified:** 2026-10-03 — generation includes devenv.yaml; lock
-> resolution remains an explicit network operation.
+> **Last verified:** 2026-10-25 — context measurements estimate Copilot tuning
+> costs; generation includes devenv.yaml; lock resolution remains an explicit
+> network operation.
 
 ```bash
 nix flake show                # List all outputs
@@ -20,3 +21,18 @@ devenv tasks run --mode before generate:all
 # After adding or changing a flake input, sync its devenv lock (may use network).
 devenv update <input>
 ```
+
+For context tuning, run `bash dev/scripts/measure-context.sh` for corpus totals
+or supply repository-relative paths, including deleted paths:
+
+```bash
+bash dev/scripts/measure-context.sh packages/chatgpt-codex/checks/module-eval.nix
+```
+
+The initial soft engineering target is **128 KiB for root AGENTS.md plus matched
+Copilot native instructions**, counting each file once: roughly 32K tokens at 4
+bytes/token, with sensitivity about 26K–44K at 5–3 bytes/token. This chosen
+target is neither a GitHub limit nor a pass/fail gate. Estimates exclude diff,
+system, organization, and retrieved content; path matching approximates native
+globs. Fallback child indexes are excluded from native instruction totals.
+Codex's separate 32 KiB project-document read window remains its own contract.

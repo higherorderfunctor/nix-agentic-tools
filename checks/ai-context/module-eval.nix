@@ -303,8 +303,151 @@ in {
       in
         fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
         && agents
-        == "<!-- rule: shared -->\n\nShared rule.\n\nShared context."
+        == "<!-- rule: shared -->\n\nApply this rule only in: `codex`, `kiro`.\n\nShared rule.\n\nShared context."
+        && result.config.ai.internal.agentsMd."AGENTS.md".audiences.shared == ["codex" "kiro"]
         && !(lib.hasInfix "---" agents)
+    );
+
+    module-shared-agentsmd-tier-delivery = mkTest "shared-agentsmd-tier-delivery" (
+      let
+        base.ai = {
+          codex.enable = true;
+          rules = lib.genAttrs ["alpha" "beta"] (_: {
+            matcher = ["src/**"];
+            references = map (n: "docs/guidance/long-document-name-${n}.md") ["one" "two" "three" "four"];
+            text = "RULE-BODY-MUST-NOT-BE-INLINED";
+          });
+        };
+        active = evalDevenv base;
+        childrenOf = result: lib.filter (path: lib.hasPrefix "AGENTS.md.rules/" path) (lib.attrNames (deliveredFiles result.config));
+        child = builtins.head (childrenOf active);
+        disabled = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".enable = false;});
+        replaced = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".content.text = "Consumer root.";});
+        removed = evalDevenv {ai.codex.enable = true;};
+        # An index can be inspected without reading a discarded context source.
+        source = pkgs.runCommand "tier-discarded-context-must-not-build" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exit 1
+        '';
+        lazy = evalDevenv (lib.recursiveUpdate base {
+          ai.context = {inherit source;};
+          ai.codex.files."AGENTS.md".content.text = "Consumer root.";
+        });
+        collision = builtins.tryEval (let
+          result = evalDevenv (lib.recursiveUpdate base {
+            ai.internal.agentsMd.${child} = {
+              hasContent = true;
+              context = "Conflicting root.";
+            };
+          });
+        in
+          builtins.deepSeq result.config.ai.internal._generatedFiles true);
+      in
+        builtins.length (childrenOf active)
+        == 1
+        && active.config.ai.files.${child}.method == "ro"
+        && fromGeneratedTree child (deliveredFiles active.config).${child}
+        && lib.hasInfix "../docs/guidance/" (markdownInput active child).text
+        && !(lib.hasInfix "RULE-BODY-MUST-NOT-BE-INLINED" (markdownInput active child).text)
+        && childrenOf disabled == []
+        && childrenOf replaced == []
+        && childrenOf removed == []
+        && childrenOf lazy == []
+        && (deliveredFiles lazy.config)."AGENTS.md".text == "Consumer root."
+        && !collision.success
+    );
+
+    module-shared-agentsmd-preserves-rule-audiences = mkTest "shared-agentsmd-preserves-rule-audiences" (
+      let
+        result = evalDevenv {
+          ai = {
+            claude.enable = true;
+            codex.enable = true;
+            copilot.enable = true;
+            kimchi.enable = true;
+            kiro.cli.enable = true;
+            rules = {
+              automatic = {
+                description = "Use for deployment planning.";
+                inclusion = ["auto" "fileMatch"];
+                matcher = ["deploy/**"];
+                references = ["docs/deploy.md"];
+                text = "Deployment guidance.";
+              };
+              inline.text = "Inline guidance.";
+              manual = {
+                inclusion = ["manual" "fileMatch"];
+                matcher = ["ops/**"];
+                references = ["docs/ops.md"];
+                text = "Operations guidance.";
+              };
+              scoped = {
+                matcher = ["src/**"];
+                references = ["docs/source.md"];
+                text = "Source guidance.";
+              };
+            };
+            codex.rules.manual.enable = false;
+            copilot.github.rules.scoped.enable = false;
+            kimchi.rules.inline.enable = false;
+          };
+        };
+        shared = result.config.ai.internal.agentsMd."AGENTS.md";
+        agents = (markdownInput result "AGENTS.md").text;
+        files = deliveredFiles result.config;
+        claude = (markdownInput result ".claude/rules/scoped.md").text;
+      in
+        shared.audiences.automatic
+        == ["codex" "kimchi"]
+        && shared.audiences.inline == ["codex" "kiro"]
+        && shared.audiences.manual == ["kimchi"]
+        && shared.audiences.scoped == ["codex" "kimchi"]
+        && shared.index.automatic
+        == {
+          description = "Use for deployment planning.";
+          inclusion = "auto";
+          matcher = ["deploy/**"];
+          references = ["docs/deploy.md"];
+        }
+        && shared.index.manual.inclusion == "manual"
+        && shared.index.scoped.inclusion == "fileMatch"
+        && lib.hasInfix "Runtimes with native rule injection already receive their applicable" agents
+        && lib.hasInfix "  - Audience: `kimchi`\n" agents
+        && lib.hasInfix "Apply this rule only in: `codex`, `kiro`.\n\nInline guidance." agents
+        && lib.hasInfix "paths:" claude
+        && lib.hasInfix "Source guidance." claude
+        && !(lib.hasInfix "Audience:" claude)
+        && !(files ? ".github/instructions/scoped.instructions.md")
+        && files ? ".github/instructions/manual.instructions.md"
+        && files ? ".kiro/steering/scoped.md"
+    );
+
+    module-shared-agentsmd-rejects-divergent-index = mkTest "shared-agentsmd-rejects-divergent-index" (
+      let
+        attempt = builtins.tryEval (let
+          result = evalDevenv {
+            ai = {
+              codex.enable = true;
+              kimchi = {
+                enable = true;
+                rules.scoped = {
+                  matcher = ["other/**"];
+                  references = ["other.md"];
+                  text = "Other guidance.";
+                };
+              };
+              rules.scoped = {
+                matcher = ["src/**"];
+                references = ["source.md"];
+                text = "Source guidance.";
+              };
+            };
+          };
+        in
+          builtins.deepSeq (markdownInput result "AGENTS.md").text true);
+      in
+        !attempt.success
     );
 
     module-shared-agentsmd-rejects-divergent-units = mkTest "shared-agentsmd-rejects-divergent-units" (

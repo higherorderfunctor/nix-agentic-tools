@@ -432,11 +432,21 @@ in {
         projectAgents = (markdownInput devenv "AGENTS.md").text;
       in
         hmAgents
-        == projectAgents
+        == builtins.concatStringsSep "\n\n" [
+          (
+            "## Path-scoped rules\n\n"
+            + "Before editing a path that matches an entry below, read every document listed\n"
+            + "for it. When several entries match, their guidance composes.\n\n"
+            + "- **`scoped`**\n  - Match:\n    - `src/**`\n"
+            + "  - Read:\n    - [`docs/scoped.md`](docs/scoped.md)\n"
+          )
+          "<!-- rule: always -->\n\nALWAYS-RULE."
+        ]
         && lib.hasInfix "## Path-scoped rules" projectAgents
         && lib.hasInfix "Match:\n    - `src/**`" projectAgents
         && lib.hasInfix "[`docs/scoped.md`](docs/scoped.md)" projectAgents
-        && lib.hasInfix "<!-- rule: always -->\n\nALWAYS-RULE." projectAgents
+        && lib.hasInfix "<!-- rule: always -->\n\nApply this rule only in: `kimchi`.\n\nALWAYS-RULE." projectAgents
+        && lib.hasInfix "This fallback index applies only to: `kimchi`." projectAgents
         && !(lib.hasInfix "SCOPED-RULE-BODY." projectAgents)
         && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? scoped
         && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? scoped)
@@ -453,7 +463,7 @@ in {
         };
       in
         (markdownInput evaluated "AGENTS.md").text
-        == "<!-- rule: shared -->\n\nSHARED-RULE."
+        == "<!-- rule: shared -->\n\nApply this rule only in: `codex`, `kimchi`.\n\nSHARED-RULE."
     );
 
     module-kimchi-rules-on-demand-index = mkTest "kimchi-rules-on-demand-index" (

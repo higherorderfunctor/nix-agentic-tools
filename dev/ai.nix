@@ -20,17 +20,34 @@
   # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
   shell = pkgs.bash;
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
-  # A per-runtime or stacked-workflows rule at a fragment category's key would
-  # silently hide that fragment, so fail on any overlap.
+  # Keep github.com's reviewer context bounded. New categories stay local until
+  # explicitly selected here; their source and local-runtime delivery stay shared.
+  reviewerCategories = [
+    "ai-config-scope"
+    "ai-module-contract"
+    "beads"
+    "facets"
+    "git"
+    "kiro-agents"
+    "kiro-settings"
+    "mcp-secrets"
+    "mcp-services"
+    "microvm"
+    "open-keys"
+    "packaging"
+  ];
+  # A runtime may omit a fragment, but replacement content would silently hide
+  # its source. The stacked-workflows router must also use its own key.
   shadowed =
     map (key: "the stacked-workflows rule `${key}`")
     (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames swsRouter))
     ++ lib.concatMap (runtime: let
       path = optionPaths.pool runtime "rules";
+      replacements = lib.filterAttrs (_: rule: rule.enable || rule.text != "" || rule.source != null) (lib.getAttrFromPath path config);
     in
       map (key: lib.showOption (path ++ [key]))
-      (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames (lib.getAttrFromPath path config))))
-    (lib.filter (runtime: config.ai.${runtime}.enable) ["claude" "codex" "copilot" "kiro"]);
+      (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames replacements)))
+    (lib.filter (runtime: config.ai.${runtime}.enable) (builtins.attrNames optionPaths.records));
 in {
   assertions = [
     {
@@ -166,7 +183,10 @@ in {
         };
       };
 
-      peer-communication.enable = true;
+      peer-communication = {
+        enable = true;
+        runtimes.copilot.enable = false;
+      };
 
       # Only installation reads isCI, so committed instructions never depend on it.
       semble = {
@@ -238,7 +258,12 @@ in {
       # AGENTS.md exceeds Codex's 32 KiB default; raise its read limit to keep the tail.
       projectDocMaxBytes = 131072;
     };
-    copilot.enable = true;
+    copilot = {
+      enable = true;
+      github.rules = lib.mapAttrs (_: _: {enable = false;}) (
+        lib.filterAttrs (name: _: !(lib.elem name reviewerCategories)) (gen.rules // swsRouter)
+      );
+    };
     kimchi = {
       enable = true;
       extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;

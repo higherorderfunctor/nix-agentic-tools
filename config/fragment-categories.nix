@@ -23,7 +23,11 @@
 # under packages/<dir>/docs/.
 #
 # Put package-specific rows beside their owner; keep cross-owner policy here.
-_: {
+{
+  config,
+  lib,
+  ...
+}: {
   config.fragments.categories = {
     # Shared packaging guidance covers the AI CLI owners and their recipes.
     ai-clis = {
@@ -64,8 +68,39 @@ _: {
       ];
       sources = ["host-config-merge"];
     };
-    # ai-module: the files and activation layer contract, fanout semantics and
-    # per-CLI enable-as-sole-gate.
+    # Directory ingestion belongs to its helpers, option expansion, native
+    # agent suffix declarations and the evaluations that exercise those inputs.
+    ai-dir-helpers = {
+      scopes = [
+        "checks/ai-context/module-eval.nix"
+        "checks/ai-factory/factory-eval.nix"
+        "lib/ai/agent.nix"
+        "lib/ai/ai-common.nix"
+        "lib/ai/app/checkRecord.nix"
+        "lib/ai/app/mkBackendTransform.nix"
+        "lib/ai/app/mkRuntime.nix"
+        "lib/ai/default.nix"
+        "lib/ai/dir-helpers.nix"
+        "lib/ai/sharedOptions.nix"
+        "packages/chatgpt-codex/checks/module-eval.nix"
+        "packages/chatgpt-codex/lib/mkCodex.nix"
+        "packages/claude-code/checks/module-eval.nix"
+        "packages/claude-code/lib/mkClaude.nix"
+        "packages/copilot-cli/checks/module-eval.nix"
+        "packages/kimchi/checks/module-eval.nix"
+        "packages/kimchi/lib/mkKimchi.nix"
+        "packages/kiro-cli/checks/module-eval.nix"
+        "packages/kiro-cli/lib/mkKiro.nix"
+      ];
+      sources = [
+        {
+          dir = "ai-module";
+          name = "dir-helpers";
+        }
+      ];
+    };
+    # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
+    # The files and activation contract has one separate rule below.
     # Post-factory, the fanout logic lives in each per-package factory
     # (packages/*/lib/mk*.nix + packages/*/modules/) and the shared
     # options barrel (lib/ai/sharedOptions.nix).
@@ -127,18 +162,25 @@ _: {
         # instead, which is a 37-line MCP defaults record.
         "packages/semble/modules/common.nix"
       ];
-      # The layer contract first; the dev fragments follow, sorted.
+      sources = [
+        "ai-module-fanout"
+        "collision-semantics"
+        "layered-fanout"
+        "shell-option"
+      ];
+    };
+    # One contract rule covers every previous reader without repeating the
+    # same source when a runtime module matches both ai-module and its backend.
+    ai-module-contract = {
+      scopes = lib.sort lib.lessThan (lib.unique (lib.concatMap
+        (category: config.fragments.categories.${category}.scopes)
+        ["ai-module" "devenv" "hm-modules"]));
       sources = [
         {
           dir = "ai-module";
           location = "package";
           name = "contract";
         }
-        "ai-module-fanout"
-        "collision-semantics"
-        "dir-helpers"
-        "layered-fanout"
-        "shell-option"
       ];
     };
     # ai-proxy: the local CLIProxyAPI surface — selection and the resolved
@@ -203,11 +245,6 @@ _: {
       sources = [
         "ci-lean-closure"
         "files-internals"
-        {
-          dir = "ai-module";
-          location = "package";
-          name = "contract";
-        }
       ];
     };
     extracted = {
@@ -305,11 +342,6 @@ _: {
       ];
       sources = [
         "module-conventions"
-        {
-          dir = "ai-module";
-          location = "package";
-          name = "contract";
-        }
       ];
     };
     # ifd: import-from-derivation eval cost and the warm-ifd composite that

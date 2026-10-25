@@ -1,16 +1,17 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-10-16 — repo documents and agent files are built by
-> `mkTree` with the evaluated `ai.formatter` treefmt config and the named
-> guards; scoped rules rely on the normalized matcher-derived `fileMatch`
-> trigger default. `generate:all` writes instruction and repo-document
-> projections plus devenv.yaml, waiting on `ai:files-ready` for AGENTS.md, the
-> `.github/` instruction files and Claude's and Kiro's rules; devenv.lock
-> requires a separate network update; the generator produces content only;
-> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
-> from its generated-file tree, formatted there with this repository's treefmt;
-> the drift check compares the built files; ai-module is the sole backend
-> delivery path.
+> **Last verified:** 2026-10-25 — `dev/ai.nix` selects reviewer categories with
+> runtime rule disables; local runtimes keep every category. Repo documents and
+> agent files are built by `mkTree` with the evaluated `ai.formatter` treefmt
+> config and the named guards; scoped rules rely on the normalized
+> matcher-derived `fileMatch` trigger default. `generate:all` writes instruction
+> and repo-document projections plus devenv.yaml, waiting on `ai:files-ready`
+> for AGENTS.md, the `.github/` instruction files and Claude's and Kiro's rules;
+> devenv.lock requires a separate network update; the generator produces content
+> only; `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction
+> file from its generated-file tree, formatted there with this repository's
+> treefmt; the drift check compares the built files; ai-module is the sole
+> backend delivery path.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -28,14 +29,25 @@ Two kinds of generated content, two owners:
   trigger). `dev/ai.nix` sets them as `ai.context` and `ai.rules` in this
   repository's own devenv, and `ai.*` renders and writes each runtime's files
   exactly as it would for any consumer: AGENTS.md (Codex, Copilot, Kiro, Kimchi,
-  with a path-scoped index of the rules), `.claude/CLAUDE.md` and
-  `.claude/rules/`, `.github/instructions/`, and `.kiro/steering/`. The
-  committed ones (AGENTS.md and `.github/`) are read-only copies.
+  with a path-scoped index of the rules and, when smaller, manually followed
+  child indexes), `.claude/CLAUDE.md` and `.claude/rules/`,
+  `.github/instructions/`, and `.kiro/steering/`. The committed ones (AGENTS.md
+  and `.github/`) are read-only copies.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
   evaluated treefmt config, and the same named guards `ai.guards` selects);
   `generate:repo:*` copies them out.
+
+`dev/ai.nix` bounds github.com's reviewer instructions with an explicit category
+allowlist and `ai.copilot.github.rules.<category>.enable = false` for every
+other category and the root stacked-workflows router. Newly registered
+categories stay out until selected. Local runtimes keep every category. The
+fragment-shadow guard accepts content-free runtime disables but rejects same-key
+replacement text or sources, including disabled replacements. Peer communication
+uses its existing Copilot program disable; delegate-routing and Semble already
+exclude Copilot. `instructions-reviewer-policy` checks the emitted instruction
+set, local content retention, and the shadow guard.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
@@ -71,12 +83,13 @@ deleted by hand.
 `checks/instructions/instructions-drift.nix` evaluates `dev/ai.nix` through the
 module harness with `isCI = false` (Semble, and so its AGENTS.md rule, is gated
 on it, and committed bytes must not depend on who evaluates them) and compares
-the tracked AGENTS.md and `.github/instructions/` tree with the built files the
-`ai.*` writers' plans point at: each is a file in its runtime's generated-file
-store tree, already formatted and checked. README.md and CONTRIBUTING.md compare
-against the `repo-*` packages. `treefmt.nix` excludes none of the committed
-instruction files: they come out of the tree in the house format, and
-`checks.formatting` reads them like any tracked file.
+the tracked AGENTS.md, its complete `.rules/` child tree and the
+`.github/instructions/` tree with the built files the `ai.*` writers' plans
+point at: each is a file in its runtime's generated-file store tree, already
+formatted and checked. README.md and CONTRIBUTING.md compare against the
+`repo-*` packages. `treefmt.nix` excludes none of the committed instruction
+files: they come out of the tree in the house format, and `checks.formatting`
+reads them like any tracked file.
 
 ### Running Generation
 

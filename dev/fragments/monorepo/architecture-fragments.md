@@ -1,7 +1,8 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-10-08 — `generate:all` regenerates instructions, repo
-> documents and devenv.yaml; devenv.lock is synced separately with
+> **Last verified:** 2026-10-25 — shared AGENTS.md indexes may use one manually
+> followed child tier; `generate:all` regenerates instructions, repo documents
+> and devenv.yaml; devenv.lock is synced separately with
 > `devenv update <input>`; fragment sources live in the dev or package tree;
 > package categories live in owner registries; `dev/generate.nix` turns them
 > into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
@@ -35,7 +36,10 @@ it per runtime through the `lib/ai/transformers/` pipeline:
 - Codex / AGENTS.md: always-loaded orientation plus a compact
   `## Path-scoped rules` index. Codex has no glob-scoped instruction primitive,
   so matching remains a manual progressive-disclosure step: the index maps the
-  same registry scopes to the authoritative source documents. AGENTS.md used to
+  same registry scopes to the authoritative source documents. Shorter
+  shared-parent `fileMatch` groups become manual child indexes under
+  `AGENTS.md.rules/`; pointers preserve coverage and children retain exact
+  scopes and audiences. Auto/manual entries stay at root. AGENTS.md used to
   concatenate every scoped fragment body, but that bloated it to ~2k lines;
   Phase 2.4 removed the bodies (commit c4f4aff), and `ai.*` renders a scoped
   rule that names `references` as an index entry for the same reason. The index
@@ -50,11 +54,12 @@ it per runtime through the `lib/ai/transformers/` pipeline:
   within 32 KiB.
 
 The source fragments are authoritative. Every runtime file above is a generated
-projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the
-Claude and Kiro ones are gitignored and written on devenv shell entry. Never
-edit a projection directly; the next shell entry, or the drift check, undoes it.
-`devenv tasks run --mode before generate:all` regenerates all of them, committed
-and gitignored, after source or registry changes.
+projection that `ai.*` writes: AGENTS.md, its generated child indexes and
+`.github/` are committed, the Claude and Kiro ones are gitignored and written on
+devenv shell entry. Never edit a projection directly; the next shell entry, or
+the drift check, undoes it. `devenv tasks run --mode before generate:all`
+regenerates all of them, committed and gitignored, after source or registry
+changes.
 
 ### Maintenance is mandatory
 
