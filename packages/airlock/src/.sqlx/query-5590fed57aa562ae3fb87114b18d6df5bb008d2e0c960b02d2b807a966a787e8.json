@@ -1,0 +1,116 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT request_events.id AS \"id!: i64\", occurred_at_unix, client_id, group_id,\n               credential_id, credentials.provider_id AS \"provider_id!: String\", model_id,\n               outcome, status_code AS \"status_code!: i64\", latency_ms AS \"latency_ms!: i64\",\n               request_bytes AS \"request_bytes!: i64\", response_bytes AS \"response_bytes!: i64\",\n               input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,\n               usage_complete AS \"usage_complete!: i64\"\n        FROM request_events\n        JOIN credentials ON credentials.id = request_events.credential_id\n        WHERE occurred_at_unix >= ? AND occurred_at_unix < ?\n          AND (? = 0 OR client_id IS ?)\n          AND (? IS NULL OR credential_id = ?)\n          AND (? IS NULL OR group_id = ?)\n          AND (? IS NULL OR model_id = ?)\n          AND (? IS NULL OR outcome = ?)\n          AND (? IS NULL OR credentials.provider_id = ?)\n          AND (? IS NULL OR request_events.id <= ?)\n          AND (? IS NULL OR occurred_at_unix < ? OR (occurred_at_unix = ? AND request_events.id < ?))\n        ORDER BY occurred_at_unix DESC, request_events.id DESC\n        LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "occurred_at_unix",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "client_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "group_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "credential_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider_id!: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "model_id",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "outcome",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "status_code!: i64",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "latency_ms!: i64",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "request_bytes!: i64",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "response_bytes!: i64",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "input_tokens",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "output_tokens",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cache_read_tokens",
+        "ordinal": 14,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cache_write_tokens",
+        "ordinal": 15,
+        "type_info": "Integer"
+      },
+      {
+        "name": "usage_complete!: i64",
+        "ordinal": 16,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 21
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "5590fed57aa562ae3fb87114b18d6df5bb008d2e0c960b02d2b807a966a787e8"
+}

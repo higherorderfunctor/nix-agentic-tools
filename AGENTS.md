@@ -97,11 +97,21 @@ this index.
     - `packages/airlock/**`
   - Read:
     - [`packages/airlock/docs/airlock.md`](packages/airlock/docs/airlock.md)
+- **`airlock-control`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`packages/airlock/docs/control.md`](packages/airlock/docs/control.md)
 - **`airlock-integration`**
   - Match:
     - `packages/airlock/**`
   - Read:
     - [`packages/airlock/docs/integration.md`](packages/airlock/docs/integration.md)
+- **`airlock-oauth`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`packages/airlock/docs/oauth.md`](packages/airlock/docs/oauth.md)
 - **`airlock-routing`**
   - Match:
     - `packages/airlock/**`
@@ -112,6 +122,11 @@ this index.
     - `packages/airlock/**`
   - Read:
     - [`packages/airlock/docs/storage.md`](packages/airlock/docs/storage.md)
+- **`airlock-usage-storage`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`packages/airlock/docs/usage-storage.md`](packages/airlock/docs/usage-storage.md)
 - **`beads`**
   - Match:
     - `packages/beads/**`

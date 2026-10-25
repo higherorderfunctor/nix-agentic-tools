@@ -1,0 +1,67 @@
+[
+  {
+    "v": 1,
+    "type": "auth",
+    "token": "fixture-read-token",
+    "resume_session": null
+  },
+  {
+    "v": 1,
+    "type": "subscribe",
+    "id": "quota-claude",
+    "kind": "usage.series",
+    "query": {
+      "provider": "claude",
+      "credential": "claude",
+      "source": "out_of_band_fetch",
+      "surface": "claude_subscription",
+      "window": {
+        "last_seconds": 86400
+      },
+      "limit": 1000
+    },
+    "resume": null
+  },
+  {
+    "v": 1,
+    "type": "ack",
+    "id": "quota-claude",
+    "epoch": "fixture-epoch",
+    "seq": 2
+  },
+  {
+    "v": 1,
+    "type": "unsubscribe",
+    "id": "quota-claude"
+  },
+  {
+    "v": 1,
+    "type": "pong",
+    "nonce": "fixture-nonce"
+  },
+  {
+    "v": 1,
+    "type": "subscribe",
+    "id": "requests-recent",
+    "kind": "requests.table",
+    "query": {
+      "window": {
+        "last_seconds": 3600
+      },
+      "limit": 200,
+      "provider": "claude"
+    },
+    "resume": null
+  },
+  {
+    "v": 1,
+    "type": "subscribe",
+    "id": "request-audit",
+    "kind": "logs.tail",
+    "query": {
+      "stream": "requests",
+      "limit": 200
+    },
+    "resume": null
+  }
+]

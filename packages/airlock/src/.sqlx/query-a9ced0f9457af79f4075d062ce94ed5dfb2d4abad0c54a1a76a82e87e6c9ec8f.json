@@ -1,53 +1,58 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT kind, group_name, percent_milli, reset_at_unix, severity, is_active,\n               model_display_name, surface_display_name\n        FROM claude_limits WHERE snapshot_id = ? ORDER BY ordinal LIMIT ?\n        ",
+  "query": "\n        SELECT snapshot_id, kind, group_name, percent_milli, reset_at_unix, severity, is_active,\n               model_display_name, surface_display_name\n        FROM claude_limits WHERE snapshot_id IN (SELECT value FROM json_each(?)) ORDER BY snapshot_id, ordinal LIMIT ?\n        ",
   "describe": {
     "columns": [
       {
-        "name": "kind",
+        "name": "snapshot_id",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Integer"
       },
       {
-        "name": "group_name",
+        "name": "kind",
         "ordinal": 1,
         "type_info": "Text"
       },
       {
-        "name": "percent_milli",
+        "name": "group_name",
         "ordinal": 2,
-        "type_info": "Integer"
+        "type_info": "Text"
       },
       {
-        "name": "reset_at_unix",
+        "name": "percent_milli",
         "ordinal": 3,
         "type_info": "Integer"
       },
       {
-        "name": "severity",
+        "name": "reset_at_unix",
         "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "severity",
+        "ordinal": 5,
         "type_info": "Text"
       },
       {
         "name": "is_active",
-        "ordinal": 5,
+        "ordinal": 6,
         "type_info": "Integer"
       },
       {
         "name": "model_display_name",
-        "ordinal": 6,
+        "ordinal": 7,
         "type_info": "Text"
       },
       {
         "name": "surface_display_name",
-        "ordinal": 7,
+        "ordinal": 8,
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Right": 2
     },
-    "nullable": [false, true, false, true, true, false, true, true]
+    "nullable": [false, false, true, false, true, true, false, true, true]
   },
-  "hash": "4717a7b5d76ff50ec0b21276d42c7a93986547dd0b68babe98295c52bad385b3"
+  "hash": "a9ced0f9457af79f4075d062ce94ed5dfb2d4abad0c54a1a76a82e87e6c9ec8f"
 }

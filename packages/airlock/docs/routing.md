@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-25 — CONNECT, model and classifier routing,
 > ToolSearch, remote-control paths, quota substitution, and M08 primary-header
-> observation share the gateway path.
+> observation share the gateway path; the control listener remains a separate
+> authenticated surface.
 
 ## Transport
 
@@ -12,6 +13,10 @@ connection goes through airlock, but only the hosts an upstream lists in
 `unknownHosts`. A client identifies itself with the token in
 `Proxy-Authorization: Basic`, so its proxy URL is
 `http://<client>:<token>@127.0.0.1:<port>`.
+
+The optional control listener is not a CONNECT proxy and must use a different
+port. Its dedicated bearer token never authenticates gateway clients, and no
+control route can select an inference credential or bypass model routing.
 
 Interception follows this order:
 

@@ -1,13 +1,14 @@
 //! Read-only, versioned usage report for delegate routing and human inspection.
 
-use std::{collections::BTreeMap, num::NonZeroU64};
+use std::{collections::BTreeMap, future::Future, num::NonZeroU64};
 
 use airlock_core::{
     config::{Config, CredentialAuthKind, UsageCredential, UsageProviderKind},
     ids::{CredentialId, ProviderId},
     storage::{
-        ProviderSnapshot, ReadOnlyStorage, RequestOutcome, RequestUsageAggregate,
-        RequestUsageQuery, SnapshotFetchStatus, SnapshotQuery, SnapshotSource, SnapshotSurface,
+        ControlReader, ControlReport, IdentifiedSnapshot, ProviderSnapshot, ReadOnlyStorage,
+        RequestOutcome, RequestUsageAggregate, RequestUsageQuery, SnapshotFetchStatus,
+        SnapshotPage, SnapshotQuery, SnapshotSource, SnapshotSurface, StorageError,
     },
 };
 use serde_json::{Value, json};
@@ -15,6 +16,103 @@ use serde_json::{Value, json};
 const FRESH_SECONDS: i64 = 900;
 const DEFAULT_HISTORY_LIMIT: u64 = 100;
 const MAX_HISTORY_LIMIT: u64 = 1_000;
+
+pub(crate) trait ReportReader {
+    fn provider_snapshot_page(
+        &mut self,
+        query: SnapshotQuery,
+    ) -> impl Future<Output = Result<SnapshotPage, StorageError>> + Send;
+
+    fn latest_provider_snapshot(
+        &mut self,
+        provider: ProviderId,
+        credential: CredentialId,
+        source: SnapshotSource,
+        surface: SnapshotSurface,
+    ) -> impl Future<Output = Result<Option<ProviderSnapshot>, StorageError>> + Send;
+
+    fn request_usage(
+        &mut self,
+        query: RequestUsageQuery,
+    ) -> impl Future<Output = Result<Vec<RequestUsageAggregate>, StorageError>> + Send;
+
+    fn request_usage_loss_total(
+        &mut self,
+    ) -> impl Future<Output = Result<u64, StorageError>> + Send;
+
+    fn provider_snapshot_loss_total(
+        &mut self,
+    ) -> impl Future<Output = Result<u64, StorageError>> + Send;
+}
+
+impl ReportReader for ReadOnlyStorage {
+    async fn provider_snapshot_page(
+        &mut self,
+        query: SnapshotQuery,
+    ) -> Result<SnapshotPage, StorageError> {
+        ReadOnlyStorage::provider_snapshot_page(self, query).await
+    }
+
+    async fn latest_provider_snapshot(
+        &mut self,
+        provider: ProviderId,
+        credential: CredentialId,
+        source: SnapshotSource,
+        surface: SnapshotSurface,
+    ) -> Result<Option<ProviderSnapshot>, StorageError> {
+        ReadOnlyStorage::latest_provider_snapshot(self, provider, credential, source, surface).await
+    }
+
+    async fn request_usage(
+        &mut self,
+        query: RequestUsageQuery,
+    ) -> Result<Vec<RequestUsageAggregate>, StorageError> {
+        ReadOnlyStorage::request_usage(self, query).await
+    }
+
+    async fn request_usage_loss_total(&mut self) -> Result<u64, StorageError> {
+        ReadOnlyStorage::request_usage_loss_total(self).await
+    }
+
+    async fn provider_snapshot_loss_total(&mut self) -> Result<u64, StorageError> {
+        ReadOnlyStorage::provider_snapshot_loss_total(self).await
+    }
+}
+
+impl ReportReader for ControlReport<'_> {
+    async fn provider_snapshot_page(
+        &mut self,
+        query: SnapshotQuery,
+    ) -> Result<SnapshotPage, StorageError> {
+        ControlReport::report_provider_snapshot_page(self, query).await
+    }
+
+    async fn latest_provider_snapshot(
+        &mut self,
+        provider: ProviderId,
+        credential: CredentialId,
+        source: SnapshotSource,
+        surface: SnapshotSurface,
+    ) -> Result<Option<ProviderSnapshot>, StorageError> {
+        ControlReport::report_latest_provider_snapshot(self, provider, credential, source, surface)
+            .await
+    }
+
+    async fn request_usage(
+        &mut self,
+        query: RequestUsageQuery,
+    ) -> Result<Vec<RequestUsageAggregate>, StorageError> {
+        ControlReport::report_request_usage(self, query).await
+    }
+
+    async fn request_usage_loss_total(&mut self) -> Result<u64, StorageError> {
+        ControlReport::report_request_usage_loss_total(self).await
+    }
+
+    async fn provider_snapshot_loss_total(&mut self) -> Result<u64, StorageError> {
+        ControlReport::report_provider_snapshot_loss_total(self).await
+    }
+}
 
 pub struct Options {
     pub bucket_seconds: NonZeroU64,
@@ -133,7 +231,18 @@ fn global_quota_complete(snapshot: Option<&ProviderSnapshot>, kind: UsageProvide
         })
 }
 
-fn snapshot_json(snapshot: &ProviderSnapshot, now: i64) -> Value {
+pub(crate) fn known_gaps() -> Vec<Value> {
+    vec![
+        "claude_limit_ui_mapping_unverified".into(),
+        "claude_credit_pool_rows_schema_unverified".into(),
+        "claude_profile_subscription_metadata_unavailable".into(),
+        "codex_secondary_window_schema_unverified".into(),
+        "console_balance_requires_ant_auth_login".into(),
+        "cpa_management_api_unsupported".into(),
+    ]
+}
+
+pub(crate) fn snapshot_json(snapshot: &ProviderSnapshot, now: i64) -> Value {
     json!({
         "account_id": snapshot.account_id,
         "client": snapshot.client.as_ref().map(AsRef::as_ref),
@@ -186,59 +295,117 @@ fn snapshot_json(snapshot: &ProviderSnapshot, now: i64) -> Value {
     })
 }
 
-fn reset_events(snapshots: &[&ProviderSnapshot]) -> Vec<Value> {
-    let mut prior = BTreeMap::<(CredentialId, &'static str, String), (u64, Option<i64>)>::new();
-    let mut prior_credits =
-        BTreeMap::<(CredentialId, &'static str, String), (u64, Option<i64>)>::new();
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ResetDimension {
+    Credit,
+    Quota,
+}
+
+#[derive(Debug)]
+pub(crate) struct IdentifiedResetEvent {
+    pub current_snapshot_id: i64,
+    pub dimension: ResetDimension,
+    pub pool: String,
+    pub preceding_snapshot_id: i64,
+    pub value: Value,
+}
+
+#[derive(Debug)]
+struct PriorPool {
+    id: i64,
+    value: u64,
+    reset_at_unix: Option<i64>,
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "reset detection walks every typed quota, credit, metric, and limit pool together"
+)]
+pub(crate) fn identified_reset_events(
+    snapshots: &[IdentifiedSnapshot],
+) -> Vec<IdentifiedResetEvent> {
+    let mut prior = BTreeMap::<(CredentialId, &'static str, String), PriorPool>::new();
+    let mut prior_credits = BTreeMap::<(CredentialId, &'static str, String), PriorPool>::new();
     let mut events = Vec::new();
-    for snapshot in snapshots {
+    for identified in snapshots {
+        let snapshot = &identified.snapshot;
         let surface = surface(snapshot.surface);
         if snapshot.fetch_status == SnapshotFetchStatus::Gap {
-            prior.retain(|(credential, observed_surface, _), _| {
-                credential != &snapshot.credential || *observed_surface != surface
+            let gap_surface = surface;
+            prior.retain(|(credential, prior_surface, _), _| {
+                credential != &snapshot.credential || *prior_surface != gap_surface
             });
-            prior_credits.retain(|(credential, observed_surface, _), _| {
-                credential != &snapshot.credential || *observed_surface != surface
+            prior_credits.retain(|(credential, prior_surface, _), _| {
+                credential != &snapshot.credential || *prior_surface != gap_surface
             });
             continue;
         }
         for pool in &snapshot.pools {
             let key = (snapshot.credential.clone(), surface, pool.label.clone());
-            if let Some((used, reset)) = prior.insert(key, (pool.utilized, pool.reset_at_unix))
-                && (pool.utilized < used
-                    || (reset.is_some()
+            let next = PriorPool {
+                id: identified.id,
+                value: pool.utilized,
+                reset_at_unix: pool.reset_at_unix,
+            };
+            if let Some(previous) = prior.insert(key, next)
+                && (pool.utilized < previous.value
+                    || (previous.reset_at_unix.is_some()
                         && pool.reset_at_unix.is_some()
-                        && reset != pool.reset_at_unix))
+                        && previous.reset_at_unix != pool.reset_at_unix))
             {
-                events.push(json!({
+                events.push(IdentifiedResetEvent {
+                    current_snapshot_id: identified.id,
+                    dimension: ResetDimension::Quota,
+                    pool: pool.label.clone(),
+                    preceding_snapshot_id: previous.id,
+                    value: json!({
                         "credential": snapshot.credential.as_ref(),
                         "detected_at_unix": snapshot.fetched_at_unix,
-                        "kind": if pool.utilized < used { "utilization_drop" } else { "reset_time_change" },
+                        "kind": if pool.utilized < previous.value {
+                            "utilization_drop"
+                        } else {
+                            "reset_time_change"
+                        },
                         "pool": pool.label,
                         "provider": snapshot.provider.as_ref(),
                         "reset_at_unix": pool.reset_at_unix,
                         "surface": surface,
-                    }));
+                    }),
+                });
             }
         }
         for credit in &snapshot.credits {
             let key = (snapshot.credential.clone(), surface, credit.label.clone());
-            if let Some((remaining, reset)) =
-                prior_credits.insert(key, (credit.remaining_minor_units, credit.reset_at_unix))
-                && (credit.remaining_minor_units > remaining
-                    || (reset.is_some()
+            let next = PriorPool {
+                id: identified.id,
+                value: credit.remaining_minor_units,
+                reset_at_unix: credit.reset_at_unix,
+            };
+            if let Some(previous) = prior_credits.insert(key, next)
+                && (credit.remaining_minor_units > previous.value
+                    || (previous.reset_at_unix.is_some()
                         && credit.reset_at_unix.is_some()
-                        && reset != credit.reset_at_unix))
+                        && previous.reset_at_unix != credit.reset_at_unix))
             {
-                events.push(json!({
-                    "credential": snapshot.credential.as_ref(),
-                    "detected_at_unix": snapshot.fetched_at_unix,
-                    "kind": if credit.remaining_minor_units > remaining { "credit_refill" } else { "reset_time_change" },
-                    "pool": credit.label,
-                    "provider": snapshot.provider.as_ref(),
-                    "reset_at_unix": credit.reset_at_unix,
-                    "surface": surface,
-                }));
+                events.push(IdentifiedResetEvent {
+                    current_snapshot_id: identified.id,
+                    dimension: ResetDimension::Credit,
+                    pool: credit.label.clone(),
+                    preceding_snapshot_id: previous.id,
+                    value: json!({
+                        "credential": snapshot.credential.as_ref(),
+                        "detected_at_unix": snapshot.fetched_at_unix,
+                        "kind": if credit.remaining_minor_units > previous.value {
+                            "credit_refill"
+                        } else {
+                            "reset_time_change"
+                        },
+                        "pool": credit.label,
+                        "provider": snapshot.provider.as_ref(),
+                        "reset_at_unix": credit.reset_at_unix,
+                        "surface": surface,
+                    }),
+                });
             }
         }
         let observed_pools = snapshot
@@ -265,7 +432,22 @@ fn reset_events(snapshots: &[&ProviderSnapshot]) -> Vec<Value> {
     events
 }
 
-fn credential_json(
+fn reset_events(snapshots: &[&ProviderSnapshot]) -> Vec<Value> {
+    let identified = snapshots
+        .iter()
+        .enumerate()
+        .map(|(index, snapshot)| IdentifiedSnapshot {
+            id: i64::try_from(index).unwrap_or(0),
+            snapshot: (*snapshot).clone(),
+        })
+        .collect::<Vec<_>>();
+    identified_reset_events(&identified)
+        .into_iter()
+        .map(|event| event.value)
+        .collect()
+}
+
+pub(crate) fn credential_json(
     credential: &UsageCredential,
     latest_fetch: Option<&ProviderSnapshot>,
     latest_header: Option<&ProviderSnapshot>,
@@ -299,7 +481,7 @@ fn credential_json(
     })
 }
 
-fn target_surface(kind: UsageProviderKind) -> SnapshotSurface {
+pub(crate) fn target_surface(kind: UsageProviderKind) -> SnapshotSurface {
     match kind {
         UsageProviderKind::Claude => SnapshotSurface::ClaudeSubscription,
         UsageProviderKind::Codex => SnapshotSurface::CodexRateLimits,
@@ -307,7 +489,7 @@ fn target_surface(kind: UsageProviderKind) -> SnapshotSurface {
     }
 }
 
-fn aggregate_json(group: &str, value: &RequestUsageAggregate) -> Value {
+pub(crate) fn aggregate_json(group: &str, value: &RequestUsageAggregate) -> Value {
     json!({
         "bucket_start_unix": value.bucket_start_unix,
         "cache_read_tokens": value.cache_read_tokens,
@@ -334,13 +516,24 @@ fn aggregate_json(group: &str, value: &RequestUsageAggregate) -> Value {
 }
 
 /// Reads and projects typed history; no credential file or OAuth table is touched.
+pub(crate) async fn build_control(
+    config: &Config,
+    reader: &mut ControlReader,
+    options: &Options,
+    now: i64,
+) -> Result<Value, StorageError> {
+    let mut transaction = reader.report_transaction().await?;
+    let result = build(config, &mut transaction, options, now).await;
+    transaction.finish(result).await
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "the versioned report assembles bounded typed sections"
 )]
-pub async fn build(
+pub(crate) async fn build(
     config: &Config,
-    reader: &mut ReadOnlyStorage,
+    reader: &mut impl ReportReader,
     options: &Options,
     now: i64,
 ) -> Result<Value, airlock_core::storage::StorageError> {
@@ -444,10 +637,7 @@ pub async fn build(
         "generated_at_unix": now,
         "history_oldest_at_unix": snapshots.first().map(|snapshot| snapshot.fetched_at_unix),
         "history_truncated": history_truncated,
-        "known_gaps": ["claude_limit_ui_mapping_unverified", "claude_credit_pool_rows_schema_unverified",
-            "claude_profile_subscription_metadata_unavailable",
-            "codex_secondary_window_schema_unverified", "console_balance_requires_ant_auth_login",
-            "cpa_management_api_unsupported"],
+        "known_gaps": known_gaps(),
         "provider_snapshot_loss_total": provider_lost,
         "request_loss_total": lost,
         "request_usage": aggregates,
@@ -643,6 +833,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one reset fixture checks monotonic history, true resets, gaps, and missing predecessors"
+    )]
     fn reset_events_require_two_observed_samples_without_a_relevant_gap() {
         let sample = |at, surface, fetch_status, utilized| ProviderSnapshot {
             account_id: "fake".to_owned(),
@@ -706,6 +900,45 @@ mod tests {
             unit: "gap".to_owned(),
             value: 1,
         });
+        let identified = |id, snapshot: &ProviderSnapshot| IdentifiedSnapshot {
+            id,
+            snapshot: snapshot.clone(),
+        };
+        let monotonic = sample(
+            100,
+            SnapshotSurface::ClaudeSubscription,
+            SnapshotFetchStatus::Success,
+            95_000,
+        );
+        let series = [
+            identified(1, &before),
+            identified(2, &monotonic),
+            identified(3, &after),
+        ];
+        let resets = identified_reset_events(&series);
+        assert_eq!(
+            resets.len(),
+            1,
+            "monotonic predecessor must not fabricate another reset"
+        );
+        assert_eq!(resets[0].preceding_snapshot_id, 2);
+        assert_eq!(resets[0].current_snapshot_id, 3);
+        assert!(
+            identified_reset_events(&[
+                identified(1, &before),
+                identified(2, &quota_gap),
+                identified(3, &after)
+            ])
+            .is_empty()
+        );
+        assert!(
+            identified_reset_events(&[
+                identified(1, &before),
+                identified(2, &partial),
+                identified(3, &after)
+            ])
+            .is_empty()
+        );
         assert!(
             reset_events(&[]).is_empty(),
             "empty history has no comparison"
@@ -917,9 +1150,10 @@ mod tests {
         )
         .await
         .expect("report");
-        let golden: Value =
-            serde_json::from_str(include_str!("../tests/fixtures/usage-report-v1.json"))
-                .expect("checked-in golden JSON");
+        let golden: Value = serde_json::from_str(include_str!(
+            "../../../../web-fixtures/usage-report-v1.json"
+        ))
+        .expect("checked-in golden JSON");
         assert_eq!(
             value, golden,
             "the entire populated v1 report contract changed"
@@ -1173,9 +1407,10 @@ mod tests {
     }
     #[test]
     fn serialized_consumer_refuses_partial_global_quota() {
-        let value: Value =
-            serde_json::from_str(include_str!("../tests/fixtures/usage-report-v1.json"))
-                .expect("committed partial fixture");
+        let value: Value = serde_json::from_str(include_str!(
+            "../../../../web-fixtures/usage-report-v1.json"
+        ))
+        .expect("committed partial fixture");
         assert_eq!(
             value["credentials"][0]["latest_fetch"]["partial_gaps"][0],
             "seven_day_utilization_unavailable"

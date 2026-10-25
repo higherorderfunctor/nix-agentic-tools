@@ -66,6 +66,29 @@ backend: {lib, ...}: let
         default = {};
         description = "Clients by id.";
       };
+      control = mkOption {
+        type = types.submodule {
+          options = {
+            enable = mkOption {
+              type = types.bool;
+              default = false;
+              description = "Whether this instance also serves the read-only loopback control API.";
+            };
+            port = mkOption {
+              type = types.port;
+              default = 8401;
+              description = "The loopback control port, distinct from the gateway CONNECT port.";
+            };
+            token = mkOption {
+              type = types.nullOr redact.types.secretFile;
+              default = null;
+              description = "The dedicated control bearer token, delivered as a 0600 file; required when control is enabled.";
+            };
+          };
+        };
+        default = {};
+        description = "The optional read-only control listener and web API.";
+      };
       credentials = mkOption {
         type = types.attrsOf credential;
         default = {};
@@ -97,8 +120,30 @@ backend: {lib, ...}: let
   };
 in {
   imports = [
+    ({config, ...}: {
+      config = {
+        assertions = lib.concatLists (lib.mapAttrsToList (name: instance: [
+            {
+              assertion = !instance.settings.control.enable || instance.settings.control.token != null;
+              message = "ai.airlock.instances.${name}.settings.control.token is required when control is enabled.";
+            }
+          ])
+          config.ai.airlock.instances);
+        ai.airlock.services =
+          lib.mapAttrs' (
+            name: instance:
+              lib.nameValuePair "airlock-${name}" {
+                ports.control = lib.mkIf instance.settings.control.enable instance.settings.control.port;
+              }
+          )
+          config.ai.airlock.instances;
+      };
+    })
     ((import ../../ai-module/lib/instances.nix {inherit lib;}).module {
-      arguments = _: ''serve --config "$AIRLOCK_CONFIG"'';
+      arguments = instance:
+        ''serve --config "$AIRLOCK_CONFIG"''
+        + lib.optionalString instance.settings.control.enable
+        " --web-root \"${instance.package.frontend}\"";
       inherit backend settingsType;
       claimProxyInstance = true;
       defaultPort = 8318;
@@ -113,26 +158,33 @@ in {
       render = settings:
         render {
           prefix = "AIRLOCK";
-          settings = {
-            clients =
-              lib.mapAttrs (_: client: {
-                inherit (client) grants;
-                token_file = client.token;
-              })
-              settings.clients;
-            credentials = lib.mapAttrs (_: credential:
-              (lib.optionalAttrs (credential.accountId != null) {account_id = credential.accountId;})
-              // {
-                auth = lib.filterAttrs (_: value: value != null) credential.auth;
-                inherit (credential) provider;
-              })
-            settings.credentials;
-            inherit (settings) groups listen;
-            providers = lib.mapAttrs (_: provider: lib.filterAttrs (_: value: value != null) provider) settings.providers;
-            state_dir = settings.stateDir;
-            inherit (settings) usage;
-            unknown_hosts = settings.unknownHosts;
-          };
+          settings =
+            {
+              clients =
+                lib.mapAttrs (_: client: {
+                  inherit (client) grants;
+                  token_file = client.token;
+                })
+                settings.clients;
+              credentials = lib.mapAttrs (_: credential:
+                (lib.optionalAttrs (credential.accountId != null) {account_id = credential.accountId;})
+                // {
+                  auth = lib.filterAttrs (_: value: value != null) credential.auth;
+                  inherit (credential) provider;
+                })
+              settings.credentials;
+              inherit (settings) groups listen;
+              providers = lib.mapAttrs (_: provider: lib.filterAttrs (_: value: value != null) provider) settings.providers;
+              state_dir = settings.stateDir;
+              inherit (settings) usage;
+              unknown_hosts = settings.unknownHosts;
+            }
+            // lib.optionalAttrs settings.control.enable {
+              control = {
+                listen = "127.0.0.1:${toString settings.control.port}";
+                read_token_file = settings.control.token;
+              };
+            };
         };
       tool = "airlock";
       variable = "AIRLOCK_CONFIG";

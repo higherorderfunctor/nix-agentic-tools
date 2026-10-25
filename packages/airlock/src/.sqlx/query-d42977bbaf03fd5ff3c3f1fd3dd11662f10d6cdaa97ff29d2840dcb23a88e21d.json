@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT id AS \"id!: i64\", fetched_at_unix, provider_id, client_id, group_id,\n               credential_id, account_id, source, surface, fetch_status, gap_reason\n        FROM provider_snapshots\n        WHERE provider_id = ? AND fetched_at_unix < ?\n          AND credential_id = ? AND source = ? AND surface = ?\n        ORDER BY fetched_at_unix DESC, id DESC\n        LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "fetched_at_unix",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "provider_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "client_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "group_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "credential_id",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_id",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "source",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "surface",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "fetch_status",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "gap_reason",
+        "ordinal": 10,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "d42977bbaf03fd5ff3c3f1fd3dd11662f10d6cdaa97ff29d2840dcb23a88e21d"
+}

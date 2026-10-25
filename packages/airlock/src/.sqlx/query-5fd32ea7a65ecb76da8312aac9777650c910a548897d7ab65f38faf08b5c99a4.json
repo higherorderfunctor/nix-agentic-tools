@@ -1,0 +1,18 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(MAX(id), 0) AS \"cutoff!: i64\" FROM request_events",
+  "describe": {
+    "columns": [
+      {
+        "name": "cutoff!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [false]
+  },
+  "hash": "5fd32ea7a65ecb76da8312aac9777650c910a548897d7ab65f38faf08b5c99a4"
+}

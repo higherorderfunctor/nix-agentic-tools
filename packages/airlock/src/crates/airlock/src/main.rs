@@ -18,6 +18,7 @@ use tokio::signal::unix::{SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
 mod collector;
+mod control;
 mod report;
 
 #[derive(Debug, Parser)]
@@ -36,6 +37,8 @@ enum Command {
     Serve {
         #[arg(long)]
         config: PathBuf,
+        #[arg(long)]
+        web_root: Option<PathBuf>,
     },
     Usage {
         #[arg(long)]
@@ -56,6 +59,10 @@ enum Error {
     #[error(transparent)]
     Config(#[from] airlock_core::error::ConfigErrors),
     #[error(transparent)]
+    Control(#[from] control::Error),
+    #[error(transparent)]
+    Secret(#[from] airlock_core::error::SecretError),
+    #[error(transparent)]
     Gateway(#[from] airlock_gateway::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -65,6 +72,8 @@ enum Error {
     RuntimeDirectory(#[from] RuntimeDirectoryError),
     #[error(transparent)]
     Storage(#[from] airlock_core::storage::StorageError),
+    #[error(transparent)]
+    Task(#[from] tokio::task::JoinError),
     #[error("the system clock is before the Unix epoch")]
     SystemTimeBeforeEpoch,
     #[error("gateway retained storage after serving stopped")]
@@ -157,11 +166,15 @@ fn now_unix() -> Result<i64, Error> {
     i64::try_from(seconds).map_err(|_| Error::SystemTimeBeforeEpoch)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "serve startup owns config, storage, collector, gateway, control, and shutdown ordering"
+)]
 async fn run() -> Result<(), Error> {
     let cli = Cli::parse();
     let config = match &cli.command {
         Command::CheckConfig { config }
-        | Command::Serve { config }
+        | Command::Serve { config, .. }
         | Command::Usage { config, .. } => config,
     };
     let source = fs::read_to_string(config)?;
@@ -194,7 +207,7 @@ async fn run() -> Result<(), Error> {
                 println!("{}", report::human(&value));
             }
         }
-        Command::Serve { .. } => {
+        Command::Serve { web_root, .. } => {
             if config.usage_collector_credentials().len() > collector::MAX_CREDENTIALS {
                 return Err(Error::UsageCredentialLimit);
             }
@@ -209,10 +222,34 @@ async fn run() -> Result<(), Error> {
             let mut terminate = signal(SignalKind::terminate())?;
             let ca_directory =
                 ca_directory(env::var_os("XDG_RUNTIME_DIR"), config.listen().port())?;
+            let (web_root, control_config) = match (web_root, config.control()) {
+                (Some(web_root), Some(control)) => (web_root, Some(control)),
+                (_, None) => (PathBuf::from("/nonexistent"), None),
+                _ => {
+                    return Err(Error::Control(control::Error::InvalidWebRoot(
+                        PathBuf::from("--web-root is required when control is configured"),
+                    )));
+                }
+            };
             let storage = Arc::new(
                 SqliteStorage::open(config.state_dir(), config.storage_identities(now_unix()?))
                     .await?,
             );
+            let control_server = match control_config {
+                Some(_) => {
+                    let token = Arc::new(config.load_control_token()?);
+                    Some(
+                        control::ControlServer::bind(
+                            Arc::new(config.clone()),
+                            config.state_dir(),
+                            &web_root,
+                            token,
+                        )
+                        .await?,
+                    )
+                }
+                None => None,
+            };
             let roots = upstream_roots();
             let gateway = Gateway::bind_with_storage_and_usage(
                 config.clone(),
@@ -222,22 +259,77 @@ async fn run() -> Result<(), Error> {
                 Some(storage.clone()),
             )
             .await?;
-            let collector = tokio::spawn(collector::run(Arc::new(config), storage.clone(), roots));
-            let serve_result = gateway
-                .serve(async move {
-                    tokio::select! {
-                        _ = interrupt.recv() => {},
-                        _ = terminate.recv() => {},
-                    }
-                })
-                .await;
+            let collector = tokio::spawn(collector::run(
+                Arc::new(config.clone()),
+                storage.clone(),
+                roots,
+            ));
+            let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(());
+            let shutdown_trigger = shutdown_sender.clone();
+            let signal_task = tokio::spawn(async move {
+                tokio::select! {
+                    _ = interrupt.recv() => {},
+                    _ = terminate.recv() => {},
+                }
+                let _ = shutdown_sender.send(());
+            });
+            let mut gateway_shutdown = shutdown_receiver.clone();
+            let mut gateway_task = tokio::spawn(gateway.serve(async move {
+                let _ = gateway_shutdown.changed().await;
+            }));
+            let mut control_task = control_server.map(|server| {
+                let mut control_shutdown = shutdown_receiver.clone();
+                tokio::spawn(server.serve(async move {
+                    let _ = control_shutdown.changed().await;
+                }))
+            });
+            let mut gateway_done = None;
+            let mut control_done = None;
+            let mut shutdown_observer = shutdown_receiver;
+            if let Some(task) = control_task.as_mut() {
+                tokio::select! {
+                    result = &mut gateway_task => gateway_done = Some(result),
+                    result = task => control_done = Some(result),
+                    _ = shutdown_observer.changed() => {},
+                }
+            } else {
+                tokio::select! {
+                    result = &mut gateway_task => gateway_done = Some(result),
+                    _ = shutdown_observer.changed() => {},
+                }
+            }
+            let _ = shutdown_trigger.send(());
+            let gateway_result = match gateway_done {
+                Some(result) => result,
+                None => gateway_task.await,
+            };
+            let mut first_error = gateway_result
+                .map_err(Error::Task)
+                .and_then(|result| result.map_err(Error::Gateway))
+                .err();
+            if let Some(task) = control_task {
+                let result = match control_done {
+                    Some(result) => result,
+                    None => task.await,
+                };
+                if let Err(error) = result
+                    .map_err(Error::Task)
+                    .and_then(|result| result.map_err(Error::Control))
+                {
+                    first_error.get_or_insert(error);
+                }
+            }
+            signal_task.abort();
+            let _ = signal_task.await;
             collector.abort();
             let _ = collector.await;
             Arc::try_unwrap(storage)
                 .map_err(|_| Error::StorageOwnership)?
                 .close()
                 .await?;
-            serve_result?;
+            if let Some(error) = first_error {
+                return Err(error);
+            }
         }
     }
     Ok(())
