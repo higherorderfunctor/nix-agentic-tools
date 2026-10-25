@@ -160,12 +160,7 @@
     stateDir = "/build/airlock-${client}-state";
     settings = {
       clients.${client} = {
-        grants = [
-          {
-            credentials = ["upstream"];
-            upstream = "anthropic";
-          }
-        ];
+        grants = ["anthropic"];
         token = redact.command (lib.getExe tokenReader);
       };
       credentials.upstream = {
@@ -173,8 +168,15 @@
           file = redact.command (lib.getExe tokenReader);
           type = "oauth_bearer";
         };
-        upstream = "anthropic";
+        provider = "claude";
       };
+      groups.anthropic = {
+        intercept = ["api.anthropic.com"];
+        members.upstream.models = [];
+        primary = "upstream";
+        protocol = "anthropic";
+      };
+      providers.claude.preset = "claude";
     };
   };
   fixture = backend: let

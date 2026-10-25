@@ -1,12 +1,7 @@
 {
   "clients": {
     "harness": {
-      "grants": [
-        {
-          "credentials": ["claude"],
-          "upstream": "anthropic"
-        }
-      ],
+      "grants": ["anthropic"],
       "token_file": "/run/airlock/harness-token"
     }
   },
@@ -16,16 +11,19 @@
         "file": "/run/airlock/claude-token",
         "type": "oauth_bearer"
       },
-      "upstream": "anthropic"
+      "provider": "claude"
+    }
+  },
+  "groups": {
+    "anthropic": {
+      "intercept": ["api.anthropic.com"],
+      "members": { "claude": { "models": [] } },
+      "primary": "claude",
+      "protocol": "anthropic"
     }
   },
   "listen": "127.0.0.1:8080",
+  "providers": { "claude": { "preset": "claude" } },
   "state_dir": "/var/lib/airlock",
-  "unknown_hosts": "tunnel",
-  "upstreams": {
-    "anthropic": {
-      "intercept": ["api.anthropic.com"],
-      "provider": "anthropic"
-    }
-  }
+  "unknown_hosts": "tunnel"
 }
