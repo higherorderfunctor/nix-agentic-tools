@@ -1760,6 +1760,197 @@ async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
     server.stop().await;
 }
 
+#[tokio::test]
+async fn classifier_fingerprint_routes_glm_primary_and_preserves_model_routing() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+
+    let classifier_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[(
+                HeaderName::from_static("anthropic-beta"),
+                "auto-mode-classifier-2026-07-16",
+            )],
+            full_body(br#"{"model":"glm-4.7","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(classifier_response.status(), hyper::StatusCode::OK);
+    let classifier_bytes = classifier_response
+        .into_body()
+        .collect()
+        .await
+        .expect("classifier body");
+    assert_eq!(
+        &classifier_bytes.to_bytes()[..],
+        br#"{"model":"glm-4.7","messages":[]}"#
+    );
+
+    let main_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[(
+                HeaderName::from_static("anthropic-beta"),
+                "dangerous-tool-use-2026-09-03",
+            )],
+            full_body(br#"{"model":"glm-4.7","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(main_response.status(), hyper::StatusCode::OK);
+    let main_bytes = main_response
+        .into_body()
+        .collect()
+        .await
+        .expect("main body");
+    assert_eq!(
+        &main_bytes.to_bytes()[..],
+        br#"{"model":"glm-4.7","messages":[]}"#
+    );
+
+    let primary_requests = records(&primary);
+    let zai_requests = records(&zai);
+    assert_eq!(primary_requests.len(), 1);
+    assert_eq!(zai_requests.len(), 1);
+    assert_eq!(
+        primary_requests[0].headers["anthropic-beta"],
+        "auto-mode-classifier-2026-07-16"
+    );
+    assert_eq!(
+        zai_requests[0].headers["anthropic-beta"],
+        "dangerous-tool-use-2026-09-03"
+    );
+    assert_eq!(zai_requests[0].path, "/api/anthropic/v1/messages");
+    let events = server.capture.request_events();
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| (
+                event["fields"]["credential"].as_str().expect("credential"),
+                event["fields"]["model"].as_str().expect("model"),
+            ))
+            .collect::<Vec<_>>(),
+        [("claude", "glm-4.7"), ("zai", "glm-4.7")]
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn unknown_classifier_fingerprint_routes_primary_and_warns() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[(
+                HeaderName::from_static("anthropic-beta"),
+                "auto-mode-classifier-2099-01-01",
+            )],
+            full_body(br#"{"model":"glm-4.7","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let response_body = response.into_body().collect().await.expect("body");
+    assert_eq!(
+        &response_body.to_bytes()[..],
+        br#"{"model":"glm-4.7","messages":[]}"#
+    );
+    let primary_requests = records(&primary);
+    assert_eq!(primary_requests.len(), 1);
+    assert_eq!(
+        primary_requests[0].headers["anthropic-beta"],
+        "auto-mode-classifier-2099-01-01"
+    );
+    assert!(records(&zai).is_empty());
+    let request_events = server.capture.request_events();
+    assert_eq!(request_events[0]["fields"]["credential"], "claude");
+    assert_eq!(request_events[0]["fields"]["model"], "glm-4.7");
+    let drift_events: Vec<_> = server
+        .capture
+        .events()
+        .into_iter()
+        .filter(|event| event["fields"]["reason"] == "classifier_fingerprint_drift")
+        .collect();
+    assert_eq!(drift_events.len(), 1);
+    assert_eq!(drift_events[0]["level"], "WARN");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn measured_remote_control_route_family_stays_on_primary() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let requests = [
+        (
+            "POST",
+            "/v1/environments/bridge",
+            br#"{"environment":"fake"}"#.as_slice(),
+        ),
+        (
+            "GET",
+            "/v1/environments/fake-env-id/work/poll",
+            b"".as_slice(),
+        ),
+        (
+            "POST",
+            "/v1/environments/fake-env-id/work/ack",
+            br#"{"work":"fake"}"#.as_slice(),
+        ),
+        (
+            "POST",
+            "/v1/environments/fake-env-id/work/stop",
+            br#"{"reason":"fake"}"#.as_slice(),
+        ),
+        (
+            "DELETE",
+            "/v1/environments/bridge/fake-env-id",
+            b"".as_slice(),
+        ),
+        (
+            "POST",
+            "/v1/environments/bridge/fake-env-id/offline",
+            br#"{"offline":true}"#.as_slice(),
+        ),
+    ];
+
+    for (method, path, body) in requests {
+        let response = client
+            .send(request(method, path, &[], full_body(body)))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        assert_eq!(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .expect("remote-control body")
+                .to_bytes()[..],
+            body
+        );
+    }
+
+    let primary_requests = records(&primary);
+    for (record, (method, path, body)) in primary_requests.iter().zip(requests) {
+        assert_eq!(record.method.as_str(), method);
+        assert_eq!(record.path, path);
+        assert_eq!(&record.body[..], body);
+    }
+    assert_eq!(primary_requests.len(), requests.len());
+    assert!(records(&zai).is_empty());
+    server.stop().await;
+}
+
 fn quota_mode(
     status: hyper::StatusCode,
     headers: &[(&'static str, &'static str)],

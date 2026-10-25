@@ -17,6 +17,18 @@
     name = "airlock";
     text = ''printf '%s' "$AIRLOCK_CONFIG" > "$AIRLOCK_TEST_CONFIG_PATH"'';
   };
+  primaryTokenReader = strictShellApplication {
+    name = "airlock-test-primary-token-reader";
+    text = ''printf '%s' "$AIRLOCK_TEST_PRIMARY_TOKEN"'';
+  };
+  zaiTokenReader = strictShellApplication {
+    name = "airlock-test-zai-token-reader";
+    text = ''printf '%s' "$AIRLOCK_TEST_ZAI_TOKEN"'';
+  };
+  compositeClaude = strictShellApplication {
+    name = "claude";
+    text = ''exec ${pkgs.python3}/bin/python3 ${./composite-route-probe.py} client "$@"'';
+  };
   mockClaudeSource = pkgs.writeText "airlock-mock-claude.py" ''
     import base64
     import json
@@ -156,6 +168,8 @@
     '';
   };
   destination = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+  # Both providers resolve to the composite check's loopback upstream.
+  mockAnthropicOrigin = "https://api.anthropic.com:18420";
   mockJail =
     self.lib.ai.jail
     // {
@@ -208,6 +222,48 @@
       providers = {
         claude.preset = "claude";
         zai.preset = "zai";
+      };
+    };
+  };
+  compositeAirlockInstance = backend: {
+    package = pkgs.ai.generic.airlock;
+    port = 18418;
+    stateDir = "/build/airlock-composite-${backend}-state";
+    settings = {
+      clients.harness = {
+        grants = ["anthropic"];
+        token = redact.command (lib.getExe tokenReader);
+      };
+      credentials = {
+        upstream = {
+          auth.file = redact.command (lib.getExe primaryTokenReader);
+          auth.type = "api_key";
+          provider = "claude";
+        };
+        zai = {
+          auth.file = redact.command (lib.getExe zaiTokenReader);
+          auth.type = "api_key";
+          provider = "zai";
+        };
+      };
+      groups.anthropic = {
+        intercept = ["api.anthropic.com"];
+        members = {
+          upstream.models = ["claude-declared"];
+          zai.models = ["glm-4.7"];
+        };
+        primary = "upstream";
+        protocol = "anthropic";
+      };
+      providers = {
+        claude = {
+          preset = "claude";
+          endpoints.anthropic = mockAnthropicOrigin;
+        };
+        zai = {
+          preset = "zai";
+          endpoints.anthropic = "${mockAnthropicOrigin}/api/anthropic";
+        };
       };
     };
   };
@@ -281,6 +337,44 @@
   nativeFixtures = {
     devenv = fixture "devenv" pkgs.ai.claude-code true;
     hm = fixture "hm" pkgs.ai.claude-code true;
+  };
+  compositeFixture = backend: let
+    evaluate =
+      if backend == "hm"
+      then harness.evalHm
+      else harness.evalDevenv;
+    aiFixture = {
+      airlock = {
+        instances.main = compositeAirlockInstance backend;
+        services.airlock-main.environment.XDG_RUNTIME_DIR = "/dev/shm/airlock-composite-${backend}-runtime";
+      };
+      claude = {
+        enable = true;
+        jail.enable = true;
+        package = compositeClaude;
+        proxy = {
+          clientKey = "harness";
+          instance = "main";
+        };
+      };
+      internal.jail = lib.mkForce mockJail;
+    };
+    result = evaluate {ai = aiFixture;};
+    installed = builtins.head (result.config.home.packages or result.config.packages);
+    service = services.mkLauncher {
+      inherit pkgs;
+      entry = result.config.ai.services.airlock-main;
+      name = "airlock-main";
+    };
+  in {
+    inherit destination;
+    launcher = "${installed}/bin/claude";
+    nssLibrary = "${pkgs.nss_wrapper}/lib/libnss_wrapper.so";
+    service = "${service}/bin/ai-service-airlock-main";
+  };
+  compositeFixtures = {
+    devenv = compositeFixture "devenv";
+    hm = compositeFixture "hm";
   };
   testSource = pkgs.writeText "airlock-claude-launch-test.py" ''
     import base64
@@ -565,6 +659,15 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         python3 ${testSource} "$fixturesFile" | tee "$out"
+      '';
+    airlock-claude-composite-routes =
+      pkgs.runCommand "airlock-claude-composite-routes" {
+        nativeBuildInputs = [pkgs.openssl pkgs.python3];
+        fixturesFile = pkgs.writeText "airlock-claude-composite-routes-fixtures.json" (builtins.toJSON compositeFixtures);
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        python3 ${./composite-route-probe.py} "$fixturesFile" | tee "$out"
       '';
   };
 }
