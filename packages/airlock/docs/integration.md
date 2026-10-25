@@ -1,8 +1,8 @@
 # airlock configuration and Claude integration
 
-> **Last verified:** 2026-10-25 — a managed Claude primary exchanges fake OAuth
-> tokens through both generated launchers; M08 adds explicit usage selection and
-> Codex quota observation without enabling Codex inference.
+> **Last verified:** 2026-10-25 — managed OAuth uses client-scoped fake tokens;
+> M08 adds usage selection and quota reports, while M10 verifies real-service
+> classifier/remote-control routing and pinned Claude's signed `cch` identity.
 
 ## Nix configuration
 
@@ -81,6 +81,29 @@ managed OAuth, its launcher clears `CLAUDE_CODE_OAUTH_TOKEN`, so Claude's native
 credential store drives login and refresh. The harness stores only the fake
 pair. It keeps nonessential traffic and claude.ai connectors enabled.
 
+## Offline feature preservation
+
+Evidence levels: **verified offline** uses a loopback fake; **source contract**
+identifies a pinned-client shape with limited offline exercise;
+**live-unverified** needs the operator's real account or device. No row claims
+real provider behavior.
+
+| Feature                                           | Offline evidence                                                                                                                                                                                                                                                                                                                                                                                                 | Remaining boundary                                                                                                                                                                                                                         |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Generated launcher and CONNECT identity           | Verified offline by `airlock-claude-launch`, `airlock-claude-selection`, `airlock-claude-native-settings`, and config/module checks. These prove generated launchers/settings and CONNECT behavior; `airlock-claude-native-oauth` additionally drives pinned Claude through a Python fake CONNECT proxy.                                                                                                         | Real browser login and each operator device remain live-unverified.                                                                                                                                                                        |
+| Actual service and launcher composition           | Verified offline by `airlock-claude-composite-routes` on Home Manager and devenv: the generated service launcher starts the real Airlock package, NSS maps the DNS endpoint to loopback, and a generated client drives both Messages comparisons plus all six remote-control calls through each generated Claude launcher.                                                                                       | The client is generated, the upstream is fake, and the check proves route composition rather than pinned-client behavior, real provider semantics, or an end-to-end `/rc` session. Pinned-client and real-provider checks remain separate. |
+| Managed OAuth login, refresh, storage, and expiry | Verified offline by `airlock-claude-native-oauth`, managed OAuth and expiry unit tests, and `managed_primary_collection_uses_replaced_real_token_and_refuses_expiry`; the native check uses generated launchers with a mocked Airlock service.                                                                                                                                                                   | Operator login, an expiry-boundary observation, and account notices remain live-unverified.                                                                                                                                                |
+| Profile, bootstrap, and Messages                  | Verified offline by `airlock-claude-native-oauth` against `/api/oauth/profile`, `/api/claude_cli/bootstrap`, and `/v1/messages`; the current pinned client retains the signed first-party `cch` billing block, and the check uses the generated launchers with a mocked Airlock service.                                                                                                                         | Full bootstrap schema, entitlement gating, and real account behavior remain live-unverified.                                                                                                                                               |
+| Usage routes and account semantics                | Verified offline: `/api/oauth/usage` primary routing in `tests/intercept.rs`; `fake_provider_transport_is_bound_to_host_path_auth_and_budgets` and typed collector parser tests for Claude, z.ai and explicit Codex; `read_only_json_contract_keeps_header_age_and_request_usage_separate` for report JSON; `delegate-routing-usage-runtime` for consumer selection. The CLI read-only wiring is source-checked. | Correlating `extra_usage` and `wattle_ember` with the real account page remains live-unverified.                                                                                                                                           |
+| Model routing and listing                         | Verified offline: exact Claude/GLM selection, undeclared-model primary ownership, late/chunked models, and `/v1/models` pagination/errors stay on their selected routes.                                                                                                                                                                                                                                         | The actual first-party returned model set and picker experience remain live-unverified.                                                                                                                                                    |
+| Inference and ToolSearch                          | Verified offline for body bytes, primary/z.ai attribution, headers, SSE first-event flush, and ToolSearch cancellation; M08's `primary_headers_do_not_change_zai_usage_attribution_or_body_bytes` and `toolsearch_sse_flushes_first_event_and_keeps_usage` cover usage accounting.                                                                                                                               | Real tool approval quality and provider behavior remain live-unverified.                                                                                                                                                                   |
+| Auto-mode client classifier                       | Verified offline in gateway tests: exact `auto-mode-classifier-2026-07-16` and classifier-prefix drift route GLM bodies to primary, with a fixed-reason warning for drift; ordinary `dangerous-tool-use-2026-09-03` GLM traffic routes to z.ai. `airlock-claude-composite-routes` repeats the exact-versus-ordinary comparison through the real service and both generated launchers.                            | The exact beta remains a source contract for the separate client classifier. Real classifier verdicts and persistence after a client update remain live-unverified.                                                                        |
+| Server dangerous-tool-use safeguard               | Source contract: the GLM main request may carry `dangerous-tool-use-2026-09-03` and embedded safeguard context; Airlock leaves its body and model route unchanged.                                                                                                                                                                                                                                               | What z.ai does with that safeguard remains an operator live check.                                                                                                                                                                         |
+| Remote Control bridge API                         | Verified offline in the gateway tests for the six measured bridge, poll, ack, stop, delete, and offline methods: all preserve method, path, body bytes, and primary routing on one CONNECT connection. The composite check repeats that family through the real service and both generated launchers.                                                                                                            | Complete endpoint set, WebSocket/SSE/heartbeat semantics, trust-device enrollment, feature gating, and an end-to-end `/rc` run remain live-unverified.                                                                                     |
+| Streaming, cancellation, upgrades, and errors     | Verified offline for HTTP/1 and HTTP/2 streams, first SSE event timing, upgrade relays, half-close cancellation, selected-provider failure, and malformed/oversized requests. M08's `stalled_usage_sink_does_not_delay_first_or_last_response_bytes` and queue-loss tests cover collector isolation.                                                                                                             | Real network latency and provider failure variety remain live-unverified.                                                                                                                                                                  |
+
+Operator cutover still requires the live checks in the matrix's boundaries.
+
 ## Managed primary OAuth
 
 Airlock intercepts `POST /v1/oauth/token` and `POST /v1/oauth/token/revoke` on
@@ -119,10 +142,7 @@ are path variants of `create_api_key`; that endpoint would return a real
 provider credential. Token JSON is bounded and held in zeroizing buffers. A
 parse or durable-store failure never returns a real token pair.
 
-The generated `airlock-claude-native-oauth` check runs the pinned Claude binary
-through both Home Manager and devenv launchers against a loopback fake upstream.
-It proves native authorization-code login from an empty credential store, native
-refresh, fake-pair persistence, and profile and Messages use inside an isolated
-network namespace without real provider access. Operator browser login and an
-expiry-boundary observation remain separate live checks before the operator
-switches to it.
+`airlock-claude-native-oauth` runs pinned Claude through both generated
+launchers against a loopback fake. It verifies empty-store login, refresh,
+fake-pair persistence, profile, and Messages; real account behavior remains
+live-unverified.

@@ -72,6 +72,8 @@ const OAUTH_EXCHANGE_TIMEOUT: Duration = Duration::from_secs(30);
 const QUOTA_HEADER_PREFIX: &str = "anthropic-ratelimit-";
 const QUOTA_HEADER_LIMIT: usize = 64;
 const QUOTA_SNAPSHOT_LIMIT: usize = 16 << 10;
+const CLASSIFIER_FINGERPRINT: &str = "auto-mode-classifier-2026-07-16";
+const CLASSIFIER_PREFIX: &str = "auto-mode-classifier-";
 
 type QuotaCache = Arc<Mutex<BTreeMap<QuotaCacheKey, QuotaSnapshot>>>;
 type OauthLocks = tokio::sync::Mutex<BTreeMap<CredentialId, Arc<tokio::sync::Mutex<()>>>>;
@@ -188,6 +190,25 @@ fn inspection_error_status(reason: &str) -> StatusCode {
     } else {
         StatusCode::BAD_REQUEST
     }
+}
+
+fn classifier_fingerprint(headers: &hyper::HeaderMap) -> (bool, bool) {
+    let mut exact = false;
+    let mut drift = false;
+    for value in &headers.get_all("anthropic-beta") {
+        for token in value
+            .as_bytes()
+            .split(|byte| *byte == b',')
+            .map(<[u8]>::trim_ascii)
+        {
+            if token == CLASSIFIER_FINGERPRINT.as_bytes() {
+                exact = true;
+            } else if token.starts_with(CLASSIFIER_PREFIX.as_bytes()) {
+                drift = true;
+            }
+        }
+    }
+    (exact || drift, drift)
 }
 
 fn token_path(method: &Method, path: &str) -> bool {
@@ -2072,6 +2093,20 @@ async fn forward(
     let upgrading = is_upgrade_request(request.headers());
     strip_hop_by_hop(request.headers_mut(), upgrading);
     let inference = method == Method::POST && path == "/v1/messages";
+    let classifier = if inference {
+        let (present, drift) = classifier_fingerprint(request.headers());
+        if drift {
+            tracing::dispatcher::with_default(&completion.audit.dispatch, || {
+                tracing::warn!(
+                    reason = "classifier_fingerprint_drift",
+                    "classifier fingerprint drift"
+                );
+            });
+        }
+        present
+    } else {
+        false
+    };
     let oauth = token_path(&method, &path);
     let (mut request, model) = match inspect_request(request, inference, oauth).await {
         Ok(result) => result,
@@ -2082,11 +2117,10 @@ async fn forward(
             return Ok(crate::response(status, reason));
         }
     };
-    let Some((credential_id, endpoint)) = state
-        .route
-        .config
-        .route(&state.route.group, model.as_deref())
-    else {
+    let Some((credential_id, endpoint)) = state.route.config.route(
+        &state.route.group,
+        if classifier { None } else { model.as_deref() },
+    ) else {
         completion.finish(StatusCode::FORBIDDEN);
         return Ok(crate::response(StatusCode::FORBIDDEN, "route unavailable"));
     };
@@ -2759,6 +2793,41 @@ mod tests {
             }
             assert_eq!(parse_model(&retained), Ok(Some("glm-4.7".to_owned())));
         }
+    }
+
+    #[test]
+    fn classifier_fingerprint_header_routes_drift_to_primary() {
+        let headers = hyper::HeaderMap::new();
+        assert_eq!(classifier_fingerprint(&headers), (false, false));
+
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            "anthropic-beta",
+            HeaderValue::from_static("dangerous-tool-use-2026-09-03"),
+        );
+        assert_eq!(classifier_fingerprint(&headers), (false, false));
+
+        headers.insert(
+            "anthropic-beta",
+            HeaderValue::from_static(
+                "dangerous-tool-use-2026-09-03,auto-mode-classifier-2026-07-16",
+            ),
+        );
+        assert_eq!(classifier_fingerprint(&headers), (true, false));
+
+        headers.append(
+            "anthropic-beta",
+            HeaderValue::from_static("auto-mode-classifier-2099-01-01"),
+        );
+        assert_eq!(classifier_fingerprint(&headers), (true, true));
+
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            "anthropic-beta",
+            HeaderValue::from_bytes(&b"auto-mode-classifier-2099-01-01\xff"[..])
+                .expect("obs-text beta value"),
+        );
+        assert_eq!(classifier_fingerprint(&headers), (true, true));
     }
 
     fn credential(auth: AuthKind, path: &std::path::Path) -> Arc<LoadedCredential> {

@@ -25,6 +25,7 @@ NEW_REFRESH = "FAKE-NEW-REFRESH-OFFLINE"
 LOGIN_CODE = "FAKE-OFFLINE-AUTHORIZATION-CODE"
 PROMPT = "AIRLOCK_OFFLINE_PROMPT_SENTINEL_7419"
 REPLY = "AIRLOCK_OFFLINE_RESPONSE_SENTINEL_5273"
+MESSAGES_BODY_LIMIT = 1 << 20
 
 
 class Handler(socketserver.BaseRequestHandler):
@@ -85,6 +86,9 @@ class Handler(socketserver.BaseRequestHandler):
                         self.send(connection, 200, {})
                     elif path == "/v1/messages":
                         assert headers.get("authorization") == f"Bearer {NEW_ACCESS}"
+                        shape = self.messages_first_party_shape(body)
+                        self.server.messages_first_party.append(shape)
+                        assert all(shape.values()), "Messages first-party identity shape mismatch"
                         self.server.messages_seen.set()
                         self.send_messages(connection)
                         break
@@ -119,9 +123,13 @@ class Handler(socketserver.BaseRequestHandler):
         size = int(headers.get("content-length", "0"))
         assert size >= 0, "negative HTTP body length"
         assert "transfer-encoding" not in headers, "unsupported HTTP transfer encoding"
-        token_request = lines[0].split()[1].split("?", 1)[0] == "/v1/oauth/token"
+        request_path = lines[0].split()[1].split("?", 1)[0]
+        token_request = request_path == "/v1/oauth/token"
+        messages_request = request_path == "/v1/messages"
         if token_request:
             assert size <= 65536, "oversized fake token request"
+        if messages_request:
+            assert size <= MESSAGES_BODY_LIMIT, "oversized fake Messages request"
         body = bytearray()
         remaining = size
         while remaining:
@@ -129,9 +137,35 @@ class Handler(socketserver.BaseRequestHandler):
             if not chunk:
                 raise ValueError("incomplete HTTP body")
             remaining -= len(chunk)
-            if token_request:
+            if token_request or messages_request:
                 body.extend(chunk)
         return lines[0], headers, body
+
+    @staticmethod
+    def messages_first_party_shape(body):
+        """Return only booleans describing the signed billing block, never its bytes."""
+        try:
+            document = json.loads(body)
+            parsed = isinstance(document, dict)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {"json": False, "system": False, "billing": False, "cch": False}
+        blocks = document.get("system", []) if parsed else []
+        system_is_list = isinstance(blocks, list)
+        billing = [
+            block.get("text")
+            for block in blocks if isinstance(block, dict)
+            and isinstance(block.get("text"), str)
+            and block["text"].startswith("x-anthropic-billing-header:")
+        ] if system_is_list else []
+        return {
+            "json": parsed,
+            "system": system_is_list,
+            "billing": bool(billing),
+            "cch": any(
+                re.search(r"(?:^|[;:])\s*cch=[0-9a-f]+\s*(?:;|$)", text)
+                for text in billing
+            ),
+        }
 
     @staticmethod
     def send(connection, status, payload):
@@ -235,6 +269,7 @@ def run_backend(backend, paths, root, cert, tls):
         server.profile_seen = threading.Event()
         server.profile_tokens = []
         server.messages_seen = threading.Event()
+        server.messages_first_party = []
         threading.Thread(target=server.serve_forever, daemon=True).start()
         login_status, login_prompt = native_login(paths["launcher"], workspace, env)
         assert login_status == 0 and server.login_seen.is_set(), (
@@ -274,6 +309,9 @@ def run_backend(backend, paths, root, cert, tls):
     output = json.loads(run.stdout)
     assert run.returncode == 0 and output.get("is_error") is False and output.get("result") == REPLY, (backend, run.returncode)
     assert server.refresh_seen.is_set() and server.profile_seen.is_set() and server.messages_seen.is_set()
+    assert server.messages_first_party and all(
+        all(shape.values()) for shape in server.messages_first_party
+    ), (backend, server.messages_first_party)
     assert any(server.profile_tokens)
     assert len(server.refresh_tokens) > refresh_count_after_login and server.refresh_tokens[-1]["is_new"], (backend, server.refresh_tokens)
     assert "platform.claude.com:443" in server.hosts and "api.anthropic.com:443" in server.hosts
@@ -284,7 +322,7 @@ def run_backend(backend, paths, root, cert, tls):
         if path.is_file():
             content = path.read_bytes()
             assert PROMPT.encode() not in content and REPLY.encode() not in content, (backend, path)
-    print(f"PASS {backend}: pinned Claude logged in and refreshed through generated launcher, stored fake pair, used fake access for profile and Messages")
+    print(f"PASS {backend}: pinned Claude logged in and refreshed through generated launcher, stored fake pair, used fake access with first-party cch billing signature for profile and Messages")
 
 
 def fake_token_state(config):

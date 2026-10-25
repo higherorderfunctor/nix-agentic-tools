@@ -1,8 +1,8 @@
 # airlock transport and routing
 
-> **Last verified:** 2026-10-25 — CONNECT interception, model routing,
-> ToolSearch, quota substitution, and M08 primary-header observation share the
-> gateway path.
+> **Last verified:** 2026-10-25 — CONNECT, model and classifier routing,
+> ToolSearch, remote-control paths, quota substitution, and M08 primary-header
+> observation share the gateway path.
 
 ## Transport
 
@@ -28,10 +28,16 @@ Interception follows this order:
   for byte. Requests carrying trailers receive 400, and larger bodies receive
   413; no request reaches any upstream in either case. Missing or null models
   retain the original host; unclaimed IDs select the primary endpoint. Malformed
-  or duplicate selectors fail before forwarding. Other methods and paths stream.
-  A selected endpoint gets its own verified TLS connection, independent ALPN,
-  authority and path prefix. Responses stream without waiting for completion;
-  HTTP/1.1, h2 and Upgrade remain supported.
+  or duplicate selectors fail before forwarding. Before body inspection, the
+  `auto-mode-classifier-` `anthropic-beta` token selects primary routing even
+  when its body names a z.ai model. A token other than the pinned
+  `auto-mode-classifier-2026-07-16` emits a warning with the fixed reason
+  `classifier_fingerprint_drift`; it still routes to primary. Raw header bytes
+  detect drift, including obs-text. Other beta values, including
+  `dangerous-tool-use-2026-09-03`, leave model routing unchanged. Other methods
+  and paths stream. A selected endpoint gets its own verified TLS connection,
+  independent ALPN, authority and path prefix. Responses stream without waiting
+  for completion; HTTP/1.1, h2 and Upgrade remain supported.
 - The selected z.ai Anthropic preset aliases `ToolSearch` in declarations,
   choice, history and references inside one tool-result level, then restores
   response tool-use names in JSON and SSE. Deeper tool results are refused.
