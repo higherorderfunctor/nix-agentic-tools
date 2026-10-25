@@ -805,6 +805,7 @@ mod tests {
             std::path::Path::new("/run/airlock/harness")
         );
         let storage_identities = baseline.storage_identities(1);
+        assert_eq!(storage_identities.clients.len(), 1);
         assert_eq!(storage_identities.providers.len(), 2);
         assert_eq!(storage_identities.credentials.len(), 2);
         assert_eq!(storage_identities.groups.len(), 1);

@@ -4,6 +4,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     process::ExitCode,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -157,18 +158,19 @@ async fn run() -> Result<(), Error> {
             let mut terminate = signal(SignalKind::terminate())?;
             let ca_directory =
                 ca_directory(env::var_os("XDG_RUNTIME_DIR"), config.listen().port())?;
-            let storage = std::sync::Arc::new(
+            let storage = Arc::new(
                 SqliteStorage::open(config.state_dir(), config.storage_identities(now_unix()?))
                     .await?,
             );
-            let gateway = Gateway::bind_with_storage(
+            let gateway = Gateway::bind_with_storage_and_usage(
                 config,
                 &ca_directory,
                 upstream_roots(),
-                Some(std::sync::Arc::clone(&storage)),
+                Some(Arc::clone(&storage)),
+                Some(storage.clone()),
             )
             .await?;
-            let served = gateway
+            let serve_result = gateway
                 .serve(async move {
                     tokio::select! {
                         _ = interrupt.recv() => {},
@@ -176,11 +178,11 @@ async fn run() -> Result<(), Error> {
                     }
                 })
                 .await;
-            std::sync::Arc::try_unwrap(storage)
+            Arc::try_unwrap(storage)
                 .map_err(|_| Error::StorageOwnership)?
                 .close()
                 .await?;
-            served?;
+            serve_result?;
         }
     }
     Ok(())

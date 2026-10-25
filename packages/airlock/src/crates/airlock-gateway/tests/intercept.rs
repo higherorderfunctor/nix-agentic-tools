@@ -3,17 +3,28 @@
 mod support;
 
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs,
+    io::Write,
+    num::NonZeroU64,
     os::unix::fs::{DirBuilderExt, PermissionsExt},
     sync::{Arc, atomic::Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use airlock_gateway::{CaError, Error, Gateway};
+use airlock_core::{
+    ids::{ClientId, CredentialId, GroupId, ProviderId},
+    storage::{
+        RequestEvent, RequestOutcome, RequestUsageQuery, SqliteStorage, Storage, StorageError,
+        StorageIdentities,
+    },
+};
+use airlock_gateway::{CaError, Error, Gateway, RequestUsageSink};
+use flate2::{Compression, write::GzEncoder};
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
 use hyper::{
-    body::Frame,
+    body::{Bytes, Frame},
     header::{
         AUTHORIZATION, CONNECTION, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE, TRAILER, UPGRADE,
     },
@@ -1206,6 +1217,415 @@ async fn managed_refresh_without_new_refresh_keeps_the_old_fake_and_real_tokens(
     server.stop().await;
 }
 
+#[derive(Default)]
+struct UsageCapture(std::sync::Mutex<Vec<RequestEvent>>);
+
+struct SlowUsageCapture {
+    entered: tokio::sync::Semaphore,
+    release: tokio::sync::Semaphore,
+    blocked_once: std::sync::atomic::AtomicBool,
+    events: std::sync::Mutex<Vec<RequestEvent>>,
+}
+
+struct FailOnceStorageSink {
+    failed: tokio::sync::Semaphore,
+    failed_once: std::sync::atomic::AtomicBool,
+    storage: Arc<SqliteStorage>,
+}
+
+fn gzip_fixture(plain: &[u8]) -> Bytes {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(plain).expect("gzip fixture write");
+    Bytes::from(encoder.finish().expect("gzip fixture finish"))
+}
+
+impl RequestUsageSink for FailOnceStorageSink {
+    fn append_request_event<'a>(
+        &'a self,
+        event: RequestEvent,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), StorageError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            if !self.failed_once.swap(true, Ordering::AcqRel) {
+                self.failed.add_permits(1);
+                return Err(StorageError::UsageUnavailable);
+            }
+            self.storage.try_append_request_event(event).await
+        })
+    }
+}
+
+impl RequestUsageSink for SlowUsageCapture {
+    fn append_request_event<'a>(
+        &'a self,
+        event: RequestEvent,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), StorageError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            if !self.blocked_once.swap(true, Ordering::AcqRel) {
+                self.entered.add_permits(1);
+                let permit = self.release.acquire().await.expect("release slow sink");
+                permit.forget();
+            }
+            self.events.lock().expect("usage lock").push(event);
+            Ok(())
+        })
+    }
+}
+
+impl RequestUsageSink for UsageCapture {
+    fn append_request_event<'a>(
+        &'a self,
+        event: RequestEvent,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), StorageError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            self.0.lock().expect("usage lock").push(event);
+            Ok(())
+        })
+    }
+}
+
+#[tokio::test]
+async fn primary_headers_do_not_change_zai_usage_attribution_or_body_bytes() {
+    const PRIMARY: &[u8] = br#"{"usage":{"input_tokens":2,"output_tokens":3}}"#;
+    const ZAI: &[u8] = b"data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":9,\"output_tokens\":1}}}\n\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\ndata: {\"type\":\"message_stop\"}\n\n";
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[("anthropic-ratelimit-unified-status", "allowed")],
+            PRIMARY,
+        ),
+    )
+    .await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[
+                ("anthropic-ratelimit-unified-status", "rejected"),
+                ("content-type", "text/event-stream"),
+            ],
+            ZAI,
+        ),
+    )
+    .await;
+    let usage = Arc::new(UsageCapture::default());
+    let server = Running::start_multiplex_with_usage(
+        ca.roots(),
+        zai.port,
+        &format!("https://localhost:{}", primary.port),
+        Some(usage.clone()),
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    for (body, expected) in [
+        (
+            br#"{"model":"claude-sonnet-5","messages":[{"content":"fake-SECRET-prompt"}]}"#
+                .as_slice(),
+            PRIMARY,
+        ),
+        (
+            br#"{"model":"glm-4.7","messages":[{"content":"fake-SECRET-prompt"}]}"#.as_slice(),
+            ZAI,
+        ),
+    ] {
+        let response = client
+            .send(request("POST", "/v1/messages", &[], full_body(body)))
+            .await;
+        assert_eq!(
+            response.headers()["anthropic-ratelimit-unified-status"],
+            "allowed"
+        );
+        assert_eq!(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .expect("response body")
+                .to_bytes()[..],
+            expected
+        );
+    }
+    drop(client);
+    let logs = server.capture.clone();
+    server.stop().await;
+    let events = usage.0.lock().expect("usage lock");
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].credential.as_ref(), "claude");
+    assert_eq!(events[0].output_tokens, Some(3));
+    assert_eq!(events[1].credential.as_ref(), "zai");
+    assert_eq!(events[1].client.as_ref(), "harness");
+    assert_eq!(events[1].model, "glm-4.7");
+    assert_eq!(events[1].input_tokens, Some(9));
+    assert_eq!(events[1].output_tokens, Some(7));
+    assert!(events[1].usage_complete);
+    assert!(!logs.text().contains("fake-SECRET-prompt"));
+}
+
+#[tokio::test]
+async fn gzip_response_bytes_and_headers_survive_with_exact_usage() {
+    const JSON: &[u8] = br#"{"usage":{"input_tokens":2,"output_tokens":3,"cache_read_input_tokens":4,"cache_creation_input_tokens":5}}"#;
+    const SSE: &[u8] = b"data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":9,\"output_tokens\":1,\"cache_read_input_tokens\":6,\"cache_creation_input_tokens\":7}}}\n\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":11}}\n\ndata: {\"type\":\"message_stop\"}\n\n";
+    let json = gzip_fixture(JSON);
+    let sse = gzip_fixture(SSE);
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::Encoded {
+            body: json.clone(),
+            content_type: "application/json",
+        },
+    )
+    .await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::Encoded {
+            body: sse.clone(),
+            content_type: "text/event-stream",
+        },
+    )
+    .await;
+    let usage = Arc::new(UsageCapture::default());
+    let server = Running::start_multiplex_with_usage(
+        ca.roots(),
+        zai.port,
+        &format!("https://localhost:{}", primary.port),
+        Some(usage.clone()),
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    for (request_body, expected) in [
+        (br#"{"model":"claude-sonnet-5"}"#.as_slice(), &json),
+        (br#"{"model":"glm-4.7"}"#.as_slice(), &sse),
+    ] {
+        let response = client
+            .send(request(
+                "POST",
+                "/v1/messages",
+                &[],
+                full_body(request_body),
+            ))
+            .await;
+        assert_eq!(response.headers()["content-encoding"], "gzip");
+        assert_eq!(
+            response.headers()["content-length"],
+            expected.len().to_string()
+        );
+        assert_eq!(
+            response
+                .into_body()
+                .collect()
+                .await
+                .expect("encoded response")
+                .to_bytes(),
+            *expected
+        );
+    }
+    drop(client);
+    server.stop().await;
+    let events = usage.0.lock().expect("usage lock");
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].credential.as_ref(), "claude");
+    assert_eq!(events[0].input_tokens, Some(2));
+    assert_eq!(events[0].output_tokens, Some(3));
+    assert_eq!(events[0].cache_read_tokens, Some(4));
+    assert_eq!(events[0].cache_write_tokens, Some(5));
+    assert_eq!(events[0].response_bytes, json.len() as u64);
+    assert!(events[0].usage_complete);
+    assert_eq!(events[1].credential.as_ref(), "zai");
+    assert_eq!(events[1].input_tokens, Some(9));
+    assert_eq!(events[1].output_tokens, Some(11));
+    assert_eq!(events[1].cache_read_tokens, Some(6));
+    assert_eq!(events[1].cache_write_tokens, Some(7));
+    assert_eq!(events[1].response_bytes, sse.len() as u64);
+    assert!(events[1].usage_complete);
+}
+
+#[tokio::test]
+async fn stalled_usage_sink_does_not_delay_first_or_last_response_bytes() {
+    const BODY: &[u8] = br#"{"usage":{"input_tokens":2,"output_tokens":3}}"#;
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(hyper::StatusCode::OK, &[], BODY),
+    )
+    .await;
+    let slow = Arc::new(SlowUsageCapture {
+        entered: tokio::sync::Semaphore::new(0),
+        release: tokio::sync::Semaphore::new(0),
+        blocked_once: std::sync::atomic::AtomicBool::new(false),
+        events: std::sync::Mutex::new(Vec::new()),
+    });
+    let server = Running::start_multiplex_with_usage(
+        ca.roots(),
+        primary.port,
+        &format!("https://localhost:{}", primary.port),
+        Some(slow.clone()),
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let first = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5"}"#),
+        ))
+        .await;
+    assert_eq!(
+        &first
+            .into_body()
+            .collect()
+            .await
+            .expect("first body")
+            .to_bytes()[..],
+        BODY
+    );
+    let permit = timeout(Duration::from_secs(1), slow.entered.acquire())
+        .await
+        .expect("worker started")
+        .expect("entered gate");
+    permit.forget();
+    let second = timeout(
+        Duration::from_secs(1),
+        client.send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5"}"#),
+        )),
+    )
+    .await
+    .expect("response headers despite blocked sink");
+    let mut body = second.into_body();
+    let first_frame = timeout(Duration::from_secs(1), body.frame())
+        .await
+        .expect("first byte despite blocked sink")
+        .expect("data frame")
+        .expect("body frame")
+        .into_data()
+        .expect("data");
+    assert!(!first_frame.is_empty());
+    let rest = timeout(Duration::from_secs(1), body.collect())
+        .await
+        .expect("last byte and EOF despite blocked sink")
+        .expect("body remainder")
+        .to_bytes();
+    let mut delivered = first_frame.to_vec();
+    delivered.extend_from_slice(&rest);
+    assert_eq!(delivered, BODY);
+    slow.release.add_permits(1);
+    drop(client);
+    server.stop().await;
+    assert_eq!(slow.events.lock().expect("usage lock").len(), 2);
+}
+
+#[tokio::test]
+async fn failed_write_is_persisted_as_global_loss_on_next_request() {
+    const BODY: &[u8] = br#"{"content":[{"text":"fake-SECRET-response"}],"usage":{"input_tokens":2,"output_tokens":3}}"#;
+    let state = tempfile::tempdir().expect("private state");
+    fs::set_permissions(state.path(), fs::Permissions::from_mode(0o700))
+        .expect("private state mode");
+    let storage = Arc::new(
+        SqliteStorage::open(state.path(), usage_storage_identities())
+            .await
+            .expect("storage"),
+    );
+    let sink = Arc::new(FailOnceStorageSink {
+        failed: tokio::sync::Semaphore::new(0),
+        failed_once: std::sync::atomic::AtomicBool::new(false),
+        storage: storage.clone(),
+    });
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(hyper::StatusCode::OK, &[], BODY),
+    )
+    .await;
+    let server = Running::start_multiplex_with_usage(
+        ca.roots(),
+        primary.port,
+        &format!("https://localhost:{}", primary.port),
+        Some(sink.clone()),
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    for index in 0..2 {
+        let response = client
+            .send(request(
+                "POST",
+                "/v1/messages",
+                &[],
+                full_body(
+                    br#"{"model":"claude-sonnet-5","messages":[{"content":"fake-SECRET-prompt","tool_args":"fake-SECRET-tool-args"}]}"#,
+                ),
+            ))
+            .await;
+        assert_eq!(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .expect("response body")
+                .to_bytes()[..],
+            BODY
+        );
+        if index == 0 {
+            let permit = timeout(Duration::from_secs(1), sink.failed.acquire())
+                .await
+                .expect("injected failure observed")
+                .expect("failure gate");
+            permit.forget();
+        }
+    }
+    drop(client);
+    let logs = server.capture.clone();
+    server.stop().await;
+    assert_eq!(
+        storage
+            .request_usage_loss_total()
+            .await
+            .expect("global loss total"),
+        1
+    );
+    let rows = storage
+        .request_usage(RequestUsageQuery {
+            bucket_seconds: NonZeroU64::new(60).expect("bucket"),
+            group: GroupId::try_from("anthropic").expect("group"),
+            since_unix: 1,
+            until_unix: i64::MAX,
+        })
+        .await
+        .expect("usage aggregate");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].events, 1);
+    assert_eq!(rows[0].outcome, RequestOutcome::Completed);
+    assert_eq!(rows[0].input_tokens, Some(2));
+    for marker in [
+        "fake-SECRET-prompt",
+        "fake-SECRET-response",
+        "fake-SECRET-tool-args",
+    ] {
+        assert!(!logs.text().contains(marker));
+    }
+    assert_no_content_in_state(state.path());
+    drop(sink);
+    Arc::try_unwrap(storage)
+        .unwrap_or_else(|_| panic!("storage still shared"))
+        .close()
+        .await
+        .expect("close storage");
+}
+
 #[tokio::test]
 async fn http1_swaps_oauth_and_removes_client_auth() {
     let ca = TestCa::new();
@@ -1351,6 +1771,41 @@ fn quota_mode(
         release_body: None,
         status,
     }))
+}
+
+fn usage_storage_identities() -> StorageIdentities {
+    let client = ClientId::try_from("harness").expect("client");
+    let credential = CredentialId::try_from("claude").expect("credential");
+    let group = GroupId::try_from("anthropic").expect("group");
+    let provider = ProviderId::try_from("claude").expect("provider");
+    StorageIdentities {
+        clients: BTreeSet::from([client]),
+        credentials: BTreeMap::from([(credential.clone(), provider.clone())]),
+        group_members: BTreeSet::from([(group.clone(), credential)]),
+        groups: BTreeSet::from([group]),
+        inserted_at_unix: 1,
+        providers: BTreeSet::from([provider]),
+    }
+}
+
+fn assert_no_content_in_state(directory: &std::path::Path) {
+    for filename in [
+        "airlock.sqlite3",
+        "airlock.sqlite3-wal",
+        "airlock.sqlite3-shm",
+    ] {
+        let path = directory.join(filename);
+        if path.exists() {
+            let bytes = fs::read(path).expect("state bytes");
+            for marker in [
+                b"fake-SECRET-prompt".as_slice(),
+                b"fake-SECRET-response",
+                b"fake-SECRET-tool-args",
+            ] {
+                assert!(!bytes.windows(marker.len()).any(|window| window == marker));
+            }
+        }
+    }
 }
 
 #[tokio::test]
@@ -1806,7 +2261,14 @@ async fn toolsearch_request_and_json_response_are_scoped_to_zai() {
         },
     )
     .await;
-    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let usage = Arc::new(UsageCapture::default());
+    let server = Running::start_multiplex_with_usage(
+        ca.roots(),
+        zai.port,
+        &format!("https://localhost:{}", primary.port),
+        Some(usage.clone()),
+    )
+    .await;
     let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
     let zai_response = client
         .send(request("POST", "/v1/messages", &[], full_body(BODY)))
@@ -1853,6 +2315,12 @@ async fn toolsearch_request_and_json_response_are_scoped_to_zai() {
         br#"{"model":"claude-sonnet-5","tools":[{"name":"ToolSearch"}]}"#
     );
     server.stop().await;
+    let events = usage.0.lock().expect("usage lock");
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].credential.as_ref(), "zai");
+    assert_eq!(events[0].input_tokens, None);
+    assert_eq!(events[0].output_tokens, Some(5));
+    assert!(events[0].usage_complete);
 }
 
 #[tokio::test]
@@ -2036,7 +2504,14 @@ async fn cancelling_toolsearch_sse_closes_selected_upstream() {
         },
     )
     .await;
-    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let usage = Arc::new(UsageCapture::default());
+    let server = Running::start_multiplex_with_usage(
+        ca.roots(),
+        zai.port,
+        &format!("https://localhost:{}", primary.port),
+        Some(usage.clone()),
+    )
+    .await;
     let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http2).await;
     let mut response = client
         .send(request(
@@ -2058,6 +2533,18 @@ async fn cancelling_toolsearch_sse_closes_selected_upstream() {
             .expect("UTF-8")
             .contains(r#""name":"ToolSearch""#)
     );
+    let tokens = timeout(Duration::from_secs(2), response.body_mut().frame())
+        .await
+        .expect("usage deadline")
+        .expect("usage event")
+        .expect("usage frame")
+        .into_data()
+        .expect("usage data");
+    assert!(
+        tokens
+            .windows(b"\"output_tokens\":7".len())
+            .any(|part| part == b"\"output_tokens\":7")
+    );
     drop(response);
     timeout(Duration::from_secs(2), zai.done)
         .await
@@ -2074,8 +2561,22 @@ async fn cancelling_toolsearch_sse_closes_selected_upstream() {
         ))
         .await;
     assert_eq!(primary_response.status(), hyper::StatusCode::OK);
+    primary_response
+        .into_body()
+        .collect()
+        .await
+        .expect("primary response");
     assert_eq!(records(&primary).len(), 1);
+    drop(client);
     server.stop().await;
+    let events = usage.0.lock().expect("usage lock");
+    let cancelled = events
+        .iter()
+        .find(|event| event.credential.as_ref() == "zai")
+        .expect("z.ai usage event");
+    assert_eq!(cancelled.outcome, RequestOutcome::Cancelled);
+    assert_eq!(cancelled.output_tokens, Some(7));
+    assert!(!cancelled.usage_complete);
 }
 
 #[tokio::test]

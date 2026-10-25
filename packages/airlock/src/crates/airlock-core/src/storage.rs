@@ -169,6 +169,7 @@ pub struct OauthPairRetirement {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RequestOutcome {
+    Cancelled,
     Completed,
     Failed,
     Rejected,
@@ -177,6 +178,7 @@ pub enum RequestOutcome {
 impl RequestOutcome {
     fn as_storage(self) -> &'static str {
         match self {
+            Self::Cancelled => "cancelled",
             Self::Completed => "completed",
             Self::Failed => "failed",
             Self::Rejected => "rejected",
@@ -185,6 +187,7 @@ impl RequestOutcome {
 
     fn from_storage(value: &str) -> Option<Self> {
         match value {
+            "cancelled" => Some(Self::Cancelled),
             "completed" => Some(Self::Completed),
             "failed" => Some(Self::Failed),
             "rejected" => Some(Self::Rejected),
@@ -193,11 +196,13 @@ impl RequestOutcome {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RequestEvent {
     pub cache_read_tokens: Option<u64>,
     pub cache_write_tokens: Option<u64>,
+    pub client: ClientId,
     pub credential: CredentialId,
+    pub dropped_events: u64,
     pub group: GroupId,
     pub input_tokens: Option<u64>,
     pub latency_ms: u64,
@@ -208,10 +213,12 @@ pub struct RequestEvent {
     pub request_bytes: u64,
     pub response_bytes: u64,
     pub status_code: u16,
+    pub usage_complete: bool,
 }
 
 #[derive(Debug)]
 pub struct RequestUsageQuery {
+    pub bucket_seconds: NonZeroU64,
     pub group: GroupId,
     pub since_unix: i64,
     pub until_unix: i64,
@@ -219,17 +226,23 @@ pub struct RequestUsageQuery {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RequestUsageAggregate {
+    pub bucket_start_unix: i64,
     pub cache_read_tokens: Option<u64>,
     pub cache_write_tokens: Option<u64>,
+    pub client: Option<ClientId>,
+    pub complete_events: u64,
     pub credential: CredentialId,
+    pub error_events: u64,
     pub events: u64,
     pub input_tokens: Option<u64>,
     pub latency_ms: u64,
     pub model: String,
     pub outcome: RequestOutcome,
     pub output_tokens: Option<u64>,
+    pub provider: ProviderId,
     pub request_bytes: u64,
     pub response_bytes: u64,
+    pub successful_events: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -325,6 +338,8 @@ pub trait Storage {
         &self,
         query: RequestUsageQuery,
     ) -> impl Future<Output = Result<Vec<RequestUsageAggregate>, StorageError>> + Send;
+
+    fn request_usage_loss_total(&self) -> impl Future<Output = Result<u64, StorageError>> + Send;
 
     fn append_provider_snapshot(
         &self,
@@ -629,6 +644,10 @@ impl Storage for SqliteStorage {
         receipt.await.map_err(|_| StorageError::UsageUnavailable)?
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "compile-checked aggregate SQL and its validated projection share this boundary"
+    )]
     async fn request_usage(
         &self,
         query: RequestUsageQuery,
@@ -640,6 +659,10 @@ impl Storage for SqliteStorage {
                 field: "usage range start must precede end",
             });
         }
+        let bucket_seconds =
+            i64::try_from(query.bucket_seconds.get()).map_err(|_| StorageError::Input {
+                field: "usage bucket seconds is too large",
+            })?;
         let group_id = query.group.as_ref();
         let aggregate_limit =
             i64::try_from(MAX_AGGREGATE_ROWS + 1).map_err(|_| StorageError::Input {
@@ -647,7 +670,16 @@ impl Storage for SqliteStorage {
             })?;
         let rows = sqlx::query!(
             r#"
-            SELECT credential_id, model_id, outcome, COUNT(*) AS "events!: i64",
+            SELECT credentials.provider_id AS provider_id, request_events.client_id,
+                   request_events.credential_id,
+                   CAST(occurred_at_unix / ? AS INTEGER) * ? AS "bucket_start_unix!: i64",
+                   model_id, outcome, COUNT(*) AS "events!: i64",
+                   SUM(CASE WHEN usage_complete THEN 1 ELSE 0 END)
+                     AS "complete_events!: i64",
+                   SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END)
+                     AS "error_events!: i64",
+                   SUM(CASE WHEN status_code BETWEEN 200 AND 299 THEN 1 ELSE 0 END)
+                     AS "successful_events!: i64",
                    SUM(request_bytes) AS "request_bytes!: i64",
                    SUM(response_bytes) AS "response_bytes!: i64",
                    SUM(latency_ms) AS "latency_ms!: i64",
@@ -664,14 +696,25 @@ impl Storage for SqliteStorage {
                    SUM(CASE WHEN cache_write_tokens IS NULL THEN 1 ELSE 0 END)
                      AS "missing_cache_write_tokens!: i64"
             FROM request_events
+            JOIN credentials ON credentials.id = request_events.credential_id
             WHERE group_id = ? AND occurred_at_unix >= ? AND occurred_at_unix < ?
-            GROUP BY credential_id, model_id, outcome
-            ORDER BY credential_id, model_id, outcome
+            GROUP BY credentials.provider_id, request_events.client_id,
+                     request_events.credential_id,
+                     CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome
+            ORDER BY credentials.provider_id, request_events.client_id,
+                     request_events.credential_id,
+                     CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome
             LIMIT ?
             "#,
+            bucket_seconds,
+            bucket_seconds,
             group_id,
             query.since_unix,
             query.until_unix,
+            bucket_seconds,
+            bucket_seconds,
+            bucket_seconds,
+            bucket_seconds,
             aggregate_limit,
         )
         .fetch_all(&mut *self.connection.lock().await)
@@ -688,12 +731,33 @@ impl Storage for SqliteStorage {
                     value: error.into_name(),
                 }
             })?;
+            let client = row
+                .client_id
+                .map(|id| {
+                    ClientId::try_from(id).map_err(|error| StorageError::StoredId {
+                        kind: "client",
+                        value: error.into_name(),
+                    })
+                })
+                .transpose()?;
+            let provider =
+                ProviderId::try_from(row.provider_id).map_err(|error| StorageError::StoredId {
+                    kind: "provider",
+                    value: error.into_name(),
+                })?;
             let outcome = RequestOutcome::from_storage(&row.outcome).ok_or_else(|| {
                 StorageError::Integrity {
                     path: self.database_path.clone(),
                 }
             })?;
             aggregates.push(RequestUsageAggregate {
+                bucket_start_unix: if row.bucket_start_unix >= 0 {
+                    row.bucket_start_unix
+                } else {
+                    return Err(StorageError::Integrity {
+                        path: self.database_path.clone(),
+                    });
+                },
                 cache_read_tokens: complete_sum(
                     row.cache_read_tokens,
                     row.missing_cache_read_tokens,
@@ -704,7 +768,10 @@ impl Storage for SqliteStorage {
                     row.missing_cache_write_tokens,
                     &self.database_path,
                 )?,
+                client,
+                complete_events: stored_count(row.complete_events, &self.database_path)?,
                 credential,
+                error_events: stored_count(row.error_events, &self.database_path)?,
                 events: stored_count(row.events, &self.database_path)?,
                 input_tokens: complete_sum(
                     row.input_tokens,
@@ -719,11 +786,22 @@ impl Storage for SqliteStorage {
                     row.missing_output_tokens,
                     &self.database_path,
                 )?,
+                provider,
                 request_bytes: stored_count(row.request_bytes, &self.database_path)?,
                 response_bytes: stored_count(row.response_bytes, &self.database_path)?,
+                successful_events: stored_count(row.successful_events, &self.database_path)?,
             });
         }
         Ok(aggregates)
+    }
+
+    async fn request_usage_loss_total(&self) -> Result<u64, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT COALESCE(SUM(dropped_events), 0) AS "total!: i64" FROM request_events"#
+        )
+        .fetch_one(&mut *self.connection.lock().await)
+        .await?;
+        stored_count(row.total, &self.database_path)
     }
 
     async fn append_provider_snapshot(
@@ -1120,6 +1198,7 @@ fn validate_request_event(event: &RequestEvent) -> Result<(), StorageError> {
     validate_count(event.request_bytes, "request bytes")?;
     validate_count(event.response_bytes, "response bytes")?;
     validate_count(event.latency_ms, "latency")?;
+    validate_count(event.dropped_events, "dropped usage events")?;
     validate_optional_count(event.input_tokens, "input tokens")?;
     validate_optional_count(event.output_tokens, "output tokens")?;
     validate_optional_count(event.cache_read_tokens, "cache read tokens")?;
@@ -1136,6 +1215,7 @@ async fn append_request_event(
     event: &RequestEvent,
     connection: &mut SqliteConnection,
 ) -> Result<(), StorageError> {
+    let client_id = event.client.as_ref();
     let group_id = event.group.as_ref();
     let credential_id = event.credential.as_ref();
     let model_id = event.model.as_str();
@@ -1148,6 +1228,9 @@ async fn append_request_event(
     })?;
     let latency_ms =
         i64::try_from(event.latency_ms).map_err(|_| StorageError::Input { field: "latency" })?;
+    let dropped_events = i64::try_from(event.dropped_events).map_err(|_| StorageError::Input {
+        field: "dropped usage events",
+    })?;
     let input_tokens = event
         .input_tokens
         .map(|value| {
@@ -1183,12 +1266,14 @@ async fn append_request_event(
     sqlx::query!(
         r"
         INSERT INTO request_events
-          (occurred_at_unix, group_id, credential_id, model_id, outcome, status_code,
-           request_bytes, response_bytes, latency_ms, input_tokens, output_tokens,
-           cache_read_tokens, cache_write_tokens)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (occurred_at_unix, client_id, group_id, credential_id, model_id, outcome,
+           status_code, request_bytes, response_bytes, latency_ms, input_tokens,
+           output_tokens, cache_read_tokens, cache_write_tokens, usage_complete,
+           dropped_events)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ",
         event.occurred_at_unix,
+        client_id,
         group_id,
         credential_id,
         model_id,
@@ -1201,6 +1286,8 @@ async fn append_request_event(
         output_tokens,
         cache_read_tokens,
         cache_write_tokens,
+        event.usage_complete,
+        dropped_events,
     )
     .execute(&mut *connection)
     .await?;
@@ -1660,6 +1747,10 @@ mod tests {
         GroupId::try_from(value).expect("group ID")
     }
 
+    fn client(value: &'static str) -> ClientId {
+        ClientId::try_from(value).expect("client ID")
+    }
+
     fn identities() -> StorageIdentities {
         let credentials = BTreeMap::from([
             (credential("claude"), provider("claude")),
@@ -1667,7 +1758,7 @@ mod tests {
         ]);
         let groups = BTreeSet::from([group("anthropic"), group("openai")]);
         StorageIdentities {
-            clients: BTreeSet::from([ClientId::try_from("claude").expect("client ID")]),
+            clients: BTreeSet::from([client("claude"), client("harness")]),
             credentials,
             group_members: BTreeSet::from([
                 (group("anthropic"), credential("claude")),
@@ -1704,7 +1795,9 @@ mod tests {
         RequestEvent {
             cache_read_tokens: Some(7),
             cache_write_tokens: None,
+            client: client("harness"),
             credential: credential("claude"),
+            dropped_events: 0,
             group: group("anthropic"),
             input_tokens: if outcome == RequestOutcome::Completed {
                 Some(11)
@@ -1719,6 +1812,7 @@ mod tests {
             request_bytes: 100,
             response_bytes: 200,
             status_code: 200,
+            usage_complete: true,
         }
     }
 
@@ -1792,8 +1886,10 @@ mod tests {
             .replace_oauth_pair(oauth(credential("claude"), 0))
             .await
             .expect("OAuth replacement");
+        let mut event = request(RequestOutcome::Completed, 10);
+        event.dropped_events = 2;
         storage
-            .try_append_request_event(request(RequestOutcome::Completed, 10))
+            .try_append_request_event(event)
             .await
             .expect("request event");
         storage
@@ -1823,6 +1919,7 @@ mod tests {
         let usage = storage
             .request_usage(RequestUsageQuery {
                 group: group("anthropic"),
+                bucket_seconds: NonZeroU64::new(60).expect("bucket seconds"),
                 since_unix: 1,
                 until_unix: 20,
             })
@@ -1830,6 +1927,19 @@ mod tests {
             .expect("usage");
         assert_eq!(usage.len(), 1);
         assert_eq!(usage[0].events, 1);
+        assert_eq!(usage[0].bucket_start_unix, 0);
+        assert_eq!(usage[0].client, Some(client("harness")));
+        assert_eq!(usage[0].provider, provider("claude"));
+        assert_eq!(usage[0].complete_events, 1);
+        assert_eq!(usage[0].successful_events, 1);
+        assert_eq!(usage[0].error_events, 0);
+        assert_eq!(
+            storage
+                .request_usage_loss_total()
+                .await
+                .expect("global losses"),
+            2
+        );
         assert_eq!(usage[0].request_bytes, 100);
         assert_eq!(usage[0].response_bytes, 200);
         assert_eq!(usage[0].latency_ms, 25);
@@ -1851,6 +1961,76 @@ mod tests {
         assert_eq!(snapshots[0].pools.len(), 1);
         assert_eq!(snapshots[0].credits.len(), 1);
         assert_eq!(snapshots[0].metrics.len(), 1);
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn unattributed_request_event_stays_distinct_from_named_client() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let path = directory.path().join(DATABASE_FILE);
+        let mut connection = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true)
+            .foreign_keys(true)
+            .connect()
+            .await
+            .expect("legacy connection");
+        sqlx::migrate!("./migrations")
+            .run(&mut connection)
+            .await
+            .expect("final schema");
+        for statement in [
+            "INSERT INTO providers VALUES ('claude', 1)",
+            "INSERT INTO credentials VALUES ('claude', 'claude', 1)",
+            "INSERT INTO groups VALUES ('anthropic', 1)",
+            "INSERT INTO group_members VALUES ('anthropic', 'claude')",
+            "INSERT INTO request_events (occurred_at_unix, group_id, credential_id, model_id, outcome, status_code, request_bytes, response_bytes, latency_ms, input_tokens, output_tokens, usage_complete, dropped_events) VALUES (10, 'anthropic', 'claude', 'claude-sonnet-5', 'completed', 200, 12, 34, 56, 7, 8, 0, 0)",
+        ] {
+            sqlx::query(statement)
+                .execute(&mut connection)
+                .await
+                .expect("legacy fixture");
+        }
+        connection.close().await.expect("close legacy connection");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .expect("private legacy database");
+        fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700))
+            .expect("private test state directory");
+        let mut seeded = identities();
+        seeded.clients.insert(client("legacy-unknown"));
+        let storage = SqliteStorage::open(directory.path(), seeded)
+            .await
+            .expect("migrated private storage");
+        let mut current = request(RequestOutcome::Completed, 10);
+        current.client = client("legacy-unknown");
+        current.model = "claude-sonnet-5".to_owned();
+        storage
+            .try_append_request_event(current)
+            .await
+            .expect("real client usage");
+        let rows = storage
+            .request_usage(RequestUsageQuery {
+                bucket_seconds: NonZeroU64::new(60).expect("bucket"),
+                group: group("anthropic"),
+                since_unix: 1,
+                until_unix: 20,
+            })
+            .await
+            .expect("migrated usage");
+        assert_eq!(rows.len(), 2);
+        let legacy = rows
+            .iter()
+            .find(|row| row.client.is_none())
+            .expect("legacy");
+        assert_eq!(legacy.complete_events, 0);
+        assert_eq!(legacy.input_tokens, Some(7));
+        assert_eq!(legacy.output_tokens, Some(8));
+        let current = rows
+            .iter()
+            .find(|row| row.client == Some(client("legacy-unknown")))
+            .expect("real client");
+        assert_eq!(current.complete_events, 1);
+        assert_eq!(current.events, 1);
         close(storage).await;
     }
 
@@ -1880,8 +2060,8 @@ mod tests {
                 r"
                 INSERT INTO request_events
                   (occurred_at_unix, group_id, credential_id, model_id, outcome, status_code,
-                   request_bytes, response_bytes, latency_ms)
-                VALUES (1, 'anthropic', 'claude', 'model', 'bogus', 200, 1, 1, 1)
+                   request_bytes, response_bytes, latency_ms, usage_complete, dropped_events)
+                VALUES (1, 'anthropic', 'claude', 'model', 'bogus', 200, 1, 1, 1, 1, 0)
                 ",
             )
             .execute(&mut test_connection(&storage.database_path).await)
@@ -1909,8 +2089,8 @@ mod tests {
                 r"
                 INSERT INTO request_events
                   (occurred_at_unix, group_id, credential_id, model_id, outcome, status_code,
-                   request_bytes, response_bytes, latency_ms)
-                VALUES (1, 'anthropic', 'claude', 'model', 'completed', 200, 'text', 1, 1)
+                   request_bytes, response_bytes, latency_ms, usage_complete, dropped_events)
+                VALUES (1, 'anthropic', 'claude', 'model', 'completed', 200, 'text', 1, 1, 1, 0)
                 ",
             )
             .execute(&mut test_connection(&storage.database_path).await)
@@ -1924,8 +2104,8 @@ mod tests {
                 r"
                 INSERT INTO request_events
                   (occurred_at_unix, group_id, credential_id, model_id, outcome, status_code,
-                   request_bytes, response_bytes, latency_ms)
-                VALUES (1, 'openai', 'claude', 'model', 'completed', 200, 1, 1, 1)
+                   request_bytes, response_bytes, latency_ms, usage_complete, dropped_events)
+                VALUES (1, 'openai', 'claude', 'model', 'completed', 200, 1, 1, 1, 1, 0)
                 ",
             )
             .execute(&mut test_connection(&storage.database_path).await)
@@ -2301,6 +2481,7 @@ mod tests {
         let error = storage
             .request_usage(RequestUsageQuery {
                 group: group("anthropic"),
+                bucket_seconds: NonZeroU64::new(60).expect("bucket seconds"),
                 since_unix: 1,
                 until_unix: 20,
             })
@@ -2335,6 +2516,7 @@ mod tests {
         let usage = storage
             .request_usage(RequestUsageQuery {
                 group: group("anthropic"),
+                bucket_seconds: NonZeroU64::new(60).expect("bucket seconds"),
                 since_unix: 1,
                 until_unix: 20,
             })

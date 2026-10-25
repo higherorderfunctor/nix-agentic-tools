@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO request_events\n          (occurred_at_unix, client_id, group_id, credential_id, model_id, outcome,\n           status_code, request_bytes, response_bytes, latency_ms, input_tokens,\n           output_tokens, cache_read_tokens, cache_write_tokens, usage_complete,\n           dropped_events)\n        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 16
+    },
+    "nullable": []
+  },
+  "hash": "2267c193f63de3910dfc24daca1b53b3fcb990370022bf352d6fbe43e664e713"
+}
