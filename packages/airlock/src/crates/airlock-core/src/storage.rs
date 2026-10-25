@@ -8,7 +8,10 @@ use std::{
     num::NonZeroU64,
     os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use log::LevelFilter;
@@ -25,6 +28,8 @@ use crate::ids::{ClientId, CredentialId, GroupId, ProviderId};
 const DATABASE_FILE: &str = "airlock.sqlite3";
 const MAX_SNAPSHOT_HISTORY: u64 = 1_000;
 const MAX_AGGREGATE_ROWS: usize = 10_000;
+const MAX_SNAPSHOT_CHILDREN: usize = 64;
+const MAX_RESPONSE_WINDOWS: usize = 2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -57,6 +62,8 @@ pub enum StorageError {
     StoredIdentity { credential: CredentialId },
     #[error("usage range produces more than 10000 aggregate groups")]
     UsageRangeIncomplete,
+    #[error("provider snapshot report exceeds its 1000-row bound")]
+    SnapshotRangeIncomplete,
     #[error("request usage storage is unavailable")]
     UsageUnavailable,
     #[error("stored {kind} identity is invalid: {value:?}")]
@@ -251,6 +258,61 @@ pub enum SnapshotFetchStatus {
     Success,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotSource {
+    OutOfBandFetch,
+    ResponseHeaders,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotSurface {
+    ClaudeSubscription,
+    CodexRateLimits,
+    ConsoleBalance,
+    ResponseHeaders,
+    ZaiQuota,
+}
+
+impl SnapshotSurface {
+    const fn as_storage(self) -> &'static str {
+        match self {
+            Self::ClaudeSubscription => "claude_subscription",
+            Self::CodexRateLimits => "codex_rate_limits",
+            Self::ConsoleBalance => "console_balance",
+            Self::ResponseHeaders => "response_headers",
+            Self::ZaiQuota => "zai_quota",
+        }
+    }
+
+    fn from_storage(value: &str) -> Option<Self> {
+        match value {
+            "claude_subscription" => Some(Self::ClaudeSubscription),
+            "codex_rate_limits" => Some(Self::CodexRateLimits),
+            "console_balance" => Some(Self::ConsoleBalance),
+            "response_headers" => Some(Self::ResponseHeaders),
+            "zai_quota" => Some(Self::ZaiQuota),
+            _ => None,
+        }
+    }
+}
+
+impl SnapshotSource {
+    const fn as_storage(self) -> &'static str {
+        match self {
+            Self::OutOfBandFetch => "out_of_band_fetch",
+            Self::ResponseHeaders => "response_headers",
+        }
+    }
+
+    fn from_storage(value: &str) -> Option<Self> {
+        match value {
+            "out_of_band_fetch" => Some(Self::OutOfBandFetch),
+            "response_headers" => Some(Self::ResponseHeaders),
+            _ => None,
+        }
+    }
+}
+
 impl SnapshotFetchStatus {
     fn as_storage(self) -> &'static str {
         match self {
@@ -292,16 +354,104 @@ pub struct QuotaMetric {
     pub value: u64,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct ClaudeLimit {
+    pub kind: String,
+    pub group: Option<String>,
+    pub percent_milli: u64,
+    pub reset_at_unix: Option<i64>,
+    pub severity: Option<String>,
+    pub is_active: bool,
+    pub model_display_name: Option<String>,
+    pub surface_display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+pub enum ResponseWindowLabel {
+    FiveHour,
+    SevenDay,
+}
+
+impl ResponseWindowLabel {
+    const fn as_storage(self) -> &'static str {
+        match self {
+            Self::FiveHour => "five_hour",
+            Self::SevenDay => "seven_day",
+        }
+    }
+
+    fn from_storage(value: &str) -> Option<Self> {
+        match value {
+            "five_hour" => Some(Self::FiveHour),
+            "seven_day" => Some(Self::SevenDay),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseWindowStatus {
+    Allowed,
+    AllowedWarning,
+    Rejected,
+}
+
+impl ResponseWindowStatus {
+    const fn as_storage(self) -> &'static str {
+        match self {
+            Self::Allowed => "allowed",
+            Self::AllowedWarning => "allowed_warning",
+            Self::Rejected => "rejected",
+        }
+    }
+
+    fn from_storage(value: &str) -> Option<Self> {
+        match value {
+            "allowed" => Some(Self::Allowed),
+            "allowed_warning" => Some(Self::AllowedWarning),
+            "rejected" => Some(Self::Rejected),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResponseHeaderWindow {
+    pub label: ResponseWindowLabel,
+    pub reset_at_unix: Option<i64>,
+    pub status: Option<ResponseWindowStatus>,
+    pub utilization_milli: u32,
+}
+
 #[derive(Debug)]
 pub struct ProviderSnapshot {
     pub account_id: String,
+    pub client: Option<ClientId>,
+    pub claude_limits: Vec<ClaudeLimit>,
+    pub credential: CredentialId,
     pub credits: Vec<CreditPool>,
     pub fetched_at_unix: i64,
     pub fetch_status: SnapshotFetchStatus,
     pub gap_reason: Option<String>,
+    pub group: Option<GroupId>,
+    pub header_windows: Vec<ResponseHeaderWindow>,
     pub metrics: Vec<QuotaMetric>,
     pub pools: Vec<QuotaPool>,
     pub provider: ProviderId,
+    pub source: SnapshotSource,
+    pub surface: SnapshotSurface,
+}
+
+impl ProviderSnapshot {
+    /// Whether a successful observation carries any validated typed dimension.
+    #[must_use]
+    pub fn has_typed_data(&self) -> bool {
+        !self.pools.is_empty()
+            || !self.credits.is_empty()
+            || !self.metrics.is_empty()
+            || !self.claude_limits.is_empty()
+            || !self.header_windows.is_empty()
+    }
 }
 
 #[derive(Debug)]
@@ -309,6 +459,12 @@ pub struct SnapshotQuery {
     pub limit: NonZeroU64,
     pub provider: ProviderId,
     pub since_unix: i64,
+}
+
+#[derive(Debug)]
+pub struct SnapshotPage {
+    pub snapshots: Vec<ProviderSnapshot>,
+    pub truncated: bool,
 }
 
 pub trait Storage {
@@ -360,11 +516,224 @@ type UsageWork = (
 pub struct SqliteStorage {
     connection: std::sync::Arc<tokio::sync::Mutex<SqliteConnection>>,
     database_path: PathBuf,
+    snapshot_loss_flush_lock: Arc<tokio::sync::Mutex<()>>,
+    snapshot_losses_pending: Arc<AtomicU64>,
+    observation_permits: Arc<tokio::sync::Semaphore>,
+    observation_tasks: std::sync::Mutex<tokio::task::JoinSet<()>>,
+    #[cfg(test)]
+    observation_after_commit: std::sync::Mutex<
+        Option<(
+            tokio::sync::oneshot::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+    >,
     usage_sender: tokio::sync::mpsc::Sender<UsageWork>,
     usage_worker: tokio::task::JoinHandle<()>,
 }
 
+/// A CLI connection that cannot seed identities, migrate, or read OAuth tables.
+pub struct ReadOnlyStorage {
+    connection: SqliteConnection,
+    database_path: PathBuf,
+}
+
+impl ReadOnlyStorage {
+    /// Opens existing private state without creating or changing application data.
+    ///
+    /// # Errors
+    /// Refuses absent, exposed, or corrupt state.
+    pub async fn open(directory: &Path) -> Result<Self, StorageError> {
+        check_private_directory(directory)?;
+        let database_path = directory.join(DATABASE_FILE);
+        private_file(&database_path)?;
+        check_private_companions(&database_path)?;
+        let options = SqliteConnectOptions::new()
+            .filename(&database_path)
+            .read_only(true)
+            .foreign_keys(true)
+            .busy_timeout(std::time::Duration::ZERO)
+            .log_statements(LevelFilter::Off)
+            .log_slow_statements(LevelFilter::Off, std::time::Duration::from_secs(1));
+        let mut connection = options.connect().await?;
+        sqlx::query("PRAGMA query_only = ON")
+            .execute(&mut connection)
+            .await?;
+        quick_check(&mut connection, &database_path).await?;
+        ensure_foreign_keys(&mut connection, &database_path).await?;
+        check_private_companions(&database_path)?;
+        Ok(Self {
+            connection,
+            database_path,
+        })
+    }
+
+    /// Returns persisted request aggregates without opening token-bearing rows.
+    ///
+    /// # Errors
+    /// Propagates bounded-query, integrity, and SQLite errors.
+    pub async fn request_usage(
+        &mut self,
+        query: RequestUsageQuery,
+    ) -> Result<Vec<RequestUsageAggregate>, StorageError> {
+        read_request_usage(&mut self.connection, &self.database_path, query).await
+    }
+
+    /// Returns the unattributed lifetime count of dropped request events.
+    ///
+    /// # Errors
+    /// Propagates integrity and SQLite errors.
+    pub async fn request_usage_loss_total(&mut self) -> Result<u64, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT COALESCE(SUM(dropped_events), 0) AS "total!: i64" FROM request_events"#
+        )
+        .fetch_one(&mut self.connection)
+        .await?;
+        stored_count(row.total, &self.database_path)
+    }
+
+    /// Returns the bounded, unattributed count of snapshot writes lost before recovery.
+    ///
+    /// # Errors
+    /// Propagates integrity and SQLite errors.
+    pub async fn provider_snapshot_loss_total(&mut self) -> Result<u64, StorageError> {
+        let row =
+            sqlx::query_scalar!("SELECT lost_snapshots FROM provider_snapshot_losses WHERE id = 1")
+                .fetch_optional(&mut self.connection)
+                .await?;
+        stored_count(row.unwrap_or(0), &self.database_path)
+    }
+
+    /// Returns bounded append-only provider snapshot history.
+    ///
+    /// # Errors
+    /// Propagates bounded-query, integrity, and SQLite errors.
+    pub async fn provider_snapshots(
+        &mut self,
+        query: SnapshotQuery,
+    ) -> Result<Vec<ProviderSnapshot>, StorageError> {
+        read_provider_snapshots(&mut self.connection, &self.database_path, query).await
+    }
+
+    /// Returns bounded history with an explicit indication of older omitted rows.
+    ///
+    /// # Errors
+    /// Propagates bounded-query, integrity, and SQLite errors.
+    pub async fn provider_snapshot_page(
+        &mut self,
+        query: SnapshotQuery,
+    ) -> Result<SnapshotPage, StorageError> {
+        read_provider_snapshot_page(&mut self.connection, &self.database_path, query, None).await
+    }
+
+    /// Reads current state independently of the caller's bounded history window.
+    ///
+    /// # Errors
+    /// Propagates integrity and SQLite errors.
+    pub async fn latest_provider_snapshot(
+        &mut self,
+        provider: ProviderId,
+        credential: CredentialId,
+        source: SnapshotSource,
+        surface: SnapshotSurface,
+    ) -> Result<Option<ProviderSnapshot>, StorageError> {
+        let page = read_provider_snapshot_page(
+            &mut self.connection,
+            &self.database_path,
+            SnapshotQuery {
+                limit: NonZeroU64::MIN,
+                provider,
+                since_unix: 1,
+            },
+            Some((credential, source, surface)),
+        )
+        .await?;
+        Ok(page.snapshots.into_iter().next())
+    }
+}
+
 impl SqliteStorage {
+    /// Retains a dropped typed observation without awaiting SQLite on response forwarding.
+    pub fn record_provider_snapshot_loss(&self) {
+        add_snapshot_loss(&self.snapshot_losses_pending);
+    }
+
+    /// Hands a collected observation to one owned write task. The task alone decides
+    /// whether commit succeeded, so cancellation cannot count a committed row as lost.
+    pub async fn append_provider_snapshot_observed(&self, snapshot: ProviderSnapshot) {
+        let Ok(permit) = Arc::clone(&self.observation_permits).try_acquire_owned() else {
+            self.record_provider_snapshot_loss();
+            return;
+        };
+        let connection = Arc::clone(&self.connection);
+        let pending = Arc::clone(&self.snapshot_losses_pending);
+        let flush_lock = Arc::clone(&self.snapshot_loss_flush_lock);
+        let (done_sender, done_receiver) = tokio::sync::oneshot::channel();
+        let (_cancel_sender, mut cancel_receiver) = tokio::sync::oneshot::channel::<()>();
+        #[cfg(test)]
+        let after_commit = self
+            .observation_after_commit
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        {
+            let mut tasks = self
+                .observation_tasks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            while tasks.try_join_next().is_some() {}
+            tasks.spawn(async move {
+                let _permit = permit;
+                let at_unix = snapshot.fetched_at_unix;
+                flush_snapshot_losses(&connection, &pending, &flush_lock, at_unix).await;
+                let mut held = connection.lock().await;
+                let failed = if matches!(
+                    cancel_receiver.try_recv(),
+                    Err(tokio::sync::oneshot::error::TryRecvError::Closed)
+                ) {
+                    true
+                } else {
+                    append_provider_snapshot_with_connection(&mut held, snapshot)
+                        .await
+                        .is_err()
+                };
+                drop(held);
+                #[cfg(test)]
+                if !failed && let Some((committed, release)) = after_commit {
+                    let _ = committed.send(());
+                    let _ = release.await;
+                }
+                if failed {
+                    add_snapshot_loss(&pending);
+                    tracing::warn!("usage snapshot could not be persisted");
+                }
+                flush_snapshot_losses(&connection, &pending, &flush_lock, at_unix).await;
+                let _ = done_sender.send(());
+            });
+        }
+        let _ = done_receiver.await;
+    }
+
+    async fn flush_provider_snapshot_losses(&self, at_unix: i64) {
+        flush_snapshot_losses(
+            &self.connection,
+            &self.snapshot_losses_pending,
+            &self.snapshot_loss_flush_lock,
+            at_unix,
+        )
+        .await;
+    }
+
+    /// Records previously failed snapshot writes once the database accepts writes again.
+    ///
+    /// # Errors
+    /// Propagates invalid counts, timestamps, and SQLite errors.
+    pub async fn record_provider_snapshot_losses(
+        &self,
+        count: u64,
+        at_unix: i64,
+    ) -> Result<(), StorageError> {
+        record_snapshot_losses_to(&self.connection, count, at_unix).await
+    }
     /// Creates or opens private SQLite state and refuses to return a serving handle on corruption.
     ///
     /// # Errors
@@ -411,6 +780,12 @@ impl SqliteStorage {
         Ok(Self {
             connection,
             database_path,
+            snapshot_loss_flush_lock: Arc::new(tokio::sync::Mutex::new(())),
+            snapshot_losses_pending: Arc::new(AtomicU64::new(0)),
+            observation_permits: Arc::new(tokio::sync::Semaphore::new(1)),
+            observation_tasks: std::sync::Mutex::new(tokio::task::JoinSet::new()),
+            #[cfg(test)]
+            observation_after_commit: std::sync::Mutex::new(None),
             usage_sender,
             usage_worker,
         })
@@ -424,9 +799,33 @@ impl SqliteStorage {
     ///
     /// Returns the underlying SQLite close error, if any.
     pub async fn close(self) -> Result<(), StorageError> {
+        let at_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .and_then(|duration| i64::try_from(duration.as_secs()).ok())
+            .unwrap_or(1);
+        let mut tasks = {
+            let mut guard = self
+                .observation_tasks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+        while let Some(result) = tasks.join_next().await {
+            if result.is_err() {
+                tracing::warn!("usage observation task failed");
+            }
+        }
+        self.flush_provider_snapshot_losses(at_unix).await;
         let Self {
             connection,
             database_path,
+            snapshot_loss_flush_lock: _,
+            snapshot_losses_pending: _,
+            observation_permits: _,
+            observation_tasks: _,
+            #[cfg(test)]
+                observation_after_commit: _,
             usage_sender,
             usage_worker,
         } = self;
@@ -644,32 +1043,173 @@ impl Storage for SqliteStorage {
         receipt.await.map_err(|_| StorageError::UsageUnavailable)?
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "compile-checked aggregate SQL and its validated projection share this boundary"
-    )]
     async fn request_usage(
         &self,
         query: RequestUsageQuery,
     ) -> Result<Vec<RequestUsageAggregate>, StorageError> {
-        validate_time(query.since_unix, "usage range start")?;
-        validate_time(query.until_unix, "usage range end")?;
-        if query.since_unix >= query.until_unix {
-            return Err(StorageError::Input {
-                field: "usage range start must precede end",
-            });
-        }
-        let bucket_seconds =
-            i64::try_from(query.bucket_seconds.get()).map_err(|_| StorageError::Input {
-                field: "usage bucket seconds is too large",
-            })?;
-        let group_id = query.group.as_ref();
-        let aggregate_limit =
-            i64::try_from(MAX_AGGREGATE_ROWS + 1).map_err(|_| StorageError::Input {
-                field: "usage aggregate limit is too large",
-            })?;
-        let rows = sqlx::query!(
-            r#"
+        let mut connection = self.connection.lock().await;
+        read_request_usage(&mut connection, &self.database_path, query).await
+    }
+
+    async fn request_usage_loss_total(&self) -> Result<u64, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT COALESCE(SUM(dropped_events), 0) AS "total!: i64" FROM request_events"#
+        )
+        .fetch_one(&mut *self.connection.lock().await)
+        .await?;
+        stored_count(row.total, &self.database_path)
+    }
+
+    async fn append_provider_snapshot(
+        &self,
+        snapshot: ProviderSnapshot,
+    ) -> Result<(), StorageError> {
+        append_provider_snapshot_to(&self.connection, snapshot).await
+    }
+
+    async fn provider_snapshots(
+        &self,
+        query: SnapshotQuery,
+    ) -> Result<Vec<ProviderSnapshot>, StorageError> {
+        let mut connection = self.connection.lock().await;
+        read_provider_snapshots(&mut connection, &self.database_path, query).await
+    }
+}
+
+fn add_snapshot_loss(pending: &AtomicU64) {
+    let _ = pending.try_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+        Some(count.saturating_add(1).min(i64::MAX.unsigned_abs()))
+    });
+}
+
+async fn flush_snapshot_losses(
+    connection: &Arc<tokio::sync::Mutex<SqliteConnection>>,
+    pending: &AtomicU64,
+    flush_lock: &tokio::sync::Mutex<()>,
+    at_unix: i64,
+) {
+    let _flush_guard = flush_lock.lock().await;
+    let count = pending.load(Ordering::Acquire);
+    if count == 0 {
+        return;
+    }
+    if record_snapshot_losses_to(connection, count, at_unix)
+        .await
+        .is_ok()
+    {
+        pending.fetch_sub(count, Ordering::AcqRel);
+    } else {
+        tracing::warn!("usage snapshot loss signal could not be persisted");
+    }
+}
+
+async fn record_snapshot_losses_to(
+    connection: &Arc<tokio::sync::Mutex<SqliteConnection>>,
+    count: u64,
+    at_unix: i64,
+) -> Result<(), StorageError> {
+    validate_time(at_unix, "provider loss time")?;
+    let count = i64::try_from(count).map_err(|_| StorageError::Input {
+        field: "provider loss count",
+    })?;
+    sqlx::query!(
+        "INSERT INTO provider_snapshot_losses (id, lost_snapshots, last_loss_at_unix) VALUES (1, ?, ?) \
+         ON CONFLICT(id) DO UPDATE SET lost_snapshots = CASE \
+           WHEN lost_snapshots > 9223372036854775807 - excluded.lost_snapshots THEN 9223372036854775807 \
+           ELSE lost_snapshots + excluded.lost_snapshots END, \
+         last_loss_at_unix = excluded.last_loss_at_unix",
+        count,
+        at_unix,
+    )
+    .execute(&mut *connection.lock().await)
+    .await?;
+    Ok(())
+}
+
+async fn append_provider_snapshot_to(
+    connection: &Arc<tokio::sync::Mutex<SqliteConnection>>,
+    snapshot: ProviderSnapshot,
+) -> Result<(), StorageError> {
+    let mut held = connection.lock().await;
+    append_provider_snapshot_with_connection(&mut held, snapshot).await
+}
+
+async fn append_provider_snapshot_with_connection(
+    connection: &mut SqliteConnection,
+    snapshot: ProviderSnapshot,
+) -> Result<(), StorageError> {
+    validate_time(snapshot.fetched_at_unix, "snapshot time")?;
+    validate_label(&snapshot.account_id, "account ID")?;
+    validate_provider_snapshot(&snapshot)?;
+    let provider_id = snapshot.provider.as_ref();
+    let fetch_status = snapshot.fetch_status.as_storage();
+    let mut transaction = connection.begin().await?;
+    let client_id = snapshot.client.as_ref().map(AsRef::as_ref);
+    let group_id = snapshot.group.as_ref().map(AsRef::as_ref);
+    let credential_id = snapshot.credential.as_ref();
+    let source = snapshot.source.as_storage();
+    let surface = snapshot.surface.as_storage();
+    sqlx::query!(
+        r"
+            INSERT INTO provider_snapshots
+              (fetched_at_unix, provider_id, client_id, group_id, credential_id,
+               account_id, source, surface, fetch_status, gap_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ",
+        snapshot.fetched_at_unix,
+        provider_id,
+        client_id,
+        group_id,
+        credential_id,
+        snapshot.account_id,
+        source,
+        surface,
+        fetch_status,
+        snapshot.gap_reason,
+    )
+    .execute(&mut *transaction)
+    .await?;
+    let snapshot_id = sqlx::query!("SELECT last_insert_rowid() AS id")
+        .fetch_one(&mut *transaction)
+        .await?
+        .id;
+
+    insert_quota_pools(&mut transaction, snapshot_id, &snapshot.pools).await?;
+    insert_credit_pools(&mut transaction, snapshot_id, &snapshot.credits).await?;
+    insert_quota_metrics(&mut transaction, snapshot_id, &snapshot.metrics).await?;
+    insert_claude_limits(&mut transaction, snapshot_id, &snapshot.claude_limits).await?;
+    insert_response_windows(&mut transaction, snapshot_id, &snapshot.header_windows).await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "compile-checked aggregate SQL and its validated projection share this boundary"
+)]
+async fn read_request_usage(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+    query: RequestUsageQuery,
+) -> Result<Vec<RequestUsageAggregate>, StorageError> {
+    validate_time(query.since_unix, "usage range start")?;
+    validate_time(query.until_unix, "usage range end")?;
+    if query.since_unix >= query.until_unix {
+        return Err(StorageError::Input {
+            field: "usage range start must precede end",
+        });
+    }
+    let bucket_seconds =
+        i64::try_from(query.bucket_seconds.get()).map_err(|_| StorageError::Input {
+            field: "usage bucket seconds is too large",
+        })?;
+    let group_id = query.group.as_ref();
+    let aggregate_limit =
+        i64::try_from(MAX_AGGREGATE_ROWS + 1).map_err(|_| StorageError::Input {
+            field: "usage aggregate limit is too large",
+        })?;
+    let rows = sqlx::query!(
+        r#"
             SELECT credentials.provider_id AS provider_id, request_events.client_id,
                    request_events.credential_id,
                    CAST(occurred_at_unix / ? AS INTEGER) * ? AS "bucket_start_unix!: i64",
@@ -706,203 +1246,228 @@ impl Storage for SqliteStorage {
                      CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome
             LIMIT ?
             "#,
-            bucket_seconds,
-            bucket_seconds,
-            group_id,
-            query.since_unix,
-            query.until_unix,
-            bucket_seconds,
-            bucket_seconds,
-            bucket_seconds,
-            bucket_seconds,
-            aggregate_limit,
-        )
-        .fetch_all(&mut *self.connection.lock().await)
-        .await?;
-        if rows.len() > MAX_AGGREGATE_ROWS {
-            return Err(StorageError::UsageRangeIncomplete);
-        }
+        bucket_seconds,
+        bucket_seconds,
+        group_id,
+        query.since_unix,
+        query.until_unix,
+        bucket_seconds,
+        bucket_seconds,
+        bucket_seconds,
+        bucket_seconds,
+        aggregate_limit,
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    if rows.len() > MAX_AGGREGATE_ROWS {
+        return Err(StorageError::UsageRangeIncomplete);
+    }
 
-        let mut aggregates = Vec::with_capacity(rows.len());
-        for row in rows {
-            let credential = CredentialId::try_from(row.credential_id).map_err(|error| {
-                StorageError::StoredId {
-                    kind: "credential",
-                    value: error.into_name(),
-                }
+    let mut aggregates = Vec::with_capacity(rows.len());
+    for row in rows {
+        let credential =
+            CredentialId::try_from(row.credential_id).map_err(|error| StorageError::StoredId {
+                kind: "credential",
+                value: error.into_name(),
             })?;
-            let client = row
-                .client_id
-                .map(|id| {
-                    ClientId::try_from(id).map_err(|error| StorageError::StoredId {
-                        kind: "client",
-                        value: error.into_name(),
-                    })
+        let client = row
+            .client_id
+            .map(|id| {
+                ClientId::try_from(id).map_err(|error| StorageError::StoredId {
+                    kind: "client",
+                    value: error.into_name(),
                 })
-                .transpose()?;
-            let provider =
-                ProviderId::try_from(row.provider_id).map_err(|error| StorageError::StoredId {
-                    kind: "provider",
-                    value: error.into_name(),
-                })?;
-            let outcome = RequestOutcome::from_storage(&row.outcome).ok_or_else(|| {
-                StorageError::Integrity {
-                    path: self.database_path.clone(),
-                }
+            })
+            .transpose()?;
+        let provider =
+            ProviderId::try_from(row.provider_id).map_err(|error| StorageError::StoredId {
+                kind: "provider",
+                value: error.into_name(),
             })?;
-            aggregates.push(RequestUsageAggregate {
-                bucket_start_unix: if row.bucket_start_unix >= 0 {
-                    row.bucket_start_unix
-                } else {
-                    return Err(StorageError::Integrity {
-                        path: self.database_path.clone(),
-                    });
-                },
-                cache_read_tokens: complete_sum(
-                    row.cache_read_tokens,
-                    row.missing_cache_read_tokens,
-                    &self.database_path,
-                )?,
-                cache_write_tokens: complete_sum(
-                    row.cache_write_tokens,
-                    row.missing_cache_write_tokens,
-                    &self.database_path,
-                )?,
-                client,
-                complete_events: stored_count(row.complete_events, &self.database_path)?,
-                credential,
-                error_events: stored_count(row.error_events, &self.database_path)?,
-                events: stored_count(row.events, &self.database_path)?,
-                input_tokens: complete_sum(
-                    row.input_tokens,
-                    row.missing_input_tokens,
-                    &self.database_path,
-                )?,
-                latency_ms: stored_count(row.latency_ms, &self.database_path)?,
-                model: row.model_id,
-                outcome,
-                output_tokens: complete_sum(
-                    row.output_tokens,
-                    row.missing_output_tokens,
-                    &self.database_path,
-                )?,
-                provider,
-                request_bytes: stored_count(row.request_bytes, &self.database_path)?,
-                response_bytes: stored_count(row.response_bytes, &self.database_path)?,
-                successful_events: stored_count(row.successful_events, &self.database_path)?,
-            });
-        }
-        Ok(aggregates)
+        let outcome =
+            RequestOutcome::from_storage(&row.outcome).ok_or_else(|| StorageError::Integrity {
+                path: database_path.to_owned(),
+            })?;
+        aggregates.push(RequestUsageAggregate {
+            bucket_start_unix: if row.bucket_start_unix >= 0 {
+                row.bucket_start_unix
+            } else {
+                return Err(StorageError::Integrity {
+                    path: database_path.to_owned(),
+                });
+            },
+            cache_read_tokens: complete_sum(
+                row.cache_read_tokens,
+                row.missing_cache_read_tokens,
+                database_path,
+            )?,
+            cache_write_tokens: complete_sum(
+                row.cache_write_tokens,
+                row.missing_cache_write_tokens,
+                database_path,
+            )?,
+            client,
+            complete_events: stored_count(row.complete_events, database_path)?,
+            credential,
+            error_events: stored_count(row.error_events, database_path)?,
+            events: stored_count(row.events, database_path)?,
+            input_tokens: complete_sum(row.input_tokens, row.missing_input_tokens, database_path)?,
+            latency_ms: stored_count(row.latency_ms, database_path)?,
+            model: row.model_id,
+            outcome,
+            output_tokens: complete_sum(
+                row.output_tokens,
+                row.missing_output_tokens,
+                database_path,
+            )?,
+            provider,
+            request_bytes: stored_count(row.request_bytes, database_path)?,
+            response_bytes: stored_count(row.response_bytes, database_path)?,
+            successful_events: stored_count(row.successful_events, database_path)?,
+        });
     }
+    Ok(aggregates)
+}
 
-    async fn request_usage_loss_total(&self) -> Result<u64, StorageError> {
-        let row = sqlx::query!(
-            r#"SELECT COALESCE(SUM(dropped_events), 0) AS "total!: i64" FROM request_events"#
-        )
-        .fetch_one(&mut *self.connection.lock().await)
-        .await?;
-        stored_count(row.total, &self.database_path)
-    }
-
-    async fn append_provider_snapshot(
-        &self,
-        snapshot: ProviderSnapshot,
-    ) -> Result<(), StorageError> {
-        validate_time(snapshot.fetched_at_unix, "snapshot time")?;
-        validate_label(&snapshot.account_id, "account ID")?;
-        validate_snapshot_collections(&snapshot)?;
-        let provider_id = snapshot.provider.as_ref();
-        let fetch_status = snapshot.fetch_status.as_storage();
-        let mut connection = self.connection.lock().await;
-        let mut transaction = connection.begin().await?;
-        sqlx::query!(
-            r"
-            INSERT INTO provider_snapshots
-              (fetched_at_unix, provider_id, account_id, fetch_status, gap_reason)
-            VALUES (?, ?, ?, ?, ?)
-            ",
-            snapshot.fetched_at_unix,
-            provider_id,
-            snapshot.account_id,
-            fetch_status,
-            snapshot.gap_reason,
-        )
-        .execute(&mut *transaction)
-        .await?;
-        let snapshot_id = sqlx::query!("SELECT last_insert_rowid() AS id")
-            .fetch_one(&mut *transaction)
+async fn read_provider_snapshots(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+    query: SnapshotQuery,
+) -> Result<Vec<ProviderSnapshot>, StorageError> {
+    Ok(
+        read_provider_snapshot_page(connection, database_path, query, None)
             .await?
-            .id;
+            .snapshots,
+    )
+}
 
-        insert_quota_pools(&mut transaction, snapshot_id, &snapshot.pools).await?;
-        insert_credit_pools(&mut transaction, snapshot_id, &snapshot.credits).await?;
-        insert_quota_metrics(&mut transaction, snapshot_id, &snapshot.metrics).await?;
-        transaction.commit().await?;
-        Ok(())
-    }
-
-    async fn provider_snapshots(
-        &self,
-        query: SnapshotQuery,
-    ) -> Result<Vec<ProviderSnapshot>, StorageError> {
-        validate_time(query.since_unix, "snapshot history start")?;
-        let limit = if query.limit.get() > MAX_SNAPSHOT_HISTORY {
-            return Err(StorageError::Input {
-                field: "snapshot history limit exceeds 1000",
-            });
-        } else {
-            i64::try_from(query.limit.get()).map_err(|_| StorageError::Input {
-                field: "snapshot history limit is too large",
-            })?
-        };
-        let provider_id = query.provider.as_ref();
-        let mut connection = self.connection.lock().await;
-        let headers = sqlx::query!(
-            r#"
-            SELECT id AS "id!: i64", fetched_at_unix, provider_id, account_id, fetch_status, gap_reason
+#[expect(
+    clippy::too_many_lines,
+    reason = "bounded page loading keeps header and typed children together"
+)]
+async fn read_provider_snapshot_page(
+    connection: &mut SqliteConnection,
+    database_path: &Path,
+    query: SnapshotQuery,
+    filter: Option<(CredentialId, SnapshotSource, SnapshotSurface)>,
+) -> Result<SnapshotPage, StorageError> {
+    validate_time(query.since_unix, "snapshot history start")?;
+    let limit = if query.limit.get() > MAX_SNAPSHOT_HISTORY {
+        return Err(StorageError::Input {
+            field: "snapshot history limit exceeds 1000",
+        });
+    } else {
+        i64::try_from(query.limit.get()).map_err(|_| StorageError::Input {
+            field: "snapshot history limit is too large",
+        })?
+    };
+    let fetch_limit = limit + 1;
+    let provider_id = query.provider.as_ref();
+    let credential_filter = filter
+        .as_ref()
+        .map(|(credential, _, _)| credential.as_ref());
+    let source_filter = filter.as_ref().map(|(_, source, _)| source.as_storage());
+    let surface_filter = filter.as_ref().map(|(_, _, surface)| surface.as_storage());
+    let mut headers = sqlx::query!(
+        r#"
+            SELECT id AS "id!: i64", fetched_at_unix, provider_id, client_id, group_id,
+                   credential_id, account_id, source, surface, fetch_status, gap_reason
             FROM provider_snapshots
             WHERE provider_id = ? AND fetched_at_unix >= ?
+              AND (? IS NULL OR credential_id = ?)
+              AND (? IS NULL OR source = ?)
+              AND (? IS NULL OR surface = ?)
             ORDER BY fetched_at_unix DESC, id DESC
             LIMIT ?
             "#,
-            provider_id,
-            query.since_unix,
-            limit,
-        )
-        .fetch_all(&mut *connection)
-        .await?;
-        let mut snapshots = Vec::with_capacity(headers.len());
-        for header in headers {
-            let pools = quota_pools(&mut connection, header.id, &self.database_path).await?;
-            let credits = credit_pools(&mut connection, header.id, &self.database_path).await?;
-            let metrics = quota_metrics(&mut connection, header.id, &self.database_path).await?;
-            let provider = ProviderId::try_from(header.provider_id).map_err(|error| {
-                StorageError::StoredId {
-                    kind: "provider",
-                    value: error.into_name(),
-                }
+        provider_id,
+        query.since_unix,
+        credential_filter,
+        credential_filter,
+        source_filter,
+        source_filter,
+        surface_filter,
+        surface_filter,
+        fetch_limit,
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    let limit_usize = usize::try_from(query.limit.get()).map_err(|_| StorageError::Input {
+        field: "snapshot history limit is too large",
+    })?;
+    let truncated = headers.len() > limit_usize;
+    headers.truncate(limit_usize);
+    let mut snapshots = Vec::with_capacity(headers.len());
+    for header in headers {
+        let pools = quota_pools(connection, header.id, database_path).await?;
+        let credits = credit_pools(connection, header.id, database_path).await?;
+        let metrics = quota_metrics(connection, header.id, database_path).await?;
+        let claude_limits = claude_limits(connection, header.id, database_path).await?;
+        let header_windows = response_windows(connection, header.id, database_path).await?;
+        let provider =
+            ProviderId::try_from(header.provider_id).map_err(|error| StorageError::StoredId {
+                kind: "provider",
+                value: error.into_name(),
             })?;
-            snapshots.push(ProviderSnapshot {
-                account_id: header.account_id,
-                credits,
-                fetched_at_unix: header.fetched_at_unix,
-                fetch_status: SnapshotFetchStatus::from_storage(&header.fetch_status).ok_or_else(
-                    || StorageError::Integrity {
-                        path: self.database_path.clone(),
-                    },
-                )?,
-                gap_reason: header.gap_reason,
-                metrics,
-                pools,
-                provider,
-            });
-        }
-        drop(connection);
-        snapshots.reverse();
-        Ok(snapshots)
+        let client = header
+            .client_id
+            .map(ClientId::try_from)
+            .transpose()
+            .map_err(|error| StorageError::StoredId {
+                kind: "client",
+                value: error.into_name(),
+            })?;
+        let group = header
+            .group_id
+            .map(GroupId::try_from)
+            .transpose()
+            .map_err(|error| StorageError::StoredId {
+                kind: "group",
+                value: error.into_name(),
+            })?;
+        let credential = CredentialId::try_from(header.credential_id).map_err(|error| {
+            StorageError::StoredId {
+                kind: "credential",
+                value: error.into_name(),
+            }
+        })?;
+        let source = SnapshotSource::from_storage(&header.source).ok_or_else(|| {
+            StorageError::Integrity {
+                path: database_path.to_owned(),
+            }
+        })?;
+        snapshots.push(ProviderSnapshot {
+            account_id: header.account_id,
+            client,
+            claude_limits,
+            credential,
+            credits,
+            fetched_at_unix: header.fetched_at_unix,
+            fetch_status: SnapshotFetchStatus::from_storage(&header.fetch_status).ok_or_else(
+                || StorageError::Integrity {
+                    path: database_path.to_owned(),
+                },
+            )?,
+            gap_reason: header.gap_reason,
+            group,
+            header_windows,
+            metrics,
+            pools,
+            provider,
+            source,
+            surface: SnapshotSurface::from_storage(&header.surface).ok_or_else(|| {
+                StorageError::Integrity {
+                    path: database_path.to_owned(),
+                }
+            })?,
+        });
     }
+    snapshots.reverse();
+    Ok(SnapshotPage {
+        snapshots,
+        truncated,
+    })
 }
-
 async fn persist_oauth_pair(
     mut transaction: Transaction<'_, Sqlite>,
     replacement: &OauthPairReplacement,
@@ -1095,21 +1660,89 @@ async fn insert_quota_metrics(
     Ok(())
 }
 
+async fn insert_claude_limits(
+    transaction: &mut Transaction<'_, Sqlite>,
+    snapshot_id: i64,
+    limits: &[ClaudeLimit],
+) -> Result<(), StorageError> {
+    for (ordinal, limit) in limits.iter().enumerate() {
+        let ordinal = i64::try_from(ordinal).map_err(|_| StorageError::Input {
+            field: "Claude limit ordinal",
+        })?;
+        let percent_milli =
+            i64::try_from(limit.percent_milli).map_err(|_| StorageError::Input {
+                field: "Claude limit percent",
+            })?;
+        let is_active = i64::from(limit.is_active);
+        sqlx::query!(
+            r"
+            INSERT INTO claude_limits
+              (snapshot_id, ordinal, kind, group_name, percent_milli, reset_at_unix,
+               severity, is_active, model_display_name, surface_display_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ",
+            snapshot_id,
+            ordinal,
+            limit.kind,
+            limit.group,
+            percent_milli,
+            limit.reset_at_unix,
+            limit.severity,
+            is_active,
+            limit.model_display_name,
+            limit.surface_display_name,
+        )
+        .execute(&mut **transaction)
+        .await?;
+    }
+    Ok(())
+}
+
+async fn insert_response_windows(
+    transaction: &mut Transaction<'_, Sqlite>,
+    snapshot_id: i64,
+    windows: &[ResponseHeaderWindow],
+) -> Result<(), StorageError> {
+    for window in windows {
+        let utilization = i64::from(window.utilization_milli);
+        let label = window.label.as_storage();
+        let status = window.status.map(ResponseWindowStatus::as_storage);
+        sqlx::query!(
+            r"
+            INSERT INTO response_header_windows
+              (snapshot_id, label, utilization_milli, reset_at_unix, status)
+            VALUES (?, ?, ?, ?, ?)
+            ",
+            snapshot_id,
+            label,
+            utilization,
+            window.reset_at_unix,
+            status,
+        )
+        .execute(&mut **transaction)
+        .await?;
+    }
+    Ok(())
+}
+
 async fn quota_pools(
     connection: &mut SqliteConnection,
     snapshot_id: i64,
     path: &Path,
 ) -> Result<Vec<QuotaPool>, StorageError> {
+    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
     let rows = sqlx::query!(
         r#"
         SELECT label, utilized, limit_value, reset_at_unix FROM quota_pools
         WHERE snapshot_id = ?
-        ORDER BY ordinal
+        ORDER BY ordinal LIMIT ?
         "#,
         snapshot_id,
+        fetch_limit,
     )
     .fetch_all(connection)
     .await?;
+    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
     rows.into_iter()
         .map(|row| {
             Ok(QuotaPool {
@@ -1127,17 +1760,20 @@ async fn credit_pools(
     snapshot_id: i64,
     path: &Path,
 ) -> Result<Vec<CreditPool>, StorageError> {
+    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
     let rows = sqlx::query!(
         r#"
         SELECT label, used_minor_units, remaining_minor_units, limit_minor_units, reset_at_unix
         FROM credit_pools
         WHERE snapshot_id = ?
-        ORDER BY ordinal
+        ORDER BY ordinal LIMIT ?
         "#,
         snapshot_id,
+        fetch_limit,
     )
     .fetch_all(connection)
     .await?;
+    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
     rows.into_iter()
         .map(|row| {
             Ok(CreditPool {
@@ -1156,16 +1792,19 @@ async fn quota_metrics(
     snapshot_id: i64,
     path: &Path,
 ) -> Result<Vec<QuotaMetric>, StorageError> {
+    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
     let rows = sqlx::query!(
         r#"
         SELECT label, value, unit FROM quota_metrics
         WHERE snapshot_id = ?
-        ORDER BY ordinal
+        ORDER BY ordinal LIMIT ?
         "#,
         snapshot_id,
+        fetch_limit,
     )
     .fetch_all(connection)
     .await?;
+    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
     rows.into_iter()
         .map(|row| {
             Ok(QuotaMetric {
@@ -1175,6 +1814,97 @@ async fn quota_metrics(
             })
         })
         .collect()
+}
+
+async fn claude_limits(
+    connection: &mut SqliteConnection,
+    snapshot_id: i64,
+    path: &Path,
+) -> Result<Vec<ClaudeLimit>, StorageError> {
+    let fetch_limit = child_query_limit(MAX_SNAPSHOT_CHILDREN);
+    let rows = sqlx::query!(
+        r#"
+        SELECT kind, group_name, percent_milli, reset_at_unix, severity, is_active,
+               model_display_name, surface_display_name
+        FROM claude_limits WHERE snapshot_id = ? ORDER BY ordinal LIMIT ?
+        "#,
+        snapshot_id,
+        fetch_limit,
+    )
+    .fetch_all(connection)
+    .await?;
+    let rows = bounded_snapshot_children(rows, MAX_SNAPSHOT_CHILDREN, path)?;
+    rows.into_iter()
+        .map(|row| {
+            Ok(ClaudeLimit {
+                kind: row.kind,
+                group: row.group_name,
+                percent_milli: stored_count(row.percent_milli, path)?,
+                reset_at_unix: row.reset_at_unix,
+                severity: row.severity,
+                is_active: row.is_active != 0,
+                model_display_name: row.model_display_name,
+                surface_display_name: row.surface_display_name,
+            })
+        })
+        .collect()
+}
+
+async fn response_windows(
+    connection: &mut SqliteConnection,
+    snapshot_id: i64,
+    path: &Path,
+) -> Result<Vec<ResponseHeaderWindow>, StorageError> {
+    let fetch_limit = child_query_limit(MAX_RESPONSE_WINDOWS);
+    let rows = sqlx::query!(
+        r#"
+        SELECT label, utilization_milli, reset_at_unix, status FROM response_header_windows
+        WHERE snapshot_id = ?
+        ORDER BY label LIMIT ?
+        "#,
+        snapshot_id,
+        fetch_limit,
+    )
+    .fetch_all(connection)
+    .await?;
+    let rows = bounded_snapshot_children(rows, MAX_RESPONSE_WINDOWS, path)?;
+    rows.into_iter()
+        .map(|row| {
+            let integrity = || StorageError::Integrity {
+                path: path.to_owned(),
+            };
+            let label = ResponseWindowLabel::from_storage(&row.label).ok_or_else(integrity)?;
+            let status = row
+                .status
+                .map(|value| {
+                    ResponseWindowStatus::from_storage(value.as_str()).ok_or_else(integrity)
+                })
+                .transpose()?;
+            Ok(ResponseHeaderWindow {
+                label,
+                reset_at_unix: row.reset_at_unix,
+                status,
+                utilization_milli: u32::try_from(row.utilization_milli).map_err(|_| integrity())?,
+            })
+        })
+        .collect()
+}
+
+fn child_query_limit(max: usize) -> i64 {
+    i64::try_from(max.saturating_add(1)).unwrap_or(i64::MAX)
+}
+
+fn bounded_snapshot_children<T>(
+    rows: Vec<T>,
+    max: usize,
+    path: &Path,
+) -> Result<Vec<T>, StorageError> {
+    if rows.len() > max {
+        return Err(StorageError::Integrity {
+            path: path.to_owned(),
+        });
+    }
+    Ok(rows)
 }
 
 async fn request_usage_worker(
@@ -1505,10 +2235,27 @@ fn validate_optional_count(value: Option<u64>, field: &'static str) -> Result<()
     Ok(())
 }
 
-fn validate_snapshot_collections(snapshot: &ProviderSnapshot) -> Result<(), StorageError> {
-    if snapshot.pools.len() > 64
-        || snapshot.credits.len() > 64
-        || snapshot.metrics.len() > 64
+/// Checks every typed dimension before a snapshot is admitted to a transaction.
+///
+/// # Errors
+/// Rejects invalid source, labels, numeric domains, or success/gap combinations.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one validation boundary covers all snapshot dimensions"
+)]
+pub fn validate_provider_snapshot(snapshot: &ProviderSnapshot) -> Result<(), StorageError> {
+    if (snapshot.source == SnapshotSource::ResponseHeaders)
+        != (snapshot.surface == SnapshotSurface::ResponseHeaders)
+    {
+        return Err(StorageError::Input {
+            field: "snapshot source and surface disagree",
+        });
+    }
+    if snapshot.pools.len() > MAX_SNAPSHOT_CHILDREN
+        || snapshot.credits.len() > MAX_SNAPSHOT_CHILDREN
+        || snapshot.metrics.len() > MAX_SNAPSHOT_CHILDREN
+        || snapshot.claude_limits.len() > MAX_SNAPSHOT_CHILDREN
+        || snapshot.header_windows.len() > MAX_RESPONSE_WINDOWS
         || snapshot
             .pools
             .iter()
@@ -1539,6 +2286,59 @@ fn validate_snapshot_collections(snapshot: &ProviderSnapshot) -> Result<(), Stor
         validate_label(&metric.unit, "quota metric unit")?;
         validate_count(metric.value, "quota metric value")?;
     }
+    for limit in &snapshot.claude_limits {
+        validate_label(&limit.kind, "Claude limit kind")?;
+        for value in [
+            limit.group.as_deref(),
+            limit.severity.as_deref(),
+            limit.model_display_name.as_deref(),
+            limit.surface_display_name.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            validate_label(value, "Claude limit scope")?;
+        }
+        if limit.percent_milli > 100_000 {
+            return Err(StorageError::Input {
+                field: "Claude limit percent",
+            });
+        }
+        validate_time_optional(limit.reset_at_unix, "Claude limit reset time")?;
+    }
+    for labels in [
+        snapshot
+            .pools
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+        snapshot
+            .credits
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+        snapshot
+            .metrics
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+    ] {
+        if labels.iter().collect::<BTreeSet<_>>().len() != labels.len() {
+            return Err(StorageError::Input {
+                field: "duplicate snapshot label",
+            });
+        }
+    }
+    let mut labels = BTreeSet::new();
+    for window in &snapshot.header_windows {
+        if !labels.insert(window.label) || window.utilization_milli > 10_000_000 {
+            return Err(StorageError::Input {
+                field: "response header windows are invalid",
+            });
+        }
+        validate_time_optional(window.reset_at_unix, "response window reset time")?;
+    }
+    let has_typed_data = snapshot.has_typed_data();
     match snapshot.fetch_status {
         SnapshotFetchStatus::Gap => {
             if snapshot
@@ -1550,14 +2350,25 @@ fn validate_snapshot_collections(snapshot: &ProviderSnapshot) -> Result<(), Stor
                     field: "gap snapshots require a 1..=256 byte reason",
                 });
             }
-        }
-        SnapshotFetchStatus::Success => {
-            if snapshot.gap_reason.is_some() {
+            if has_typed_data {
                 return Err(StorageError::Input {
-                    field: "successful snapshots cannot carry a gap reason",
+                    field: "gap snapshots cannot contain quota dimensions",
                 });
             }
         }
+        SnapshotFetchStatus::Success if snapshot.gap_reason.is_some() => {
+            return Err(StorageError::Input {
+                field: "successful snapshots cannot carry a gap reason",
+            });
+        }
+        SnapshotFetchStatus::Success
+            if snapshot.source == SnapshotSource::OutOfBandFetch && !has_typed_data =>
+        {
+            return Err(StorageError::Input {
+                field: "out-of-band success snapshots require typed quota data",
+            });
+        }
+        SnapshotFetchStatus::Success => {}
     }
     Ok(())
 }
@@ -1592,6 +2403,15 @@ fn create_private_directory(path: &Path) -> Result<(), StorageError> {
                 });
             }
         }
+    }
+    check_private_directory(path)
+}
+
+fn check_private_directory(path: &Path) -> Result<(), StorageError> {
+    if !path.is_absolute() {
+        return Err(StorageError::NotPrivateDirectory {
+            path: path.to_owned(),
+        });
     }
     let metadata = fs::symlink_metadata(path).map_err(|source| StorageError::Io {
         path: path.to_owned(),
@@ -1829,6 +2649,9 @@ mod tests {
     fn snapshot(timestamp: i64) -> ProviderSnapshot {
         ProviderSnapshot {
             account_id: "account".to_owned(),
+            client: Some(client("harness")),
+            claude_limits: vec![],
+            credential: credential("claude"),
             credits: vec![CreditPool {
                 label: "credits".to_owned(),
                 limit_minor_units: 100,
@@ -1839,6 +2662,8 @@ mod tests {
             fetched_at_unix: timestamp,
             fetch_status: SnapshotFetchStatus::Success,
             gap_reason: None,
+            group: Some(group("anthropic")),
+            header_windows: vec![],
             metrics: vec![QuotaMetric {
                 label: "events".to_owned(),
                 unit: "count".to_owned(),
@@ -1851,6 +2676,8 @@ mod tests {
                 utilized: 12,
             }],
             provider: provider("claude"),
+            source: SnapshotSource::OutOfBandFetch,
+            surface: SnapshotSurface::ClaudeSubscription,
         }
     }
 
@@ -2605,6 +3432,150 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn child_reads_reject_quick_check_clean_rows_above_each_bound() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        storage
+            .append_provider_snapshot(snapshot(20))
+            .await
+            .expect("bounded fixture");
+        let mut connection = test_connection(&storage.database_path).await;
+        let snapshot_id: i64 = sqlx::query_scalar("SELECT id FROM provider_snapshots LIMIT 1")
+            .fetch_one(&mut connection)
+            .await
+            .expect("snapshot id");
+        for ordinal in 1_i64..=64 {
+            let label = format!("pool-{ordinal}");
+            sqlx::query("INSERT INTO quota_pools (snapshot_id, ordinal, label, utilized, limit_value) VALUES (?, ?, ?, 1, 100)")
+                .bind(snapshot_id).bind(ordinal).bind(&label).execute(&mut connection).await.expect("extra pool");
+            sqlx::query("INSERT INTO credit_pools (snapshot_id, ordinal, label, used_minor_units, remaining_minor_units, limit_minor_units) VALUES (?, ?, ?, 1, 99, 100)")
+                .bind(snapshot_id).bind(ordinal).bind(&label).execute(&mut connection).await.expect("extra credit");
+            sqlx::query("INSERT INTO quota_metrics (snapshot_id, ordinal, label, value, unit) VALUES (?, ?, ?, 1, 'count')")
+                .bind(snapshot_id).bind(ordinal).bind(&label).execute(&mut connection).await.expect("extra metric");
+        }
+        for ordinal in 0_i64..=64 {
+            sqlx::query("INSERT INTO claude_limits (snapshot_id, ordinal, kind, percent_milli, is_active) VALUES (?, ?, 'rate', 1000, 1)")
+                .bind(snapshot_id).bind(ordinal).execute(&mut connection).await.expect("extra limit");
+        }
+        quick_check(&mut connection, &storage.database_path)
+            .await
+            .expect("structurally valid SQLite");
+        for excess_result in [
+            quota_pools(&mut connection, snapshot_id, &storage.database_path)
+                .await
+                .map(|_| ()),
+            credit_pools(&mut connection, snapshot_id, &storage.database_path)
+                .await
+                .map(|_| ()),
+            quota_metrics(&mut connection, snapshot_id, &storage.database_path)
+                .await
+                .map(|_| ()),
+            claude_limits(&mut connection, snapshot_id, &storage.database_path)
+                .await
+                .map(|_| ()),
+            bounded_snapshot_children(vec![0, 1, 2], MAX_RESPONSE_WINDOWS, &storage.database_path)
+                .map(|_| ()),
+        ] {
+            assert!(matches!(excess_result, Err(StorageError::Integrity { .. })));
+        }
+        connection.close().await.expect("close fixture connection");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn snapshot_write_loss_recovers_after_sqlite_contention() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut blocker = test_connection(&storage.database_path).await;
+        sqlx::query("BEGIN IMMEDIATE")
+            .execute(&mut blocker)
+            .await
+            .expect("writer lock");
+        storage
+            .append_provider_snapshot_observed(snapshot(20))
+            .await;
+        sqlx::query("ROLLBACK")
+            .execute(&mut blocker)
+            .await
+            .expect("release writer lock");
+        storage
+            .append_provider_snapshot_observed(snapshot(21))
+            .await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("read-only report state");
+        assert_eq!(
+            reader.provider_snapshot_loss_total().await.expect("loss"),
+            1
+        );
+        let snapshots = reader
+            .provider_snapshots(SnapshotQuery {
+                limit: NonZeroU64::new(2).expect("limit"),
+                provider: provider("claude"),
+                since_unix: 1,
+            })
+            .await
+            .expect("history");
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].fetched_at_unix, 21);
+        blocker.close().await.expect("close blocker");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn close_persists_pending_snapshot_loss_without_another_observation() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        storage.record_provider_snapshot_loss();
+        close(storage).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("read-only report state");
+        assert_eq!(
+            reader.provider_snapshot_loss_total().await.expect("loss"),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_loss_flush_keeps_pending_count_for_close() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = Arc::new(open(directory.path()).await);
+        storage.record_provider_snapshot_loss();
+        let connection_guard = storage.connection.lock().await;
+        let flushing = Arc::clone(&storage);
+        let task = tokio::spawn(async move {
+            flushing.flush_provider_snapshot_losses(20).await;
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                if storage.snapshot_loss_flush_lock.try_lock().is_err() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("flush must begin before cancellation");
+        task.abort();
+        let _ = task.await;
+        drop(connection_guard);
+        Arc::try_unwrap(storage)
+            .ok()
+            .expect("sole storage owner")
+            .close()
+            .await
+            .expect("close and recover loss");
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("read-only report state");
+        assert_eq!(
+            reader.provider_snapshot_loss_total().await.expect("loss"),
+            1
+        );
+    }
+
+    #[tokio::test]
     async fn unsafe_paths_and_permissions_are_refused() {
         let parent = tempfile::tempdir().expect("parent");
         let target = parent.path().join("target");
@@ -2760,5 +3731,119 @@ mod tests {
                 .is_err()
         );
         close(storage).await;
+    }
+    #[tokio::test]
+    async fn reviewer_cancelled_observation_must_be_counted() {
+        let directory = tempfile::tempdir().expect("fake state");
+        let storage = open(directory.path()).await;
+        {
+            let _guard = storage.connection.lock().await;
+            let mut observation =
+                std::pin::pin!(storage.append_provider_snapshot_observed(snapshot(20)));
+            std::future::poll_fn(|cx| {
+                assert!(observation.as_mut().poll(cx).is_pending());
+                std::task::Poll::Ready(())
+            })
+            .await;
+        }
+        close(storage).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("fake history");
+        let history = reader
+            .provider_snapshots(SnapshotQuery {
+                limit: NonZeroU64::MIN,
+                provider: provider("claude"),
+                since_unix: 1,
+            })
+            .await
+            .expect("history");
+        let lost = reader
+            .provider_snapshot_loss_total()
+            .await
+            .expect("loss total");
+        assert!(
+            history.is_empty(),
+            "a cancelled pending observation must not append"
+        );
+        assert_eq!(lost, 1);
+    }
+    #[tokio::test]
+    async fn caller_cancellation_never_counts_a_committed_observation_twice() {
+        let directory = tempfile::tempdir().expect("fake state");
+        let storage = open(directory.path()).await;
+        for at in 20..52 {
+            let mut observation =
+                std::pin::pin!(storage.append_provider_snapshot_observed(snapshot(at)));
+            std::future::poll_fn(|cx| {
+                let _ = observation.as_mut().poll(cx);
+                std::task::Poll::Ready(())
+            })
+            .await;
+            tokio::task::yield_now().await;
+        }
+        close(storage).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("fake history");
+        let history = reader
+            .provider_snapshots(SnapshotQuery {
+                limit: NonZeroU64::new(32).expect("limit"),
+                provider: provider("claude"),
+                since_unix: 1,
+            })
+            .await
+            .expect("history");
+        let lost = reader
+            .provider_snapshot_loss_total()
+            .await
+            .expect("loss total");
+        assert_eq!(
+            history.len() + usize::try_from(lost).expect("bounded loss"),
+            32
+        );
+    }
+
+    #[tokio::test]
+    async fn committed_observation_survives_cancelled_ack_without_loss() {
+        let directory = tempfile::tempdir().expect("fake state");
+        let storage = open(directory.path()).await;
+        let (committed_sender, committed_receiver) = tokio::sync::oneshot::channel();
+        let (release_sender, release_receiver) = tokio::sync::oneshot::channel();
+        *storage.observation_after_commit.lock().expect("test hook") =
+            Some((committed_sender, release_receiver));
+        {
+            let mut observation =
+                std::pin::pin!(storage.append_provider_snapshot_observed(snapshot(20)));
+            std::future::poll_fn(|cx| {
+                assert!(observation.as_mut().poll(cx).is_pending());
+                std::task::Poll::Ready(())
+            })
+            .await;
+            committed_receiver
+                .await
+                .expect("row committed before acknowledgement");
+        }
+        release_sender.send(()).expect("release writer");
+        close(storage).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("fake history");
+        let history = reader
+            .provider_snapshots(SnapshotQuery {
+                limit: NonZeroU64::MIN,
+                provider: provider("claude"),
+                since_unix: 1,
+            })
+            .await
+            .expect("history");
+        assert_eq!(history.len(), 1);
+        assert_eq!(
+            reader
+                .provider_snapshot_loss_total()
+                .await
+                .expect("loss total"),
+            0
+        );
     }
 }

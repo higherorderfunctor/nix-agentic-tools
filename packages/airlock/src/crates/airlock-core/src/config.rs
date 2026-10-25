@@ -13,6 +13,7 @@ use crate::{
     storage::StorageIdentities,
 };
 
+#[derive(Clone)]
 pub struct Config {
     clients: BTreeMap<ClientId, ClientConfig>,
     credentials: BTreeMap<CredentialId, CredentialConfig>,
@@ -21,24 +22,30 @@ pub struct Config {
     providers: BTreeMap<ProviderId, ProviderConfig>,
     state_dir: PathBuf,
     unknown_hosts: UnknownHosts,
+    usage_credentials: BTreeSet<CredentialId>,
 }
 
+#[derive(Clone)]
 struct ClientConfig {
     grants: Vec<GroupId>,
     token_file: SecretFile,
 }
 
+#[derive(Clone)]
 struct CredentialConfig {
     auth: Auth,
     provider: ProviderId,
+    usage_account_id: Option<String>,
 }
 
+#[derive(Clone)]
 pub enum Auth {
     ApiKey { file: SecretFile },
     OauthBearer { file: SecretFile },
     OauthManaged,
 }
 
+#[derive(Clone)]
 struct GroupConfig {
     hosts: Vec<HostName>,
     members: BTreeMap<CredentialId, Vec<String>>,
@@ -46,12 +53,15 @@ struct GroupConfig {
     protocol: Protocol,
 }
 
+#[derive(Clone)]
 struct ProviderConfig {
     claude_preset: bool,
+    codex_preset: bool,
     endpoints: BTreeMap<Protocol, Endpoint>,
     zai_preset: bool,
 }
 
+#[derive(Clone)]
 struct Endpoint {
     url: String,
 }
@@ -63,11 +73,28 @@ enum Protocol {
 }
 
 impl Protocol {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Anthropic => "anthropic",
+            Self::Openai => "openai",
+        }
+    }
+
     fn parse(value: &str) -> Option<Self> {
         match value {
             "anthropic" => Some(Self::Anthropic),
             "openai" => Some(Self::Openai),
             _ => None,
+        }
+    }
+}
+
+impl Auth {
+    const fn kind(&self) -> CredentialAuthKind {
+        match self {
+            Self::ApiKey { .. } => CredentialAuthKind::ApiKey,
+            Self::OauthBearer { .. } => CredentialAuthKind::OauthBearer,
+            Self::OauthManaged => CredentialAuthKind::OauthManaged,
         }
     }
 }
@@ -88,6 +115,8 @@ pub struct RawConfig {
     pub providers: BTreeMap<String, RawProvider>,
     pub state_dir: PathBuf,
     #[serde(default)]
+    pub usage: RawUsage,
+    #[serde(default)]
     pub unknown_hosts: Option<String>,
 }
 
@@ -101,6 +130,8 @@ pub struct RawClient {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawCredential {
+    #[serde(default)]
+    pub account_id: Option<String>,
     pub auth: RawAuth,
     pub provider: String,
 }
@@ -135,6 +166,49 @@ pub struct RawProvider {
     pub endpoints: BTreeMap<String, String>,
     #[serde(default)]
     pub preset: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawUsage {
+    #[serde(default)]
+    pub credentials: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CredentialAuthKind {
+    ApiKey,
+    OauthBearer,
+    OauthManaged,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct UsageCredential {
+    pub account_id: Option<String>,
+    pub auth: CredentialAuthKind,
+    pub client: Option<ClientId>,
+    pub explicit_usage_selection: bool,
+    pub group: Option<GroupId>,
+    pub id: CredentialId,
+    pub provider: ProviderId,
+    pub provider_kind: UsageProviderKind,
+    pub routes: Vec<UsageRoute>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UsageProviderKind {
+    Claude,
+    Codex,
+    Zai,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct UsageRoute {
+    pub client: ClientId,
+    pub group: GroupId,
+    pub models: Vec<String>,
+    pub primary: bool,
+    pub protocol: &'static str,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -189,6 +263,132 @@ impl Config {
         self.clients
             .iter()
             .map(|(client, config)| (client, &config.token_file))
+    }
+
+    /// Projects every credential the quota collector may read, with its routing eligibility.
+    ///
+    /// Explicit out-of-band credentials such as Codex have no protocol or model eligibility.
+    #[must_use]
+    pub fn usage_credentials(&self) -> Vec<UsageCredential> {
+        self.project_usage_credentials(true)
+    }
+
+    /// Collector metadata excludes report-only routes and model lists.
+    #[must_use]
+    pub fn usage_collector_credentials(&self) -> Vec<UsageCredential> {
+        self.project_usage_credentials(false)
+    }
+
+    fn project_usage_credentials(&self, include_routes: bool) -> Vec<UsageCredential> {
+        let mut selected = self.usage_credentials.clone();
+        selected.extend(
+            self.clients
+                .values()
+                .flat_map(|client| &client.grants)
+                .filter_map(|group| self.groups.get(group))
+                .flat_map(|group| group.members.keys().cloned()),
+        );
+        selected
+            .into_iter()
+            .filter_map(|id| {
+                let credential = self.credentials.get(&id)?;
+                let provider = self.providers.get(&credential.provider)?;
+                let provider_kind = if provider.claude_preset {
+                    UsageProviderKind::Claude
+                } else if provider.zai_preset {
+                    UsageProviderKind::Zai
+                } else if provider.codex_preset {
+                    UsageProviderKind::Codex
+                } else {
+                    return None;
+                };
+                let (client, group) = self.sole_usage_route(&id);
+                let routes = if include_routes {
+                    self.usage_routes(&id)
+                } else {
+                    Vec::new()
+                };
+                Some(UsageCredential {
+                    account_id: credential.usage_account_id.clone(),
+                    auth: credential.auth.kind(),
+                    client,
+                    explicit_usage_selection: self.usage_credentials.contains(&id),
+                    group,
+                    id: id.clone(),
+                    provider: credential.provider.clone(),
+                    provider_kind,
+                    routes,
+                })
+            })
+            .collect()
+    }
+
+    fn sole_usage_route(&self, credential: &CredentialId) -> (Option<ClientId>, Option<GroupId>) {
+        let mut seen = BTreeSet::new();
+        let mut routes = self
+            .clients
+            .iter()
+            .flat_map(|(client, config)| {
+                config.grants.iter().filter_map(move |group| {
+                    self.groups
+                        .get(group)?
+                        .members
+                        .contains_key(credential)
+                        .then_some((client, group))
+                })
+            })
+            .filter(|route| seen.insert(*route));
+        match (routes.next(), routes.next()) {
+            (Some((client, group)), None) => (Some(client.clone()), Some(group.clone())),
+            _ => (None, None),
+        }
+    }
+
+    /// Groups reachable by at least one granted client.
+    #[must_use]
+    pub fn usage_groups(&self) -> BTreeSet<GroupId> {
+        self.clients
+            .values()
+            .flat_map(|client| &client.grants)
+            .filter(|group| self.groups.contains_key(group))
+            .cloned()
+            .collect()
+    }
+
+    fn usage_routes(&self, credential: &CredentialId) -> Vec<UsageRoute> {
+        self.clients
+            .iter()
+            .flat_map(|(client, config)| {
+                config
+                    .grants
+                    .iter()
+                    .map(move |group| (client.clone(), group.clone()))
+            })
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .filter_map(|(client, group)| {
+                let config = self.groups.get(&group)?;
+                Some(UsageRoute {
+                    client,
+                    group,
+                    models: config.members.get(credential)?.clone(),
+                    primary: config.primary == *credential,
+                    protocol: config.protocol.as_str(),
+                })
+            })
+            .collect()
+    }
+    #[must_use]
+    pub fn credential_provider(&self, credential: &CredentialId) -> Option<&ProviderId> {
+        self.credentials
+            .get(credential)
+            .map(|entry| &entry.provider)
+    }
+
+    /// Only the daemon's collector calls this; the read-only CLI never loads it.
+    #[must_use]
+    pub fn usage_auth(&self, credential: &CredentialId) -> Option<&Auth> {
+        self.credentials.get(credential).map(|config| &config.auth)
     }
 
     pub(crate) fn client_grants(&self) -> impl Iterator<Item = (&ClientId, &[GroupId])> {
@@ -349,6 +549,7 @@ impl TryFrom<RawConfig> for Config {
 
     fn try_from(raw: RawConfig) -> Result<Self, Self::Error> {
         let mut errors = Vec::new();
+        validate_usage_projection(&raw, &mut errors);
         let listen = match raw.listen.parse::<SocketAddr>() {
             Ok(address) if address.ip().is_loopback() => Some(address),
             Ok(address) => {
@@ -385,6 +586,7 @@ impl TryFrom<RawConfig> for Config {
         let credentials = parse_credentials(&raw, &mut errors);
         let groups = parse_groups(&raw, &mut errors);
         let clients = parse_clients(&raw, &mut errors);
+        let usage_credentials = parse_usage(&raw, &mut errors);
         validate_references(&raw, &providers, &mut errors);
 
         match (listen, state_dir, unknown_hosts) {
@@ -396,8 +598,37 @@ impl TryFrom<RawConfig> for Config {
                 providers,
                 state_dir,
                 unknown_hosts,
+                usage_credentials,
             }),
             _ => Err(ConfigErrors(errors)),
+        }
+    }
+}
+
+fn validate_usage_projection(raw: &RawConfig, errors: &mut Vec<ConfigError>) {
+    // One client grant per group contributes one route for every group member;
+    // the report clones that member's model list into each route.
+    let mut routes = 0usize;
+    let mut models = 0usize;
+    let mut credentials = raw.usage.credentials.iter().collect::<BTreeSet<_>>();
+    for client in raw.clients.values() {
+        for group in client.grants.iter().collect::<BTreeSet<_>>() {
+            if let Some(group) = raw.groups.get(group) {
+                routes = routes.saturating_add(group.members.len());
+                for (credential, member) in &group.members {
+                    credentials.insert(credential);
+                    models = models.saturating_add(member.models.len());
+                }
+            }
+        }
+    }
+    for (dimension, count, limit) in [
+        ("credentials", credentials.len(), 64),
+        ("routes", routes, 256),
+        ("cloned model strings", models, 8_192),
+    ] {
+        if count > limit {
+            errors.push(ConfigError::UsageProjectionLimit { dimension, limit });
         }
     }
 }
@@ -447,6 +678,19 @@ fn parse_clients(
     clients
 }
 
+fn parse_usage(raw: &RawConfig, errors: &mut Vec<ConfigError>) -> BTreeSet<CredentialId> {
+    let mut selected = BTreeSet::new();
+    for credential in &raw.usage.credentials {
+        match CredentialId::try_from(credential.as_str()) {
+            Ok(id) => {
+                selected.insert(id);
+            }
+            Err(error) => errors.push(invalid_name("usage credential", error)),
+        }
+    }
+    selected
+}
+
 fn parse_credentials(
     raw: &RawConfig,
     errors: &mut Vec<ConfigError>,
@@ -459,6 +703,15 @@ fn parse_credentials(
         let provider = ProviderId::try_from(raw_credential.provider.as_str())
             .map_err(|error| errors.push(invalid_name("provider", error)))
             .ok();
+        let usage_account_id = raw_credential.account_id.clone();
+        if usage_account_id
+            .as_ref()
+            .is_some_and(|account| account.is_empty() || account.len() > 128)
+        {
+            errors.push(ConfigError::InvalidUsageAccount {
+                credential: raw_id.clone(),
+            });
+        }
         let auth = match &raw_credential.auth {
             RawAuth::OauthManaged {} => Some(Auth::OauthManaged),
             RawAuth::ApiKey { file } | RawAuth::OauthBearer { file } => {
@@ -477,7 +730,14 @@ fn parse_credentials(
             }
         };
         if let (Some(id), Some(provider), Some(auth)) = (id, provider, auth) {
-            credentials.insert(id, CredentialConfig { auth, provider });
+            credentials.insert(
+                id,
+                CredentialConfig {
+                    auth,
+                    provider,
+                    usage_account_id,
+                },
+            );
         }
     }
     credentials
@@ -603,14 +863,15 @@ fn parse_providers(
                     "https://api.z.ai/api/coding/paas/v4".to_owned(),
                 );
             }
+            Some("codex") | None => {}
             Some(preset) => errors.push(ConfigError::UnknownPreset {
                 provider: raw_id.clone(),
                 preset: preset.to_owned(),
             }),
-            None => {}
         }
         endpoints.extend(raw_provider.endpoints.clone());
-        if endpoints.is_empty() {
+        let codex_preset = raw_provider.preset.as_deref() == Some("codex");
+        if endpoints.is_empty() && !codex_preset {
             errors.push(ConfigError::EmptyProviderEndpoints {
                 provider: raw_id.clone(),
             });
@@ -639,6 +900,7 @@ fn parse_providers(
                 id,
                 ProviderConfig {
                     claude_preset: raw_provider.preset.as_deref() == Some("claude"),
+                    codex_preset,
                     endpoints: resolved,
                     zai_preset: raw_provider.preset.as_deref() == Some("zai"),
                 },
@@ -689,6 +951,36 @@ fn validate_references(
     providers: &BTreeMap<ProviderId, ProviderConfig>,
     errors: &mut Vec<ConfigError>,
 ) {
+    for credential in &raw.usage.credentials {
+        let Some(raw_credential) = raw.credentials.get(credential) else {
+            errors.push(ConfigError::UnknownUsageCredential {
+                credential: credential.clone(),
+            });
+            continue;
+        };
+        let Ok(provider_id) = ProviderId::try_from(raw_credential.provider.as_str()) else {
+            continue;
+        };
+        let Some(provider) = providers.get(&provider_id) else {
+            continue;
+        };
+        let codex = provider.codex_preset;
+        let supported = match raw_credential.auth {
+            RawAuth::OauthManaged {} => provider.claude_preset,
+            RawAuth::OauthBearer { .. } => provider.claude_preset || codex,
+            RawAuth::ApiKey { .. } => provider.zai_preset,
+        };
+        if !supported
+            || (codex
+                && (raw_credential.account_id.as_deref().is_none()
+                    || !matches!(raw_credential.auth, RawAuth::OauthBearer { .. })))
+            || (!codex && raw_credential.account_id.is_some())
+        {
+            errors.push(ConfigError::UnsupportedUsageCredential {
+                credential: credential.clone(),
+            });
+        }
+    }
     for (credential_id, credential) in &raw.credentials {
         if !raw.providers.contains_key(&credential.provider) {
             errors.push(ConfigError::UnknownCredentialProvider {
@@ -718,14 +1010,20 @@ fn validate_references(
                 ProviderId::try_from(credential.provider.as_str()).ok(),
                 Protocol::parse(&group.protocol),
             ) && let Some(provider) = providers.get(&provider_id)
-                && !provider.endpoints.contains_key(&protocol)
             {
-                errors.push(ConfigError::MissingProviderProtocol {
-                    group: group_id.clone(),
-                    credential: credential_id.clone(),
-                    provider: credential.provider.clone(),
-                    protocol: group.protocol.clone(),
-                });
+                if provider.codex_preset {
+                    errors.push(ConfigError::UsageOnlyCredentialInGroup {
+                        credential: credential_id.clone(),
+                        group: group_id.clone(),
+                    });
+                } else if !provider.endpoints.contains_key(&protocol) {
+                    errors.push(ConfigError::MissingProviderProtocol {
+                        group: group_id.clone(),
+                        credential: credential_id.clone(),
+                        provider: credential.provider.clone(),
+                        protocol: group.protocol.clone(),
+                    });
+                }
             }
         }
     }
@@ -1047,6 +1345,118 @@ mod tests {
     }
 
     #[test]
+    fn explicit_usage_credentials_are_inference_inert() {
+        let mut value = valid_raw();
+        value["credentials"]["codex"] = json!({
+            "account_id": "fake-chatgpt-account",
+            "auth": {"type": "oauth_bearer", "file": "/run/airlock/codex"},
+            "provider": "codex"
+        });
+        value["providers"]["codex"] = json!({"preset": "codex"});
+        value["usage"] = json!({"credentials": ["codex"]});
+        let config = converted(value).expect("explicit Codex usage config");
+        assert_eq!(
+            config
+                .granted_credentials()
+                .find_map(|(id, _)| (id.as_ref() == "codex").then_some(())),
+            None
+        );
+        assert_eq!(
+            config
+                .route(
+                    &GroupId::try_from("anthropic").expect("group ID"),
+                    Some("codex")
+                )
+                .map(|(id, _)| id.as_ref()),
+            Some("claude")
+        );
+        let usage = config
+            .usage_credentials()
+            .into_iter()
+            .find(|credential| credential.id.as_ref() == "codex")
+            .expect("Codex usage credential");
+        assert!(usage.explicit_usage_selection);
+        assert_eq!(usage.account_id.as_deref(), Some("fake-chatgpt-account"));
+        assert_eq!(usage.routes.len(), 0);
+        assert!(usage.group.is_none());
+    }
+
+    #[test]
+    fn usage_projection_preserves_all_grants_and_primary_ownership() {
+        let mut value = valid_raw();
+        value["groups"]["other"] = json!({
+            "intercept": ["other.example"],
+            "members": {"zai": {"models": []}},
+            "primary": "zai", "protocol": "anthropic"
+        });
+        value["clients"]["harness"]["grants"] = json!(["anthropic", "other"]);
+        value["clients"]["second"] = json!({
+            "grants": ["anthropic"], "token_file": "/run/airlock/second"
+        });
+        let config = converted(value).expect("reused credential config");
+        let credentials = config.usage_credentials();
+        assert_eq!(credentials.len(), 2, "one collection per credential");
+        let zai = credentials
+            .iter()
+            .find(|item| item.id.as_ref() == "zai")
+            .expect("zai");
+        assert_eq!(zai.routes.len(), 3);
+        assert!(zai.client.is_none(), "multiple routes have no sole owner");
+        assert!(zai.routes.iter().any(|route| route.primary
+            && route.models.is_empty()
+            && route.group.as_ref() == "other"));
+        assert_eq!(zai.routes.iter().filter(|route| route.primary).count(), 1);
+    }
+
+    #[test]
+    fn explicit_usage_selection_is_provider_and_shape_checked() {
+        let mut missing_account = valid_raw();
+        missing_account["credentials"]["codex"] = json!({
+            "auth": {"type": "oauth_bearer", "file": "/run/airlock/codex"},
+            "provider": "codex"
+        });
+        missing_account["providers"]["codex"] = json!({"preset": "codex"});
+        missing_account["usage"] = json!({"credentials": ["codex"]});
+        has_error(missing_account, |error| {
+            matches!(error, ConfigError::UnsupportedUsageCredential { .. })
+        });
+
+        let mut wrong_provider = valid_raw();
+        wrong_provider["usage"] = json!({"credentials": ["claude"]});
+        wrong_provider["credentials"]["claude"]["account_id"] = json!("fake-account");
+        has_error(wrong_provider, |error| {
+            matches!(error, ConfigError::UnsupportedUsageCredential { .. })
+        });
+
+        let mut wrong_auth = valid_raw();
+        wrong_auth["usage"] = json!({"credentials": ["claude"]});
+        wrong_auth["credentials"]["claude"]["auth"] =
+            json!({"type": "api_key", "file": "/run/airlock/claude"});
+        has_error(wrong_auth, |error| {
+            matches!(error, ConfigError::UnsupportedUsageCredential { .. })
+        });
+
+        let mut unknown = valid_raw();
+        unknown["usage"] = json!({"credentials": ["missing"]});
+        has_error(unknown, |error| {
+            matches!(error, ConfigError::UnknownUsageCredential { .. })
+        });
+
+        let mut routed = valid_raw();
+        routed["credentials"]["codex"] = json!({
+            "account_id": "fake-account",
+            "auth": {"type": "oauth_bearer", "file": "/run/airlock/codex"},
+            "provider": "codex"
+        });
+        routed["providers"]["codex"] =
+            json!({"preset": "codex", "endpoints": {"anthropic": "https://example.invalid"}});
+        routed["groups"]["anthropic"]["members"]["codex"] = json!({"models": ["fake-codex-model"]});
+        has_error(routed, |error| {
+            matches!(error, ConfigError::UsageOnlyCredentialInGroup { .. })
+        });
+    }
+
+    #[test]
     fn unknown_fields_are_rejected() {
         let mut value = valid_raw();
         value["groups"]["anthropic"]["unexpected"] = json!(true);
@@ -1063,5 +1473,35 @@ mod tests {
             value["credentials"]["claude"]["auth"] = auth;
             assert!(serde_json::from_value::<RawConfig>(value).is_err());
         }
+    }
+    #[test]
+    fn usage_projection_rejects_amplification_before_cloning() {
+        let mut value = valid_raw();
+        let clients = (0..300)
+            .map(|index| {
+                (
+                    format!("fake-client-{index}"),
+                    json!({"grants":["anthropic"],"token_file":"/run/fake-unused"}),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>();
+        value["clients"] = Value::Object(clients);
+        value["groups"]["anthropic"]["members"]["zai"]["models"] = json!(
+            (0..1000)
+                .map(|i| format!("fake-model-{i}"))
+                .collect::<Vec<_>>()
+        );
+        let bytes = serde_json::to_vec(&value).expect("config bytes").len();
+        assert_eq!(bytes, 39_755);
+        has_error(value, |error| {
+            matches!(error, ConfigError::UsageProjectionLimit { .. })
+        });
+        let config = converted(valid_raw()).expect("small config");
+        assert!(
+            config
+                .usage_collector_credentials()
+                .iter()
+                .all(|credential| credential.routes.is_empty())
+        );
     }
 }

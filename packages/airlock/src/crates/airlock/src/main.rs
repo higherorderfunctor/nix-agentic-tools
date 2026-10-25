@@ -2,6 +2,7 @@ use std::{
     env,
     ffi::OsString,
     fs, io,
+    num::NonZeroU64,
     path::{Path, PathBuf},
     process::ExitCode,
     sync::Arc,
@@ -15,6 +16,9 @@ use clap::{Parser, Subcommand};
 use rustls::RootCertStore;
 use tokio::signal::unix::{SignalKind, signal};
 use tracing_subscriber::EnvFilter;
+
+mod collector;
+mod report;
 
 #[derive(Debug, Parser)]
 #[command(version, about = "airlock credential gateway")]
@@ -32,6 +36,18 @@ enum Command {
     Serve {
         #[arg(long)]
         config: PathBuf,
+    },
+    Usage {
+        #[arg(long)]
+        config: PathBuf,
+        #[arg(long, default_value_t = 3600)]
+        bucket_seconds: u64,
+        #[arg(long, default_value_t = report::default_history_limit())]
+        history_limit: u64,
+        #[arg(long)]
+        since_unix: Option<i64>,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -53,6 +69,10 @@ enum Error {
     SystemTimeBeforeEpoch,
     #[error("gateway retained storage after serving stopped")]
     StorageOwnership,
+    #[error("more than 64 usage credentials are configured")]
+    UsageCredentialLimit,
+    #[error("invalid usage report options: {0}")]
+    UsageOptions(&'static str),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -139,14 +159,45 @@ fn now_unix() -> Result<i64, Error> {
 
 async fn run() -> Result<(), Error> {
     let cli = Cli::parse();
-    let (Command::CheckConfig { config } | Command::Serve { config }) = &cli.command;
+    let config = match &cli.command {
+        Command::CheckConfig { config }
+        | Command::Serve { config }
+        | Command::Usage { config, .. } => config,
+    };
     let source = fs::read_to_string(config)?;
     let raw = serde_json::from_str::<RawConfig>(&source)?;
     // check-config validates paths without loading secrets; secret files may not exist yet.
     let config = Config::try_from(raw)?;
     match cli.command {
         Command::CheckConfig { .. } => println!("ok"),
+        Command::Usage {
+            bucket_seconds,
+            history_limit,
+            since_unix,
+            json,
+            ..
+        } => {
+            let now = now_unix()?;
+            let options = report::Options {
+                bucket_seconds: NonZeroU64::new(bucket_seconds)
+                    .ok_or(Error::UsageOptions("bucket-seconds must be positive"))?,
+                history_limit,
+                since_unix: since_unix.unwrap_or(now.saturating_sub(7 * 24 * 3600).max(1)),
+            };
+            options.validate(now).map_err(Error::UsageOptions)?;
+            let mut reader =
+                airlock_core::storage::ReadOnlyStorage::open(config.state_dir()).await?;
+            let value = report::build(&config, &mut reader, &options, now).await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            } else {
+                println!("{}", report::human(&value));
+            }
+        }
         Command::Serve { .. } => {
+            if config.usage_collector_credentials().len() > collector::MAX_CREDENTIALS {
+                return Err(Error::UsageCredentialLimit);
+            }
             tracing_subscriber::fmt()
                 .json()
                 .with_env_filter(
@@ -162,14 +213,16 @@ async fn run() -> Result<(), Error> {
                 SqliteStorage::open(config.state_dir(), config.storage_identities(now_unix()?))
                     .await?,
             );
+            let roots = upstream_roots();
             let gateway = Gateway::bind_with_storage_and_usage(
-                config,
+                config.clone(),
                 &ca_directory,
-                upstream_roots(),
+                roots.clone(),
                 Some(Arc::clone(&storage)),
                 Some(storage.clone()),
             )
             .await?;
+            let collector = tokio::spawn(collector::run(Arc::new(config), storage.clone(), roots));
             let serve_result = gateway
                 .serve(async move {
                     tokio::select! {
@@ -178,6 +231,8 @@ async fn run() -> Result<(), Error> {
                     }
                 })
                 .await;
+            collector.abort();
+            let _ = collector.await;
             Arc::try_unwrap(storage)
                 .map_err(|_| Error::StorageOwnership)?
                 .close()

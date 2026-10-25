@@ -1,6 +1,6 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-24 — usage follows each runtime's selected proxy,
+> **Last verified:** 2026-10-25 — usage follows each runtime's selected proxy,
 > with direct reads when management metadata is absent; review role overrides
 > migrate to the single Review step, with no compatibility keys shipped.
 >
@@ -188,14 +188,22 @@ helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
 direct read. `zai-usage claude|codex` selects the route whose GLM pool it reads;
 this repository attaches it to both runtimes as a usage technique.
 
-Usage follows generic `ai.<runtime>.proxy` selection. A selected local instance
-with a file management-key reference supplies metadata automatically. With no
-proxy or no management metadata, helpers use their direct login or
-`ZAI_API_KEY_FILE`. Once metadata is supplied, missing accounts, ambiguous z.ai
-keys, malformed responses and request failures are errors; stale local logins
-are not consulted. The backend never drains the usage queue. z.ai discovery
-reads secret-bearing configuration in memory, matches hostname `api.z.ai` and
-requires one distinct key across both supported transports.
+Usage follows generic `ai.<runtime>.proxy` selection. A selected CPA instance
+with a file management-key reference supplies metadata automatically. A selected
+airlock instance supplies its selected client and a config-path helper using
+`ai.services` runtime directory rules, including declared directory overrides.
+The usage helper reads that service's private rendered `config.json` through
+`airlock usage --json` and requires schema version 1 and complete, known global
+quota for the selected client's provider route. It reports fresh and exhausted
+quota in the existing usage command shape. Invalid, incomplete or stale airlock
+reports fail without consulting stale direct logins. A separately managed
+service may set `DELEGATE_USAGE_AIRLOCK_<RUNTIME>_CONFIG`. With no proxy or no
+management metadata, helpers use their direct login or `ZAI_API_KEY_FILE`. Once
+metadata is supplied, missing accounts, ambiguous z.ai keys, malformed responses
+and request failures are errors; stale local logins are not consulted. The
+backend never drains the usage queue. z.ai discovery reads secret-bearing
+configuration in memory, matches hostname `api.z.ai` and requires one distinct
+key across both supported transports.
 
 When a host manages the proxy and a project delivers routing, add the matching
 runtime pairs in `devenv.local.nix` (use `ai.codex.environmentVariables` for

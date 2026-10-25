@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT label, value, unit FROM quota_metrics\n        WHERE snapshot_id = ?\n        ORDER BY ordinal\n        ",
+  "query": "\n        SELECT label, value, unit FROM quota_metrics\n        WHERE snapshot_id = ?\n        ORDER BY ordinal LIMIT ?\n        ",
   "describe": {
     "columns": [
       {
@@ -20,9 +20,9 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 2
     },
     "nullable": [false, false, false]
   },
-  "hash": "78c14db4aa9c053c319f6e0b05a871c5488e4f19827b2d7fbb06b0fc0e7bf26f"
+  "hash": "0258becbf32a2cd37b28acc01fa777600387cb595e353514a4855c99b58178af"
 }

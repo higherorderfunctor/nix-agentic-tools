@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # Shared constants come from the prepended usage-cpa.sh.
+if usage_airlock claude; then exit 0; fi
 if usage_cpa claude; then exit 0; fi
 
 delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json")

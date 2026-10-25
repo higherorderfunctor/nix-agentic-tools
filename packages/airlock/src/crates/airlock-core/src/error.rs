@@ -40,10 +40,19 @@ pub enum SecretError {
         path: PathBuf,
         source: std::io::Error,
     },
+    #[error("secret file {path} exceeds the {limit}-byte bound")]
+    TooLarge { limit: usize, path: PathBuf },
+    #[error("secret file {path} is not a regular file")]
+    UnsupportedType { path: PathBuf },
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    #[error("usage route projection exceeds {limit} {dimension}")]
+    UsageProjectionLimit {
+        dimension: &'static str,
+        limit: usize,
+    },
     #[error("model {model:?} in group {group:?} is owned by both {first:?} and {second:?}")]
     DuplicateModel {
         first: String,
@@ -84,8 +93,12 @@ pub enum ConfigError {
         protocol: String,
         provider: String,
     },
+    #[error("group {group:?} cannot route through usage-only Codex credential {credential:?}")]
+    UsageOnlyCredentialInGroup { credential: String, group: String },
     #[error("unknown_hosts must be \"tunnel\" or \"deny\", not {value:?}")]
     InvalidUnknownHostPolicy { value: String },
+    #[error("usage credential {credential:?} has an invalid account ID")]
+    InvalidUsageAccount { credential: String },
     #[error("listen address {address} is not loopback")]
     NonLoopbackListen { address: SocketAddr },
     #[error("group {group:?} non-primary credential {credential:?} cannot use managed OAuth")]
@@ -107,6 +120,12 @@ pub enum ConfigError {
     UnknownGrantGroup { client: String, group: String },
     #[error("group {group:?} references unknown credential {credential:?}")]
     UnknownGroupCredential { credential: String, group: String },
+    #[error("usage selection references unknown credential {credential:?}")]
+    UnknownUsageCredential { credential: String },
+    #[error(
+        "usage credential {credential:?} requires a matching provider preset and authentication mode"
+    )]
+    UnsupportedUsageCredential { credential: String },
     #[error("provider {provider:?} has unknown preset {preset:?}")]
     UnknownPreset { preset: String, provider: String },
     #[error("group {group:?} uses unsupported protocol {protocol:?}")]

@@ -15,8 +15,9 @@ use airlock_core::{
     config::Config,
     ids::{ClientId, CredentialId, GroupId, HostName, ProviderId},
     storage::{
-        OauthPairRecord, OauthPairReplacement, OauthPairRetirement, SqliteStorage, Storage,
-        TokenMaterial,
+        OauthPairRecord, OauthPairReplacement, OauthPairRetirement, ProviderSnapshot,
+        ResponseHeaderWindow, ResponseWindowLabel, ResponseWindowStatus, SnapshotFetchStatus,
+        SnapshotSource, SnapshotSurface, SqliteStorage, Storage, TokenMaterial,
     },
     target::ConnectTarget,
 };
@@ -114,6 +115,9 @@ struct QuotaContext {
     group: GroupId,
     primary_credential: CredentialId,
     primary: bool,
+    provider: Option<ProviderId>,
+    quota_sender: Option<mpsc::Sender<ProviderSnapshot>>,
+    storage: Option<Arc<SqliteStorage>>,
 }
 
 type BodyError = Box<dyn std::error::Error + Send + Sync>;
@@ -407,6 +411,8 @@ pub(crate) struct Interceptor {
     authority: Authority,
     provider: Arc<CryptoProvider>,
     quota_cache: QuotaCache,
+    quota_sender: Option<mpsc::Sender<ProviderSnapshot>>,
+    quota_worker: Option<tokio::task::JoinHandle<()>>,
     oauth_locks: OauthLocks,
     storage: Option<Arc<SqliteStorage>>,
     upstream: Arc<ClientConfig>,
@@ -952,14 +958,30 @@ impl Interceptor {
             .with_safe_default_protocol_versions()?
             .with_root_certificates(upstream_roots)
             .with_no_client_auth();
+        let (quota_sender, quota_worker) = storage.as_ref().map_or((None, None), |storage| {
+            let (sender, mut receiver) = mpsc::channel::<ProviderSnapshot>(32);
+            let storage = Arc::clone(storage);
+            let worker = tokio::spawn(async move {
+                while let Some(snapshot) = receiver.recv().await {
+                    storage.append_provider_snapshot_observed(snapshot).await;
+                }
+            });
+            (Some(sender), Some(worker))
+        });
         Ok(Self {
             authority: Authority::open(ca_directory, provider.clone())?,
             provider,
             quota_cache: Arc::new(Mutex::new(BTreeMap::new())),
+            quota_sender,
+            quota_worker,
             oauth_locks: tokio::sync::Mutex::new(BTreeMap::new()),
             storage,
             upstream: Arc::new(upstream),
         })
+    }
+
+    pub(crate) fn take_quota_worker(&mut self) -> Option<tokio::task::JoinHandle<()>> {
+        self.quota_worker.take()
     }
 
     #[expect(
@@ -1342,6 +1364,55 @@ fn captured_quota_headers(
     captured
 }
 
+fn header_window(
+    headers: &hyper::HeaderMap<HeaderValue>,
+    prefix: &'static str,
+    label: ResponseWindowLabel,
+    status: Option<ResponseWindowStatus>,
+) -> Option<ResponseHeaderWindow> {
+    let utilization = headers
+        .get(format!("anthropic-ratelimit-unified-{prefix}-utilization"))?
+        .to_str()
+        .ok()?
+        .parse::<f64>()
+        .ok()?;
+    if !utilization.is_finite() || !(0.0..=100.0).contains(&utilization) {
+        return None;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let utilization_milli = (utilization * 100_000.0).round() as u32;
+    let reset_at_unix = headers
+        .get(format!("anthropic-ratelimit-unified-{prefix}-reset"))
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<i64>().ok())
+        .filter(|value| *value > 0);
+    Some(ResponseHeaderWindow {
+        label,
+        reset_at_unix,
+        status,
+        utilization_milli,
+    })
+}
+
+fn typed_header_windows(headers: &hyper::HeaderMap<HeaderValue>) -> Vec<ResponseHeaderWindow> {
+    let status = headers
+        .get("anthropic-ratelimit-unified-status")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| match value {
+            "allowed" => Some(ResponseWindowStatus::Allowed),
+            "allowed_warning" => Some(ResponseWindowStatus::AllowedWarning),
+            "rejected" => Some(ResponseWindowStatus::Rejected),
+            _ => None,
+        });
+    [
+        header_window(headers, "5h", ResponseWindowLabel::FiveHour, status),
+        header_window(headers, "7d", ResponseWindowLabel::SevenDay, status),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
 impl QuotaContext {
     fn key(&self, credential: &CredentialId) -> QuotaCacheKey {
         QuotaCacheKey {
@@ -1366,6 +1437,35 @@ impl QuotaContext {
             .is_none_or(|existing| snapshot.replaces(existing))
         {
             cache.insert(key, snapshot);
+        }
+        drop(cache);
+        if self.primary
+            && let (Some(sender), Some(provider), Ok(now)) =
+                (&self.quota_sender, &self.provider, unix_now())
+        {
+            let observation = ProviderSnapshot {
+                account_id: self.credential.as_ref().to_owned(),
+                client: Some(self.client.clone()),
+                claude_limits: Vec::new(),
+                credential: self.credential.clone(),
+                credits: Vec::new(),
+                fetched_at_unix: now,
+                fetch_status: SnapshotFetchStatus::Success,
+                gap_reason: None,
+                group: Some(self.group.clone()),
+                header_windows: typed_header_windows(headers),
+                metrics: Vec::new(),
+                pools: Vec::new(),
+                provider: provider.clone(),
+                source: SnapshotSource::ResponseHeaders,
+                surface: SnapshotSurface::ResponseHeaders,
+            };
+            if sender.try_send(observation).is_err() {
+                if let Some(storage) = &self.storage {
+                    storage.record_provider_snapshot_loss();
+                }
+                tracing::warn!("primary header observation queue unavailable");
+            }
         }
     }
 
@@ -1409,6 +1509,9 @@ fn quota_context(
         group: state.route.group.clone(),
         primary_credential: primary_credential.clone(),
         primary,
+        provider: state.route.config.credential_provider(credential).cloned(),
+        quota_sender: state.interceptor.quota_sender.clone(),
+        storage: state.interceptor.storage.clone(),
     }
 }
 
@@ -2259,6 +2362,9 @@ fn strip_hop_by_hop(headers: &mut hyper::HeaderMap, upgrading: bool) {
 mod tests {
     use super::*;
     use airlock_core::secret::SecretFile;
+    use airlock_core::storage::{ReadOnlyStorage, StorageIdentities};
+    use std::collections::BTreeSet;
+    use std::os::unix::fs::PermissionsExt;
 
     #[tokio::test]
     async fn stalled_primary_oauth_exchange_does_not_block_another_primary() {
@@ -2338,6 +2444,9 @@ mod tests {
             group: GroupId::try_from(group).expect("group"),
             primary_credential: CredentialId::try_from(primary_credential).expect("primary"),
             primary,
+            provider: None,
+            quota_sender: None,
+            storage: None,
         }
     }
 
@@ -2350,6 +2459,94 @@ mod tests {
             );
         }
         headers
+    }
+
+    #[test]
+    fn only_real_primary_responses_create_typed_durable_observations() {
+        let cache: QuotaCache = Arc::new(Mutex::new(BTreeMap::new()));
+        let (sender, mut receiver) = mpsc::channel(2);
+        let mut primary = quota_context(&cache, "harness", "claude", "anthropic", "claude", true);
+        primary.provider = Some(ProviderId::try_from("claude").expect("provider"));
+        primary.quota_sender = Some(sender.clone());
+        primary.observe(&quota_headers(&[
+            ("anthropic-ratelimit-unified-5h-utilization", "0.42"),
+            ("anthropic-ratelimit-unified-status", "allowed"),
+            (
+                "anthropic-ratelimit-unified-reset",
+                "never persist this raw field",
+            ),
+        ]));
+        let observed = receiver.try_recv().expect("primary observation");
+        assert_eq!(observed.source, SnapshotSource::ResponseHeaders);
+        assert_eq!(observed.header_windows.len(), 1);
+        assert_eq!(observed.header_windows[0].utilization_milli, 42_000);
+        assert_eq!(observed.metrics.len(), 0);
+
+        let mut non_primary = quota_context(&cache, "harness", "zai", "anthropic", "claude", false);
+        non_primary.provider = Some(ProviderId::try_from("zai").expect("provider"));
+        non_primary.quota_sender = Some(sender);
+        let mut displayed = quota_headers(&[("anthropic-ratelimit-unified-status", "rejected")]);
+        non_primary.apply(StatusCode::OK, &mut displayed);
+        assert_eq!(
+            displayed["anthropic-ratelimit-unified-5h-utilization"],
+            "0.42"
+        );
+        assert!(
+            receiver.try_recv().is_err(),
+            "displayed headers are not observations"
+        );
+    }
+
+    #[tokio::test]
+    async fn full_primary_observation_queue_records_loss_on_recovery() {
+        let directory = tempfile::tempdir().expect("private scratch");
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("private state directory");
+        let client = ClientId::try_from("harness").expect("client");
+        let credential = CredentialId::try_from("claude").expect("credential");
+        let group = GroupId::try_from("anthropic").expect("group");
+        let provider = ProviderId::try_from("claude").expect("provider");
+        let identities = StorageIdentities {
+            clients: BTreeSet::from([client]),
+            credentials: BTreeMap::from([(credential.clone(), provider.clone())]),
+            group_members: BTreeSet::from([(group.clone(), credential.clone())]),
+            groups: BTreeSet::from([group]),
+            inserted_at_unix: 1,
+            providers: BTreeSet::from([provider.clone()]),
+        };
+        let storage = Arc::new(
+            SqliteStorage::open(directory.path(), identities)
+                .await
+                .expect("private storage"),
+        );
+        let cache: QuotaCache = Arc::new(Mutex::new(BTreeMap::new()));
+        let (sender, mut receiver) = mpsc::channel(1);
+        let mut primary = quota_context(&cache, "harness", "claude", "anthropic", "claude", true);
+        primary.provider = Some(provider);
+        primary.quota_sender = Some(sender);
+        primary.storage = Some(Arc::clone(&storage));
+        let headers = quota_headers(&[("anthropic-ratelimit-unified-5h-utilization", "0.42")]);
+        primary.observe(&headers);
+        primary.observe(&headers);
+        let queued = receiver
+            .try_recv()
+            .expect("first observation remains queued");
+        storage.append_provider_snapshot_observed(queued).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("read-only report state");
+        assert_eq!(
+            reader.provider_snapshot_loss_total().await.expect("loss"),
+            1
+        );
+        drop(primary);
+        drop(receiver);
+        Arc::try_unwrap(storage)
+            .ok()
+            .expect("sole storage owner")
+            .close()
+            .await
+            .expect("close storage");
     }
 
     #[test]

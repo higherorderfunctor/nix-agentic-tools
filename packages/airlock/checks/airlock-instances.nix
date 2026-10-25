@@ -13,6 +13,7 @@
   asFile = value: {_redact.asFile = value;};
 
   claudeToken = redact.file "/run/secrets/airlock-claude-token";
+  codexToken = redact.file "/run/secrets/airlock-codex-token";
   harnessToken = redact.file "/run/secrets/airlock-harness-token";
   zaiKey = redact.file "/run/secrets/airlock-zai-key";
   # A fixed stateDir, since each backend defaults it under its own root.
@@ -105,6 +106,21 @@
       airlock.instances.main.settings.credentials.claude.auth.type = lib.mkForce "oauth_managed";
     });
   override = backend: fileOf (evaluate backend {airlock.instances.main.settings.providers.zai.endpoints.anthropic = "https://api.z.ai/api/anthropic";});
+  usage = backend:
+    fileOf (evaluate backend {
+      airlock.instances.main.settings = {
+        credentials.codex = {
+          accountId = "fake-chatgpt-account";
+          auth = {
+            file = codexToken;
+            type = "oauth_bearer";
+          };
+          provider = "codex";
+        };
+        providers.codex.preset = "codex";
+        usage.credentials = ["codex"];
+      };
+    });
   failures = result: map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions);
   thrown = backend: ai: !(builtins.tryEval (builtins.deepSeq (fileOf (evaluate backend ai)).content true)).success;
   packageRefused = backend: ai: !(builtins.tryEval (builtins.deepSeq (toString (builtins.head ((evaluate backend ai).config.home.packages or (evaluate backend ai).config.packages))) true)).success;
@@ -115,6 +131,7 @@
   checkedManaged = pkgs.writeText "airlock-config-managed.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (managed "hm").secrets) (managed "hm").content);
   checkedManagedWithFile = pkgs.writeText "airlock-config-managed-with-file.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (managedWithFile "hm").secrets) (managedWithFile "hm").content);
   checkedOverride = pkgs.writeText "airlock-config-override.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (override "hm").secrets) (override "hm").content);
+  checkedUsage = pkgs.writeText "airlock-config-usage.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (usage "hm").secrets) (usage "hm").content);
 in {
   checks =
     {
@@ -124,6 +141,7 @@ in {
         airlock check-config --config ${checked}
         airlock check-config --config ${checkedManaged}
         airlock check-config --config ${checkedOverride}
+        airlock check-config --config ${checkedUsage}
         if airlock check-config --config ${checkedManagedWithFile}; then
           echo "managed OAuth unexpectedly accepted a file" >&2
           exit 1
@@ -143,6 +161,9 @@ in {
           && managedWithFile backend == managedWithFile "hm"
           && builtins.hasAttr "file" (builtins.fromJSON (managedWithFile backend).content).credentials.claude.auth
           && override backend == override "hm"
+          && usage backend == usage "hm"
+          && (builtins.fromJSON (usage backend).content).usage.credentials == ["codex"]
+          && (builtins.fromJSON (usage backend).content).credentials.codex.account_id == "fake-chatgpt-account"
           && (builtins.fromJSON (override backend).content).providers.zai.endpoints.anthropic == "https://api.z.ai/api/anthropic"
           && file.variable == "AIRLOCK_CONFIG"
           # Tagged as secret files: the launcher writes each to a 0600 file and
@@ -154,6 +175,7 @@ in {
             AIRLOCK_CREDENTIALS_OTHER_AUTH_FILE = asFile zaiKey;
             AIRLOCK_CREDENTIALS_ZAI_AUTH_FILE = asFile zaiKey;
           }
+          && (usage backend).secrets.AIRLOCK_CREDENTIALS_CODEX_AUTH_FILE == asFile codexToken
           && (builtins.fromJSON file.content).state_dir == sample.stateDir
           && result.config.ai.claims.port."8400" == ["airlock:airlock-main.ports.main"]
           && failures result == []

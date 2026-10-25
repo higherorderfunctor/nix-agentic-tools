@@ -9,6 +9,7 @@ CFFIXED
 chatcmpl
 ciphertext
 cliproxy
+CLOEXEC
 CLOUDSDK
 codemode
 COLORFGBG
@@ -25,6 +26,7 @@ GOWORK
 hardlinks
 libxcb
 Menlo
+NONBLOCK
 NOSYSTEM
 NPROCESSORS
 nullish
@@ -38,6 +40,7 @@ pluginhost
 pnpmfile
 qll
 ramfs
+RDONLY
 rcgen
 rustix
 rustls
@@ -321,6 +324,7 @@ mergetool
 metacharacter
 microvm
 microvms
+milli
 minishlab
 misordered
 mkfifo

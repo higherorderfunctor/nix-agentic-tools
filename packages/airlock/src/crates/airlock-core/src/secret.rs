@@ -1,6 +1,6 @@
 #[cfg(test)]
 use std::path::Path;
-use std::{fmt, path::PathBuf};
+use std::{fmt, io::Read, path::PathBuf};
 
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
@@ -24,6 +24,12 @@ impl Secret {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.value
+    }
+
+    /// Transfers ownership to a caller that must send this token without making another copy.
+    #[must_use]
+    pub fn into_value(self) -> Zeroizing<String> {
+        self.value
     }
 
     #[cfg(test)]
@@ -65,12 +71,70 @@ impl SecretFile {
     ///
     /// Returns an error when the file cannot be read, or is empty after trimming one trailing newline.
     pub fn load(&self) -> Result<Secret, SecretError> {
-        let mut value = Zeroizing::new(std::fs::read_to_string(&self.0).map_err(|source| {
+        let value = Zeroizing::new(std::fs::read_to_string(&self.0).map_err(|source| {
             SecretError::Read {
                 path: self.0.clone(),
                 source,
             }
         })?);
+        self.finish(value)
+    }
+
+    /// Reads at most `limit` bytes from a regular file without blocking on a FIFO.
+    ///
+    /// # Errors
+    /// Rejects special files, symlinks, oversized contents, empty tokens, and invalid UTF-8.
+    pub fn load_bounded_regular(&self, limit: usize) -> Result<Secret, SecretError> {
+        let descriptor = rustix::fs::openat(
+            rustix::fs::CWD,
+            &self.0,
+            rustix::fs::OFlags::RDONLY
+                | rustix::fs::OFlags::NONBLOCK
+                | rustix::fs::OFlags::NOFOLLOW
+                | rustix::fs::OFlags::CLOEXEC,
+            rustix::fs::Mode::empty(),
+        )
+        .map_err(|source| SecretError::Read {
+            path: self.0.clone(),
+            source: source.into(),
+        })?;
+        let file = std::fs::File::from(descriptor);
+        let metadata = file.metadata().map_err(|source| SecretError::Read {
+            path: self.0.clone(),
+            source,
+        })?;
+        if !metadata.is_file() {
+            return Err(SecretError::UnsupportedType {
+                path: self.0.clone(),
+            });
+        }
+        if metadata.len() > limit as u64 {
+            return Err(SecretError::TooLarge {
+                limit,
+                path: self.0.clone(),
+            });
+        }
+        let mut bytes = Zeroizing::new(Vec::new());
+        file.take(limit as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|source| SecretError::Read {
+                path: self.0.clone(),
+                source,
+            })?;
+        if bytes.len() > limit {
+            return Err(SecretError::TooLarge {
+                limit,
+                path: self.0.clone(),
+            });
+        }
+        let text = std::str::from_utf8(&bytes).map_err(|_| SecretError::Read {
+            path: self.0.clone(),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid UTF-8"),
+        })?;
+        self.finish(Zeroizing::new(text.to_owned()))
+    }
+
+    fn finish(&self, mut value: Zeroizing<String>) -> Result<Secret, SecretError> {
         if let Some(trimmed) = value.strip_suffix("\r\n") {
             let trimmed_length = trimmed.len();
             value.truncate(trimmed_length);
@@ -128,5 +192,39 @@ mod tests {
                 )),
             }
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_loader_rejects_fifo_symlink_and_oversized_file() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let token = directory.path().join("token");
+        std::fs::write(&token, b"fake-token").expect("regular token");
+        assert_eq!(
+            SecretFile(token.clone())
+                .load_bounded_regular(10)
+                .expect("bounded token")
+                .expose(),
+            "fake-token"
+        );
+        assert!(matches!(
+            SecretFile(token.clone()).load_bounded_regular(3),
+            Err(SecretError::TooLarge { .. })
+        ));
+        let link = directory.path().join("link");
+        std::os::unix::fs::symlink(&token, &link).expect("symlink");
+        assert!(SecretFile(link).load_bounded_regular(10).is_err());
+        let fifo = directory.path().join("fifo");
+        assert!(
+            std::process::Command::new("mkfifo")
+                .arg(&fifo)
+                .status()
+                .expect("mkfifo")
+                .success()
+        );
+        assert!(matches!(
+            SecretFile(fifo).load_bounded_regular(10),
+            Err(SecretError::UnsupportedType { .. })
+        ));
     }
 }

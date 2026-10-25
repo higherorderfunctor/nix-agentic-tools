@@ -8,8 +8,8 @@ applyTo: "packages/airlock/**"
 # airlock configuration and Claude integration
 
 > **Last verified:** 2026-10-25 — a managed Claude primary exchanges fake OAuth
-> tokens through both generated launchers; storage scopes the pair to one
-> client.
+> tokens through both generated launchers; M08 adds explicit usage selection and
+> Codex quota observation without enabling Codex inference.
 
 ## Nix configuration
 
@@ -25,15 +25,26 @@ IDs, references, URLs, protocols, primary and model ownership for direct JSON
 and Nix output. `airlock-config-roundtrip` feeds rendered settings to
 `check-config`; raw structs deny unknown fields.
 
-`providers.<id>` holds a `claude` or `zai` preset and optional protocol-keyed
-endpoint overrides. Rust expands each preset once: Claude Anthropic resolves to
-`https://api.anthropic.com`; z.ai Anthropic to `https://api.z.ai/api/anthropic`;
-z.ai OpenAI to `https://api.z.ai/api/coding/paas/v4`. No Codex endpoint is
-asserted yet. `credentials.<id>` names a provider and auth mode. `groups.<id>`
-names one protocol, its first-party intercept hosts, a primary credential, and
-members with exact model IDs. A client grants whole groups. The primary owns
-undeclared models; non-primary members need explicit IDs. Duplicate model IDs
-within a group are invalid.
+`providers.<id>` holds a `claude`, `codex`, or `zai` preset and optional
+protocol-keyed endpoint overrides. Rust expands each preset once: Claude
+Anthropic resolves to `https://api.anthropic.com`; z.ai Anthropic to
+`https://api.z.ai/api/anthropic`; z.ai OpenAI to
+`https://api.z.ai/api/coding/paas/v4`. The Codex preset names no inference
+endpoint; it is eligible only for an explicitly selected usage fetch.
+`credentials.<id>` names a provider, auth mode, and optional provider account
+ID. `usage.credentials` selects additional credentials for out-of-band quota
+collection. Active Claude and z.ai group credentials are collected
+automatically; Codex remains inert unless selected. `groups.<id>` names one
+protocol, its first-party intercept hosts, a primary credential, and members
+with exact model IDs. A client grants whole groups. The primary owns undeclared
+models; non-primary members need explicit IDs. Duplicate model IDs within a
+group are invalid.
+
+Configuration validation caps the report projection before route/model copies:
+at most 64 usage credentials, 256 client/group/member routes, and 8,192 copied
+model IDs. An oversized config is rejected by `check-config` and serve alike.
+The collector projects credential identity and its sole owner without allocating
+report routes or model lists.
 
 Client tokens and file-backed credentials use `redact.types.secretFile`; the
 service launcher writes each value to a 0600 runtime file and renders only its
@@ -42,6 +53,13 @@ a Claude-preset Anthropic primary, granted to exactly one client, with
 `platform.claude.com` intercepted. Unsupported managed routes and active OpenAI
 fail before secret loading. Endpoint overrides may include a port for local
 tests.
+
+The usage collector reads each selected file-backed credential from its rendered
+runtime file, or the current real managed OAuth access token from SQLite. It
+never reads Claude's home files or refreshes OAuth itself. The same option shape
+and secret delivery apply in Home Manager and devenv. Usage reports list every
+granted client/group/model route for a credential, including which primary owns
+undeclared models. Collection still runs once per credential.
 
 ## Harness selection
 

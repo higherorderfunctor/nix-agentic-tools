@@ -70,6 +70,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error("request usage telemetry worker failed during shutdown")]
     UsageTelemetryWorkerJoin,
+    #[error("primary header observation worker failed during shutdown")]
+    QuotaWorkerJoin,
     #[error("no upstream root certificates could be loaded (check SSL_CERT_FILE)")]
     NoUpstreamRoots,
     #[error("managed OAuth requires initialized storage")]
@@ -100,6 +102,7 @@ pub struct Gateway {
     listener: TcpListener,
     state: Arc<State>,
     usage_worker: Option<tokio::task::JoinHandle<()>>,
+    quota_worker: Option<tokio::task::JoinHandle<()>>,
 }
 
 struct State {
@@ -210,7 +213,9 @@ impl Gateway {
         if !errors.is_empty() {
             return Err(SecretErrors(errors).into());
         }
-        let interceptor = Arc::new(Interceptor::new(ca_directory, upstream_roots, storage)?);
+        let mut interceptor = Interceptor::new(ca_directory, upstream_roots, storage)?;
+        let quota_worker = interceptor.take_quota_worker();
+        let interceptor = Arc::new(interceptor);
         let listener = TcpListener::bind(config.listen()).await?;
         let policy = Policy::from_config(&config);
         let (usage, usage_worker) = usage.map_or_else(
@@ -232,6 +237,7 @@ impl Gateway {
                 usage,
             }),
             usage_worker,
+            quota_worker,
         })
     }
 
@@ -276,6 +282,9 @@ impl Gateway {
         }
         if let Some(worker) = self.usage_worker.take() {
             worker.await.map_err(|_| Error::UsageTelemetryWorkerJoin)?;
+        }
+        if let Some(worker) = self.quota_worker.take() {
+            worker.await.map_err(|_| Error::QuotaWorkerJoin)?;
         }
         result
     }

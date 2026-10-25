@@ -1,0 +1,377 @@
+{
+  "bucket_seconds": 300,
+  "credentials": [
+    {
+      "account_id": null,
+      "auth": "oauth_bearer",
+      "client": "harness",
+      "credential": "claude",
+      "explicit_usage_selection": false,
+      "group": "anthropic",
+      "header_age_seconds": 200,
+      "latest_fetch": {
+        "account_id": "claude",
+        "claude_limits": [
+          {
+            "group": "models",
+            "is_active": true,
+            "kind": "rate",
+            "percent_milli": 100000,
+            "reset_at_unix": 1500,
+            "scope": {
+              "model_display_name": "fake-model",
+              "surface_display_name": "fake-surface"
+            },
+            "severity": "warning"
+          }
+        ],
+        "client": "harness",
+        "credential": "claude",
+        "credits": [
+          {
+            "label": "wattle_ember",
+            "limit_minor_units": 20000,
+            "remaining_minor_units": 15000,
+            "reset_at_unix": 1500,
+            "used_minor_units": 5000
+          }
+        ],
+        "fetched_at_unix": 900,
+        "gap_reason": null,
+        "group": "anthropic",
+        "header_windows": [],
+        "metrics": [
+          {
+            "label": "seven_day_utilization_unavailable",
+            "unit": "gap",
+            "value": 1
+          }
+        ],
+        "partial_gaps": ["seven_day_utilization_unavailable"],
+        "pools": [
+          {
+            "label": "five_hour",
+            "limit": 100000,
+            "remaining": 75000,
+            "reset_at_unix": 1500,
+            "unit": "percent_milli",
+            "utilized": 25000
+          }
+        ],
+        "provider": "claude",
+        "source": "out_of_band_fetch",
+        "status": "fresh",
+        "surface": "claude_subscription"
+      },
+      "latest_header": {
+        "account_id": "claude",
+        "claude_limits": [],
+        "client": "harness",
+        "credential": "claude",
+        "credits": [],
+        "fetched_at_unix": 800,
+        "gap_reason": null,
+        "group": "anthropic",
+        "header_windows": [
+          {
+            "label": "five_hour",
+            "reset_at_unix": 1500,
+            "status": null,
+            "utilization_milli": 30000
+          }
+        ],
+        "metrics": [],
+        "partial_gaps": [],
+        "pools": [],
+        "provider": "claude",
+        "source": "response_headers",
+        "status": "unavailable",
+        "surface": "response_headers"
+      },
+      "provider": "claude",
+      "routes": [
+        {
+          "client": "harness",
+          "group": "anthropic",
+          "models": [],
+          "primary": true,
+          "protocol": "anthropic"
+        }
+      ],
+      "status": "fresh",
+      "surface": "claude_subscription",
+      "global_quota_complete": false
+    },
+    {
+      "account_id": null,
+      "auth": "oauth_bearer",
+      "client": "harness",
+      "credential": "other",
+      "explicit_usage_selection": false,
+      "group": "anthropic",
+      "header_age_seconds": null,
+      "latest_fetch": {
+        "account_id": "other",
+        "claude_limits": [],
+        "client": "harness",
+        "credential": "other",
+        "credits": [],
+        "fetched_at_unix": 850,
+        "gap_reason": null,
+        "group": "anthropic",
+        "header_windows": [],
+        "metrics": [],
+        "partial_gaps": [],
+        "pools": [
+          {
+            "label": "five_hour",
+            "limit": 100000,
+            "remaining": 60000,
+            "reset_at_unix": 1300,
+            "unit": "percent_milli",
+            "utilized": 40000
+          }
+        ],
+        "provider": "claude",
+        "source": "out_of_band_fetch",
+        "status": "fresh",
+        "surface": "claude_subscription"
+      },
+      "latest_header": null,
+      "provider": "claude",
+      "routes": [
+        {
+          "client": "harness",
+          "group": "anthropic",
+          "models": ["other-model"],
+          "primary": false,
+          "protocol": "anthropic"
+        }
+      ],
+      "status": "fresh",
+      "surface": "claude_subscription",
+      "global_quota_complete": false
+    }
+  ],
+  "fresh_seconds": 900,
+  "generated_at_unix": 1000,
+  "history_oldest_at_unix": 700,
+  "history_truncated": false,
+  "known_gaps": [
+    "claude_limit_ui_mapping_unverified",
+    "claude_credit_pool_rows_schema_unverified",
+    "claude_profile_subscription_metadata_unavailable",
+    "codex_secondary_window_schema_unverified",
+    "console_balance_requires_ant_auth_login",
+    "cpa_management_api_unsupported"
+  ],
+  "provider_snapshot_loss_total": 0,
+  "request_loss_total": 0,
+  "request_usage": [
+    {
+      "bucket_start_unix": 900,
+      "cache_read_tokens": null,
+      "cache_write_tokens": null,
+      "client": "harness",
+      "complete_events": 1,
+      "credential": "claude",
+      "error_events": 0,
+      "events": 1,
+      "group": "anthropic",
+      "input_tokens": 12,
+      "latency_ms": 40,
+      "model": "glm-fake",
+      "outcome": "completed",
+      "output_tokens": 7,
+      "provider": "claude",
+      "request_bytes": 32,
+      "response_bytes": 64,
+      "successful_events": 1
+    }
+  ],
+  "reset_events": [
+    {
+      "credential": "claude",
+      "detected_at_unix": 900,
+      "kind": "utilization_drop",
+      "pool": "five_hour",
+      "provider": "claude",
+      "reset_at_unix": 1500,
+      "surface": "claude_subscription"
+    },
+    {
+      "credential": "claude",
+      "detected_at_unix": 900,
+      "kind": "credit_refill",
+      "pool": "wattle_ember",
+      "provider": "claude",
+      "reset_at_unix": 1500,
+      "surface": "claude_subscription"
+    }
+  ],
+  "reset_events_complete_since_unix": null,
+  "reset_events_observed_only": true,
+  "schema_version": 1,
+  "since_unix": 1,
+  "snapshots": [
+    {
+      "account_id": "claude",
+      "claude_limits": [],
+      "client": "harness",
+      "credential": "claude",
+      "credits": [
+        {
+          "label": "wattle_ember",
+          "limit_minor_units": 20000,
+          "remaining_minor_units": 5000,
+          "reset_at_unix": 1200,
+          "used_minor_units": 15000
+        }
+      ],
+      "fetched_at_unix": 700,
+      "gap_reason": null,
+      "group": "anthropic",
+      "header_windows": [],
+      "metrics": [],
+      "partial_gaps": [],
+      "pools": [
+        {
+          "label": "five_hour",
+          "limit": 100000,
+          "remaining": 50000,
+          "reset_at_unix": 1200,
+          "unit": "percent_milli",
+          "utilized": 50000
+        }
+      ],
+      "provider": "claude",
+      "source": "out_of_band_fetch",
+      "status": "fresh",
+      "surface": "claude_subscription"
+    },
+    {
+      "account_id": "claude",
+      "claude_limits": [],
+      "client": "harness",
+      "credential": "claude",
+      "credits": [],
+      "fetched_at_unix": 800,
+      "gap_reason": null,
+      "group": "anthropic",
+      "header_windows": [
+        {
+          "label": "five_hour",
+          "reset_at_unix": 1500,
+          "status": null,
+          "utilization_milli": 30000
+        }
+      ],
+      "metrics": [],
+      "partial_gaps": [],
+      "pools": [],
+      "provider": "claude",
+      "source": "response_headers",
+      "status": "unavailable",
+      "surface": "response_headers"
+    },
+    {
+      "account_id": "other",
+      "claude_limits": [],
+      "client": "harness",
+      "credential": "other",
+      "credits": [],
+      "fetched_at_unix": 850,
+      "gap_reason": null,
+      "group": "anthropic",
+      "header_windows": [],
+      "metrics": [],
+      "partial_gaps": [],
+      "pools": [
+        {
+          "label": "five_hour",
+          "limit": 100000,
+          "remaining": 60000,
+          "reset_at_unix": 1300,
+          "unit": "percent_milli",
+          "utilized": 40000
+        }
+      ],
+      "provider": "claude",
+      "source": "out_of_band_fetch",
+      "status": "fresh",
+      "surface": "claude_subscription"
+    },
+    {
+      "account_id": "claude",
+      "claude_limits": [
+        {
+          "group": "models",
+          "is_active": true,
+          "kind": "rate",
+          "percent_milli": 100000,
+          "reset_at_unix": 1500,
+          "scope": {
+            "model_display_name": "fake-model",
+            "surface_display_name": "fake-surface"
+          },
+          "severity": "warning"
+        }
+      ],
+      "client": "harness",
+      "credential": "claude",
+      "credits": [
+        {
+          "label": "wattle_ember",
+          "limit_minor_units": 20000,
+          "remaining_minor_units": 15000,
+          "reset_at_unix": 1500,
+          "used_minor_units": 5000
+        }
+      ],
+      "fetched_at_unix": 900,
+      "gap_reason": null,
+      "group": "anthropic",
+      "header_windows": [],
+      "metrics": [
+        {
+          "label": "seven_day_utilization_unavailable",
+          "unit": "gap",
+          "value": 1
+        }
+      ],
+      "partial_gaps": ["seven_day_utilization_unavailable"],
+      "pools": [
+        {
+          "label": "five_hour",
+          "limit": 100000,
+          "remaining": 75000,
+          "reset_at_unix": 1500,
+          "unit": "percent_milli",
+          "utilized": 25000
+        }
+      ],
+      "provider": "claude",
+      "source": "out_of_band_fetch",
+      "status": "fresh",
+      "surface": "claude_subscription"
+    },
+    {
+      "account_id": "claude",
+      "claude_limits": [],
+      "client": "harness",
+      "credential": "claude",
+      "credits": [],
+      "fetched_at_unix": 901,
+      "gap_reason": "console_balance_requires_ant_auth_login",
+      "group": "anthropic",
+      "header_windows": [],
+      "metrics": [],
+      "partial_gaps": [],
+      "pools": [],
+      "provider": "claude",
+      "source": "out_of_band_fetch",
+      "status": "unavailable",
+      "surface": "console_balance"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO provider_snapshot_losses (id, lost_snapshots, last_loss_at_unix) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET lost_snapshots = CASE WHEN lost_snapshots > 9223372036854775807 - excluded.lost_snapshots THEN 9223372036854775807 ELSE lost_snapshots + excluded.lost_snapshots END, last_loss_at_unix = excluded.last_loss_at_unix",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "7ecb3b9526d859f7347e27de425da6b20cb4c0f3256cd185ff478d4425853e83"
+}

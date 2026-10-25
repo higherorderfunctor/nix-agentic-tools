@@ -75,7 +75,12 @@ CREATE TABLE provider_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   fetched_at_unix INTEGER NOT NULL CHECK (fetched_at_unix > 0),
   provider_id TEXT NOT NULL REFERENCES providers (id),
+  client_id TEXT REFERENCES clients (id),
+  group_id TEXT REFERENCES groups (id),
+  credential_id TEXT NOT NULL REFERENCES credentials (id),
   account_id TEXT NOT NULL CHECK (length(account_id) > 0 AND length(account_id) <= 128),
+  source TEXT NOT NULL CHECK (source IN ('out_of_band_fetch', 'response_headers')),
+  surface TEXT NOT NULL CHECK (surface IN ('claude_subscription', 'codex_rate_limits', 'console_balance', 'response_headers', 'zai_quota')),
   fetch_status TEXT NOT NULL CHECK (fetch_status IN ('success', 'gap')),
   gap_reason TEXT CHECK (gap_reason IS NULL OR (length(gap_reason) > 0 AND length(gap_reason) <= 256))
 ) STRICT;
@@ -114,4 +119,34 @@ CREATE TABLE quota_metrics (
   unit TEXT NOT NULL CHECK (length(unit) > 0 AND length(unit) <= 16),
   PRIMARY KEY (snapshot_id, ordinal),
   UNIQUE (snapshot_id, label)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE claude_limits (
+  snapshot_id INTEGER NOT NULL REFERENCES provider_snapshots (id),
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  kind TEXT NOT NULL CHECK (length(kind) > 0 AND length(kind) <= 64),
+  group_name TEXT CHECK (group_name IS NULL OR (length(group_name) > 0 AND length(group_name) <= 64)),
+  percent_milli INTEGER NOT NULL CHECK (percent_milli >= 0 AND percent_milli <= 100000),
+  reset_at_unix INTEGER CHECK (reset_at_unix IS NULL OR reset_at_unix > 0),
+  severity TEXT CHECK (severity IS NULL OR (length(severity) > 0 AND length(severity) <= 64)),
+  is_active INTEGER NOT NULL CHECK (is_active IN (0, 1)),
+  model_display_name TEXT CHECK (model_display_name IS NULL OR (length(model_display_name) > 0 AND length(model_display_name) <= 128)),
+  surface_display_name TEXT CHECK (surface_display_name IS NULL OR (length(surface_display_name) > 0 AND length(surface_display_name) <= 128)),
+  PRIMARY KEY (snapshot_id, ordinal)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE provider_snapshot_losses (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  lost_snapshots INTEGER NOT NULL CHECK (lost_snapshots >= 0),
+  last_loss_at_unix INTEGER NOT NULL CHECK (last_loss_at_unix > 0)
+) STRICT;
+
+CREATE TABLE response_header_windows (
+  snapshot_id INTEGER NOT NULL REFERENCES provider_snapshots (id),
+  label TEXT NOT NULL CHECK (label IN ('five_hour', 'seven_day')),
+  utilization_milli INTEGER NOT NULL
+    CHECK (utilization_milli >= 0 AND utilization_milli <= 10000000),
+  reset_at_unix INTEGER,
+  status TEXT CHECK (status IN ('allowed', 'allowed_warning', 'rejected')),
+  PRIMARY KEY (snapshot_id, label)
 ) STRICT, WITHOUT ROWID;
