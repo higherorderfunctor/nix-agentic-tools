@@ -1,7 +1,7 @@
 {pkgs, ...}: let
-  package = pkgs.ai.generic.airlock;
+  package = pkgs.ai.generic.airlock.raw;
 in {
-  imports = [./checks/airlock-instances.nix ./checks/claude-launch.nix];
+  imports = [./checks/airlock-instances.nix ./checks/claude-launch.nix ./checks/web.nix];
 
   # nixpkgs' buildRustPackage has no clippy hook, so reuse the package's
   # offline vendored-dependency setup and run clippy instead of the build.
