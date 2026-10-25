@@ -347,7 +347,63 @@
       {ai.programs.delegate-routing.routing.Conflict.text = "FIRST CONTENT";}
       {ai.programs.delegate-routing.routing.Conflict.text = "SECOND CONTENT";}
     ]);
+    redact = import ../../../lib/redact {inherit lib;};
+    usageBase.ai = {
+      claude = {
+        enable = true;
+        skills.delegate-routing = null;
+      };
+      codex = {
+        enable = true;
+        skills.delegate-routing = null;
+      };
+      programs.delegate-routing.enable = true;
+    };
+    usageInstance = key: {
+      clientKeys.usage-test = {
+        key = redact.file "/run/secrets/client";
+        routes = [{credential = "login";}];
+      };
+      credentials.login.oauth = {
+        account = redact.file "/run/secrets/account";
+        vendor = "claude";
+      };
+      settings.management.secret-key = key;
+    };
+    usageSelected.ai = {
+      cliproxyapi.instances.main = usageInstance (redact.file "/run/secrets/management");
+      proxy = {
+        instance = "main";
+        clientKey = "usage-test";
+      };
+    };
+    usage = extra: evaluate (lib.mkMerge [usageBase extra]);
+    usageVars = evaluation: runtime:
+      lib.filterAttrs (key: _: lib.hasPrefix "DELEGATE_USAGE_CPA_" key)
+      (
+        if runtime == "claude"
+        then evaluation.config.ai.claude.native.settings.env
+        else evaluation.config.ai.${runtime}.environmentVariables
+      );
+    usageEmpty = extra: lib.all (runtime: usageVars (usage extra) runtime == {}) ["claude" "codex"];
   in {
+    "module-delegate-routing-${name}-usage" = mkTest "delegate-routing-${name}-usage" (
+      lib.all (runtime:
+        usageVars (usage usageSelected) runtime
+        == {
+          "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_MANAGEMENT_KEY_FILE" = "/run/secrets/management";
+          "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_URL" = "http://127.0.0.1:8317";
+        }) ["claude" "codex"]
+      && usageEmpty {}
+      && usageEmpty {ai.cliproxyapi.instances = usageSelected.ai.cliproxyapi.instances;}
+      && usageEmpty (lib.recursiveUpdate usageSelected {ai.programs.delegate-routing.enable = lib.mkForce false;})
+      && usageEmpty (lib.mkMerge [
+        usageSelected
+        {
+          ai.cliproxyapi.instances.main.settings.management.secret-key = lib.mkForce (redact.command "/run/read-management");
+        }
+      ])
+    );
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
       passes result
       && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]

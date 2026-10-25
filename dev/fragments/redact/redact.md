@@ -1,10 +1,7 @@
 ## Redact: secrets kept out of the Nix store
 
-> **Last verified:** 2026-10-21 — `types.secretFile` tags a reference for path
-> delivery by the `ai.services` launcher only; any set with a `_redact` key is
-> reserved; secret-name classification lives privately in
-> `lib/redact/classify.nix`, over the suffix table in
-> `lib/open-keys/patterns.nix`.
+> **Last verified:** 2026-10-24 — consumers can test exact references through
+> the public predicate before extracting their file paths.
 
 `lib/redact` is a pure `{lib}` import, exported as `lib.redact`. A value either
 is cleartext, which is visible and lands in the store, or names where a secret
@@ -35,11 +32,11 @@ that embeds a secret is not caught.
 The marker shape is the only representation. `isMarker`, `isReference`,
 `isConcat`, `isRedacted` and `isAsFile` in `default.nix` are the one copy of
 that logic. Constructors, types and `assign` all reach it through `sealed`.
-`isRedacted`, `isAsFile`, `isPath`, `isReserved` and `sealed` are exported, so a
-consumer that walks values (`lib/extracted/render.nix`) uses this copy too.
-`_redact` is reserved syntax: `isReserved` holds for any set with the key, valid
-or not, and a reserved set that is no reference is refused through `sealed`,
-judged after null attributes are dropped.
+`isAsFile`, `isPath`, `isRedacted`, `isReference`, `isReserved` and `sealed` are
+exported, so a consumer that walks values (`lib/extracted/render.nix`) uses this
+copy too. `_redact` is reserved syntax: `isReserved` holds for any set with the
+key, valid or not, and a reserved set that is no reference is refused through
+`sealed`, judged after null attributes are dropped.
 
 ### Why refusals never print the value
 
