@@ -136,6 +136,19 @@ impl Running {
             roots,
             ca_directory,
             FixtureAuth::OauthBearer,
+            None,
+        )
+        .await
+    }
+
+    pub async fn start_with_port(roots: RootCertStore, upstream_port: u16) -> Self {
+        Self::start_with_auth(
+            "deny",
+            &["localhost"],
+            roots,
+            None,
+            FixtureAuth::OauthBearer,
+            Some(upstream_port),
         )
         .await
     }
@@ -146,17 +159,58 @@ impl Running {
         roots: RootCertStore,
         ca_directory: Option<&Path>,
         auth: FixtureAuth,
+        upstream_port: Option<u16>,
     ) -> Self {
         let directory = tempfile::tempdir().expect("tempdir");
         write_fixtures(&directory, auth);
         let ca_directory = ca_directory.map_or_else(|| directory.path().join("ca"), Path::to_owned);
-        let gateway = Gateway::bind(
-            config_with_auth(&directory, unknown_hosts, intercepted, auth),
-            &ca_directory,
-            roots,
-        )
-        .await
-        .expect("bind gateway");
+        let config = config_with_auth(&directory, unknown_hosts, intercepted, auth, upstream_port);
+        Self::start_config(directory, config, ca_directory, roots).await
+    }
+
+    pub async fn start_multiplex(roots: RootCertStore, primary_port: u16, zai_port: u16) -> Self {
+        let primary_endpoint = format!("https://localhost:{primary_port}");
+        Self::start_multiplex_with_primary(roots, zai_port, &primary_endpoint).await
+    }
+
+    pub async fn start_multiplex_with_primary(
+        roots: RootCertStore,
+        zai_port: u16,
+        primary_endpoint: &str,
+    ) -> Self {
+        let directory = tempfile::tempdir().expect("tempdir");
+        write_fixtures(&directory, FixtureAuth::OauthBearer);
+        std::fs::write(directory.path().join("zai"), "fake-REAL-zai\n").expect("zai secret");
+        let config = Config::try_from(serde_json::from_value::<RawConfig>(json!({
+            "clients": {"harness": {"grants": ["anthropic"], "token_file": directory.path().join("token")}},
+            "credentials": {
+                "claude": {"auth": {"file": directory.path().join("claude"), "type": "oauth_bearer"}, "provider": "claude"},
+                "zai": {"auth": {"file": directory.path().join("zai"), "type": "api_key"}, "provider": "zai"}
+            },
+            "groups": {"anthropic": {"intercept": ["localhost"], "members": {
+                "claude": {"models": []}, "zai": {"models": ["glm-4.7"]}
+            }, "primary": "claude", "protocol": "anthropic"}},
+            "listen": "127.0.0.1:0",
+            "providers": {
+                "claude": {"endpoints": {"anthropic": primary_endpoint}},
+                "zai": {"endpoints": {"anthropic": format!("https://localhost:{zai_port}/api/anthropic")}}
+            },
+            "state_dir": directory.path(),
+            "unknown_hosts": "deny"
+        })).expect("raw multiplex config")).expect("multiplex config");
+        let ca_directory = directory.path().join("ca");
+        Self::start_config(directory, config, ca_directory, roots).await
+    }
+
+    async fn start_config(
+        directory: TempDir,
+        config: Config,
+        ca_directory: PathBuf,
+        roots: RootCertStore,
+    ) -> Self {
+        let gateway = Gateway::bind(config, &ca_directory, roots)
+            .await
+            .expect("bind gateway");
         let address = gateway.local_addr();
         assert_eq!(address.ip(), std::net::Ipv4Addr::LOCALHOST);
         let capture = Capture::default();
@@ -332,6 +386,7 @@ pub fn config(directory: &TempDir, unknown_hosts: &str, intercepted: &[&str]) ->
         unknown_hosts,
         intercepted,
         FixtureAuth::OauthBearer,
+        None,
     )
 }
 
@@ -340,6 +395,7 @@ fn config_with_auth(
     unknown_hosts: &str,
     intercepted: &[&str],
     auth: FixtureAuth,
+    upstream_port: Option<u16>,
 ) -> Config {
     let primary = match auth {
         FixtureAuth::ApiKey => json!({
@@ -349,7 +405,13 @@ fn config_with_auth(
             "file": directory.path().join("claude"), "type": "oauth_bearer"
         }),
     };
-    let endpoint = format!("https://{}", intercepted.first().unwrap_or(&"localhost"));
+    let endpoint = match upstream_port {
+        Some(port) => format!(
+            "https://{}:{port}",
+            intercepted.first().unwrap_or(&"localhost")
+        ),
+        None => format!("https://{}", intercepted.first().unwrap_or(&"localhost")),
+    };
     Config::try_from(serde_json::from_value::<RawConfig>(json!({
         "clients": {"harness": {
             "grants": ["anthropic"],
@@ -476,6 +538,7 @@ impl HttpProtocol {
 
 #[derive(Debug)]
 pub struct RequestRecord {
+    pub authority: Option<String>,
     pub body: Bytes,
     pub body_hash: u64,
     pub body_len: usize,
@@ -685,6 +748,7 @@ pub fn records(upstream: &HttpUpstream) -> Vec<RequestRecord> {
     records
         .iter()
         .map(|record| RequestRecord {
+            authority: record.authority.clone(),
             body: record.body.clone(),
             body_hash: record.body_hash,
             body_len: record.body_len,
@@ -722,12 +786,14 @@ pub async fn http_upstream(
             let records = service_records.clone();
             let mode = service_mode.clone();
             async move {
+                let authority = request.uri().authority().map(ToString::to_string);
                 let method = request.method().clone();
                 let path = request.uri().path().to_owned();
                 let headers = request.headers().clone();
                 let body = request.into_body();
                 let (body, body_hash, body_len) = request_body(&mode, body).await;
                 records.lock().expect("records lock").push(RequestRecord {
+                    authority,
                     body: body.clone(),
                     body_hash,
                     body_len,

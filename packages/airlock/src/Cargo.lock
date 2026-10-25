@@ -52,6 +52,7 @@ dependencies = [
  "rcgen",
  "rustix",
  "rustls",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror",

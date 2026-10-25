@@ -50,7 +50,6 @@ struct ProviderConfig {
 }
 
 struct Endpoint {
-    host: HostName,
     url: String,
 }
 
@@ -139,12 +138,8 @@ pub struct RawProvider {
 pub enum UnsupportedExecution {
     #[error("group {group} uses OpenAI, which serve does not support yet")]
     Openai { group: GroupId },
-    #[error("group {group} has multiple members; model routing is not implemented")]
-    MultipleMembers { group: GroupId },
     #[error("credential {credential} uses managed OAuth, which serve does not support yet")]
     ManagedOauth { credential: CredentialId },
-    #[error("group {group} endpoint {url:?} differs from the intercepted original host")]
-    Endpoint { group: GroupId, url: String },
 }
 
 impl Config {
@@ -194,6 +189,29 @@ impl Config {
         self.groups.get(group).map(|config| &config.primary)
     }
 
+    /// Selects one credential and its protocol endpoint. Unclaimed models belong to the primary.
+    #[must_use]
+    pub fn route(&self, group: &GroupId, model: Option<&str>) -> Option<(&CredentialId, &str)> {
+        let group = self.groups.get(group)?;
+        let credential_id = model
+            .and_then(|model| {
+                group.members.iter().find_map(|(id, models)| {
+                    models
+                        .iter()
+                        .any(|candidate| candidate == model)
+                        .then_some(id)
+                })
+            })
+            .unwrap_or(&group.primary);
+        let credential = self.credentials.get(credential_id)?;
+        let endpoint = self
+            .providers
+            .get(&credential.provider)?
+            .endpoints
+            .get(&group.protocol)?;
+        Some((credential_id, endpoint.url.as_str()))
+    }
+
     pub(crate) fn unknown_hosts(&self) -> UnknownHosts {
         self.unknown_hosts
     }
@@ -201,7 +219,7 @@ impl Config {
     /// Refuse active routes whose configured behavior the current transport cannot execute.
     ///
     /// # Errors
-    /// Returns the first active group with unsupported protocol, membership, auth or endpoint.
+    /// Returns the first active group with unsupported protocol or auth.
     pub fn validate_executable(&self) -> Result<(), UnsupportedExecution> {
         let active: BTreeSet<&GroupId> = self
             .clients
@@ -217,35 +235,16 @@ impl Config {
                     group: group_id.clone(),
                 });
             }
-            if group.members.len() != 1 {
-                return Err(UnsupportedExecution::MultipleMembers {
-                    group: group_id.clone(),
-                });
-            }
-            let Some(credential) = self.credentials.get(&group.primary) else {
-                continue;
-            };
-            if matches!(credential.auth, Auth::OauthManaged) {
-                return Err(UnsupportedExecution::ManagedOauth {
-                    credential: group.primary.clone(),
-                });
-            }
-            let Some(endpoint) = self
-                .providers
-                .get(&credential.provider)
-                .and_then(|provider| provider.endpoints.get(&group.protocol))
-            else {
-                continue;
-            };
-            if group
-                .hosts
-                .iter()
-                .any(|host| endpoint.host != *host || endpoint.url != format!("https://{host}"))
-            {
-                return Err(UnsupportedExecution::Endpoint {
-                    group: group_id.clone(),
-                    url: endpoint.url.clone(),
-                });
+            for credential_id in group.members.keys() {
+                if self
+                    .credentials
+                    .get(credential_id)
+                    .is_some_and(|credential| matches!(credential.auth, Auth::OauthManaged))
+                {
+                    return Err(UnsupportedExecution::ManagedOauth {
+                        credential: credential_id.clone(),
+                    });
+                }
             }
         }
         Ok(())
@@ -533,8 +532,8 @@ fn parse_providers(
                 continue;
             };
             match parse_endpoint(&url) {
-                Some(host) => {
-                    resolved.insert(protocol, Endpoint { host, url });
+                Some(()) => {
+                    resolved.insert(protocol, Endpoint { url });
                 }
                 None => errors.push(ConfigError::InvalidEndpoint {
                     provider: raw_id.clone(),
@@ -554,13 +553,20 @@ fn parse_providers(
     providers
 }
 
-fn parse_endpoint(url: &str) -> Option<HostName> {
+fn parse_endpoint(url: &str) -> Option<()> {
     let rest = url.strip_prefix("https://")?;
-    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
-    if host.contains(['@', ':', '?', '#']) || !valid_uri_path(path) {
+    let (authority, path) = rest.split_once('/').unwrap_or((rest, ""));
+    if authority.contains(['@', '?', '#']) || !valid_uri_path(path) {
         return None;
     }
-    HostName::try_from(host).ok()
+    let (host, port) = authority
+        .rsplit_once(':')
+        .map_or((authority, None), |(host, port)| (host, Some(port)));
+    HostName::try_from(host).ok()?;
+    if let Some(port) = port {
+        port.parse::<std::num::NonZeroU16>().ok()?;
+    }
+    Some(())
 }
 
 fn valid_uri_path(path: &str) -> bool {
@@ -887,10 +893,24 @@ mod tests {
     #[test]
     fn unsupported_execution_is_explicit() {
         let config = converted(valid_raw()).expect("valid multiplex config");
-        assert!(matches!(
-            config.validate_executable(),
-            Err(UnsupportedExecution::MultipleMembers { .. })
-        ));
+        assert!(config.validate_executable().is_ok());
+        let group = GroupId::try_from("anthropic").expect("group");
+        assert_eq!(
+            config
+                .route(&group, Some("glm-4.7"))
+                .map(|(id, _)| id.as_ref()),
+            Some("zai")
+        );
+        assert_eq!(
+            config
+                .route(&group, Some("new-claude-model"))
+                .map(|(id, _)| id.as_ref()),
+            Some("claude")
+        );
+        assert_eq!(
+            config.route(&group, None).map(|(id, _)| id.as_ref()),
+            Some("claude")
+        );
 
         let mut value = valid_raw();
         value["groups"]["anthropic"]["members"] = json!({"claude": {"models": []}});
@@ -905,10 +925,11 @@ mod tests {
         value["groups"]["anthropic"]["members"] = json!({"claude": {"models": []}});
         value["providers"]["claude"]["endpoints"] = json!({"anthropic": "https://other.example"});
         let config = converted(value).expect("valid override config");
-        assert!(matches!(
-            config.validate_executable(),
-            Err(UnsupportedExecution::Endpoint { .. })
-        ));
+        assert!(config.validate_executable().is_ok());
+        assert_eq!(
+            config.route(&group, None).map(|(_, endpoint)| endpoint),
+            Some("https://other.example")
+        );
 
         let mut value = valid_raw();
         value["groups"]["openai"] = json!({

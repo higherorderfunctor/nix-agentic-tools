@@ -548,6 +548,7 @@ unshares
 unstages
 unstarted
 unstash
+unsync
 untarring
 unwire
 upgrader

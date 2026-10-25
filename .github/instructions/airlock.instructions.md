@@ -7,10 +7,10 @@ applyTo: "packages/airlock/**"
 
 # airlock
 
-> **Last verified:** 2026-10-24 — provider presets and protocol groups replace
-> the upstream schema. Rust resolves endpoints for direct and Nix-rendered
-> config; `serve` rejects active routes whose configured behavior is not yet
-> implemented. CONNECT, CA trust and Claude selection remain as described below.
+> **Last verified:** 2026-10-24 — Anthropic groups route each inference request
+> by a model read from a zeroizing 32 MiB in-memory body. Selected endpoints
+> connect with independent TLS and ALPN; feature traffic retains the original
+> host. OpenAI and managed OAuth remain gated.
 
 ## Scope
 
@@ -36,28 +36,31 @@ Interception follows this order:
   verified against the system store (`SSL_CERT_FILE` is honoured). Only then
   does it finish the client's handshake, offering only the protocol the upstream
   chose, so ALPN matches end to end.
-- Startup loads client tokens and each credential in a granted group once,
-  collecting every unreadable or empty file before serving. Ungranted groups and
-  credentials stay inert. Until model routing lands, `serve` accepts only a
-  single member per active group and uses its primary credential.
-- Interception parses HTTP on the negotiated protocol, opens one verified
-  upstream connection of the same kind, and streams request and response bodies
-  as frames. It preserves method, path, query, status, version, headers, and
-  body bytes; HTTP/2 requests are given the absolute `https` URI that protocol
-  requires.
+- Startup loads client tokens and every credential in a granted group once,
+  collecting unreadable or empty files. Ungranted groups stay inert.
+- The original verified upstream chooses client ALPN and carries primary feature
+  traffic. Each inference POST to `/v1/messages` is buffered in zeroizing memory
+  up to 32 MiB, parsed by serde_json for one top-level model and replayed byte
+  for byte. Requests carrying trailers receive 400, and larger bodies receive
+  413; no request reaches any upstream in either case. Missing or null models
+  retain the original host; unclaimed IDs select the primary endpoint. Malformed
+  or duplicate selectors fail before forwarding. Other methods and paths stream.
+  A selected endpoint gets its own verified TLS connection, independent ALPN,
+  authority and path prefix. Responses stream without waiting for completion;
+  HTTP/1.1, h2 and Upgrade remain supported.
 - Before injection, every request drops client `Authorization` and `x-api-key`
   values plus hop-by-hop fields named by `Connection`. An OAuth credential is
   injected as a sensitive Authorization bearer header; an API key is injected as
-  a sensitive x-api-key header. Other request headers stay unchanged.
+  a sensitive x-api-key header. Non-primary routes also remove client cookies.
 - A valid HTTP/1 upgrade keeps `Upgrade` and `Connection: Upgrade`, forwards the
   101, and then bridges the two upgraded byte streams. Other upgrades and
   hop-by-hop fields are removed. An upstream send or handshake failure on an
   applicable request becomes 502.
-- The CONNECT audit carries `sni`, `alpn`, the selected credential, and request
-  count, never body bytes or secrets. Its byte counters cover completed TLS
-  application writes, including HTTP framing, rather than body payload alone.
-  Normal connections retain bounded `close_notify` shutdown; an upgraded stream
-  is relayed until one peer closes.
+- The CONNECT audit carries `sni`, `alpn` and request count. Each request event
+  carries its selected credential and bounded model ID, never body bytes or
+  secrets. Byte counters cover completed TLS application writes, including HTTP
+  framing, rather than body payload alone. Normal connections retain bounded
+  `close_notify` shutdown; an upgraded stream is relayed until one peer closes.
 
 The CA lives in `$XDG_RUNTIME_DIR/airlock-<port>/` (0700): `ca.key`
 (PKCS#8, 0600) and `ca.pem` (0644), ECDSA P-256 with `pathlen:0` and no name
@@ -115,13 +118,13 @@ asserted yet. `credentials.<id>` names a provider and auth mode; `groups.<id>`
 names one protocol, its first-party intercept hosts, a primary credential and
 member credentials with exact model IDs. A client grants whole groups. The
 primary owns undeclared models; non-primary members need explicit IDs. A
-duplicate ID within a group is invalid. No traffic routing by model exists yet.
+duplicate ID within a group is invalid.
 
 Client tokens and file-backed credentials use `redact.types.secretFile`; the
 launcher writes each value to a 0600 runtime file and renders only its absolute
 path. `oauth_managed` has no file and is shape-checked for the future primary
-OAuth flow. Active managed OAuth, OpenAI, multiple members or endpoints that
-cannot use original-host transport make `serve` fail before secret loading.
+OAuth flow. Active managed OAuth and OpenAI make `serve` fail before secret
+loading. Endpoint overrides may include a port for local tests.
 
 ## Harness selection
 
