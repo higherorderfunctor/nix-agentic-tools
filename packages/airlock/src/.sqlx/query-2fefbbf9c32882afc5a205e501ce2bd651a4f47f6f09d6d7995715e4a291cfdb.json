@@ -1,0 +1,18 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(SUM(dropped_events), 0) AS \"total!: i64\" FROM request_events",
+  "describe": {
+    "columns": [
+      {
+        "name": "total!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [false]
+  },
+  "hash": "2fefbbf9c32882afc5a205e501ce2bd651a4f47f6f09d6d7995715e4a291cfdb"
+}

@@ -1,6 +1,7 @@
 mod ca;
 mod intercept;
 mod toolsearch;
+mod usage;
 
 use std::{
     collections::BTreeMap,
@@ -51,6 +52,8 @@ use zeroize::Zeroizing;
 
 pub use crate::ca::{CaError, create_private_directory, private_directory};
 use crate::intercept::Interceptor;
+pub use crate::usage::RequestUsageSink;
+use crate::usage::UsageTelemetry;
 
 // A peer that stops reading can hold a closed relay open this long while close_notify flushes.
 const CLOSE_GRACE: Duration = Duration::from_secs(1);
@@ -65,6 +68,8 @@ pub enum Error {
     Authority(#[from] CaError),
     #[error("gateway socket: {0}")]
     Io(#[from] io::Error),
+    #[error("request usage telemetry worker failed during shutdown")]
+    UsageTelemetryWorkerJoin,
     #[error("no upstream root certificates could be loaded (check SSL_CERT_FILE)")]
     NoUpstreamRoots,
     #[error("managed OAuth requires initialized storage")]
@@ -94,6 +99,7 @@ pub struct Gateway {
     address: SocketAddr,
     listener: TcpListener,
     state: Arc<State>,
+    usage_worker: Option<tokio::task::JoinHandle<()>>,
 }
 
 struct State {
@@ -102,6 +108,7 @@ struct State {
     interceptor: Arc<Interceptor>,
     policy: Policy,
     tokens: BTreeMap<ClientId, Secret>,
+    usage: UsageTelemetry,
 }
 
 #[derive(Clone, Copy)]
@@ -138,6 +145,33 @@ impl Gateway {
         ca_directory: &Path,
         upstream_roots: RootCertStore,
         storage: Option<Arc<SqliteStorage>>,
+    ) -> Result<Self, Error> {
+        Self::bind_with_storage_and_usage(config, ca_directory, upstream_roots, storage, None).await
+    }
+
+    /// Binds with a request-usage sink; telemetry is bounded and never delays response bodies.
+    ///
+    /// # Errors
+    /// Returns the ordinary bind errors; telemetry is fail-visible rather than startup-critical.
+    pub async fn bind_with_usage(
+        config: Config,
+        ca_directory: &Path,
+        upstream_roots: RootCertStore,
+        usage: Option<Arc<dyn RequestUsageSink>>,
+    ) -> Result<Self, Error> {
+        Self::bind_with_storage_and_usage(config, ca_directory, upstream_roots, None, usage).await
+    }
+
+    /// Binds with managed OAuth storage and a request-usage sink.
+    ///
+    /// # Errors
+    /// Returns configuration, secret, TLS, or socket errors.
+    pub async fn bind_with_storage_and_usage(
+        config: Config,
+        ca_directory: &Path,
+        upstream_roots: RootCertStore,
+        storage: Option<Arc<SqliteStorage>>,
+        usage: Option<Arc<dyn RequestUsageSink>>,
     ) -> Result<Self, Error> {
         config.validate_executable()?;
         if config.has_active_managed_oauth() && storage.is_none() {
@@ -179,6 +213,13 @@ impl Gateway {
         let interceptor = Arc::new(Interceptor::new(ca_directory, upstream_roots, storage)?);
         let listener = TcpListener::bind(config.listen()).await?;
         let policy = Policy::from_config(&config);
+        let (usage, usage_worker) = usage.map_or_else(
+            || (UsageTelemetry::disabled(), None),
+            |sink| {
+                let (usage, worker) = UsageTelemetry::new(sink);
+                (usage, Some(worker))
+            },
+        );
         Ok(Self {
             address: listener.local_addr()?,
             listener,
@@ -188,7 +229,9 @@ impl Gateway {
                 interceptor,
                 policy,
                 tokens,
+                usage,
             }),
+            usage_worker,
         })
     }
 
@@ -201,7 +244,7 @@ impl Gateway {
     ///
     /// # Errors
     /// Returns a listener accept error after terminating its connections.
-    pub async fn serve(self, shutdown: impl Future<Output = ()>) -> Result<(), Error> {
+    pub async fn serve(mut self, shutdown: impl Future<Output = ()>) -> Result<(), Error> {
         let mut connections = JoinSet::new();
         tokio::pin!(shutdown);
         let result = loop {
@@ -210,7 +253,10 @@ impl Gateway {
                 () = &mut shutdown => break Ok(()),
                 accepted = self.listener.accept() => match accepted {
                     Ok((socket, _)) => {
-                        connections.spawn(connection(socket, self.state.clone()).with_current_subscriber());
+                        connections.spawn(
+                            connection(socket, Arc::clone(&self.state))
+                                .with_current_subscriber(),
+                        );
                     }
                     Err(error) => break Err(Error::Io(error)),
                 },
@@ -218,6 +264,7 @@ impl Gateway {
             }
         };
         drop(self.listener);
+        drop(self.state);
         if timeout(SHUTDOWN_GRACE, async {
             while connections.join_next().await.is_some() {}
         })
@@ -226,6 +273,9 @@ impl Gateway {
         {
             connections.abort_all();
             while connections.join_next().await.is_some() {}
+        }
+        if let Some(worker) = self.usage_worker.take() {
+            worker.await.map_err(|_| Error::UsageTelemetryWorkerJoin)?;
         }
         result
     }
@@ -271,6 +321,7 @@ async fn connection(socket: TcpStream, state: Arc<State>) {
                         route.group,
                         state.config.clone(),
                         state.credentials.clone(),
+                        state.usage.clone(),
                         pending.audit,
                     )
                     .await;

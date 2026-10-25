@@ -1,8 +1,7 @@
 # airlock storage
 
-> **Last verified:** 2026-10-25 — managed primary OAuth mappings are scoped to
-> authenticated clients, with durable refresh expiry and generation-checked
-> replacement and retirement.
+> **Last verified:** 2026-10-25 — client-owned managed OAuth and bounded request
+> usage share the pre-release 0001 SQLite schema.
 
 ## Scope
 
@@ -33,14 +32,18 @@ worker tries to take the connection; queue or ownership contention returns
 external writer cannot stall response-side telemetry work.
 
 The one-slot channel permits one active write and at most one queued write.
-Acknowledgement happens only after SQLite succeeds or fails. Request forwarding
-does not wait for this worker; M07 must call it from telemetry side-work and
-treat `UsageUnavailable` or a write error as visible completeness loss. `close`
-drains the worker, takes sole ownership of the connection, and awaits SQLite's
-asynchronous close. Dropping a handle without `close` releases the worker
-asynchronously and is not the deterministic shutdown path. The serve caller
-keeps the sole storage owner after gateway connections drain and calls `close`
-on both normal and error exits before the state directory is reused.
+Acknowledgement happens only after SQLite succeeds or fails. The gateway has a
+separate bounded 32-event dispatcher: response forwarding only tries to queue an
+event, and one worker awaits storage. A full dispatcher, failed write, or closed
+worker increments a pending loss count and emits a reason-only warning; the next
+durable event carries that count as global, unattributed loss. It is reported
+through a lifetime global total, never assigned to that event's provider,
+client, model, or time bucket. Gateway shutdown drains connections and the
+dispatcher before storage `close` drains its own worker and closes SQLite. A
+loss with no later successful write remains visible in the warning, not in a
+database aggregate. Dropping a storage handle without `close` releases its
+worker asynchronously. The serve caller keeps the sole storage owner and calls
+`close` on both normal and error exits before the state directory is reused.
 
 ## Data contract
 
@@ -53,8 +56,7 @@ implementation is always `[redacted]`. Storage never logs token values, and SQLx
 statement and slow-statement logging are disabled.
 
 OAuth stores one real token pair per credential and a fake mapping keyed by
-authenticated client and credential. A migration retires the pre-release unowned
-pairs rather than guessing their owner. The active managed route has exactly one
+authenticated client and credential. The active managed route has exactly one
 client. Replacement is a transaction guarded by a generation: an absent mapping
 requires generation zero, while an existing mapping must match the caller's
 expected generation before either half is replaced. Lookup joins the mapping,
@@ -63,15 +65,28 @@ client/credential/provider mismatch without returning token material. Known
 refresh-token expiry is durable. Successful revoke removes both pairs only when
 its client, provider, fake refresh token, and generation still match.
 
-Observed request events are separate from provider snapshots. An event records
-the group, credential, bounded model ID, completed/failed/rejected outcome,
-status, byte counters, latency, and optional token dimensions; it never records
-request or response bodies, headers, prompts, tool arguments, or arbitrary
-provider JSON. Aggregation groups by credential, model, and outcome over a time
-range, sums known dimensions, and preserves an unknown token dimension when any
-included event lacks it. It fetches at most 10,001 groups and returns
-`UsageRangeIncomplete` when a range has more than 10,000 groups, rather than
-silently truncating the result.
+Observed request events are separate from provider snapshots. An inference event
+records client, group, served credential, bounded model ID, status,
+completed/failed/rejected/cancelled outcome, byte counters, latency in
+milliseconds from request handling through body completion, completeness and
+loss counts, and optional input, output, cache read and cache creation token
+counts. It never records request or response bodies, headers, prompts, tool
+arguments, or arbitrary provider JSON. The response tee reads `message_start`
+and cumulative `message_delta` usage without changing forwarded bytes; gzip SSE
+is decoded incrementally in memory, while JSON and gzip JSON observation are
+limited to 1 MiB. Unknown encoding, malformed or truncated usage, and an
+over-limit body are marked incomplete. Requests rejected before a served
+credential is known are only in the request audit, since attributing them to a
+provider would invent a serving identity. Rows with an unknown client use SQL
+null; a configured client named `legacy-unknown` remains distinct from them.
+
+Aggregation uses caller-selected time buckets and groups by provider, client,
+served credential, model, and outcome. It counts HTTP 2xx successes, 4xx/5xx
+errors and complete observations, and sums known latency, bytes, and token
+dimensions. A token total stays unknown when any included event lacks that
+dimension. It fetches at most 10,001 groups and returns `UsageRangeIncomplete`
+when a range has more than 10,000 groups, rather than silently truncating the
+result.
 
 Provider snapshots are append-only history. A header records fetch time,
 provider, account ID, success/gap status, and a bounded gap reason; child rows

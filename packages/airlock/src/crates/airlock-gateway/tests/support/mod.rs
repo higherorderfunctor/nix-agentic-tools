@@ -15,7 +15,7 @@ use std::{
 
 use airlock_core::config::{Config, RawConfig};
 use airlock_core::storage::SqliteStorage;
-use airlock_gateway::{Error, Gateway};
+use airlock_gateway::{Error, Gateway, RequestUsageSink};
 use base64::{Engine as _, prelude::BASE64_STANDARD};
 use http_body_util::BodyExt;
 use hyper::{
@@ -168,7 +168,7 @@ impl Running {
         write_fixtures(&directory, auth);
         let ca_directory = ca_directory.map_or_else(|| directory.path().join("ca"), Path::to_owned);
         let config = config_with_auth(&directory, unknown_hosts, intercepted, auth, upstream_port);
-        Self::start_config(directory, config, ca_directory, roots).await
+        Self::start_config(directory, config, ca_directory, roots, None).await
     }
 
     pub async fn start_multiplex(roots: RootCertStore, primary_port: u16, zai_port: u16) -> Self {
@@ -180,6 +180,15 @@ impl Running {
         roots: RootCertStore,
         zai_port: u16,
         primary_endpoint: &str,
+    ) -> Self {
+        Self::start_multiplex_with_usage(roots, zai_port, primary_endpoint, None).await
+    }
+
+    pub async fn start_multiplex_with_usage(
+        roots: RootCertStore,
+        zai_port: u16,
+        primary_endpoint: &str,
+        usage: Option<Arc<dyn RequestUsageSink>>,
     ) -> Self {
         let directory = tempfile::tempdir().expect("tempdir");
         write_fixtures(&directory, FixtureAuth::OauthBearer);
@@ -202,7 +211,7 @@ impl Running {
             "unknown_hosts": "deny"
         })).expect("raw multiplex config")).expect("multiplex config");
         let ca_directory = directory.path().join("ca");
-        Self::start_config(directory, config, ca_directory, roots).await
+        Self::start_config(directory, config, ca_directory, roots, usage).await
     }
 
     pub async fn start_managed(roots: RootCertStore, upstream_port: u16) -> Self {
@@ -253,7 +262,8 @@ impl Running {
                 .expect("managed storage"),
         );
         let ca_directory = directory.path().join("ca");
-        Self::start_config_with_storage(directory, config, ca_directory, roots, Some(storage)).await
+        Self::start_config_with_storage(directory, config, ca_directory, roots, Some(storage), None)
+            .await
     }
 
     async fn start_config(
@@ -261,8 +271,9 @@ impl Running {
         config: Config,
         ca_directory: PathBuf,
         roots: RootCertStore,
+        usage: Option<Arc<dyn RequestUsageSink>>,
     ) -> Self {
-        Self::start_config_with_storage(directory, config, ca_directory, roots, None).await
+        Self::start_config_with_storage(directory, config, ca_directory, roots, None, usage).await
     }
 
     async fn start_config_with_storage(
@@ -271,10 +282,17 @@ impl Running {
         ca_directory: PathBuf,
         roots: RootCertStore,
         storage: Option<Arc<SqliteStorage>>,
+        usage: Option<Arc<dyn RequestUsageSink>>,
     ) -> Self {
-        let gateway = Gateway::bind_with_storage(config, &ca_directory, roots, storage.clone())
-            .await
-            .expect("bind gateway");
+        let gateway = Gateway::bind_with_storage_and_usage(
+            config,
+            &ca_directory,
+            roots,
+            storage.clone(),
+            usage,
+        )
+        .await
+        .expect("bind gateway");
         let address = gateway.local_addr();
         assert_eq!(address.ip(), std::net::Ipv4Addr::LOCALHOST);
         let capture = Capture::default();
@@ -653,6 +671,10 @@ pub enum UpstreamMode {
         content_type: &'static str,
         encoding: Option<&'static str>,
     },
+    Encoded {
+        body: Bytes,
+        content_type: &'static str,
+    },
     Gate(Arc<Notify>),
     HashUpload,
     Metadata,
@@ -729,6 +751,7 @@ async fn request_body(mode: &UpstreamMode, mut body: Incoming) -> (Bytes, u64, u
             | UpstreamMode::OauthWithoutNewRefresh
             | UpstreamMode::OauthReply { .. }
             | UpstreamMode::OauthStall(_)
+            | UpstreamMode::Encoded { .. }
             | UpstreamMode::ToolSearchSse { .. }
     );
     let mut collected = Vec::new();
@@ -760,6 +783,20 @@ fn toolsearch_sse_chunks(cr_only: bool) -> &'static [&'static [u8]] {
             b"\nevent: message\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\n",
         ]
     }
+}
+
+fn fixed_response(
+    body: Bytes,
+    content_type: &'static str,
+    encoding: Option<&'static str>,
+) -> Response<ReceiverBody> {
+    let mut response = Response::builder()
+        .header("content-type", content_type)
+        .header("content-length", body.len().to_string());
+    if let Some(encoding) = encoding {
+        response = response.header("content-encoding", encoding);
+    }
+    response.body(queued_body(body)).expect("fixed response")
 }
 
 fn quota_response(fixture: &QuotaFixture) -> Response<ReceiverBody> {
@@ -923,16 +960,9 @@ async fn upstream_response(
             body,
             content_type,
             encoding,
-        } => {
-            let mut response = Response::builder()
-                .header("content-type", content_type)
-                .header("content-length", body.len().to_string());
-            if let Some(encoding) = encoding {
-                response = response.header("content-encoding", encoding);
-            }
-            response
-                .body(queued_body(Bytes::from_static(body)))
-                .expect("fixed response")
+        } => fixed_response(Bytes::from_static(body), content_type, encoding),
+        UpstreamMode::Encoded { body, content_type } => {
+            fixed_response(body, content_type, Some("gzip"))
         }
         UpstreamMode::Gate(release) => gated_response(release, path).await,
         UpstreamMode::HashUpload => Response::new(queued_body(Bytes::from(body_hash.to_string()))),

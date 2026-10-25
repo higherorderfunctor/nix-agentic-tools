@@ -53,8 +53,10 @@ use tokio_rustls::{LazyConfigAcceptor, StartHandshake, TlsConnector, client, ser
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
-    Audit, AuthKind, CONNECT_TIMEOUT, Error, LoadedCredential, Reply, ca::Authority,
+    Audit, AuthKind, CONNECT_TIMEOUT, Error, LoadedCredential, Reply,
+    ca::Authority,
     record_completed_write, relay_streams, toolsearch,
+    usage::{RequestUsageIdentity, RequestUsageTracker, UsageTelemetry, sse_event_end},
 };
 
 // A client gets this long to send its ClientHello, and later to finish its handshake.
@@ -694,6 +696,7 @@ struct ForwardState {
     quota_cache: QuotaCache,
     route: ForwardRoute,
     sender: UpstreamSender,
+    usage: UsageTelemetry,
 }
 
 struct PendingUpgrade {
@@ -705,6 +708,7 @@ struct PendingUpgrade {
 
 struct LeasedBody {
     inner: ResponsePayload,
+    usage: Option<RequestUsageTracker>,
     _task: Option<AbortOnDrop>,
     _sender: Option<UpstreamSender>,
 }
@@ -725,28 +729,6 @@ enum ResponsePayload {
         skip_lf: bool,
         trailers: Option<hyper::HeaderMap>,
     },
-}
-
-fn sse_event_end(bytes: &[u8]) -> Option<usize> {
-    let mut line_start = 0;
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'\r' || bytes[index] == b'\n' {
-            let blank = index == line_start;
-            let cr = bytes[index] == b'\r';
-            index += 1;
-            if cr && bytes.get(index) == Some(&b'\n') {
-                index += 1;
-            }
-            if blank {
-                return Some(index);
-            }
-            line_start = index;
-        } else {
-            index += 1;
-        }
-    }
-    None
 }
 
 fn skip_optional_lf(chunk: Bytes, skip_lf: &mut bool) -> Bytes {
@@ -772,10 +754,22 @@ fn transformed_event(event: &mut Zeroizing<Vec<u8>>) -> Result<Frame<Bytes>, Bod
     Ok(Frame::data(Bytes::copy_from_slice(event)))
 }
 
+impl LeasedBody {
+    fn finish_usage(&mut self, outcome: airlock_core::storage::RequestOutcome) {
+        if let Some(usage) = &mut self.usage {
+            usage.finish(outcome);
+        }
+    }
+}
+
 impl Body for LeasedBody {
     type Data = Bytes;
     type Error = BodyError;
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one response body state machine preserves streaming and ToolSearch transformation order"
+    )]
     fn poll_frame(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -783,9 +777,31 @@ impl Body for LeasedBody {
         loop {
             match &mut self.inner {
                 ResponsePayload::Passthrough(inner) => {
-                    return std::pin::Pin::new(inner)
+                    let item = std::pin::Pin::new(inner)
                         .poll_frame(cx)
                         .map(|item| item.map(|result| result.map_err(Into::into)));
+                    match item {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(Some(Ok(frame))) => match frame.into_data() {
+                            Ok(chunk) => {
+                                if let Some(usage) = &mut self.usage {
+                                    usage.observe_chunk(&chunk);
+                                }
+                                return Poll::Ready(Some(Ok(Frame::data(chunk))));
+                            }
+                            Err(frame) => {
+                                return Poll::Ready(Some(Ok(frame)));
+                            }
+                        },
+                        Poll::Ready(Some(Err(error))) => {
+                            self.finish_usage(airlock_core::storage::RequestOutcome::Failed);
+                            return Poll::Ready(Some(Err(error)));
+                        }
+                        Poll::Ready(None) => {
+                            self.finish_usage(airlock_core::storage::RequestOutcome::Completed);
+                            return Poll::Ready(None);
+                        }
+                    }
                 }
                 ResponsePayload::Json {
                     inner,
@@ -806,6 +822,9 @@ impl Body for LeasedBody {
                                     .is_err()
                                 {
                                     *done = true;
+                                    self.finish_usage(
+                                        airlock_core::storage::RequestOutcome::Failed,
+                                    );
                                     return Poll::Ready(Some(Err(body_error(
                                         "toolsearch_response_too_large",
                                     ))));
@@ -814,15 +833,23 @@ impl Body for LeasedBody {
                             Err(frame) => *trailers = frame.into_trailers().ok(),
                         },
                         Poll::Ready(Some(Err(error))) => {
+                            self.finish_usage(airlock_core::storage::RequestOutcome::Failed);
                             return Poll::Ready(Some(Err(error.into())));
                         }
                         Poll::Ready(None) => {
                             *done = true;
-                            if let Err(reason) = toolsearch::response(bytes) {
+                            let mut bytes = Zeroizing::new(std::mem::take(&mut **bytes));
+                            if let Err(reason) = toolsearch::response(&mut bytes) {
+                                drop(bytes);
+                                self.finish_usage(airlock_core::storage::RequestOutcome::Failed);
                                 return Poll::Ready(Some(Err(body_error(reason))));
                             }
+                            if let Some(usage) = &mut self.usage {
+                                usage.observe_json(&bytes);
+                            }
+                            self.finish_usage(airlock_core::storage::RequestOutcome::Completed);
                             return Poll::Ready(Some(Ok(Frame::data(Bytes::copy_from_slice(
-                                bytes,
+                                &bytes,
                             )))));
                         }
                     }
@@ -839,21 +866,42 @@ impl Body for LeasedBody {
                         let mut event = Zeroizing::new(bytes[..end].to_vec());
                         *skip_lf = event.ends_with(b"\r") && end == bytes.len();
                         *bytes = Zeroizing::new(bytes[end..].to_vec());
-                        return Poll::Ready(Some(transformed_event(&mut event)));
+                        let result = transformed_event(&mut event);
+                        if let Some(usage) = &mut self.usage {
+                            usage.observe_sse_event(&event);
+                        }
+                        return match result {
+                            Ok(frame) => Poll::Ready(Some(Ok(frame))),
+                            Err(error) => {
+                                self.finish_usage(airlock_core::storage::RequestOutcome::Failed);
+                                Poll::Ready(Some(Err(error)))
+                            }
+                        };
                     }
                     if *done {
                         if bytes.is_empty() {
-                            return Poll::Ready(
-                                trailers.take().map(|value| Ok(Frame::trailers(value))),
-                            );
+                            let trailers = trailers.take();
+                            self.finish_usage(airlock_core::storage::RequestOutcome::Completed);
+                            return Poll::Ready(trailers.map(|value| Ok(Frame::trailers(value))));
                         }
                         let mut event = Zeroizing::new(std::mem::take(&mut **bytes));
-                        return Poll::Ready(Some(transformed_event(&mut event)));
+                        let result = transformed_event(&mut event);
+                        if let Some(usage) = &mut self.usage {
+                            usage.observe_sse_event(&event);
+                        }
+                        return match result {
+                            Ok(frame) => Poll::Ready(Some(Ok(frame))),
+                            Err(error) => {
+                                self.finish_usage(airlock_core::storage::RequestOutcome::Failed);
+                                Poll::Ready(Some(Err(error)))
+                            }
+                        };
                     }
                     if let Some(chunk) = take_sse_chunk(pending, skip_lf) {
                         let room = toolsearch::EVENT_LIMIT.saturating_sub(bytes.len());
                         if room == 0 {
                             *done = true;
+                            self.finish_usage(airlock_core::storage::RequestOutcome::Failed);
                             return Poll::Ready(Some(Err(body_error(
                                 "toolsearch_event_too_large",
                             ))));
@@ -872,6 +920,7 @@ impl Body for LeasedBody {
                             Err(frame) => *trailers = frame.into_trailers().ok(),
                         },
                         Poll::Ready(Some(Err(error))) => {
+                            self.finish_usage(airlock_core::storage::RequestOutcome::Failed);
                             return Poll::Ready(Some(Err(error.into())));
                         }
                         Poll::Ready(None) => *done = true,
@@ -913,6 +962,10 @@ impl Interceptor {
         })
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "CONNECT state must carry authenticated usage identity through the tunnel"
+    )]
     pub(crate) async fn run(
         self: &Arc<Self>,
         client: TokioIo<hyper::upgrade::Upgraded>,
@@ -920,6 +973,7 @@ impl Interceptor {
         group: GroupId,
         config: Arc<Config>,
         credentials: Arc<BTreeMap<CredentialId, Arc<LoadedCredential>>>,
+        usage: UsageTelemetry,
         mut audit: Audit,
     ) {
         // A timeout, a non-handshake first record and an unparseable hello all mean "not TLS".
@@ -972,10 +1026,14 @@ impl Interceptor {
             group,
             target,
         };
-        self.forward_connection(start, upstream, negotiated, route, audit, client_id)
+        self.forward_connection(start, upstream, negotiated, route, audit, client_id, usage)
             .await;
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the verified upstream and authenticated usage state travel together"
+    )]
     async fn forward_connection(
         self: &Arc<Self>,
         start: StartHandshake<TokioIo<hyper::upgrade::Upgraded>>,
@@ -984,6 +1042,7 @@ impl Interceptor {
         route: ForwardRoute,
         mut audit: Audit,
         client_id: ClientId,
+        usage: UsageTelemetry,
     ) {
         let protocol = HttpProtocol::from_alpn(negotiated.as_deref());
         let Ok(tls_config) = self.server_config(route.target.host(), negotiated) else {
@@ -996,10 +1055,14 @@ impl Interceptor {
             let _ = timeout(crate::CLOSE_GRACE, upstream.shutdown()).await;
             return;
         };
-        self.serve_forwarding(client, upstream, protocol, route, audit, client_id)
+        self.serve_forwarding(client, upstream, protocol, route, audit, client_id, usage)
             .await;
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "HTTP forwarding needs both TLS peers and authenticated usage state"
+    )]
     async fn serve_forwarding(
         self: &Arc<Self>,
         client: server::TlsStream<TokioIo<hyper::upgrade::Upgraded>>,
@@ -1008,6 +1071,7 @@ impl Interceptor {
         route: ForwardRoute,
         mut audit: Audit,
         client_identity: ClientId,
+        usage: UsageTelemetry,
     ) {
         let relay_closed = Arc::new(Notify::new());
         let (upstream_io, upstream_shutdown) = shared_io(
@@ -1038,6 +1102,7 @@ impl Interceptor {
             quota_cache: self.quota_cache.clone(),
             route,
             sender,
+            usage,
         };
         let service =
             service_fn(move |request| forward(request, forwarding.clone(), upgrade_sender.clone()));
@@ -1782,6 +1847,10 @@ async fn forward_managed_token(
     json_reply(status, &fake_response)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "response body ownership and usage tracking meet only at this boundary"
+)]
 async fn finish_response(
     mut response: Response<Incoming>,
     shim: bool,
@@ -1790,6 +1859,7 @@ async fn finish_response(
     mut completion: RequestCompletion,
     client_upgrade: OnUpgrade,
     upgrades: mpsc::Sender<PendingUpgrade>,
+    mut usage: Option<RequestUsageTracker>,
 ) -> Reply {
     let status = response.status();
     if shim
@@ -1799,10 +1869,22 @@ async fn finish_response(
             .get(CONTENT_ENCODING)
             .is_some_and(|value| !value.as_bytes().eq_ignore_ascii_case(b"identity"))
     {
+        if let Some(usage) = &mut usage {
+            usage.set_status(StatusCode::BAD_GATEWAY.as_u16());
+            usage.finish_without_observation(airlock_core::storage::RequestOutcome::Rejected);
+        }
         completion.outcome = Some("toolsearch_compressed_response");
         completion.finish(StatusCode::BAD_GATEWAY);
         return crate::response(StatusCode::BAD_GATEWAY, "toolsearch_compressed_response");
     }
+    let content_type = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .map(|value| value.as_bytes().to_vec());
+    let content_encoding = response
+        .headers()
+        .get(CONTENT_ENCODING)
+        .map(|value| value.as_bytes().to_vec());
     let transform = shim && status.is_success();
     let sse = transform
         && response.headers().get(CONTENT_TYPE).is_some_and(|value| {
@@ -1812,6 +1894,10 @@ async fn finish_response(
                 .next()
                 .is_some_and(|mime| mime.trim_ascii().eq_ignore_ascii_case(b"text/event-stream"))
         });
+    if let Some(usage) = &mut usage {
+        usage.set_status(status.as_u16());
+        usage.observe_response(content_type.as_deref(), content_encoding.as_deref());
+    }
     if transform {
         response.headers_mut().remove(CONTENT_LENGTH);
     }
@@ -1830,12 +1916,17 @@ async fn finish_response(
             _sender: selected_sender.take(),
         };
         if upgrades.send(pending).await.is_err() {
+            if let Some(usage) = &mut usage {
+                usage.set_status(StatusCode::INTERNAL_SERVER_ERROR.as_u16());
+                usage.finish_without_observation(airlock_core::storage::RequestOutcome::Failed);
+            }
             return crate::response(StatusCode::INTERNAL_SERVER_ERROR, "connection closed");
         }
     }
     completion.finish(status);
     response.map(|body| {
         LeasedBody {
+            usage,
             inner: if sse {
                 ResponsePayload::Sse {
                     inner: body,
@@ -1864,7 +1955,7 @@ async fn finish_response(
 
 #[expect(
     clippy::too_many_lines,
-    reason = "the request gate keeps selection, authorization, and forwarding in one ordered path"
+    reason = "routing, credential injection, and usage outcome share one request boundary"
 )]
 async fn forward(
     mut request: Request<Incoming>,
@@ -1898,7 +1989,7 @@ async fn forward(
     };
     let credential_id = credential_id.clone();
     let has_model = model.is_some();
-    completion.selected(credential_id.clone(), model);
+    completion.selected(credential_id.clone(), model.clone());
     let Some((primary_id, _)) = state.route.config.route(&state.route.group, None) else {
         completion.finish(StatusCode::FORBIDDEN);
         return Ok(crate::response(StatusCode::FORBIDDEN, "route unavailable"));
@@ -1955,6 +2046,19 @@ async fn forward(
             ));
         }
     }
+    let mut usage = inference.then(|| {
+        state.usage.request(
+            RequestUsageIdentity {
+                client: state.client.clone(),
+                credential: credential_id.clone(),
+                group: state.route.group.clone(),
+                model: model.clone().unwrap_or_else(|| "unspecified".to_owned()),
+            },
+            request_body_size(&request),
+            599,
+            completion.duration_started,
+        )
+    });
     let zai = inference
         && state
             .route
@@ -1964,6 +2068,12 @@ async fn forward(
         match prepare_toolsearch_request(&mut request) {
             Ok(changed) => changed,
             Err(reason) => {
+                if let Some(usage) = &mut usage {
+                    usage.set_status(StatusCode::BAD_REQUEST.as_u16());
+                    usage.finish_without_observation(
+                        airlock_core::storage::RequestOutcome::Rejected,
+                    );
+                }
                 completion.outcome = Some(reason);
                 completion.finish(StatusCode::BAD_REQUEST);
                 return Ok(crate::response(StatusCode::BAD_REQUEST, reason));
@@ -1974,6 +2084,10 @@ async fn forward(
     };
     let Ok(selected) = select_upstream(&state, endpoint, primary, inference && has_model).await
     else {
+        if let Some(usage) = &mut usage {
+            usage.set_status(StatusCode::BAD_GATEWAY.as_u16());
+            usage.finish_without_observation(airlock_core::storage::RequestOutcome::Failed);
+        }
         completion.finish(StatusCode::BAD_GATEWAY);
         return Ok(crate::response(
             StatusCode::BAD_GATEWAY,
@@ -1981,6 +2095,10 @@ async fn forward(
         ));
     };
     let Ok(request) = prepare_request(request, &selected, primary) else {
+        if let Some(usage) = &mut usage {
+            usage.set_status(StatusCode::BAD_GATEWAY.as_u16());
+            usage.finish_without_observation(airlock_core::storage::RequestOutcome::Failed);
+        }
         completion.finish(StatusCode::BAD_GATEWAY);
         return Ok(crate::response(
             StatusCode::BAD_GATEWAY,
@@ -2008,12 +2126,20 @@ async fn forward(
             } else {
                 StatusCode::INTERNAL_SERVER_ERROR
             };
+            if let Some(usage) = &mut usage {
+                usage.set_status(status.as_u16());
+                usage.finish_without_observation(airlock_core::storage::RequestOutcome::Failed);
+            }
             completion.outcome = Some(reason);
             completion.finish(status);
             return Ok(crate::response(status, reason));
         }
     };
     let Ok(response) = selected.sender.clone().send_request(request).await else {
+        if let Some(usage) = &mut usage {
+            usage.set_status(StatusCode::BAD_GATEWAY.as_u16());
+            usage.finish_without_observation(airlock_core::storage::RequestOutcome::Failed);
+        }
         completion.finish(StatusCode::BAD_GATEWAY);
         return Ok(crate::response(
             StatusCode::BAD_GATEWAY,
@@ -2029,8 +2155,16 @@ async fn forward(
         completion,
         client_upgrade,
         upgrades,
+        usage,
     )
     .await)
+}
+
+fn request_body_size(request: &Request<RequestBody>) -> u64 {
+    let RequestBody::Buffered { bytes, .. } = request.body() else {
+        unreachable!("inspected inference request must have a buffered body");
+    };
+    bytes.len() as u64
 }
 
 fn swap_credential<B>(

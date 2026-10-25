@@ -102,6 +102,11 @@ this index.
     - `packages/airlock/**`
   - Read:
     - [`packages/airlock/docs/integration.md`](packages/airlock/docs/integration.md)
+- **`airlock-routing`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`packages/airlock/docs/routing.md`](packages/airlock/docs/routing.md)
 - **`airlock-storage`**
   - Match:
     - `packages/airlock/**`

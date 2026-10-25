@@ -21,6 +21,16 @@
         }
       ];
     };
+    airlock-routing = {
+      scopes = ["packages/${facetOwner}/**"];
+      sources = [
+        {
+          dir = facetOwner;
+          location = "package";
+          name = "routing";
+        }
+      ];
+    };
     airlock-storage = {
       scopes = ["packages/${facetOwner}/**"];
       sources = [

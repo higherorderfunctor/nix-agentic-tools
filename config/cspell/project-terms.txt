@@ -195,6 +195,7 @@ fhsenv
 fileset
 findutils
 fixpoint
+flate
 foldl
 foldr
 footgun

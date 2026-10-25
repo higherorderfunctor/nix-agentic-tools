@@ -20,30 +20,42 @@ CREATE TABLE group_members (
   PRIMARY KEY (group_id, credential_id)
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE clients (
+  id TEXT PRIMARY KEY,
+  inserted_at_unix INTEGER NOT NULL CHECK (inserted_at_unix > 0)
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE oauth_tokens (
   credential_id TEXT PRIMARY KEY REFERENCES credentials (id),
   access_token TEXT NOT NULL,
   refresh_token TEXT NOT NULL,
+  refresh_token_expires_at_unix INTEGER
+    CHECK (refresh_token_expires_at_unix IS NULL OR refresh_token_expires_at_unix > 0),
   access_expires_at_unix INTEGER NOT NULL CHECK (access_expires_at_unix > 0),
   updated_at_unix INTEGER NOT NULL CHECK (updated_at_unix > 0)
 ) STRICT, WITHOUT ROWID;
 
 CREATE TABLE oauth_mappings (
-  credential_id TEXT PRIMARY KEY REFERENCES credentials (id),
+  client_id TEXT NOT NULL REFERENCES clients (id),
+  credential_id TEXT NOT NULL REFERENCES credentials (id),
   generation INTEGER NOT NULL CHECK (generation > 0),
   fake_access_token TEXT NOT NULL UNIQUE,
   fake_refresh_token TEXT NOT NULL UNIQUE,
   fake_access_expires_at_unix INTEGER NOT NULL CHECK (fake_access_expires_at_unix > 0),
-  updated_at_unix INTEGER NOT NULL CHECK (updated_at_unix > 0)
+  updated_at_unix INTEGER NOT NULL CHECK (updated_at_unix > 0),
+  PRIMARY KEY (client_id, credential_id)
 ) STRICT, WITHOUT ROWID;
 
 CREATE TABLE request_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   occurred_at_unix INTEGER NOT NULL CHECK (occurred_at_unix > 0),
+  client_id TEXT REFERENCES clients (id),
   group_id TEXT NOT NULL REFERENCES groups (id),
   credential_id TEXT NOT NULL REFERENCES credentials (id),
   model_id TEXT NOT NULL CHECK (length(model_id) > 0 AND length(model_id) <= 128),
-  outcome TEXT NOT NULL CHECK (outcome IN ('completed', 'failed', 'rejected')),
+  outcome TEXT NOT NULL CHECK (
+    outcome IN ('completed', 'failed', 'rejected', 'cancelled')
+  ),
   status_code INTEGER NOT NULL CHECK (status_code BETWEEN 100 AND 599),
   request_bytes INTEGER NOT NULL CHECK (request_bytes >= 0),
   response_bytes INTEGER NOT NULL CHECK (response_bytes >= 0),
@@ -52,6 +64,8 @@ CREATE TABLE request_events (
   output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
   cache_read_tokens INTEGER CHECK (cache_read_tokens IS NULL OR cache_read_tokens >= 0),
   cache_write_tokens INTEGER CHECK (cache_write_tokens IS NULL OR cache_write_tokens >= 0),
+  usage_complete INTEGER NOT NULL CHECK (usage_complete IN (0, 1)),
+  dropped_events INTEGER NOT NULL CHECK (dropped_events >= 0),
   FOREIGN KEY (group_id, credential_id) REFERENCES group_members (group_id, credential_id)
 ) STRICT;
 
