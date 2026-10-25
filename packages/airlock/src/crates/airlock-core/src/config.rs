@@ -10,6 +10,7 @@ use crate::{
     error::{ConfigError, ConfigErrors, NameError},
     ids::{ClientId, CredentialId, GroupId, HostName, ProviderId},
     secret::SecretFile,
+    storage::StorageIdentities,
 };
 
 pub struct Config {
@@ -152,6 +153,34 @@ impl Config {
     #[must_use]
     pub fn state_dir(&self) -> &std::path::Path {
         &self.state_dir
+    }
+
+    /// Projects configured identities for durable state initialization.
+    ///
+    /// Configuration validation has already established all references. The timestamp belongs to
+    /// the caller so startup remains deterministic and testable.
+    #[must_use]
+    pub fn storage_identities(&self, inserted_at_unix: i64) -> StorageIdentities {
+        StorageIdentities {
+            credentials: self
+                .credentials
+                .iter()
+                .map(|(id, credential)| (id.clone(), credential.provider.clone()))
+                .collect(),
+            group_members: self
+                .groups
+                .iter()
+                .flat_map(|(group, config)| {
+                    config
+                        .members
+                        .keys()
+                        .map(move |credential| (group.clone(), credential.clone()))
+                })
+                .collect(),
+            groups: self.groups.keys().cloned().collect(),
+            inserted_at_unix,
+            providers: self.providers.keys().cloned().collect(),
+        }
     }
 
     pub fn client_token_files(&self) -> impl Iterator<Item = (&ClientId, &SecretFile)> {
@@ -724,6 +753,11 @@ mod tests {
                 .path(),
             std::path::Path::new("/run/airlock/harness")
         );
+        let storage_identities = baseline.storage_identities(1);
+        assert_eq!(storage_identities.providers.len(), 2);
+        assert_eq!(storage_identities.credentials.len(), 2);
+        assert_eq!(storage_identities.groups.len(), 1);
+        assert_eq!(storage_identities.group_members.len(), 2);
         assert_eq!(baseline.unknown_hosts(), UnknownHosts::Tunnel);
     }
 

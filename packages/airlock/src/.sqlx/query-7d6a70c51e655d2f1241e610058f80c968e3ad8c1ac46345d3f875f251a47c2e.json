@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO credentials (id, provider_id, inserted_at_unix) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "7d6a70c51e655d2f1241e610058f80c968e3ad8c1ac46345d3f875f251a47c2e"
+}

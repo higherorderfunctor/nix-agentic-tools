@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT label, used_minor_units, remaining_minor_units, limit_minor_units, reset_at_unix\n        FROM credit_pools\n        WHERE snapshot_id = ?\n        ORDER BY ordinal\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "label",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "used_minor_units",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "remaining_minor_units",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "limit_minor_units",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "reset_at_unix",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [false, false, false, false, true]
+  },
+  "hash": "2403361aa9060aa37b114fce93c561c887a05858bd17e532b1188edc1b90013f"
+}

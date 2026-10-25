@@ -1,0 +1,28 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT label, value, unit FROM quota_metrics\n        WHERE snapshot_id = ?\n        ORDER BY ordinal\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "label",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "value",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "unit",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [false, false, false]
+  },
+  "hash": "78c14db4aa9c053c319f6e0b05a871c5488e4f19827b2d7fbb06b0fc0e7bf26f"
+}

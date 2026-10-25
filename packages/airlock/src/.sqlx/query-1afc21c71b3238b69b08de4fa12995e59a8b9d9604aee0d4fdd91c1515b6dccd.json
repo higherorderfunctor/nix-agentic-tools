@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT mappings.credential_id, credentials.provider_id, mappings.generation,\n                   mappings.fake_access_token, mappings.fake_refresh_token,\n                   mappings.fake_access_expires_at_unix,\n                   mappings.updated_at_unix AS mapping_updated_at_unix,\n                   tokens.access_token, tokens.refresh_token,\n                   tokens.access_expires_at_unix,\n                   tokens.updated_at_unix AS real_updated_at_unix\n            FROM oauth_mappings AS mappings\n            JOIN credentials\n              ON credentials.id = mappings.credential_id\n            JOIN oauth_tokens AS tokens\n              ON tokens.credential_id = mappings.credential_id\n            WHERE mappings.credential_id = ? AND credentials.provider_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "credential_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "generation",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "fake_access_token",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "fake_refresh_token",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "fake_access_expires_at_unix",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "mapping_updated_at_unix",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "access_token",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "refresh_token",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "access_expires_at_unix",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "real_updated_at_unix",
+        "ordinal": 10,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1afc21c71b3238b69b08de4fa12995e59a8b9d9604aee0d4fdd91c1515b6dccd"
+}

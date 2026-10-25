@@ -1,0 +1,18 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT last_insert_rowid() AS id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [false]
+  },
+  "hash": "57dbd6b1c348dc494057b67ccd222d78fe5f96bf4455a70c59f003e672ad32c5"
+}

@@ -1,0 +1,33 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT label, utilized, limit_value, reset_at_unix FROM quota_pools\n        WHERE snapshot_id = ?\n        ORDER BY ordinal\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "label",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "utilized",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "limit_value",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "reset_at_unix",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [false, false, false, true]
+  },
+  "hash": "1fa1ae8777184ea63069d2c0b7f40f12204d6d55fbcbf3cc47eeab11dade0b6e"
+}

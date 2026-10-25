@@ -1,4 +1,5 @@
 apikey
+AUTOINCREMENT
 AUTOUPDATER
 AWSLAMBDA
 bindingset
@@ -40,6 +41,7 @@ ramfs
 rcgen
 rustix
 rustls
+SQLX
 statfs
 SYSTEMONE
 TERMUX
@@ -576,6 +578,7 @@ zdiff
 zebrafish
 zereight
 zeroize
+zeroizes
 zeroizing
 zstd
 gnupatch
