@@ -190,10 +190,11 @@ jobs:
       # modified-branch rule). Placement after the receipt
       # upload is load-bearing: cleanup needs every lane's receipt, and
       # `fail-fast: false` keeps the other lanes running. `!cancelled()` keeps
-      # the verdict (and its ::error) when publish or auto-merge arming fails;
-      # step order alone still keeps it after publish.
+      # the verdict (and its ::error) when publish or auto-merge arming fails.
+      # Successful preparation must have written prepared.json first; a failed
+      # or timed-out preparation has no completed verification to report.
       - name: Fail on failed build verification
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
