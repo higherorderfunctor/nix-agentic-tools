@@ -54,18 +54,6 @@ in {
         source = ../fragments/review-one-reviewer.md;
       }
       {
-        name = "Prosecute";
-        source = ../fragments/review-prosecute.md;
-      }
-      {
-        name = "Defend";
-        source = ../fragments/review-defend.md;
-      }
-      {
-        name = "Judge";
-        source = ../fragments/review-judge.md;
-      }
-      {
         name = "Loop";
         source = ../fragments/review-loop.md;
       }

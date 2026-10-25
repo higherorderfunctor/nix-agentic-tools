@@ -4,10 +4,10 @@ description: >-
   Use when a PR against main is open, updated, or failing — the mechanics of
   running its review loop. Covers reading a Copilot review without missing the
   suppressed bucket, the API traps that silently report a clean round, the
-  separate-agent substitute when Copilot does not review, and the
-  prosecute/defend/judge protocol for complex changes. Load it when you are
-  actually operating the loop; the trigger and the decision rules are always-on
-  in the git-workflow orientation.
+  separate-agent substitute when Copilot does not review, and the pointer to
+  delegate-routing for three blind checks. Load it when you are actually
+  operating the loop; the trigger and the decision rules are always-on in the
+  git-workflow orientation.
 ---
 
 # PR review loop — mechanics
@@ -242,36 +242,12 @@ client config, so match on the trailing segment rather than the full name.
 
 ## Separate-agent review
 
-Dispatch a reviewer that did not write the code. Give it the diff, an explicit
-lens, and the standing instruction that the PR body is an ARGUMENT, not
-evidence, and that the author is orchestrating the review and cannot be deferred
-to. Read-only: forbid every mutating git command, because sibling worktrees hold
-live edits.
+The git-workflow orientation owns the triggers and scope. For local review,
+follow the delegate-routing skill's **Work and review** workflow, including its
+Subtractive rubric, single-reviewer path and three blind checks. Keep reviewers
+read-only: forbid mutating git commands because sibling worktrees hold live
+edits. Record dismissed findings by title and count, and their dispositions in
+the PR body.
 
-Default is ONE independent reviewer. Report dismissed findings by title and
-count — a review that reports only confirmed findings is indistinguishable from
-one that found nothing — and record the dispositions in the PR body.
-
-## Prosecute / defend / judge
-
-The recipe. WHEN to run it, and the scope limits on it, are stated once in the
-git-workflow orientation — do not restate them here.
-
-1. **Prosecute.** An agent whose job is to find why the change is wrong. It may
-   not conclude the change is fine.
-2. **Defend.** A separate agent arguing the change is correct. It may not
-   concede merely because a fix would be awkward.
-3. **Judge.** A third agent, given both cases and the diff, that rules per
-   finding on the EVIDENCE rather than the rhetoric.
-
-The three roles run inside a loop of at most 3 rounds with the worker: the
-worker fixes the findings you validated, then the review runs again on the fix
-and what it touches. Findings inside the worker's task need no approval from the
-operator. If the same defect survives 2 rounds, change the brief instead of
-repeating it. At the cap, return the result, the open defects and the decision
-needed. A finding the judge cannot settle goes back to you to validate.
-
-Size the stages separately. Prosecute and defend are judgement work; the
-evidence-gathering underneath them is mechanical and belongs on a cheaper model.
-Findings are unbounded, so bound the contest phase before adding lenses — a
-94-line docs PR once produced 28 findings and a 59-agent run.
+Findings are unbounded, so bound the contest before adding lenses: a 94-line
+docs PR once produced 28 findings and a 59-agent run.

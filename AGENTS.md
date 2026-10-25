@@ -1128,12 +1128,8 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-20 — `service-secret-ordering` is the tenth
-> required context, from #2765's merge; CI watching exits on the first failure
-> through the `pr-review-loop` watcher; `test` evaluates only. The worker and
-> three review roles run inside a loop of at most 3 rounds; unsettled findings
-> go back to the orchestrator to validate. Merge teardown deletes the PR's
-> `archive/*` backups.
+> **Last verified:** 2026-10-24 — local review mechanics are owned by the
+> delegate-routing Work and review workflow.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -1278,41 +1274,32 @@ never left draft, or `git diff --stat <last-reviewed-sha>...HEAD` shows a change
 that would earn a re-request under the test above — a new file or mechanism, or
 an approach rewritten rather than corrected.
 
-**You cannot review your own diff.** Reading it back produces agreement, because
-the reasoning that wrote the code is the reasoning evaluating it. Dispatch a
-reviewer that did not write it, told plainly that the PR body is an argument
-rather than evidence and that its author cannot be deferred to. One independent
-reviewer is the default. Report what was dismissed as well as what was fixed.
+**You cannot review your own diff.** The reasoning that wrote the code is the
+reasoning evaluating it, so reading it back produces agreement. Dispatch a
+reviewer that did not write the diff, from a different vendor. Give it the
+requirements and diff; the PR body is an argument, not evidence. Report
+dismissed findings as well as fixes.
 
-This is not a fallback for one outage. It is the standing substitute whenever
-the automatic review did not happen, and github.com Copilot fails on this repo
-often enough that it is the common case, not the rare one.
+github.com Copilot fails here often enough that separate-agent review is the
+common case, not a fallback for one outage.
 
-### Escalating past one reviewer: prosecute, defend, judge
+### Escalating past one reviewer: three blind checks
 
-Escalate from one independent reviewer to the three-role protocol when EITHER
-holds. Do not grade the change's "complexity" — that word routed this decision
-before and two agents reading it reached opposite answers.
+**Settled — do not relitigate:** never trigger escalation on a change's
+"complexity": that word routed the decision before, and two agents reached
+opposite answers.
 
-**(a) You intend to DISMISS a reviewer finding rather than fix it.** Dismissing
-your own reviewer's finding is the second discard filter this whole structure
-exists to remove, so the intent to dismiss is itself the trigger. One round,
-scoped to the disputed findings only.
+Use all three checks when either trigger holds:
 
-**(b) The diff touches a shared abstraction.**
-`git diff --name-only origin/main...HEAD` matches `lib/**`, `packages/*/lib/**`
-or `packages/*/packages/**/*.nix`; or a hunk under `packages/*/modules/**` or
-`lib/ai/**` adds, removes or retypes a `mkOption`.
+- You intend to dismiss a reviewer finding rather than fix it; scope the checks
+  to disputed findings.
+- The diff touches a shared abstraction: `lib/**`, `packages/*/lib/**`, carried
+  patches under `packages/*/patches/**` or `packages/*/packages/**/*.nix`; or a
+  hunk under `packages/*/modules/**` or `lib/ai/**` adds, removes or retypes a
+  `mkOption`.
 
-Everything else uses the single-reviewer default. Run the three-role protocol:
-an agent that prosecutes, a separate agent that defends, and a third that judges
-on evidence. The three roles run inside a loop of at most 3 rounds with the
-worker: the worker fixes the findings you validated, then the review runs again
-on the fix and what it touches. Findings inside the worker's task need no
-approval from the operator. If the same defect survives 2 rounds, change the
-brief instead of repeating it. At the cap, return the result, the open defects
-and the decision needed. A finding the judge cannot settle goes back to you to
-validate.
+Everything else uses one reviewer. Follow the delegate-routing skill's **Work
+and review** workflow for the rubric, checks and loop.
 
 **Scope, deliberately narrow:**
 
@@ -1322,13 +1309,10 @@ validate.
 - **Local runtimes only, always.** Never hand this to github.com Copilot: it
   cannot be given a model or an effort level, and the cost belongs where those
   controls exist.
-- Size the roles separately, and never let a delegate inherit an interactive
-  session's model and effort by default — see the delegate-routing skill's "Size
-  the work" section.
+- Size the roles separately using the delegate-routing skill's **Size the work**
+  section.
 
-The recipe is in the `pr-review-loop` skill. It lives there rather than here
-because a skill is the only manual-load carrier that works across runtimes —
-Kiro's `inclusion: manual` steering is inert in the CLI.
+The `pr-review-loop` skill owns the GitHub review and CI mechanics.
 
 ### Every change goes through an isolated worktree + PR
 
