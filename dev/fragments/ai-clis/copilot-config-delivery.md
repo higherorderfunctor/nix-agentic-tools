@@ -1,10 +1,10 @@
 ## Copilot config delivery — github.com Copilot
 
-> **Last verified:** 2026-10-15 — `ai.copilot` is github.com Copilot: pools
+> **Last verified:** 2026-10-25 — `ai.copilot` is github.com Copilot: pools
 > under `ai.copilot.github`, devenv-only delivery as staged read-only copies the
 > ai-module files engine writes, the old writer's ledgers declared as legacy
 > ledgers; `ai.copilot.cli` reserved for a launcher the module does not ship;
-> agents and skills declare gaps.
+> skills use `mkSkillFiles` with `method = "ro"`; agents declare a gap.
 >
 > **Settled — do not relitigate.**
 >
@@ -34,6 +34,7 @@ through `optionNamespaces.pools = ["github"]`. Only devenv writes:
 | ------- | ----------------------------------------------- | -------------------------------------- |
 | context | root `AGENTS.md`, through the shared owner      | cloud agent, code review (root only)   |
 | rules   | `<projectDir>/instructions/<n>.instructions.md` | cloud agent, code review, by `applyTo` |
+| skills  | `<projectDir>/skills/<n>/`                      | cloud agent                            |
 
 `projectDir` is `ai.copilot.github.projectDir` (default `.github`). Code review
 reads the PR's head branch, so a PR that regenerates these files is reviewed
@@ -44,37 +45,48 @@ with its own copies.
 - **Rules**: the matcher becomes the comma-joined `applyTo` and `null` becomes
   `"**"` (`lib/ai/transformers/copilot.nix`). Code review loads every file whose
   globs match a changed file, so a `**` rule rides on every review.
-- Instructions are staged in `ai.copilot._generatedFiles` as read-only COPIES
-  (`method = "ro"`) that the ai-module files engine writes: github.com reads the
-  committed tree, where a store symlink dangles. The engine owns each copy by
-  path, so a hand-written sibling survives and N→0 or a disable retracts the
-  copies. The old writer's directory ledgers (`copilot-instructions.manifest`,
-  `copilot-github-agents.manifest`) stay declared in `ai.copilot.legacyLedgers`
-  while Copilot is disabled too, so the copies they recorded are imported once
-  and then follow the plan; the agents ledger thereby retires the profiles the
-  old writer left. Existing consumers delete `.github/copilot-instructions.md`
-  once by hand when migrating.
+- **Skills** use `helpers.mkSkillFiles`, the same builder as every runtime, with
+  `configDir = projectDir` and `method = "ro"`. The engine expands each source
+  directory into owned real files, preserving nested references, assets and
+  executable bits. File symlinks become regular copies; directory symlinks fail
+  evaluation rather than leaving committed links or missing subtrees.
+  Single-file skills become `<projectDir>/skills/<name>/SKILL.md`. Root skills,
+  runtime replacements and null suppression follow the shared pool merge.
+- Instructions and skills are staged in `ai.copilot._generatedFiles` as
+  read-only COPIES (`method = "ro"`) that the ai-module files engine writes:
+  github.com reads the committed tree, where a store symlink dangles. The engine
+  owns each copy by path, so a hand-written sibling survives and N→0 or a
+  disable retracts the copies. The old writer's directory ledgers
+  (`copilot-instructions.manifest`, `copilot-github-agents.manifest`) stay
+  declared in `ai.copilot.legacyLedgers` while Copilot is disabled too, so the
+  copies they recorded are imported once and then follow the plan; the agents
+  ledger thereby retires the profiles the old writer left. Existing consumers
+  delete `.github/copilot-instructions.md` once by hand when migrating.
 
 ### What it refuses, and why
 
 Every other shared surface is declared `backends = []` with GitHub's reason and
 a docs.github.com link, so the shared registry warns at the path a consumer set:
 
-| surface              | why github.com cannot take it from this module                               |
-| -------------------- | ---------------------------------------------------------------------------- |
-| agents               | code review never reads `.github/agents`                                     |
-| environmentVariables | the cloud agent's environment is `copilot-setup-steps.yml` and secrets       |
-| hooks                | code review runs none; the cloud agent reads `.github/hooks/*.json` only     |
-| mcpServers           | a repository setting on github.com, not a file                               |
-| settings             | no settings file; model and review options are repository settings           |
-| shell                | GitHub's cloud environment, set by `copilot-setup-steps.yml`                 |
-| skills               | store links dangle in committed trees; this module does not copy skill trees |
+| surface              | why github.com cannot take it from this module                           |
+| -------------------- | ------------------------------------------------------------------------ |
+| agents               | code review never reads `.github/agents`                                 |
+| environmentVariables | the cloud agent's environment is `copilot-setup-steps.yml` and secrets   |
+| hooks                | code review runs none; the cloud agent reads `.github/hooks/*.json` only |
+| mcpServers           | a repository setting on github.com, not a file                           |
+| settings             | no settings file; model and review options are repository settings       |
+| shell                | GitHub's cloud environment, set by `copilot-setup-steps.yml`             |
 
 Permissions has no shared option; its policy rows carry the same kind of reason.
-Home Manager has no repository, so the two delivered pools warn there too. The
+Home Manager has no repository, so the three delivered pools warn there too. The
 module stays registered on Home Manager for exactly that: a value set there
 warns instead of vanishing. Package rule and skill contributors
 (`mkSkillPackageModule.nix`) skip Copilot on Home Manager.
+
+The repository's own `dev/ai.nix` null-suppresses its root skills for Copilot:
+these are local-session operations, not a default committed payload. Package
+runtime disables remain authoritative, including peer communication's explicit
+Copilot disable. `.github/skills` is committable when a consumer selects skills.
 
 The hooks reason names a real reader this module does not serve: the cloud agent
 loads `.github/hooks/*.json` from the default branch (bash entries only, `ask`

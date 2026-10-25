@@ -1,8 +1,10 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-10-25 — shared AGENTS.md indexes may use one manually
-> followed child tier; `generate:all` regenerates instructions, repo documents
-> and devenv.yaml; devenv.lock is synced separately with
+> **Last verified:** 2026-10-25 — the monorepo category selects concise
+> operating policy and leaves its full workflow, instruction and linting guides
+> as mandatory action-triggered references; shared AGENTS.md indexes may use one
+> manually followed child tier; `generate:all` regenerates instructions, repo
+> documents and devenv.yaml; devenv.lock is synced separately with
 > `devenv update <input>`; fragment sources live in the dev or package tree;
 > package categories live in owner registries; `dev/generate.nix` turns them
 > into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
@@ -13,9 +15,11 @@ agents working on it. They are SEPARATE from the published consumer-facing
 content. Two location flavors are supported by `dev/generate.nix`:
 
 - `dev/fragments/<category>/<name>.md` (default `location = "dev"`) —
-  orientation and topic-scoped categories not tied to a single package.
-  `dev/fragments/monorepo/` specifically holds the always-loaded orientation,
-  delivered to every runtime as `ai.context`.
+  orientation and topic-scoped categories not tied to a single package. The
+  `monorepo` category's source list selects the always-loaded orientation,
+  delivered to every runtime as `ai.context`. Other documents in that directory
+  remain authoritative references loaded by the operating policy's action
+  triggers; their directory alone does not make them always-loaded.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
 

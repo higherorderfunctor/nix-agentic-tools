@@ -7,12 +7,12 @@ description: >-
   separate-agent substitute when Copilot does not review, and the pointer to
   delegate-routing for three blind checks. Load it when you are actually
   operating the loop; the trigger and the decision rules are always-on in the
-  git-workflow orientation.
+  repository operating policy.
 ---
 
 # PR review loop — mechanics
 
-The orientation fragment owns WHEN to do these things and WHOSE job it is. This
+The operating policy owns WHEN to do these things and WHOSE job it is. This
 skill owns HOW, because the how is a pile of API traps that each produce a
 confident wrong answer, and none of it is needed until a PR actually exists.
 
@@ -221,9 +221,9 @@ arrive as `state: COMMENTED` with zero threads — every mechanical signal reads
 
 ## Re-requesting
 
-Only ever after a significant change since the last run (the orientation
-fragment defines significant). Request the review through REST with the real
-reviewer login:
+Only ever after a significant change since the last run (the operating policy
+defines significant). Request the review through REST with the real reviewer
+login:
 
 ```bash
 gh api --method POST "repos/OWNER/REPO/pulls/N/requested_reviewers" \
@@ -242,7 +242,7 @@ client config, so match on the trailing segment rather than the full name.
 
 ## Separate-agent review
 
-The git-workflow orientation owns the triggers and scope. For local review,
+The repository operating policy owns the triggers and scope. For local review,
 follow the delegate-routing skill's **Work and review** workflow, including its
 Subtractive rubric, single-reviewer path and three blind checks. Keep reviewers
 read-only: forbid mutating git commands because sibling worktrees hold live

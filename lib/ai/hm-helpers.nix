@@ -7,8 +7,9 @@
   # every runtime and both backends; layer 1 and the files engine deliver them.
   #
   # A directory skill is one entry with a directory source, which the engine
-  # walks into one link per leaf on both backends. A single-file skill becomes
-  # its own `SKILL.md`.
+  # walks into one leaf per file on both backends. `method` selects native
+  # symlinks by default or owned copies for repository consumers. A single-file
+  # skill becomes its own `SKILL.md`.
   #
   # `recursive = false` with a directory source is Codex's shape, and it is a
   # measured consumer fact rather than a preference: Codex discovers a skill
@@ -22,12 +23,14 @@
   # relative symlink between two of its leaves still resolves.
   mkSkillFiles = {
     configDir,
+    method ? "symlink",
     recursive ? true,
     skills,
   }:
     lib.mapAttrs' (
       name: source: let
         entry = {
+          inherit method;
           content.source = "${source}";
           surface = "skills";
         };

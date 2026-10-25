@@ -260,9 +260,13 @@ in {
     };
     copilot = {
       enable = true;
-      github.rules = lib.mapAttrs (_: _: {enable = false;}) (
-        lib.filterAttrs (name: _: !(lib.elem name reviewerCategories)) (gen.rules // swsRouter)
-      );
+      github = {
+        rules = lib.mapAttrs (_: _: {enable = false;}) (
+          lib.filterAttrs (name: _: !(lib.elem name reviewerCategories)) (gen.rules // swsRouter)
+        );
+        # These skills operate the local session; github.com receives none of them.
+        skills = lib.mapAttrs (_: _: null) config.ai.skills;
+      };
     };
     kimchi = {
       enable = true;

@@ -4,10 +4,42 @@
 {
   lib,
   harness,
+  pkgs,
   ...
 }: let
   inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree markdownInput mkTest ownPlan setEnable;
-  skillFixture = ../../claude-code/checks/fixtures/claude-skills/skill-a;
+  fileLib = import ../../ai-module/lib/files/default.nix {inherit lib pkgs;};
+  skillFixture = ./fixtures/committed-skill;
+  skillLeaves = ["SKILL.md" "assets/expected.txt" "reference.md" "references/deep/guide.md" "scripts/check.sh"];
+  skillPaths = prefix: map (leaf: "${prefix}/${leaf}") skillLeaves;
+  # The integration evaluates real runtime plans; the existing files-engine
+  # safety corpus covers generic copy/refusal cases.
+  skillPlan = skills: local: enable:
+    fileLib.normalize {
+      backend = "devenv";
+      namespace = "ai";
+      files =
+        (evalDevenv {
+          ai = {
+            inherit skills;
+            copilot = {
+              inherit enable;
+              github.skills = local;
+            };
+          };
+        }).config.ai.files;
+    };
+  skillLifecycle = {
+    disabled = skillPlan {example = skillFixture;} {local = skillFixture;} false;
+    empty = skillPlan {} {} true;
+    enabled = skillPlan {example = skillFixture;} {local = skillFixture;} true;
+    suppressed =
+      skillPlan {example = skillFixture;} {
+        example = null;
+        local = skillFixture;
+      }
+      true;
+  };
   # One of every surface github.com reads, each carrying its own token.
   populated = {
     ai = {
@@ -20,6 +52,7 @@
             matcher = ["**/*.ts"];
             text = "SECURITY-RULE";
           };
+          skills.local = skillFixture;
         };
       };
       skills.example = skillFixture;
@@ -59,8 +92,7 @@ in {
 
     # No launcher ships: the record has no package, so the reserved `cli`
     # namespace declares nothing, `enable` is the root switch, and neither
-    # backend installs anything. None of the files the Copilot CLI read are
-    # written any more.
+    # backend installs anything. The CLI-only settings and MCP files are absent.
     module-copilot-no-launcher = mkTest "copilot-no-launcher" (
       let
         hm = evalHm populated;
@@ -83,9 +115,9 @@ in {
       let
         options = (evalDevenv {}).options.ai.copilot;
       in
-        lib.all (pool: options.github ? ${pool} && !(options ? ${pool})) ["context" "rules" "rulesDir"]
+        lib.all (pool: options.github ? ${pool} && !(options ? ${pool})) ["context" "rules" "rulesDir" "skills" "skillsDir"]
         && options.github.normalized ? context
-        && lib.all (pool: !(options.github ? ${pool})) ["agents" "agentsDir" "environmentVariables" "mcpServers" "settings" "shell" "skills" "skillsDir"]
+        && lib.all (pool: !(options.github ? ${pool})) ["agents" "agentsDir" "environmentVariables" "mcpServers" "settings" "shell"]
     );
 
     # Home Manager has no repository: it writes nothing and warns for every
@@ -100,7 +132,7 @@ in {
         && result.config.ai.copilot._generatedFiles == {}
         && result.config.ai.copilot.legacyLedgers == []
         # Root and per-runtime context warn once, naming the per-runtime pool.
-        && lib.all warns ["ai.copilot.github.context" "ai.copilot.github.rules" "ai.skills"]
+        && lib.all warns ["ai.copilot.github.context" "ai.copilot.github.rules" "ai.copilot.github.skills"]
         && !(warns "ai.context")
     );
 
@@ -122,6 +154,8 @@ in {
         && fromGeneratedTree ".custom-github/instructions/security.instructions.md" files.".custom-github/instructions/security.instructions.md"
         && files ? "AGENTS.md"
         && !(files ? ".github/instructions/security.instructions.md")
+        && lib.all (path: files ? ${path}) (skillPaths ".custom-github/skills/example" ++ skillPaths ".custom-github/skills/local")
+        && !(files ? ".github/skills/example/SKILL.md")
         && declaresLedgers ".custom-github" devenv
     );
 
@@ -174,7 +208,7 @@ in {
         linked = evalDevenv (lib.recursiveUpdate populated {ai.copilot.files.".github/instructions/security.instructions.md".method = "symlink";});
         disabled = evalDevenv (lib.recursiveUpdate populated {ai.copilot.enable = false;});
         empty = evalDevenv {ai.copilot.enable = true;};
-        targets = copies enabled;
+        targets = lib.filterAttrs (path: _: lib.hasPrefix ".github/instructions/" path) (copies enabled);
         copied = path:
           targets.${path}.method
           == "ro"
@@ -193,6 +227,57 @@ in {
         && lib.all (declaresLedgers ".github") [disabled empty enabled]
     );
 
+    module-copilot-devenv-skills = mkTest "copilot-devenv-skills" (
+      let
+        result = evalDevenv populated;
+        targets = lib.filterAttrs (path: _: lib.hasPrefix ".github/skills/" path) (copies result);
+        overridden = evalDevenv (lib.recursiveUpdate populated {
+          ai.copilot.files.".github/skills/example".method = "symlink";
+        });
+        single = evalDevenv {
+          ai.skills.single = skillFixture;
+          ai.copilot = {
+            enable = true;
+            github.skills.single = skillFixture + "/SKILL.md";
+          };
+        };
+        directory = evalDevenv {
+          ai.copilot = {
+            enable = true;
+            github.skillsDir = ./fixtures;
+          };
+        };
+      in
+        builtins.attrNames targets
+        == skillPaths ".github/skills/example" ++ skillPaths ".github/skills/local"
+        && lib.all (path:
+          targets.${path}.method
+          == "ro"
+          && targets.${path}.format == "raw"
+          && targets.${path}.mode == null
+          && targets.${path}.executable == null
+          && !(result.config.files ? ${path})) (builtins.attrNames targets)
+        && !(lib.any (lib.hasInfix "does not deliver it to copilot") result.config.warnings)
+        && overridden.config.ai.files.".github/skills/example".method == "symlink"
+        && overridden.config.files ? ".github/skills/example/SKILL.md"
+        && builtins.attrNames (copies single) == [".github/skills/single/SKILL.md"]
+        && fromGeneratedTree ".github/skills/single/SKILL.md" (deliveredFiles single.config).".github/skills/single/SKILL.md"
+        && builtins.attrNames (copies directory) == skillPaths ".github/skills/committed-skill"
+        && skillLifecycle.empty == []
+        && skillLifecycle.disabled == []
+        && map (item: item.path) skillLifecycle.suppressed == skillPaths ".github/skills/local"
+    );
+
+    module-copilot-skills-lifecycle = pkgs.runCommandLocal "module-copilot-skills-lifecycle" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${pkgs.python3}/bin/python3 -I ${./skills-lifecycle.py} \
+        ${../../ai-module/lib/files}/engine.py \
+        ${pkgs.writeText "copilot-skills-plans.json" (builtins.toJSON skillLifecycle)} \
+        ${skillFixture} ${pkgs.bash}/bin/bash
+      touch "$out"
+    '';
+
     # Ported from module-delivery-normalized-keyed-pools-extend, for the keyed
     # pools Copilot supports: an ordinary normalized definition extends the
     # inherited and local keys, and `mkForce` replaces the pool.
@@ -200,7 +285,10 @@ in {
       let
         optionPaths = import ../../../lib/ai/option-paths.nix {inherit lib;};
         # Copilot's keyed pools; Codex's are ported with Codex.
-        samples.rules.text = "probe";
+        samples = {
+          rules.text = "probe";
+          skills = skillFixture;
+        };
       in
         lib.all (
           evaluate:

@@ -77,6 +77,6 @@ if sys.argv[1:]:
     report("Copilot root + matched native instructions (each file counted once)",
            [*root, *matched])
 
-report("Source monorepo fragments (composed into the orientation)",
+report("Monorepo policy and reference sources",
        Path("dev/fragments/monorepo").glob("*.md"))
 PY
