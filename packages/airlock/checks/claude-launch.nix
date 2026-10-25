@@ -32,6 +32,18 @@
     assert args[2] == "--settings"
     overlay = json.loads(Path(args[3]).read_text())
     assert args[4:] in (["--print", "two words", "--flag=literal"], ["--exit=23"], ["--sleep"], ["--stdin"])
+    rows = [
+        {"description": "upstream through airlock", "model": "claude-declared"},
+        {"description": "zai through airlock", "model": "glm-4.7"},
+    ]
+    expected_rows = rows if os.environ["AIRLOCK_TEST_CLIENT"] == "harness" else []
+    if args[1] == "project":
+        if expected_rows:
+            assert overlay["modelPicker"]["options"] == expected_rows
+        else:
+            assert "modelPicker" not in overlay
+    else:
+        assert "modelPicker" not in overlay
     assert "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR" not in os.environ
     assert not any(name in os.environ for name in (
         "HTTP_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"))
@@ -42,6 +54,8 @@
     assert environment["ANTHROPIC_BASE_URL"] == ""
     assert data["apiKeyHelper"] == ""
     assert environment["CLAUDE_CODE_OAUTH_TOKEN"] == "airlock-fake-oauth-token-not-a-credential"
+    if args[1] == "user" and expected_rows:
+        assert data["modelPicker"]["options"] == expected_rows
     if args[4:] == ["--sleep"]:
         Path(os.environ["AIRLOCK_TEST_CHILD_PID"]).write_text(str(os.getpid()))
         time.sleep(120)
@@ -163,20 +177,35 @@
         grants = ["anthropic"];
         token = redact.command (lib.getExe tokenReader);
       };
-      credentials.upstream = {
-        auth = {
-          file = redact.command (lib.getExe tokenReader);
-          type = "oauth_bearer";
+      credentials = {
+        upstream = {
+          auth = {
+            file = redact.command (lib.getExe tokenReader);
+            type = "oauth_bearer";
+          };
+          provider = "claude";
         };
-        provider = "claude";
+        zai = {
+          auth = {
+            file = redact.command (lib.getExe tokenReader);
+            type = "api_key";
+          };
+          provider = "zai";
+        };
       };
       groups.anthropic = {
         intercept = ["api.anthropic.com"];
-        members.upstream.models = [];
+        members = {
+          upstream.models = ["claude-declared"];
+          zai.models = ["glm-4.7"];
+        };
         primary = "upstream";
         protocol = "anthropic";
       };
-      providers.claude.preset = "claude";
+      providers = {
+        claude.preset = "claude";
+        zai.preset = "zai";
+      };
     };
   };
   fixture = backend: let
