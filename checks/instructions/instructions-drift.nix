@@ -65,6 +65,21 @@
       "ai.skills is set but devenv does not deliver it to ${runtime} (reason: ${support.reason})")
     (builtins.attrNames records);
 
+    composerInstructions = pkgs.linkFarm "expected-agents-md" (map (target: {
+        name = target.path;
+        path = target.content.source;
+      })
+      (composed repo).targets);
+    # Include the complete tracked child directories, not just expected names:
+    # a stale child must fail alongside a missing newly generated one.
+    trackedComposer = pkgs.linkFarm "tracked-agents-md" (lib.concatMap (filename:
+      lib.concatMap (name:
+        lib.optional (builtins.pathExists "${self}/${name}") {
+          inherit name;
+          path = "${self}/${name}";
+        }) [filename "${filename}.rules"])
+    (lib.attrNames repo.config.ai.internal.agentsMd));
+
     agentsMd = (lib.findFirst (target: target.path == "AGENTS.md") (throw "instructions-drift: the composer writes no AGENTS.md") (composed repo).targets).content.source;
     # The Copilot instruction files the files engine copies, as the built files
     # in Copilot's generated tree.
@@ -77,9 +92,15 @@
     # `regenerate` is the task the failure message names.
     files = [
       {
-        label = "AGENTS.md";
-        tracked = ../../AGENTS.md;
-        generated = agentsMd;
+        label = "AGENTS.md and child indexes";
+        tracked = trackedComposer;
+        generated = composerInstructions;
+        regenerate = "generate:all";
+      }
+      {
+        label = ".github/instructions/";
+        tracked = ../../.github/instructions;
+        generated = copilotInstructions;
         regenerate = "generate:all";
       }
       {
@@ -100,7 +121,7 @@
     # lands in the captured output too — otherwise it goes to the real
     # stderr and the printed diff is blank, hiding why the check failed.
     compareOne = f: ''
-      if ! "$diff" -u "${f.tracked}" "${f.generated}" >"$tmp/diff" 2>&1; then
+      if ! "$diff" -r -u "${f.tracked}" "${f.generated}" >"$tmp/diff" 2>&1; then
         failed=1
         echo "" >&2
         echo "DRIFT: ${f.label}" >&2
@@ -217,19 +238,6 @@
 
         agentsMd=${agentsMd}
         ${lib.concatMapStrings endsInWindow windowNeedles}
-
-        # The Copilot instruction files are compared as a TREE rather than
-        # file by file: a fragment that is renamed away, or a new one that
-        # was never committed, changes the SET of files. Comparing only the
-        # names we happen to list here would miss both.
-        if ! "$diff" -r -u "${../../.github/instructions}" \
-          "${copilotInstructions}" >"$tmp/diff-dir" 2>&1; then
-          failed=1
-          echo "" >&2
-          echo "DRIFT: .github/instructions/" >&2
-          echo "  regenerate with: devenv tasks run --mode before generate:all" >&2
-          "$sed" -n '1,80p' "$tmp/diff-dir" >&2
-        fi
 
         if [ "$failed" -ne 0 ]; then
           echo "" >&2

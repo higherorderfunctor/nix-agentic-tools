@@ -34,66 +34,6 @@ this index.
     - `packages/*/modules/devenv/**`
   - Read:
     - [`dev/fragments/ai-config-scope/host-config-merge.md`](dev/fragments/ai-config-scope/host-config-merge.md)
-- **`ai-dir-helpers`**
-  - Match:
-    - `checks/ai-context/module-eval.nix`
-    - `checks/ai-factory/factory-eval.nix`
-    - `lib/ai/agent.nix`
-    - `lib/ai/ai-common.nix`
-    - `lib/ai/app/checkRecord.nix`
-    - `lib/ai/app/mkBackendTransform.nix`
-    - `lib/ai/app/mkRuntime.nix`
-    - `lib/ai/default.nix`
-    - `lib/ai/dir-helpers.nix`
-    - `lib/ai/sharedOptions.nix`
-    - `packages/chatgpt-codex/checks/module-eval.nix`
-    - `packages/chatgpt-codex/lib/mkCodex.nix`
-    - `packages/claude-code/checks/module-eval.nix`
-    - `packages/claude-code/lib/mkClaude.nix`
-    - `packages/copilot-cli/checks/module-eval.nix`
-    - `packages/kimchi/checks/module-eval.nix`
-    - `packages/kimchi/lib/mkKimchi.nix`
-    - `packages/kiro-cli/checks/module-eval.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-  - Read:
-    - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
-- **`ai-module`**
-  - Match:
-    - `checks/*/module-eval.nix`
-    - `checks/module-provenance/**`
-    - `config/ai-delivery*.nix`
-    - `lib/ai/agent.nix`
-    - `lib/ai/ai-common.nix`
-    - `lib/ai/app/**`
-    - `lib/ai/default.nix`
-    - `lib/ai/hooks.nix`
-    - `lib/ai/launcher.nix`
-    - `lib/ai/mkSkillPackageModule.nix`
-    - `lib/ai/program.nix`
-    - `lib/ai/runtimes.nix`
-    - `lib/ai/sharedOptions.nix`
-    - `lib/generated.nix`
-    - `lib/generated-guard.py`
-    - `lib/markdown/**`
-    - `lib/testing/module-harness.nix`
-    - `packages/*/checks/module-eval.nix`
-    - `packages/ai-module/**`
-    - `packages/chatgpt-codex/lib/mkCodex.nix`
-    - `packages/chatgpt-codex/modules/**`
-    - `packages/claude-code/lib/mkClaude.nix`
-    - `packages/claude-code/modules/**`
-    - `packages/copilot-cli/lib/mkCopilot.nix`
-    - `packages/copilot-cli/modules/**`
-    - `packages/delegate-routing/modules/**`
-    - `packages/kimchi/lib/mkKimchi.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-    - `packages/kiro-cli/modules/**`
-    - `packages/semble/modules/common.nix`
-  - Read:
-    - [`dev/fragments/ai-module/ai-module-fanout.md`](dev/fragments/ai-module/ai-module-fanout.md)
-    - [`dev/fragments/ai-module/collision-semantics.md`](dev/fragments/ai-module/collision-semantics.md)
-    - [`dev/fragments/ai-module/layered-fanout.md`](dev/fragments/ai-module/layered-fanout.md)
-    - [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
 - **`ai-module-contract`**
   - Match:
     - `.github/workflows/devenv-test.yml`
@@ -133,23 +73,6 @@ this index.
     - `packages/semble/modules/common.nix`
   - Read:
     - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
-- **`ai-proxy`**
-  - Match:
-    - `checks/ai-proxy/**`
-    - `lib/ai/proxy/**`
-    - `packages/chatgpt-codex/lib/proxy.nix`
-    - `packages/claude-code/lib/proxy.nix`
-  - Read:
-    - [`dev/fragments/ai-proxy/ai-proxy.md`](dev/fragments/ai-proxy/ai-proxy.md)
-- **`ai-proxy-runtimes`**
-  - Match:
-    - `packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix`
-    - `packages/chatgpt-codex/checks/proxy-test.py`
-    - `packages/chatgpt-codex/lib/proxy.nix`
-    - `packages/claude-code/checks/claude-proxy.nix`
-    - `packages/claude-code/lib/proxy.nix`
-  - Read:
-    - [`dev/fragments/ai-proxy/ai-proxy-runtimes.md`](dev/fragments/ai-proxy/ai-proxy-runtimes.md)
 - **`ai-skills`**
   - Match:
     - `lib/ai/hm-helpers.nix`
@@ -210,6 +133,75 @@ this index.
     - `packages/delegate-routing/**`
   - Read:
     - [`packages/delegate-routing/docs/development.md`](packages/delegate-routing/docs/development.md)
+- **`dev/fragments/ai-module`**
+  - Match:
+    - `checks/*/module-eval.nix`
+    - `checks/ai-context/module-eval.nix`
+    - `checks/ai-factory/factory-eval.nix`
+    - `checks/module-provenance/**`
+    - `config/ai-delivery*.nix`
+    - `lib/ai/agent.nix`
+    - `lib/ai/ai-common.nix`
+    - `lib/ai/app/**`
+    - `lib/ai/default.nix`
+    - `lib/ai/dir-helpers.nix`
+    - `lib/ai/hooks.nix`
+    - `lib/ai/launcher.nix`
+    - `lib/ai/mkSkillPackageModule.nix`
+    - `lib/ai/program.nix`
+    - `lib/ai/runtimes.nix`
+    - `lib/ai/sharedOptions.nix`
+    - `lib/generated-guard.py`
+    - `lib/generated.nix`
+    - `lib/markdown/**`
+    - `lib/testing/module-harness.nix`
+    - `packages/*/checks/module-eval.nix`
+    - `packages/ai-module/**`
+    - `packages/chatgpt-codex/checks/module-eval.nix`
+    - `packages/chatgpt-codex/lib/mkCodex.nix`
+    - `packages/chatgpt-codex/modules/**`
+    - `packages/claude-code/checks/module-eval.nix`
+    - `packages/claude-code/lib/mkClaude.nix`
+    - `packages/claude-code/modules/**`
+    - `packages/copilot-cli/checks/module-eval.nix`
+    - `packages/copilot-cli/lib/mkCopilot.nix`
+    - `packages/copilot-cli/modules/**`
+    - `packages/delegate-routing/modules/**`
+    - `packages/kimchi/checks/module-eval.nix`
+    - `packages/kimchi/lib/mkKimchi.nix`
+    - `packages/kiro-cli/checks/module-eval.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+    - `packages/kiro-cli/modules/**`
+    - `packages/semble/modules/common.nix`
+  - Read:
+    - [`AGENTS.md.rules/7783e19f85259a8f9ae98a7ca89792066a7101688f9945bc27a87ca2c6517f6c.md`](AGENTS.md.rules/7783e19f85259a8f9ae98a7ca89792066a7101688f9945bc27a87ca2c6517f6c.md)
+- **`dev/fragments/ai-proxy`**
+  - Match:
+    - `checks/ai-proxy/**`
+    - `lib/ai/proxy/**`
+    - `packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix`
+    - `packages/chatgpt-codex/checks/proxy-test.py`
+    - `packages/chatgpt-codex/lib/proxy.nix`
+    - `packages/claude-code/checks/claude-proxy.nix`
+    - `packages/claude-code/lib/proxy.nix`
+  - Read:
+    - [`AGENTS.md.rules/5a70e8a2a50fb97e8c092d25292c2142bf9d010880956be85ce1bf334c2a6d54.md`](AGENTS.md.rules/5a70e8a2a50fb97e8c092d25292c2142bf9d010880956be85ce1bf334c2a6d54.md)
+- **`dev/fragments/overlays`**
+  - Match:
+    - `.github/actions/warm-ifd/**`
+    - `.github/workflows/ci.yml`
+    - `.github/workflows/devenv-test.yml`
+    - `.github/workflows/update.yml`
+    - `lib/facets/**`
+    - `lib/packaging.nix`
+    - `lib/testing/**`
+    - `lib/toolchains.nix`
+    - `packages/*/lib/packaging.nix`
+    - `packages/*/packages/**`
+    - `packages/*/packages/**/*.nix`
+    - `packages/*/patches/**`
+  - Read:
+    - [`AGENTS.md.rules/25581e95421380b923246a11efb2dde817edd1180385a851b81116183db4e8bf.md`](AGENTS.md.rules/25581e95421380b923246a11efb2dde817edd1180385a851b81116183db4e8bf.md)
 - **`devenv`**
   - Match:
     - `.github/workflows/devenv-test.yml`
@@ -297,20 +289,6 @@ this index.
     - `packages/*/modules/homeManager/**`
   - Read:
     - [`dev/fragments/hm-modules/module-conventions.md`](dev/fragments/hm-modules/module-conventions.md)
-- **`ifd`**
-  - Match:
-    - `.github/actions/warm-ifd/**`
-    - `.github/workflows/ci.yml`
-    - `.github/workflows/devenv-test.yml`
-    - `.github/workflows/update.yml`
-    - `lib/facets/**`
-    - `lib/testing/**`
-    - `lib/packaging.nix`
-    - `packages/*/lib/packaging.nix`
-    - `packages/*/packages/**/*.nix`
-    - `packages/*/packages/**`
-  - Read:
-    - [`dev/fragments/overlays/ifd-patterns.md`](dev/fragments/overlays/ifd-patterns.md)
 - **`jail-nix`**
   - Match:
     - `checks/ai-jail/**`
@@ -318,42 +296,6 @@ this index.
     - `packages/jail-nix/**`
   - Read:
     - [`packages/jail-nix/docs/jail-nix.md`](packages/jail-nix/docs/jail-nix.md)
-- **`kimchi`**
-  - Match:
-    - `packages/kimchi/**`
-  - Read:
-    - [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
-    - [`packages/kimchi/docs/kimchi-workflows.md`](packages/kimchi/docs/kimchi-workflows.md)
-- **`kimchi-codeql`**
-  - Match:
-    - `packages/kimchi/checks/fixtures/codeql-environment/**`
-    - `packages/kimchi/checks/fixtures/network-expected.txt`
-    - `packages/kimchi/checks/fixtures/network/**`
-    - `packages/kimchi/checks/kimchi-codeql-network.nix`
-    - `packages/kimchi/checks/kimchi-codeql.nix`
-    - `packages/kimchi/extract/environment.jq`
-    - `packages/kimchi/extract/environment.nix`
-    - `packages/kimchi/lib/codeql.nix`
-    - `packages/kimchi/lib/network.jq`
-    - `packages/kimchi/lib/network.nix`
-    - `packages/kimchi/ql/**`
-  - Read:
-    - [`packages/kimchi/docs/kimchi-codeql.md`](packages/kimchi/docs/kimchi-codeql.md)
-    - [`packages/kimchi/docs/kimchi-codeql-environment.md`](packages/kimchi/docs/kimchi-codeql-environment.md)
-    - [`packages/kimchi/docs/kimchi-codeql-network.md`](packages/kimchi/docs/kimchi-codeql-network.md)
-- **`kimchi-egress-report`**
-  - Match:
-    - `checks/references/kimchi-egress-report.nix`
-    - `dev/skills/kimchi-egress-report/**`
-    - `packages/kimchi/egress-report.json`
-  - Read:
-    - [`packages/kimchi/docs/kimchi-egress-report.md`](packages/kimchi/docs/kimchi-egress-report.md)
-- **`kiro-agents`**
-  - Match:
-    - `packages/kiro-cli/checks/module-eval.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-  - Read:
-    - [`packages/kiro-cli/docs/agents.md`](packages/kiro-cli/docs/agents.md)
 - **`kiro-model-catalog`**
   - Match:
     - `dev/tasks/check.nix`
@@ -362,37 +304,6 @@ this index.
     - `packages/kiro-model-catalog/**`
   - Read:
     - [`packages/kiro-model-catalog/docs/model-catalog.md`](packages/kiro-model-catalog/docs/model-catalog.md)
-- **`kiro-settings`**
-  - Match:
-    - `lib/ai/ai-common.nix`
-    - `packages/kiro-cli/lib/packaging.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-  - Read:
-    - [`packages/kiro-cli/docs/settings-shape.md`](packages/kiro-cli/docs/settings-shape.md)
-- **`kiro-steering`**
-  - Match:
-    - `lib/ai/ai-common.nix`
-    - `lib/ai/transformers/kiro.nix`
-    - `packages/kiro-cli/**`
-  - Read:
-    - [`packages/kiro-cli/docs/steering-inclusion.md`](packages/kiro-cli/docs/steering-inclusion.md)
-- **`kiro-workflows`**
-  - Match:
-    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
-    - `packages/kiro-cli/lib/packaging.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-  - Read:
-    - [`packages/kiro-cli/docs/workflow-gating.md`](packages/kiro-cli/docs/workflow-gating.md)
-- **`kiro-wrapper`**
-  - Match:
-    - `packages/kiro-cli/checks/kiro-fhs-contract.nix`
-    - `packages/kiro-cli/checks/kiro-wrapper-argv.nix`
-    - `lib/idempotentFlags.nix`
-    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
-    - `packages/kiro-cli/lib/**`
-  - Read:
-    - [`packages/kiro-cli/docs/fhs-sandbox.md`](packages/kiro-cli/docs/fhs-sandbox.md)
-    - [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)
 - **`markdown-formatting`**
   - Match:
     - `**/*.md`
@@ -474,19 +385,21 @@ this index.
     - `packages/kiro-cli/lib/mkKiro.nix`
   - Read:
     - [`dev/fragments/open-keys/open-keys.md`](dev/fragments/open-keys/open-keys.md)
-- **`overlays`**
+- **`packages/kimchi/docs`**
   - Match:
-    - `lib/facets/**`
-    - `lib/testing/**`
-    - `lib/packaging.nix`
-    - `lib/toolchains.nix`
-    - `packages/*/lib/packaging.nix`
-    - `packages/*/packages/**/*.nix`
-    - `packages/*/packages/**`
-    - `packages/*/patches/**`
+    - `checks/references/kimchi-egress-report.nix`
+    - `dev/skills/kimchi-egress-report/**`
+    - `packages/kimchi/**`
   - Read:
-    - [`dev/fragments/overlays/overlay-pattern.md`](dev/fragments/overlays/overlay-pattern.md)
-    - [`dev/fragments/overlays/source-patches.md`](dev/fragments/overlays/source-patches.md)
+    - [`AGENTS.md.rules/a2567642799f79c918dee2ed1bd1fd6a01bbec44b6c56afa61fbf9ab787f54b9.md`](AGENTS.md.rules/a2567642799f79c918dee2ed1bd1fd6a01bbec44b6c56afa61fbf9ab787f54b9.md)
+- **`packages/kiro-cli/docs`**
+  - Match:
+    - `lib/ai/ai-common.nix`
+    - `lib/ai/transformers/kiro.nix`
+    - `lib/idempotentFlags.nix`
+    - `packages/kiro-cli/**`
+  - Read:
+    - [`AGENTS.md.rules/6c15eb97325a151e073ef2e34d5bb59cb6fe4cda0567d2665c88718301a7ce35.md`](AGENTS.md.rules/6c15eb97325a151e073ef2e34d5bb59cb6fe4cda0567d2665c88718301a7ce35.md)
 - **`packaging`**
   - Match:
     - `config/update-targets.nix`
@@ -963,8 +876,9 @@ alejandra) and markdown (via prettier).
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-10-08 — `generate:all` regenerates instructions, repo
-> documents and devenv.yaml; devenv.lock is synced separately with
+> **Last verified:** 2026-10-25 — shared AGENTS.md indexes may use one manually
+> followed child tier; `generate:all` regenerates instructions, repo documents
+> and devenv.yaml; devenv.lock is synced separately with
 > `devenv update <input>`; fragment sources live in the dev or package tree;
 > package categories live in owner registries; `dev/generate.nix` turns them
 > into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
@@ -998,7 +912,10 @@ it per runtime through the `lib/ai/transformers/` pipeline:
 - Codex / AGENTS.md: always-loaded orientation plus a compact
   `## Path-scoped rules` index. Codex has no glob-scoped instruction primitive,
   so matching remains a manual progressive-disclosure step: the index maps the
-  same registry scopes to the authoritative source documents. AGENTS.md used to
+  same registry scopes to the authoritative source documents. Shorter
+  shared-parent `fileMatch` groups become manual child indexes under
+  `AGENTS.md.rules/`; pointers preserve coverage and children retain exact
+  scopes and audiences. Auto/manual entries stay at root. AGENTS.md used to
   concatenate every scoped fragment body, but that bloated it to ~2k lines;
   Phase 2.4 removed the bodies (commit c4f4aff), and `ai.*` renders a scoped
   rule that names `references` as an index entry for the same reason. The index
@@ -1013,11 +930,12 @@ it per runtime through the `lib/ai/transformers/` pipeline:
   within 32 KiB.
 
 The source fragments are authoritative. Every runtime file above is a generated
-projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the
-Claude and Kiro ones are gitignored and written on devenv shell entry. Never
-edit a projection directly; the next shell entry, or the drift check, undoes it.
-`devenv tasks run --mode before generate:all` regenerates all of them, committed
-and gitignored, after source or registry changes.
+projection that `ai.*` writes: AGENTS.md, its generated child indexes and
+`.github/` are committed, the Claude and Kiro ones are gitignored and written on
+devenv shell entry. Never edit a projection directly; the next shell entry, or
+the drift check, undoes it. `devenv tasks run --mode before generate:all`
+regenerates all of them, committed and gitignored, after source or registry
+changes.
 
 ### Maintenance is mandatory
 

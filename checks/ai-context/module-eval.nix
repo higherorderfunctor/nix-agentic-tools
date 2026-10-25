@@ -308,6 +308,56 @@ in {
         && !(lib.hasInfix "---" agents)
     );
 
+    module-shared-agentsmd-tier-delivery = mkTest "shared-agentsmd-tier-delivery" (
+      let
+        base.ai = {
+          codex.enable = true;
+          rules = lib.genAttrs ["alpha" "beta"] (_: {
+            matcher = ["src/**"];
+            references = map (n: "docs/guidance/long-document-name-${n}.md") ["one" "two" "three" "four"];
+            text = "RULE-BODY-MUST-NOT-BE-INLINED";
+          });
+        };
+        active = evalDevenv base;
+        childrenOf = result: lib.filter (path: lib.hasPrefix "AGENTS.md.rules/" path) (lib.attrNames (deliveredFiles result.config));
+        child = builtins.head (childrenOf active);
+        disabled = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".enable = false;});
+        replaced = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".content.text = "Consumer root.";});
+        removed = evalDevenv {ai.codex.enable = true;};
+        # An index can be inspected without reading a discarded context source.
+        source = pkgs.runCommand "tier-discarded-context-must-not-build" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exit 1
+        '';
+        lazy = evalDevenv (lib.recursiveUpdate base {
+          ai.context = {inherit source;};
+          ai.codex.files."AGENTS.md".content.text = "Consumer root.";
+        });
+        collision = builtins.tryEval (let
+          result = evalDevenv (lib.recursiveUpdate base {
+            ai.internal.agentsMd.${child} = {
+              hasContent = true;
+              context = "Conflicting root.";
+            };
+          });
+        in
+          builtins.deepSeq result.config.ai.internal._generatedFiles true);
+      in
+        builtins.length (childrenOf active)
+        == 1
+        && active.config.ai.files.${child}.method == "ro"
+        && fromGeneratedTree child (deliveredFiles active.config).${child}
+        && lib.hasInfix "../docs/guidance/" (markdownInput active child).text
+        && !(lib.hasInfix "RULE-BODY-MUST-NOT-BE-INLINED" (markdownInput active child).text)
+        && childrenOf disabled == []
+        && childrenOf replaced == []
+        && childrenOf removed == []
+        && childrenOf lazy == []
+        && (deliveredFiles lazy.config)."AGENTS.md".text == "Consumer root."
+        && !collision.success
+    );
+
     module-shared-agentsmd-preserves-rule-audiences = mkTest "shared-agentsmd-preserves-rule-audiences" (
       let
         result = evalDevenv {

@@ -1,18 +1,18 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-25 — shared AGENTS.md rule contributions retain
-> runtime audiences and structured index metadata; non-AI owners use the same
-> layer-1 helper; delivery facts derive delivered and absent cells, keyed
-> withdrawal and normalized gaps from option and runtime declarations;
-> `poolOptions` covers `agentsDir` and `environmentVariables` only;
-> `optionNamespaces` places launcher and pool options; the devenv file observer
-> lives in ai-module and reads the files plan; the shared AGENTS.md composer
-> reaches the files plan as the owner `internal`; Claude stages every surface,
-> including HM `.claude.json` as `rw`; the files engine writes its rules copies
-> on devenv; staged Markdown and raw entries are whole-content defaults; Kiro
-> stages every surface, with hooks, settings and steering legacy ledgers
-> declared outside its enable gate; Kimchi stages every surface, with every
-> legacy ledger ungated; Codex stages every surface and declares both copy
+> **Last verified:** 2026-10-25 — shared AGENTS.md uses one optional child index
+> tier, preserves runtime audiences and retains structured index metadata;
+> non-AI owners use the same layer-1 helper; delivery facts derive delivered and
+> absent cells, keyed withdrawal and normalized gaps from option and runtime
+> declarations; `poolOptions` covers `agentsDir` and `environmentVariables`
+> only; `optionNamespaces` places launcher and pool options; the devenv file
+> observer lives in ai-module and reads the files plan; the shared AGENTS.md
+> composer reaches the files plan as the owner `internal`; Claude stages every
+> surface, including HM `.claude.json` as `rw`; the files engine writes its
+> rules copies on devenv; staged Markdown and raw entries are whole-content
+> defaults; Kiro stages every surface, with hooks, settings and steering legacy
+> ledgers declared outside its enable gate; Kimchi stages every surface, with
+> every legacy ledger ungated; Codex stages every surface and declares both copy
 > ledgers while disabled; hand rows are confined to the policy-only permissions
 > surface; named CPA routing replaces runtime proxy defaults; Claude's
 > `native.installMethod` and `native.unpinLaunchEffort` are declared for Home
@@ -377,7 +377,21 @@ cells without policy edits.
   backend and in any repo; there is no shell-entry window notice. The Markdown
   formatter handles the generated layout (one blank line between units and after
   each rule comment, one glob or link per index line) before the tree is
-  installed.
+  installed. The shared composer groups two or more `fileMatch` entries only
+  when every reference in each entry is a plain relative file path under one
+  common parent directory and the rendered root index becomes strictly shorter.
+  It uses sorted matcher unions for root pointers, dropping only patterns
+  already covered by a literal `directory/**` prefix; children retain each
+  original matcher and audience. Auto/manual rules, mixed-parent references,
+  URLs and anchors stay at root. Child names are
+  `<target>.rules/<full SHA-256 of parent>.md`, never an automatically loaded
+  `AGENTS.md`; links are rebased relative to their containing file, including
+  nested custom targets. There is one child tier and no grouping option.
+  Children use the existing internal generated tree and read-only file
+  ownership; replacing or disabling the root disables its generated children,
+  and removing a group retires its files. Child/root target collisions fail
+  rather than overwrite. Tier selection reads index metadata, never discarded
+  context or inline rule sources.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit

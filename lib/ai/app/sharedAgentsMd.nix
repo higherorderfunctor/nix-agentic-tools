@@ -115,9 +115,16 @@
       };
     };
   };
-  allRendered = lib.mapAttrs (_filename: value:
+  tiers = lib.mapAttrs (filename: value:
+    agentsmd.tierIndex {
+      inherit filename;
+      inherit (value) audiences hasOnDemandIndex index;
+    })
+  config.ai.internal.agentsMd;
+  allRendered = lib.mapAttrs (filename: value:
     agentsmd.renderKeyed {
-      inherit (value) audiences context hasOnDemandIndex index rules;
+      inherit (value) audiences context hasOnDemandIndex rules;
+      inherit (tiers.${filename}) index indexGroups;
     })
   config.ai.internal.agentsMd;
   generatedRendered =
@@ -125,6 +132,13 @@
       filename: _text: config.ai.internal.agentsMd.${filename}.hasContent
     )
     allRendered;
+  children = lib.foldl' (result: filename: let
+    additions = lib.mapAttrs (_path: text: {inherit filename text;}) tiers.${filename}.children;
+    collisions = lib.attrNames (builtins.intersectAttrs additions (result // config.ai.internal.agentsMd));
+  in
+    if collisions != []
+    then throw "AGENTS.md child index path collides with another target: ${lib.concatStringsSep ", " collisions}"
+    else result // additions) {} (lib.attrNames config.ai.internal.agentsMd);
   # Each target's hard limit, measured on the built file whoever supplies it.
   limits =
     lib.mapAttrs (_filename: value: {
@@ -193,10 +207,27 @@ in {
               then "context"
               else "rules";
           })
-          generatedRendered;
+          generatedRendered
+          // lib.mapAttrs (_path: child: {
+            content.text = child.text;
+            format = "markdown";
+            method = "ro";
+            surface = "rules";
+          })
+          children;
         _generatedTree = tree;
         files = lib.mkMerge [
           (generatedFiles.layer1 {inherit staged tree;})
+          # Keep names structural: gating staged children on final root files
+          # would make ai.files' attribute discovery depend on itself. Final
+          # enable arbitration also keeps discarded child bytes out of the tree.
+          (lib.mapAttrs (_path: child: {
+              enable = lib.mkDefault (
+                config.ai.files.${child.filename}.enable
+                && config.ai.files.${child.filename}._contentPrio >= (lib.mkDefault null).priority
+              );
+            })
+            children)
           # Every shared target is the composer's claim, so a runtime's
           # entry alone still lands as a read-only copy, and only when some
           # definition supplies content. Read by priority, so the content
