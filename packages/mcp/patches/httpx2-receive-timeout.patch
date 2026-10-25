@@ -1,0 +1,23 @@
+--- a/tests/httpx2/websockets/test_api.py
++++ b/tests/httpx2/websockets/test_api.py
+@@ -238,17 +238,18 @@
+     def test_receive_timeout(self) -> None:
+         class MockNetworkStream(NetworkStream):
+             def __init__(self) -> None:
++                self.closed = threading.Event()
+                 self.connection = wsproto.connection.Connection(wsproto.connection.ConnectionType.SERVER)
+ 
+             def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+-                time.sleep(0.2)
++                self.closed.wait()
+                 return b""
+ 
+             def write(self, buffer: bytes, timeout: float | None = None) -> None:
+                 pass
+ 
+             def close(self) -> None:
+-                pass
++                self.closed.set()
+ 
+         stream = MockNetworkStream()
+         with pytest.raises(TimeoutError):
