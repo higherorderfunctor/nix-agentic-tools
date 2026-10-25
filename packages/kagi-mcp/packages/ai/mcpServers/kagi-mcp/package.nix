@@ -5,7 +5,12 @@
   packageLib,
   ...
 }: let
-  inherit (pkgs) fetchFromGitHub python313Packages;
+  inherit (pkgs) fetchFromGitHub;
+  # FastMCP 3 uses the MCP 1 API. Keep its whole Python scope on that major;
+  # nixpkgs' default MCP now exposes the incompatible SDK 2 API.
+  python313Packages = pkgs.python313Packages.overrideScope (_: prev: {
+    mcp = prev.mcp_1;
+  });
   vu = packageLib;
 
   rev = "55b38d20c67f1406f2c284af776de395297a75cc";

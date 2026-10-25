@@ -52,6 +52,10 @@
     inherit (sources) version;
     inherit srcHash;
     cargoHash = sources.cargoHash or lib.fakeHash;
+    # Our release already carries the security updates in nixpkgs' 12.9.0
+    # backport, which conflicts with our lock. Override the
+    # builder input so source patching and cargo vendoring use the same lock.
+    cargoPatches = [];
     rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
   };
 in

@@ -9,6 +9,11 @@
 }: let
   inherit (pkgs) fetchFromGitHub;
   vu = packageLib;
+  # mcp-proxy requires mcp<2; select nixpkgs' maintained SDK 1 package in
+  # the scope consumed by the upstream recipe, including its test inputs.
+  python3Packages = pkgs.python3Packages.overrideScope (_: prev: {
+    mcp = prev.mcp_1;
+  });
 
   rev = "701a0453487d1b28c8f9806ee4863674c70210dd";
   src = fetchFromGitHub {
@@ -18,7 +23,7 @@
     hash = "sha256-dChbKePHfI3IdJRBw/XoKTeadcnHeJByblOSQ8jG/yA=";
   };
 in
-  pkgs.mcp-proxy.overridePythonAttrs (old: let
+  (pkgs.mcp-proxy.override {inherit python3Packages;}).overridePythonAttrs (old: let
     # upstream: readPyprojectVersion @ pyproject.toml
     upstreamVersion = "0.13.0";
   in {
@@ -46,8 +51,8 @@ in
     # which is what let the build reach this phase at all.
     dependencies =
       (old.dependencies or [])
-      ++ [pkgs.python3Packages.httpx-auth];
-    nativeCheckInputs = with pkgs.python3Packages; [pytest pytest-asyncio];
+      ++ [python3Packages.httpx-auth];
+    nativeCheckInputs = with python3Packages; [pytest pytest-asyncio];
     doInstallCheck = true;
     installCheckPhase = vu.mkMcpSmokeTest {bin = "mcp-proxy";};
     # Patch versionCheckHook's $version to drop our +<shortRev> suffix.
