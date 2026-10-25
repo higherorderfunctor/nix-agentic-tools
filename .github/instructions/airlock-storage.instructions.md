@@ -7,9 +7,9 @@ applyTo: "packages/airlock/**"
 
 # airlock storage
 
-> **Last verified:** 2026-10-25 — guarded SQLite state passes the focused
-> storage suite, offline workspace tests, Clippy, the Nix package build, the Nix
-> Clippy check, and clean SQLx metadata regeneration.
+> **Last verified:** 2026-10-25 — managed primary OAuth mappings are scoped to
+> authenticated clients, with durable refresh expiry and generation-checked
+> replacement and retirement.
 
 ## Scope
 
@@ -45,7 +45,9 @@ does not wait for this worker; M07 must call it from telemetry side-work and
 treat `UsageUnavailable` or a write error as visible completeness loss. `close`
 drains the worker, takes sole ownership of the connection, and awaits SQLite's
 asynchronous close. Dropping a handle without `close` releases the worker
-asynchronously and is not the deterministic shutdown path.
+asynchronously and is not the deterministic shutdown path. The serve caller
+keeps the sole storage owner after gateway connections drain and calls `close`
+on both normal and error exits before the state directory is reused.
 
 ## Data contract
 
@@ -57,12 +59,16 @@ bounded and represented by `TokenMaterial`: a zeroizing buffer whose `Debug`
 implementation is always `[redacted]`. Storage never logs token values, and SQLx
 statement and slow-statement logging are disabled.
 
-OAuth stores one real token pair and one fake mapping pair per credential.
-Replacement is a transaction guarded by a generation: an absent mapping requires
-generation zero, while an existing mapping must match the caller's expected
-generation before either half is replaced. Lookup joins the mapping, credential,
-real token row, and provider, and refuses a credential/provider mismatch without
-returning token material.
+OAuth stores one real token pair per credential and a fake mapping keyed by
+authenticated client and credential. A migration retires the pre-release unowned
+pairs rather than guessing their owner. The active managed route has exactly one
+client. Replacement is a transaction guarded by a generation: an absent mapping
+requires generation zero, while an existing mapping must match the caller's
+expected generation before either half is replaced. Lookup joins the mapping,
+credential, real token row, and provider, and refuses a
+client/credential/provider mismatch without returning token material. Known
+refresh-token expiry is durable. Successful revoke removes both pairs only when
+its client, provider, fake refresh token, and generation still match.
 
 Observed request events are separate from provider snapshots. An event records
 the group, credential, bounded model ID, completed/failed/rejected outcome,

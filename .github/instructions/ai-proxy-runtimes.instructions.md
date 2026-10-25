@@ -9,21 +9,23 @@ applyTo: "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix,packages/chatgpt
 
 > **Last verified:** 2026-10-25 — Claude's airlock route reads its
 > service-delivered client token at launch, prepares current CA trust before one
-> jail, pins Home Manager's config directory, and limits settings sources to its
-> managed scope. CPA Claude uses `redact.assign` and the shared reader through
-> `apiKeyHelper` for file, command and concat references, and clears inherited
-> API keys, bearer tokens, custom headers and Bedrock/Vertex/Foundry switches in
-> settings, and suppresses the inherited API-key descriptor before Claude
-> starts. Codex uses command-backed provider auth. Resolved credentials supply
-> owner-labelled Claude `/model` rows on both backends; airlock includes only
-> the granted `api.anthropic.com` group. Codex discovers CPA models without
-> per-credential profiles. Kimchi, Kiro and Copilot omit `proxy` support and
-> warn.
+> jail, pins Home Manager's config directory, limits settings sources to its
+> managed scope, and lets managed OAuth use Claude's native store and traffic.
+> CPA Claude uses `redact.assign` and the shared reader through `apiKeyHelper`
+> for file, command and concat references, and clears inherited API keys, bearer
+> tokens, custom headers and Bedrock/Vertex/Foundry switches in settings, and
+> suppresses the inherited API-key descriptor before Claude starts. Codex uses
+> command-backed provider auth. Resolved credentials supply owner-labelled
+> Claude `/model` rows on both backends; airlock includes only the granted
+> `api.anthropic.com` group. Codex discovers CPA models without per-credential
+> profiles. Kimchi, Kiro and Copilot omit `proxy` support and warn.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
 An airlock instance keeps Claude's settings `ANTHROPIC_BASE_URL` and
-`apiKeyHelper` empty, and sets a visibly fake `CLAUDE_CODE_OAUTH_TOKEN`. The
+`apiKeyHelper` empty. A file-backed primary sets a visibly fake
+`CLAUDE_CODE_OAUTH_TOKEN`; a managed OAuth primary clears that setting and the
+inherited process token so Claude uses its native credential store. The
 generated launcher clears the early API-key descriptor. Before bwrap, its jail
 permission reads only the selected client's token path from the rendered service
 config, builds a percent-encoded `HTTPS_PROXY`, and combines current system
@@ -42,25 +44,27 @@ The airlock launcher passes `--setting-sources user` on Home Manager and
 `--setting-sources project` on devenv. Home Manager also pins
 `CLAUDE_CONFIG_DIR` to `$HOME/.claude`, where it delivers the user settings.
 Both pass an explicit, non-secret `--settings` overlay with the static route
-fields, including the fake OAuth token and empty base URL/helper. This keeps
-unrelated settings in the managed scope while excluding other user, project and
-local scopes for that invocation. It can exclude unrelated customizations from
-those other scopes. Conflicting Nix-defined proxy environment keys and jail
-environment overrides are rejected, including deferred jail permissions that set
-or unset a proxy variable. A pinned Claude 2.1.310 offline probe observed the
-competing CONNECT authority without the overlay and the restored
-`api.anthropic.com:443` authority with the overlay for both user and project
-settings. It also observed an empty helper suppress a lower-scope helper; it did
-not inspect a real provider request or prove enterprise managed precedence.
+fields, including the empty base URL/helper and the appropriate fake or empty
+OAuth token setting. This keeps unrelated settings in the managed scope while
+excluding other user, project and local scopes for that invocation. It can
+exclude unrelated customizations from those other scopes. Conflicting
+Nix-defined proxy environment keys and jail environment overrides are rejected,
+including deferred jail permissions that set or unset a proxy variable. A pinned
+Claude 2.1.310 offline probe observed the competing CONNECT authority without
+the overlay and the restored `api.anthropic.com:443` authority with the overlay
+for both user and project settings. It also observed an empty helper suppress a
+lower-scope helper; it did not inspect a real provider request or prove
+enterprise managed precedence.
 
-A settings `env` beats the process env, so the endpoint travels through settings
-files. `render` writes `env.ANTHROPIC_BASE_URL` (the origin; Claude appends
-`/v1/messages`) and one strict `apiKeyHelper`. `lib/ai/proxy/key-helper.nix`,
-shared with Codex, calls `redact.assign` with the selected file, command or
-concat reference, then prints the resolved key with a constant `printf` format.
-Its shell source carries only reference paths and concat's literal parts; the
-secret stays in the shared reader's stdout and the helper's shell variable.
-Resolution failures abort the helper before it returns a key.
+A settings `env` beats the process env, so CPA's endpoint travels through
+settings files. For CPA, `render` writes `env.ANTHROPIC_BASE_URL` (the origin;
+Claude appends `/v1/messages`) and one strict `apiKeyHelper`.
+`lib/ai/proxy/key-helper.nix`, shared with Codex, calls `redact.assign` with the
+selected file, command or concat reference, then prints the resolved key with a
+constant `printf` format. Its shell source carries only reference paths and
+concat's literal parts; the secret stays in the shared reader's stdout and the
+helper's shell variable. Resolution failures abort the helper before it returns
+a key.
 
 Both `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are written blank.
 Settings merge per key across scopes, so an inherited token or a lower-scope key
@@ -79,9 +83,10 @@ descriptor before exec; without a selection the package stays unchanged. An
 explicit `ai.claude.package = null` keeps settings delivery and warns that the
 caller must unset the descriptor when launching an unmanaged Claude.
 
-Any selection also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
+A CPA selection also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
 `DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
-`settings.disableClaudeAiConnectors` to `true` to disable claude.ai connectors.
+`settings.disableClaudeAiConnectors` to `true`. Airlock leaves nonessential
+traffic and claude.ai connectors enabled for native login and features.
 
 The endpoint lands in `native.settings`, so the settings.json the backend
 already writes (user on Home Manager, project on devenv). The proxy leaves are

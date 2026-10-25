@@ -6,7 +6,7 @@ use std::{
     fs,
     os::unix::fs::{DirBuilderExt, PermissionsExt},
     sync::{Arc, atomic::Ordering},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use airlock_gateway::{CaError, Error, Gateway};
@@ -18,10 +18,12 @@ use hyper::{
         AUTHORIZATION, CONNECTION, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE, TRAILER, UPGRADE,
     },
 };
+use sqlx::{Connection, SqliteConnection, sqlite::SqliteConnectOptions};
 use support::{
     FixtureAuth, HttpClient, HttpProtocol, REAL_API_KEY, REAL_OAUTH_TOKEN, Running, StallGates,
     TOKEN, TestCa, UpgradeBytes, UpstreamMode, config, fields, fnv1a_test, full_body,
-    http_upstream, records, request, sink, streaming_body, tls_upstream, wait_for_request,
+    http_upstream, owned_body, records, request, sink, streaming_body, tls_upstream,
+    wait_for_request,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -30,6 +32,1179 @@ use tokio::{
 use x509_parser::{extensions::GeneralName, prelude::FromDer};
 
 const LARGE_BODY: usize = 64 << 20;
+
+async fn managed_status(
+    client: &mut HttpClient,
+    request: hyper::Request<support::ReceiverBody>,
+) -> hyper::StatusCode {
+    let response = client.send(request).await;
+    let status = response.status();
+    response
+        .into_body()
+        .collect()
+        .await
+        .expect("managed response body");
+    status
+}
+
+#[tokio::test]
+async fn another_authenticated_client_cannot_replay_the_managed_primary() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Oauth).await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut owner = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let login = owner
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    assert_eq!(login.status(), hyper::StatusCode::OK);
+    let (_, refused) = server
+        .request(
+            "CONNECT",
+            &format!("localhost:{}", upstream.port),
+            Some(&support::basic("stranger", "fake-STRANGER-token")),
+        )
+        .await;
+    assert!(
+        refused.starts_with("HTTP/1.1 403"),
+        "other client reached primary"
+    );
+    assert_eq!(records(&upstream).len(), 1);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn stalled_oauth_body_times_out_and_releases_the_primary() {
+    let gates = Arc::new(StallGates {
+        backpressure: tokio::sync::Notify::new(),
+        response_started: tokio::sync::Notify::new(),
+    });
+    let ca = TestCa::new();
+    let upstream = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::OauthStall(gates.clone()),
+    )
+    .await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let pending = tokio::spawn(async move {
+        let status = managed_status(
+            &mut client,
+            request(
+                "POST",
+                "/v1/oauth/token",
+                &[],
+                full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+            ),
+        )
+        .await;
+        (client, status)
+    });
+    timeout(Duration::from_secs(2), gates.response_started.notified())
+        .await
+        .expect("upstream token response started");
+    let (mut client, status) = timeout(Duration::from_secs(33), pending)
+        .await
+        .expect("bounded OAuth exchange")
+        .expect("client task");
+    assert_eq!(status, hyper::StatusCode::GATEWAY_TIMEOUT);
+    let unknown = managed_status(
+        &mut client,
+        request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"refresh_token","refresh_token":"fake-UNKNOWN"}"#),
+        ),
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), unknown)
+            .await
+            .expect("released primary lock"),
+        hyper::StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(records(&upstream).len(), 1);
+    gates.backpressure.notify_one();
+    server.stop().await;
+}
+
+#[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one fixture exercises the complete stateful OAuth lifecycle"
+)]
+async fn managed_oauth_exchanges_refreshes_and_revokes_without_exposing_real_tokens() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Oauth).await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let login_wire = br#"{"grant_type":"authorization_code","code":"fake-code","code_verifier":"fake-verifier","state":"fake-state","client_id":"fake-client"}"#;
+    let login = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(login_wire),
+        ))
+        .await;
+    assert_eq!(login.status(), hyper::StatusCode::OK);
+    let login_body = login
+        .into_body()
+        .collect()
+        .await
+        .expect("login body")
+        .to_bytes();
+    let login: serde_json::Value = serde_json::from_slice(&login_body).expect("login JSON");
+    let fake_access = login["access_token"].as_str().expect("fake access");
+    let fake_refresh = login["refresh_token"].as_str().expect("fake refresh");
+    assert!(fake_access.starts_with("sk-ant-oat01-airlock-"));
+    assert_ne!(fake_access, "fake-REAL-access-one");
+    assert_ne!(fake_refresh, "fake-REAL-refresh-one");
+    assert_eq!(login["expires_in"], 3600);
+    assert_eq!(login["scope"], "user:inference user:profile");
+    assert_eq!(login["account"]["uuid"], "fake-account");
+
+    let mut profile = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    profile.headers_mut().insert(
+        AUTHORIZATION,
+        format!("Bearer {fake_access}")
+            .parse()
+            .expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, profile).await,
+        hyper::StatusCode::OK
+    );
+    let mut unknown = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    unknown.headers_mut().insert(
+        AUTHORIZATION,
+        "Bearer fake-UNKNOWN-access".parse().expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, unknown).await,
+        hyper::StatusCode::UNAUTHORIZED
+    );
+
+    let refresh = serde_json::json!({"grant_type":"refresh_token","refresh_token":fake_refresh,"client_id":"fake-client"});
+    let refreshed = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            owned_body(serde_json::to_vec(&refresh).expect("refresh JSON")),
+        ))
+        .await;
+    assert_eq!(refreshed.status(), hyper::StatusCode::OK);
+    let refreshed_body = refreshed
+        .into_body()
+        .collect()
+        .await
+        .expect("refresh body")
+        .to_bytes();
+    let refreshed: serde_json::Value =
+        serde_json::from_slice(&refreshed_body).expect("refresh JSON");
+    let new_access = refreshed["access_token"].as_str().expect("new access");
+    let new_refresh = refreshed["refresh_token"].as_str().expect("new refresh");
+    assert_ne!(new_access, fake_access);
+    assert_ne!(new_refresh, fake_refresh);
+    assert!(
+        !refreshed_body
+            .windows(b"fake-REAL".len())
+            .any(|bytes| bytes == b"fake-REAL")
+    );
+
+    let mut old = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    old.headers_mut().insert(
+        AUTHORIZATION,
+        format!("Bearer {fake_access}")
+            .parse()
+            .expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, old).await,
+        hyper::StatusCode::UNAUTHORIZED
+    );
+    let mut latest = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    latest.headers_mut().insert(
+        AUTHORIZATION,
+        format!("Bearer {new_access}").parse().expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, latest).await,
+        hyper::StatusCode::OK
+    );
+    for path in [
+        "/api/oauth/claude_cli/create_api_key",
+        "/api/oauth/claude_cli/create_api_key/",
+        "/api/oauth/claude_cli/%63reate_api_key", // cspell:ignore reate
+    ] {
+        let mut key_request = request("POST", path, &[], full_body(b""));
+        key_request.headers_mut().insert(
+            AUTHORIZATION,
+            format!("Bearer {new_access}").parse().expect("fake header"),
+        );
+        assert_eq!(
+            managed_status(&mut client, key_request).await,
+            hyper::StatusCode::FORBIDDEN
+        );
+    }
+
+    let revoke = serde_json::json!({"token":new_refresh,"token_type_hint":"refresh_token","client_id":"fake-client"});
+    assert_eq!(
+        managed_status(
+            &mut client,
+            request(
+                "POST",
+                "/v1/oauth/token/revoke",
+                &[],
+                owned_body(serde_json::to_vec(&revoke).expect("revoke JSON"))
+            )
+        )
+        .await,
+        hyper::StatusCode::OK
+    );
+    let mut retired = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    retired.headers_mut().insert(
+        AUTHORIZATION,
+        format!("Bearer {new_access}").parse().expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, retired).await,
+        hyper::StatusCode::UNAUTHORIZED
+    );
+
+    let received = records(&upstream);
+    assert_eq!(received.len(), 5);
+    assert_eq!(&received[0].body[..], login_wire);
+    assert!(received[0].headers.get(AUTHORIZATION).is_none());
+    assert_eq!(
+        received[1].headers[AUTHORIZATION],
+        "Bearer fake-REAL-access-one"
+    );
+    let sent_refresh: serde_json::Value =
+        serde_json::from_slice(&received[2].body).expect("upstream refresh");
+    assert_eq!(sent_refresh["refresh_token"], "fake-REAL-refresh-one");
+    assert_eq!(
+        received[3].headers[AUTHORIZATION],
+        "Bearer fake-REAL-access-two"
+    );
+    let sent_revoke: serde_json::Value =
+        serde_json::from_slice(&received[4].body).expect("upstream revoke");
+    assert_eq!(sent_revoke["token"], "fake-REAL-refresh-two");
+    server.capture.request_events();
+    server.stop().await;
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "the malformed initial-exchange table verifies every rejection against a fresh gateway"
+)]
+#[tokio::test]
+async fn managed_oauth_rejects_malformed_success_without_a_mapping() {
+    let valid = serde_json::json!({
+        "access_token": "fake-REAL-access",
+        "expires_in": 3600,
+        "refresh_token": "fake-REAL-refresh",
+    });
+    let mut cases = Vec::new();
+    for (name, field, replacement) in [
+        (
+            "access array",
+            "access_token",
+            serde_json::json!(["fake-REAL"]),
+        ),
+        ("access empty", "access_token", serde_json::json!("")),
+        (
+            "access header invalid",
+            "access_token",
+            serde_json::json!("fake-REAL\r\nx"),
+        ),
+        ("access null", "access_token", serde_json::Value::Null),
+        (
+            "access object",
+            "access_token",
+            serde_json::json!({"value":"fake-REAL"}),
+        ),
+        (
+            "access oversize",
+            "access_token",
+            serde_json::json!("x".repeat(8193)),
+        ),
+        ("expiry negative", "expires_in", serde_json::json!(-1)),
+        ("expiry null", "expires_in", serde_json::Value::Null),
+        ("expiry overflow", "expires_in", serde_json::json!(u64::MAX)),
+        ("expiry string", "expires_in", serde_json::json!("3600")),
+        ("expiry zero", "expires_in", serde_json::json!(0)),
+        (
+            "refresh array",
+            "refresh_token",
+            serde_json::json!(["fake-REAL"]),
+        ),
+        ("refresh empty", "refresh_token", serde_json::json!("")),
+        ("refresh null", "refresh_token", serde_json::Value::Null),
+        (
+            "refresh object",
+            "refresh_token",
+            serde_json::json!({"value":"fake-REAL"}),
+        ),
+        (
+            "refresh oversize",
+            "refresh_token",
+            serde_json::json!("x".repeat(8193)),
+        ),
+    ] {
+        let mut response = valid.clone();
+        response[field] = replacement;
+        cases.push((name, response));
+    }
+    for (name, field) in [
+        ("access missing", "access_token"),
+        ("expiry missing", "expires_in"),
+        ("refresh missing", "refresh_token"),
+    ] {
+        let mut response = valid.clone();
+        response
+            .as_object_mut()
+            .expect("response object")
+            .remove(field);
+        cases.push((name, response));
+    }
+    for (name, reply) in cases {
+        let ca = TestCa::new();
+        let body = Box::leak(
+            serde_json::to_vec(&reply)
+                .expect("fixture JSON")
+                .into_boxed_slice(),
+        );
+        let upstream = http_upstream(
+            &ca,
+            HttpProtocol::Http1,
+            UpstreamMode::OauthReply {
+                body,
+                status: hyper::StatusCode::OK,
+            },
+        )
+        .await;
+        let server = Running::start_managed(ca.roots(), upstream.port).await;
+        let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+        let response = client
+            .send(request(
+                "POST",
+                "/v1/oauth/token",
+                &[],
+                full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+            ))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::BAD_GATEWAY, "{name}");
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("rejection body")
+            .to_bytes();
+        assert!(
+            !body
+                .windows(b"fake-REAL".len())
+                .any(|part| part == b"fake-REAL"),
+            "{name}"
+        );
+        let mut profile = request("GET", "/api/oauth/profile", &[], full_body(b""));
+        profile.headers_mut().insert(
+            AUTHORIZATION,
+            "Bearer fake-UNKNOWN-access".parse().expect("fake header"),
+        );
+        assert_eq!(
+            managed_status(&mut client, profile).await,
+            hyper::StatusCode::UNAUTHORIZED,
+            "{name}"
+        );
+        assert_eq!(records(&upstream).len(), 1, "{name}");
+        drop(client);
+        server.stop().await;
+    }
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "the malformed refresh table verifies every rejection preserves the prior mapping"
+)]
+#[tokio::test]
+async fn managed_refresh_rejects_present_invalid_fields_without_changing_mapping() {
+    let valid = serde_json::json!({
+        "access_token": "fake-REAL-new",
+        "expires_in": 3600,
+        "refresh_token": "fake-REAL-new-refresh",
+        "refresh_token_expires_in": 86400,
+    });
+    let mut cases = Vec::new();
+    for (name, field, replacement) in [
+        (
+            "access array",
+            "access_token",
+            serde_json::json!(["fake-REAL"]),
+        ),
+        ("access empty", "access_token", serde_json::json!("")),
+        (
+            "access header invalid",
+            "access_token",
+            serde_json::json!("fake-REAL\r\nx"),
+        ),
+        ("access null", "access_token", serde_json::Value::Null),
+        (
+            "access object",
+            "access_token",
+            serde_json::json!({"value":"fake-REAL"}),
+        ),
+        (
+            "access oversize",
+            "access_token",
+            serde_json::json!("x".repeat(8193)),
+        ),
+        ("expiry negative", "expires_in", serde_json::json!(-1)),
+        ("expiry null", "expires_in", serde_json::Value::Null),
+        ("expiry overflow", "expires_in", serde_json::json!(u64::MAX)),
+        ("expiry string", "expires_in", serde_json::json!("3600")),
+        ("expiry zero", "expires_in", serde_json::json!(0)),
+        (
+            "refresh array",
+            "refresh_token",
+            serde_json::json!(["fake-REAL"]),
+        ),
+        ("refresh empty", "refresh_token", serde_json::json!("")),
+        ("refresh null", "refresh_token", serde_json::Value::Null),
+        (
+            "refresh object",
+            "refresh_token",
+            serde_json::json!({"value":"fake-REAL"}),
+        ),
+        (
+            "refresh oversize",
+            "refresh_token",
+            serde_json::json!("x".repeat(8193)),
+        ),
+        (
+            "refresh expiry negative",
+            "refresh_token_expires_in",
+            serde_json::json!(-1),
+        ),
+        (
+            "refresh expiry null",
+            "refresh_token_expires_in",
+            serde_json::Value::Null,
+        ),
+        (
+            "refresh expiry overflow",
+            "refresh_token_expires_in",
+            serde_json::json!(u64::MAX),
+        ),
+        (
+            "refresh expiry string",
+            "refresh_token_expires_in",
+            serde_json::json!("86400"),
+        ),
+        (
+            "refresh expiry zero",
+            "refresh_token_expires_in",
+            serde_json::json!(0),
+        ),
+    ] {
+        let mut response = valid.clone();
+        response[field] = replacement;
+        cases.push((name, response));
+    }
+    for (name, field) in [
+        ("access missing", "access_token"),
+        ("expiry missing", "expires_in"),
+    ] {
+        let mut response = valid.clone();
+        response
+            .as_object_mut()
+            .expect("response object")
+            .remove(field);
+        cases.push((name, response));
+    }
+    for (name, reply) in cases {
+        let malformed = Box::leak(
+            serde_json::to_vec(&reply)
+                .expect("fixture JSON")
+                .into_boxed_slice(),
+        );
+        let ca = TestCa::new();
+        let upstream = http_upstream(
+            &ca,
+            HttpProtocol::Http1,
+            UpstreamMode::OauthRefreshReply {
+                initial: None,
+                refresh: malformed,
+            },
+        )
+        .await;
+        let server = Running::start_managed(ca.roots(), upstream.port).await;
+        let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+        let login = client
+            .send(request(
+                "POST",
+                "/v1/oauth/token",
+                &[],
+                full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+            ))
+            .await;
+        let login = login
+            .into_body()
+            .collect()
+            .await
+            .expect("login body")
+            .to_bytes();
+        let login: serde_json::Value = serde_json::from_slice(&login).expect("login JSON");
+        let refresh = serde_json::to_vec(&serde_json::json!({
+            "grant_type": "refresh_token",
+            "refresh_token": login["refresh_token"],
+        }))
+        .expect("refresh JSON");
+        let response = client
+            .send(request("POST", "/v1/oauth/token", &[], owned_body(refresh)))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::BAD_GATEWAY, "{name}");
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("rejection body")
+            .to_bytes();
+        assert!(
+            !body
+                .windows(b"fake-REAL".len())
+                .any(|part| part == b"fake-REAL"),
+            "{name}"
+        );
+        let mut profile = request("GET", "/api/oauth/profile", &[], full_body(b""));
+        profile.headers_mut().insert(
+            AUTHORIZATION,
+            format!(
+                "Bearer {}",
+                login["access_token"].as_str().expect("fake access")
+            )
+            .parse()
+            .expect("fake header"),
+        );
+        assert_eq!(
+            managed_status(&mut client, profile).await,
+            hyper::StatusCode::OK,
+            "{name}"
+        );
+        assert_eq!(records(&upstream).len(), 3, "{name}");
+        server.stop().await;
+    }
+}
+
+#[tokio::test]
+async fn managed_refresh_without_new_token_caps_or_learns_its_expiry() {
+    let known_initial = br#"{"access_token":"fake-REAL-initial","refresh_token":"fake-REAL-refresh","expires_in":3600,"refresh_token_expires_in":3600}"#;
+    let unknown_initial = br#"{"access_token":"fake-REAL-initial","refresh_token":"fake-REAL-refresh","expires_in":3600}"#;
+    for (name, initial, lifetime, preserves_old) in [
+        ("longer supplied lifetime", &known_initial[..], 7200, true),
+        ("shorter supplied lifetime", &known_initial[..], 60, false),
+        ("unknown old lifetime", &unknown_initial[..], 60, false),
+    ] {
+        let reply = Box::leak(
+            serde_json::to_vec(&serde_json::json!({
+                "access_token": "fake-REAL-new",
+                "expires_in": 3600,
+                "refresh_token_expires_in": lifetime,
+            }))
+            .expect("refresh fixture")
+            .into_boxed_slice(),
+        );
+        let ca = TestCa::new();
+        let upstream = http_upstream(
+            &ca,
+            HttpProtocol::Http1,
+            UpstreamMode::OauthRefreshReply {
+                initial: Some(initial),
+                refresh: reply,
+            },
+        )
+        .await;
+        let server = Running::start_managed(ca.roots(), upstream.port).await;
+        let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+        let login = client
+            .send(request(
+                "POST",
+                "/v1/oauth/token",
+                &[],
+                full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+            ))
+            .await;
+        assert_eq!(login.status(), hyper::StatusCode::OK, "{name}");
+        let login = login
+            .into_body()
+            .collect()
+            .await
+            .expect("login body")
+            .to_bytes();
+        let login: serde_json::Value = serde_json::from_slice(&login).expect("login JSON");
+        let path = server.directory.path().join("airlock.sqlite3");
+        let mut database = SqliteConnection::connect_with(
+            &SqliteConnectOptions::new()
+                .filename(&path)
+                .create_if_missing(false),
+        )
+        .await
+        .expect("fixture database");
+        let expiry_query = "SELECT refresh_token_expires_at_unix FROM oauth_tokens";
+        let old_expiry: Option<i64> = sqlx::query_scalar(expiry_query)
+            .fetch_one(&mut database)
+            .await
+            .expect("old expiry");
+        let refresh = serde_json::to_vec(&serde_json::json!({
+            "grant_type": "refresh_token",
+            "refresh_token": login["refresh_token"],
+        }))
+        .expect("refresh request");
+        let response = client
+            .send(request("POST", "/v1/oauth/token", &[], owned_body(refresh)))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK, "{name}");
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("refresh body")
+            .to_bytes();
+        let returned: serde_json::Value = serde_json::from_slice(&body).expect("refresh JSON");
+        assert!(returned.get("refresh_token").is_none(), "{name}");
+        let new_expiry: Option<i64> = sqlx::query_scalar(expiry_query)
+            .fetch_one(&mut database)
+            .await
+            .expect("new expiry");
+        let new_expiry = new_expiry.expect("known new expiry");
+        if preserves_old {
+            assert_eq!(Some(new_expiry), old_expiry, "{name}");
+        } else {
+            assert!(old_expiry.is_none_or(|old| new_expiry < old), "{name}");
+        }
+        let now: i64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("wall clock")
+            .as_secs()
+            .try_into()
+            .expect("Unix time fits i64");
+        let reported = returned["refresh_token_expires_in"]
+            .as_i64()
+            .expect("reported refresh lifetime");
+        assert!((0..=1).contains(&(reported - (new_expiry - now))), "{name}");
+        database.close().await.expect("close fixture database");
+        server.stop().await;
+    }
+}
+
+#[tokio::test]
+async fn managed_oauth_counts_upstream_delay_against_persisted_and_reported_lifetimes() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::OauthDelayedReply {
+            body: br#"{"access_token":"fake-REAL-access","refresh_token":"fake-REAL-refresh","expires_in":4,"refresh_token_expires_in":8}"#,
+            delay: Duration::from_millis(1_500),
+        },
+    )
+    .await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let started_at: i64 = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("wall clock")
+        .as_secs()
+        .try_into()
+        .expect("Unix time fits i64");
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("login body")
+        .to_bytes();
+    let login: serde_json::Value = serde_json::from_slice(&body).expect("login JSON");
+    let acknowledged_at: i64 = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("wall clock")
+        .as_secs()
+        .try_into()
+        .expect("Unix time fits i64");
+    let path = server.directory.path().join("airlock.sqlite3");
+    let mut database = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(false),
+    )
+    .await
+    .expect("fixture database");
+    let (fake_expiry, real_expiry, refresh_expiry): (i64, i64, i64) = sqlx::query_as(
+        "SELECT mappings.fake_access_expires_at_unix, tokens.access_expires_at_unix, tokens.refresh_token_expires_at_unix FROM oauth_mappings AS mappings JOIN oauth_tokens AS tokens USING (credential_id)",
+    )
+    .fetch_one(&mut database)
+    .await
+    .expect("stored lifetimes");
+    assert!(fake_expiry <= started_at + 5);
+    assert_eq!(fake_expiry, real_expiry);
+    assert!(fake_expiry <= acknowledged_at + 3);
+    assert!(refresh_expiry <= acknowledged_at + 7);
+    for (name, reported, persisted) in [
+        ("access", login["expires_in"].as_i64(), fake_expiry),
+        (
+            "refresh",
+            login["refresh_token_expires_in"].as_i64(),
+            refresh_expiry,
+        ),
+    ] {
+        let reported = reported.expect("reported lifetime");
+        assert!(
+            (0..=1).contains(&(reported - (persisted - acknowledged_at))),
+            "{name} lifetime disagrees with storage"
+        );
+    }
+    assert!(login["expires_in"].as_i64().expect("access lifetime") < 4);
+    database.close().await.expect("close fixture database");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn managed_oauth_rejects_a_token_that_expires_during_upstream_response() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::OauthDelayedReply {
+            body: br#"{"access_token":"fake-REAL-access","refresh_token":"fake-REAL-refresh","expires_in":1}"#,
+            delay: Duration::from_millis(1_200),
+        },
+    )
+    .await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::BAD_GATEWAY);
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("rejection body")
+        .to_bytes();
+    assert!(
+        !body
+            .windows(b"fake-REAL".len())
+            .any(|part| part == b"fake-REAL")
+    );
+    let path = server.directory.path().join("airlock.sqlite3");
+    let mut database = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(false),
+    )
+    .await
+    .expect("fixture database");
+    let mappings: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM oauth_mappings")
+        .fetch_one(&mut database)
+        .await
+        .expect("stored mapping count");
+    assert_eq!(mappings, 0);
+    database.close().await.expect("close fixture database");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn managed_oauth_does_not_acknowledge_a_failed_durable_store() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Oauth).await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let path = server.directory.path().join("airlock.sqlite3");
+    let mut database = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(false),
+    )
+    .await
+    .expect("fixture database");
+    sqlx::query(
+        "CREATE TRIGGER deny_fake_insert BEFORE INSERT ON oauth_tokens BEGIN SELECT RAISE(FAIL, 'fake durable failure'); END",
+    )
+    .execute(&mut database)
+    .await
+    .expect("install fixture failure");
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::SERVICE_UNAVAILABLE);
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("failed store body")
+        .to_bytes();
+    assert!(
+        !body
+            .windows(b"fake-REAL".len())
+            .any(|bytes| bytes == b"fake-REAL")
+    );
+    let tokens: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM oauth_tokens")
+        .fetch_one(&mut database)
+        .await
+        .expect("stored token count");
+    let mappings: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM oauth_mappings")
+        .fetch_one(&mut database)
+        .await
+        .expect("stored mapping count");
+    assert_eq!((tokens, mappings), (0, 0));
+    assert_eq!(records(&upstream).len(), 1);
+    database.close().await.expect("close fixture database");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn managed_access_reports_storage_failure_as_unavailable() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Oauth).await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let login = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    let login = login
+        .into_body()
+        .collect()
+        .await
+        .expect("login body")
+        .to_bytes();
+    let login: serde_json::Value = serde_json::from_slice(&login).expect("login JSON");
+    let path = server.directory.path().join("airlock.sqlite3");
+    let mut database = SqliteConnection::connect_with(
+        &SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(false),
+    )
+    .await
+    .expect("fixture database");
+    sqlx::query("DROP TABLE oauth_mappings")
+        .execute(&mut database)
+        .await
+        .expect("break fixture lookup");
+    let mut profile = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    profile.headers_mut().insert(
+        AUTHORIZATION,
+        format!(
+            "Bearer {}",
+            login["access_token"].as_str().expect("fake access")
+        )
+        .parse()
+        .expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, profile).await,
+        hyper::StatusCode::SERVICE_UNAVAILABLE
+    );
+    assert_eq!(
+        records(&upstream).len(),
+        1,
+        "no API request reached upstream"
+    );
+    database.close().await.expect("close fixture database");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn managed_access_rejects_expired_fake_without_forwarding() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::OauthReply {
+            body: br#"{"access_token":"fake-REAL-access","refresh_token":"fake-REAL-refresh","expires_in":1}"#,
+            status: hyper::StatusCode::OK,
+        },
+    )
+    .await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let login = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    let login = login
+        .into_body()
+        .collect()
+        .await
+        .expect("login body")
+        .to_bytes();
+    let login: serde_json::Value = serde_json::from_slice(&login).expect("login JSON");
+    tokio::time::sleep(Duration::from_millis(1_100)).await;
+    let mut profile = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    profile.headers_mut().insert(
+        AUTHORIZATION,
+        format!(
+            "Bearer {}",
+            login["access_token"].as_str().expect("fake access")
+        )
+        .parse()
+        .expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, profile).await,
+        hyper::StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        records(&upstream).len(),
+        1,
+        "no expired API request reached upstream"
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn managed_access_survives_gateway_restart_with_the_same_fake_mapping() {
+    let ca = TestCa::new();
+    let first_upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Oauth).await;
+    let server = Running::start_managed(ca.roots(), first_upstream.port).await;
+    let mut client = HttpClient::connect(&server, first_upstream.port, HttpProtocol::Http1).await;
+    let login = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    let login = login
+        .into_body()
+        .collect()
+        .await
+        .expect("login body")
+        .to_bytes();
+    let login: serde_json::Value = serde_json::from_slice(&login).expect("login JSON");
+    let fake_access = login["access_token"].as_str().expect("fake access");
+    drop(client);
+    let (directory, _) = server.stop_with_directory().await;
+
+    let second_upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Oauth).await;
+    let server = Running::start_managed_in(directory, ca.roots(), second_upstream.port).await;
+    let mut client = HttpClient::connect(&server, second_upstream.port, HttpProtocol::Http1).await;
+    let mut profile = request("GET", "/api/oauth/profile", &[], full_body(b""));
+    profile.headers_mut().insert(
+        AUTHORIZATION,
+        format!("Bearer {fake_access}")
+            .parse()
+            .expect("fake header"),
+    );
+    assert_eq!(
+        managed_status(&mut client, profile).await,
+        hyper::StatusCode::OK
+    );
+    let received = records(&second_upstream);
+    assert_eq!(received.len(), 1);
+    assert_eq!(
+        received[0].headers[AUTHORIZATION],
+        "Bearer fake-REAL-access-one"
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn managed_oauth_preserves_upstream_error_code_without_a_mapping() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::OauthReply {
+            body: br#"{"error":"invalid_grant","error_description":"fake code rejected"}"#,
+            status: hyper::StatusCode::BAD_REQUEST,
+        },
+    )
+    .await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::BAD_REQUEST);
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("upstream error body")
+        .to_bytes();
+    let error: serde_json::Value = serde_json::from_slice(&body).expect("OAuth error JSON");
+    assert_eq!(error["error"], "invalid_grant");
+    assert!(
+        !body
+            .windows(b"fake-REAL".len())
+            .any(|bytes| bytes == b"fake-REAL")
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn concurrent_managed_refresh_uses_the_real_refresh_token_once() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Oauth).await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http2).await;
+    let login = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    let login = login
+        .into_body()
+        .collect()
+        .await
+        .expect("login body")
+        .to_bytes();
+    let login: serde_json::Value = serde_json::from_slice(&login).expect("login JSON");
+    let refresh = serde_json::to_vec(&serde_json::json!({
+        "grant_type": "refresh_token",
+        "refresh_token": login["refresh_token"],
+    }))
+    .expect("refresh JSON");
+    let mut first = client.http2_sender();
+    let mut second = client.http2_sender();
+    let (first, second) = tokio::join!(
+        first.send_request(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            owned_body(refresh.clone()),
+        )),
+        second.send_request(request("POST", "/v1/oauth/token", &[], owned_body(refresh),))
+    );
+    let statuses = [
+        first.expect("first refresh").status(),
+        second.expect("second refresh").status(),
+    ];
+    assert!(statuses.contains(&hyper::StatusCode::OK));
+    assert!(statuses.contains(&hyper::StatusCode::UNAUTHORIZED));
+    let received = records(&upstream);
+    assert_eq!(received.len(), 2, "only one refresh may reach upstream");
+    let forwarded: serde_json::Value =
+        serde_json::from_slice(&received[1].body).expect("upstream refresh");
+    assert_eq!(forwarded["refresh_token"], "fake-REAL-refresh-one");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn managed_refresh_without_new_refresh_keeps_the_old_fake_and_real_tokens() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::OauthWithoutNewRefresh,
+    )
+    .await;
+    let server = Running::start_managed(ca.roots(), upstream.port).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let login = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"authorization_code","code":"fake-code"}"#),
+        ))
+        .await;
+    let login = login
+        .into_body()
+        .collect()
+        .await
+        .expect("login body")
+        .to_bytes();
+    let login: serde_json::Value = serde_json::from_slice(&login).expect("login JSON");
+    let old_fake = login["refresh_token"].as_str().expect("fake refresh");
+    let mut previous_lifetime = login["refresh_token_expires_in"]
+        .as_i64()
+        .expect("refresh lifetime");
+    let refresh = serde_json::to_vec(&serde_json::json!({
+        "grant_type": "refresh_token",
+        "refresh_token": old_fake,
+    }))
+    .expect("refresh JSON");
+    for _ in 0..2 {
+        let response = client
+            .send(request(
+                "POST",
+                "/v1/oauth/token",
+                &[],
+                owned_body(refresh.clone()),
+            ))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        let bytes = response
+            .into_body()
+            .collect()
+            .await
+            .expect("refresh body")
+            .to_bytes();
+        let returned: serde_json::Value = serde_json::from_slice(&bytes).expect("refresh JSON");
+        assert!(returned.get("refresh_token").is_none());
+        let remaining = returned["refresh_token_expires_in"]
+            .as_i64()
+            .expect("remaining lifetime");
+        assert!(remaining > 0 && remaining <= previous_lifetime);
+        previous_lifetime = remaining;
+        assert!(
+            !bytes
+                .windows(b"fake-REAL".len())
+                .any(|part| part == b"fake-REAL")
+        );
+    }
+    let forwarded = records(&upstream);
+    assert_eq!(forwarded.len(), 3);
+    for record in &forwarded[1..] {
+        let body: serde_json::Value = serde_json::from_slice(&record.body).expect("forwarded JSON");
+        assert_eq!(body["refresh_token"], "fake-REAL-refresh-one");
+    }
+    server.stop().await;
+}
 
 #[tokio::test]
 async fn http1_swaps_oauth_and_removes_client_auth() {

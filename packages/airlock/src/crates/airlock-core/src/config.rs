@@ -47,6 +47,7 @@ struct GroupConfig {
 }
 
 struct ProviderConfig {
+    claude_preset: bool,
     endpoints: BTreeMap<Protocol, Endpoint>,
     zai_preset: bool,
 }
@@ -140,7 +141,7 @@ pub struct RawProvider {
 pub enum UnsupportedExecution {
     #[error("group {group} uses OpenAI, which serve does not support yet")]
     Openai { group: GroupId },
-    #[error("credential {credential} uses managed OAuth, which serve does not support yet")]
+    #[error("credential {credential} has an unsupported managed OAuth route")]
     ManagedOauth { credential: CredentialId },
 }
 
@@ -162,6 +163,7 @@ impl Config {
     #[must_use]
     pub fn storage_identities(&self, inserted_at_unix: i64) -> StorageIdentities {
         StorageIdentities {
+            clients: self.clients.keys().cloned().collect(),
             credentials: self
                 .credentials
                 .iter()
@@ -207,6 +209,37 @@ impl Config {
         self.credentials.iter().filter_map(move |(id, credential)| {
             granted.contains(id).then_some((id, &credential.auth))
         })
+    }
+
+    #[must_use]
+    pub fn managed_provider(&self, credential: &CredentialId) -> Option<&ProviderId> {
+        self.credentials
+            .get(credential)
+            .and_then(|entry| matches!(entry.auth, Auth::OauthManaged).then_some(&entry.provider))
+    }
+
+    #[must_use]
+    pub fn managed_host_allowed(&self, group: &GroupId, host: &HostName) -> bool {
+        if host.as_ref() == "platform.claude.com" {
+            return true;
+        }
+        self.route(group, None)
+            .and_then(|(_, endpoint)| endpoint.strip_prefix("https://"))
+            .and_then(|authority| authority.split('/').next())
+            .and_then(|authority| authority.split(':').next())
+            .is_some_and(|endpoint_host| endpoint_host == host.as_ref())
+    }
+
+    #[must_use]
+    pub fn oauth_token_host_allowed(&self, group: &GroupId, host: &HostName) -> bool {
+        host.as_ref() == "platform.claude.com"
+            || (host.as_ref() != "api.anthropic.com" && self.managed_host_allowed(group, host))
+    }
+
+    #[must_use]
+    pub fn has_active_managed_oauth(&self) -> bool {
+        self.granted_credentials()
+            .any(|(_, auth)| matches!(auth, Auth::OauthManaged))
     }
 
     pub(crate) fn intercepted_hosts(&self) -> impl Iterator<Item = (&HostName, &GroupId)> {
@@ -269,6 +302,7 @@ impl Config {
             .values()
             .flat_map(|client| &client.grants)
             .collect();
+        let mut managed_owners = BTreeSet::new();
         for group_id in active {
             let Some(group) = self.groups.get(group_id) else {
                 continue;
@@ -279,10 +313,26 @@ impl Config {
                 });
             }
             for credential_id in group.members.keys() {
-                if self
-                    .credentials
-                    .get(credential_id)
-                    .is_some_and(|credential| matches!(credential.auth, Auth::OauthManaged))
+                let Some(credential) = self.credentials.get(credential_id) else {
+                    continue;
+                };
+                if matches!(credential.auth, Auth::OauthManaged)
+                    && (credential_id != &group.primary
+                        || !self
+                            .providers
+                            .get(&credential.provider)
+                            .is_some_and(|provider| provider.claude_preset)
+                        || self
+                            .clients
+                            .values()
+                            .filter(|client| client.grants.contains(group_id))
+                            .count()
+                            != 1
+                        || !group
+                            .hosts
+                            .iter()
+                            .any(|host| host.as_ref() == "platform.claude.com")
+                        || !managed_owners.insert(credential_id.clone()))
                 {
                     return Err(UnsupportedExecution::ManagedOauth {
                         credential: credential_id.clone(),
@@ -588,6 +638,7 @@ fn parse_providers(
             providers.insert(
                 id,
                 ProviderConfig {
+                    claude_preset: raw_provider.preset.as_deref() == Some("claude"),
                     endpoints: resolved,
                     zai_preset: raw_provider.preset.as_deref() == Some("zai"),
                 },

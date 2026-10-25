@@ -17,9 +17,10 @@ use sqlx::{
     ConnectOptions, Connection, Sqlite, Transaction,
     sqlite::{SqliteConnectOptions, SqliteConnection, SqliteJournalMode, SqliteSynchronous},
 };
+use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
-use crate::ids::{CredentialId, GroupId, ProviderId};
+use crate::ids::{ClientId, CredentialId, GroupId, ProviderId};
 
 const DATABASE_FILE: &str = "airlock.sqlite3";
 const MAX_SNAPSHOT_HISTORY: u64 = 1_000;
@@ -96,6 +97,11 @@ impl TokenMaterial {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    #[must_use]
+    pub fn matches(&self, candidate: &[u8]) -> bool {
+        bool::from(self.0.as_bytes().ct_eq(candidate))
+    }
 }
 
 impl std::fmt::Debug for TokenMaterial {
@@ -114,6 +120,7 @@ impl TryFrom<String> for TokenMaterial {
 
 #[derive(Debug, Clone)]
 pub struct StorageIdentities {
+    pub clients: BTreeSet<ClientId>,
     pub credentials: BTreeMap<CredentialId, ProviderId>,
     pub group_members: BTreeSet<(GroupId, CredentialId)>,
     pub groups: BTreeSet<GroupId>,
@@ -123,6 +130,7 @@ pub struct StorageIdentities {
 
 #[derive(Debug)]
 pub struct OauthPairReplacement {
+    pub client: ClientId,
     pub credential: CredentialId,
     pub expected_generation: u64,
     pub fake_access_token: TokenMaterial,
@@ -131,11 +139,13 @@ pub struct OauthPairReplacement {
     pub real_access_token: TokenMaterial,
     pub real_access_expires_at_unix: i64,
     pub real_refresh_token: TokenMaterial,
+    pub real_refresh_expires_at_unix: Option<i64>,
     pub updated_at_unix: i64,
 }
 
 #[derive(Debug)]
 pub struct OauthPairRecord {
+    pub client: ClientId,
     pub credential: CredentialId,
     pub fake_access_token: TokenMaterial,
     pub fake_access_expires_at_unix: i64,
@@ -144,7 +154,17 @@ pub struct OauthPairRecord {
     pub real_access_token: TokenMaterial,
     pub real_access_expires_at_unix: i64,
     pub real_refresh_token: TokenMaterial,
+    pub real_refresh_expires_at_unix: Option<i64>,
     pub updated_at_unix: i64,
+}
+
+#[derive(Debug)]
+pub struct OauthPairRetirement {
+    pub client: ClientId,
+    pub credential: CredentialId,
+    pub expected_generation: u64,
+    pub fake_refresh_token: TokenMaterial,
+    pub provider: ProviderId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -286,9 +306,15 @@ pub trait Storage {
 
     fn oauth_pair(
         &self,
+        client: &ClientId,
         credential: &CredentialId,
         provider: &ProviderId,
     ) -> impl Future<Output = Result<OauthPairRecord, StorageError>> + Send;
+
+    fn retire_oauth_pair(
+        &self,
+        retirement: OauthPairRetirement,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
 
     fn try_append_request_event(
         &self,
@@ -412,11 +438,13 @@ impl Storage for SqliteStorage {
         replacement: OauthPairReplacement,
     ) -> Result<OauthPairRecord, StorageError> {
         validate_oauth_replacement(&replacement)?;
+        let client_id = replacement.client.as_ref();
         let credential_id = replacement.credential.as_ref();
         let mut connection = self.connection.lock().await;
         let mut transaction = connection.begin().await?;
         let existing = sqlx::query!(
-            "SELECT generation FROM oauth_mappings WHERE credential_id = ?",
+            "SELECT generation FROM oauth_mappings WHERE client_id = ? AND credential_id = ?",
+            client_id,
             credential_id,
         )
         .fetch_optional(&mut *transaction)
@@ -436,8 +464,9 @@ impl Storage for SqliteStorage {
         }
         let generation =
             persist_oauth_pair(transaction, &replacement, expected, existing.is_some()).await?;
-
+        let client = replacement.client.clone();
         Ok(OauthPairRecord {
+            client,
             credential: replacement.credential,
             fake_access_token: replacement.fake_access_token,
             fake_access_expires_at_unix: replacement.fake_access_expires_at_unix,
@@ -446,24 +475,28 @@ impl Storage for SqliteStorage {
             real_access_token: replacement.real_access_token,
             real_access_expires_at_unix: replacement.real_access_expires_at_unix,
             real_refresh_token: replacement.real_refresh_token,
+            real_refresh_expires_at_unix: replacement.real_refresh_expires_at_unix,
             updated_at_unix: replacement.updated_at_unix,
         })
     }
 
     async fn oauth_pair(
         &self,
+        client: &ClientId,
         credential: &CredentialId,
         provider: &ProviderId,
     ) -> Result<OauthPairRecord, StorageError> {
+        let client_id = client.as_ref();
         let credential_id = credential.as_ref();
         let provider_id = provider.as_ref();
         let record = sqlx::query!(
             r#"
-            SELECT mappings.credential_id, credentials.provider_id, mappings.generation,
-                   mappings.fake_access_token, mappings.fake_refresh_token,
+            SELECT mappings.client_id, mappings.credential_id, credentials.provider_id,
+                   mappings.generation, mappings.fake_access_token, mappings.fake_refresh_token,
                    mappings.fake_access_expires_at_unix,
                    mappings.updated_at_unix AS mapping_updated_at_unix,
                    tokens.access_token, tokens.refresh_token,
+                   tokens.refresh_token_expires_at_unix,
                    tokens.access_expires_at_unix,
                    tokens.updated_at_unix AS real_updated_at_unix
             FROM oauth_mappings AS mappings
@@ -471,8 +504,10 @@ impl Storage for SqliteStorage {
               ON credentials.id = mappings.credential_id
             JOIN oauth_tokens AS tokens
               ON tokens.credential_id = mappings.credential_id
-            WHERE mappings.credential_id = ? AND credentials.provider_id = ?
+            WHERE mappings.client_id = ? AND mappings.credential_id = ?
+              AND credentials.provider_id = ?
             "#,
+            client_id,
             credential_id,
             provider_id,
         )
@@ -482,6 +517,10 @@ impl Storage for SqliteStorage {
             credential: credential.clone(),
             provider: provider.clone(),
         })?;
+        let stored_client =
+            ClientId::try_from(record.client_id).map_err(|_| StorageError::StoredIdentity {
+                credential: credential.clone(),
+            })?;
         let stored_credential = CredentialId::try_from(record.credential_id).map_err(|_| {
             StorageError::StoredIdentity {
                 credential: credential.clone(),
@@ -492,7 +531,8 @@ impl Storage for SqliteStorage {
                 kind: "provider",
                 value: error.into_name(),
             })?;
-        if stored_credential != *credential
+        if stored_client != *client
+            || stored_credential != *credential
             || stored_provider != *provider
             || record.mapping_updated_at_unix != record.real_updated_at_unix
         {
@@ -507,6 +547,7 @@ impl Storage for SqliteStorage {
                 path: self.database_path.clone(),
             })?;
         Ok(OauthPairRecord {
+            client: stored_client,
             credential: stored_credential,
             fake_access_token: TokenMaterial::new(record.fake_access_token)?,
             fake_access_expires_at_unix: record.fake_access_expires_at_unix,
@@ -515,8 +556,68 @@ impl Storage for SqliteStorage {
             real_access_token: TokenMaterial::new(record.access_token)?,
             real_access_expires_at_unix: record.access_expires_at_unix,
             real_refresh_token: TokenMaterial::new(record.refresh_token)?,
+            real_refresh_expires_at_unix: record.refresh_token_expires_at_unix,
             updated_at_unix: record.mapping_updated_at_unix,
         })
+    }
+
+    async fn retire_oauth_pair(&self, retirement: OauthPairRetirement) -> Result<(), StorageError> {
+        let expected =
+            i64::try_from(retirement.expected_generation).map_err(|_| StorageError::Input {
+                field: "OAuth generation is too large",
+            })?;
+        if expected <= 0 {
+            return Err(StorageError::Input {
+                field: "OAuth retirement generation must be positive",
+            });
+        }
+        let client_id = retirement.client.as_ref();
+        let credential_id = retirement.credential.as_ref();
+        let provider_id = retirement.provider.as_ref();
+        let fake_refresh_token = retirement.fake_refresh_token.as_str();
+        let mut connection = self.connection.lock().await;
+        let mut transaction = connection.begin().await?;
+        let owned = sqlx::query!(
+            r#"
+            SELECT mappings.generation, mappings.fake_refresh_token
+            FROM oauth_mappings AS mappings
+            JOIN credentials ON credentials.id = mappings.credential_id
+            WHERE mappings.client_id = ? AND mappings.credential_id = ?
+              AND credentials.provider_id = ?
+            "#,
+            client_id,
+            credential_id,
+            provider_id,
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(owned) = owned else {
+            return Err(StorageError::MissingOauthPair {
+                credential: retirement.credential.clone(),
+                provider: retirement.provider.clone(),
+            });
+        };
+        let stored_refresh = TokenMaterial::new(owned.fake_refresh_token)?;
+        if owned.generation != expected || !stored_refresh.matches(fake_refresh_token.as_bytes()) {
+            return Err(StorageError::ConcurrentOauth {
+                credential: retirement.credential.clone(),
+            });
+        }
+        sqlx::query!(
+            "DELETE FROM oauth_mappings WHERE client_id = ? AND credential_id = ?",
+            client_id,
+            credential_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            "DELETE FROM oauth_tokens WHERE credential_id = ?",
+            credential_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(())
     }
 
     async fn try_append_request_event(&self, event: RequestEvent) -> Result<(), StorageError> {
@@ -735,20 +836,24 @@ async fn persist_oauth_pair(
     let real_refresh_token = replacement.real_refresh_token.as_str();
     let fake_access_token = replacement.fake_access_token.as_str();
     let fake_refresh_token = replacement.fake_refresh_token.as_str();
+    let client_id = replacement.client.as_ref();
     sqlx::query!(
         r"
         INSERT INTO oauth_tokens
-          (credential_id, access_token, refresh_token, access_expires_at_unix, updated_at_unix)
-        VALUES (?, ?, ?, ?, ?)
+          (credential_id, access_token, refresh_token, refresh_token_expires_at_unix,
+           access_expires_at_unix, updated_at_unix)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (credential_id) DO UPDATE SET
           access_token = excluded.access_token,
           refresh_token = excluded.refresh_token,
+          refresh_token_expires_at_unix = excluded.refresh_token_expires_at_unix,
           access_expires_at_unix = excluded.access_expires_at_unix,
           updated_at_unix = excluded.updated_at_unix
         ",
         credential_id,
         real_access_token,
         real_refresh_token,
+        replacement.real_refresh_expires_at_unix,
         replacement.real_access_expires_at_unix,
         replacement.updated_at_unix,
     )
@@ -764,13 +869,14 @@ async fn persist_oauth_pair(
             UPDATE oauth_mappings
             SET generation = ?, fake_access_token = ?, fake_refresh_token = ?,
                 fake_access_expires_at_unix = ?, updated_at_unix = ?
-            WHERE credential_id = ? AND generation = ?
+            WHERE client_id = ? AND credential_id = ? AND generation = ?
             "#,
             generation,
             fake_access_token,
             fake_refresh_token,
             replacement.fake_access_expires_at_unix,
             replacement.updated_at_unix,
+            client_id,
             credential_id,
             expected,
         )
@@ -785,10 +891,11 @@ async fn persist_oauth_pair(
         sqlx::query!(
             r"
             INSERT INTO oauth_mappings
-              (credential_id, generation, fake_access_token, fake_refresh_token,
+              (client_id, credential_id, generation, fake_access_token, fake_refresh_token,
                fake_access_expires_at_unix, updated_at_unix)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ",
+            client_id,
             credential_id,
             generation,
             fake_access_token,
@@ -1149,6 +1256,16 @@ async fn seed_identities(
     identities: StorageIdentities,
 ) -> Result<(), StorageError> {
     let mut transaction = connection.begin().await?;
+    for client in identities.clients {
+        let client_id = client.as_ref();
+        sqlx::query!(
+            "INSERT INTO clients (id, inserted_at_unix) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+            client_id,
+            identities.inserted_at_unix,
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
     for provider in identities.providers {
         let provider_id = provider.as_ref();
         sqlx::query!(
@@ -1219,6 +1336,10 @@ fn validate_oauth_replacement(replacement: &OauthPairReplacement) -> Result<(), 
     validate_time(
         replacement.fake_access_expires_at_unix,
         "fake access expiry",
+    )?;
+    validate_time_optional(
+        replacement.real_refresh_expires_at_unix,
+        "real refresh expiry",
     )?;
     if replacement.expected_generation > i64::MAX.unsigned_abs() {
         return Err(StorageError::Input {
@@ -1546,6 +1667,7 @@ mod tests {
         ]);
         let groups = BTreeSet::from([group("anthropic"), group("openai")]);
         StorageIdentities {
+            clients: BTreeSet::from([ClientId::try_from("claude").expect("client ID")]),
             credentials,
             group_members: BTreeSet::from([
                 (group("anthropic"), credential("claude")),
@@ -1564,6 +1686,7 @@ mod tests {
     fn oauth(credential: CredentialId, expected_generation: u64) -> OauthPairReplacement {
         let suffix = credential.to_string();
         OauthPairReplacement {
+            client: ClientId::try_from("claude").expect("client ID"),
             credential,
             expected_generation,
             fake_access_token: token(&format!("{suffix}-fake-access")),
@@ -1572,6 +1695,7 @@ mod tests {
             real_access_token: token(&format!("{suffix}-real-access")),
             real_access_expires_at_unix: 3_600,
             real_refresh_token: token(&format!("{suffix}-real-refresh")),
+            real_refresh_expires_at_unix: Some(86_400),
             updated_at_unix: 1,
         }
     }
@@ -1682,7 +1806,11 @@ mod tests {
 
         let storage = open(directory.path()).await;
         let mapping = storage
-            .oauth_pair(&credential("claude"), &provider("claude"))
+            .oauth_pair(
+                &ClientId::try_from("claude").expect("client ID"),
+                &credential("claude"),
+                &provider("claude"),
+            )
             .await
             .expect("OAuth pair");
         assert_eq!(mapping.credential, credential("claude"));
@@ -1883,7 +2011,11 @@ mod tests {
                 .await
                 .expect("OAuth replacement");
             storage
-                .oauth_pair(&credential("claude"), &provider("claude"))
+                .oauth_pair(
+                    &ClientId::try_from("claude").expect("client ID"),
+                    &credential("claude"),
+                    &provider("claude"),
+                )
                 .await
                 .expect("OAuth pair");
             tracing::info!(target: "airlock::storage_tests", "{LOG_CAPTURE_MARKER}");
@@ -1964,7 +2096,11 @@ mod tests {
         assert_eq!(successes, 1);
         assert_eq!(concurrent, 1);
         let mapping = storage
-            .oauth_pair(&credential("claude"), &provider("claude"))
+            .oauth_pair(
+                &ClientId::try_from("claude").expect("client ID"),
+                &credential("claude"),
+                &provider("claude"),
+            )
             .await
             .expect("winner pair");
         assert_eq!(mapping.generation, 1);
@@ -1972,7 +2108,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn oauth_pair_lookup_is_provider_scoped() {
+    async fn oauth_pair_lookup_is_client_and_provider_scoped() {
         let directory = tempfile::tempdir().expect("state directory");
         let storage = open(directory.path()).await;
         let replacement = oauth(credential("claude"), 0);
@@ -1983,7 +2119,11 @@ mod tests {
             .expect("OAuth pair");
         let operation = async {
             let result = storage
-                .oauth_pair(&credential("claude"), &provider("zai"))
+                .oauth_pair(
+                    &ClientId::try_from("claude").expect("client ID"),
+                    &credential("claude"),
+                    &provider("zai"),
+                )
                 .await;
             tracing::warn!(target: "airlock::storage_tests", "{LOG_CAPTURE_MARKER}");
             result
@@ -2004,8 +2144,25 @@ mod tests {
             assert!(!logs.contains(secret.as_str()), "logs leaked token");
         }
 
+        let wrong_client = storage
+            .oauth_pair(
+                &ClientId::try_from("other-client").expect("client ID"),
+                &credential("claude"),
+                &provider("claude"),
+            )
+            .await
+            .expect_err("wrong client cannot read the OAuth pair");
+        assert!(matches!(
+            wrong_client,
+            StorageError::MissingOauthPair { .. }
+        ));
+
         let pair = storage
-            .oauth_pair(&credential("claude"), &provider("claude"))
+            .oauth_pair(
+                &ClientId::try_from("claude").expect("client ID"),
+                &credential("claude"),
+                &provider("claude"),
+            )
             .await
             .expect("joined OAuth pair");
         assert_eq!(pair.credential, credential("claude"));
@@ -2020,6 +2177,7 @@ mod tests {
         );
         assert_eq!(pair.fake_access_expires_at_unix, 3_600);
         assert_eq!(pair.real_access_expires_at_unix, 3_600);
+        assert_eq!(pair.real_refresh_expires_at_unix, Some(86_400));
         close(storage).await;
     }
 

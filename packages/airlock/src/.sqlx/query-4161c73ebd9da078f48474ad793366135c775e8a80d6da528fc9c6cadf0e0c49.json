@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM oauth_mappings WHERE client_id = ? AND credential_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "4161c73ebd9da078f48474ad793366135c775e8a80d6da528fc9c6cadf0e0c49"
+}

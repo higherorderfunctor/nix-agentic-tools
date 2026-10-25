@@ -19,11 +19,13 @@
   # switches, which would send model traffic past the proxy.
   render = {
     owner ? "cliproxyapi",
+    managedOauth ? false,
     key,
     url,
     ...
   }: let
     airlock = owner == "airlock";
+    nativeOauth = airlock && managedOauth;
     helper =
       if airlock
       then null
@@ -52,7 +54,12 @@
         CLAUDE_CODE_USE_FOUNDRY = "";
         CLAUDE_CODE_USE_VERTEX = "";
       }
-      // lib.optionalAttrs airlock {CLAUDE_CODE_OAUTH_TOKEN = "airlock-fake-oauth-token-not-a-credential";};
+      // lib.optionalAttrs airlock {
+        CLAUDE_CODE_OAUTH_TOKEN =
+          if nativeOauth
+          then ""
+          else "airlock-fake-oauth-token-not-a-credential";
+      };
   };
 
   # One row per authorized model comes from the resolved proxy contract. CPA
@@ -99,6 +106,7 @@ in {
   }: let
     rows = pickerRows resolvedProxy;
     airlock = resolvedProxy != null && (resolvedProxy.owner or "cliproxyapi") == "airlock";
+    nativeOauth = airlock && (resolvedProxy.managedOauth or false);
     # The explicit settings layer keeps route fields ahead of native settings
     # merges even when a different user directory is selected by the caller.
     # It contains only static fake credentials, never the CONNECT token.
@@ -111,6 +119,7 @@ in {
       exe = "claude";
       flags =
         lib.optional (resolvedProxy != null) "--unset CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"
+        ++ lib.optional nativeOauth "--unset CLAUDE_CODE_OAUTH_TOKEN"
         ++ lib.optional (airlock && backend == "hm") ''--run 'CLAUDE_CONFIG_DIR="''${HOME}/.claude"; export CLAUDE_CONFIG_DIR' ''
         ++ lib.optional airlock "--add-flags ${lib.escapeShellArg "--setting-sources ${
           if backend == "hm"
@@ -127,7 +136,7 @@ in {
     resolvedProxy,
   }:
     lib.mkMerge [
-      (lib.mkIf (resolvedProxy != null) {
+      (lib.mkIf (resolvedProxy != null && (resolvedProxy.owner or "cliproxyapi") != "airlock") {
         ai.claude.native.settings = {
           disableClaudeAiConnectors = lib.mkDefault true;
           env = lib.mapAttrs (_: lib.mkDefault) quietEnv;

@@ -24,6 +24,7 @@ use airlock_core::{
     ids::{ClientId, CredentialId, GroupId},
     policy::{Decision, Policy},
     secret::Secret,
+    storage::SqliteStorage,
     target::ConnectTarget,
 };
 use base64::{Engine as _, prelude::BASE64_STANDARD};
@@ -66,6 +67,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error("no upstream root certificates could be loaded (check SSL_CERT_FILE)")]
     NoUpstreamRoots,
+    #[error("managed OAuth requires initialized storage")]
+    ManagedStorageRequired,
     #[error(transparent)]
     Secrets(#[from] SecretErrors),
     #[error("TLS configuration: {0}")]
@@ -123,7 +126,23 @@ impl Gateway {
         ca_directory: &Path,
         upstream_roots: RootCertStore,
     ) -> Result<Self, Error> {
+        Self::bind_with_storage(config, ca_directory, upstream_roots, None).await
+    }
+
+    /// Binds a gateway with initialized durable storage for managed OAuth.
+    ///
+    /// # Errors
+    /// Returns a storage, configuration, secret, TLS, or socket error.
+    pub async fn bind_with_storage(
+        config: Config,
+        ca_directory: &Path,
+        upstream_roots: RootCertStore,
+        storage: Option<Arc<SqliteStorage>>,
+    ) -> Result<Self, Error> {
         config.validate_executable()?;
+        if config.has_active_managed_oauth() && storage.is_none() {
+            return Err(Error::ManagedStorageRequired);
+        }
         let mut errors = Vec::new();
         let mut tokens = BTreeMap::new();
         for (client, file) in config.client_token_files() {
@@ -157,7 +176,7 @@ impl Gateway {
         if !errors.is_empty() {
             return Err(SecretErrors(errors).into());
         }
-        let interceptor = Arc::new(Interceptor::new(ca_directory, upstream_roots)?);
+        let interceptor = Arc::new(Interceptor::new(ca_directory, upstream_roots, storage)?);
         let listener = TcpListener::bind(config.listen()).await?;
         let policy = Policy::from_config(&config);
         Ok(Self {

@@ -115,6 +115,15 @@
           models = lib.sort (a: b: a < b) group.members.${credential}.models or [];
         }) (lib.attrNames group.members)
       else []) (lib.attrNames instance.settings.groups);
+    airlockManagedOauth = lib.any (groupId: let
+      group = instance.settings.groups.${groupId};
+      primary = instance.settings.credentials.${group.primary} or null;
+    in
+      builtins.elem groupId client.grants
+      && group.protocol == "anthropic"
+      && builtins.elem "api.anthropic.com" group.intercept
+      && primary != null
+      && primary.auth.type == "oauth_managed") (lib.attrNames instance.settings.groups);
   in
     if !isSelected selection
     then null
@@ -128,6 +137,7 @@
     else if owner == "airlock"
     then {
       inherit owner;
+      managedOauth = airlockManagedOauth;
       inherit (selected) url;
       client = selection.clientKey;
       inherit (selection) instance;
@@ -178,6 +188,11 @@ in {
       key = mkOption {
         type = types.nullOr redact.types.redacted;
         default = null;
+      };
+      managedOauth = mkOption {
+        type = types.bool;
+        default = false;
+        description = "The selected Airlock primary uses native Claude OAuth with a fake-only client store.";
       };
       owner = mkOption {
         type = types.enum ["airlock" "cliproxyapi"];

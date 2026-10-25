@@ -168,7 +168,7 @@
         };
       extend = args: self.lib.ai.jail.extend (args // {bubblewrapPackage = mockBwrap;});
     };
-  airlockInstance = port: client: {
+  airlockInstance = managed: port: client: {
     package = mockService;
     inherit port;
     stateDir = "/build/airlock-${client}-state";
@@ -179,10 +179,13 @@
       };
       credentials = {
         upstream = {
-          auth = {
-            file = redact.command (lib.getExe tokenReader);
-            type = "oauth_bearer";
-          };
+          auth =
+            if managed
+            then {type = "oauth_managed";}
+            else {
+              file = redact.command (lib.getExe tokenReader);
+              type = "oauth_bearer";
+            };
           provider = "claude";
         };
         zai = {
@@ -194,7 +197,7 @@
         };
       };
       groups.anthropic = {
-        intercept = ["api.anthropic.com"];
+        intercept = ["api.anthropic.com"] ++ lib.optional managed "platform.claude.com";
         members = {
           upstream.models = ["claude-declared"];
           zai.models = ["glm-4.7"];
@@ -208,22 +211,22 @@
       };
     };
   };
-  fixture = backend: let
+  fixture = backend: claudePackage: managed: let
     evaluate =
       if backend == "hm"
       then harness.evalHm
       else harness.evalDevenv;
     aiFixture = {
       airlock = {
-        instances.alternate = airlockInstance 18419 "second";
-        instances.main = airlockInstance 18418 "harness";
+        instances.alternate = airlockInstance managed 18419 "second";
+        instances.main = airlockInstance managed 18418 "harness";
         services.airlock-alternate.environment.XDG_RUNTIME_DIR = "/build/airlock-service-runtime";
         services.airlock-main.environment.XDG_RUNTIME_DIR = "/build/airlock-service-runtime";
       };
       claude = {
         enable = true;
         jail.enable = true;
-        package = mockClaude;
+        package = claudePackage;
         proxy = {
           clientKey = "harness";
           instance = "main";
@@ -272,8 +275,12 @@
     settings = harness.claudeSettings result;
   };
   fixtures = {
-    devenv = fixture "devenv";
-    hm = fixture "hm";
+    devenv = fixture "devenv" mockClaude false;
+    hm = fixture "hm" mockClaude false;
+  };
+  nativeFixtures = {
+    devenv = fixture "devenv" pkgs.ai.claude-code true;
+    hm = fixture "hm" pkgs.ai.claude-code true;
   };
   testSource = pkgs.writeText "airlock-claude-launch-test.py" ''
     import base64
@@ -541,6 +548,20 @@ in {
       shopt -s inherit_errexit 2>/dev/null || :
       python3 ${./native-settings-probe.py} ${lib.getExe pkgs.ai.claude-code} | tee "$out"
     '';
+    airlock-claude-native-oauth =
+      pkgs.runCommand "airlock-claude-native-oauth" {
+        nativeBuildInputs = [pkgs.iproute2 pkgs.openssl pkgs.python3 pkgs.util-linux];
+        fixturesFile = pkgs.writeText "airlock-claude-native-oauth-fixtures.json" (builtins.toJSON nativeFixtures);
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        unshare --user --map-root-user --net ${pkgs.bash}/bin/bash -c '
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ip link set lo up
+          python3 ${./native-oauth-probe.py} "$1"
+        ' _ "$fixturesFile" | tee "$out"
+      '';
     airlock-claude-launch =
       pkgs.runCommand "airlock-claude-launch" {
         nativeBuildInputs = [pkgs.python3];
