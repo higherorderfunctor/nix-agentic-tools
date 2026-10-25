@@ -1,6 +1,7 @@
 //! HTTP interception: terminate client TLS, open verified upstream TLS, swap credentials.
 
 use std::{
+    collections::BTreeMap,
     path::Path,
     sync::{
         Arc, Mutex,
@@ -10,15 +11,19 @@ use std::{
     time::Duration,
 };
 
-use airlock_core::{ids::HostName, target::ConnectTarget};
-use http_body_util::Either;
+use airlock_core::{
+    config::Config,
+    ids::{CredentialId, GroupId, HostName},
+    target::ConnectTarget,
+};
+use http_body_util::BodyExt;
 use hyper::{
     Method, Request, Response, StatusCode,
-    body::Incoming,
+    body::{Body, Bytes, Frame, Incoming, SizeHint},
     client::conn as client_conn,
     header::{
-        AUTHORIZATION, CONNECTION, HeaderName, HeaderValue, InvalidHeaderValue, PROXY_AUTHENTICATE,
-        PROXY_AUTHORIZATION, TE, TRAILER, TRANSFER_ENCODING, UPGRADE,
+        AUTHORIZATION, CONNECTION, CONTENT_LENGTH, HeaderName, HeaderValue, InvalidHeaderValue,
+        PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE, TRAILER, TRANSFER_ENCODING, UPGRADE,
     },
     server::conn as server_conn,
     service::service_fn,
@@ -29,6 +34,7 @@ use rustls::{
     ClientConfig, RootCertStore, ServerConfig, crypto::CryptoProvider, pki_types::ServerName,
     server::Acceptor, sign::SingleCertAndKey,
 };
+use serde::Deserialize;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf},
     net::TcpStream,
@@ -47,6 +53,162 @@ use crate::{
 // A client gets this long to send its ClientHello, and later to finish its handshake.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const X_API_KEY: HeaderName = HeaderName::from_static("x-api-key");
+// Anthropic's Messages API limits request bodies to 32 MiB.
+const MODEL_BODY_LIMIT: usize = 32 << 20;
+
+type BodyError = Box<dyn std::error::Error + Send + Sync>;
+
+enum RequestBody {
+    Incoming(Incoming),
+    Buffered {
+        bytes: Zeroizing<Vec<u8>>,
+        offset: usize,
+    },
+}
+
+impl Body for RequestBody {
+    type Data = Bytes;
+    type Error = BodyError;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+        match &mut *self {
+            Self::Incoming(body) => std::pin::Pin::new(body)
+                .poll_frame(cx)
+                .map(|item| item.map(|result| result.map_err(Into::into))),
+            Self::Buffered { bytes, offset } => {
+                if *offset < bytes.len() {
+                    let end = (*offset + (16 << 10)).min(bytes.len());
+                    let frame = Frame::data(Bytes::copy_from_slice(&bytes[*offset..end]));
+                    *offset = end;
+                    Poll::Ready(Some(Ok(frame)))
+                } else {
+                    Poll::Ready(None)
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        match self {
+            Self::Incoming(body) => body.size_hint(),
+            Self::Buffered { bytes, offset, .. } => {
+                SizeHint::with_exact((bytes.len() - offset) as u64)
+            }
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct ModelSelector {
+    model: Option<String>,
+}
+
+fn parse_model(bytes: &[u8]) -> Result<Option<String>, &'static str> {
+    if bytes.iter().find(|byte| !byte.is_ascii_whitespace()) != Some(&b'{') {
+        return Err("invalid_model_selector");
+    }
+    let selector: ModelSelector =
+        serde_json::from_slice(bytes).map_err(|_| "invalid_model_selector")?;
+    if selector.model.as_deref().is_some_and(invalid_model_id) {
+        return Err("invalid_model_selector");
+    }
+    Ok(selector.model)
+}
+
+fn inspection_error_status(reason: &str) -> StatusCode {
+    if reason == "request_too_large" {
+        StatusCode::PAYLOAD_TOO_LARGE
+    } else {
+        StatusCode::BAD_REQUEST
+    }
+}
+
+fn invalid_model_id(model: &str) -> bool {
+    model.is_empty()
+        || model.len() > 128
+        || !model
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-._:/".contains(&byte))
+}
+
+fn append_inference_chunk(
+    bytes: &mut Zeroizing<Vec<u8>>,
+    chunk: &[u8],
+    fixed_capacity: bool,
+) -> Result<(), &'static str> {
+    if chunk.len() > MODEL_BODY_LIMIT - bytes.len() {
+        return Err("request_too_large");
+    }
+    let needed = bytes.len() + chunk.len();
+    if needed > bytes.capacity() {
+        if fixed_capacity {
+            return Err("request_body_error");
+        }
+        let capacity = MODEL_BODY_LIMIT.min((2 * bytes.len()).max(needed));
+        let mut replacement = Zeroizing::new(Vec::with_capacity(capacity));
+        replacement.extend_from_slice(bytes);
+        *bytes = replacement;
+    }
+    bytes.extend_from_slice(chunk);
+    Ok(())
+}
+
+async fn inference_body(
+    mut body: Incoming,
+    content_length: Option<u64>,
+) -> Result<(RequestBody, Option<String>), &'static str> {
+    let capacity = match content_length {
+        Some(length) if length > MODEL_BODY_LIMIT as u64 => return Err("request_too_large"),
+        Some(length) => usize::try_from(length).map_err(|_| "request_too_large")?,
+        None => 0,
+    };
+    let mut bytes = Zeroizing::new(Vec::with_capacity(capacity));
+    while let Some(frame) = body.frame().await {
+        let frame = frame.map_err(|_| "request_body_error")?;
+        match frame.into_data() {
+            Ok(chunk) => {
+                append_inference_chunk(&mut bytes, &chunk, content_length.is_some())?;
+            }
+            Err(frame) => {
+                // Claude's Messages requests never carry trailers; reject rather than replay them.
+                return Err(if frame.into_trailers().is_ok() {
+                    "request_trailers_unsupported"
+                } else {
+                    "request_body_error"
+                });
+            }
+        }
+    }
+    let model = parse_model(&bytes)?;
+    Ok((RequestBody::Buffered { bytes, offset: 0 }, model))
+}
+
+async fn inspect_request(
+    request: Request<Incoming>,
+    inference: bool,
+) -> Result<(Request<RequestBody>, Option<String>), &'static str> {
+    let (parts, incoming) = request.into_parts();
+    let (body, model) = if inference {
+        let content_length = parts
+            .headers
+            .get(CONTENT_LENGTH)
+            .map(|value| {
+                value
+                    .to_str()
+                    .ok()
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .ok_or("request_body_error")
+            })
+            .transpose()?;
+        inference_body(incoming, content_length).await?
+    } else {
+        (RequestBody::Incoming(incoming), None)
+    };
+    Ok((Request::from_parts(parts, body), model))
+}
 
 pub(crate) struct Interceptor {
     authority: Authority,
@@ -72,6 +234,7 @@ impl HttpProtocol {
 
 #[derive(Clone)]
 struct RequestAudit {
+    client_to_upstream: Arc<AtomicU64>,
     dispatch: tracing::Dispatch,
     requests: Arc<std::sync::atomic::AtomicU64>,
 }
@@ -87,6 +250,9 @@ struct RequestCompletion {
     completed: bool,
     duration_started: std::time::Instant,
     method: Method,
+    credential: Option<CredentialId>,
+    model: Option<String>,
+    outcome: Option<&'static str>,
     path: String,
 }
 
@@ -98,8 +264,16 @@ impl RequestCompletion {
             completed: false,
             duration_started: std::time::Instant::now(),
             method,
+            credential: None,
+            model: None,
+            outcome: None,
             path,
         }
+    }
+
+    fn selected(&mut self, credential: CredentialId, model: Option<String>) {
+        self.credential = Some(credential);
+        self.model = model;
     }
 
     fn finish(mut self, status: StatusCode) {
@@ -107,6 +281,9 @@ impl RequestCompletion {
         tracing::dispatcher::with_default(&self.audit.dispatch, || {
             tracing::debug!(
                 method = self.method.as_str(),
+                credential = self.credential.as_ref().map_or("", AsRef::as_ref),
+                model = self.model.as_deref().unwrap_or_default(),
+                outcome = self.outcome.unwrap_or_default(),
                 path = self.path.as_str(),
                 status = status.as_u16(),
                 duration_ms = self.duration_started.elapsed().as_secs_f64() * 1000.0,
@@ -124,6 +301,8 @@ impl Drop for RequestCompletion {
         tracing::dispatcher::with_default(&self.audit.dispatch, || {
             tracing::debug!(
                 method = self.method.as_str(),
+                credential = self.credential.as_ref().map_or("", AsRef::as_ref),
+                model = self.model.as_deref().unwrap_or_default(),
                 path = self.path.as_str(),
                 cancelled = true,
                 duration_ms = self.duration_started.elapsed().as_secs_f64() * 1000.0,
@@ -247,8 +426,8 @@ impl<T: AsyncWrite + Unpin> IoShutdown<T> {
 
 #[derive(Clone)]
 enum UpstreamSender {
-    Http1(Arc<AsyncHttp1SenderMutex<client_conn::http1::SendRequest<Incoming>>>),
-    Http2(client_conn::http2::SendRequest<Incoming>),
+    Http1(Arc<AsyncHttp1SenderMutex<client_conn::http1::SendRequest<RequestBody>>>),
+    Http2(client_conn::http2::SendRequest<RequestBody>),
 }
 
 impl UpstreamSender {
@@ -258,7 +437,7 @@ impl UpstreamSender {
 
     async fn send_request(
         self,
-        request: Request<Incoming>,
+        request: Request<RequestBody>,
     ) -> Result<Response<Incoming>, hyper::Error> {
         match self {
             Self::Http1(sender) => {
@@ -306,17 +485,50 @@ async fn start_upstream(
 }
 
 #[derive(Clone)]
+struct ForwardRoute {
+    config: Arc<Config>,
+    credentials: Arc<BTreeMap<CredentialId, Arc<LoadedCredential>>>,
+    group: GroupId,
+    target: ConnectTarget,
+}
+
+#[derive(Clone)]
 struct ForwardState {
-    absolute_uri: bool,
-    authority: String,
     audit: RequestAudit,
-    credential: Arc<LoadedCredential>,
+    interceptor: Arc<Interceptor>,
+    route: ForwardRoute,
     sender: UpstreamSender,
 }
 
 struct PendingUpgrade {
     client: OnUpgrade,
     upstream: OnUpgrade,
+    task: Option<AbortOnDrop>,
+    _sender: Option<UpstreamSender>,
+}
+
+struct LeasedBody {
+    inner: Incoming,
+    _task: Option<AbortOnDrop>,
+    _sender: Option<UpstreamSender>,
+}
+
+impl Body for LeasedBody {
+    type Data = Bytes;
+    type Error = BodyError;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+        std::pin::Pin::new(&mut self.inner)
+            .poll_frame(cx)
+            .map(|item| item.map(|result| result.map_err(Into::into)))
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.inner.size_hint()
+    }
 }
 
 impl Interceptor {
@@ -337,10 +549,12 @@ impl Interceptor {
     }
 
     pub(crate) async fn run(
-        &self,
+        self: &Arc<Self>,
         client: TokioIo<hyper::upgrade::Upgraded>,
         target: ConnectTarget,
-        credential: Arc<LoadedCredential>,
+        group: GroupId,
+        config: Arc<Config>,
+        credentials: Arc<BTreeMap<CredentialId, Arc<LoadedCredential>>>,
         mut audit: Audit,
     ) {
         // A timeout, a non-handshake first record and an unparseable hello all mean "not TLS".
@@ -358,7 +572,7 @@ impl Interceptor {
             audit.outcome = "sni_missing";
             return;
         };
-        let offered = hello
+        let offered: Vec<Vec<u8>> = hello
             .alpn()
             .into_iter()
             .flatten()
@@ -383,39 +597,45 @@ impl Interceptor {
         audit.alpn = negotiated
             .as_deref()
             .map(|protocol| String::from_utf8_lossy(protocol).into_owned());
-        self.forward_connection(start, upstream, &target, negotiated, credential, audit)
+        let route = ForwardRoute {
+            config,
+            credentials,
+            group,
+            target,
+        };
+        self.forward_connection(start, upstream, negotiated, route, audit)
             .await;
     }
 
     async fn forward_connection(
-        &self,
+        self: &Arc<Self>,
         start: StartHandshake<TokioIo<hyper::upgrade::Upgraded>>,
         mut upstream: client::TlsStream<TcpStream>,
-        target: &ConnectTarget,
         negotiated: Option<Vec<u8>>,
-        credential: Arc<LoadedCredential>,
+        route: ForwardRoute,
         mut audit: Audit,
     ) {
         let protocol = HttpProtocol::from_alpn(negotiated.as_deref());
-        let Ok(config) = self.server_config(target.host(), negotiated) else {
+        let Ok(tls_config) = self.server_config(route.target.host(), negotiated) else {
             audit.outcome = "leaf_error";
             let _ = timeout(crate::CLOSE_GRACE, upstream.shutdown()).await;
             return;
         };
-        let Ok(Ok(client)) = timeout(HANDSHAKE_TIMEOUT, start.into_stream(config)).await else {
+        let Ok(Ok(client)) = timeout(HANDSHAKE_TIMEOUT, start.into_stream(tls_config)).await else {
             audit.outcome = "client_tls_error";
             let _ = timeout(crate::CLOSE_GRACE, upstream.shutdown()).await;
             return;
         };
-        Self::serve_forwarding(client, upstream, target, protocol, credential, audit).await;
+        self.serve_forwarding(client, upstream, protocol, route, audit)
+            .await;
     }
 
     async fn serve_forwarding(
+        self: &Arc<Self>,
         client: server::TlsStream<TokioIo<hyper::upgrade::Upgraded>>,
         upstream: client::TlsStream<TcpStream>,
-        target: &ConnectTarget,
         protocol: HttpProtocol,
-        credential: Arc<LoadedCredential>,
+        route: ForwardRoute,
         mut audit: Audit,
     ) {
         let relay_closed = Arc::new(Notify::new());
@@ -434,17 +654,16 @@ impl Interceptor {
             relay_closed.clone(),
         );
 
-        let sender_requires_absolute_uri = sender.requires_absolute_uri();
         let request_audit = RequestAudit {
+            client_to_upstream: audit.client_to_upstream.clone(),
             dispatch: audit.dispatch.clone(),
             requests: audit.requests.clone(),
         };
         let (upgrade_sender, mut upgrade_receiver) = mpsc::channel(1);
         let forwarding = ForwardState {
-            absolute_uri: sender_requires_absolute_uri,
-            authority: format!("{}:{}", target.host(), target.port()),
             audit: request_audit,
-            credential,
+            interceptor: self.clone(),
+            route,
             sender,
         };
         let service =
@@ -470,6 +689,7 @@ impl Interceptor {
         let mut relay_audited = false;
         let mut upgrade_failed = false;
         if let Ok(pending) = upgrade_receiver.try_recv() {
+            let _selected_task = pending.task;
             match tokio::join!(pending.client, pending.upstream) {
                 (Ok(client), Ok(upstream)) => {
                     drop(normal_shutdown.take());
@@ -539,6 +759,109 @@ impl Interceptor {
     }
 }
 
+struct SelectedUpstream {
+    target: ConnectTarget,
+    prefix: String,
+    use_original: bool,
+    sender: UpstreamSender,
+    task: Option<AbortOnDrop>,
+}
+
+async fn select_upstream(
+    state: &ForwardState,
+    endpoint: &str,
+    primary: bool,
+    inference: bool,
+) -> Result<SelectedUpstream, &'static str> {
+    let (target, prefix, use_original) = if inference {
+        let uri = endpoint
+            .parse::<hyper::Uri>()
+            .map_err(|_| "invalid route endpoint")?;
+        let authority = uri.authority().ok_or("invalid route endpoint")?;
+        let target = ConnectTarget::try_from(
+            format!(
+                "{}:{}",
+                authority.host(),
+                authority.port_u16().unwrap_or(443)
+            )
+            .as_str(),
+        )
+        .map_err(|_| "invalid route endpoint")?;
+        let prefix = uri.path().trim_end_matches('/').to_owned();
+        if primary && target == state.route.target && prefix.is_empty() {
+            (state.route.target.clone(), prefix, true)
+        } else {
+            (target, prefix, false)
+        }
+    } else {
+        (state.route.target.clone(), String::new(), true)
+    };
+    let (sender, task) = if use_original {
+        (state.sender.clone(), None)
+    } else {
+        let upstream = state
+            .interceptor
+            .connect(&target, vec![b"h2".to_vec(), b"http/1.1".to_vec()])
+            .await
+            .map_err(|_| "upstream connection failed")?;
+        let protocol = HttpProtocol::from_alpn(upstream.get_ref().1.alpn_protocol());
+        let (io, _shutdown) = shared_io(
+            upstream,
+            state.audit.client_to_upstream.clone(),
+            Arc::new(Notify::new()),
+        );
+        let (sender, task) = start_upstream(protocol, io)
+            .await
+            .ok_or("upstream connection failed")?;
+        (sender, Some(task))
+    };
+    Ok(SelectedUpstream {
+        target,
+        prefix,
+        use_original,
+        sender,
+        task,
+    })
+}
+
+fn prepare_request(
+    mut request: Request<RequestBody>,
+    selected: &SelectedUpstream,
+    primary: bool,
+) -> Result<Request<RequestBody>, &'static str> {
+    *request.version_mut() = if selected.sender.requires_absolute_uri() {
+        hyper::Version::HTTP_2
+    } else {
+        hyper::Version::HTTP_11
+    };
+    if !primary {
+        request.headers_mut().remove(hyper::header::COOKIE);
+    }
+    if !selected.use_original {
+        let authority = format!("{}:{}", selected.target.host(), selected.target.port());
+        let host = HeaderValue::from_str(&authority).map_err(|_| "invalid route authority")?;
+        request.headers_mut().insert(hyper::header::HOST, host);
+    }
+    if selected.sender.requires_absolute_uri() || !selected.use_original {
+        let path_and_query = request
+            .uri()
+            .path_and_query()
+            .map_or("/", |value| value.as_str());
+        let path = format!("{}{path_and_query}", selected.prefix);
+        let uri = if selected.sender.requires_absolute_uri() {
+            format!(
+                "https://{}:{}{path}",
+                selected.target.host(),
+                selected.target.port()
+            )
+        } else {
+            path
+        };
+        *request.uri_mut() = uri.parse().map_err(|_| "invalid route URI")?;
+    }
+    Ok(request)
+}
+
 async fn forward(
     mut request: Request<Incoming>,
     state: ForwardState,
@@ -546,35 +869,67 @@ async fn forward(
 ) -> Result<Reply, std::convert::Infallible> {
     let method = request.method().clone();
     let path = request.uri().path().to_owned();
-    let completion = RequestCompletion::new(state.audit.clone(), method.clone(), path.clone());
+    let mut completion = RequestCompletion::new(state.audit.clone(), method.clone(), path.clone());
     let client_upgrade = hyper::upgrade::on(&mut request);
     let upgrading = is_upgrade_request(request.headers());
     strip_hop_by_hop(request.headers_mut(), upgrading);
-    if state.absolute_uri {
-        let path_and_query = request
-            .uri()
-            .path_and_query()
-            .map(|value| value.as_str().to_owned())
-            .unwrap_or_default();
-        let Ok(uri) = format!("https://{}{path_and_query}", state.authority).parse::<hyper::Uri>()
-        else {
-            completion.finish(StatusCode::INTERNAL_SERVER_ERROR);
-            return Ok(crate::response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "invalid upstream URI",
-            ));
-        };
-        *request.uri_mut() = uri;
-    }
-    let Ok(request) = swap_credential(request, &state.credential) else {
+    let inference = method == Method::POST && path == "/v1/messages";
+    let (request, model) = match inspect_request(request, inference).await {
+        Ok(result) => result,
+        Err(reason) => {
+            let status = inspection_error_status(reason);
+            completion.outcome = Some(reason);
+            completion.finish(status);
+            return Ok(crate::response(status, reason));
+        }
+    };
+    let Some((credential_id, endpoint)) = state
+        .route
+        .config
+        .route(&state.route.group, model.as_deref())
+    else {
+        completion.finish(StatusCode::FORBIDDEN);
+        return Ok(crate::response(StatusCode::FORBIDDEN, "route unavailable"));
+    };
+    let credential_id = credential_id.clone();
+    let has_model = model.is_some();
+    completion.selected(credential_id.clone(), model);
+    let Some(credential) = state.route.credentials.get(&credential_id) else {
+        completion.finish(StatusCode::FORBIDDEN);
+        return Ok(crate::response(
+            StatusCode::FORBIDDEN,
+            "credential unavailable",
+        ));
+    };
+    let primary = state
+        .route
+        .config
+        .route(&state.route.group, None)
+        .is_some_and(|(id, _)| *id == credential_id);
+    let Ok(mut selected) = select_upstream(&state, endpoint, primary, inference && has_model).await
+    else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return Ok(crate::response(
+            StatusCode::BAD_GATEWAY,
+            "upstream connection failed",
+        ));
+    };
+    let Ok(request) = prepare_request(request, &selected, primary) else {
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return Ok(crate::response(
+            StatusCode::BAD_GATEWAY,
+            "invalid upstream request",
+        ));
+    };
+    let Ok(request) = swap_credential(request, credential) else {
         completion.finish(StatusCode::INTERNAL_SERVER_ERROR);
         return Ok(crate::response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "credential could not be encoded",
         ));
     };
-    let sender = state.sender.clone();
-    let Ok(mut response) = sender.send_request(request).await else {
+    let mut selected_sender = (!selected.use_original).then_some(selected.sender.clone());
+    let Ok(mut response) = selected.sender.send_request(request).await else {
         completion.finish(StatusCode::BAD_GATEWAY);
         return Ok(crate::response(
             StatusCode::BAD_GATEWAY,
@@ -591,6 +946,8 @@ async fn forward(
         let pending = PendingUpgrade {
             client: client_upgrade,
             upstream: upstream_upgrade,
+            task: selected.task.take(),
+            _sender: selected_sender.take(),
         };
         if upgrades.send(pending).await.is_err() {
             return Ok(crate::response(
@@ -600,7 +957,14 @@ async fn forward(
         }
     }
     completion.finish(status);
-    Ok(response.map(Either::Left))
+    Ok(response.map(|body| {
+        LeasedBody {
+            inner: body,
+            _task: selected.task,
+            _sender: selected_sender,
+        }
+        .boxed_unsync()
+    }))
 }
 
 fn swap_credential<B>(
@@ -695,6 +1059,28 @@ fn strip_hop_by_hop(headers: &mut hyper::HeaderMap, upgrading: bool) {
 mod tests {
     use super::*;
     use airlock_core::secret::SecretFile;
+
+    #[test]
+    fn exact_limit_json_in_uneven_chunks_keeps_bounded_capacity() {
+        let mut body = br#"{"model":"glm-4.7","pad":""#.to_vec();
+        body.resize(MODEL_BODY_LIMIT - 2, b'x');
+        body.extend_from_slice(b"\"}");
+        assert_eq!(body.len(), MODEL_BODY_LIMIT);
+
+        for fixed_capacity in [false, true] {
+            let mut retained = Zeroizing::new(Vec::with_capacity(if fixed_capacity {
+                MODEL_BODY_LIMIT
+            } else {
+                0
+            }));
+            for chunk in body.chunks(1003) {
+                append_inference_chunk(&mut retained, chunk, fixed_capacity)
+                    .expect("exact limit fits");
+                assert!(retained.capacity() <= MODEL_BODY_LIMIT);
+            }
+            assert_eq!(parse_model(&retained), Ok(Some("glm-4.7".to_owned())));
+        }
+    }
 
     fn credential(auth: AuthKind, path: &std::path::Path) -> Arc<LoadedCredential> {
         Arc::new(LoadedCredential {

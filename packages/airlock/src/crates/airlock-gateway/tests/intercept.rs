@@ -35,7 +35,7 @@ const LARGE_BODY: usize = 64 << 20;
 async fn http1_swaps_oauth_and_removes_client_auth() {
     let ca = TestCa::new();
     let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
-    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let server = Running::start_with_port(ca.roots(), upstream.port).await;
     let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
 
     let response = client
@@ -47,7 +47,7 @@ async fn http1_swaps_oauth_and_removes_client_auth() {
                 (HeaderName::from_static("x-api-key"), "fake-CLIENT-api-key"),
                 (HeaderName::from_static("anthropic-beta"), "test"),
             ],
-            full_body(b"request body"),
+            full_body(br#"{"model":"claude-sonnet-5","messages":[]}"#),
         ))
         .await;
 
@@ -58,7 +58,7 @@ async fn http1_swaps_oauth_and_removes_client_auth() {
         .await
         .expect("body")
         .to_bytes();
-    assert_eq!(&body[..], b"request body");
+    assert_eq!(&body[..], br#"{"model":"claude-sonnet-5","messages":[]}"#);
     let received = records(&upstream);
     assert_eq!(received.len(), 1);
     assert_eq!(received[0].path, "/v1/messages");
@@ -68,13 +68,17 @@ async fn http1_swaps_oauth_and_removes_client_auth() {
     );
     assert!(received[0].headers.get("x-api-key").is_none());
     assert_eq!(received[0].headers["anthropic-beta"], "test");
-    assert_eq!(&received[0].body[..], b"request body");
+    assert_eq!(
+        &received[0].body[..],
+        br#"{"model":"claude-sonnet-5","messages":[]}"#
+    );
     let request_events = server.capture.request_events();
     assert_eq!(request_events[0]["fields"]["path"], "/v1/messages");
+    assert_eq!(request_events[0]["fields"]["credential"], "claude");
+    assert_eq!(request_events[0]["fields"]["model"], "claude-sonnet-5");
     let events = server.stop().await;
     assert_eq!(events.len(), 1);
     let audit = fields(&events[0]);
-    assert_eq!(audit["credential"], "claude");
     assert_eq!(audit["requests"], 1);
     assert!(audit["client_to_upstream"].as_u64().expect("upload bytes") > 0);
     assert!(
@@ -83,6 +87,513 @@ async fn http1_swaps_oauth_and_removes_client_auth() {
             .expect("download bytes")
             > 0
     );
+}
+
+#[tokio::test]
+async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+
+    for (path, body) in [
+        (
+            "/v1/messages",
+            br#"{"model":"claude-sonnet-5","messages":[]}"#.as_slice(),
+        ),
+        (
+            "/v1/messages",
+            br#"{"messages":[],"model":"glm-4.7"}"#.as_slice(),
+        ),
+        ("/api/oauth/usage", b"".as_slice()),
+        (
+            "/v1/messages",
+            br#"{"model":"new-claude-model","messages":[]}"#.as_slice(),
+        ),
+    ] {
+        let response = client
+            .send(request(
+                "POST",
+                path,
+                &[
+                    (AUTHORIZATION, "Bearer fake-CLIENT-oauth"),
+                    (HeaderName::from_static("x-api-key"), "fake-CLIENT-api-key"),
+                    (HeaderName::from_static("cookie"), "fake-CLIENT-session"),
+                ],
+                full_body(body),
+            ))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        assert_eq!(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .expect("body")
+                .to_bytes()[..],
+            body
+        );
+    }
+    let primary_requests = records(&primary);
+    let zai_requests = records(&zai);
+    assert_eq!(primary_requests.len(), 3);
+    assert_eq!(zai_requests.len(), 1);
+    assert_eq!(zai_requests[0].path, "/api/anthropic/v1/messages");
+    assert_eq!(zai_requests[0].headers["x-api-key"], "fake-REAL-zai");
+    assert!(zai_requests[0].headers.get(AUTHORIZATION).is_none());
+    assert!(zai_requests[0].headers.get("cookie").is_none());
+    assert!(
+        primary_requests
+            .iter()
+            .all(|record| record.headers[AUTHORIZATION] == format!("Bearer {REAL_OAUTH_TOKEN}"))
+    );
+    let events = server.capture.request_events();
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| event["fields"]["credential"].as_str().expect("credential"))
+            .collect::<Vec<_>>(),
+        ["claude", "zai", "claude", "claude"]
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn absent_model_and_token_path_keep_original_host_while_explicit_model_uses_endpoint() {
+    let ca = TestCa::new();
+    let original = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let primary_endpoint = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex_with_primary(
+        ca.roots(),
+        zai.port,
+        &format!("https://localhost:{}", primary_endpoint.port),
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, original.port, HttpProtocol::Http1).await;
+    for body in [
+        br#"{"messages":[]}"#.as_slice(),
+        br#"{"model":"new-claude-model"}"#.as_slice(),
+    ] {
+        let response = client
+            .send(request("POST", "/v1/messages", &[], full_body(body)))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        assert_eq!(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .expect("body")
+                .to_bytes()[..],
+            body
+        );
+    }
+    let token_body = b"fake-CLIENT-token-request";
+    let response = client
+        .send(request(
+            "POST",
+            "/api/oauth/token",
+            &[],
+            full_body(token_body),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    assert_eq!(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("token response")
+            .to_bytes()[..],
+        token_body
+    );
+    let original_requests = records(&original);
+    assert_eq!(original_requests.len(), 2);
+    assert_eq!(original_requests[1].path, "/api/oauth/token");
+    assert_eq!(original_requests[1].body.as_ref(), token_body);
+    assert_eq!(
+        original_requests[1].headers[AUTHORIZATION],
+        format!("Bearer {REAL_OAUTH_TOKEN}")
+    );
+    assert_eq!(records(&primary_endpoint).len(), 1);
+    assert!(records(&zai).is_empty());
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn selected_upstream_failure_does_not_fall_back_to_primary() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let closed = sink().await;
+    let zai_port = closed.local_addr().expect("closed port").port();
+    drop(closed);
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai_port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::BAD_GATEWAY);
+    assert!(records(&primary).is_empty());
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn cancelling_selected_stream_closes_its_upstream_connection() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http2,
+        UpstreamMode::Sse(Arc::new(tokio::sync::Notify::new())),
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http2).await;
+    let mut response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let first = response
+        .body_mut()
+        .frame()
+        .await
+        .expect("first event")
+        .expect("frame")
+        .into_data()
+        .expect("data");
+    assert_eq!(&first[..], b"event:first\n\n");
+    drop(response);
+    drop(client);
+    timeout(Duration::from_secs(2), zai.done)
+        .await
+        .expect("selected upstream closed")
+        .expect("task")
+        .expect("upstream service");
+    assert!(records(&primary).is_empty());
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn nested_and_malformed_models_cannot_select_zai() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    for (body, status) in [
+        (br#"["glm-4.7"]"#.as_slice(), hyper::StatusCode::BAD_REQUEST),
+        (
+            br#"{"messages":[{"model":"glm-4.7"}]}"#.as_slice(),
+            hyper::StatusCode::OK,
+        ),
+        (br#"{"model":null}"#.as_slice(), hyper::StatusCode::OK),
+        (
+            br#"{"model":"glm-4.7",}"#.as_slice(),
+            hyper::StatusCode::BAD_REQUEST,
+        ),
+        (
+            br#"{"model":"glm-4.7","model":"claude-sonnet-5"}"#.as_slice(),
+            hyper::StatusCode::BAD_REQUEST,
+        ),
+        (
+            br#"{"model":{"value":"glm-4.7"}}"#.as_slice(),
+            hyper::StatusCode::BAD_REQUEST,
+        ),
+        (
+            br#"{"model":"glm@4.7"}"#.as_slice(),
+            hyper::StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let response = client
+            .send(request("POST", "/v1/messages", &[], full_body(body)))
+            .await;
+        assert_eq!(
+            response.status(),
+            status,
+            "{}",
+            String::from_utf8_lossy(body)
+        );
+        let _ = response.into_body().collect().await.expect("response");
+    }
+    assert_eq!(records(&primary).len(), 2);
+    assert!(records(&zai).is_empty());
+    let oversized = format!(r#"{{"model":"{}"}}"#, "x".repeat(1 << 20));
+    let (sender, body) = streaming_body(1);
+    sender
+        .try_send(Ok(Frame::data(hyper::body::Bytes::from(oversized))))
+        .expect("queue oversized model");
+    drop(sender);
+    let response = client
+        .send(request("POST", "/v1/messages", &[], body))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::BAD_REQUEST);
+    assert_eq!(records(&primary).len(), 2);
+    assert!(records(&zai).is_empty());
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn inference_body_over_32_mib_returns_413_without_upstream_request() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let (sender, body) = streaming_body(1);
+    sender
+        .try_send(Ok(Frame::data(hyper::body::Bytes::from(vec![
+            b'x';
+            (32 << 20)
+                + 1
+        ]))))
+        .expect("queue oversized body");
+    drop(sender);
+
+    let response = client
+        .send(request("POST", "/v1/messages", &[], body))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::PAYLOAD_TOO_LARGE);
+    let response_body = response.into_body().collect().await.expect("response body");
+    assert_eq!(&response_body.to_bytes()[..], b"request_too_large");
+    assert!(records(&primary).is_empty());
+    assert!(records(&zai).is_empty());
+    let request_events = server.capture.request_events();
+    assert_eq!(request_events[0]["fields"]["status"], 413);
+    assert_eq!(request_events[0]["fields"]["outcome"], "request_too_large");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn inference_with_trailers_returns_400_without_upstream_request() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http2).await;
+    let (sender, body) = streaming_body(2);
+    sender
+        .try_send(Ok(Frame::data(hyper::body::Bytes::from_static(
+            br#"{"model":"glm-4.7"}"#,
+        ))))
+        .expect("queue inference body");
+    let mut trailers = hyper::HeaderMap::new();
+    trailers.insert("x-test", "checksum".parse().expect("trailer value"));
+    sender
+        .try_send(Ok(Frame::trailers(trailers)))
+        .expect("queue trailers");
+    drop(sender);
+
+    let response = client
+        .send(request("POST", "/v1/messages", &[], body))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::BAD_REQUEST);
+    let response_body = response.into_body().collect().await.expect("response body");
+    assert_eq!(
+        &response_body.to_bytes()[..],
+        b"request_trailers_unsupported"
+    );
+    assert!(records(&primary).is_empty());
+    assert!(records(&zai).is_empty());
+    let request_events = server.capture.request_events();
+    assert_eq!(request_events[0]["fields"]["status"], 400);
+    assert_eq!(
+        request_events[0]["fields"]["outcome"],
+        "request_trailers_unsupported"
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn exact_limit_in_uneven_frames_reaches_selected_upstream() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::HashUpload).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::HashUpload).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let mut bytes = br#"{"model":"glm-4.7","pad":""#.to_vec();
+    bytes.resize(32 << 20, b'x');
+    let last = bytes.len();
+    bytes[last - 2..].copy_from_slice(b"\"}");
+    let expected_hash = fnv1a_test(support::FNV_OFFSET, &bytes);
+    let body_bytes = hyper::body::Bytes::from(bytes);
+    let (sender, body) = streaming_body(1);
+    tokio::spawn(async move {
+        let mut start = 0;
+        for end in [1003, 1_000_003, 2_000_003, 4_000_003, body_bytes.len()] {
+            sender
+                .send(Ok(Frame::data(body_bytes.slice(start..end))))
+                .await
+                .expect("send uneven frame");
+            start = end;
+        }
+    });
+
+    let response = client
+        .send(request("POST", "/v1/messages", &[], body))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let response_body = response.into_body().collect().await.expect("response body");
+    assert_eq!(
+        &response_body.to_bytes()[..],
+        expected_hash.to_string().as_bytes()
+    );
+    assert!(records(&primary).is_empty());
+    let records = records(&zai);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].body_len, 32 << 20);
+    assert_eq!(records[0].body_hash, expected_hash);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn concurrent_http2_streams_route_independently() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let client = HttpClient::connect(&server, primary.port, HttpProtocol::Http2).await;
+    let mut first = client.http2_sender();
+    let mut second = client.http2_sender();
+    let primary_body = br#"{"model":"claude-sonnet-5"}"#;
+    let zai_body = br#"{"model":"glm-4.7"}"#;
+    let (primary_result, zai_result) = tokio::join!(
+        first.send_request(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(primary_body)
+        )),
+        second.send_request(request(
+            "POST",
+            "/v1/messages",
+            &[(AUTHORIZATION, "Bearer fake-CLIENT-oauth")],
+            full_body(zai_body)
+        ))
+    );
+    for (result, expected) in [
+        (primary_result, primary_body.as_slice()),
+        (zai_result, zai_body.as_slice()),
+    ] {
+        let response = result.expect("response");
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        assert_eq!(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .expect("body")
+                .to_bytes()[..],
+            expected
+        );
+    }
+    let primary_records = records(&primary);
+    let zai_records = records(&zai);
+    assert_eq!(primary_records.len(), 1);
+    assert_eq!(zai_records.len(), 1);
+    assert_eq!(primary_records[0].body.as_ref(), primary_body);
+    assert_eq!(zai_records[0].body.as_ref(), zai_body);
+    assert_eq!(primary_records[0].path, "/v1/messages");
+    assert_eq!(zai_records[0].path, "/api/anthropic/v1/messages");
+    assert_eq!(
+        primary_records[0].authority.as_deref(),
+        Some(format!("localhost:{}", primary.port).as_str())
+    );
+    assert_eq!(
+        zai_records[0].authority.as_deref(),
+        Some(format!("localhost:{}", zai.port).as_str())
+    );
+    assert_eq!(
+        primary_records[0].headers[AUTHORIZATION],
+        format!("Bearer {REAL_OAUTH_TOKEN}")
+    );
+    assert!(primary_records[0].headers.get("x-api-key").is_none());
+    assert_eq!(zai_records[0].headers["x-api-key"], "fake-REAL-zai");
+    assert!(zai_records[0].headers.get(AUTHORIZATION).is_none());
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn selected_upstream_may_negotiate_http1_for_an_http2_client() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http2).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    assert_eq!(&records(&zai)[0].body[..], br#"{"model":"glm-4.7"}"#);
+    assert_eq!(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes()[..],
+        br#"{"model":"glm-4.7"}"#
+    );
+    assert!(records(&primary).is_empty());
+    assert_eq!(records(&zai).len(), 1);
+    let events = server.stop().await;
+    assert!(
+        fields(&events[0])["client_to_upstream"]
+            .as_u64()
+            .expect("upload bytes")
+            > 0
+    );
+}
+
+#[tokio::test]
+async fn late_chunk_split_model_is_routed_without_changing_body_bytes() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let (sender, body) = streaming_body(2);
+    let prefix = format!("{{\"padding\":\"{}\",\"model\":\"g", "x".repeat(1 << 20));
+    let suffix = "lm-4.7\",\"messages\":[]}";
+    let expected = format!("{prefix}{suffix}");
+    tokio::spawn(async move {
+        sender
+            .send(Ok(Frame::data(hyper::body::Bytes::from(prefix))))
+            .await
+            .expect("prefix");
+        sender
+            .send(Ok(Frame::data(hyper::body::Bytes::from_static(
+                suffix.as_bytes(),
+            ))))
+            .await
+            .expect("suffix");
+    });
+    let response = client
+        .send(request("POST", "/v1/messages", &[], body))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let _ = response.into_body().collect().await.expect("response body");
+    assert!(records(&primary).is_empty());
+    let records = records(&zai);
+    assert_eq!(records.len(), 1);
+    assert_eq!(&records[0].body[..], expected.as_bytes());
+    server.stop().await;
 }
 
 #[tokio::test]
@@ -115,7 +626,7 @@ async fn http1_preserves_upstream_status_headers_and_body() {
 async fn http2_swaps_oauth_on_the_same_protocol() {
     let ca = TestCa::new();
     let upstream = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
-    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let server = Running::start_with_port(ca.roots(), upstream.port).await;
     let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http2).await;
 
     let response = client
@@ -123,7 +634,7 @@ async fn http2_swaps_oauth_on_the_same_protocol() {
             "POST",
             "/v1/messages",
             &[(AUTHORIZATION, "Bearer fake-CLIENT-oauth")],
-            full_body(b"h2 body"),
+            full_body(br#"{"model":"claude-sonnet-5","messages":[]}"#),
         ))
         .await;
 
@@ -134,7 +645,7 @@ async fn http2_swaps_oauth_on_the_same_protocol() {
         .await
         .expect("body")
         .to_bytes();
-    assert_eq!(&body[..], b"h2 body");
+    assert_eq!(&body[..], br#"{"model":"claude-sonnet-5","messages":[]}"#);
     let received = records(&upstream);
     assert_eq!(
         received[0].headers[AUTHORIZATION],
@@ -189,6 +700,7 @@ async fn api_key_credentials_replace_authorization_with_x_api_key() {
         ca.roots(),
         None,
         FixtureAuth::ApiKey,
+        Some(upstream.port),
     )
     .await;
     let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
@@ -201,7 +713,7 @@ async fn api_key_credentials_replace_authorization_with_x_api_key() {
                 (AUTHORIZATION, "Bearer fake-CLIENT-oauth"),
                 (HeaderName::from_static("x-api-key"), "fake-CLIENT-api-key"),
             ],
-            full_body(b"api body"),
+            full_body(br#"{"model":"claude-sonnet-5","messages":[]}"#),
         ))
         .await;
 
@@ -212,7 +724,7 @@ async fn api_key_credentials_replace_authorization_with_x_api_key() {
         .await
         .expect("body")
         .to_bytes();
-    assert_eq!(&body[..], b"api body");
+    assert_eq!(&body[..], br#"{"model":"claude-sonnet-5","messages":[]}"#);
     let received = records(&upstream);
     assert_eq!(received[0].headers["x-api-key"], REAL_API_KEY);
     assert!(received[0].headers.get(AUTHORIZATION).is_none());
