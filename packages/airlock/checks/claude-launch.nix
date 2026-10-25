@@ -550,17 +550,12 @@ in {
     '';
     airlock-claude-native-oauth =
       pkgs.runCommand "airlock-claude-native-oauth" {
-        nativeBuildInputs = [pkgs.iproute2 pkgs.openssl pkgs.python3 pkgs.util-linux];
+        nativeBuildInputs = [pkgs.openssl pkgs.python3];
         fixturesFile = pkgs.writeText "airlock-claude-native-oauth-fixtures.json" (builtins.toJSON nativeFixtures);
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        unshare --user --map-root-user --net ${pkgs.bash}/bin/bash -c '
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ip link set lo up
-          python3 ${./native-oauth-probe.py} "$1"
-        ' _ "$fixturesFile" | tee "$out"
+        python3 ${./native-oauth-probe.py} "$fixturesFile" | tee "$out"
       '';
     airlock-claude-launch =
       pkgs.runCommand "airlock-claude-launch" {
