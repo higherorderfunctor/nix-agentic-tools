@@ -3,6 +3,7 @@
   echo 'zai-usage: expected route claude or codex' >&2
   exit 1
 }
+if usage_airlock zai "$1"; then exit 0; fi
 if usage_cpa zai "$1"; then exit 0; fi
 
 [[ -r ${ZAI_API_KEY_FILE:-} ]] || {

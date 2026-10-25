@@ -1,0 +1,53 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT kind, group_name, percent_milli, reset_at_unix, severity, is_active,\n               model_display_name, surface_display_name\n        FROM claude_limits WHERE snapshot_id = ? ORDER BY ordinal LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "kind",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "group_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "percent_milli",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "reset_at_unix",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "severity",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_active",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "model_display_name",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "surface_display_name",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [false, true, false, true, true, false, true, true]
+  },
+  "hash": "4717a7b5d76ff50ec0b21276d42c7a93986547dd0b68babe98295c52bad385b3"
+}

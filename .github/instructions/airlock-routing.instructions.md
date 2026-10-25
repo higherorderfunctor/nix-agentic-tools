@@ -8,7 +8,8 @@ applyTo: "packages/airlock/**"
 # airlock transport and routing
 
 > **Last verified:** 2026-10-25 — CONNECT interception, model routing,
-> ToolSearch and quota substitution share the M06 and M07 gateway path.
+> ToolSearch, quota substitution, and M08 primary-header observation share the
+> gateway path.
 
 ## Transport
 
@@ -55,6 +56,12 @@ Interception follows this order:
   cached or substituted. Status, ordinary headers and body usage remain from the
   selected provider. Each snapshot is limited to 64 header values and 16 KiB; an
   oversized observation clears it.
+- Only an actual primary response contributes a typed header-window observation
+  to SQLite. Showing cached primary headers on a non-primary response does not
+  create or refresh that observation. A full observation queue or failed write
+  increments the shared pending snapshot-loss count without delaying response
+  forwarding; recovery or clean shutdown persists it. The source and age remain
+  separate from the out-of-band Claude quota fetch in the usage report.
 - Before injection, every request drops client `Authorization` and `x-api-key`
   values plus hop-by-hop fields named by `Connection`. An OAuth credential is
   injected as a sensitive Authorization bearer header; an API key is injected as

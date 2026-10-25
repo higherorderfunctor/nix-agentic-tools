@@ -8,16 +8,25 @@ version.workspace = true
 airlock-core.workspace = true
 airlock-gateway.workspace = true
 clap = { workspace = true, features = ["derive"] }
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
 rustix = { workspace = true, features = ["fs"] }
 rustls.workspace = true
 rustls-native-certs.workspace = true
 serde_json.workspace = true
+time.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-rustls.workspace = true
+tracing.workspace = true
 tracing-subscriber.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
+rcgen.workspace = true
 tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

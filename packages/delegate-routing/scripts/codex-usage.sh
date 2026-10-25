@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+if usage_airlock codex; then exit 0; fi
 if usage_cpa codex; then exit 0; fi
 
 timeout 25s python3 - <<'PY' | jq '.rateLimits.primary | {usedPercent, remainingPercent: (100 - .usedPercent), resetsAt: (.resetsAt | strflocaltime("%Y-%m-%d %H:%M:%S %Z"))}'

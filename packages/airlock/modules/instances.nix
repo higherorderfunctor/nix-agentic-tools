@@ -19,13 +19,18 @@ backend: {lib, ...}: let
   };
   credential = types.submodule {
     options = {
+      accountId = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Explicit account identifier for out-of-band Codex quota reads; never inferred from a credential.";
+      };
       auth = {
         file = mkOption {
           type = types.nullOr redact.types.secretFile;
           default = null;
           description = "File-backed credential, delivered as a 0600 file; absent for managed OAuth.";
         };
-        type = required (types.enum ["api_key" "oauth_bearer" "oauth_managed"]) "Credential mode; managed OAuth is accepted by check-config but serve does not support it yet.";
+        type = required (types.enum ["api_key" "oauth_bearer" "oauth_managed"]) "Credential mode; managed OAuth is stored by Airlock for the primary client.";
       };
       provider = required types.str "The provider this credential authenticates to.";
     };
@@ -48,7 +53,7 @@ backend: {lib, ...}: let
         description = "Protocol-keyed HTTPS endpoint overrides; Rust expands the preset once and checks URL shape.";
       };
       preset = mkOption {
-        type = types.nullOr (types.enum ["claude" "zai"]);
+        type = types.nullOr (types.enum ["claude" "codex" "zai"]);
         default = null;
         description = "Built-in endpoint preset; a protocol-keyed endpoint overrides its value.";
       };
@@ -78,6 +83,11 @@ backend: {lib, ...}: let
         description = "Named providers with preset endpoints and optional protocol overrides.";
       };
       stateDir = required (types.strMatching "/.*") "The state directory; the instance fixes it to its `stateDir`.";
+      usage.credentials = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "Credentials explicitly authorized for out-of-band quota collection; Codex requires this selection and an accountId.";
+      };
       unknownHosts = mkOption {
         type = types.enum ["deny" "tunnel"];
         default = "tunnel";
@@ -111,14 +121,16 @@ in {
               })
               settings.clients;
             credentials = lib.mapAttrs (_: credential:
-              credential
+              (lib.optionalAttrs (credential.accountId != null) {account_id = credential.accountId;})
               // {
                 auth = lib.filterAttrs (_: value: value != null) credential.auth;
+                inherit (credential) provider;
               })
             settings.credentials;
             inherit (settings) groups listen;
             providers = lib.mapAttrs (_: provider: lib.filterAttrs (_: value: value != null) provider) settings.providers;
             state_dir = settings.stateDir;
+            inherit (settings) usage;
             unknown_hosts = settings.unknownHosts;
           };
         };

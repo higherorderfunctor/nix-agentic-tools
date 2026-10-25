@@ -18,14 +18,22 @@ dependencies = [
  "airlock-core",
  "airlock-gateway",
  "clap",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "rcgen",
  "rustix",
  "rustls",
  "rustls-native-certs",
  "serde_json",
  "tempfile",
  "thiserror",
+ "time",
  "tokio",
+ "tokio-rustls",
+ "tracing",
  "tracing-subscriber",
+ "zeroize",
 ]
 
 [[package]]

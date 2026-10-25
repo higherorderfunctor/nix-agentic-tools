@@ -377,9 +377,40 @@
         clientKey = "usage-test";
       };
     };
+    usageSelectedAirlock.ai = {
+      airlock.instances.main = {
+        port = 8400;
+        stateDir = "/srv/airlock/main";
+        settings = {
+          clients.harness = {
+            grants = ["anthropic"];
+            token = redact.file "/run/secrets/harness";
+          };
+          credentials.claude = {
+            auth = {
+              file = redact.file "/run/secrets/claude";
+              type = "oauth_bearer";
+            };
+            provider = "claude";
+          };
+          groups.anthropic = {
+            intercept = ["api.anthropic.com"];
+            members.claude.models = [];
+            primary = "claude";
+            protocol = "anthropic";
+          };
+          providers.claude.preset = "claude";
+        };
+      };
+      services."airlock-main".environment.XDG_RUNTIME_DIR = "/run/selected-airlock";
+      claude.proxy = {
+        instance = "main";
+        clientKey = "harness";
+      };
+    };
     usage = extra: evaluate (lib.mkMerge [usageBase extra]);
     usageVars = evaluation: runtime:
-      lib.filterAttrs (key: _: lib.hasPrefix "DELEGATE_USAGE_CPA_" key)
+      lib.filterAttrs (key: _: lib.hasPrefix "DELEGATE_USAGE_CPA_" key || lib.hasPrefix "DELEGATE_USAGE_AIRLOCK_" key)
       (
         if runtime == "claude"
         then evaluation.config.ai.claude.native.settings.env
@@ -387,6 +418,16 @@
       );
     usageEmpty = extra: lib.all (runtime: usageVars (usage extra) runtime == {}) ["claude" "codex"];
   in {
+    "module-delegate-routing-${name}-airlock-config-path" = let
+      helper = (usageVars (usage usageSelectedAirlock) "claude").DELEGATE_USAGE_AIRLOCK_CLAUDE_CONFIG_HELPER;
+    in
+      pkgs.runCommand "delegate-routing-${name}-airlock-config-path" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        actual="$(XDG_RUNTIME_DIR=/run/caller TMPDIR=/tmp/caller ${helper})"
+        test "$actual" = /run/selected-airlock/ai-service-airlock-main/config.json
+        touch "$out"
+      '';
     "module-delegate-routing-${name}-usage" = mkTest "delegate-routing-${name}-usage" (
       lib.all (runtime:
         usageVars (usage usageSelected) runtime
@@ -394,6 +435,14 @@
           "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_MANAGEMENT_KEY_FILE" = "/run/secrets/management";
           "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_URL" = "http://127.0.0.1:8317";
         }) ["claude" "codex"]
+      && (let
+        selected = usage usageSelectedAirlock;
+        variables = usageVars selected "claude";
+      in
+        variables.DELEGATE_USAGE_AIRLOCK_CLAUDE_CLIENT
+        == "harness"
+        && lib.hasSuffix "/bin/delegate-airlock-claude-config-path" variables.DELEGATE_USAGE_AIRLOCK_CLAUDE_CONFIG_HELPER
+        && selected.config.ai.services."airlock-main".environment.XDG_RUNTIME_DIR == "/run/selected-airlock")
       && usageEmpty {}
       && usageEmpty {ai.cliproxyapi.instances = usageSelected.ai.cliproxyapi.instances;}
       && usageEmpty (lib.recursiveUpdate usageSelected {ai.programs.delegate-routing.enable = lib.mkForce false;})

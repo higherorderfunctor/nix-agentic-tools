@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO claude_limits\n              (snapshot_id, ordinal, kind, group_name, percent_milli, reset_at_unix,\n               severity, is_active, model_display_name, surface_display_name)\n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "4d83bd5926084067005db4b98e8972614d4e8ec57ed0c83bb7c72de204ffedda"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT label, used_minor_units, remaining_minor_units, limit_minor_units, reset_at_unix\n        FROM credit_pools\n        WHERE snapshot_id = ?\n        ORDER BY ordinal\n        ",
+  "query": "\n        SELECT label, used_minor_units, remaining_minor_units, limit_minor_units, reset_at_unix\n        FROM credit_pools\n        WHERE snapshot_id = ?\n        ORDER BY ordinal LIMIT ?\n        ",
   "describe": {
     "columns": [
       {
@@ -30,9 +30,9 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 2
     },
     "nullable": [false, false, false, false, true]
   },
-  "hash": "2403361aa9060aa37b114fce93c561c887a05858bd17e532b1188edc1b90013f"
+  "hash": "b79f392c50af08b2ae205d5ba6b7331a8103dadce9d2fbcf22bdc6a29d0ebb88"
 }

@@ -8,7 +8,7 @@ applyTo: "packages/airlock/**"
 # airlock
 
 > **Last verified:** 2026-10-25 — Airlock scope, security boundary, and
-> integration links reflect the M06 and M07 gateway.
+> integration links reflect the M08 usage collector and CLI.
 
 ## Scope
 
@@ -32,7 +32,7 @@ environment and config, not out of its reach.
 
 The configuration, launcher, and primary OAuth contracts live in
 `docs/integration.md`. SQLite's durable-state contract lives in
-`docs/storage.md`.
+`docs/storage.md`, including provider history and the read-only usage report.
 
 ## Settled — do not relitigate
 

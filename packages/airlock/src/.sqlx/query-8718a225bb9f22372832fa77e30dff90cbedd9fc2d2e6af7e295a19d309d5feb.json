@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO provider_snapshots\n              (fetched_at_unix, provider_id, client_id, group_id, credential_id,\n               account_id, source, surface, fetch_status, gap_reason)\n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "8718a225bb9f22372832fa77e30dff90cbedd9fc2d2e6af7e295a19d309d5feb"
+}
