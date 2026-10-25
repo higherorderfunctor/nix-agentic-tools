@@ -1,16 +1,17 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-10-16 — repo documents and agent files are built by
-> `mkTree` with the evaluated `ai.formatter` treefmt config and the named
-> guards; scoped rules rely on the normalized matcher-derived `fileMatch`
-> trigger default. `generate:all` writes instruction and repo-document
-> projections plus devenv.yaml, waiting on `ai:files-ready` for AGENTS.md, the
-> `.github/` instruction files and Claude's and Kiro's rules; devenv.lock
-> requires a separate network update; the generator produces content only;
-> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
-> from its generated-file tree, formatted there with this repository's treefmt;
-> the drift check compares the built files; ai-module is the sole backend
-> delivery path.
+> **Last verified:** 2026-10-25 — `dev/ai.nix` selects reviewer categories with
+> runtime rule disables; local runtimes keep every category. Repo documents and
+> agent files are built by `mkTree` with the evaluated `ai.formatter` treefmt
+> config and the named guards; scoped rules rely on the normalized
+> matcher-derived `fileMatch` trigger default. `generate:all` writes instruction
+> and repo-document projections plus devenv.yaml, waiting on `ai:files-ready`
+> for AGENTS.md, the `.github/` instruction files and Claude's and Kiro's rules;
+> devenv.lock requires a separate network update; the generator produces content
+> only; `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction
+> file from its generated-file tree, formatted there with this repository's
+> treefmt; the drift check compares the built files; ai-module is the sole
+> backend delivery path.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -36,6 +37,16 @@ Two kinds of generated content, two owners:
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
   evaluated treefmt config, and the same named guards `ai.guards` selects);
   `generate:repo:*` copies them out.
+
+`dev/ai.nix` bounds github.com's reviewer instructions with an explicit category
+allowlist and `ai.copilot.github.rules.<category>.enable = false` for every
+other category and the root stacked-workflows router. Newly registered
+categories stay out until selected. Local runtimes keep every category. The
+fragment-shadow guard accepts content-free runtime disables but rejects same-key
+replacement text or sources, including disabled replacements. Peer communication
+uses its existing Copilot program disable; delegate-routing and Semble already
+exclude Copilot. `instructions-reviewer-policy` checks the emitted instruction
+set, local content retention, and the shadow guard.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.

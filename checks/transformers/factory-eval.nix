@@ -152,9 +152,43 @@ in {
         out == "body only"
     );
 
+    factory-transformer-agentsmd-index-audience-deduplication = mkTest "transformer-agentsmd-index-audience-deduplication" (
+      let
+        index = lib.genAttrs ["alpha" "beta"] (_: {
+          description = "";
+          inclusion = "fileMatch";
+          matcher = ["src/**"];
+          references = ["guide.md"];
+        });
+        render = audiences: ai.transformers.agentsmd.renderKeyed {inherit audiences index;};
+        uniform = render {
+          alpha = ["codex" "kimchi"];
+          beta = ["codex" "kimchi"];
+        };
+        mixed = render {
+          alpha = ["codex"];
+          beta = ["kimchi"];
+        };
+        private = render {};
+      in
+        lib.hasInfix "This fallback index applies only to: `codex`, `kimchi`.\n" uniform
+        && !(lib.hasInfix "  - Audience:" uniform)
+        && lib.hasInfix "If your runtime is not named, skip this index." uniform
+        && lib.hasInfix "Runtimes with native rule injection" uniform
+        && lib.hasInfix "  - Audience: `codex`\n" mixed
+        && lib.hasInfix "  - Audience: `kimchi`\n" mixed
+        && !(lib.hasInfix "This fallback index" private)
+        && !(lib.hasInfix "Audience:" private)
+    );
+
     factory-transformer-agentsmd-index-heading-uses-structure = mkTest "transformer-agentsmd-index-heading-uses-structure" (
       let
-        index = {example = "  - Trigger: rendered text is not metadata\n";};
+        index.example = {
+          description = "Trigger: rendered text is not metadata";
+          inclusion = "fileMatch";
+          matcher = ["*.nix"];
+          references = ["guide.md"];
+        };
       in
         lib.hasPrefix "## Path-scoped rules\n" (ai.transformers.agentsmd.renderKeyed {inherit index;})
         && lib.hasPrefix "## Rule index\n" (ai.transformers.agentsmd.renderKeyed {

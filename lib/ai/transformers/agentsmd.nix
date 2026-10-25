@@ -59,7 +59,12 @@ in rec {
     hasOnDemandIndex = lib.any (
       rule: builtins.elem rule.inclusion ["auto" "manual"]
     ) (lib.attrValues indexedRules);
-    index = lib.mapAttrs renderIndexEntry indexedRules;
+    # Keep trigger data until the shared composer renders the final index.
+    index =
+      lib.mapAttrs (_name: rule: {
+        inherit (rule) description inclusion matcher references;
+      })
+      indexedRules;
     rules = lib.mapAttrs (mkRuleBody readContent) (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) routedRules);
   };
 
@@ -100,11 +105,15 @@ in rec {
   # comments keep key provenance without introducing frontmatter or another
   # metadata schema.
   renderKeyed = {
+    audiences ? {},
     context ? null,
     hasOnDemandIndex ? false,
     index ? {},
     rules ? {},
   }: let
+    audienceNames = names: lib.concatMapStringsSep ", " (runtime: "`${runtime}`") names;
+    indexAudiences = lib.unique (map (name: audiences.${name} or []) (lib.attrNames index));
+    uniformAudience = builtins.length indexAudiences == 1 && builtins.head indexAudiences != [];
     units =
       lib.optional (index != {}) (
         (
@@ -124,10 +133,32 @@ in rec {
 
           ''
         )
-        + lib.concatStrings (lib.attrValues index)
+        + lib.optionalString (audiences != {}) (
+          (
+            if uniformAudience
+            then "This fallback index applies only to: ${audienceNames (builtins.head indexAudiences)}.\n"
+            else "This fallback index applies only to the runtimes named in each entry.\n"
+          )
+          + ''
+            Runtimes with native rule injection already receive their applicable
+            rules; do not follow this fallback index to load additional guidance.
+          ''
+          + (
+            if uniformAudience
+            then "If your runtime is not named, skip this index.\n\n"
+            else "If your runtime is not named, skip the entry.\n\n"
+          )
+        )
+        + lib.concatStrings (lib.mapAttrsToList (name: entry:
+          renderIndexEntry name entry
+          + lib.optionalString (!uniformAudience && audiences ? ${name}) "  - Audience: ${audienceNames audiences.${name}}\n")
+        index)
       )
       ++ lib.mapAttrsToList (
-        name: body: "<!-- rule: ${name} -->\n\n${body}"
+        name: body:
+          "<!-- rule: ${name} -->\n\n"
+          + lib.optionalString (audiences ? ${name}) "Apply this rule only in: ${audienceNames audiences.${name}}.\n\n"
+          + body
       )
       rules
       ++ lib.optional (context != null && context != "") context;

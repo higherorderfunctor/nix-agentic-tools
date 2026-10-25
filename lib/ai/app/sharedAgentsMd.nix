@@ -41,7 +41,7 @@
         then builtins.head values
         else
           throw
-          "The option `${lib.showOption loc}` has divergent contributions; AGENTS.md units with the same key must be byte-identical";
+          "The option `${lib.showOption loc}` has divergent contributions; AGENTS.md units with the same key must have identical payloads";
     };
   deduplicatedLines = deduplicatingType {
     name = "deduplicated Markdown text";
@@ -51,8 +51,26 @@
     name = "null or deduplicated Markdown text";
     check = value: value == null || builtins.isString value;
   };
+  deduplicatedIndexEntry = deduplicatingType {
+    name = "deduplicated rule index entry";
+    check = value:
+      builtins.isAttrs value
+      && builtins.isString value.description
+      && builtins.elem value.inclusion ["auto" "fileMatch" "manual"]
+      && (value.matcher == null || (builtins.isList value.matcher && lib.all builtins.isString value.matcher))
+      && builtins.isList value.references
+      && lib.all builtins.isString value.references;
+  };
   fileType = lib.types.submodule {
     options = {
+      audiences = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+        default = {};
+        apply = lib.mapAttrs (_: names: lib.sort builtins.lessThan (lib.unique names));
+        internal = true;
+        visible = false;
+        description = "Contributing runtimes for each rule or index key; audience guidance is advisory, not file isolation.";
+      };
       context = lib.mkOption {
         type = deduplicatedNullableLines;
         default = null;
@@ -75,11 +93,11 @@
         description = "Whether the index includes a model-selected or manual trigger.";
       };
       index = lib.mkOption {
-        type = lib.types.attrsOf deduplicatedLines;
+        type = lib.types.attrsOf deduplicatedIndexEntry;
         default = {};
         internal = true;
         visible = false;
-        description = "Rendered path-scoped index entries keyed by stable rule identity.";
+        description = "Resolved rule index metadata keyed by stable rule identity.";
       };
       maxBytes = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.positive;
@@ -99,7 +117,7 @@
   };
   allRendered = lib.mapAttrs (_filename: value:
     agentsmd.renderKeyed {
-      inherit (value) context hasOnDemandIndex index rules;
+      inherit (value) audiences context hasOnDemandIndex index rules;
     })
   config.ai.internal.agentsMd;
   generatedRendered =

@@ -128,6 +128,73 @@
       fi
     '';
   in {
+    instructions-reviewer-policy = let
+      expected = [
+        "ai-config-scope"
+        "ai-module-contract"
+        "beads"
+        "facets"
+        "git"
+        "kiro-agents"
+        "kiro-settings"
+        "mcp-secrets"
+        "mcp-services"
+        "microvm"
+        "open-keys"
+        "packaging"
+      ];
+      copilotPaths = map (target: target.path) (harness.ownPlan "copilot" "files-apply" repo).targets;
+      localRuntimes = ["claude" "codex" "kimchi" "kiro"];
+      localRules = runtime: repo.config.ai.${runtime}.normalized.rules;
+      optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
+      fragmentOverride = runtime: rule: lib.setAttrByPath (optionPaths.pool runtime "rules" ++ ["packaging"]) rule;
+      shadowAllowed = overrides: let
+        evaluated = harness.evalDevenvModules [
+          (import ../../dev/ai.nix {isCI = true;})
+          overrides
+        ];
+      in
+        (lib.findFirst (assertion: lib.hasPrefix "dev/ai.nix:" assertion.message) (throw "missing fragment-shadow assertion") evaluated.config.assertions).assertion;
+      observation = {
+        reviewerRules = builtins.attrNames repo.config.ai.copilot.github.normalized.rules;
+        reviewerPaths = copilotPaths;
+        localFragments = lib.genAttrs localRuntimes (runtime:
+          lib.all (name: let
+            root = repo.config.ai.rules.${name};
+            local = (localRules runtime).${name};
+          in
+            local.text == root.text && local.matcher == root.matcher && local.references == root.references)
+          (builtins.attrNames repo.config.ai.rules));
+        localRouters = lib.genAttrs localRuntimes (runtime:
+          lib.all (name: builtins.hasAttr name (localRules runtime))
+          (["delegate-routing-router" "peer-communication-router" "stacked-workflows-router"] ++ lib.optional (runtime != "kimchi") "semble"));
+        disablesAllowed = shadowAllowed (lib.foldl' lib.recursiveUpdate {} (
+          map (runtime: fragmentOverride runtime {enable = false;}) (builtins.attrNames optionPaths.records)
+        ));
+        disabledReplacementRejected =
+          !(shadowAllowed (fragmentOverride "copilot" {
+            enable = false;
+            text = "Replacement fragment.";
+          }));
+        sourceReplacementRejected =
+          !(shadowAllowed (fragmentOverride "claude" {
+            enable = false;
+            source = ../../dev/ai.nix;
+          }));
+      };
+    in
+      (harness.mkTest "instructions-reviewer-policy" (
+        observation.reviewerRules
+        == expected
+        && copilotPaths == map (name: ".github/instructions/${name}.instructions.md") expected
+        && lib.all (value: value) (builtins.attrValues observation.localFragments)
+        && lib.all (value: value) (builtins.attrValues observation.localRouters)
+        && observation.disablesAllowed
+        && observation.disabledReplacementRejected
+        && observation.sourceReplacementRejected
+      ))
+      // {passthru = {inherit observation;};};
+
     instructions-drift = assert lib.assertMsg (instructionPlans repo == instructionPlans repoCI)
     "instructions-drift: dev/ai.nix writes different instruction files when isCI is set; the committed bytes must not depend on the environment.";
     assert lib.assertMsg (failedAssertions == [])

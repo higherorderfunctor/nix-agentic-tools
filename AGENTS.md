@@ -3,6 +3,11 @@
 Before editing a path that matches an entry below, read every document listed
 for it. When several entries match, their guidance composes.
 
+This fallback index applies only to: `codex`, `kimchi`. Runtimes with native
+rule injection already receive their applicable rules; do not follow this
+fallback index to load additional guidance. If your runtime is not named, skip
+this index.
+
 - **`ai-clis`**
   - Match:
     - `packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`
@@ -29,6 +34,29 @@ for it. When several entries match, their guidance composes.
     - `packages/*/modules/devenv/**`
   - Read:
     - [`dev/fragments/ai-config-scope/host-config-merge.md`](dev/fragments/ai-config-scope/host-config-merge.md)
+- **`ai-dir-helpers`**
+  - Match:
+    - `checks/ai-context/module-eval.nix`
+    - `checks/ai-factory/factory-eval.nix`
+    - `lib/ai/agent.nix`
+    - `lib/ai/ai-common.nix`
+    - `lib/ai/app/checkRecord.nix`
+    - `lib/ai/app/mkBackendTransform.nix`
+    - `lib/ai/app/mkRuntime.nix`
+    - `lib/ai/default.nix`
+    - `lib/ai/dir-helpers.nix`
+    - `lib/ai/sharedOptions.nix`
+    - `packages/chatgpt-codex/checks/module-eval.nix`
+    - `packages/chatgpt-codex/lib/mkCodex.nix`
+    - `packages/claude-code/checks/module-eval.nix`
+    - `packages/claude-code/lib/mkClaude.nix`
+    - `packages/copilot-cli/checks/module-eval.nix`
+    - `packages/kimchi/checks/module-eval.nix`
+    - `packages/kimchi/lib/mkKimchi.nix`
+    - `packages/kiro-cli/checks/module-eval.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+  - Read:
+    - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
 - **`ai-module`**
   - Match:
     - `checks/*/module-eval.nix`
@@ -62,12 +90,49 @@ for it. When several entries match, their guidance composes.
     - `packages/kiro-cli/modules/**`
     - `packages/semble/modules/common.nix`
   - Read:
-    - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
     - [`dev/fragments/ai-module/ai-module-fanout.md`](dev/fragments/ai-module/ai-module-fanout.md)
     - [`dev/fragments/ai-module/collision-semantics.md`](dev/fragments/ai-module/collision-semantics.md)
-    - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
     - [`dev/fragments/ai-module/layered-fanout.md`](dev/fragments/ai-module/layered-fanout.md)
     - [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
+- **`ai-module-contract`**
+  - Match:
+    - `.github/workflows/devenv-test.yml`
+    - `checks/*/module-eval.nix`
+    - `checks/module-provenance/**`
+    - `config/ai-delivery*.nix`
+    - `devenv.nix`
+    - `lib/ai/agent.nix`
+    - `lib/ai/ai-common.nix`
+    - `lib/ai/app/**`
+    - `lib/ai/default.nix`
+    - `lib/ai/hm-helpers.nix`
+    - `lib/ai/hooks.nix`
+    - `lib/ai/launcher.nix`
+    - `lib/ai/mkSkillPackageModule.nix`
+    - `lib/ai/program.nix`
+    - `lib/ai/runtimes.nix`
+    - `lib/ai/sharedOptions.nix`
+    - `lib/generated-guard.py`
+    - `lib/generated.nix`
+    - `lib/markdown/**`
+    - `lib/testing/module-harness.nix`
+    - `packages/*/checks/module-eval.nix`
+    - `packages/*/modules/devenv/**`
+    - `packages/*/modules/homeManager/**`
+    - `packages/ai-module/**`
+    - `packages/chatgpt-codex/lib/mkCodex.nix`
+    - `packages/chatgpt-codex/modules/**`
+    - `packages/claude-code/lib/mkClaude.nix`
+    - `packages/claude-code/modules/**`
+    - `packages/copilot-cli/lib/mkCopilot.nix`
+    - `packages/copilot-cli/modules/**`
+    - `packages/delegate-routing/modules/**`
+    - `packages/kimchi/lib/mkKimchi.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+    - `packages/kiro-cli/modules/**`
+    - `packages/semble/modules/common.nix`
+  - Read:
+    - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
 - **`ai-proxy`**
   - Match:
     - `checks/ai-proxy/**`
@@ -154,7 +219,6 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`dev/fragments/devenv/ci-lean-closure.md`](dev/fragments/devenv/ci-lean-closure.md)
     - [`dev/fragments/devenv/files-internals.md`](dev/fragments/devenv/files-internals.md)
-    - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
 - **`extracted`**
   - Match:
     - `checks/extracted/**`
@@ -233,7 +297,6 @@ for it. When several entries match, their guidance composes.
     - `packages/*/modules/homeManager/**`
   - Read:
     - [`dev/fragments/hm-modules/module-conventions.md`](dev/fragments/hm-modules/module-conventions.md)
-    - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
 - **`ifd`**
   - Match:
     - `.github/actions/warm-ifd/**`
@@ -488,6 +551,8 @@ for it. When several entries match, their guidance composes.
 
 <!-- rule: delegate-routing-router -->
 
+Apply this rule only in: `codex`, `kimchi`, `kiro`.
+
 # Delegate routing
 
 ### Architecture
@@ -624,6 +689,8 @@ written the way their communication rules ask, if they have any.
 
 <!-- rule: peer-communication-router -->
 
+Apply this rule only in: `codex`, `kimchi`, `kiro`.
+
 # Peer communication
 
 When you are talking with a person, load the peer-communication skill before
@@ -631,6 +698,8 @@ your first reply and follow it for every reply after. Skip it when your brief
 says you run non-interactively and report to an orchestrator.
 
 <!-- rule: semble -->
+
+Apply this rule only in: `codex`, `kiro`.
 
 Use `semble search` to discover code by behavior or meaning. Use exact text
 searches, filename searches, and direct reads when you know the identifier or
@@ -692,6 +761,8 @@ content selection.
    completeness matters.
 
 <!-- rule: stacked-workflows-router -->
+
+Apply this rule only in: `codex`, `kimchi`, `kiro`.
 
 <!-- Fragment: packages/stacked-workflows/fragments/skill-routing.md -->
 
@@ -1081,8 +1152,9 @@ runs an aggregate without its dependency leaves.
 
 ## Build & Validation Commands
 
-> **Last verified:** 2026-10-03 — generation includes devenv.yaml; lock
-> resolution remains an explicit network operation.
+> **Last verified:** 2026-10-25 — context measurements estimate Copilot tuning
+> costs; generation includes devenv.yaml; lock resolution remains an explicit
+> network operation.
 
 ```bash
 nix flake show                # List all outputs
@@ -1101,6 +1173,21 @@ devenv tasks run --mode before generate:all
 # After adding or changing a flake input, sync its devenv lock (may use network).
 devenv update <input>
 ```
+
+For context tuning, run `bash dev/scripts/measure-context.sh` for corpus totals
+or supply repository-relative paths, including deleted paths:
+
+```bash
+bash dev/scripts/measure-context.sh packages/chatgpt-codex/checks/module-eval.nix
+```
+
+The initial soft engineering target is **128 KiB for root AGENTS.md plus matched
+Copilot native instructions**, counting each file once: roughly 32K tokens at 4
+bytes/token, with sensitivity about 26K–44K at 5–3 bytes/token. This chosen
+target is neither a GitHub limit nor a pass/fail gate. Estimates exclude diff,
+system, organization, and retrieved content; path matching approximates native
+globs. Fallback child indexes are excluded from native instruction totals.
+Codex's separate 32 KiB project-document read window remains its own contract.
 
 <!-- Fragment: dev/fragments/monorepo/change-propagation.md -->
 

@@ -2089,7 +2089,13 @@ in {
       in
         (markdownInput hm ".codex/AGENTS.md").text
         == expected
-        && (markdownInput devenv "AGENTS.md").text == expected
+        && (markdownInput devenv "AGENTS.md").text
+        == builtins.concatStringsSep "\n\n" [
+          "<!-- rule: alpha -->\n\nApply this rule only in: `codex`.\n\nAlpha rule"
+          "<!-- rule: zeta -->\n\nApply this rule only in: `codex`.\n\nZeta rule"
+          "Shared context"
+          "Codex context"
+        ]
         && !(lib.hasInfix "---" expected)
     );
 
@@ -2146,7 +2152,8 @@ in {
       in
         (markdownInput hm ".codex/AGENTS.md").text
         == expected
-        && (markdownInput devenv "AGENTS.md").text == expected
+        && (markdownInput devenv "AGENTS.md").text
+        == "<!-- rule: scoped -->\n\nApply this rule only in: `codex`.\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule"
     );
 
     # A scoped rule that names the documents holding its text is listed, not
@@ -2194,7 +2201,23 @@ in {
       in
         (markdownInput hm ".codex/AGENTS.md").text
         == expected
-        && (markdownInput devenv "AGENTS.md").text == expected
+        && (markdownInput devenv "AGENTS.md").text
+        == builtins.concatStringsSep "\n\n" [
+          (
+            "## Path-scoped rules\n\n"
+            + "Before editing a path that matches an entry below, read every document listed\n"
+            + "for it. When several entries match, their guidance composes.\n\n"
+            + "This fallback index applies only to: `codex`.\n"
+            + "Runtimes with native rule injection already receive their applicable\n"
+            + "rules; do not follow this fallback index to load additional guidance.\n"
+            + "If your runtime is not named, skip this index.\n\n"
+            + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
+            + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
+            + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)\n"
+          )
+          "<!-- rule: always -->\n\nApply this rule only in: `codex`.\n\nAlways body"
+          "Shared context"
+        ]
         && !devenv.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex
         && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
         && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)

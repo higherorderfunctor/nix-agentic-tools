@@ -1,22 +1,23 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-23 — non-AI owners use the same layer-1 helper;
-> delivery facts derive delivered and absent cells, keyed withdrawal and
-> normalized gaps from option and runtime declarations; `poolOptions` covers
-> `agentsDir` and `environmentVariables` only; `optionNamespaces` places
-> launcher and pool options; the devenv file observer lives in ai-module and
-> reads the files plan; the shared AGENTS.md composer reaches the files plan as
-> the owner `internal`; Claude stages every surface, including HM `.claude.json`
-> as `rw`; the files engine writes its rules copies on devenv; staged Markdown
-> and raw entries are whole-content defaults; Kiro stages every surface, with
-> hooks, settings and steering legacy ledgers declared outside its enable gate;
-> Kimchi stages every surface, with every legacy ledger ungated; Codex stages
-> every surface and declares both copy ledgers while disabled; hand rows are
-> confined to the policy-only permissions surface; named CPA routing replaces
-> runtime proxy defaults; Claude's `native.installMethod` and
-> `native.unpinLaunchEffort` are declared for Home Manager only, so delivery
-> facts carry no supplement rows; backend lowering and validation live only in
-> ai-module.
+> **Last verified:** 2026-10-25 — shared AGENTS.md rule contributions retain
+> runtime audiences and structured index metadata; non-AI owners use the same
+> layer-1 helper; delivery facts derive delivered and absent cells, keyed
+> withdrawal and normalized gaps from option and runtime declarations;
+> `poolOptions` covers `agentsDir` and `environmentVariables` only;
+> `optionNamespaces` places launcher and pool options; the devenv file observer
+> lives in ai-module and reads the files plan; the shared AGENTS.md composer
+> reaches the files plan as the owner `internal`; Claude stages every surface,
+> including HM `.claude.json` as `rw`; the files engine writes its rules copies
+> on devenv; staged Markdown and raw entries are whole-content defaults; Kiro
+> stages every surface, with hooks, settings and steering legacy ledgers
+> declared outside its enable gate; Kimchi stages every surface, with every
+> legacy ledger ungated; Codex stages every surface and declares both copy
+> ledgers while disabled; hand rows are confined to the policy-only permissions
+> surface; named CPA routing replaces runtime proxy defaults; Claude's
+> `native.installMethod` and `native.unpinLaunchEffort` are declared for Home
+> Manager only, so delivery facts carry no supplement rows; backend lowering and
+> validation live only in ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -248,7 +249,11 @@ rather than a second path field: a runtime names exactly the groups it moves.
   route `auto` and `manual` only through a non-empty `references` index. In the
   shared devenv AGENTS.md, Codex and Kimchi contribute every resolved inline or
   indexed rule; Kiro contributes only rules resolved to `always`. The keyed
-  writer deduplicates byte-identical same-key contributions.
+  writer deduplicates identical same-key payloads and combines their sorted
+  runtime audiences. A runtime-local suppression removes that runtime from the
+  audience even when a sibling still contributes the rule. Audience prose is
+  advisory: it does not hide bytes from readers, and shared always-on context
+  remains shared.
 - **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
   for each supported pool and is public, writable with `mkForce`. Keyed pools
   have neutral `{}` option defaults and receive the root-to-runtime fold as
@@ -347,15 +352,23 @@ cells without policy edits.
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex and
   Kimchi every rule; Kiro only unscoped always-on rules), optional `index`
-  entries, an optional build-time `maxBytes`, and nothing else: the builder
-  reads those by name, so `checkRecord.nix` rejects a missing `key` or any other
-  field. The optional `hasOnDemandIndex` bit selects the general rule-index
-  heading from routed trigger data rather than rendered Markdown. Codex and
-  Kimchi list a scoped rule that names `references` as an index entry (its globs
-  plus links to those documents) and inline every other rule, a scoped one
-  behind a prose scope note. `agentsmd.renderKeyed` writes the general
-  `## Rule index` when that bit is set and `## Path-scoped rules` otherwise,
-  then the inlined rules and context. A file with many scoped rules stays under
+  entries (resolved inclusion, matcher, references and description), an optional
+  build-time `maxBytes`, and nothing else: the builder reads those by name, so
+  `checkRecord.nix` rejects a missing `key` or any other field. The optional
+  `hasOnDemandIndex` bit selects the general rule-index heading from routed
+  trigger data rather than rendered Markdown. Codex and Kimchi list a scoped
+  rule that names `references` as an index entry (its globs plus links to those
+  documents) and inline every other rule, a scoped one behind a prose scope
+  note. `agentsmd.renderKeyed` writes the general `## Rule index` when that bit
+  is set and `## Path-scoped rules` otherwise, then the inlined rules and
+  context. The builder supplies an audience map from each contributing runtime's
+  name; equal index/body payloads deduplicate while audiences combine, and
+  divergent payloads still fail. Index entries and inline bodies name their
+  intended runtimes. An index whose entries all share one audience names it once
+  above the entries; mixed audiences remain per-entry. The fallback index tells
+  runtimes with native rule injection to use that injected guidance instead of
+  following additional references. Standalone runtime documents omit these
+  shared-target audience notes. A file with many scoped rules stays under
   Codex's document limit, and a long context that does not (read at the 32 KiB
   default because the raised limit is absent or untrusted) loses only its own
   tail. The builder adds the merged context and publishes it on devenv. A limit
@@ -380,6 +393,15 @@ cells without policy edits.
   `packages/ai-module/lib/files/default.nix`, `lib/files/backend.nix` and
   `lib/lower-{hm,devenv}.nix` under that owner; the runtime factory renders and
   stages entries without writing native sinks.
+
+The shared-target audience notes are routing instructions, not access controls:
+every reader still receives the same bytes. GitHub's
+[custom-instructions support table](https://docs.github.com/en/copilot/reference/custom-instructions-support)
+lists both path-specific instructions and AGENTS.md for code review; its
+[repository instructions guide](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions)
+documents automatic use by default (verified 2026-10-25). A reader with native
+rules must not treat the shared fallback index as permission to reload rules its
+own configuration omitted.
 
 ### Adding a new concern X
 
