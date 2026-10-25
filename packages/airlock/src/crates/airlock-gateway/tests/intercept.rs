@@ -161,6 +161,369 @@ async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
     server.stop().await;
 }
 
+fn quota_mode(
+    status: hyper::StatusCode,
+    headers: &[(&'static str, &'static str)],
+    body: &'static [u8],
+) -> UpstreamMode {
+    UpstreamMode::Quota(Arc::new(support::QuotaFixture {
+        body,
+        headers: headers.to_vec(),
+        release_body: None,
+        status,
+    }))
+}
+
+#[tokio::test]
+async fn primary_quota_headers_replace_zai_identity_and_stream_usage_stays_honest() {
+    const PRIMARY_BODY: &[u8] = br#"{"usage":{"output_tokens":3}}"#;
+    const ZAI_BODY: &[u8] =
+        b"event: message\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\n";
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[
+                ("anthropic-ratelimit-unified-5h-utilization", "0.42"),
+                ("anthropic-ratelimit-unified-status", "allowed"),
+                ("x-primary-ordinary", "kept"),
+            ],
+            PRIMARY_BODY,
+        ),
+    )
+    .await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[
+                ("anthropic-ratelimit-unified-5h-utilization", "0.9"),
+                ("anthropic-ratelimit-unified-status", "rejected"),
+                ("x-zai-ordinary", "kept"),
+            ],
+            ZAI_BODY,
+        ),
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+
+    let primary_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(primary_response.status(), hyper::StatusCode::OK);
+    assert_eq!(
+        primary_response.headers()["anthropic-ratelimit-unified-status"],
+        "allowed"
+    );
+    assert_eq!(primary_response.headers()["x-primary-ordinary"], "kept");
+    assert_eq!(
+        &primary_response
+            .into_body()
+            .collect()
+            .await
+            .expect("primary body")
+            .to_bytes()[..],
+        PRIMARY_BODY
+    );
+
+    let zai_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7","stream":true}"#),
+        ))
+        .await;
+    assert_eq!(zai_response.status(), hyper::StatusCode::OK);
+    assert_eq!(
+        zai_response.headers()["anthropic-ratelimit-unified-5h-utilization"],
+        "0.42"
+    );
+    assert_eq!(
+        zai_response.headers()["anthropic-ratelimit-unified-status"],
+        "allowed"
+    );
+    assert_eq!(zai_response.headers()["x-zai-ordinary"], "kept");
+    assert!(zai_response.headers().get("retry-after").is_none());
+    let zai_usage = zai_response
+        .into_body()
+        .collect()
+        .await
+        .expect("z.ai stream")
+        .to_bytes();
+    assert!(
+        std::str::from_utf8(&zai_usage)
+            .expect("UTF-8 stream")
+            .contains(r#""output_tokens":7"#)
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn substituted_quota_headers_arrive_before_zai_body_completes() {
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[("anthropic-ratelimit-unified-status", "allowed")],
+            b"primary",
+        ),
+    )
+    .await;
+    let release_body = Arc::new(tokio::sync::Notify::new());
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::Quota(Arc::new(support::QuotaFixture {
+            body: b"zai body",
+            headers: vec![("anthropic-ratelimit-unified-status", "rejected")],
+            release_body: Some(release_body.clone()),
+            status: hyper::StatusCode::OK,
+        })),
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let primary_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5"}"#),
+        ))
+        .await;
+    primary_response
+        .into_body()
+        .collect()
+        .await
+        .expect("primary body");
+
+    let response = timeout(
+        Duration::from_secs(2),
+        client.send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7"}"#),
+        )),
+    )
+    .await
+    .expect("headers before gated body");
+    assert_eq!(
+        response.headers()["anthropic-ratelimit-unified-status"],
+        "allowed"
+    );
+    release_body.notify_one();
+    assert_eq!(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("released body")
+            .to_bytes()[..],
+        b"zai body"
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn cold_cache_omits_zai_quota_identity_without_changing_response() {
+    const BODY: &[u8] = br#"{"usage":{"output_tokens":7}}"#;
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[
+                ("anthropic-ratelimit-unified-status", "rejected"),
+                ("retry-after", "9"),
+                ("x-zai-ordinary", "kept"),
+            ],
+            BODY,
+        ),
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    assert!(
+        response
+            .headers()
+            .keys()
+            .all(|name| !name.as_str().starts_with("anthropic-ratelimit-"))
+    );
+    assert_eq!(response.headers()["retry-after"], "9");
+    assert_eq!(response.headers()["x-zai-ordinary"], "kept");
+    assert_eq!(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("z.ai body")
+            .to_bytes()[..],
+        BODY
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn zai_429_keeps_its_retry_and_quota_headers() {
+    const ZAI_BODY: &[u8] = br#"{"type":"error","error":{"type":"rate_limit_error"}}"#;
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[("anthropic-ratelimit-unified-status", "allowed")],
+            br#"{"usage":{"output_tokens":3}}"#,
+        ),
+    )
+    .await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::TOO_MANY_REQUESTS,
+            &[
+                ("anthropic-ratelimit-unified-status", "rejected"),
+                ("retry-after", "9"),
+                ("x-zai-ordinary", "kept"),
+            ],
+            ZAI_BODY,
+        ),
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let primary_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5"}"#),
+        ))
+        .await;
+    assert_eq!(primary_response.status(), hyper::StatusCode::OK);
+    let _ = primary_response
+        .into_body()
+        .collect()
+        .await
+        .expect("primary body");
+
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        response.headers()["anthropic-ratelimit-unified-status"],
+        "rejected"
+    );
+    assert_eq!(response.headers()["retry-after"], "9");
+    assert_eq!(response.headers()["x-zai-ordinary"], "kept");
+    assert_eq!(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("z.ai error body")
+            .to_bytes()[..],
+        ZAI_BODY
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn primary_429_retry_after_does_not_leak_into_later_zai_success() {
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::TOO_MANY_REQUESTS,
+            &[
+                ("anthropic-ratelimit-unified-status", "limited"),
+                ("retry-after", "30"),
+            ],
+            b"primary limited",
+        ),
+    )
+    .await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        quota_mode(
+            hyper::StatusCode::OK,
+            &[("anthropic-ratelimit-unified-status", "allowed")],
+            b"zai success",
+        ),
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let primary_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5"}"#),
+        ))
+        .await;
+    assert_eq!(
+        primary_response.status(),
+        hyper::StatusCode::TOO_MANY_REQUESTS
+    );
+    assert_eq!(primary_response.headers()["retry-after"], "30");
+    primary_response
+        .into_body()
+        .collect()
+        .await
+        .expect("primary body");
+
+    let zai_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7"}"#),
+        ))
+        .await;
+    assert_eq!(zai_response.status(), hyper::StatusCode::OK);
+    assert_eq!(
+        zai_response.headers()["anthropic-ratelimit-unified-status"],
+        "limited"
+    );
+    assert!(zai_response.headers().get("retry-after").is_none());
+    zai_response.into_body().collect().await.expect("z.ai body");
+    server.stop().await;
+}
+
 #[tokio::test]
 async fn toolsearch_request_and_json_response_are_scoped_to_zai() {
     const BODY: &[u8] = br#"{"model":"glm-4.7","tools":[{"name":"ToolSearch"},{"name":"lookup"}],"tool_choice":{"type":"tool","name":"ToolSearch"},"messages":[{"content":[{"type":"tool_use","name":"ToolSearch","input":{"text":"ToolSearch"}},{"type":"tool_reference","tool_name":"ToolSearch"},{"type":"tool_result","content":[{"type":"tool_reference","tool_name":"ToolSearch"}]}]}]}"#;
