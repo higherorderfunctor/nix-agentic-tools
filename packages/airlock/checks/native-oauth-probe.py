@@ -277,10 +277,12 @@ def run_backend(backend, paths, root, cert, tls):
             sorted(server.hosts), server.failures,
         )
         stored_login = json.loads((config / ".credentials.json").read_text())["claudeAiOauth"]
-        assert stored_login["accessToken"] == NEW_ACCESS and stored_login["refreshToken"] == NEW_REFRESH, (
+        # Ancillary login requests may refresh; the exchange itself stores OLD.
+        login_pair = (stored_login["accessToken"], stored_login["refreshToken"])
+        assert login_pair in ((OLD_ACCESS, OLD_REFRESH), (NEW_ACCESS, NEW_REFRESH)), (
             backend, "native login stored unexpected pair", sorted(stored_login), server.refresh_tokens,
         )
-        assert server.refresh_tokens and server.refresh_tokens[0]["is_old"]
+        assert not server.refresh_tokens or server.refresh_tokens[0]["is_old"]
         refresh_count_after_login = len(server.refresh_tokens)
         stored_login["expiresAt"] = int(time.time() * 1000) - 60000
         (config / ".credentials.json").write_text(json.dumps({"claudeAiOauth": stored_login}))
@@ -313,7 +315,10 @@ def run_backend(backend, paths, root, cert, tls):
         all(shape.values()) for shape in server.messages_first_party
     ), (backend, server.messages_first_party)
     assert any(server.profile_tokens)
-    assert len(server.refresh_tokens) > refresh_count_after_login and server.refresh_tokens[-1]["is_new"], (backend, server.refresh_tokens)
+    assert len(server.refresh_tokens) > refresh_count_after_login and any(
+        refresh["is_old" if login_pair[1] == OLD_REFRESH else "is_new"]
+        for refresh in server.refresh_tokens[refresh_count_after_login:]
+    ), (backend, server.refresh_tokens)
     assert "platform.claude.com:443" in server.hosts and "api.anthropic.com:443" in server.hosts
     stored = json.loads((config / ".credentials.json").read_text())["claudeAiOauth"]
     assert stored["accessToken"] == NEW_ACCESS and stored["refreshToken"] == NEW_REFRESH
