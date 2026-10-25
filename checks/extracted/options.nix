@@ -454,7 +454,8 @@
     lib.nameValuePair "${owner}-report-is-empty" (lib.all (list: list == []) (builtins.attrValues exported.report)))
   owners;
 
-  failures = builtins.attrNames (lib.filterAttrs (_: passed: !passed) (fixtures // ownerCases));
+  untypedCases = import ./untyped-settings.nix {inherit lib self;};
+  failures = builtins.attrNames (lib.filterAttrs (_: passed: !passed) (fixtures // ownerCases // untypedCases));
 in {
   checks.extracted-options = harness.mkTest "extracted-options" (
     assert lib.assertMsg (failures == [] && ownerCases != {}) "extracted-options: FAILED ${builtins.toJSON failures}"; true
