@@ -55,12 +55,21 @@
       // lib.optionalAttrs airlock {CLAUDE_CODE_OAUTH_TOKEN = "airlock-fake-oauth-token-not-a-credential";};
   };
 
-  # One row per model of each routed upstream credential, in route order. Claude
-  # labels a row with its model id when it has no label.
-  pickerRows = resolvedProxy:
+  # One row per authorized model comes from the resolved proxy contract. CPA
+  # preserves route order; airlock's resolver sorts its declared IDs.
+  pickerRows = resolvedProxy: let
+    owner =
+      if resolvedProxy == null
+      then "cliproxyapi"
+      else resolvedProxy.owner or "cliproxyapi";
+  in
     lib.concatMap (credential:
       map (model: {
-        description = "${credential.name} through CLIProxyAPI";
+        description = "${credential.name} through ${
+          if owner == "airlock"
+          then "airlock"
+          else "CLIProxyAPI"
+        }";
         inherit model;
       })
       credential.models)

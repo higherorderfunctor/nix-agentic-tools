@@ -100,6 +100,21 @@
         ).${
           selection.clientKey
         } or null;
+    # Claude preserves api.anthropic.com through CONNECT, and Rust selects the
+    # group by that host. The picker uses that same host-scoped declaration.
+    airlockCredentials = lib.concatMap (groupId: let
+      group = instance.settings.groups.${groupId};
+    in
+      if
+        builtins.elem groupId client.grants
+        && group.protocol == "anthropic"
+        && builtins.elem "api.anthropic.com" group.intercept
+      then
+        map (credential: {
+          name = credential;
+          models = lib.sort (a: b: a < b) group.members.${credential}.models or [];
+        }) (lib.attrNames group.members)
+      else []) (lib.attrNames instance.settings.groups);
   in
     if !isSelected selection
     then null
@@ -117,7 +132,7 @@
       client = selection.clientKey;
       inherit (selection) instance;
       inherit (instance) port;
-      credentials = [];
+      credentials = airlockCredentials;
     }
     else {
       inherit (client) key;
@@ -150,7 +165,7 @@ in {
           };
         });
         default = [];
-        description = "Named upstream credentials in client route order, with declared API-key models.";
+        description = "Authorized upstream credentials and their selectable model IDs, in the owner's delivery order.";
       };
       client = mkOption {
         type = types.nullOr types.str;

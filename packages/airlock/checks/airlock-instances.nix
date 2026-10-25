@@ -21,7 +21,7 @@
     stateDir = "/srv/airlock/main";
     settings = {
       clients.harness = {
-        grants = ["anthropic"];
+        grants = ["anthropic" "other-anthropic"];
         token = harnessToken;
       };
       credentials = {
@@ -32,6 +32,13 @@
           };
           provider = "claude";
         };
+        other = {
+          auth = {
+            file = zaiKey;
+            type = "api_key";
+          };
+          provider = "zai";
+        };
         zai = {
           auth = {
             file = zaiKey;
@@ -40,14 +47,37 @@
           provider = "zai";
         };
       };
-      groups.anthropic = {
-        intercept = ["api.anthropic.com"];
-        members = {
-          claude.models = [];
-          zai.models = ["glm-4.7"];
+      groups = {
+        anthropic = {
+          intercept = ["api.anthropic.com"];
+          members = {
+            claude.models = ["claude-declared"];
+            zai.models = ["glm-4.7"];
+          };
+          primary = "claude";
+          protocol = "anthropic";
         };
-        primary = "claude";
-        protocol = "anthropic";
+        # Both Anthropic groups are granted, but only the first owns Claude's
+        # CONNECT host. Its repeated ID must not duplicate the picker row.
+        other-anthropic = {
+          intercept = ["other.invalid"];
+          members.other.models = ["claude-declared" "other-only"];
+          primary = "other";
+          protocol = "anthropic";
+        };
+        # Neither group below is granted.
+        openai = {
+          intercept = ["openai.invalid"];
+          members.zai.models = ["gpt-ungranted"];
+          primary = "zai";
+          protocol = "openai";
+        };
+        ungranted = {
+          intercept = ["ungranted.invalid"];
+          members.zai.models = ["glm-ungranted"];
+          primary = "zai";
+          protocol = "anthropic";
+        };
       };
       providers = {
         claude.preset = "claude";
@@ -121,6 +151,7 @@ in {
           == {
             AIRLOCK_CLIENTS_HARNESS_TOKEN_FILE = asFile harnessToken;
             AIRLOCK_CREDENTIALS_CLAUDE_AUTH_FILE = asFile claudeToken;
+            AIRLOCK_CREDENTIALS_OTHER_AUTH_FILE = asFile zaiKey;
             AIRLOCK_CREDENTIALS_ZAI_AUTH_FILE = asFile zaiKey;
           }
           && (builtins.fromJSON file.content).state_dir == sample.stateDir
@@ -206,6 +237,14 @@ in {
             };
           };
           partial = evaluate backend {claude.proxy.clientKey = "harness";};
+          pickerConflict = evaluate backend {
+            claude = {
+              enable = true;
+              proxy = selection;
+              jail.enable = true;
+              native.settings.modelPicker.options = [{model = "consumer-model";}];
+            };
+          };
           configuredProxy = evaluate backend {
             claude = {
               enable = true;
@@ -310,6 +349,48 @@ in {
           && settings.env.ANTHROPIC_BASE_URL == ""
           && settings.env.CLAUDE_CODE_OAUTH_TOKEN == "airlock-fake-oauth-token-not-a-credential"
           && settings.apiKeyHelper == ""
+          && selected.config.ai.claude.normalized.proxy.credentials
+          == [
+            {
+              models = ["claude-declared"];
+              name = "claude";
+            }
+            {
+              models = ["glm-4.7"];
+              name = "zai";
+            }
+          ]
+          && (
+            if backend == "hm"
+            then
+              (claudeSettings selected).modelPicker.options
+              == [
+                {
+                  description = "claude through airlock";
+                  model = "claude-declared";
+                }
+                {
+                  description = "zai through airlock";
+                  model = "glm-4.7";
+                }
+              ]
+              && (claudeSettings pickerConflict).modelPicker.options
+              == [
+                {model = "consumer-model";}
+                {
+                  description = "claude through airlock";
+                  model = "claude-declared";
+                }
+                {
+                  description = "zai through airlock";
+                  model = "glm-4.7";
+                }
+              ]
+            else
+              !(settings ? modelPicker)
+              && (claudeSettings pickerConflict).modelPicker.options
+              == [{model = "consumer-model";}]
+          )
           && lib.hasInfix "claude-jail" (toString (builtins.head (selected.config.home.packages or selected.config.packages)))
           && failures selected == []
           && builtins.any (lib.hasInfix "enable ai.claude.jail") (failures noJail)

@@ -2,8 +2,9 @@
 
 > **Last verified:** 2026-10-25 — Anthropic groups route by model; the z.ai
 > preset aliases `ToolSearch` in requests and restores it in JSON and SSE
-> responses. Primary quota headers replace non-primary display headers. OpenAI
-> and managed OAuth remain gated.
+> responses. Primary quota headers replace non-primary display headers.
+> Model-list requests stay on the primary; picker credentials follow Claude's
+> CONNECT host. OpenAI and managed OAuth remain gated.
 
 ## Scope
 
@@ -106,12 +107,12 @@ environment and config, not out of its reach.
 `airlock-<name>` running `airlock serve --config "$AIRLOCK_CONFIG"`; its port
 and service name are claimed by the helper.
 
-`settings` mirrors Rust's `RawConfig`. The render renames only `stateDir` →
+`settings` mirrors Rust's `RawConfig`: the render renames `stateDir` →
 `state_dir`, `unknownHosts` → `unknown_hosts`, and client `token` →
-`token_file`; it omits null `preset` and managed-OAuth `file`. Rust checks IDs,
-references, URLs, protocol membership, primary and model ownership for both
-direct JSON and Nix output. `airlock-config-roundtrip` passes a rendered sample
-to `check-config`; raw structs deny unknown fields.
+`token_file`, while omitting null `preset` and managed-OAuth `file`. Rust checks
+IDs, references, URLs, protocols, primary and model ownership for direct JSON
+and Nix output; `airlock-config-roundtrip` passes a rendered sample to
+`check-config`, and raw structs deny unknown fields.
 
 `providers.<id>` holds a `claude` or `zai` preset plus optional protocol-keyed
 endpoint overrides. Rust expands the preset once: Claude Anthropic resolves to
@@ -141,10 +142,13 @@ config-only and non-Linux surfaces warn and get no launcher.
 At launch the harness reads its client's `token_file` from the service-rendered
 config, exports a percent-encoded `HTTPS_PROXY`, and clears every other proxy
 variable. It holds a fake OAuth token, and its route overlay blanks the CPA base
-URL and `apiKeyHelper`. Only the managed settings scope loads (user on Home
-Manager, project on devenv), so no other scope can override the route; managed
-admin policy is outside this contract. The jail gets system roots plus the
-current `ca.pem` as one read-only bundle over
+URL and `apiKeyHelper`. Picker IDs come only from the selected client's granted
+Anthropic group intercepting `api.anthropic.com`, including explicit primary
+declarations. Home Manager writes those rows to user settings, while devenv
+passes them in its `--settings` overlay. Only the managed settings scope loads
+(user on Home Manager, project on devenv), so no other scope can override the
+route; managed admin policy is outside this contract. The jail gets system roots
+plus the current `ca.pem` as one read-only bundle over
 `/etc/ssl/certs/ca-certificates.crt` through an unlinked descriptor, rebuilt per
 launch. A missing token, config, roots or CA fails the launch: no wait, no CPA
 or direct fallback.
@@ -152,9 +156,8 @@ or direct fallback.
 ## Settled — do not relitigate
 
 - **A unix socket with Claude Code's `ANTHROPIC_UNIX_SOCKET` placeholder mode is
-  not the main path.** The socket path under `$XDG_RUNTIME_DIR` is unknown at
-  evaluation, and the mode serves only Claude Code; CONNECT serves every client
-  that honours `HTTPS_PROXY`.
+  not the main path.** Its runtime path is unknown at evaluation and it serves
+  only Claude; CONNECT serves every client honouring `HTTPS_PROXY`.
 - **Base-URL mode is not the main path.** Claude Code drops `cch` behind
   `ANTHROPIC_BASE_URL`, so a subscription request would have to be forged.
 - **No Postgres for now.** Home Manager has no user-level Postgres module, so it

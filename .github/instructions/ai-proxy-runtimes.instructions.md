@@ -7,19 +7,18 @@ applyTo: "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix,packages/chatgpt
 
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-24 — Claude's airlock route reads its
+> **Last verified:** 2026-10-25 — Claude's airlock route reads its
 > service-delivered client token at launch, prepares current CA trust before one
 > jail, pins Home Manager's config directory, and limits settings sources to its
 > managed scope. CPA Claude uses `redact.assign` and the shared reader through
 > `apiKeyHelper` for file, command and concat references, and clears inherited
 > API keys, bearer tokens, custom headers and Bedrock/Vertex/Foundry switches in
 > settings, and suppresses the inherited API-key descriptor before Claude
-> starts. Codex uses command-backed provider auth. Named client routes supply
-> Claude `/model` picker rows (listed and selectable for a non-Anthropic id in
-> 2.1.306, read from the bundle); Codex discovers CPA models without
-> per-credential profiles. Both use the shared client-key helper. Kimchi, Kiro
-> and Copilot omit `proxy` from `surfaceSupport` and warn through the generated
-> warning cases.
+> starts. Codex uses command-backed provider auth. Resolved credentials supply
+> owner-labelled Claude `/model` rows on both backends; airlock includes only
+> the granted `api.anthropic.com` group. Codex discovers CPA models without
+> per-credential profiles. Kimchi, Kiro and Copilot omit `proxy` support and
+> warn.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -89,17 +88,18 @@ already writes (user on Home Manager, project on devenv). The proxy leaves are
 at ordinary priority, so a consumer's own value for one is a definition
 conflict.
 
-Each declared API-key model of each routed upstream credential
-(`normalized.proxy.credentials`) becomes one `modelPicker.options` row,
-`{model; description = "<credential> through CLIProxyAPI";}`, labelled with its
-id. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker builder
-returns the built-in lineup plus each new row unless that flag is `=== true`,
-and its schema says unset adds the rows after the built-ins. The same schema
-says `modelPicker` is honored only from managed, `--settings`/SDK and user
-settings, never a project checkout. So Home Manager writes the rows to user
-settings, where a consumer's own rows concatenate, and devenv's launcher adds
-`--settings <store file>` holding only `modelPicker`. Since the highest scope
-that defines `modelPicker` wins outright, that devenv session shows the
+Each model of each resolved upstream credential (`normalized.proxy.credentials`)
+becomes one `modelPicker.options` row,
+`{model; description = "<credential> through <owner>";}`, where the owner is
+CLIProxyAPI or airlock. Airlock supplies only the granted group intercepting
+`api.anthropic.com`. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's
+picker builder returns the built-in lineup plus each new row unless that flag is
+`=== true`, and its schema says unset adds the rows after the built-ins. The
+same schema says `modelPicker` is honored only from managed, `--settings`/SDK
+and user settings, never a project checkout. So Home Manager writes the rows to
+user settings, where a consumer's own rows concatenate, and devenv's launcher
+adds `--settings <store file>` holding only `modelPicker`. Since the highest
+scope that defines `modelPicker` wins outright, that devenv session shows the
 credential rows instead of any user picker rows.
 
 A row for a non-Anthropic id such as `glm-5.3` is listed and selectable in

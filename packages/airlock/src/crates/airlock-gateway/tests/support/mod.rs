@@ -545,6 +545,7 @@ pub struct RequestRecord {
     pub headers: HeaderMap,
     pub method: Method,
     pub path: String,
+    pub query: Option<String>,
 }
 
 pub struct StallGates {
@@ -578,6 +579,7 @@ pub enum UpstreamMode {
     HashUpload,
     Metadata,
     Quota(Arc<QuotaFixture>),
+    Models,
     Sse(Arc<Notify>),
     ToolSearchSse {
         release: Arc<Notify>,
@@ -682,9 +684,36 @@ fn quota_response(fixture: &QuotaFixture) -> Response<ReceiverBody> {
     builder.body(body).expect("quota response")
 }
 
+fn model_list_response(path: &str, query: Option<&str>) -> Response<ReceiverBody> {
+    let path_query = format!("{path}?{}", query.unwrap_or_default());
+    let (status, body): (StatusCode, &'static [u8]) = if path_query.contains("fail=") {
+        (
+            StatusCode::from_u16(529).expect("Anthropic overloaded status"),
+            br#"{"type":"error","error":{"type":"overloaded_error","message":"fake upstream busy"}}"#,
+        )
+    } else if path_query.contains("after=claude-a") {
+        (
+            StatusCode::OK,
+            br#"{"data":[{"id":"claude-b"}],"first_id":"claude-a","has_more":false,"last_id":"claude-b"}"#,
+        )
+    } else {
+        (
+            StatusCode::OK,
+            br#"{"data":[{"id":"claude-a"}],"first_id":null,"has_more":true,"last_id":"claude-a"}"#,
+        )
+    };
+    Response::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .header("anthropic-version", "fake-pagination")
+        .body(queued_body(Bytes::from_static(body)))
+        .expect("model-list response")
+}
+
 async fn upstream_response(
     mode: UpstreamMode,
     path: &str,
+    query: Option<&str>,
     body: Bytes,
     body_hash: u64,
 ) -> Response<ReceiverBody> {
@@ -738,6 +767,7 @@ async fn upstream_response(
             .body(queued_body(Bytes::from_static(b"quota")))
             .expect("metadata response"),
         UpstreamMode::Quota(fixture) => quota_response(&fixture),
+        UpstreamMode::Models => model_list_response(path, query),
         UpstreamMode::Sse(release) => {
             let (sender, receiver) = mpsc::channel(2);
             tokio::spawn(async move {
@@ -859,6 +889,7 @@ pub fn records(upstream: &HttpUpstream) -> Vec<RequestRecord> {
             headers: record.headers.clone(),
             method: record.method.clone(),
             path: record.path.clone(),
+            query: record.query.clone(),
         })
         .collect()
 }
@@ -893,6 +924,7 @@ pub async fn http_upstream(
                 let authority = request.uri().authority().map(ToString::to_string);
                 let method = request.method().clone();
                 let path = request.uri().path().to_owned();
+                let query = request.uri().query().map(ToOwned::to_owned);
                 let headers = request.headers().clone();
                 let body = request.into_body();
                 let (body, body_hash, body_len) = request_body(&mode, body).await;
@@ -904,9 +936,11 @@ pub async fn http_upstream(
                     headers,
                     method,
                     path: path.clone(),
+                    query: query.clone(),
                 });
 
-                let response = upstream_response(mode, path.as_str(), body, body_hash).await;
+                let response =
+                    upstream_response(mode, path.as_str(), query.as_deref(), body, body_hash).await;
                 Ok::<_, std::convert::Infallible>(response)
             }
         });

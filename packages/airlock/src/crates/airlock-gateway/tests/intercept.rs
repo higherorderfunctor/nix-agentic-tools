@@ -141,6 +141,10 @@ async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
     assert_eq!(primary_requests.len(), 3);
     assert_eq!(zai_requests.len(), 1);
     assert_eq!(zai_requests[0].path, "/api/anthropic/v1/messages");
+    assert_eq!(
+        std::str::from_utf8(&zai_requests[0].body).expect("UTF-8"),
+        r#"{"messages":[],"model":"glm-4.7"}"#
+    );
     assert_eq!(zai_requests[0].headers["x-api-key"], "fake-REAL-zai");
     assert_eq!(zai_requests[0].headers["accept-encoding"], "gzip");
     assert!(zai_requests[0].headers.get(AUTHORIZATION).is_none());
@@ -521,6 +525,84 @@ async fn primary_429_retry_after_does_not_leak_into_later_zai_success() {
     );
     assert!(zai_response.headers().get("retry-after").is_none());
     zai_response.into_body().collect().await.expect("z.ai body");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn model_list_pagination_and_errors_stay_on_primary() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Models).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+
+    let expected = [
+        (
+            "/v1/models?limit=1",
+            br#"{"data":[{"id":"claude-a"}],"first_id":null,"has_more":true,"last_id":"claude-a"}"#.as_slice(),
+        ),
+        (
+            "/v1/models?after=claude-a&limit=1",
+            br#"{"data":[{"id":"claude-b"}],"first_id":"claude-a","has_more":false,"last_id":"claude-b"}"#.as_slice(),
+        ),
+    ];
+    for (target, body) in expected {
+        let response = client
+            .send(request("GET", target, &[], full_body(b"")))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        assert_eq!(response.headers()["anthropic-version"], "fake-pagination");
+        assert_eq!(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .expect("model-list body")
+                .to_bytes()[..],
+            body
+        );
+    }
+    let error = client
+        .send(request("GET", "/v1/models?fail=1", &[], full_body(b"")))
+        .await;
+    assert_eq!(
+        error.status(),
+        hyper::StatusCode::from_u16(529).expect("status")
+    );
+    assert_eq!(
+        &error
+            .into_body()
+            .collect()
+            .await
+            .expect("model-list error")
+            .to_bytes()[..],
+        br#"{"type":"error","error":{"type":"overloaded_error","message":"fake upstream busy"}}"#
+    );
+
+    let received = records(&primary);
+    assert_eq!(received.len(), 3);
+    assert!(received.iter().all(|record| record.method == "GET"));
+    assert_eq!(
+        received
+            .iter()
+            .map(|record| format!(
+                "{}?{}",
+                record.path,
+                record.query.as_deref().unwrap_or_default()
+            ))
+            .collect::<Vec<_>>(),
+        [
+            "/v1/models?limit=1",
+            "/v1/models?after=claude-a&limit=1",
+            "/v1/models?fail=1"
+        ]
+    );
+    assert!(
+        received
+            .iter()
+            .all(|record| record.headers[AUTHORIZATION] == format!("Bearer {REAL_OAUTH_TOKEN}"))
+    );
+    assert!(records(&zai).is_empty());
     server.stop().await;
 }
 
