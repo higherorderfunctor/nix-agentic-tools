@@ -168,5 +168,5 @@ or direct fallback.
 - **Base-URL mode is not the main path.** Claude Code drops `cch` behind
   `ANTHROPIC_BASE_URL`, so a subscription request would have to be forged.
 - **No Postgres for now.** Home Manager has no user-level Postgres module, so it
-  would break Home Manager and devenv parity. Storage, when it lands, is SQLite
-  in `stateDir` behind a trait.
+  would break Home Manager and devenv parity. The SQLite state contract lives in
+  `docs/storage.md`.

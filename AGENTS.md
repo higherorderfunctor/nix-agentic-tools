@@ -109,6 +109,11 @@ for it. When several entries match, their guidance composes.
     - `packages/airlock/**`
   - Read:
     - [`packages/airlock/docs/airlock.md`](packages/airlock/docs/airlock.md)
+- **`airlock-storage`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`packages/airlock/docs/storage.md`](packages/airlock/docs/storage.md)
 - **`beads`**
   - Match:
     - `packages/beads/**`

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO groups (id, inserted_at_unix) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "bda5f9976b69bd2bf2f6eb01fa0dddf91d7316ad6dbccaf522093ca0a1b6a39a"
+}

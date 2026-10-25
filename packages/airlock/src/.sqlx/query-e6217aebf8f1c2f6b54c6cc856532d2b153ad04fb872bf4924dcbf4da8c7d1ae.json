@@ -1,0 +1,18 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT provider_id FROM credentials WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "provider_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [false]
+  },
+  "hash": "e6217aebf8f1c2f6b54c6cc856532d2b153ad04fb872bf4924dcbf4da8c7d1ae"
+}

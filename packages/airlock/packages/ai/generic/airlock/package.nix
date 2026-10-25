@@ -17,12 +17,15 @@ in
     src = lib.fileset.toSource {
       inherit root;
       fileset = lib.fileset.unions [
+        (root + "/.sqlx")
         (root + "/Cargo.lock")
         (root + "/Cargo.toml")
         (root + "/crates")
       ];
     };
     cargoLock.lockFile = root + "/Cargo.lock";
+
+    SQLX_OFFLINE = "true";
 
     passthru.updateTargetExempt = "built from the in-repo workspace; its Cargo.toml version has no upstream release";
 

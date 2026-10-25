@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO credit_pools\n              (snapshot_id, ordinal, label, used_minor_units, remaining_minor_units,\n               limit_minor_units, reset_at_unix)\n            VALUES (?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "458f164aeb31211fa4a8b3fae7eee82427cb7622f87cb53e280e7e311fb29387"
+}

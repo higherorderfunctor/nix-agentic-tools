@@ -1,0 +1,104 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT credential_id, model_id, outcome, COUNT(*) AS \"events!: i64\",\n                   SUM(request_bytes) AS \"request_bytes!: i64\",\n                   SUM(response_bytes) AS \"response_bytes!: i64\",\n                   SUM(latency_ms) AS \"latency_ms!: i64\",\n                   SUM(input_tokens) AS \"input_tokens?: i64\",\n                   SUM(output_tokens) AS \"output_tokens?: i64\",\n                   SUM(cache_read_tokens) AS \"cache_read_tokens?: i64\",\n                   SUM(cache_write_tokens) AS \"cache_write_tokens?: i64\",\n                   SUM(CASE WHEN input_tokens IS NULL THEN 1 ELSE 0 END)\n                     AS \"missing_input_tokens!: i64\",\n                   SUM(CASE WHEN output_tokens IS NULL THEN 1 ELSE 0 END)\n                     AS \"missing_output_tokens!: i64\",\n                   SUM(CASE WHEN cache_read_tokens IS NULL THEN 1 ELSE 0 END)\n                     AS \"missing_cache_read_tokens!: i64\",\n                   SUM(CASE WHEN cache_write_tokens IS NULL THEN 1 ELSE 0 END)\n                     AS \"missing_cache_write_tokens!: i64\"\n            FROM request_events\n            WHERE group_id = ? AND occurred_at_unix >= ? AND occurred_at_unix < ?\n            GROUP BY credential_id, model_id, outcome\n            ORDER BY credential_id, model_id, outcome\n            LIMIT ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "credential_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "model_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "outcome",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "events!: i64",
+        "ordinal": 3,
+        "type_info": "Null"
+      },
+      {
+        "name": "request_bytes!: i64",
+        "ordinal": 4,
+        "type_info": "Null"
+      },
+      {
+        "name": "response_bytes!: i64",
+        "ordinal": 5,
+        "type_info": "Null"
+      },
+      {
+        "name": "latency_ms!: i64",
+        "ordinal": 6,
+        "type_info": "Null"
+      },
+      {
+        "name": "input_tokens?: i64",
+        "ordinal": 7,
+        "type_info": "Null"
+      },
+      {
+        "name": "output_tokens?: i64",
+        "ordinal": 8,
+        "type_info": "Null"
+      },
+      {
+        "name": "cache_read_tokens?: i64",
+        "ordinal": 9,
+        "type_info": "Null"
+      },
+      {
+        "name": "cache_write_tokens?: i64",
+        "ordinal": 10,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_input_tokens!: i64",
+        "ordinal": 11,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_output_tokens!: i64",
+        "ordinal": 12,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_cache_read_tokens!: i64",
+        "ordinal": 13,
+        "type_info": "Null"
+      },
+      {
+        "name": "missing_cache_write_tokens!: i64",
+        "ordinal": 14,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2950c27aaba34469d3fcab48dde949c18def8f9a5f3d80e8542d6354a469c51c"
+}

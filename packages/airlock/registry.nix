@@ -10,4 +10,14 @@
       }
     ];
   };
+  fragments.categories.airlock-storage = {
+    scopes = ["packages/${facetOwner}/**"];
+    sources = [
+      {
+        dir = facetOwner;
+        location = "package";
+        name = "storage";
+      }
+    ];
+  };
 }

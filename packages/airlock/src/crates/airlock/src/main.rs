@@ -4,9 +4,11 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     process::ExitCode,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use airlock_core::config::{Config, RawConfig};
+use airlock_core::storage::SqliteStorage;
 use airlock_gateway::Gateway;
 use clap::{Parser, Subcommand};
 use rustls::RootCertStore;
@@ -44,6 +46,10 @@ enum Error {
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     RuntimeDirectory(#[from] RuntimeDirectoryError),
+    #[error(transparent)]
+    Storage(#[from] airlock_core::storage::StorageError),
+    #[error("the system clock is before the Unix epoch")]
+    SystemTimeBeforeEpoch,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -120,6 +126,14 @@ fn upstream_roots() -> RootCertStore {
     roots
 }
 
+fn now_unix() -> Result<i64, Error> {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| Error::SystemTimeBeforeEpoch)?
+        .as_secs();
+    i64::try_from(seconds).map_err(|_| Error::SystemTimeBeforeEpoch)
+}
+
 async fn run() -> Result<(), Error> {
     let cli = Cli::parse();
     let (Command::CheckConfig { config } | Command::Serve { config }) = &cli.command;
@@ -141,6 +155,9 @@ async fn run() -> Result<(), Error> {
             let mut terminate = signal(SignalKind::terminate())?;
             let ca_directory =
                 ca_directory(env::var_os("XDG_RUNTIME_DIR"), config.listen().port())?;
+            let _storage =
+                SqliteStorage::open(config.state_dir(), config.storage_identities(now_unix()?))
+                    .await?;
             Gateway::bind(config, &ca_directory, upstream_roots())
                 .await?
                 .serve(async move {
