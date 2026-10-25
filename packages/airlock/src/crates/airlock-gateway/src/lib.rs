@@ -20,13 +20,13 @@ use std::{
 use airlock_core::{
     config::{Auth, Config, UnsupportedExecution},
     error::SecretError,
-    ids::{ClientId, CredentialId},
+    ids::{ClientId, CredentialId, GroupId},
     policy::{Decision, Policy},
     secret::Secret,
     target::ConnectTarget,
 };
 use base64::{Engine as _, prelude::BASE64_STANDARD};
-use http_body_util::{Either, Full};
+use http_body_util::{BodyExt, Full, combinators::UnsyncBoxBody};
 use hyper::{
     Method, Request, Response, StatusCode,
     body::{Bytes, Incoming},
@@ -55,7 +55,7 @@ const CLOSE_GRACE: Duration = Duration::from_secs(1);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
-type Reply = Response<Either<Incoming, Full<Bytes>>>;
+type Reply = Response<UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -93,8 +93,9 @@ pub struct Gateway {
 }
 
 struct State {
-    credentials: BTreeMap<CredentialId, Arc<LoadedCredential>>,
-    interceptor: Interceptor,
+    config: Arc<Config>,
+    credentials: Arc<BTreeMap<CredentialId, Arc<LoadedCredential>>>,
+    interceptor: Arc<Interceptor>,
     policy: Policy,
     tokens: BTreeMap<ClientId, Secret>,
 }
@@ -155,15 +156,17 @@ impl Gateway {
         if !errors.is_empty() {
             return Err(SecretErrors(errors).into());
         }
-        let interceptor = Interceptor::new(ca_directory, upstream_roots)?;
+        let interceptor = Arc::new(Interceptor::new(ca_directory, upstream_roots)?);
         let listener = TcpListener::bind(config.listen()).await?;
+        let policy = Policy::from_config(&config);
         Ok(Self {
             address: listener.local_addr()?,
             listener,
             state: Arc::new(State {
-                credentials,
+                config: Arc::new(config),
+                credentials: Arc::new(credentials),
                 interceptor,
-                policy: Policy::from_config(&config),
+                policy,
                 tokens,
             }),
         })
@@ -215,7 +218,7 @@ struct PendingTunnel {
 }
 
 struct InterceptRoute {
-    credential: CredentialId,
+    group: GroupId,
     target: ConnectTarget,
 }
 
@@ -240,16 +243,14 @@ async fn connection(socket: TcpStream, state: Arc<State>) {
         }
         match (pending.upgrade.await, pending.route) {
             (Ok(upgraded), Route::Intercept(route)) => {
-                let Some(credential) = state.credentials.get(&route.credential) else {
-                    pending.audit.outcome = "policy_denied";
-                    return;
-                };
                 state
                     .interceptor
                     .run(
                         TokioIo::new(upgraded),
                         route.target,
-                        credential.clone(),
+                        route.group,
+                        state.config.clone(),
+                        state.credentials.clone(),
                         pending.audit,
                     )
                     .await;
@@ -263,7 +264,11 @@ async fn connection(socket: TcpStream, state: Arc<State>) {
 }
 
 fn response(status: StatusCode, reason: impl Into<Bytes>) -> Reply {
-    let mut response = Response::new(Either::Right(Full::new(reason.into())));
+    let mut response = Response::new(
+        Full::new(reason.into())
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
     *response.status_mut() = status;
     response
 }
@@ -324,16 +329,10 @@ async fn handle(
             audit.outcome = "policy_denied";
             Ok(response(StatusCode::FORBIDDEN, format!("{reason:?}")))
         }
-        Decision::Intercept { credentials, .. } => {
-            // Until model routing lands, executable groups have one primary credential.
-            let Some(credential) = credentials.first() else {
-                audit.outcome = "policy_denied";
-                return Ok(response(StatusCode::FORBIDDEN, "no granted credential"));
-            };
-            audit.credential = Some(credential.clone());
+        Decision::Intercept { group, .. } => {
             audit.decision = "intercept";
             let route = InterceptRoute {
-                credential: credential.clone(),
+                group: group.clone(),
                 target,
             };
             Ok(establish(&mut request, &sender, audit, Route::Intercept(route)).await)
@@ -395,7 +394,6 @@ struct Audit {
     alpn: Option<String>,
     client: Option<ClientId>,
     client_to_upstream: Arc<AtomicU64>,
-    credential: Option<CredentialId>,
     decision: &'static str,
     dispatch: tracing::Dispatch,
     host: Option<airlock_core::ids::HostName>,
@@ -413,7 +411,6 @@ impl Audit {
             alpn: None,
             client: None,
             client_to_upstream: Arc::default(),
-            credential: None,
             decision: "deny",
             dispatch: tracing::dispatcher::get_default(Clone::clone),
             host: None,
@@ -432,7 +429,6 @@ impl Drop for Audit {
         tracing::dispatcher::with_default(&self.dispatch, || {
             tracing::info!(
                 client = self.client.as_ref().map_or("", AsRef::as_ref),
-                credential = self.credential.as_ref().map_or("", AsRef::as_ref),
                 host = self.host.as_ref().map_or("", AsRef::as_ref),
                 requests = self.requests.load(Ordering::Relaxed),
                 port = self.port,

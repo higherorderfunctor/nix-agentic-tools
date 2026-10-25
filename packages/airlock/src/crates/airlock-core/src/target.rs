@@ -2,7 +2,7 @@ use std::{net::IpAddr, num::NonZeroU16};
 
 use crate::{error::HostNameError, ids::HostName};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConnectTarget {
     host: HostName,
     port: NonZeroU16,
