@@ -1,7 +1,7 @@
 {
-  "version": "1.4.7",
+  "version": "1.4.8",
   "src": {
-    "url": "https://github.com/aristocratos/btop/archive/v1.4.7.tar.gz",
-    "hash": "sha256-3gECGBSWcGTYQkUlD4X2zrxZVvH2x2xfh5zdZ2jJbDQ="
+    "url": "https://github.com/aristocratos/btop/archive/v1.4.8.tar.gz",
+    "hash": "sha256-NujxQ6d8K+cRlwPfcoJk9XC0GDeh6Omx8x+WkCbxTcs="
   }
 }
