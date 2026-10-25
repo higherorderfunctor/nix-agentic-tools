@@ -1,9 +1,9 @@
 # airlock
 
-> **Last verified:** 2026-10-24 — Anthropic groups route by model; the z.ai
+> **Last verified:** 2026-10-25 — Anthropic groups route by model; the z.ai
 > preset aliases `ToolSearch` in requests and restores it in JSON and SSE
-> responses. Nested tool results stop at one supported level; SSE accepts CR, LF
-> and CRLF framing. OpenAI and managed OAuth remain gated.
+> responses. Primary quota headers replace non-primary display headers. OpenAI
+> and managed OAuth remain gated.
 
 ## Scope
 
@@ -46,6 +46,15 @@ Interception follows this order:
   before body forwarding. JSON is capped at 32 MiB; each SSE event at 1 MiB and
   emitted when complete. SSE accepts CR, LF and CRLF line endings and
   case-insensitive `text/event-stream` media type.
+- Each upstream response atomically replaces its cached `anthropic-ratelimit-*`
+  snapshot, keyed by client, group and credential with an observation time. On a
+  successful non-primary response, airlock replaces that header family with the
+  primary snapshot before streaming the body. A cold or empty primary snapshot
+  leaves that family absent. Non-primary errors keep their own rate-limit
+  headers. `retry-after` always belongs to the selected response and is never
+  cached or substituted. Status, ordinary headers and body usage remain from the
+  selected provider. Each snapshot is limited to 64 header values and 16 KiB; an
+  oversized observation clears it.
 - Before injection, every request drops client `Authorization` and `x-api-key`
   values plus hop-by-hop fields named by `Connection`. An OAuth credential is
   injected as a sensitive Authorization bearer header; an API key is injected as

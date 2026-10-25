@@ -8,12 +8,12 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use airlock_core::{
     config::Config,
-    ids::{CredentialId, GroupId, HostName},
+    ids::{ClientId, CredentialId, GroupId, HostName},
     target::ConnectTarget,
 };
 use http_body_util::BodyExt;
@@ -56,6 +56,42 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const X_API_KEY: HeaderName = HeaderName::from_static("x-api-key");
 // Anthropic's Messages API limits request bodies to 32 MiB.
 const MODEL_BODY_LIMIT: usize = 32 << 20;
+// Only Anthropic rate-limit fields identify the primary account; retry-after belongs to the
+// selected provider's response and is never part of the cached snapshot.
+const QUOTA_HEADER_PREFIX: &str = "anthropic-ratelimit-";
+const QUOTA_HEADER_LIMIT: usize = 64;
+const QUOTA_SNAPSHOT_LIMIT: usize = 16 << 10;
+
+type QuotaCache = Arc<Mutex<BTreeMap<QuotaCacheKey, QuotaSnapshot>>>;
+
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+struct QuotaCacheKey {
+    client: ClientId,
+    credential: CredentialId,
+    group: GroupId,
+}
+
+#[derive(Clone)]
+struct QuotaSnapshot {
+    headers: hyper::HeaderMap<HeaderValue>,
+    observed: Instant,
+}
+
+impl QuotaSnapshot {
+    fn replaces(&self, existing: &Self) -> bool {
+        self.observed >= existing.observed
+    }
+}
+
+#[derive(Clone)]
+struct QuotaContext {
+    cache: QuotaCache,
+    client: ClientId,
+    credential: CredentialId,
+    group: GroupId,
+    primary_credential: CredentialId,
+    primary: bool,
+}
 
 type BodyError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -214,6 +250,7 @@ async fn inspect_request(
 pub(crate) struct Interceptor {
     authority: Authority,
     provider: Arc<CryptoProvider>,
+    quota_cache: QuotaCache,
     upstream: Arc<ClientConfig>,
 }
 
@@ -496,7 +533,9 @@ struct ForwardRoute {
 #[derive(Clone)]
 struct ForwardState {
     audit: RequestAudit,
+    client: ClientId,
     interceptor: Arc<Interceptor>,
+    quota_cache: QuotaCache,
     route: ForwardRoute,
     sender: UpstreamSender,
 }
@@ -705,6 +744,7 @@ impl Interceptor {
         Ok(Self {
             authority: Authority::open(ca_directory, provider.clone())?,
             provider,
+            quota_cache: Arc::new(Mutex::new(BTreeMap::new())),
             upstream: Arc::new(upstream),
         })
     }
@@ -758,13 +798,17 @@ impl Interceptor {
         audit.alpn = negotiated
             .as_deref()
             .map(|protocol| String::from_utf8_lossy(protocol).into_owned());
+        let Some(client_id) = audit.client.clone() else {
+            audit.outcome = "authentication_required";
+            return;
+        };
         let route = ForwardRoute {
             config,
             credentials,
             group,
             target,
         };
-        self.forward_connection(start, upstream, negotiated, route, audit)
+        self.forward_connection(start, upstream, negotiated, route, audit, client_id)
             .await;
     }
 
@@ -775,6 +819,7 @@ impl Interceptor {
         negotiated: Option<Vec<u8>>,
         route: ForwardRoute,
         mut audit: Audit,
+        client_id: ClientId,
     ) {
         let protocol = HttpProtocol::from_alpn(negotiated.as_deref());
         let Ok(tls_config) = self.server_config(route.target.host(), negotiated) else {
@@ -787,7 +832,7 @@ impl Interceptor {
             let _ = timeout(crate::CLOSE_GRACE, upstream.shutdown()).await;
             return;
         };
-        self.serve_forwarding(client, upstream, protocol, route, audit)
+        self.serve_forwarding(client, upstream, protocol, route, audit, client_id)
             .await;
     }
 
@@ -798,6 +843,7 @@ impl Interceptor {
         protocol: HttpProtocol,
         route: ForwardRoute,
         mut audit: Audit,
+        client_identity: ClientId,
     ) {
         let relay_closed = Arc::new(Notify::new());
         let (upstream_io, upstream_shutdown) = shared_io(
@@ -823,7 +869,9 @@ impl Interceptor {
         let (upgrade_sender, mut upgrade_receiver) = mpsc::channel(1);
         let forwarding = ForwardState {
             audit: request_audit,
+            client: client_identity,
             interceptor: self.clone(),
+            quota_cache: self.quota_cache.clone(),
             route,
             sender,
         };
@@ -1044,10 +1092,102 @@ fn prepare_toolsearch_request(request: &mut Request<RequestBody>) -> Result<bool
     Ok(changed)
 }
 
+fn is_quota_header(name: &HeaderName) -> bool {
+    name.as_str().starts_with(QUOTA_HEADER_PREFIX)
+}
+
+fn captured_quota_headers(
+    headers: &hyper::HeaderMap<HeaderValue>,
+) -> hyper::HeaderMap<HeaderValue> {
+    let mut captured = hyper::HeaderMap::new();
+    let mut values = 0;
+    let mut bytes = 0;
+    for (name, value) in headers.iter().filter(|(name, _)| is_quota_header(name)) {
+        values += 1;
+        bytes += name.as_str().len() + value.as_bytes().len();
+        if values > QUOTA_HEADER_LIMIT || bytes > QUOTA_SNAPSHOT_LIMIT {
+            return hyper::HeaderMap::new();
+        }
+        captured.append(name.clone(), value.clone());
+    }
+    captured
+}
+
+impl QuotaContext {
+    fn key(&self, credential: &CredentialId) -> QuotaCacheKey {
+        QuotaCacheKey {
+            client: self.client.clone(),
+            credential: credential.clone(),
+            group: self.group.clone(),
+        }
+    }
+
+    fn observe(&self, headers: &hyper::HeaderMap<HeaderValue>) {
+        let key = self.key(&self.credential);
+        let snapshot = QuotaSnapshot {
+            headers: captured_quota_headers(headers),
+            observed: Instant::now(),
+        };
+        let mut cache = self
+            .cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if cache
+            .get(&key)
+            .is_none_or(|existing| snapshot.replaces(existing))
+        {
+            cache.insert(key, snapshot);
+        }
+    }
+
+    fn apply(&self, status: StatusCode, headers: &mut hyper::HeaderMap<HeaderValue>) {
+        self.observe(headers);
+        if self.primary || !status.is_success() {
+            return;
+        }
+        let quota_names = headers
+            .keys()
+            .filter(|name| is_quota_header(name))
+            .cloned()
+            .collect::<Vec<_>>();
+        for name in quota_names {
+            headers.remove(name);
+        }
+        let primary_key = self.key(&self.primary_credential);
+        let snapshot = self
+            .cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&primary_key)
+            .map(|snapshot| snapshot.headers.clone())
+            .unwrap_or_default();
+        for (name, value) in &snapshot {
+            headers.append(name.clone(), value.clone());
+        }
+    }
+}
+
+fn quota_context(
+    state: &ForwardState,
+    credential: &CredentialId,
+    primary_credential: &CredentialId,
+    primary: bool,
+) -> QuotaContext {
+    QuotaContext {
+        cache: state.quota_cache.clone(),
+        client: state.client.clone(),
+        credential: credential.clone(),
+        group: state.route.group.clone(),
+        primary_credential: primary_credential.clone(),
+        primary,
+    }
+}
+
 async fn finish_response(
     mut response: Response<Incoming>,
     shim: bool,
     mut selected: SelectedUpstream,
+    quota: QuotaContext,
     mut completion: RequestCompletion,
     client_upgrade: OnUpgrade,
     upgrades: mpsc::Sender<PendingUpgrade>,
@@ -1080,6 +1220,7 @@ async fn finish_response(
         response.headers_mut(),
         status == StatusCode::SWITCHING_PROTOCOLS,
     );
+    quota.apply(status, response.headers_mut());
     let mut selected_sender = (!selected.use_original).then_some(selected.sender.clone());
     if status == StatusCode::SWITCHING_PROTOCOLS {
         let upstream_upgrade = hyper::upgrade::on(&mut response);
@@ -1161,11 +1302,11 @@ async fn forward(
             "credential unavailable",
         ));
     };
-    let primary = state
-        .route
-        .config
-        .route(&state.route.group, None)
-        .is_some_and(|(id, _)| *id == credential_id);
+    let Some((primary_id, _)) = state.route.config.route(&state.route.group, None) else {
+        completion.finish(StatusCode::FORBIDDEN);
+        return Ok(crate::response(StatusCode::FORBIDDEN, "route unavailable"));
+    };
+    let primary = *primary_id == credential_id;
     let zai = inference
         && state
             .route
@@ -1212,10 +1353,12 @@ async fn forward(
             "upstream connection failed",
         ));
     };
+    let quota = quota_context(&state, &credential_id, primary_id, primary);
     Ok(finish_response(
         response,
         shim,
         selected,
+        quota,
         completion,
         client_upgrade,
         upgrades,
@@ -1360,6 +1503,225 @@ mod tests {
             Bytes::from_static(b"event: next\r\r")
         );
         assert!(!skip_lf);
+    }
+
+    fn quota_context(
+        cache: &QuotaCache,
+        client: &str,
+        credential: &str,
+        group: &str,
+        primary_credential: &str,
+        primary: bool,
+    ) -> QuotaContext {
+        QuotaContext {
+            cache: cache.clone(),
+            client: ClientId::try_from(client).expect("client"),
+            credential: CredentialId::try_from(credential).expect("credential"),
+            group: GroupId::try_from(group).expect("group"),
+            primary_credential: CredentialId::try_from(primary_credential).expect("primary"),
+            primary,
+        }
+    }
+
+    fn quota_headers(values: &[(&str, &str)]) -> hyper::HeaderMap<HeaderValue> {
+        let mut headers = hyper::HeaderMap::new();
+        for (name, value) in values {
+            headers.insert(
+                HeaderName::from_bytes(name.as_bytes()).expect("header name"),
+                HeaderValue::from_str(value).expect("header value"),
+            );
+        }
+        headers
+    }
+
+    #[test]
+    fn quota_snapshot_order_uses_observation_instants() {
+        let newer = Instant::now();
+        let older = newer
+            .checked_sub(Duration::from_nanos(1))
+            .expect("older instant");
+        let snapshot = |observed| QuotaSnapshot {
+            headers: hyper::HeaderMap::new(),
+            observed,
+        };
+        assert!(snapshot(newer).replaces(&snapshot(older)));
+        assert!(!snapshot(older).replaces(&snapshot(newer)));
+        assert!(snapshot(newer).replaces(&snapshot(newer)));
+    }
+
+    #[test]
+    fn quota_snapshots_replace_atomically_and_enforce_value_and_byte_limits() {
+        let cache: QuotaCache = Arc::new(Mutex::new(BTreeMap::new()));
+        let primary = quota_context(&cache, "client", "claude", "group", "claude", true);
+        primary.observe(&quota_headers(&[
+            ("anthropic-ratelimit-unified-status", "allowed"),
+            ("anthropic-ratelimit-unified-5h-utilization", "0.42"),
+        ]));
+        let first = primary
+            .cache
+            .lock()
+            .expect("cache lock")
+            .get(&primary.key(&primary.credential))
+            .cloned()
+            .expect("first snapshot");
+        assert!(first.observed.elapsed() <= Duration::from_secs(1));
+
+        primary.observe(&quota_headers(&[(
+            "anthropic-ratelimit-unified-status",
+            "limited",
+        )]));
+        let non_primary = quota_context(&cache, "client", "zai", "group", "claude", false);
+        let mut headers = quota_headers(&[
+            ("anthropic-ratelimit-unified-status", "rejected"),
+            ("anthropic-ratelimit-unified-5h-utilization", "0.9"),
+            ("retry-after", "9"),
+            ("x-ordinary", "kept"),
+        ]);
+        non_primary.apply(StatusCode::OK, &mut headers);
+        assert_eq!(headers["anthropic-ratelimit-unified-status"], "limited");
+        assert!(
+            headers
+                .get("anthropic-ratelimit-unified-5h-utilization")
+                .is_none()
+        );
+        assert_eq!(headers["retry-after"], "9");
+        assert_eq!(headers["x-ordinary"], "kept");
+
+        primary.observe(&hyper::HeaderMap::new());
+        let snapshot = primary
+            .cache
+            .lock()
+            .expect("cache lock")
+            .get(&primary.key(&primary.credential))
+            .cloned()
+            .expect("empty snapshot retained for age");
+        assert!(snapshot.headers.is_empty());
+
+        let name = HeaderName::from_static("anthropic-ratelimit-unified-status");
+        let at_byte_limit =
+            HeaderValue::from_bytes(&vec![b'x'; QUOTA_SNAPSHOT_LIMIT - name.as_str().len()])
+                .expect("exact-limit value");
+        let mut boundary = hyper::HeaderMap::new();
+        boundary.insert(name.clone(), at_byte_limit);
+        primary.observe(&boundary);
+        let snapshot = primary
+            .cache
+            .lock()
+            .expect("cache lock")
+            .get(&primary.key(&primary.credential))
+            .cloned()
+            .expect("exact-limit snapshot");
+        assert_eq!(snapshot.headers.get(&name), boundary.get(&name));
+
+        let over_byte_limit =
+            HeaderValue::from_bytes(&vec![b'x'; QUOTA_SNAPSHOT_LIMIT - name.as_str().len() + 1])
+                .expect("over-limit value");
+        boundary.insert(name.clone(), over_byte_limit);
+        primary.observe(&boundary);
+        let snapshot = primary
+            .cache
+            .lock()
+            .expect("cache lock")
+            .get(&primary.key(&primary.credential))
+            .cloned()
+            .expect("byte-overflow snapshot replaces old state");
+        assert!(snapshot.headers.is_empty());
+
+        let mut duplicates = hyper::HeaderMap::new();
+        for _ in 0..QUOTA_HEADER_LIMIT {
+            duplicates.append(name.clone(), HeaderValue::from_static("x"));
+        }
+        assert_eq!(
+            captured_quota_headers(&duplicates)
+                .get_all(&name)
+                .iter()
+                .count(),
+            QUOTA_HEADER_LIMIT
+        );
+        duplicates.append(name, HeaderValue::from_static("x"));
+        primary.observe(&duplicates);
+        let snapshot = primary
+            .cache
+            .lock()
+            .expect("cache lock")
+            .get(&primary.key(&primary.credential))
+            .cloned()
+            .expect("value-overflow snapshot replaces old state");
+        assert!(snapshot.headers.is_empty());
+    }
+
+    #[test]
+    fn quota_cache_is_isolated_by_client_group_and_credential() {
+        let cache: QuotaCache = Arc::new(Mutex::new(BTreeMap::new()));
+        let primary = quota_context(&cache, "client-a", "claude", "group-a", "claude", true);
+        primary.observe(&quota_headers(&[(
+            "anthropic-ratelimit-unified-status",
+            "allowed",
+        )]));
+        let other_group = quota_context(&cache, "client-a", "zai", "group-b", "claude", false);
+        let mut headers = quota_headers(&[
+            ("anthropic-ratelimit-unified-status", "rejected"),
+            ("retry-after", "9"),
+        ]);
+        other_group.apply(StatusCode::OK, &mut headers);
+        assert_eq!(headers["retry-after"], "9");
+        assert_eq!(headers.len(), 1);
+
+        let other_client = quota_context(&cache, "client-b", "zai", "group-a", "claude", false);
+        let mut headers = quota_headers(&[("anthropic-ratelimit-unified-status", "rejected")]);
+        other_client.apply(StatusCode::OK, &mut headers);
+        assert!(headers.is_empty());
+
+        let non_primary = quota_context(&cache, "client-a", "zai", "group-a", "claude", false);
+        non_primary.observe(&quota_headers(&[(
+            "anthropic-ratelimit-unified-7d-utilization",
+            "0.9",
+        )]));
+        let mut headers = quota_headers(&[
+            ("anthropic-ratelimit-unified-status", "rejected"),
+            ("retry-after", "9"),
+        ]);
+        non_primary.apply(StatusCode::OK, &mut headers);
+        assert_eq!(headers["anthropic-ratelimit-unified-status"], "allowed");
+        assert_eq!(headers["retry-after"], "9");
+        assert_eq!(cache.lock().expect("cache lock").len(), 4);
+    }
+
+    #[test]
+    fn concurrent_quota_observations_leave_one_complete_snapshot() {
+        let cache: QuotaCache = Arc::new(Mutex::new(BTreeMap::new()));
+        let observer = quota_context(&cache, "client", "claude", "group", "claude", true);
+        let threads = [("snapshot-a", "11"), ("snapshot-b", "22")]
+            .into_iter()
+            .map(|(status, reset)| {
+                let observer = observer.clone();
+                std::thread::spawn(move || {
+                    observer.observe(&quota_headers(&[
+                        ("anthropic-ratelimit-unified-status", status),
+                        ("anthropic-ratelimit-unified-reset", reset),
+                    ]));
+                })
+            })
+            .collect::<Vec<_>>();
+        for thread in threads {
+            thread.join().expect("quota observer");
+        }
+        let snapshot = observer
+            .cache
+            .lock()
+            .expect("cache lock")
+            .get(&observer.key(&observer.credential))
+            .cloned()
+            .expect("snapshot");
+        let status = snapshot
+            .headers
+            .get("anthropic-ratelimit-unified-status")
+            .expect("status");
+        let reset = snapshot.headers["anthropic-ratelimit-unified-reset"].as_bytes();
+        assert!(
+            (status == "snapshot-a" && reset == b"11")
+                || (status == "snapshot-b" && reset == b"22")
+        );
     }
 
     #[test]
