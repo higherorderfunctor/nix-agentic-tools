@@ -14,6 +14,7 @@
   tsgolint = "recipe";
 
   # Sidecar-owned floors must precede vendor extraction.
+  anthropic-cli = "sidecar";
   beads = "sidecar";
   "beads.dolt" = "sidecar";
   cliproxyapi = "sidecar";
