@@ -506,6 +506,7 @@ tidwall
 timespec
 tmpfs
 toctou
+toolsearch
 toolsets
 tostring
 traceparent

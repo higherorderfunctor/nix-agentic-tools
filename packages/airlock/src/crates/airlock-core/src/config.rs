@@ -47,6 +47,7 @@ struct GroupConfig {
 
 struct ProviderConfig {
     endpoints: BTreeMap<Protocol, Endpoint>,
+    zai_preset: bool,
 }
 
 struct Endpoint {
@@ -210,6 +211,19 @@ impl Config {
             .endpoints
             .get(&group.protocol)?;
         Some((credential_id, endpoint.url.as_str()))
+    }
+
+    /// The `ToolSearch` spelling shim belongs to the selected z.ai Anthropic preset.
+    #[must_use]
+    pub fn zai_anthropic(&self, group: &GroupId, credential: &CredentialId) -> bool {
+        self.groups.get(group).is_some_and(|group| {
+            group.protocol == Protocol::Anthropic
+                && self
+                    .credentials
+                    .get(credential)
+                    .and_then(|credential| self.providers.get(&credential.provider))
+                    .is_some_and(|provider| provider.zai_preset)
+        })
     }
 
     pub(crate) fn unknown_hosts(&self) -> UnknownHosts {
@@ -546,6 +560,7 @@ fn parse_providers(
                 id,
                 ProviderConfig {
                     endpoints: resolved,
+                    zai_preset: raw_provider.preset.as_deref() == Some("zai"),
                 },
             );
         }

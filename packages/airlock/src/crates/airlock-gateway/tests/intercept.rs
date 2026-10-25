@@ -119,6 +119,7 @@ async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
                 &[
                     (AUTHORIZATION, "Bearer fake-CLIENT-oauth"),
                     (HeaderName::from_static("x-api-key"), "fake-CLIENT-api-key"),
+                    (HeaderName::from_static("accept-encoding"), "gzip"),
                     (HeaderName::from_static("cookie"), "fake-CLIENT-session"),
                 ],
                 full_body(body),
@@ -141,6 +142,7 @@ async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
     assert_eq!(zai_requests.len(), 1);
     assert_eq!(zai_requests[0].path, "/api/anthropic/v1/messages");
     assert_eq!(zai_requests[0].headers["x-api-key"], "fake-REAL-zai");
+    assert_eq!(zai_requests[0].headers["accept-encoding"], "gzip");
     assert!(zai_requests[0].headers.get(AUTHORIZATION).is_none());
     assert!(zai_requests[0].headers.get("cookie").is_none());
     assert!(
@@ -156,6 +158,303 @@ async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
             .collect::<Vec<_>>(),
         ["claude", "zai", "claude", "claude"]
     );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn toolsearch_request_and_json_response_are_scoped_to_zai() {
+    const BODY: &[u8] = br#"{"model":"glm-4.7","tools":[{"name":"ToolSearch"},{"name":"lookup"}],"tool_choice":{"type":"tool","name":"ToolSearch"},"messages":[{"content":[{"type":"tool_use","name":"ToolSearch","input":{"text":"ToolSearch"}},{"type":"tool_reference","tool_name":"ToolSearch"},{"type":"tool_result","content":[{"type":"tool_reference","tool_name":"ToolSearch"}]}]}]}"#;
+    const RESPONSE: &[u8] = br#"{"content":[{"type":"tool_use","name":"ToolSearch_","input":{"text":"ToolSearch_"}},{"type":"text","text":"ToolSearch_"}],"usage":{"output_tokens":5}}"#;
+    let ca = TestCa::new();
+    let primary = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::Fixed {
+            body: RESPONSE,
+            content_type: "application/json",
+            encoding: None,
+        },
+    )
+    .await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::Fixed {
+            body: RESPONSE,
+            content_type: "application/json",
+            encoding: None,
+        },
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let zai_response = client
+        .send(request("POST", "/v1/messages", &[], full_body(BODY)))
+        .await;
+    assert_eq!(zai_response.status(), hyper::StatusCode::OK);
+    assert!(zai_response.headers().get("content-length").is_none());
+    let zai_body = zai_response
+        .into_body()
+        .collect()
+        .await
+        .expect("z.ai body")
+        .to_bytes();
+    assert_eq!(
+        &zai_body[..],
+        br#"{"content":[{"type":"tool_use","name":"ToolSearch","input":{"text":"ToolSearch_"}},{"type":"text","text":"ToolSearch_"}],"usage":{"output_tokens":5}}"#
+    );
+    let sent = records(&zai);
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].headers["accept-encoding"], "identity");
+    let sent_body = std::str::from_utf8(&sent[0].body).expect("UTF-8");
+    assert!(sent_body.contains(r#""name":"ToolSearch_""#));
+    assert!(sent_body.contains(r#""tool_name":"ToolSearch_""#));
+    assert!(sent_body.contains(r#""text":"ToolSearch""#));
+
+    let primary_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5","tools":[{"name":"ToolSearch"}]}"#),
+        ))
+        .await;
+    assert_eq!(
+        &primary_response
+            .into_body()
+            .collect()
+            .await
+            .expect("primary body")
+            .to_bytes()[..],
+        RESPONSE
+    );
+    assert_eq!(
+        &records(&primary)[0].body[..],
+        br#"{"model":"claude-sonnet-5","tools":[{"name":"ToolSearch"}]}"#
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn toolsearch_collision_and_compression_fail_explicitly() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::Fixed {
+            body: b"fake-compressed",
+            content_type: "application/json",
+            encoding: Some("gzip"),
+        },
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let rejected = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7","tools":[{"name":"ToolSearch_"}]}"#),
+        ))
+        .await;
+    assert_eq!(rejected.status(), hyper::StatusCode::BAD_REQUEST);
+    assert!(records(&zai).is_empty());
+    let compressed = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7","tools":[{"name":"ToolSearch"}]}"#),
+        ))
+        .await;
+    assert_eq!(compressed.status(), hyper::StatusCode::BAD_GATEWAY);
+    assert_eq!(
+        &compressed
+            .into_body()
+            .collect()
+            .await
+            .expect("diagnostic")
+            .to_bytes()[..],
+        b"toolsearch_compressed_response"
+    );
+    assert_eq!(records(&zai).len(), 1);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn toolsearch_response_limits_fail_the_body() {
+    for (content_type, size, succeeds) in [
+        ("application/json", 32 << 20, true),
+        ("application/json", (32 << 20) + 1, false),
+        ("text/event-stream", (1 << 20) + 1, false),
+    ] {
+        let ca = TestCa::new();
+        let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+        let bytes = if content_type == "application/json" {
+            let mut json = br#"{"pad":""#.to_vec();
+            json.resize(size - br#""}"#.len(), b'x');
+            json.extend_from_slice(br#""}"#);
+            assert_eq!(json.len(), size);
+            serde_json::from_slice::<serde_json::Value>(&json).expect("valid JSON fixture");
+            json
+        } else {
+            vec![b'x'; size]
+        };
+        let body: &'static [u8] = Box::leak(bytes.into_boxed_slice());
+        let zai = http_upstream(
+            &ca,
+            HttpProtocol::Http1,
+            UpstreamMode::Fixed {
+                body,
+                content_type,
+                encoding: None,
+            },
+        )
+        .await;
+        let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+        let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+        let response = client
+            .send(request(
+                "POST",
+                "/v1/messages",
+                &[],
+                full_body(br#"{"model":"glm-4.7","tools":[{"name":"ToolSearch"}]}"#),
+            ))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        let result = response.into_body().collect().await;
+        if succeeds {
+            assert_eq!(&result.expect("at-limit JSON body").to_bytes()[..], body);
+        } else {
+            assert!(result.is_err(), "{content_type} size {size}");
+        }
+        server.stop().await;
+    }
+}
+
+#[tokio::test]
+async fn toolsearch_sse_flushes_first_event_and_keeps_usage() {
+    for (content_type, cr_only) in [
+        ("text/event-stream", false),
+        ("Text/Event-Stream; charset=utf-8", false),
+        ("text/event-stream", true),
+    ] {
+        let release = Arc::new(tokio::sync::Notify::new());
+        let ca = TestCa::new();
+        let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+        let zai = http_upstream(
+            &ca,
+            HttpProtocol::Http1,
+            UpstreamMode::ToolSearchSse {
+                release: release.clone(),
+                content_type,
+                cr_only,
+            },
+        )
+        .await;
+        let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+        let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+        let mut response = client
+            .send(request(
+                "POST",
+                "/v1/messages",
+                &[],
+                full_body(br#"{"model":"glm-4.7","tools":[{"name":"ToolSearch"}],"stream":true}"#),
+            ))
+            .await;
+        assert_eq!(response.status(), hyper::StatusCode::OK);
+        let first = timeout(Duration::from_secs(2), response.body_mut().frame())
+            .await
+            .expect("first event before release")
+            .expect("first event")
+            .expect("first frame")
+            .into_data()
+            .expect("data");
+        assert!(
+            std::str::from_utf8(&first)
+                .expect("UTF-8")
+                .contains(r#""name":"ToolSearch""#)
+        );
+        assert!(first.ends_with(if cr_only { b"\r\r" } else { b"\r\n\r" }));
+        let usage = timeout(Duration::from_secs(2), response.body_mut().frame())
+            .await
+            .expect("usage event before release")
+            .expect("usage event")
+            .expect("usage frame")
+            .into_data()
+            .expect("data");
+        assert!(
+            usage
+                .windows(b"\"output_tokens\":7".len())
+                .any(|window| window == b"\"output_tokens\":7")
+        );
+        release.notify_one();
+        let done = response
+            .into_body()
+            .collect()
+            .await
+            .expect("done")
+            .to_bytes();
+        assert_eq!(&done[..], b"event: done\ndata: [DONE]\n\n");
+        server.stop().await;
+    }
+}
+
+#[tokio::test]
+async fn cancelling_toolsearch_sse_closes_selected_upstream() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let zai = http_upstream(
+        &ca,
+        HttpProtocol::Http2,
+        UpstreamMode::ToolSearchSse {
+            release: Arc::new(tokio::sync::Notify::new()),
+            content_type: "text/event-stream",
+            cr_only: false,
+        },
+    )
+    .await;
+    let server = Running::start_multiplex(ca.roots(), primary.port, zai.port).await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http2).await;
+    let mut response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7","tools":[{"name":"ToolSearch"}],"stream":true}"#),
+        ))
+        .await;
+    let first = timeout(Duration::from_secs(2), response.body_mut().frame())
+        .await
+        .expect("first event deadline")
+        .expect("first event")
+        .expect("first frame")
+        .into_data()
+        .expect("data");
+    assert!(
+        std::str::from_utf8(&first)
+            .expect("UTF-8")
+            .contains(r#""name":"ToolSearch""#)
+    );
+    drop(response);
+    timeout(Duration::from_secs(2), zai.done)
+        .await
+        .expect("selected upstream closed")
+        .expect("task")
+        .expect("upstream service");
+    assert!(records(&primary).is_empty());
+    let primary_response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(primary_response.status(), hyper::StatusCode::OK);
+    assert_eq!(records(&primary).len(), 1);
     server.stop().await;
 }
 

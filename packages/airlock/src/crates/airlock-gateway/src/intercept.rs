@@ -22,8 +22,9 @@ use hyper::{
     body::{Body, Bytes, Frame, Incoming, SizeHint},
     client::conn as client_conn,
     header::{
-        AUTHORIZATION, CONNECTION, CONTENT_LENGTH, HeaderName, HeaderValue, InvalidHeaderValue,
-        PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE, TRAILER, TRANSFER_ENCODING, UPGRADE,
+        ACCEPT_ENCODING, AUTHORIZATION, CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE,
+        HeaderName, HeaderValue, InvalidHeaderValue, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE,
+        TRAILER, TRANSFER_ENCODING, UPGRADE,
     },
     server::conn as server_conn,
     service::service_fn,
@@ -47,7 +48,7 @@ use zeroize::Zeroizing;
 
 use crate::{
     Audit, AuthKind, CONNECT_TIMEOUT, Error, LoadedCredential, Reply, ca::Authority,
-    record_completed_write, relay_streams,
+    record_completed_write, relay_streams, toolsearch,
 };
 
 // A client gets this long to send its ClientHello, and later to finish its handshake.
@@ -508,9 +509,72 @@ struct PendingUpgrade {
 }
 
 struct LeasedBody {
-    inner: Incoming,
+    inner: ResponsePayload,
     _task: Option<AbortOnDrop>,
     _sender: Option<UpstreamSender>,
+}
+
+enum ResponsePayload {
+    Passthrough(Incoming),
+    Json {
+        inner: Incoming,
+        bytes: Zeroizing<Vec<u8>>,
+        done: bool,
+        trailers: Option<hyper::HeaderMap>,
+    },
+    Sse {
+        inner: Incoming,
+        bytes: Zeroizing<Vec<u8>>,
+        done: bool,
+        pending: Option<Bytes>,
+        skip_lf: bool,
+        trailers: Option<hyper::HeaderMap>,
+    },
+}
+
+fn sse_event_end(bytes: &[u8]) -> Option<usize> {
+    let mut line_start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'\r' || bytes[index] == b'\n' {
+            let blank = index == line_start;
+            let cr = bytes[index] == b'\r';
+            index += 1;
+            if cr && bytes.get(index) == Some(&b'\n') {
+                index += 1;
+            }
+            if blank {
+                return Some(index);
+            }
+            line_start = index;
+        } else {
+            index += 1;
+        }
+    }
+    None
+}
+
+fn skip_optional_lf(chunk: Bytes, skip_lf: &mut bool) -> Bytes {
+    if !std::mem::take(skip_lf) || chunk.first() != Some(&b'\n') {
+        return chunk;
+    }
+    chunk.slice(1..)
+}
+
+fn take_sse_chunk(pending: &mut Option<Bytes>, skip_lf: &mut bool) -> Option<Bytes> {
+    pending
+        .take()
+        .map(|chunk| skip_optional_lf(chunk, skip_lf))
+        .filter(|chunk| !chunk.is_empty())
+}
+
+fn body_error(reason: &'static str) -> BodyError {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, reason).into()
+}
+
+fn transformed_event(event: &mut Zeroizing<Vec<u8>>) -> Result<Frame<Bytes>, BodyError> {
+    toolsearch::event(event).map_err(body_error)?;
+    Ok(Frame::data(Bytes::copy_from_slice(event)))
 }
 
 impl Body for LeasedBody {
@@ -521,13 +585,110 @@ impl Body for LeasedBody {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
-        std::pin::Pin::new(&mut self.inner)
-            .poll_frame(cx)
-            .map(|item| item.map(|result| result.map_err(Into::into)))
+        loop {
+            match &mut self.inner {
+                ResponsePayload::Passthrough(inner) => {
+                    return std::pin::Pin::new(inner)
+                        .poll_frame(cx)
+                        .map(|item| item.map(|result| result.map_err(Into::into)));
+                }
+                ResponsePayload::Json {
+                    inner,
+                    bytes,
+                    done,
+                    trailers,
+                } => {
+                    if *done {
+                        return Poll::Ready(
+                            trailers.take().map(|value| Ok(Frame::trailers(value))),
+                        );
+                    }
+                    match std::pin::Pin::new(inner).poll_frame(cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(Some(Ok(frame))) => match frame.into_data() {
+                            Ok(chunk) => {
+                                if append_inference_chunk(bytes, &chunk, false).is_err() {
+                                    *done = true;
+                                    return Poll::Ready(Some(Err(body_error(
+                                        "toolsearch_response_too_large",
+                                    ))));
+                                }
+                            }
+                            Err(frame) => *trailers = frame.into_trailers().ok(),
+                        },
+                        Poll::Ready(Some(Err(error))) => {
+                            return Poll::Ready(Some(Err(error.into())));
+                        }
+                        Poll::Ready(None) => {
+                            *done = true;
+                            if let Err(reason) = toolsearch::response(bytes) {
+                                return Poll::Ready(Some(Err(body_error(reason))));
+                            }
+                            return Poll::Ready(Some(Ok(Frame::data(Bytes::copy_from_slice(
+                                bytes,
+                            )))));
+                        }
+                    }
+                }
+                ResponsePayload::Sse {
+                    inner,
+                    bytes,
+                    done,
+                    pending,
+                    skip_lf,
+                    trailers,
+                } => {
+                    if let Some(end) = sse_event_end(bytes) {
+                        let mut event = Zeroizing::new(bytes[..end].to_vec());
+                        *skip_lf = event.ends_with(b"\r") && end == bytes.len();
+                        *bytes = Zeroizing::new(bytes[end..].to_vec());
+                        return Poll::Ready(Some(transformed_event(&mut event)));
+                    }
+                    if *done {
+                        if bytes.is_empty() {
+                            return Poll::Ready(
+                                trailers.take().map(|value| Ok(Frame::trailers(value))),
+                            );
+                        }
+                        let mut event = Zeroizing::new(std::mem::take(&mut **bytes));
+                        return Poll::Ready(Some(transformed_event(&mut event)));
+                    }
+                    if let Some(chunk) = take_sse_chunk(pending, skip_lf) {
+                        let room = toolsearch::EVENT_LIMIT.saturating_sub(bytes.len());
+                        if room == 0 {
+                            *done = true;
+                            return Poll::Ready(Some(Err(body_error(
+                                "toolsearch_event_too_large",
+                            ))));
+                        }
+                        let taken = room.min(chunk.len());
+                        bytes.extend_from_slice(&chunk[..taken]);
+                        if taken < chunk.len() {
+                            *pending = Some(chunk.slice(taken..));
+                        }
+                        continue;
+                    }
+                    match std::pin::Pin::new(inner).poll_frame(cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(Some(Ok(frame))) => match frame.into_data() {
+                            Ok(chunk) => *pending = Some(chunk),
+                            Err(frame) => *trailers = frame.into_trailers().ok(),
+                        },
+                        Poll::Ready(Some(Err(error))) => {
+                            return Poll::Ready(Some(Err(error.into())));
+                        }
+                        Poll::Ready(None) => *done = true,
+                    }
+                }
+            }
+        }
     }
 
     fn size_hint(&self) -> SizeHint {
-        self.inner.size_hint()
+        match &self.inner {
+            ResponsePayload::Passthrough(inner) => inner.size_hint(),
+            ResponsePayload::Json { .. } | ResponsePayload::Sse { .. } => SizeHint::default(),
+        }
     }
 }
 
@@ -862,6 +1023,105 @@ fn prepare_request(
     Ok(request)
 }
 
+fn prepare_toolsearch_request(request: &mut Request<RequestBody>) -> Result<bool, &'static str> {
+    let has_length = request.headers().contains_key(CONTENT_LENGTH);
+    let mut new_length = None;
+    let mut changed = false;
+    if let RequestBody::Buffered { bytes, .. } = request.body_mut() {
+        changed = toolsearch::request(bytes)?;
+        if changed && has_length {
+            new_length = HeaderValue::from_str(&bytes.len().to_string()).ok();
+        }
+    }
+    if let Some(length) = new_length {
+        request.headers_mut().insert(CONTENT_LENGTH, length);
+    }
+    if changed {
+        request
+            .headers_mut()
+            .insert(ACCEPT_ENCODING, HeaderValue::from_static("identity"));
+    }
+    Ok(changed)
+}
+
+async fn finish_response(
+    mut response: Response<Incoming>,
+    shim: bool,
+    mut selected: SelectedUpstream,
+    mut completion: RequestCompletion,
+    client_upgrade: OnUpgrade,
+    upgrades: mpsc::Sender<PendingUpgrade>,
+) -> Reply {
+    let status = response.status();
+    if shim
+        && status.is_success()
+        && response
+            .headers()
+            .get(CONTENT_ENCODING)
+            .is_some_and(|value| !value.as_bytes().eq_ignore_ascii_case(b"identity"))
+    {
+        completion.outcome = Some("toolsearch_compressed_response");
+        completion.finish(StatusCode::BAD_GATEWAY);
+        return crate::response(StatusCode::BAD_GATEWAY, "toolsearch_compressed_response");
+    }
+    let transform = shim && status.is_success();
+    let sse = transform
+        && response.headers().get(CONTENT_TYPE).is_some_and(|value| {
+            value
+                .as_bytes()
+                .split(|byte| *byte == b';')
+                .next()
+                .is_some_and(|mime| mime.trim_ascii().eq_ignore_ascii_case(b"text/event-stream"))
+        });
+    if transform {
+        response.headers_mut().remove(CONTENT_LENGTH);
+    }
+    strip_hop_by_hop(
+        response.headers_mut(),
+        status == StatusCode::SWITCHING_PROTOCOLS,
+    );
+    let mut selected_sender = (!selected.use_original).then_some(selected.sender.clone());
+    if status == StatusCode::SWITCHING_PROTOCOLS {
+        let upstream_upgrade = hyper::upgrade::on(&mut response);
+        let pending = PendingUpgrade {
+            client: client_upgrade,
+            upstream: upstream_upgrade,
+            task: selected.task.take(),
+            _sender: selected_sender.take(),
+        };
+        if upgrades.send(pending).await.is_err() {
+            return crate::response(StatusCode::INTERNAL_SERVER_ERROR, "connection closed");
+        }
+    }
+    completion.finish(status);
+    response.map(|body| {
+        LeasedBody {
+            inner: if sse {
+                ResponsePayload::Sse {
+                    inner: body,
+                    bytes: Zeroizing::new(Vec::new()),
+                    done: false,
+                    pending: None,
+                    skip_lf: false,
+                    trailers: None,
+                }
+            } else if transform {
+                ResponsePayload::Json {
+                    inner: body,
+                    bytes: Zeroizing::new(Vec::new()),
+                    done: false,
+                    trailers: None,
+                }
+            } else {
+                ResponsePayload::Passthrough(body)
+            },
+            _task: selected.task,
+            _sender: selected_sender,
+        }
+        .boxed_unsync()
+    })
+}
+
 async fn forward(
     mut request: Request<Incoming>,
     state: ForwardState,
@@ -874,7 +1134,7 @@ async fn forward(
     let upgrading = is_upgrade_request(request.headers());
     strip_hop_by_hop(request.headers_mut(), upgrading);
     let inference = method == Method::POST && path == "/v1/messages";
-    let (request, model) = match inspect_request(request, inference).await {
+    let (mut request, model) = match inspect_request(request, inference).await {
         Ok(result) => result,
         Err(reason) => {
             let status = inspection_error_status(reason);
@@ -906,7 +1166,24 @@ async fn forward(
         .config
         .route(&state.route.group, None)
         .is_some_and(|(id, _)| *id == credential_id);
-    let Ok(mut selected) = select_upstream(&state, endpoint, primary, inference && has_model).await
+    let zai = inference
+        && state
+            .route
+            .config
+            .zai_anthropic(&state.route.group, &credential_id);
+    let shim = if zai {
+        match prepare_toolsearch_request(&mut request) {
+            Ok(changed) => changed,
+            Err(reason) => {
+                completion.outcome = Some(reason);
+                completion.finish(StatusCode::BAD_REQUEST);
+                return Ok(crate::response(StatusCode::BAD_REQUEST, reason));
+            }
+        }
+    } else {
+        false
+    };
+    let Ok(selected) = select_upstream(&state, endpoint, primary, inference && has_model).await
     else {
         completion.finish(StatusCode::BAD_GATEWAY);
         return Ok(crate::response(
@@ -928,43 +1205,22 @@ async fn forward(
             "credential could not be encoded",
         ));
     };
-    let mut selected_sender = (!selected.use_original).then_some(selected.sender.clone());
-    let Ok(mut response) = selected.sender.send_request(request).await else {
+    let Ok(response) = selected.sender.clone().send_request(request).await else {
         completion.finish(StatusCode::BAD_GATEWAY);
         return Ok(crate::response(
             StatusCode::BAD_GATEWAY,
             "upstream connection failed",
         ));
     };
-    let status = response.status();
-    strip_hop_by_hop(
-        response.headers_mut(),
-        status == StatusCode::SWITCHING_PROTOCOLS,
-    );
-    if status == StatusCode::SWITCHING_PROTOCOLS {
-        let upstream_upgrade = hyper::upgrade::on(&mut response);
-        let pending = PendingUpgrade {
-            client: client_upgrade,
-            upstream: upstream_upgrade,
-            task: selected.task.take(),
-            _sender: selected_sender.take(),
-        };
-        if upgrades.send(pending).await.is_err() {
-            return Ok(crate::response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "connection closed",
-            ));
-        }
-    }
-    completion.finish(status);
-    Ok(response.map(|body| {
-        LeasedBody {
-            inner: body,
-            _task: selected.task,
-            _sender: selected_sender,
-        }
-        .boxed_unsync()
-    }))
+    Ok(finish_response(
+        response,
+        shim,
+        selected,
+        completion,
+        client_upgrade,
+        upgrades,
+    )
+    .await)
 }
 
 fn swap_credential<B>(
@@ -1059,6 +1315,52 @@ fn strip_hop_by_hop(headers: &mut hyper::HeaderMap, upgrading: bool) {
 mod tests {
     use super::*;
     use airlock_core::secret::SecretFile;
+
+    #[test]
+    fn every_sse_split_boundary_and_multiple_events_are_framed() {
+        let first = b"event: content_block_start\r\ndata: {\"type\":\"content_block_start\",\"content_block\":{\"type\":\"tool_use\",\"name\":\"ToolSearch_\"}}\r\n\r\n";
+        let second = b"event: keepalive\ndata: plain text\n\n";
+        for split in 1..first.len() {
+            let mut buffered = Vec::new();
+            buffered.extend_from_slice(&first[..split]);
+            if let Some(end) = sse_event_end(&buffered) {
+                assert_eq!(end, split, "split {split}");
+                assert_eq!(first[split], b'\n', "split {split}");
+                let mut skip_lf = true;
+                let suffix =
+                    skip_optional_lf(Bytes::copy_from_slice(&first[split..]), &mut skip_lf);
+                assert!(suffix.is_empty(), "split {split}");
+                assert!(!skip_lf, "split {split}");
+            }
+            buffered.extend_from_slice(&first[split..]);
+            buffered.extend_from_slice(second);
+            let end = sse_event_end(&buffered).expect("first complete event");
+            assert_eq!(end, first.len(), "split {split}");
+            let mut event = Zeroizing::new(buffered[..end].to_vec());
+            assert_eq!(toolsearch::event(&mut event), Ok(true));
+            assert!(
+                std::str::from_utf8(&event)
+                    .expect("UTF-8")
+                    .contains(r#""name":"ToolSearch""#)
+            );
+            assert_eq!(sse_event_end(&buffered[end..]), Some(second.len()));
+        }
+        assert_eq!(sse_event_end(b"data: {}\n\r\n"), Some(11));
+        for first in [
+            b"data: {}\r\r".as_slice(),
+            b"data: {}\n\n".as_slice(),
+            b"data: {}\r\n\r\n".as_slice(),
+            b"data: {}\r\n\r".as_slice(),
+        ] {
+            assert_eq!(sse_event_end(first), Some(first.len()));
+        }
+        let mut skip_lf = true;
+        assert_eq!(
+            skip_optional_lf(Bytes::from_static(b"event: next\r\r"), &mut skip_lf),
+            Bytes::from_static(b"event: next\r\r")
+        );
+        assert!(!skip_lf);
+    }
 
     #[test]
     fn exact_limit_json_in_uneven_chunks_keeps_bounded_capacity() {

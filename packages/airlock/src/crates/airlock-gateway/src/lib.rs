@@ -1,5 +1,6 @@
 mod ca;
 mod intercept;
+mod toolsearch;
 
 use std::{
     collections::BTreeMap,
