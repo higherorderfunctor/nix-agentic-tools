@@ -10,8 +10,9 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 WORKFLOW = SCRIPTS.parents[1] / ".github" / "workflows" / "update.yml"
@@ -140,7 +141,32 @@ class MatrixTest(unittest.TestCase):
         self.assertLess(update.index("update-publish.sh"), verdict)
         self.assertLess(update.index("name: update-receipt-"), verdict)
         step = update[update.rindex("- name:", 0, verdict):verdict]
-        self.assertIn("if: ${{ !cancelled() }}", step)
+        condition = next(line.strip() for line in step.splitlines() if line.strip().startswith("if: "))
+        expression = condition.removeprefix("if: ${{ ").removesuffix(" }}")
+        expression = expression.replace("&&", " and ").replace("||", " or ").replace("!", "not ")
+        for prepare, publish, cancelled, expected in (
+            ("cancelled", "skipped", False, False),
+            ("failure", "skipped", False, False),
+            ("skipped", "skipped", False, False),
+            ("success", "failure", False, True),
+            ("success", "success", False, True),
+            ("success", "failure", True, False),
+            ("success", "success", True, False),
+        ):
+            with self.subTest(prepare=prepare, publish=publish, cancelled=cancelled):
+                # Evaluate the workflow's guard, including the implicit success()
+                # gate Actions adds only when no status function is present.
+                success = prepare == publish == "success" and not cancelled
+                context = {
+                    "always": lambda: True,
+                    "cancelled": lambda: cancelled,
+                    "failure": lambda: "failure" in (prepare, publish),
+                    "steps": SimpleNamespace(prepare=SimpleNamespace(outcome=prepare)),
+                    "success": lambda: success,
+                }
+                status_guard = any(f"{name}()" in expression for name in ("always", "cancelled", "failure", "success"))
+                result = bool(eval(expression, {"__builtins__": {}}, context)) and (status_guard or success)
+                self.assertEqual(result, expected)
 
 
 class GitHubTest(unittest.TestCase):

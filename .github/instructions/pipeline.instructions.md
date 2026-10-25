@@ -7,14 +7,16 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-24 — Darwin extraction waits for package shards to
-> publish their builds through Cachix; the sweep is the only update entrypoint;
-> package workers never build; `checks/<concern>/flake.lock` files are lock-kind
-> matrix rows; the `mirror-health` job reports the jail-nix mirror; ci.yml runs
-> the required KVM job `service-secret-ordering`, which builds a dev-only
-> fixture flake; `jail-smoke` and `checks-eval-darwin` are required contexts;
-> both systems' name evaluations are budgeted by function count; the pushFilter
-> also excludes the CodeQL engines.
+> **Last verified:** 2026-10-25 — the verification verdict requires successful
+> preparation and still runs after publication failures unless cancelled; Darwin
+> extraction waits for package shards to publish their builds through Cachix;
+> the sweep is the only update entrypoint; package workers never build;
+> `checks/<concern>/flake.lock` files are lock-kind matrix rows; the
+> `mirror-health` job reports the jail-nix mirror; ci.yml runs the required KVM
+> job `service-secret-ordering`, which builds a dev-only fixture flake;
+> `jail-smoke` and `checks-eval-darwin` are required contexts; both systems'
+> name evaluations are budgeted by function count; the pushFilter also excludes
+> the CodeQL engines.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -76,7 +78,11 @@ before permitting publication. An early rev/source commit alone proves nothing:
 main-tracking packages create it before refreshing dependency hashes. A timeout
 must therefore never publish that worker's partial branch. Completed siblings
 publish independently; no `always()` publication of an interrupted worker is
-needed. Diagnostics still upload on failure or cancellation.
+needed. The verification verdict also requires successful preparation: a failed
+or timed-out preparation never writes `prepared.json`. With that record
+available, the verdict still runs if publication or auto-merge arming fails,
+unless the sweep was cancelled. Diagnostics still upload on failure or
+cancellation.
 
 Each worker has a 120-minute job ceiling, with preparation and setup sharing 105
 minutes from its first step. The remaining budget is reserved for publishing and
