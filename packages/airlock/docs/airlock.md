@@ -1,15 +1,14 @@
 # airlock
 
-> **Last verified:** 2026-10-24 — Anthropic groups route each inference request
-> by a model read from a zeroizing 32 MiB in-memory body. Selected endpoints
-> connect with independent TLS and ALPN; feature traffic retains the original
-> host. OpenAI and managed OAuth remain gated.
+> **Last verified:** 2026-10-24 — Anthropic groups route by model; the z.ai
+> preset aliases `ToolSearch` in requests and restores it in JSON and SSE
+> responses. Nested tool results stop at one supported level; SSE accepts CR, LF
+> and CRLF framing. OpenAI and managed OAuth remain gated.
 
 ## Scope
 
 airlock is becoming the sandboxed harness's egress gateway for providers, MCP,
-gh/glab, guarded web and git+ssh. Its core handles client identity, policy,
-credential injection and audit. CLIProxyAPI coexists until harnesses cut over.
+gh/glab, guarded web and git+ssh. CLIProxyAPI coexists for now.
 
 ## Transport
 
@@ -25,10 +24,8 @@ Interception follows this order:
 - airlock reads the ClientHello and requires its SNI to equal the CONNECT host,
   else it closes (`sni_mismatch`, `sni_missing`, `not_tls`). Otherwise a client
   could CONNECT to one host and speak TLS to another under that host's leaf.
-- It opens TLS to the real host offering exactly the client's ALPN list,
-  verified against the system store (`SSL_CERT_FILE` is honoured). Only then
-  does it finish the client's handshake, offering only the protocol the upstream
-  chose, so ALPN matches end to end.
+- It opens verified TLS to the real host with the client's ALPN list (system
+  store or `SSL_CERT_FILE`), then offers the chosen protocol to the client.
 - Startup loads client tokens and every credential in a granted group once,
   collecting unreadable or empty files. Ungranted groups stay inert.
 - The original verified upstream chooses client ALPN and carries primary feature
@@ -41,6 +38,14 @@ Interception follows this order:
   A selected endpoint gets its own verified TLS connection, independent ALPN,
   authority and path prefix. Responses stream without waiting for completion;
   HTTP/1.1, h2 and Upgrade remain supported.
+- The selected z.ai Anthropic preset aliases `ToolSearch` in declarations,
+  choice, history and references inside one tool-result level, then restores
+  response tool-use names in JSON and SSE. Deeper tool results are refused.
+  Other request bytes remain exact; a declared `ToolSearch_` gets 400. An
+  aliased request asks for identity encoding; a compressed success gets 502
+  before body forwarding. JSON is capped at 32 MiB; each SSE event at 1 MiB and
+  emitted when complete. SSE accepts CR, LF and CRLF line endings and
+  case-insensitive `text/event-stream` media type.
 - Before injection, every request drops client `Authorization` and `x-api-key`
   values plus hop-by-hop fields named by `Connection`. An OAuth credential is
   injected as a sensitive Authorization bearer header; an API key is injected as
@@ -76,10 +81,6 @@ with a local CONNECT proxy intercepting TLS and a fake token, offline:
 - All traffic went to `api.anthropic.com`, on many `/api/*` paths besides
   `/v1/messages`. An intercepted host must pass every path through and swap the
   token wherever it appears; an allowlist of paths would break features.
-
-The harness therefore holds only fake client credentials, such as a disposable
-`CLAUDE_CODE_OAUTH_TOKEN`; airlock reads the real provider credential from its
-runtime files when it binds and substitutes it on every intercepted request.
 
 ## Not a security boundary yet
 

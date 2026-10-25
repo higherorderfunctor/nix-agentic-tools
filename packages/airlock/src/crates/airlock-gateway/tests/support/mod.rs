@@ -193,7 +193,7 @@ impl Running {
             "listen": "127.0.0.1:0",
             "providers": {
                 "claude": {"endpoints": {"anthropic": primary_endpoint}},
-                "zai": {"endpoints": {"anthropic": format!("https://localhost:{zai_port}/api/anthropic")}}
+                "zai": {"preset": "zai", "endpoints": {"anthropic": format!("https://localhost:{zai_port}/api/anthropic")}}
             },
             "state_dir": directory.path(),
             "unknown_hosts": "deny"
@@ -561,10 +561,20 @@ pub enum UpstreamMode {
     CloseAfterResponse,
     DropMidResponse,
     Echo,
+    Fixed {
+        body: &'static [u8],
+        content_type: &'static str,
+        encoding: Option<&'static str>,
+    },
     Gate(Arc<Notify>),
     HashUpload,
     Metadata,
     Sse(Arc<Notify>),
+    ToolSearchSse {
+        release: Arc<Notify>,
+        content_type: &'static str,
+        cr_only: bool,
+    },
     Stall(Arc<StallGates>),
     UpgradeEcho(Arc<UpgradeBytes>),
 }
@@ -605,7 +615,10 @@ async fn serve_raw_upgrade(
 }
 
 async fn request_body(mode: &UpstreamMode, mut body: Incoming) -> (Bytes, u64, usize) {
-    let echo = matches!(mode, UpstreamMode::Echo);
+    let echo = matches!(
+        mode,
+        UpstreamMode::Echo | UpstreamMode::Fixed { .. } | UpstreamMode::ToolSearchSse { .. }
+    );
     let mut collected = Vec::new();
     let mut hash = FNV_OFFSET;
     let mut len = 0;
@@ -620,6 +633,21 @@ async fn request_body(mode: &UpstreamMode, mut body: Incoming) -> (Bytes, u64, u
         }
     }
     (Bytes::from(collected), hash, len)
+}
+
+fn toolsearch_sse_chunks(cr_only: bool) -> &'static [&'static [u8]] {
+    if cr_only {
+        &[
+            b"event: content_block_start\rdata: {\"type\":\"content_block_start\",\"content_block\":{\"type\":\"tool_use\",\"name\":\"ToolSearch_\",\"input\":{}}}\r\r",
+            b"event: message\rdata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\r\r",
+        ]
+    } else {
+        &[
+            b"event: content_block_start\r\ndata: {\"type\":\"content_block_start\",\"content_block\":{\"type\":\"tool_use\",\"name\":\"Tool",
+            b"Search_\",\"input\":{}}}\r\n\r",
+            b"\nevent: message\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\n",
+        ]
+    }
 }
 
 async fn upstream_response(
@@ -646,6 +674,21 @@ async fn upstream_response(
             Response::new(ReceiverBody::new(receiver))
         }
         UpstreamMode::Echo => Response::new(queued_body(body)),
+        UpstreamMode::Fixed {
+            body,
+            content_type,
+            encoding,
+        } => {
+            let mut response = Response::builder()
+                .header("content-type", content_type)
+                .header("content-length", body.len().to_string());
+            if let Some(encoding) = encoding {
+                response = response.header("content-encoding", encoding);
+            }
+            response
+                .body(queued_body(Bytes::from_static(body)))
+                .expect("fixed response")
+        }
         UpstreamMode::Gate(release) => {
             if path == "/blocked" {
                 release.notified().await;
@@ -674,6 +717,34 @@ async fn upstream_response(
                     .await;
             });
             Response::new(ReceiverBody::new(receiver))
+        }
+        UpstreamMode::ToolSearchSse {
+            release,
+            content_type,
+            cr_only,
+        } => {
+            let (sender, receiver) = mpsc::channel(4);
+            tokio::spawn(async move {
+                for part in toolsearch_sse_chunks(cr_only) {
+                    if sender
+                        .send(Ok(Frame::data(Bytes::copy_from_slice(part))))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                release.notified().await;
+                let _ = sender
+                    .send(Ok(Frame::data(Bytes::from_static(
+                        b"event: done\ndata: [DONE]\n\n",
+                    ))))
+                    .await;
+            });
+            Response::builder()
+                .header("content-type", content_type)
+                .body(ReceiverBody::new(receiver))
+                .expect("SSE response")
         }
         UpstreamMode::Stall(_) => unreachable!("raw stalled-reader upstream"),
         UpstreamMode::UpgradeEcho(_) => unreachable!("raw upgrade upstream"),
