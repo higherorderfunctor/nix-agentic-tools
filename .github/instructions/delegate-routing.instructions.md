@@ -7,8 +7,8 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-16 — Kiro workflow step sessions skip the per-turn
-> reminder; root sessions and the other runtimes retain their reminder output.
+> **Last verified:** 2026-10-24 — tool selection preserves configured model ids
+> beyond the Agent enum.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -110,8 +110,9 @@ per tier with all applicable native and external reaches.
 
 Resolve concrete models at launch time: inspect the runtime's live list, compare
 version segments to find the highest version matching the family pattern, and
-use that runtime's spelling. Claude's interactive tools take aliases such as
-`opus`.
+use that runtime's spelling. Claude's Agent tool takes aliases such as `opus`;
+Workflow `agent()` takes full model ids from configured model-picker rows,
+including ids published by the operator's proxy routes.
 
 `runtimes.<runtime>.techniques` is a keyed set of workflow, subagent, external,
 introspect and usage nodes. Delegate nodes describe model and effort pinning,

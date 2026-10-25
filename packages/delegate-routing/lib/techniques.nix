@@ -6,7 +6,7 @@
     Agent = {
       kind = "subagent";
       modes = ["interactive" "headless"];
-      notes = "`model` takes an alias from the tool's enum; effort is inherited";
+      notes = "`model` takes only an alias from the tool's own enum; effort is inherited";
       pinsEffort = false;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Agent`: depth 3 below main (claude:depth)
@@ -15,7 +15,7 @@
     Workflow = {
       kind = "workflow";
       modes = ["interactive" "headless"];
-      notes = "`agent(prompt, {model, effort})` per node; a single node is the way to pin one delegate";
+      notes = "`agent(prompt, {model, effort})` per node; accepts full model ids, including ids outside the Agent enum, from configured model-picker rows (the ids operator proxy routes publish); a single node is the way to pin one delegate";
       pinsEffort = true;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Workflow` fn 14: nodes lack Agent/Workflow (claude:wf_allowed)
