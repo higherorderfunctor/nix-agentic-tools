@@ -20,7 +20,7 @@ use hyper::{
     Method, Request, Response, StatusCode, Uri,
     body::{Body, Bytes, Frame, Incoming},
     client::conn,
-    header::{HeaderMap, HeaderName},
+    header::{HeaderMap, HeaderName, HeaderValue},
     server::conn as server_conn,
     service::service_fn,
 };
@@ -557,6 +557,14 @@ pub struct UpgradeBytes {
 }
 
 #[derive(Clone)]
+pub struct QuotaFixture {
+    pub body: &'static [u8],
+    pub headers: Vec<(&'static str, &'static str)>,
+    pub release_body: Option<Arc<Notify>>,
+    pub status: StatusCode,
+}
+
+#[derive(Clone)]
 pub enum UpstreamMode {
     CloseAfterResponse,
     DropMidResponse,
@@ -569,6 +577,7 @@ pub enum UpstreamMode {
     Gate(Arc<Notify>),
     HashUpload,
     Metadata,
+    Quota(Arc<QuotaFixture>),
     Sse(Arc<Notify>),
     ToolSearchSse {
         release: Arc<Notify>,
@@ -650,6 +659,29 @@ fn toolsearch_sse_chunks(cr_only: bool) -> &'static [&'static [u8]] {
     }
 }
 
+fn quota_response(fixture: &QuotaFixture) -> Response<ReceiverBody> {
+    let mut builder = Response::builder().status(fixture.status);
+    for (name, value) in &fixture.headers {
+        builder = builder.header(
+            HeaderName::from_bytes(name.as_bytes()).expect("fixture header name"),
+            HeaderValue::from_str(value).expect("fixture header value"),
+        );
+    }
+    let body = if let Some(release) = &fixture.release_body {
+        let (sender, receiver) = mpsc::channel(1);
+        let release = release.clone();
+        let bytes = Bytes::from_static(fixture.body);
+        tokio::spawn(async move {
+            release.notified().await;
+            let _ = sender.send(Ok(Frame::data(bytes))).await;
+        });
+        ReceiverBody::new(receiver)
+    } else {
+        queued_body(Bytes::from_static(fixture.body))
+    };
+    builder.body(body).expect("quota response")
+}
+
 async fn upstream_response(
     mode: UpstreamMode,
     path: &str,
@@ -705,6 +737,7 @@ async fn upstream_response(
             .header("upgrade", "websocket")
             .body(queued_body(Bytes::from_static(b"quota")))
             .expect("metadata response"),
+        UpstreamMode::Quota(fixture) => quota_response(&fixture),
         UpstreamMode::Sse(release) => {
             let (sender, receiver) = mpsc::channel(2);
             tokio::spawn(async move {
