@@ -872,200 +872,6 @@ After editing any file — regardless of how it was modified (Edit, Write, Bash,
 sed, etc.) — run `treefmt <file>` on the changed file. treefmt handles Nix (via
 alejandra) and markdown (via prettier).
 
-<!-- Fragment: dev/fragments/monorepo/architecture-fragments.md -->
-
-## Architecture Fragments
-
-> **Last verified:** 2026-10-25 — shared AGENTS.md indexes may use one manually
-> followed child tier; `generate:all` regenerates instructions, repo documents
-> and devenv.yaml; devenv.lock is synced separately with
-> `devenv update <input>`; fragment sources live in the dev or package tree;
-> package categories live in owner registries; `dev/generate.nix` turns them
-> into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
-> first; devenv warns where AGENTS.md is past the limit Codex will apply there.
-
-This repo ships path-scoped architecture fragments as dev-only context for
-agents working on it. They are SEPARATE from the published consumer-facing
-content. Two location flavors are supported by `dev/generate.nix`:
-
-- `dev/fragments/<category>/<name>.md` (default `location = "dev"`) —
-  orientation and topic-scoped categories not tied to a single package.
-  `dev/fragments/monorepo/` specifically holds the always-loaded orientation,
-  delivered to every runtime as `ai.context`.
-- `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
-  package whose abstractions it documents.
-
-Scope globs (which files the fragment loads for) live separately in
-`config.fragments.categories.<category>.scopes` (composed from owner
-`registry.nix` files and `config/fragment-categories.nix`) and are independent
-of where the markdown source lives on disk.
-
-Each scoped category becomes one `ai.rules` entry (`dev/ai.nix`) whose `matcher`
-is its scopes and whose `references` are its source documents, and `ai.*` writes
-it per runtime through the `lib/ai/transformers/` pipeline:
-
-- Claude: `.claude/rules/<name>.md` with `paths:` YAML list
-- Copilot: `.github/instructions/<name>.instructions.md` with `applyTo:`
-  comma-joined globs
-- Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
-  `fileMatchPattern:`
-- Codex / AGENTS.md: always-loaded orientation plus a compact
-  `## Path-scoped rules` index. Codex has no glob-scoped instruction primitive,
-  so matching remains a manual progressive-disclosure step: the index maps the
-  same registry scopes to the authoritative source documents. Shorter
-  shared-parent `fileMatch` groups become manual child indexes under
-  `AGENTS.md.rules/`; pointers preserve coverage and children retain exact
-  scopes and audiences. Auto/manual entries stay at root. AGENTS.md used to
-  concatenate every scoped fragment body, but that bloated it to ~2k lines;
-  Phase 2.4 removed the bodies (commit c4f4aff), and `ai.*` renders a scoped
-  rule that names `references` as an index entry for the same reason. The index
-  and the always-on rules come before the orientation, so Codex's default 32 KiB
-  read keeps them in a fresh clone or a linked worktree, where the raised
-  `project_doc_max_bytes` in the gitignored `.codex/` does not apply. Every
-  module-provided Codex launcher warns on stderr when its byte budget truncates
-  or omits project documentation, including in repos without devenv. The check
-  reads local docs and reuses the effective-limit resolver, which adds a trust
-  remedy when an untrusted project config raises the limit. The
-  instructions-drift build check still guards this repo's index and rule markers
-  within 32 KiB.
-
-The source fragments are authoritative. Every runtime file above is a generated
-projection that `ai.*` writes: AGENTS.md, its generated child indexes and
-`.github/` are committed, the Claude and Kiro ones are gitignored and written on
-devenv shell entry. Never edit a projection directly; the next shell entry, or
-the drift check, undoes it. `devenv tasks run --mode before generate:all`
-regenerates all of them, committed and gitignored, after source or registry
-changes.
-
-### Maintenance is mandatory
-
-**When you make changes that alter the shape of any abstraction a scoped
-fragment describes, update the fragment in the same commit.** Out-of-date
-architecture fragments actively mislead future sessions and are worse than no
-fragment at all.
-
-Each scoped fragment opens with a `Last verified: <date> (commit <hash>)`
-marker. If that marker predates your change to the area the fragment scopes, the
-fragment is stale. Stop and update it before landing the commit — in the same
-commit, not a follow-up.
-
-This is not an etiquette rule. Research on LLM context shows out-of-date
-instructions degrade task success more than missing instructions. A lie is worse
-than silence.
-
-### The marker is ONE entry, not a changelog
-
-Update the `Last verified` marker in place. **Do not append the old entry as a
-`Prior:`.** These fragments are LLM context: one source fans out to Claude,
-Codex, Copilot and Kiro, so every byte is paid four times, on every turn that
-matches the scope.
-
-The habit of chaining `Prior:` entries grew to **82 KB across 31 fragments — 15%
-of all fragment text** — and it broke a consumer outright: github.com's Copilot
-PR reviewer began failing with `Prompt too big after adding system message`
-before it read a line of any diff.
-
-**The body is the record.** A correction that was applied to the body needs no
-changelog entry — the body already says the true thing, and the entry only
-restates it at four times the cost. That is what nearly all of those 82 KB were.
-
-Keep exactly two things beyond the current entry, and only when they earn it:
-
-- A **`Settled — do not relitigate`** bullet, for an approach that was TRIED and
-  REJECTED, or a measurement that would otherwise be re-derived wrongly. Name
-  the rejected thing and why it failed, keep the evidence (dates, PR numbers,
-  counts), and stop. This is the one thing git does not give you cheaply,
-  because reading a diff tells you WHAT changed and not what was ruled out.
-- A **git ref** to the last fuller version, when the reasoning is worth being
-  able to re-read: `` `git show <hash>:<path>` ``. One ref, not a chain.
-
-Everything else — re-verification with no change, restatements of what a commit
-did, dates with no claim attached — is dropped. Deleting it loses nothing: it is
-in the file's history, which is what history is for.
-
-### When to add a new fragment
-
-Add a fragment when you encounter a piece of non-inferable knowledge during
-debugging or implementation — something the next session would burn a lot of
-tokens rediscovering. Examples of the kind of content worth writing down:
-
-- **Why** a non-obvious design decision was made (trade-offs, abandoned
-  alternatives)
-- **Cross-cutting invariants** that span multiple files
-- **Shapes of abstractions** (fanout patterns, wrapper chains, activation
-  lifecycles)
-- **Known pitfalls** (subtle bugs, gotchas, migrations in flight)
-- **Debugging entry points** (what to grep, what to eval)
-
-Do NOT add fragments for content that is:
-
-- Discoverable by reading the code itself in under 10 seconds
-- Already covered by existing code comments (DRY)
-- A restatement of function signatures, file paths, or line numbers
-- Ephemeral (in-progress state goes in memory, not fragments)
-
-Target under 150 lines per fragment. If a topic outgrows that, split by
-sub-concern with tighter scopes.
-
-### Generator registration
-
-New fragments are registered under `config.fragments.categories`: use the
-owner's `registry.nix` for package-specific categories and
-`config/fragment-categories.nix` for workspace/shared categories. The attribute
-key is the category (which becomes the output filename for scoped Claude rules,
-Copilot instructions, and Kiro steering). Each category is one record with two
-fields: `scopes` (the path globs it loads for) and `sources` (the markdown
-fragments composed into it). A `sources` entry is either a bare string (legacy
-dev/fragments/ path) or an attrset with an explicit location:
-
-```nix
-# ILLUSTRATIVE ONLY — neither category below exists. Real rows
-# live in config/fragment-categories.nix; read that file for them.
-config.fragments.categories = {
-  example-dev-sourced = {
-    scopes = ["packages/example/**"];
-    sources = [
-      # bare string: location="dev", dir defaults to the category key
-      "packaging-guide"
-      # → dev/fragments/example-dev-sourced/packaging-guide.md
-    ];
-  };
-  example-co-located = {
-    scopes = ["packages/example/**"];
-    sources = [
-      {
-        location = "package";
-        name = "example-wrapper";
-        # dir overrides the category key; null (the default) would
-        # look under packages/example-co-located/docs/ instead
-        dir = "example";
-        # → packages/example/docs/example-wrapper.md
-      }
-    ];
-  };
-};
-```
-
-Both categories above are **fictional on purpose.** A worked example that names
-a real category is a standing drift liability: it goes stale every time that
-category's `scopes` change, and the maintenance rule above will not catch it,
-because re-pointing a glob does not alter the _shape_ this snippet teaches. That
-is exactly how this snippet rotted once — it taught `packages/ai-clis/**`, a
-directory that no longer exists. Keep the example about the record's shape and
-let `config/fragment-categories.nix` be the source of real rows.
-
-`scopes` is a Nix list of globs, and `null` means always-loaded (what the
-`monorepo` orientation category uses). The option itself is declared in
-`lib/fragments-registry.nix`; `lib/facets/registry.nix` composes the
-contributions with `lib.evalModules`, and `dev/generate.nix` reads its result
-into the `context` and `rules` that `dev/ai.nix` hands to `ai.*`. The transforms
-handle per-ecosystem emission — do not hand-format frontmatter.
-
-After adding or editing fragments, run
-`devenv tasks run --mode before generate:all` to regenerate instruction and
-repo-document projections. `--mode before` is load-bearing: without it devenv
-runs an aggregate without its dependency leaves.
-
 <!-- Fragment: dev/fragments/monorepo/build-commands.md -->
 
 ## Build & Validation Commands
@@ -1129,575 +935,115 @@ The structural check (`nix flake check`) validates cross-references. The
 pre-commit hook runs a fast subset. If something is removed, grep for it across
 the repo before committing.
 
-<!-- Fragment: dev/fragments/monorepo/git-workflow.md -->
-
-## Git Workflow — trunk-based, worktree-per-branch
-
-> **Last verified:** 2026-10-24 — local review mechanics are owned by the
-> delegate-routing Work and review workflow.
->
-> **Settled — do not relitigate.** Each of these records an approach that was
-> TRIED and rejected, so the reasoning is not re-derived from scratch. Full
-> lineage: `git show ca236499:dev/fragments/monorepo/git-workflow.md`.
->
-> - **Back up with a ref pushed to `origin`, never a local tag or branch.** The
->   tag was tried, on the sound reasoning that `--update-refs` moves branches
->   and not tags. Tags are refs in the COMMON git dir, so any worktree's fetch
->   prunes them all when the author's global `fetch.pruneTags` is set — measured
->   twice on 2026-08-15, the second time by the verifying fetch itself.
-> - **Do NOT re-add a `devenv shell` bootstrap to the worktree recipe.** It was
->   required until 2026-08-18 and is now actively wrong under the sandbox-stack
->   topology. `devenv tasks run` was the obvious substitute and does NOT
->   materialize `.pre-commit-config.yaml` either — measured 2026-07-31 in two
->   fresh worktrees, where the task succeeded and the next commit was still
->   rejected.
-> - **Hooks and tool config come from the LAUNCH checkout; a worktree is
->   materialized only by choice.** Operator, 2026-09-30: "cwd llm launch from
->   wins which will always be from a materialized shell" — usually the primary
->   clone, sometimes a long-lived worktree used as a base — and "the llm should
->   also just materialize if it needs (to test devenv stuff) and prek is a
->   subset of that. dont materialize direnv/devenv as default though in wts".
->   Rejected: worktree-only config (every fresh worktree blocked until a 17 s
->   cold materialize, `devenv tasks run --mode single devenv:files`); a
->   post-checkout or async materializer (cost for no day-to-day benefit); "the
->   worktree's config wins when present" (a stale snapshot silently gates
->   commits after a rebase). The premise that carries the weight: every local
->   validator has a CI backend, enforced by `config/repo-validation.nix`, so a
->   branch that ADDS a gate is skipped locally but cannot escape CI; a
->   repository without that property should not copy this decision. This kept
->   drifting because summaries kept the first half and dropped the second; write
->   both.
-> - **Do not restore `devenv-test` as a required context.** It was promoted
->   2026-08-03 and demoted two days later as a merge-blocking liability, risk
->   accepted; it left automatic PR/push execution entirely on 2026-08-29.
-> - **Do not re-derive a Copilot auto-trigger rate from push observations.** The
->   "1 review in 5 pushes" datum was a ready-transition coinciding with a push,
->   not a flaky trigger. Sampling this way produces a confident wrong model and
->   costs a paid review re-establishing a trigger that fires on readiness only.
-
-`main` is the trunk. Its branch-protection ruleset requires a pull request, no
-force-push, no deletion, and ten required status checks —
-`build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
-`checks-eval-darwin`, `checks-matrix`, `gitleaks`, `jail-smoke`,
-`kiro-patched (x86_64-linux, ubuntu-latest)`,
-`kiro-patched (aarch64-darwin, macos-latest)`, `service-secret-ordering`, and
-`test`. `checks-matrix` was promoted 2026-10-14: it builds every flake check
-through Hestia's evaluate-once matrix, and `test` only evaluates.
-`checks-eval-darwin` was promoted 2026-10-18 after six green runs: since the
-`checks` option became lazy (#2675) no other Darwin context forces every check
-value, so without it a Linux-only check leaking onto Darwin merges green. Both
-`kiro-patched` contexts were promoted 2026-08-13 with PR #895. `jail-smoke` was
-added and promoted 2026-10-20 with PR #2742: it runs `ai.jail` live on a runner,
-so a jail-nix bump that stops jailing cannot auto-merge.
-`service-secret-ordering` is required from #2765's merge: its VM test is the
-only verification of a fixture-flake lock PR, which would otherwise auto-merge
-unverified. The ruleset requires **zero approving reviews** but it DOES require
-**every review thread to be resolved** (`required_review_thread_resolution`,
-enabled 2026-07-29).
-
-The full Devenv Diagnostic is now `workflow_dispatch` only. It was promoted to a
-required check on 2026-08-03, demoted on 2026-08-05 after becoming a
-merge-blocking liability, and removed from automatic PR/push execution on
-2026-08-29 after its deterministic contracts moved under `nix flake check`. Do
-not "restore" its old context to make this fragment match historical prose —
-read the ruleset:
-
-```bash
-gh api "repos/OWNER/REPO/rulesets" --jq '.[] | "\(.id)  \(.name)"'
-gh api "repos/OWNER/REPO/rulesets/<id>" \
-  --jq '.rules[] | select(.type=="required_status_checks")
-        | [.parameters.required_status_checks[].context]'
-```
-
-**Squash-merge only** — but that is the REPOSITORY settings, not the ruleset:
-`allow_squash_merge` true, `allow_merge_commit` and `allow_rebase_merge` false.
-The ruleset's own `allowed_merge_methods` still lists all three, so changing it
-there changes nothing. Copilot review comes from a separate ruleset rule
-(`Copilot review for default branch`) that _requests_ a review **once per PR,
-when it becomes ready** — not on every push (see the trigger model below): it is
-neither a required approval nor a required status check.
-
-**But it can now block a merge indirectly**, and that is deliberate. Since
-threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
-`update/*` PR included, which is the intended trade: nothing auto-merges while a
-reviewer has an open question on it. A stalled update PR is not lost; the next
-4x/day sweep rebuilds and re-arms it.
-
-### After you open or update a PR, the loop is YOURS
-
-Not the operator's. They should not have to notice CI went red, notice a review
-landed, or hand the PR back to you. You are the one still holding the context.
-
-**Never end a turn on a promise.** "I'll check when it lands" with no mechanism
-is worse than saying nothing: it looks like ownership and behaves like a block.
-Arm something that re-invokes you — a backgrounded watcher whose exit wakes the
-session — and only then report. Kill it once the signal arrives.
-
-On every push, including the first:
-
-1. **Watch CI until the first failure or until every check finishes.** Use the
-   `pr-review-loop` skill's watcher, in the background: it waits for checks on
-   the commit you pushed and exits on the first red (`--fail-fast`). A watcher
-   that waits for every check reports a failure only after the slowest job. Read
-   the exit status of the tool, not a notification's summary — a pipeline's
-   status is the last command's, so `nix flake check | tail` reports the tail's
-   success. Capture the real code.
-2. **A conflicted PR gets ZERO check runs and reads exactly like slow CI.**
-   `mergeStateStatus: DIRTY` with an empty check list means rebase, not wait.
-   The same shape appears when the base moves under a long-running branch.
-3. **React to a red check by reading the failing job's log**, not by guessing
-   from the check name. Fix, push, re-arm the watcher.
-4. **Then read the review** (next section).
-
-Only report back when the PR is green and reviewed, or when something needs a
-decision that is genuinely the operator's.
-
-### Copilot reviews once, automatically. Do not trigger the first one
-
-The ruleset requests it when the PR **becomes ready for review** — which covers
-a PR opened non-draft as well as a draft flipped later. It is automatic. Do not
-request it by hand, and do not treat an absent run on a fresh push as a missed
-trigger: pushes never trigger a review, so absent is the resting state.
-
-**Re-request only after a significant change since the last run.** New scope, a
-mechanism the previous review never saw, an approach rewritten rather than
-corrected. Applying the review's own findings is NOT a significant change, and
-neither is rewording, reformatting or renaming. There is no round count to spend
-down — there is one question, asked each time: is there materially new code to
-review? Every review after the first is a paid manual request.
-
-Read BOTH buckets. The inline threads gate the merge; the review body carries a
-suppressed block that creates no thread and that a heading grep will silently
-miss. Reply and resolve each gating thread **in the same turn as the fix**, not
-after the checks pass. Mechanics, and the API traps that each report a clean
-round that did not happen, are in the `pr-review-loop` skill.
-
-### When Copilot does not review, a SEPARATE agent does
-
-Triggers, any of them: the review errored, the account is out of quota, the PR
-never left draft, or `git diff --stat <last-reviewed-sha>...HEAD` shows a change
-that would earn a re-request under the test above — a new file or mechanism, or
-an approach rewritten rather than corrected.
-
-**You cannot review your own diff.** The reasoning that wrote the code is the
-reasoning evaluating it, so reading it back produces agreement. Dispatch a
-reviewer that did not write the diff, from a different vendor. Give it the
-requirements and diff; the PR body is an argument, not evidence. Report
-dismissed findings as well as fixes.
-
-github.com Copilot fails here often enough that separate-agent review is the
-common case, not a fallback for one outage.
-
-### Escalating past one reviewer: three blind checks
-
-**Settled — do not relitigate:** never trigger escalation on a change's
-"complexity": that word routed the decision before, and two agents reached
-opposite answers.
-
-Use all three checks when either trigger holds:
-
-- You intend to dismiss a reviewer finding rather than fix it; scope the checks
-  to disputed findings.
-- The diff touches a shared abstraction: `lib/**`, `packages/*/lib/**`, carried
-  patches under `packages/*/patches/**` or `packages/*/packages/**/*.nix`; or a
-  hunk under `packages/*/modules/**` or `lib/ai/**` adds, removes or retypes a
-  `mkOption`.
-
-Everything else uses one reviewer. Follow the delegate-routing skill's **Work
-and review** workflow for the rubric, checks and loop.
-
-**Scope, deliberately narrow:**
-
-- Only for changes going to `main`. A draft PR, or a long-lived experiment
-  branch where the design is not settled yet, forgoes it — if it is a draft, it
-  is not ready for this.
-- **Local runtimes only, always.** Never hand this to github.com Copilot: it
-  cannot be given a model or an effort level, and the cost belongs where those
-  controls exist.
-- Size the roles separately using the delegate-routing skill's **Size the work**
-  section.
-
-The `pr-review-loop` skill owns the GitHub review and CI mechanics.
-
-### Every change goes through an isolated worktree + PR
-
-**"Change" includes untracked drafts.** The rule is not "worktree before you
-commit" — it is worktree before you author the FIRST repo-destined file, and a
-working doc you have not decided to commit yet still counts. Added 2026-08-05
-after a reference doc was drafted directly in the primary checkout: the operator
-runs multiple parallel sessions that share that cwd, so every one of them
-started failing the shared lint hooks on a file none of them had written, while
-the drafting session was the only one that could not see the damage. The primary
-checkout belongs to the operator, not to any agent session.
-
-Pre-flight before the first Write/Edit of any repo file in a session:
-
-```bash
-git rev-parse --path-format=absolute --git-dir
-# ends in .git/worktrees/<slug> → linked worktree, proceed
-# ends in a bare <clone>/.git   → primary checkout: STOP, make a worktree first
-```
-
-`--path-format=absolute` is load-bearing, not decoration, and the bare form is
-actively misleading here. `git rev-parse --git-dir` prints a path **relative to
-cwd when it can**, so at the top of the primary checkout it answers `.git` —
-while in a linked worktree it answers an absolute
-`<clone>/.git/worktrees/<slug>`. Measured both ways on 2026-08-05. So the one
-case the check exists to catch is the case whose output does not look like the
-`<clone>/.git` you are comparing against, and a reader matching on that string
-concludes "not the primary checkout" precisely when they are standing in it.
-Forcing absolute makes both arms comparable. This is the same flag the worktree
-derivation below already uses for `--git-common-dir`, and the same one
-`devenv.nix` uses for its related checks.
-
-Only the session scratchpad is exempt, because it never touches the repo tree at
-all. There is no "just a draft" exemption, no "I'll move it before committing"
-exemption, and no "it's gitignored-adjacent" exemption.
-
-Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** — a
-clone at `~/src/nix-agentic-tools` puts them in
-`~/src/nix-agentic-tools-worktrees/<slug>`. Keeping them beside the clone means
-a direnv whitelist (or any editor/tooling trust root) covering the checkout
-covers new worktrees too, so editors and tooling treat them as the same trusted
-project — and it keeps work out of `~/.cache`, which cache-cleaning tools treat
-as disposable.
-
-This used to be justified by `cd` alone entering the devenv shell and
-materializing the gitignored `files.*` artifacts, which was how a worktree got
-bootstrapped. That is no longer a reason to want it: nothing needs a worktree
-shell entry now (step 2 below), and under the sandbox-stack topology devenv is
-deliberately entered in the primary checkout only. Do not read the sibling
-layout as an endorsement of direnv-driven devenv entry in worktrees.
-
-Derive that directory once per shell. This form is correct from **any**
-worktree, not just the primary checkout:
-
-```bash
-worktrees="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")-worktrees"
-```
-
-`--git-common-dir` resolves to the ORIGINAL clone's `.git` even when run from a
-linked worktree, so `dirname` of it is always the primary checkout. Do **not**
-substitute a bare `../<repo>-worktrees/<slug>`: from a linked worktree that
-silently resolves one level too deep, into
-`<repo>-worktrees/<repo>-worktrees/<slug>`.
-
-1. Branch off `main` into its own worktree:
-
-   ```bash
-   git worktree add -b <type>/<slug> "$worktrees/<slug>" origin/main
-   ```
-
-   `<type>` is a Conventional Commits type (`build`, `chore`, `ci`, `docs`,
-   `feat`, `fix`, `perf`, `refactor`, `style`, `test`).
-
-2. **There is no worktree bootstrap step.** `git worktree add` and commit — the
-   shared prek hooks resolve their config from the launch checkout, and
-   `PREK_HOME` from the committing worktree, so a worktree that has never
-   entered `devenv shell` validates exactly like one that has.
-
-   This changed on 2026-08-18 and the old shape is worth knowing, because every
-   doc and habit predating it says otherwise. The hooks used to resolve
-   `.pre-commit-config.yaml` from the COMMITTING worktree's toplevel — a devenv
-   `files.*` artifact materialized on SHELL ENTRY only, which `git worktree add`
-   never runs — so a fresh worktree's first commit was rejected until you ran
-   `devenv shell true` in it. Worse, `devenv tasks run` did not materialize it
-   either — measured 2026-07-31 in two fresh worktrees (`generate:all` succeeded
-   in each and the next commit was still rejected) and re-confirmed 2026-08-18 —
-   so bootstrapping via the task you needed anyway looked like it worked and
-   failed later, attributed to the commit. That asymmetry is still live for
-   anything else that wants a `files.*` artifact in a worktree; it just no
-   longer gates commits.
-
-   The launch checkout is the one that is entered — sessions launch in its
-   devenv shell and the agent process runs with cwd in a linked worktree — so
-   its config always exists and always tracks regeneration. It is usually the
-   primary clone, sometimes a long-lived worktree used as a base for prototype
-   work. **Only the launch checkout needs `devenv shell true`, and only after a
-   fresh clone or a `devenv.nix` change.** If a commit is ever rejected for a
-   missing config, the hook names that path and that fix; do not silence it with
-   `PREK_ALLOW_NO_CONFIG=1`, `--allow-missing-config`, or `prek uninstall` — all
-   three skip every check rather than fixing the bootstrap.
-
-   Materialize a **worktree** only when you need to test devenv output there —
-   regenerating instruction projections, or checking your own hook changes. It
-   is your call, never a default. For hook changes, materialize the worktree and
-   run `prek run` in it: stock prek finds the worktree's own config from cwd,
-   while commits keep using the launch checkout's. CI builds `checks.repo-lints`
-   from the branch's own config, so a gate the branch adds is enforced there
-   even though local commits do not run it yet.
-
-3. **Push at the first commit** — not at the end — so the branch is a continuous
-   off-machine backup. Open the PR **ready (non-draft) as soon as the work is
-   dev-complete**: becoming ready for review is the _only_ thing that
-   automatically requests a Copilot review, so a draft that is actually ready
-   silently skips review and a later flip is what fires it. Reserve **draft**
-   for genuine WIP, or when you explicitly want to preview the branch in GitHub
-   without review. Draft and ready PRs both get full CI here.
-
-   Corollary worth internalizing: that one automatic review is the only free
-   one, so **flip to ready when the branch is worth reviewing** — not
-   mid-refactor, where it is spent on code you are about to replace.
-
-4. Keep pushing as work lands. Flip draft → ready the moment it is dev-complete
-   so review can start.
-
-5. **The moment the PR is open and non-draft, run the Copilot review loop on
-   your own initiative.** Nobody has to ask. Poll for the review on the head
-   commit, read BOTH buckets, fix what is real, reply, resolve each gating
-   thread, re-request, verify — the sections above say how. Handing back a
-   freshly-opened PR with an unread review is an incomplete task, not a
-   checkpoint: it makes the operator notice the review, chase it, and hand it
-   back to you, when you are the one still holding the context to act on it.
-   STARTING the loop needs no permission. It is ONE round; going beyond that
-   needs a significant change in reviewed scope, or the operator's say-so.
-
-6. Merges are squash merges. The operator performs them for **human** PRs; the
-   bot's `update/*` PRs land themselves (next section).
-
-7. **Always tear the worktree, local branch and backup refs down once the PR is
-   merged.** This cleanup belongs to the agent that implemented the change; do
-   not hand it back to the operator or declare the task complete while any of
-   them remains:
-
-   ```bash
-   git worktree remove "$worktrees/<slug>"   # re-derive $worktrees if needed
-   git branch -D <type>/<slug>   # squash-merged: -d refuses, -D is correct
-   git ls-remote --heads origin "refs/heads/archive/<slug>/*" \
-     | awk '{print $2}' | xargs -r git push origin --delete  # this PR's backups
-   ```
-
-   The remote branch auto-deletes on merge; the `archive/*` backups do not. The
-   merge is what makes them redundant, so it is also what authorizes deleting
-   them — no separate approval is needed. A PR closed unmerged keeps its backups
-   until the operator says otherwise.
-
-### Put a follow-up in the PR it belongs to
-
-A fix for a PR's own review, a follow-up its author already intended, a defect
-found while reviewing it — all of these amend that PR. Do not open a second PR
-to avoid disturbing a green one.
-
-A stacked follow-up costs the same CI and the same review round as an amendment.
-It just spreads them across more PRs and hands the reviewer a worse shape. "It
-is already green and reviewed" is not a reason: CI is free on this repository,
-and the review being protected examined a shape that has since been superseded.
-
-The instinct this replaces is a sound one in a project with several reviewers,
-where unasked additions tax people who did not ask for them. Here there is one
-reviewer, and they would rather review the right shape once.
-
-Open a separate PR when the change is genuinely unrelated to any open one.
-
-### Bot `update/*` PRs land themselves
-
-`.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
-18:00 UTC) and opens one PR per dependency that actually moved. Each is armed
-with GitHub-native **auto-merge (squash)** as it is created, and re-armed on
-every later sweep, so it merges itself once the ten required checks go green.
-Safe precisely because the ruleset requires no approving review, all ten status
-checks must pass, and an unresolved Copilot thread still holds the merge through
-the separate review-thread rule.
-
-A merge conflict **disables** auto-merge, so a conflicted update PR drops out of
-the queue until the next sweep rebuilds its branch on the current base and
-re-arms it. Arming is non-fatal too: a failure logs an `Auto-merge not armed`
-warning naming the branch and PR, and that PR is the one needing a hand.
-
-There is **no manual merge path** — the `pr:merge-updates` task and
-`merge-update-prs` skill that used to batch-merge these are deleted. Do not
-reintroduce hand-merging of `update/*` PRs; land the individual stragglers the
-pipeline could not, and fix the reason.
-
-### What is shared across worktrees — and what is not
-
-Linked worktrees of one clone share the common `.git` directory, so these are
-**shared, not per-worktree**:
-
-- **The hooks directory.** One `core.hooksPath` serves every worktree, and it
-  holds git-branchless's hooks (`post-commit`, `post-rewrite`,
-  `reference-transaction`, `post-checkout`) alongside the prek hooks. Do NOT
-  redirect `core.hooksPath` per worktree: it **replaces** `.git/hooks` with no
-  fallback, so branchless's hooks would stop firing in linked worktrees and its
-  event log would silently miss every commit made there.
-- **The git-branchless event database** (`.git/branchless/db.sqlite3`).
-  Serialize stack-skill operations across concurrent worktrees; they are not
-  session-isolated.
-- **Local tags.** Tags are refs in the common git dir, so a tag created in one
-  worktree is visible — and deletable — from every other. A fetch run from ANY
-  worktree can wipe them all at once if the author's global git config sets
-  `fetch.pruneTags`, which prunes local tags with no remote-tracking
-  counterpart. See "Rebasing: back up with a pushed ref" below — this is the
-  root cause the tag-backup advice used to miss.
-
-The prek **config and runtime state** resolve from different places, and the
-split is deliberate. The `hooks:isolate-config` devenv task rewrites the
-installed hooks so that at hook-run time they resolve:
-
-- **`.pre-commit-config.yaml` from the LAUNCH CHECKOUT** — the committing
-  process's `$DEVENV_ROOT` when it belongs to this repository, else the primary
-  checkout via
-  `$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")` (an
-  editor or plain-terminal commit has no devenv shell). The same-repository test
-  runs with `GIT_DIR` scrubbed: git exports it to hooks, and left in place it
-  makes any `DEVENV_ROOT` look like this repository. Resolution happens per
-  commit from the committing process's environment, so a shell entry in one
-  worktree never changes what another validates against.
-- **`PREK_HOME` beneath the COMMITTING worktree's `.devenv/state`.** A devenv
-  shell's `PREK_HOME` is not inherited by commits launched from an editor or
-  agent, so deriving it beats falling back to the user-global XDG cache; and
-  under the agent sandbox the primary checkout is a read-only bind while the
-  worktree is the writable one, so primary-anchored state would fail there. No
-  `mkdir` is needed — prek creates `PREK_HOME` itself.
-
-The rewrite task takes a lock in the shared hooks directory and publishes each
-complete hook with a same-filesystem rename after preserving its mode. Two shell
-entries therefore serialize their rewrites, and a concurrent commit sees an old
-or new complete hook rather than a partially truncated script. The upstream
-installer still runs immediately before the rewrite task in each shell's devenv
-DAG; do not split or reorder that dependency edge.
-
-One more shared thing, and it lives outside the repository entirely: **the
-agent's own memory directory is shared across concurrent sessions, and no
-session sees another's writes.** There is no locking and no notification — a
-session reads the memory index once and then writes into a directory that may
-have moved underneath it. Two sessions on 2026-08-05 recorded the same concept
-under different filenames minutes apart, and they agreed only by luck; had the
-wording diverged, the repo would now carry two half-truths with no link between
-them. A duplicate under a different name is invisible to the `[[wikilink]]`
-graph, so it does not surface as a conflict — it just quietly fails to be found.
-
-Before writing a memory, **list the directory by mtime and grep it for the
-concept**, not for the filename you intend to use. Anything written in the last
-few minutes is a live concurrent session, and the right move is to extend that
-file rather than open a second one:
-
-```bash
-ls -lt "$MEMORY_DIR" | head -20
-grep -rl "<the concept, not the slug>" "$MEMORY_DIR"
-```
-
-This is a general cross-harness rule, not a Claude Code one: any two agent
-sessions sharing a memory store have it, and the failure is silent in all of
-them.
-
-### Rebasing: back up with a PUSHED ref, not a tag or a local branch
-
-`git rebase --update-refs` (and git-branchless) moves any **branch** that points
-into the rebased range — including a backup branch created moments earlier,
-silently defeating it. A local **tag** dodges that, but is not safe either: tags
-are refs in the COMMON git dir, shared across every worktree of the clone, and
-`fetch.pruneTags` — a common global git config setting — prunes any local tag
-with no matching remote-tracking ref on the next fetch, from ANY worktree.
-Measured twice on 2026-08-15, the second time when the same session ran its own
-fetch moments later to check whether an unrelated push had landed, and it
-deleted the backup tag along with it. Neither primitive alone survives both
-hazards, and there is no way to tell from the tag alone whether the local config
-has `pruneTags` set, so write backup guidance that holds regardless:
-
-```bash
-git push origin HEAD:refs/heads/archive/<slug>/pre-rebase   # create + push in one step
-```
-
-Push the backup **in the same command sequence as the rebase**, before running
-it — not after, and not as a "verify it's there" step, because the fetch that
-verifies it is exactly the kind of operation that can delete a local-only tag.
-Only a ref that has actually reached `origin` survives both a rebase with
-`--update-refs` and a prune-on-fetch.
-
-A backup lives until its PR merges, then step 7 of the worktree recipe deletes
-it. Name each one `archive/<slug>/<what>`, with `<slug>` the PR's worktree slug,
-so teardown's `archive/<slug>/*` pattern finds every backup that PR made and no
-other PR's. Nothing else deletes them: 349 had piled up by 2026-10-17, when the
-operator cleared them.
-
-Lockfile conflicts (`flake.lock`, `devenv.lock`) during a rebase are
-**regenerated, never hand-merged**: take the base's copy, then re-run
-`nix flake lock` (and let devenv reconcile `devenv.lock`) so the result matches
-the merged `flake.nix` / `devenv.yaml`.
-
-<!-- Fragment: dev/fragments/monorepo/linting.md -->
-
-## Linting
-
-> **Last verified:** 2026-10-08 — local and CI cspell hooks tolerate batches
-> excluded entirely by ignorePaths while still failing spelling errors; the
-> separate shellcheck backend retains its empty-corpus guard. Full lineage:
-> `git show f7189d05:dev/fragments/monorepo/linting.md`.
-
-`nix flake check` is the authoritative CI gate. Local hooks provide earlier
-feedback, but neither a successful changeset scan nor a `--no-verify` commit is
-evidence that the tracked corpus is clean.
-
-The source of truth is `config/repo-validation.nix`. Every hook declaration must
-name its role and CI backend (including an explicit `null` for local-only
-commit-lifecycle hooks). Evaluation rejects a validator, formatter, or security
-hook without CI coverage. From that table the repo derives:
-
-| Surface                    | Selection                                                      | Scope                                                       | Authority                       |
-| -------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------- |
-| Git hooks                  | each declaration's real Git stages; treefmt runs at pre-commit | staged files / commit message                               | fast local feedback; bypassable |
-| `checks.formatting`        | treefmt's formatter check                                      | every tracked file selected by treefmt                      | required `test` context         |
-| `checks.repo-lints`        | validators with `ci.backend = "git-hooks"`                     | every matching tracked file                                 | required `test` context         |
-| `checks.shellcheck-corpus` | validator with the specialized corpus backend                  | every tracked extension- or shebang-identified shell script | required `test` context         |
-
-The manual stage belongs to the devenv diagnostic. It contains treefmt plus the
-code validators and therefore excludes convco, gitleaks, treefmt-restage, and
-`reject-default-branch-commit`. The diagnostic always requests that stage
-explicitly; an unscoped `prek run` must not be used for it. Index mutation
-belongs only to the pre-commit restager.
-
-Full-corpus work is not a shell-entry concern. `devenv:treefmt:run` and
-`devenv:git-hooks:run` remain explicit named diagnostics with no activation DAG
-edges. `devenv test` no longer invokes the full-corpus hook runner: automatic CI
-covers those validators through `checks.repo-lints`, `checks.formatting` and
-`checks.shellcheck-corpus`. Keep full-corpus tasks detached from activation:
-devenv's `RunMode::All` can traverse from a shared prerequisite into a sibling
-lane, so leaving the hook task behind `devenv:git-hooks:install` made ordinary
-shell activation run the full repository even though the hook task targeted
-`devenv:enterTest`.
-
-The treefmt hook enables treefmt's SQLite evaluation cache and sets
-`require_serial = true`. prek otherwise partitions the files across concurrent
-treefmt processes; those processes contend on one cache database, time out, and
-lose the intended warm-cache benefit.
-
-Formatters and linters remain separate — treefmt formats and lints nothing.
-
-**Formatters — treefmt, all write in place:**
-
-- **JS/TS/JSX/JSON/CSS:** biome
-- **Markdown/YAML and friends:** prettier (`proseWrap = "always"`)
-- **Nix:** alejandra
-- **Shell:** shfmt (`*.sh`, `*.bash` — extension globs only, so it never sees an
-  extensionless script, shell embedded in a `.nix` string, or a heredoc body)
-- **TOML:** taplo
-
-**Code validators — local changeset feedback plus CI corpus gates:**
-
-- **Nix:** deadnix (dead code), statix (anti-patterns)
-- **Shell:** `shellcheck -x` with the shared opt-in flags from
-  `config/shell-strict.nix`. The specialized CI scanner deliberately covers a
-  superset of prek's file tagging and hard-fails an empty corpus.
-- **Spelling:** cspell uses `--no-must-find-files` because a commit whose staged
-  files are all excluded by `ignorePaths`, or one of prek's parallel filename
-  batches made only of such files, otherwise exits 1 with nothing checked. Both
-  local hooks and `checks.repo-lints` use this invocation; spelling issues still
-  fail. There is no separate empty-corpus guard for cspell.
-
-**Commit-only hooks:**
-
-- convco (commit message shape)
-- gitleaks (staged secrets; mirrored by its standalone CI job)
-- reject-default-branch-commit
-- treefmt-restage (re-adds formatter changes only during pre-commit)
-
-**Available in the devenv shell, wired to no gate:** agnix (agent config
-linting) — run it by hand or via the agnix MCP server.
-
-There is no shellharden in this repo, and no linter reads shell embedded in
-`.nix` strings beyond `writeShellApplication`'s own checkPhase. See the Bash
-coding standard for which sites that leaves unchecked.
+<!-- Fragment: dev/fragments/monorepo/operating-policy.md -->
+
+## Repository operating policy
+
+> **Last verified:** 2026-10-25 — the monorepo category loads these decisions;
+> the linked guides retain procedures, rationale and settled evidence and must
+> be read before the actions named below.
+
+### Repository writes and Git operations
+
+Before planning a repository change or writing the first repo-destined file,
+read [Git Workflow](dev/fragments/monorepo/git-workflow.md). Read it again
+before creating a worktree, planning commits, pushing, rebasing, changing hooks
+or repository settings, handling bot updates, or cleaning up a merged PR if it
+is not already in your current context. Its settled constraints remain binding.
+
+Every change goes through an isolated worktree and PR. This includes untracked
+drafts; only a session scratchpad outside the repository is exempt. Before the
+first write, run `git rev-parse --path-format=absolute --git-dir`: a path ending
+in `.git/worktrees/<slug>` is a linked worktree; the primary checkout's `.git`
+means create a worktree first. The primary checkout belongs to the operator.
+
+Create worktrees from `origin/main` beside the primary checkout, deriving their
+parent from the absolute Git common directory as the guide specifies. Do not
+bootstrap them by default. Hook configuration comes from the launch checkout;
+hook state comes from the committing worktree. A branch adding a local gate
+still gets its own CI validation. Materialize a worktree only to test its devenv
+output; never bypass missing hook configuration. Keep the shared hooks path and
+serialize stack operations against the shared branchless database.
+
+Use the existing `stack-*` skills for operations they cover. Push the first
+commit and subsequent work as it lands. Amend an existing PR for its own review
+fixes, intended follow-ups and defects; open another PR only for unrelated work.
+Before rewriting history, push a backup under `archive/<slug>/<what>` to
+`origin` in the same command sequence. Local tags and branches are unsafe
+backups. Regenerate conflicting lockfiles; never hand-merge them.
+
+Human PRs are squash-merged by the operator. Bot `update/*` PRs auto-merge after
+required checks and review-thread resolution; do not restore a manual batch
+merge path. Once a PR merges, its implementing agent removes its worktree, local
+branch and `archive/<slug>/*` backup refs before declaring completion. Retain
+backups when a PR closes unmerged until the operator says otherwise.
+
+Before writing shared agent memory, read the guide's **What is shared across
+worktrees — and what is not** section. List recent memory files and search the
+concept before choosing a filename; extend an existing record rather than
+creating a concurrent duplicate.
+
+### PR ownership and review
+
+Before opening or updating a PR against `main`, pushing to one, responding to
+review, or investigating its checks, load the `pr-review-loop` skill and the Git
+Workflow guide above. Own the loop through green checks and completed review, or
+a decision only the operator can make. Never end on an unarmed promise to check
+later: run the skill's background watcher for the pushed head, react to its
+first failure, read the failing log, fix and re-arm. An empty check list with
+`mergeStateStatus: DIRTY` means rebase, not wait.
+
+Open ready when dev-complete; reserve drafts for WIP or an explicit preview.
+Copilot automatically reviews once when a PR becomes ready. Never request the
+first review manually or infer a missed trigger from an ordinary push. Read both
+inline threads and the whole review body, including suppressed findings. Reply
+to and resolve each gating thread in the same turn as its fix.
+
+Re-request only for new scope, a new mechanism, or an approach rewritten since
+the last review. Applying findings, rewording, formatting and renaming do not
+qualify. Further paid review needs such a change or the operator's instruction.
+Do not restore the Devenv Diagnostic as a required or automatic PR context; read
+the guide's evidence and the live ruleset before changing repository gates.
+
+Use a separate reviewer from a different vendor when Copilot errors, lacks
+quota, never reviewed a draft, or the change since its last review meets the
+re-request test. Give requirements and the diff; the PR body is not evidence.
+Report dismissed findings as well as fixes. Never review your own diff.
+
+For work going to `main`, use delegate-routing's **Work and review** workflow.
+Use its three blind checks when dismissing a reviewer finding, or when a diff
+touches `lib/**`, `packages/*/lib/**`, `packages/*/patches/**`,
+`packages/*/packages/**/*.nix`, or adds, removes or retypes a `mkOption` under
+`packages/*/modules/**` or `lib/ai/**`. Otherwise use one reviewer. Drafts and
+unsettled experiment branches forgo this escalation. Run these checks locally,
+never through github.com Copilot, and size each role separately. Do not route
+escalation on an undefined judgment of "complexity".
+
+### Instruction and validation changes
+
+Before changing instruction sources, their registration, generation or delivery,
+read [Architecture Fragments](dev/fragments/monorepo/architecture-fragments.md)
+and the applicable path-scoped pipeline guidance. Before changing an abstraction
+a fragment describes, read that fragment and update it in the same commit.
+
+Edit authoritative sources, never generated instruction projections. Use owner
+registries for package categories and `config/fragment-categories.nix` for
+workspace categories. Keep one current verification marker; retain settled
+rejections and their evidence, not a changelog. Add fragments for non-inferable
+knowledge, not signatures or ephemeral work. Target fewer than 150 lines per
+fragment and split longer topics by concern. Regenerate after source or registry
+changes with `devenv tasks run --mode before generate:all`; `--mode before` is
+required to run dependency leaves. Sync input locks separately with
+`devenv update <input>` when needed.
+
+Before changing hooks, validators, formatter configuration, or diagnostic and
+shell-activation wiring, read [Linting](dev/fragments/monorepo/linting.md) and
+the Git Workflow guide's shared-hook rules. `config/repo-validation.nix` owns
+validation policy; every local validator needs its declared CI backend.
+`nix flake check` is authoritative; local changeset success or a bypassed hook
+does not prove corpus correctness. Treefmt formats and lints nothing. Keep
+corpus diagnostics off shell activation; the diagnostic hook runner must
+explicitly request the manual stage.
 
 <!-- Fragment: dev/fragments/monorepo/project-overview.md -->
 

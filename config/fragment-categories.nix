@@ -466,11 +466,9 @@
     monorepo = {
       scopes = null;
       sources = [
-        "architecture-fragments"
         "build-commands"
         "change-propagation"
-        "git-workflow"
-        "linting"
+        "operating-policy"
         "project-overview"
       ];
     };
