@@ -28,9 +28,15 @@ function chart(): UsageChart {
       error_events: 1,
       events: 10,
       input_tokens: model === "a" ? null : 20,
-      output_tokens: 0,
-      cache_read_tokens: 0,
-      cache_write_tokens: 0,
+      output_tokens: model === "a" ? null : 0,
+      cache_read_tokens: model === "a" ? null : 0,
+      cache_write_tokens: model === "a" ? null : 0,
+      token_unknown_events: {
+        cache_read_tokens: model === "a" ? 10 : 0,
+        cache_write_tokens: model === "a" ? 10 : 0,
+        input_tokens: model === "a" ? 10 : 0,
+        output_tokens: model === "a" ? 10 : 0,
+      },
     })),
     { startUnix: 50, endUnix: 75, bucketSeconds: 60 },
     {
@@ -50,7 +56,7 @@ afterEach(() => {
 });
 
 describe("usage geometry", () => {
-  it("preserves opaque identity and unknown stack bases, independently per stack", () => {
+  it("preserves unknown raw values while stacking known contributions independently", () => {
     const source = chart();
     const input = {
       ...source,
@@ -62,6 +68,7 @@ describe("usage geometry", () => {
           stack: "p",
           name: "p / b",
           values: [7, 0],
+          partial: [false, false],
         },
       ],
     };
@@ -71,7 +78,7 @@ describe("usage geometry", () => {
     );
     expect(geometry?.series.map((item) => item.ranges[0])).toEqual([
       null,
-      null,
+      [0, 20],
       [0, 7],
     ]);
     expect(geometry?.overlayMax).toBe(21);
@@ -84,9 +91,30 @@ describe("usage geometry", () => {
       ...chart(),
       bucketTotals: [30, null],
       series: [
-        { id: "a", stackId: "p", stack: "p", name: "a", values: [8, null] },
-        { id: "b", stackId: "p", stack: "p", name: "b", values: [12, 0] },
-        { id: "c", stackId: "q", stack: "q", name: "c", values: [10, 0] },
+        {
+          id: "a",
+          stackId: "p",
+          stack: "p",
+          name: "a",
+          partial: [false, false],
+          values: [8, null],
+        },
+        {
+          id: "b",
+          stackId: "p",
+          stack: "p",
+          name: "b",
+          partial: [false, false],
+          values: [12, 0],
+        },
+        {
+          id: "c",
+          stackId: "q",
+          stack: "q",
+          name: "c",
+          partial: [false, false],
+          values: [10, 0],
+        },
       ],
     };
     expect(usageGeometry(input, "line")?.stackMax).toBe(21);
@@ -257,7 +285,9 @@ it.each(["line", "area", "mixed"] as const)(
       axis: [0, 60, 120],
       bucketTotals: [null, 10, null],
       errors: [],
-      series: [{ ...series, values: [null, 10, null] }],
+      series: [
+        { ...series, partial: [false, false, false], values: [null, 10, null] },
+      ],
     };
     const plot = (
       value: UsageChart,
@@ -276,24 +306,31 @@ it.each(["line", "area", "mixed"] as const)(
       plot({
         ...input,
         bucketTotals: [10, 10, 10],
-        series: [{ ...series, values: [10, 10, 10] }],
+        series: [
+          { ...series, partial: [false, false, false], values: [10, 10, 10] },
+        ],
       }),
     );
     expect(dots()).toHaveLength(0);
-    // The upper raw series is continuous, but its displayed stack has one known point.
+    // A missing lower contribution must not punch holes into the known upper series.
     rerender(
       plot(
         {
           ...input,
           series: [
             { ...series, values: [null, 0, null] },
-            { ...series, id: "upper", values: [10, 10, 10] },
+            {
+              ...series,
+              id: "upper",
+              partial: [false, false, false],
+              values: [10, 10, 10],
+            },
           ],
         },
         "stack",
       ),
     );
-    expect(dots()).toHaveLength(mode === "mixed" ? 1 : 2);
+    expect(dots()).toHaveLength(1);
   },
 );
 
@@ -307,6 +344,7 @@ it("refuses point budgets before reading values and counts the mixed total line"
       name: String(i),
       stack: "All",
       stackId: "all",
+      partial: [],
       get values(): readonly (number | null)[] {
         throw new Error("per-point allocation reached");
       },
@@ -333,4 +371,35 @@ it("refuses point budgets before reading values and counts the mixed total line"
   expect(container.querySelector(".recharts-wrapper")).toBeNull();
   rerender(plot(excessive));
   expect(screen.queryByText(/choose line mode/)).toBeNull();
+});
+
+it("shows per-part missing facts and known subtotals without inventing an unavailable-request union", () => {
+  sizePlot();
+  const input = chart();
+  render(
+    <MantineProvider>
+      <UsagePlot
+        chart={input}
+        label="Known tokens"
+        layout="stack"
+        render="mixed"
+      />
+    </MantineProvider>,
+  );
+  expect(
+    screen.getByText(
+      /Some token dimensions are missing; values show known subtotals/,
+    ),
+  ).toBeTruthy();
+  for (const part of ["Cache read", "Cache write", "Input", "Output"])
+    expect(
+      screen.getByText(`${part} unavailable for 10 of 20 requests.`),
+    ).toBeTruthy();
+  fireEvent.click(screen.getByRole("combobox", { name: "Inspect bucket" }));
+  fireEvent.click(screen.getAllByRole("option")[0] as HTMLElement);
+  expect(screen.getByText("p / a: Unknown")).toBeTruthy();
+  expect(screen.getByText("p / b: 20")).toBeTruthy();
+  expect(screen.getByText("Total: Known subtotal: 20")).toBeTruthy();
+  expect(screen.queryByText(/40 requests/)).toBeNull();
+  expect(usageGeometry(input, "mixed")?.series[1]?.ranges[0]).toEqual([0, 20]);
 });

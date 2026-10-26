@@ -1024,6 +1024,14 @@ pub struct RequestChartQuery {
     pub window: RequestChartWindow,
 }
 
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+pub struct RequestChartTokenUnknownEvents {
+    pub cache_read_tokens: u64,
+    pub cache_write_tokens: u64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct RequestChartRow {
     pub bucket_start_unix: i64,
@@ -1035,6 +1043,7 @@ pub struct RequestChartRow {
     pub events: u64,
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
+    pub token_unknown_events: RequestChartTokenUnknownEvents,
 }
 
 #[derive(Debug)]
@@ -1938,10 +1947,14 @@ async fn read_request_chart_transaction(
                SUM(events) AS "events!: i64",
                SUM(complete_events) AS "complete_events!: i64",
                SUM(error_events) AS "error_events!: i64",
-               CASE WHEN SUM(cache_read_unknown) = 0 THEN SUM(cache_read_tokens) END AS "cache_read_tokens?: i64",
-               CASE WHEN SUM(cache_write_unknown) = 0 THEN SUM(cache_write_tokens) END AS "cache_write_tokens?: i64",
-               CASE WHEN SUM(input_unknown) = 0 THEN SUM(input_tokens) END AS "input_tokens?: i64",
-               CASE WHEN SUM(output_unknown) = 0 THEN SUM(output_tokens) END AS "output_tokens?: i64"
+               CASE WHEN SUM(cache_read_unknown) < SUM(events) THEN SUM(cache_read_tokens) END AS "cache_read_tokens?: i64",
+               CASE WHEN SUM(cache_write_unknown) < SUM(events) THEN SUM(cache_write_tokens) END AS "cache_write_tokens?: i64",
+               CASE WHEN SUM(input_unknown) < SUM(events) THEN SUM(input_tokens) END AS "input_tokens?: i64",
+               CASE WHEN SUM(output_unknown) < SUM(events) THEN SUM(output_tokens) END AS "output_tokens?: i64",
+               SUM(cache_read_unknown) AS "cache_read_unknown!: i64",
+               SUM(cache_write_unknown) AS "cache_write_unknown!: i64",
+               SUM(input_unknown) AS "input_unknown!: i64",
+               SUM(output_unknown) AS "output_unknown!: i64"
         FROM facts
         GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4 LIMIT ?
         "#,
@@ -1985,6 +1998,31 @@ async fn read_request_chart_transaction(
             })?;
             dimensions.insert(RequestChartDimension::Provider, Some(id.to_string()));
         }
+        let events = chart_count(row.events, path)?;
+        let token_unknown_events = RequestChartTokenUnknownEvents {
+            cache_read_tokens: chart_count(row.cache_read_unknown, path)?,
+            cache_write_tokens: chart_count(row.cache_write_unknown, path)?,
+            input_tokens: chart_count(row.input_unknown, path)?,
+            output_tokens: chart_count(row.output_unknown, path)?,
+        };
+        for (value, unknown) in [
+            (
+                row.cache_read_tokens,
+                token_unknown_events.cache_read_tokens,
+            ),
+            (
+                row.cache_write_tokens,
+                token_unknown_events.cache_write_tokens,
+            ),
+            (row.input_tokens, token_unknown_events.input_tokens),
+            (row.output_tokens, token_unknown_events.output_tokens),
+        ] {
+            if unknown > events || value.is_none() != (unknown == events) {
+                return Err(StorageError::Integrity {
+                    path: path.to_owned(),
+                });
+            }
+        }
         result.push(RequestChartRow {
             bucket_start_unix: row.bucket_start_unix,
             cache_read_tokens: row
@@ -1998,7 +2036,7 @@ async fn read_request_chart_transaction(
             complete_events: chart_count(row.complete_events, path)?,
             dimensions,
             error_events: chart_count(row.error_events, path)?,
-            events: chart_count(row.events, path)?,
+            events,
             input_tokens: row
                 .input_tokens
                 .map(|value| chart_count(value, path))
@@ -2007,6 +2045,7 @@ async fn read_request_chart_transaction(
                 .output_tokens
                 .map(|value| chart_count(value, path))
                 .transpose()?,
+            token_unknown_events,
         });
     }
     let metadata = control_metadata(&mut transaction, path).await?;
@@ -3984,6 +4023,10 @@ mod tests {
             Option<i64>,
             Option<i64>,
             Option<i64>,
+            i64,
+            i64,
+            i64,
+            i64,
         );
         let dimensions = &query.dimensions;
         let since = page.since_unix;
@@ -4003,10 +4046,11 @@ mod tests {
         let raw: Vec<Facts> = sqlx::query_as(
             "SELECT (r.occurred_at_unix / ?) * ?, CASE WHEN ? THEN r.client_id END, CASE WHEN ? THEN r.model_id END, CASE WHEN ? THEN c.provider_id END,
              COUNT(*), SUM(r.usage_complete), SUM(r.status_code>=400),
-             CASE WHEN COUNT(r.cache_read_tokens)=COUNT(*) THEN SUM(r.cache_read_tokens) END,
-             CASE WHEN COUNT(r.cache_write_tokens)=COUNT(*) THEN SUM(r.cache_write_tokens) END,
-             CASE WHEN COUNT(r.input_tokens)=COUNT(*) THEN SUM(r.input_tokens) END,
-             CASE WHEN COUNT(r.output_tokens)=COUNT(*) THEN SUM(r.output_tokens) END
+             CASE WHEN COUNT(r.cache_read_tokens)>0 THEN SUM(r.cache_read_tokens) END,
+             CASE WHEN COUNT(r.cache_write_tokens)>0 THEN SUM(r.cache_write_tokens) END,
+             CASE WHEN COUNT(r.input_tokens)>0 THEN SUM(r.input_tokens) END,
+             CASE WHEN COUNT(r.output_tokens)>0 THEN SUM(r.output_tokens) END,
+             SUM(r.cache_read_tokens IS NULL),SUM(r.cache_write_tokens IS NULL),SUM(r.input_tokens IS NULL),SUM(r.output_tokens IS NULL)
              FROM request_events r JOIN credentials c ON c.id=r.credential_id
              WHERE r.occurred_at_unix>=? AND r.occurred_at_unix<? AND (?=0 OR r.client_id IS ?)
                AND (? IS NULL OR r.model_id=?) AND (? IS NULL OR c.provider_id=?) GROUP BY 1,2,3,4 ORDER BY 1,2,3,4",
@@ -4033,10 +4077,18 @@ mod tests {
                     row.cache_write_tokens.map(|v| i64::try_from(v).unwrap()),
                     row.input_tokens.map(|v| i64::try_from(v).unwrap()),
                     row.output_tokens.map(|v| i64::try_from(v).unwrap()),
+                    i64::try_from(row.token_unknown_events.cache_read_tokens).unwrap(),
+                    i64::try_from(row.token_unknown_events.cache_write_tokens).unwrap(),
+                    i64::try_from(row.token_unknown_events.input_tokens).unwrap(),
+                    i64::try_from(row.token_unknown_events.output_tokens).unwrap(),
                 )
             })
             .collect();
-        assert_eq!(actual, raw, "query={query:?}");
+        assert_eq!(
+            serde_json::to_value(actual).expect("actual facts"),
+            serde_json::to_value(raw).expect("raw facts"),
+            "query={query:?}"
+        );
     }
 
     #[tokio::test]
@@ -4082,14 +4134,14 @@ mod tests {
                         (86_401, 122_401),
                         (86_411, 345_619),
                         (86_400, 691_200),
-                        (93_601, 4_500_000),
+                        (93_601, 4_410_001),
                     ] {
                         let query = RequestChartQuery {
                             dimensions: dimensions.clone(),
                             client: client.clone(),
                             model: filtered.then(|| "model-a".to_owned()),
                             provider: filtered.then(|| provider("claude")),
-                            window: if until == 4_500_000 {
+                            window: if until == 4_410_001 {
                                 RequestChartWindow::All { until_unix: until }
                             } else {
                                 RequestChartWindow::Range {
@@ -4104,7 +4156,7 @@ mod tests {
                         let bucket = i64::try_from(page.bucket_seconds).expect("bucket");
                         assert_eq!(
                             bucket,
-                            if until == 4_500_000 {
+                            if until == 4_410_001 {
                                 2 * 86400
                             } else if until - since <= 2 * 86400 {
                                 3600
@@ -4124,7 +4176,7 @@ mod tests {
                 model: Some("absent".to_owned()),
                 provider: None,
                 window: RequestChartWindow::All {
-                    until_unix: 4_500_000,
+                    until_unix: 4_410_001,
                 },
             })
             .await
@@ -4260,6 +4312,103 @@ mod tests {
                 .await,
             Err(StorageError::Input { .. })
         ));
+        reader.close().await.expect("close reader");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn chart_known_subtotals_keep_zero_and_all_unknown_distinct() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        for (timestamp, input, output, cache_write) in [
+            (10, None, Some(5), Some(0)),
+            (11, Some(0), Some(7), None),
+            (12, Some(9), None, Some(0)),
+        ] {
+            let mut event = request(RequestOutcome::Completed, timestamp);
+            event.input_tokens = input;
+            event.output_tokens = output;
+            event.cache_read_tokens = None;
+            event.cache_write_tokens = cache_write;
+            event.usage_complete = true;
+            storage
+                .try_append_request_event(event)
+                .await
+                .expect("mixed usage");
+        }
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        let page = reader
+            .request_chart(RequestChartQuery {
+                client: None,
+                dimensions: vec![],
+                model: None,
+                provider: None,
+                window: RequestChartWindow::Range {
+                    since_unix: 1,
+                    until_unix: 20,
+                },
+            })
+            .await
+            .expect("known subtotal");
+        let row = &page.rows[0];
+        assert_eq!((row.events, row.complete_events), (3, 3));
+        assert_eq!(
+            (
+                row.cache_read_tokens,
+                row.cache_write_tokens,
+                row.input_tokens,
+                row.output_tokens
+            ),
+            (None, Some(0), Some(9), Some(12))
+        );
+        assert_eq!(
+            row.token_unknown_events,
+            RequestChartTokenUnknownEvents {
+                cache_read_tokens: 3,
+                cache_write_tokens: 1,
+                input_tokens: 1,
+                output_tokens: 1
+            }
+        );
+        reader.close().await.expect("close reader");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn chart_refuses_integer_sum_overflow_across_daily_rows() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        for timestamp in [2 * 86400 + 1, 3 * 86400 + 1] {
+            let mut event = request(RequestOutcome::Completed, timestamp);
+            event.input_tokens = Some(i64::MAX.unsigned_abs());
+            storage
+                .try_append_request_event(event)
+                .await
+                .expect("separate daily maxima");
+        }
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        let error = reader
+            .request_chart(RequestChartQuery {
+                client: None,
+                dimensions: vec![],
+                model: None,
+                provider: None,
+                window: RequestChartWindow::All {
+                    until_unix: 60 * 86400,
+                },
+            })
+            .await
+            .expect_err("integer SUM overflow");
+        assert!(
+            matches!(error,StorageError::Database(ref value) if value.to_string().contains("integer overflow")),
+            "{error}"
+        );
         reader.close().await.expect("close reader");
         close(storage).await;
     }

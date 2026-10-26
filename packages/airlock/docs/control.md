@@ -70,15 +70,35 @@ daily buckets remain UTC.
 
 The `request_chart` collection keeps keyed snapshot/upsert/remove semantics.
 Keys are canonical JSON `[bucket_start_unix, ...selected identities]`. Values
-are
-`[bucket_start_unix, ...selected identities, events, complete_events, error_events, cache_read_tokens, cache_write_tokens, input_tokens, output_tokens]`.
-A selected unknown client is null; an unselected dimension has no slot. Token
-totals remain null when any included event lacks that token dimension.
+have `12 + dimensions.length` slots:
+
+```text
+[bucket_start_unix, ...selected identities,
+ events, complete_events, error_events,
+ cache_read_tokens, cache_write_tokens, input_tokens, output_tokens,
+ token_unknown_events.cache_read_tokens, token_unknown_events.cache_write_tokens,
+ token_unknown_events.input_tokens, token_unknown_events.output_tokens]
+```
+
+A selected unknown client is null; an unselected dimension has no slot. The four
+required unknown-event counts decode to the row's `token_unknown_events` object.
+Old short tuples are refused. Each count is between zero and events; for
+populated rows a token value is null exactly when its count equals events.
+Values show known subtotals, including a reported known zero. Total tokens sum
+known contributions across all four parts, so one missing part does not erase
+other measurements. Empty buckets remain zero. Partial values and stacks are
+labeled Known subtotal, with per-part missing counts. Those counts must never be
+added and labeled requests with missing tokens: a request can lack several
+parts. Stored incomplete usage and HTTP error marks remain separate facts.
 
 The shared decoder validates tuple shape, exact integers, identities and key
 equality before constructing narrow domain rows. The reducer validates
 active-query dimensions and bounds and the entire resulting row set under new
 precision before ACK. Adaptive bucket changes replace affected keys and metadata
-in the same atomic delta. Both the server and client enforce the 1 MiB decoded
-retained-view accounting in addition to encoded frame limits: compact wire fit
-alone does not authorize a larger view.
+in the same atomic delta. Both the server and client enforce a 2 MiB decoded
+retained-view limit independently of the 1 MiB encoded frame limit. The separate
+budgets admit ordinary tuple expansion: the measured 1M-event, 37-day fixture's
+30-day client/model query occupies 443,283 wire bytes and 1,196,229 decoded
+retained bytes; adaptive all history occupies 290,264 and 775,777 bytes. The
+row, series, renderer-point and flow-credit limits are unchanged. Larger decoded
+views are refused even when compact wire values fit.

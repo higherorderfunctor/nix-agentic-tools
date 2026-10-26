@@ -45,6 +45,12 @@ describe("explorer selection", () => {
       ].map(([provider, model]) => ({
         bucket_start_unix: 0,
         dimensions: { provider: provider ?? "", model: model ?? "" },
+        token_unknown_events: {
+          cache_read_tokens: 0,
+          cache_write_tokens: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
         complete_events: 1,
         error_events: 0,
         events: 1,
@@ -139,6 +145,16 @@ const plot: UsagePlotData = {
   axis: [0, 60, 120],
   bucketSeconds: 60,
   bucketTotals: [1_000_000, 1_000_000, 1_000_000],
+  bucketTotalsPartial: [false, false, false],
+  summary: {
+    requests: 3,
+    tokenUnknownEvents: {
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+    },
+  },
   requestedStartUnix: 0,
   requestedEndUnix: 180,
   errors: [],
@@ -149,6 +165,7 @@ const plot: UsagePlotData = {
       stack: "All",
       stackId: "all",
       values: [1_000_000, 1_000_000, 1_000_000],
+      partial: [false, false, false],
     },
   ],
 };

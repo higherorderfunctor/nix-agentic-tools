@@ -3,6 +3,7 @@ import {
   type UsageChartDimensionName,
   type UsageChartRow,
   type UsageTokenDimension,
+  usageTokenDimensions,
 } from "./domain.ts";
 import {
   type ExplorerSelection,
@@ -75,6 +76,12 @@ export const demoFacts: readonly DemoFact[] = (() => {
               : events * (200 + ((hour * 17 + lane * 101) % 700)),
           output_tokens:
             incomplete && ordinal % 2 !== 0 ? null : events * (70 + lane * 20),
+          token_unknown_events: {
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            input_tokens: incomplete && ordinal % 2 === 0 ? events : 0,
+            output_tokens: incomplete && ordinal % 2 !== 0 ? events : 0,
+          },
         },
       });
     }
@@ -129,10 +136,20 @@ function aggregate(
       current.row.complete_events += fact.usage.complete_events;
       current.row.error_events += fact.usage.error_events;
       current.row.events += fact.usage.events;
-      for (const key of Object.keys(fact.usage).filter((key) =>
-        key.endsWith("_tokens"),
-      ) as UsageTokenDimension[])
-        current.row[key] = add(current.row[key], fact.usage[key]);
+      for (const key of usageTokenDimensions)
+        current.row[key] =
+          current.row[key] === null
+            ? fact.usage[key]
+            : fact.usage[key] === null
+              ? current.row[key]
+              : (current.row[key] ?? 0) + (fact.usage[key] ?? 0);
+      current.row.token_unknown_events = Object.fromEntries(
+        usageTokenDimensions.map((part) => [
+          part,
+          current.row.token_unknown_events[part] +
+            fact.usage.token_unknown_events[part],
+        ]),
+      ) as Record<UsageTokenDimension, number>;
       current.costMicroDollars += fact.costMicroDollars;
     }
   }
@@ -232,7 +249,14 @@ export function demoView(
         message: `Synthetic view refused: ${result.kind}. Narrow the range or grouping.`,
       },
     };
-  const { ok: _ok, summary, ...plot } = result;
+  const { ok: _ok, summary, ...geometry } = result;
+  const plot = {
+    ...geometry,
+    summary: {
+      requests: summary.requests,
+      tokenUnknownEvents: summary.tokenUnknownEvents,
+    },
+  };
   const chart =
     selection.metric === "cost" ? costPlot(aggregates, plot, selection) : plot;
   if (chart === null)
@@ -259,7 +283,20 @@ export function demoView(
         errorEvents: summary.errorEvents,
         incompleteEvents: summary.incompleteEvents,
         requests: summary.requests,
-        total: chart.bucketTotals.reduce<number | null>(add, 0),
+        total:
+          selection.metric === "tokens"
+            ? summary.tokens[
+                (
+                  {
+                    cache_read_tokens: "cacheRead",
+                    cache_write_tokens: "cacheWrite",
+                    input_tokens: "input",
+                    output_tokens: "output",
+                    total: "total",
+                  } as const
+                )[selection.part]
+              ]
+            : chart.bucketTotals.reduce<number | null>(add, 0),
       },
     },
   };

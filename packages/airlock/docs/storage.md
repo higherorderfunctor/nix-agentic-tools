@@ -114,11 +114,14 @@ retry it.
 
 Daily rows retain event, complete-observation and HTTP-error counts
 (`status_code >= 400`, independent of outcome), plus each token dimension's
-known sum and unknown-event count. Consumers must return a null token total
-whenever its unknown count is nonzero. These counters do not attribute global
-dropped events. A private empty client key encodes SQL null; typed client IDs
-cannot be empty. The raw table and CLI report queries still read raw events. The
-old request-series reader is retired with its wire caller.
+known sum and unknown-event count. The chart returns the known subtotal and a
+required per-part `token_unknown_events` count. A token value is null only when
+every contributing event lacks that part; a known zero remains zero. Missing
+counts are bounded by events and independent of stored `usage_complete`. These
+counters do not attribute global dropped events. A private empty client key
+encodes SQL null; typed client IDs cannot be empty. The raw table and CLI report
+queries still read raw events. The old request-series reader is retired with its
+wire caller.
 
 The bounded chart reader groups a canonical sorted selection of zero to two
 client/model/provider dimensions and applies every filter before aggregation.
@@ -141,7 +144,8 @@ dictionary or local-midnight daily reconstruction is inferred from daily
 aggregates. The reader refuses unsorted/duplicate dimensions, invalid
 filters/windows, more than 10,000 groups and counts beyond exact JSON integers
 instead of truncating. The wire caller still enforces frame and decoded-memory
-limits.
+limits. Missing token values never change request/error counts or the separate
+CLI report contract.
 
 Identified usage-series history loads its page and same-filter reset predecessor
 in one SQLite transaction. The query applies both `since_unix` and exclusive

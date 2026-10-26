@@ -71,7 +71,7 @@ describe("deterministic synthetic usage", () => {
     }
     expect(
       complete(select({ range: "month", metric: "tokens" })).summary.total,
-    ).toBeNull();
+    ).toBeGreaterThan(0);
     expect(complete(select({ range: "all" })).chart.axis).toHaveLength(73);
     expect(demo.demoView(select({ range: "all" }), []).status.kind).toBe(
       "unavailable",
@@ -132,6 +132,12 @@ const fact = (
   costMicroDollars,
   dimensions: { client, model: "shared-model", provider },
   usage: {
+    token_unknown_events: {
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+    },
     complete_events: 2,
     error_events: 0,
     events: 2,
@@ -201,15 +207,24 @@ it("keeps independently assigned cost separate when either costs or tokens chang
     );
   const unknown = fixture.map((item) => ({
     ...item,
-    usage: { ...item.usage, input_tokens: null },
+    usage: {
+      ...item.usage,
+      input_tokens: null,
+      token_unknown_events: {
+        ...item.usage.token_unknown_events,
+        input_tokens: item.usage.events,
+      },
+    },
   }));
   expect(complete(selection, unknown).summary.total).toBe(
     complete(selection, fixture).summary.total,
   );
   expect(
     complete({ ...selection, metric: "tokens" }, unknown).summary.total,
-  ).toBeNull();
-  expect("summary" in complete(selection, fixture).chart).toBe(false);
+  ).toBeGreaterThan(0);
+  expect(
+    Object.keys(complete(selection, fixture).chart.summary).sort(),
+  ).toEqual(["requests", "tokenUnknownEvents"]);
 });
 
 it("renders the explicit demo without socket/auth access and memoizes chart-only control changes", () => {

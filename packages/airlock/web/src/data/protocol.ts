@@ -1,7 +1,9 @@
 import { Effect, Schema } from "effect";
-import type {
-  UsageChartDimensionName,
-  UsageChartRow,
+import {
+  type UsageChartDimensionName,
+  type UsageChartRow,
+  type UsageTokenDimension,
+  usageTokenDimensions,
 } from "../usage/domain.ts";
 
 const safeInteger = Schema.Int.pipe(
@@ -696,7 +698,7 @@ function decodeChartEntry(
   if (
     chart === undefined ||
     !validDimensions(chart.dimensions) ||
-    entry.value.length !== 8 + chart.dimensions.length
+    entry.value.length !== 12 + chart.dimensions.length
   )
     throw new ProtocolDecodeError({ reason: "invalid_chart_tuple" });
   const count = (index: number): number => {
@@ -728,7 +730,23 @@ function decodeChartEntry(
     cache_write_tokens: token(offset + 4),
     input_tokens: token(offset + 5),
     output_tokens: token(offset + 6),
+    token_unknown_events: Object.fromEntries(
+      usageTokenDimensions.map((part, index) => [
+        part,
+        count(offset + 7 + index),
+      ]),
+    ) as Record<UsageTokenDimension, number>,
   };
+  if (
+    usageTokenDimensions.some(
+      (part) =>
+        value.token_unknown_events[part] > value.events ||
+        (value.events > 0 &&
+          (value[part] === null) !==
+            (value.token_unknown_events[part] === value.events)),
+    )
+  )
+    throw new ProtocolDecodeError({ reason: "invalid_chart_coverage" });
   if (
     value.complete_events > value.events ||
     value.error_events > value.events ||

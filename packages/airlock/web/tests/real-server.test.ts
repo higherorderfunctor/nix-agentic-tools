@@ -604,7 +604,7 @@ describe.skipIf(binary === undefined || frontend === undefined)(
             request_chart: Array<{ key: string; value: unknown[] }>;
           }
         ).request_chart[0];
-        expect(chartTuple?.value).toHaveLength(10);
+        expect(chartTuple?.value).toHaveLength(14);
         expect(chartTuple?.value.slice(1)).toEqual([
           null,
           "chart-model",
@@ -615,6 +615,10 @@ describe.skipIf(binary === undefined || frontend === undefined)(
           null,
           2,
           4,
+          2,
+          2,
+          0,
+          0,
         ]);
         expect(chartTuple?.key).toBe(
           JSON.stringify(chartTuple?.value.slice(0, 3)),
@@ -836,8 +840,8 @@ describe.skipIf(binary === undefined || frontend === undefined)(
         await Effect.runPromise(Fiber.interrupt(slowFiber));
         const insertedAt = Math.floor(Date.now() / 1000) - 1;
         database.exec("BEGIN");
-        for (let index = 0; index < 4000; index++) {
-          const model = `m${String(index).padStart(4, "0")}${"x".repeat(80)}`;
+        for (let index = 0; index < 6000; index++) {
+          const model = `m${String(index).padStart(4, "0")}${"x".repeat(35)}`;
           database
             .prepare(
               "INSERT INTO request_events (occurred_at_unix,group_id,credential_id,model_id,outcome,status_code,request_bytes,response_bytes,latency_ms,input_tokens,output_tokens,usage_complete,dropped_events) VALUES (?, 'group-b', 'credential-b', ?, 'completed',200,0,0,0,1,2,1,0)",

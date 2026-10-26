@@ -23,23 +23,21 @@ export function usageRenderFits(chart: UsagePlotData, render: UsageRender) {
   );
 }
 
-// A missing lower contribution makes the stack above it unknown too.
+// Unknown segments keep null geometry but do not erase known contributions above them.
 export function usageGeometry(chart: UsagePlotData, render: UsageRender) {
   if (!usageRenderFits(chart, render)) return null;
-  const bases = new Map<string, (number | null)[]>();
+  const bases = new Map<string, number[]>();
   let overlayMax = 1;
   let stackMax = 1;
   const series = chart.series.map((item) => {
     const base = bases.get(item.stackId) ?? chart.axis.map(() => 0);
     const ranges = item.values.map((value, i) => {
-      const lower = base[i] ?? null;
-      const upper = lower === null || value === null ? null : lower + value;
+      const lower = base[i] ?? 0;
+      const upper = lower + (value ?? 0);
       if (value !== null) overlayMax = Math.max(overlayMax, value);
-      if (upper !== null) stackMax = Math.max(stackMax, upper);
+      stackMax = Math.max(stackMax, upper);
       base[i] = upper;
-      return lower === null || value === null
-        ? null
-        : ([lower, value] as const);
+      return value === null ? null : ([lower, value] as const);
     });
     bases.set(item.stackId, base);
     return { ...item, ranges };
@@ -50,7 +48,7 @@ export function usageGeometry(chart: UsagePlotData, render: UsageRender) {
       stackMax = Math.max(stackMax, value ?? 0);
     }
   }
-  // Known values hidden above an unknown base must fit when overlay reveals them.
+  // Both layouts share scale headroom for every known contribution.
   return {
     series,
     overlayMax: overlayMax * 1.05,
