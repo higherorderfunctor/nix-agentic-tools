@@ -20,7 +20,9 @@ const serverTranscript = JSON.parse(
   ),
 );
 const frames = Object.fromEntries(
-  serverTranscript.map((frame) => [frame.type, frame]),
+  serverTranscript
+    .filter((frame) => frame.meta?.chart === undefined)
+    .map((frame) => [frame.type, frame]),
 );
 const args = new Set(process.argv.slice(2));
 const scenarioIndex = process.argv.indexOf("--scenario");
@@ -34,8 +36,9 @@ const expectedHost =
   process.env.AIRLOCK_FIXTURE_HOST_HEADER ?? "127.0.0.1:5173";
 const token = clientTranscript[0].token;
 const nowUnix = 1_200;
+const chartNowUnix = 1_800_000_000;
 const cadence = {
-  "requests.series": 5_000,
+  "requests.chart": 5_000,
   "requests.table": 1_000,
   "usage.overview": 5_000,
   "usage.series": 5_000,
@@ -67,15 +70,21 @@ function normalizedQuery(query) {
 
 function resolvedWindow(query) {
   if (query.kind === "usage.overview") return null;
+  const now = query.kind === "requests.chart" ? chartNowUnix : nowUnix;
+  if ("all" in query.window)
+    return { since_unix: chartNowUnix - 37 * 86400, until_unix: now };
   return "last_seconds" in query.window
-    ? { since_unix: nowUnix - query.window.last_seconds, until_unix: nowUnix }
+    ? {
+        since_unix: Math.max(1, now - query.window.last_seconds),
+        until_unix: now,
+      }
     : query.window;
 }
 
 function meta(query, scenario, oldest = null, more = false, nextBefore = null) {
   return {
     ...frames.snapshot.meta,
-    as_of_unix: nowUnix,
+    as_of_unix: query.kind === "requests.chart" ? chartNowUnix : nowUnix,
     window: resolvedWindow(query),
     oldest_at_unix: oldest,
     has_more: more,
@@ -164,27 +173,58 @@ function requestRow(id = "1") {
   };
 }
 
-function aggregateRow(bucketStart = 900) {
-  return {
-    credential: "credential-a",
-    group: "group-a",
-    model: "model-a",
-    provider: "provider-a",
-    client: null,
-    outcome: "completed",
-    bucket_start_unix: bucketStart,
-    complete_events: 1,
-    error_events: 0,
-    events: 1,
-    latency_ms: 10,
-    request_bytes: 10,
-    response_bytes: 10,
-    successful_events: 1,
-    cache_read_tokens: null,
-    cache_write_tokens: null,
-    input_tokens: 1,
-    output_tokens: 1,
-  };
+function chartRows(query) {
+  const window = resolvedWindow(query);
+  const days =
+    Math.floor((window.until_unix - 1) / 86400) -
+    Math.floor(window.since_unix / 86400) +
+    1;
+  const bucket =
+    "all" in query.window
+      ? Math.max(1, Math.ceil(days / 32)) * 86400
+      : window.until_unix - window.since_unix <= 2 * 86400
+        ? 3600
+        : 86400;
+  const events = [
+    { ...requestRow(), occurred_at_unix: chartNowUnix - 200 },
+    {
+      ...requestRow("old"),
+      occurred_at_unix: chartNowUnix - 37 * 86400,
+      client: "harness",
+    },
+  ];
+  const rows = new Map();
+  for (const event of events.filter(
+    (row) => matchesQuery(query, row) && inWindow(query, row.occurred_at_unix),
+  )) {
+    const identity = [
+      Math.floor(event.occurred_at_unix / bucket) * bucket,
+      ...query.dimensions.map((dimension) => event[dimension]),
+    ];
+    const id = key(identity);
+    const row = rows.get(id) ?? {
+      key: id,
+      value: [...identity, 0, 0, 0, 0, 0, 0, 0],
+    };
+    const offset = identity.length;
+    row.value[offset] += 1;
+    row.value[offset + 1] += Number(event.usage_complete);
+    row.value[offset + 2] += Number(event.status_code >= 400);
+    [
+      "cache_read_tokens",
+      "cache_write_tokens",
+      "input_tokens",
+      "output_tokens",
+    ].forEach((field, index) => {
+      const at = offset + 3 + index;
+      row.value[at] =
+        row.value[at] === null || event[field] === null
+          ? null
+          : row.value[at] + event[field];
+    });
+    rows.set(id, row);
+  }
+  return { rows: [...rows.values()], bucket };
 }
 
 function resetRow() {
@@ -250,18 +290,6 @@ function rowsForQuery(query, scenario) {
       return [snapshotRow(1_000, scenario), resetRow()];
     case "requests.table":
       return tablePage(query).rows;
-    case "requests.series":
-      return [requestRow()]
-        .filter(
-          (row) =>
-            matchesQuery(query, row) && inWindow(query, row.occurred_at_unix),
-        )
-        .map((row) =>
-          aggregateRow(
-            Math.floor(row.occurred_at_unix / query.bucket_seconds) *
-              query.bucket_seconds,
-          ),
-        );
     default:
       return [];
   }
@@ -319,21 +347,8 @@ function collections(query, scenario) {
           value,
         })),
       };
-    case "requests.series":
-      return {
-        request_usage: rowsForQuery(query, scenario).map((value) => ({
-          key: key([
-            value.bucket_start_unix,
-            value.client,
-            value.group,
-            value.provider,
-            value.credential,
-            value.model,
-            value.outcome,
-          ]),
-          value,
-        })),
-      };
+    case "requests.chart":
+      return { request_chart: chartRows(query).rows };
     default:
       return {};
   }
@@ -356,13 +371,21 @@ function subscribedFrame(id, kind, epoch) {
 
 function viewMeta(query, scenario) {
   const page = query.kind === "requests.table" ? tablePage(query) : undefined;
-  return meta(
+  const metadata = meta(
     query,
     scenario,
     page?.rows.at(-1)?.occurred_at_unix ?? null,
     page?.hasMore ?? false,
     page?.nextBefore ?? null,
   );
+  if (query.kind === "requests.chart") {
+    metadata.oldest_at_unix = chartNowUnix - 37 * 86400;
+    metadata.chart = {
+      bucket_seconds: chartRows(query).bucket,
+      dimensions: query.dimensions,
+    };
+  }
+  return metadata;
 }
 
 function snapshotFrame(query, scenario, id, epoch) {

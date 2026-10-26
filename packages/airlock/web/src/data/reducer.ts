@@ -78,8 +78,8 @@ function collectionNames(query: SubscriptionQuery): readonly string[] {
       return ["snapshots", "reset_events"];
     case "requests.table":
       return ["requests"];
-    case "requests.series":
-      return ["request_usage"];
+    case "requests.chart":
+      return ["request_chart"];
     case "logs.tail":
       return [];
   }
@@ -93,7 +93,7 @@ function entryLimit(query: SubscriptionQuery): number {
       return Math.min(query.limit * 2, 2_000);
     case "requests.table":
       return query.limit;
-    case "requests.series":
+    case "requests.chart":
       return 10_000;
     case "logs.tail":
       return 0;
@@ -210,6 +210,70 @@ function contact(state: ViewState, unix: number | null): ViewState {
   return unix === null ? state : { ...state, lastServerContactUnix: unix };
 }
 
+function validView(
+  query: SubscriptionQuery,
+  meta: ViewMetadata,
+  entries: ReadonlyMap<string, CollectionValue>,
+): boolean {
+  if (query.kind !== "requests.chart") return meta.chart === undefined;
+  const chart = meta.chart;
+  const axis = meta.window;
+  if (
+    chart === undefined ||
+    axis === null ||
+    axis.since_unix < 0 ||
+    axis.until_unix <= axis.since_unix ||
+    JSON.stringify(chart.dimensions) !== JSON.stringify(query.dimensions)
+  )
+    return false;
+  if (
+    "last_seconds" in query.window &&
+    (axis.until_unix !== meta.as_of_unix ||
+      axis.since_unix !==
+        Math.max(1, meta.as_of_unix - query.window.last_seconds))
+  )
+    return false;
+  if (
+    "since_unix" in query.window &&
+    (axis.since_unix !== query.window.since_unix ||
+      axis.until_unix !== query.window.until_unix)
+  )
+    return false;
+  if ("all" in query.window) {
+    const oldest = meta.oldest_at_unix;
+    const since =
+      oldest !== null && oldest < meta.as_of_unix
+        ? oldest
+        : Math.max(0, meta.as_of_unix - 86400);
+    if (axis.until_unix !== meta.as_of_unix || axis.since_unix !== since)
+      return false;
+  }
+  const bucket =
+    "all" in query.window
+      ? Math.max(
+          1,
+          Math.ceil(
+            (Math.floor((axis.until_unix - 1) / 86400) -
+              Math.floor(axis.since_unix / 86400) +
+              1) /
+              32,
+          ),
+        ) * 86400
+      : axis.until_unix - axis.since_unix <= 2 * 86400
+        ? 3600
+        : 86400;
+  if (chart.bucket_seconds !== bucket) return false;
+  return [...entries.values()].every(
+    (row) =>
+      "dimensions" in row &&
+      JSON.stringify(Object.keys(row.dimensions)) ===
+        JSON.stringify(chart.dimensions) &&
+      row.bucket_start_unix % bucket === 0 &&
+      row.bucket_start_unix >= Math.floor(axis.since_unix / bucket) * bucket &&
+      row.bucket_start_unix < axis.until_unix,
+  );
+}
+
 function appliesToSubscription(frame: ServerFrame, id: string): boolean {
   return "id" in frame && frame.id === id;
 }
@@ -302,6 +366,8 @@ export function applyServerFrame(
         return resynchronizing(state, "sequence_gap");
       }
       const entries = collectSnapshot(frame.collections, expected, limit);
+      if (entries !== null && !validView(query, frame.meta, entries))
+        return resynchronizing(state, "invalid_frame");
       if (entries === null || retainedBytes(entries) > retainedViewByteLimit) {
         return resynchronizing(
           state,
@@ -357,6 +423,8 @@ export function applyServerFrame(
       }
       const changed = new Map([...upserts, ...removes]);
       const entries = applyOperations(state.entries, changed);
+      if (!validView(query, frame.meta, entries))
+        return resynchronizing(state, "invalid_frame");
       if (
         entries.size > limit ||
         retainedBytes(entries) > retainedViewByteLimit

@@ -17,8 +17,9 @@ use airlock_core::{
     ids::{ClientId, CredentialId, ProviderId},
     secret::Secret,
     storage::{
-        ControlMetadata, ControlReader, ReadOnlyStorage, RequestOutcome, RequestRowQuery,
-        RequestSeriesQuery, SnapshotQuery, SnapshotSource, SnapshotSurface, StorageError,
+        ControlMetadata, ControlReader, ReadOnlyStorage, RequestChartDimension, RequestChartQuery,
+        RequestChartRow, RequestChartWindow, RequestOutcome, RequestRowQuery, SnapshotQuery,
+        SnapshotSource, SnapshotSurface, StorageError,
     },
 };
 use axum::{
@@ -538,25 +539,45 @@ struct RequestsTableQuery {
     reason = "wire filters distinguish omitted from explicit client null"
 )]
 #[serde(deny_unknown_fields)]
-struct RequestsSeriesQuery {
-    bucket_seconds: u64,
+struct RequestsChartQuery {
     #[serde(
         default,
         deserialize_with = "present_nullable",
         skip_serializing_if = "Option::is_none"
     )]
     client: Option<Option<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    credential: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    group: Option<String>,
+    dimensions: Vec<ChartDimension>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    outcome: Option<RequestOutcomeWire>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     provider: Option<String>,
-    window: Window,
+    window: ChartWindow,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+enum ChartDimension {
+    Client,
+    Model,
+    Provider,
+}
+
+impl ChartDimension {
+    fn storage(self) -> RequestChartDimension {
+        match self {
+            Self::Client => RequestChartDimension::Client,
+            Self::Model => RequestChartDimension::Model,
+            Self::Provider => RequestChartDimension::Provider,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged, deny_unknown_fields)]
+enum ChartWindow {
+    All { all: bool },
+    Fixed { since_unix: i64, until_unix: i64 },
+    Rolling { last_seconds: i64 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -581,8 +602,8 @@ struct LogsTailQuery {
 pub(crate) enum SubscriptionKind {
     #[serde(rename = "logs.tail")]
     LogsTail,
-    #[serde(rename = "requests.series")]
-    RequestsSeries,
+    #[serde(rename = "requests.chart")]
+    RequestsChart,
     #[serde(rename = "requests.table")]
     RequestsTable,
     #[serde(rename = "usage.overview")]
@@ -595,7 +616,7 @@ pub(crate) enum SubscriptionKind {
 #[serde(untagged)]
 enum QueryBody {
     LogsTail(LogsTailQuery),
-    RequestsSeries(RequestsSeriesQuery),
+    RequestsChart(RequestsChartQuery),
     RequestsTable(RequestsTableQuery),
     UsageOverview(OverviewQuery),
     UsageSeries(UsageSeriesQuery),
@@ -606,8 +627,8 @@ enum QueryBody {
 enum SubscriptionQuery {
     #[serde(rename = "logs.tail")]
     LogsTail { query: LogsTailQuery },
-    #[serde(rename = "requests.series")]
-    RequestsSeries { query: RequestsSeriesQuery },
+    #[serde(rename = "requests.chart")]
+    RequestsChart { query: RequestsChartQuery },
     #[serde(rename = "requests.table")]
     RequestsTable { query: RequestsTableQuery },
     #[serde(rename = "usage.overview")]
@@ -622,8 +643,8 @@ impl SubscriptionQuery {
             (SubscriptionKind::LogsTail, QueryBody::LogsTail(query)) => {
                 Some(Self::LogsTail { query })
             }
-            (SubscriptionKind::RequestsSeries, QueryBody::RequestsSeries(query)) => {
-                Some(Self::RequestsSeries { query })
+            (SubscriptionKind::RequestsChart, QueryBody::RequestsChart(query)) => {
+                Some(Self::RequestsChart { query })
             }
             (SubscriptionKind::RequestsTable, QueryBody::RequestsTable(query)) => {
                 Some(Self::RequestsTable { query })
@@ -641,7 +662,7 @@ impl SubscriptionQuery {
     fn kind(&self) -> SubscriptionKind {
         match self {
             Self::LogsTail { .. } => SubscriptionKind::LogsTail,
-            Self::RequestsSeries { .. } => SubscriptionKind::RequestsSeries,
+            Self::RequestsChart { .. } => SubscriptionKind::RequestsChart,
             Self::RequestsTable { .. } => SubscriptionKind::RequestsTable,
             Self::UsageOverview { .. } => SubscriptionKind::UsageOverview,
             Self::UsageSeries { .. } => SubscriptionKind::UsageSeries,
@@ -932,7 +953,7 @@ async fn run_socket_inner(state: ControlState, socket: axum::extract::ws::WebSoc
     let socket_close = Arc::new(Notify::new());
     let hello = json!({
         "v":1,"type":"hello","server_time_unix":now_unix(),
-        "capabilities":["requests.series","requests.table","usage.overview","usage.series"],
+        "capabilities":["requests.chart","requests.table","usage.overview","usage.series"],
         "limits":{"max_subscriptions":MAX_SUBSCRIPTIONS,"max_frame_bytes":MAX_FRAME_BYTES,
             "max_unacked_frames":MAX_UNACKED_FRAMES}
     });
@@ -1224,10 +1245,43 @@ fn validate_query(query: &SubscriptionQuery) -> Result<(), &'static str> {
     };
     match query {
         SubscriptionQuery::LogsTail { .. } => Err("unsupported_subscription"),
-        SubscriptionQuery::RequestsSeries { query } => {
-            window(&query.window)?;
-            if !matches!(query.bucket_seconds, 60 | 300 | 3600) {
+        SubscriptionQuery::RequestsChart { query } => {
+            if query.dimensions.len() > 2
+                || query.dimensions.windows(2).any(|pair| pair[0] >= pair[1])
+                || query
+                    .model
+                    .as_ref()
+                    .is_some_and(|model| model.is_empty() || model.len() > 128)
+            {
                 return Err("invalid_query");
+            }
+            parse_client_filter(query.client.as_ref())?;
+            let _: Option<ProviderId> = parse_id(query.provider.as_deref())?;
+            let (since, until) = match query.window {
+                ChartWindow::All { all: true } => return Ok(()),
+                ChartWindow::All { all: false } => return Err("invalid_query"),
+                ChartWindow::Fixed {
+                    since_unix,
+                    until_unix,
+                } => {
+                    if since_unix <= 0 || until_unix <= 0 {
+                        return Err("invalid_query");
+                    }
+                    (since_unix, until_unix)
+                }
+                ChartWindow::Rolling { last_seconds } => {
+                    if last_seconds <= 0 {
+                        return Err("invalid_query");
+                    }
+                    (0, last_seconds)
+                }
+            };
+            if until <= since
+                || until
+                    .checked_sub(since)
+                    .is_none_or(|span| span > 30 * 86400)
+            {
+                return Err("range_too_large");
             }
             Ok(())
         }
@@ -1376,15 +1430,6 @@ fn parse_client_filter(
         Some(Some(value)) => ClientId::try_from(value.as_str())
             .map(|client| Some(Some(client)))
             .map_err(|_| "invalid_query"),
-    }
-}
-
-fn outcome_string(outcome: RequestOutcome) -> &'static str {
-    match outcome {
-        RequestOutcome::Cancelled => "cancelled",
-        RequestOutcome::Completed => "completed",
-        RequestOutcome::Failed => "failed",
-        RequestOutcome::Rejected => "rejected",
     }
 }
 
@@ -1549,7 +1594,7 @@ enum ViewCollection {
     Snapshots,
     ResetEvents,
     Requests,
-    RequestUsage,
+    RequestChart,
 }
 
 impl ViewCollection {
@@ -1559,7 +1604,7 @@ impl ViewCollection {
             Self::Snapshots => "snapshots",
             Self::ResetEvents => "reset_events",
             Self::Requests => "requests",
-            Self::RequestUsage => "request_usage",
+            Self::RequestChart => "request_chart",
         }
     }
 }
@@ -1583,14 +1628,9 @@ enum ViewKey {
     Request {
         id: String,
     },
-    RequestUsage {
+    RequestChart {
         bucket_start_unix: i64,
-        client: Option<String>,
-        credential: String,
-        group: String,
-        model: String,
-        outcome: String,
-        provider: String,
+        dimensions: Vec<Option<String>>,
     },
 }
 
@@ -1619,24 +1659,14 @@ impl ViewKey {
                 kind
             ])
             .to_string(),
-            Self::RequestUsage {
+            Self::RequestChart {
                 bucket_start_unix,
-                client,
-                credential,
-                group,
-                model,
-                outcome,
-                provider,
-            } => json!([
-                bucket_start_unix,
-                client,
-                group,
-                provider,
-                credential,
-                model,
-                outcome
-            ])
-            .to_string(),
+                dimensions,
+            } => {
+                let mut key = vec![json!(bucket_start_unix)];
+                key.extend(dimensions.iter().map(|value| json!(value)));
+                json!(key).to_string()
+            }
         }
     }
 }
@@ -1672,7 +1702,7 @@ impl ViewState {
             SubscriptionKind::RequestsTable => [(ViewCollection::Requests, BTreeMap::new())]
                 .into_iter()
                 .collect(),
-            SubscriptionKind::RequestsSeries => [(ViewCollection::RequestUsage, BTreeMap::new())]
+            SubscriptionKind::RequestsChart => [(ViewCollection::RequestChart, BTreeMap::new())]
                 .into_iter()
                 .collect(),
         };
@@ -1723,6 +1753,66 @@ impl ViewState {
     }
 }
 
+fn chart_row_json(row: &RequestChartRow) -> Value {
+    let dimensions = row
+        .dimensions
+        .iter()
+        .map(|(dimension, value)| {
+            (
+                match dimension {
+                    RequestChartDimension::Client => "client",
+                    RequestChartDimension::Model => "model",
+                    RequestChartDimension::Provider => "provider",
+                },
+                json!(value),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    json!({"bucket_start_unix":row.bucket_start_unix, "dimensions":dimensions,
+        "events":row.events,"complete_events":row.complete_events,"error_events":row.error_events,
+        "cache_read_tokens":row.cache_read_tokens,"cache_write_tokens":row.cache_write_tokens,
+        "input_tokens":row.input_tokens,"output_tokens":row.output_tokens})
+}
+
+fn wire_entry(collection: ViewCollection, key: &ViewKey, value: &Value, meta: &Value) -> Value {
+    let wire_value = if collection == ViewCollection::RequestChart {
+        let mut tuple = vec![value["bucket_start_unix"].clone()];
+        if let Some(dimensions) = meta["chart"]["dimensions"].as_array() {
+            tuple.extend(dimensions.iter().map(|dimension| {
+                value["dimensions"][dimension.as_str().expect("validated dimension")].clone()
+            }));
+        }
+        tuple.extend(
+            [
+                "events",
+                "complete_events",
+                "error_events",
+                "cache_read_tokens",
+                "cache_write_tokens",
+                "input_tokens",
+                "output_tokens",
+            ]
+            .iter()
+            .map(|field| value[field].clone()),
+        );
+        json!(tuple)
+    } else {
+        value.clone()
+    };
+    json!({"key":key.wire_key(), "value":wire_value})
+}
+
+fn retained_view_bytes(view: &ViewState) -> usize {
+    view.collections
+        .iter()
+        .flat_map(|(collection, rows)| {
+            rows.iter().map(move |(key, value)| {
+                collection.as_str().len() + 1 + key.wire_key().len() + value.to_string().len()
+            })
+        })
+        .sum()
+}
+
 fn data_frame(
     kind: &str,
     id: &str,
@@ -1738,7 +1828,7 @@ fn data_frame(
             wire_upserts.insert(
                 collection.as_str(),
                 rows.iter()
-                    .map(|(key, value)| json!({"key":key.wire_key(), "value":value}))
+                    .map(|(key, value)| wire_entry(*collection, key, value, &view.meta))
                     .collect::<Vec<_>>(),
             );
         }
@@ -1759,7 +1849,7 @@ fn data_frame(
             collections.insert(
                 collection.as_str(),
                 rows.iter()
-                    .map(|(key, value)| json!({"key":key.wire_key(), "value":value}))
+                    .map(|(key, value)| wire_entry(*collection, key, value, &view.meta))
                     .collect::<Vec<_>>(),
             );
         }
@@ -2041,57 +2131,60 @@ async fn evaluate(
             );
             Ok(view)
         }
-        SubscriptionQuery::RequestsSeries { query } => {
-            let (since, until) = resolve_window(&query.window, now);
+        SubscriptionQuery::RequestsChart { query } => {
+            let window = match query.window {
+                ChartWindow::All { .. } => RequestChartWindow::All { until_unix: now },
+                ChartWindow::Fixed {
+                    since_unix,
+                    until_unix,
+                } => RequestChartWindow::Range {
+                    since_unix,
+                    until_unix,
+                },
+                ChartWindow::Rolling { last_seconds } => RequestChartWindow::Range {
+                    since_unix: now.saturating_sub(last_seconds).max(1),
+                    until_unix: now,
+                },
+            };
             let page = reader
-                .request_series(RequestSeriesQuery {
-                    bucket_seconds: NonZeroU64::new(query.bucket_seconds).ok_or("invalid_query")?,
+                .request_chart(RequestChartQuery {
                     client: parse_client_filter(query.client.as_ref())?,
-                    credential: parse_id(query.credential.as_deref())?,
-                    group: parse_id(query.group.as_deref())?,
+                    dimensions: query
+                        .dimensions
+                        .iter()
+                        .map(|dimension| dimension.storage())
+                        .collect(),
                     model: query.model.clone(),
-                    outcome: query.outcome.map(Into::into),
                     provider: parse_id(query.provider.as_deref())?,
-                    since_unix: since,
-                    until_unix: until,
+                    window,
                 })
                 .await
                 .map_err(|error| storage_code(&error))?;
             let mut view = ViewState::empty(query_kind);
-            for aggregate in &page.aggregates {
+            for row in &page.rows {
                 view.insert(
-                    ViewCollection::RequestUsage,
-                    ViewKey::RequestUsage {
-                        bucket_start_unix: aggregate.aggregate.bucket_start_unix,
-                        client: aggregate
-                            .aggregate
-                            .client
-                            .as_ref()
-                            .map(|client| client.as_ref().to_owned()),
-                        credential: aggregate.aggregate.credential.as_ref().to_owned(),
-                        group: aggregate.group.as_ref().to_owned(),
-                        model: aggregate.aggregate.model.clone(),
-                        outcome: outcome_string(aggregate.aggregate.outcome).to_owned(),
-                        provider: aggregate.aggregate.provider.as_ref().to_owned(),
+                    ViewCollection::RequestChart,
+                    ViewKey::RequestChart {
+                        bucket_start_unix: row.bucket_start_unix,
+                        dimensions: row.dimensions.values().cloned().collect(),
                     },
-                    report::aggregate_json(aggregate.group.as_ref(), &aggregate.aggregate),
+                    chart_row_json(row),
                 );
             }
-            let oldest = page
-                .aggregates
-                .iter()
-                .map(|row| row.aggregate.bucket_start_unix)
-                .min();
-            let metadata = page.metadata;
             view.meta = meta_value(
                 now,
-                Some((since, until)),
-                oldest,
+                Some((page.since_unix, page.until_unix)),
+                page.oldest_at_unix,
                 false,
                 None,
                 false,
-                metadata,
+                page.metadata,
             );
+            view.meta["chart"] =
+                json!({"bucket_seconds":page.bucket_seconds,"dimensions":query.dimensions});
+            if retained_view_bytes(&view) > MAX_FRAME_BYTES {
+                return Err("range_too_large");
+            }
             Ok(view)
         }
         SubscriptionQuery::LogsTail { .. } => Err("unsupported_subscription"),
@@ -2196,7 +2289,38 @@ mod tests {
                 ClientFrame::Subscribe { .. } => subscriptions += 1,
             }
         }
-        assert_eq!(subscriptions, 3);
+        assert_eq!(subscriptions, 4);
+    }
+
+    #[test]
+    fn chart_query_accepts_only_bounded_canonical_current_contract() {
+        let validate = |query: Value| -> Result<(), &'static str> {
+            let frame = decode_client_frame(Message::Text(serde_json::json!({"v":1,"type":"subscribe","id":"chart","kind":"requests.chart","query":query}).to_string().into()))?;
+            let ClientFrame::Subscribe { kind, query, .. } = frame else {
+                return Err("invalid_frame");
+            };
+            super::validate_query(
+                &super::SubscriptionQuery::new(kind, query).ok_or("invalid_query")?,
+            )
+        };
+        for window in [
+            serde_json::json!({"last_seconds":2_592_000}),
+            serde_json::json!({"since_unix":100,"until_unix":90100}),
+            serde_json::json!({"all":true}),
+        ] {
+            assert!(validate(serde_json::json!({"window":window,"dimensions":["client","model"],"client":null})).is_ok());
+        }
+        for query in [
+            serde_json::json!({"window":{"all":false},"dimensions":[]}),
+            serde_json::json!({"window":{"all":true},"dimensions":["model","client"]}),
+            serde_json::json!({"window":{"all":true},"dimensions":["model","model"]}),
+            serde_json::json!({"window":{"all":true},"dimensions":["client","model","provider"]}),
+            serde_json::json!({"window":{"last_seconds":2_592_001},"dimensions":[]}),
+            serde_json::json!({"window":{"all":true},"dimensions":[],"credential":"key"}),
+            serde_json::json!({"window":{"all":true},"dimensions":[],"bucket_seconds":3600}),
+        ] {
+            assert!(validate(query).is_err());
+        }
     }
 
     #[test]
@@ -3862,6 +3986,57 @@ mod view_tests {
             json!({"value": value}),
         );
         view
+    }
+
+    #[test]
+    fn chart_tuple_fit_still_refuses_oversized_decoded_view() {
+        let mut view = ViewState::empty(SubscriptionKind::RequestsChart);
+        view.meta = super::meta_value(
+            1_800_000_000,
+            Some((1_799_996_400, 1_800_000_000)),
+            None,
+            false,
+            None,
+            false,
+            super::ControlMetadata {
+                request_loss_total: 0,
+                provider_snapshot_loss_total: 0,
+            },
+        );
+        view.meta["chart"] = json!({"bucket_seconds":3600,"dimensions":["model"]});
+        for index in 0..4000 {
+            let model = format!("m{index:04}{}", "x".repeat(80));
+            let row = super::RequestChartRow {
+                bucket_start_unix: 1_799_996_400,
+                dimensions: std::collections::BTreeMap::from([(
+                    super::RequestChartDimension::Model,
+                    Some(model.clone()),
+                )]),
+                events: 1,
+                complete_events: 1,
+                error_events: 0,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                input_tokens: Some(1),
+                output_tokens: Some(2),
+            };
+            view.insert(
+                ViewCollection::RequestChart,
+                ViewKey::RequestChart {
+                    bucket_start_unix: row.bucket_start_unix,
+                    dimensions: vec![Some(model)],
+                },
+                super::chart_row_json(&row),
+            );
+        }
+        let retained = super::retained_view_bytes(&view);
+        let wire = data_frame("snapshot", "chart", "e", 1, None, &view, None)
+            .to_string()
+            .len();
+        assert!(wire < super::MAX_FRAME_BYTES, "wire={wire}");
+        assert_eq!(retained, 1_564_000);
+        assert!(retained > super::MAX_FRAME_BYTES, "retained={retained}");
+        println!("chart size:4000 rows, wire={wire}, decoded retained={retained}");
     }
 
     #[test]

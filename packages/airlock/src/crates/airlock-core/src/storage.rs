@@ -253,12 +253,6 @@ pub struct RequestUsageAggregate {
     pub successful_events: u64,
 }
 
-#[derive(Debug)]
-pub struct RequestSeriesAggregate {
-    pub aggregate: RequestUsageAggregate,
-    pub group: GroupId,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotFetchStatus {
     Gap,
@@ -889,27 +883,6 @@ impl ControlReader {
         .await
     }
 
-    /// Reads filtered request aggregates and totals in one transaction.
-    ///
-    /// # Errors
-    /// Returns bounded-query, range, integrity, and SQLite errors without retaining SQL work.
-    pub async fn request_series(
-        &mut self,
-        query: RequestSeriesQuery,
-    ) -> Result<RequestSeriesPage, StorageError> {
-        validate_time(query.since_unix, "request series start")?;
-        validate_time(query.until_unix, "request series end")?;
-        if query.since_unix >= query.until_unix {
-            return Err(StorageError::Input {
-                field: "request series start must precede end",
-            });
-        }
-        self.read(move |connection, path| {
-            Box::pin(read_request_series_transaction(connection, path, query))
-        })
-        .await
-    }
-
     /// Reads a stable request row page and its totals in one transaction.
     ///
     /// # Errors
@@ -1072,25 +1045,6 @@ pub struct RequestChartPage {
     pub rows: Vec<RequestChartRow>,
     pub since_unix: i64,
     pub until_unix: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct RequestSeriesQuery {
-    pub bucket_seconds: NonZeroU64,
-    pub client: Option<Option<ClientId>>,
-    pub credential: Option<CredentialId>,
-    pub group: Option<GroupId>,
-    pub model: Option<String>,
-    pub outcome: Option<RequestOutcome>,
-    pub provider: Option<ProviderId>,
-    pub since_unix: i64,
-    pub until_unix: i64,
-}
-
-#[derive(Debug)]
-pub struct RequestSeriesPage {
-    pub aggregates: Vec<RequestSeriesAggregate>,
-    pub metadata: ControlMetadata,
 }
 
 #[derive(Debug)]
@@ -2072,179 +2026,6 @@ async fn read_request_chart_transaction(
         rows: result,
         since_unix: since,
         until_unix: until,
-    })
-}
-
-#[expect(
-    clippy::too_many_lines,
-    reason = "compile-checked aggregate SQL and its validated projection share this boundary"
-)]
-async fn read_request_series_transaction(
-    connection: &mut SqliteConnection,
-    database_path: &Path,
-    query: RequestSeriesQuery,
-) -> Result<RequestSeriesPage, StorageError> {
-    let bucket_seconds =
-        i64::try_from(query.bucket_seconds.get()).map_err(|_| StorageError::Input {
-            field: "request bucket seconds is too large",
-        })?;
-    let aggregate_limit =
-        i64::try_from(MAX_AGGREGATE_ROWS + 1).map_err(|_| StorageError::Input {
-            field: "usage aggregate limit is too large",
-        })?;
-    let client_filter = query.client.is_some();
-    let client_value = query.client.flatten().map(|id| id.as_ref().to_owned());
-    let client_value = client_value.as_deref();
-    let credential = query.credential.as_ref().map(AsRef::as_ref);
-    let group = query.group.as_ref().map(AsRef::as_ref);
-    let model = query.model.as_deref();
-    let outcome = query.outcome.map(RequestOutcome::as_storage);
-    let provider = query.provider.as_ref().map(AsRef::as_ref);
-    let mut transaction = connection.begin().await?;
-    let rows = sqlx::query!(
-        r#"
-        SELECT group_id, credentials.provider_id AS provider_id, request_events.client_id,
-               request_events.credential_id,
-               CAST(occurred_at_unix / ? AS INTEGER) * ? AS "bucket_start_unix!: i64",
-               model_id, outcome, COUNT(*) AS "events!: i64",
-               SUM(CASE WHEN usage_complete THEN 1 ELSE 0 END)
-                 AS "complete_events!: i64",
-               SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END)
-                 AS "error_events!: i64",
-               SUM(CASE WHEN status_code BETWEEN 200 AND 299 THEN 1 ELSE 0 END)
-                 AS "successful_events!: i64",
-               SUM(request_bytes) AS "request_bytes!: i64",
-               SUM(response_bytes) AS "response_bytes!: i64",
-               SUM(latency_ms) AS "latency_ms!: i64",
-               SUM(input_tokens) AS "input_tokens?: i64",
-               SUM(output_tokens) AS "output_tokens?: i64",
-               SUM(cache_read_tokens) AS "cache_read_tokens?: i64",
-               SUM(cache_write_tokens) AS "cache_write_tokens?: i64",
-               SUM(CASE WHEN input_tokens IS NULL THEN 1 ELSE 0 END)
-                 AS "missing_input_tokens!: i64",
-               SUM(CASE WHEN output_tokens IS NULL THEN 1 ELSE 0 END)
-                 AS "missing_output_tokens!: i64",
-               SUM(CASE WHEN cache_read_tokens IS NULL THEN 1 ELSE 0 END)
-                 AS "missing_cache_read_tokens!: i64",
-               SUM(CASE WHEN cache_write_tokens IS NULL THEN 1 ELSE 0 END)
-                 AS "missing_cache_write_tokens!: i64"
-        FROM request_events
-        JOIN credentials ON credentials.id = request_events.credential_id
-        WHERE occurred_at_unix >= ? AND occurred_at_unix < ?
-          AND (? = 0 OR client_id IS ?)
-          AND (? IS NULL OR credential_id = ?)
-          AND (? IS NULL OR group_id = ?)
-          AND (? IS NULL OR model_id = ?)
-          AND (? IS NULL OR outcome = ?)
-          AND (? IS NULL OR credentials.provider_id = ?)
-        GROUP BY group_id, credentials.provider_id, request_events.client_id,
-                 request_events.credential_id,
-                 CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome
-        ORDER BY group_id, credentials.provider_id, request_events.client_id,
-                 request_events.credential_id,
-                 CAST(occurred_at_unix / ? AS INTEGER) * ?, model_id, outcome
-        LIMIT ?
-        "#,
-        bucket_seconds,
-        bucket_seconds,
-        query.since_unix,
-        query.until_unix,
-        client_filter,
-        client_value,
-        credential,
-        credential,
-        group,
-        group,
-        model,
-        model,
-        outcome,
-        outcome,
-        provider,
-        provider,
-        bucket_seconds,
-        bucket_seconds,
-        bucket_seconds,
-        bucket_seconds,
-        aggregate_limit,
-    )
-    .fetch_all(&mut *transaction)
-    .await?;
-    if rows.len() > MAX_AGGREGATE_ROWS {
-        return Err(StorageError::UsageRangeIncomplete);
-    }
-    let mut aggregates = Vec::with_capacity(rows.len());
-    for row in rows {
-        let credential =
-            CredentialId::try_from(row.credential_id).map_err(|error| StorageError::StoredId {
-                kind: "credential",
-                value: error.into_name(),
-            })?;
-        let client = row
-            .client_id
-            .map(|id| {
-                ClientId::try_from(id).map_err(|error| StorageError::StoredId {
-                    kind: "client",
-                    value: error.into_name(),
-                })
-            })
-            .transpose()?;
-        let group = GroupId::try_from(row.group_id).map_err(|error| StorageError::StoredId {
-            kind: "group",
-            value: error.into_name(),
-        })?;
-        let provider =
-            ProviderId::try_from(row.provider_id).map_err(|error| StorageError::StoredId {
-                kind: "provider",
-                value: error.into_name(),
-            })?;
-        let outcome =
-            RequestOutcome::from_storage(&row.outcome).ok_or_else(|| StorageError::Integrity {
-                path: database_path.to_owned(),
-            })?;
-        let aggregate = RequestUsageAggregate {
-            bucket_start_unix: if row.bucket_start_unix >= 0 {
-                row.bucket_start_unix
-            } else {
-                return Err(StorageError::Integrity {
-                    path: database_path.to_owned(),
-                });
-            },
-            cache_read_tokens: complete_sum(
-                row.cache_read_tokens,
-                row.missing_cache_read_tokens,
-                database_path,
-            )?,
-            cache_write_tokens: complete_sum(
-                row.cache_write_tokens,
-                row.missing_cache_write_tokens,
-                database_path,
-            )?,
-            client,
-            complete_events: stored_count(row.complete_events, database_path)?,
-            credential,
-            error_events: stored_count(row.error_events, database_path)?,
-            events: stored_count(row.events, database_path)?,
-            input_tokens: complete_sum(row.input_tokens, row.missing_input_tokens, database_path)?,
-            latency_ms: stored_count(row.latency_ms, database_path)?,
-            model: row.model_id,
-            outcome,
-            output_tokens: complete_sum(
-                row.output_tokens,
-                row.missing_output_tokens,
-                database_path,
-            )?,
-            provider,
-            request_bytes: stored_count(row.request_bytes, database_path)?,
-            response_bytes: stored_count(row.response_bytes, database_path)?,
-            successful_events: stored_count(row.successful_events, database_path)?,
-        };
-        aggregates.push(RequestSeriesAggregate { aggregate, group });
-    }
-    let metadata = control_metadata(&mut transaction, database_path).await?;
-    transaction.rollback().await?;
-    Ok(RequestSeriesPage {
-        aggregates,
-        metadata,
     })
 }
 
@@ -5487,7 +5268,7 @@ mod tests {
               output_tokens, cache_read_tokens, cache_write_tokens, usage_complete,
               dropped_events
             )
-            SELECT value, 'harness', 'anthropic', 'claude', 'model-' || value, 'completed',
+            SELECT value / 100 + 1, 'harness', 'anthropic', 'claude', 'model-' || value, 'completed',
                    200, 100, 200, 25, 11, 13, 7, NULL, 1, 0
             FROM sequence
             ",
@@ -5513,16 +5294,15 @@ mod tests {
             .into_control_reader();
         let request_started = std::time::Instant::now();
         let request_error = reader
-            .request_series(RequestSeriesQuery {
-                bucket_seconds: NonZeroU64::new(60).expect("bucket"),
+            .request_chart(RequestChartQuery {
                 client: None,
-                credential: None,
-                group: None,
+                dimensions: vec![RequestChartDimension::Model],
                 model: None,
-                outcome: None,
                 provider: None,
-                since_unix: 1,
-                until_unix: REQUEST_ROWS + 1,
+                window: RequestChartWindow::Range {
+                    since_unix: 1,
+                    until_unix: REQUEST_ROWS / 100 + 2,
+                },
             })
             .await
             .expect_err("large aggregate is bounded");
@@ -6227,32 +6007,6 @@ mod tests {
             .await
             .expect("control reader storage")
             .into_control_reader();
-        let base_series = RequestSeriesQuery {
-            bucket_seconds: NonZeroU64::new(60).expect("bucket"),
-            client: None,
-            credential: None,
-            group: None,
-            model: None,
-            outcome: None,
-            provider: None,
-            since_unix: 1,
-            until_unix: 20,
-        };
-        let omitted = reader
-            .request_series(base_series.clone())
-            .await
-            .expect("omitted client series");
-        assert_eq!(omitted.aggregates.len(), 2);
-        let unknown_series = reader
-            .request_series(RequestSeriesQuery {
-                client: Some(None),
-                ..base_series.clone()
-            })
-            .await
-            .expect("explicit unknown client series");
-        assert_eq!(unknown_series.aggregates.len(), 1);
-        assert!(unknown_series.aggregates[0].aggregate.client.is_none());
-
         let base_rows = RequestRowQuery {
             before: None,
             client: None,

@@ -28,6 +28,8 @@ import type {
 } from "../data/protocol.ts";
 import { useVisibleSubscription } from "../data/visibility.ts";
 
+import { CredentialObservations } from "./CredentialObservations.tsx";
+
 type Observation = {
   readonly key: string;
   readonly at: number;
@@ -416,6 +418,7 @@ export function ProviderHistory({ runtime }: { readonly runtime: AppRuntime }) {
           )}
         </Widget>
       )}
+      <CredentialObservations credentials={credentials} />
       {current?.surface === "claude_subscription" && (
         <Text>
           Fable sub-limit and granted early resets with expiry remain

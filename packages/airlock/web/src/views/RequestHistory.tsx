@@ -15,7 +15,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Collapsible,
   ConnectionNotice,
-  collectionEntries,
   number,
   Status,
   time,
@@ -23,13 +22,13 @@ import {
 } from "../components/data.tsx";
 import type { AppRuntime } from "../data/app.ts";
 import type {
-  Aggregate,
   RequestRow,
   SubscriptionQuery,
   Window,
 } from "../data/protocol.ts";
 import type { ViewState } from "../data/reducer.ts";
 import { useVisibleSubscription } from "../data/visibility.ts";
+import { buildUsageChart, type UsageChartRow } from "../usage/domain.ts";
 
 type Filters = {
   client?: string;
@@ -40,139 +39,6 @@ type Filters = {
   outcome?: "cancelled" | "completed" | "failed" | "rejected";
 };
 const fields = ["client", "group", "credential", "provider", "model"] as const;
-
-export function aggregateStats(rows: readonly Aggregate[]) {
-  const events = rows.reduce((total, row) => total + row.events, 0);
-  const incompleteEvents = rows.reduce(
-    (total, row) => total + row.events - row.complete_events,
-    0,
-  );
-  const latency = rows.reduce((total, row) => total + row.latency_ms, 0);
-  const tokens = (field: "input_tokens" | "output_tokens") =>
-    rows.some((row) => row[field] === null)
-      ? null
-      : rows.reduce((total, row) => total + (row[field] ?? 0), 0);
-  return {
-    events,
-    incompleteEvents,
-    latency,
-    meanLatency: events === 0 ? null : latency / events,
-    inputTokens: tokens("input_tokens"),
-    outputTokens: tokens("output_tokens"),
-  };
-}
-
-export function requestChartData(
-  rows: readonly Aggregate[],
-  bucketSeconds = 60,
-) {
-  const buckets = new Map<
-    number,
-    {
-      at: number;
-      count: number | null;
-      input: number | null;
-      output: number | null;
-      latency: number;
-      events: number;
-    }
-  >();
-  for (const row of rows) {
-    const bucket = buckets.get(row.bucket_start_unix) ?? {
-      at: row.bucket_start_unix,
-      count: 0,
-      input: 0,
-      output: 0,
-      latency: 0,
-      events: 0,
-    };
-    bucket.count = (bucket.count ?? 0) + row.events;
-    bucket.input =
-      bucket.input === null || row.input_tokens === null
-        ? null
-        : bucket.input + row.input_tokens;
-    bucket.output =
-      bucket.output === null || row.output_tokens === null
-        ? null
-        : bucket.output + row.output_tokens;
-    bucket.latency += row.latency_ms;
-    bucket.events += row.events;
-    buckets.set(row.bucket_start_unix, bucket);
-  }
-  const sorted = [...buckets.values()].sort(
-    (left, right) => left.at - right.at,
-  );
-  const points: {
-    at: number;
-    count: number | null;
-    input: number | null;
-    output: number | null;
-    mean: number | null;
-  }[] = [];
-  for (const bucket of sorted) {
-    const previous = points.at(-1);
-    if (previous !== undefined && bucket.at - previous.at > bucketSeconds)
-      points.push({
-        at: previous.at + bucketSeconds,
-        count: null,
-        input: null,
-        output: null,
-        mean: null,
-      });
-    points.push({
-      at: bucket.at,
-      count: bucket.count,
-      input: bucket.input,
-      output: bucket.output,
-      mean: bucket.events === 0 ? null : bucket.latency / bucket.events,
-    });
-  }
-  return points;
-}
-
-export function RequestTrend({
-  rows,
-  includeDuration = true,
-}: {
-  readonly rows: readonly Aggregate[];
-  readonly includeDuration?: boolean;
-}) {
-  const data = requestChartData(rows);
-  const charts = [
-    {
-      label: "Request count over time",
-      series: [{ name: "count", color: "blue.6" }],
-    },
-    {
-      label: "Token usage over time",
-      series: [
-        { name: "input", color: "teal.6" },
-        { name: "output", color: "orange.6" },
-      ],
-    },
-    ...(includeDuration
-      ? [
-          {
-            label: "Mean duration over time (ms)",
-            series: [{ name: "mean", color: "violet.6" }],
-          },
-        ]
-      : []),
-  ];
-  return charts.map((chart) => (
-    <figure key={chart.label} aria-label={chart.label}>
-      <figcaption>{chart.label}</figcaption>
-      <LineChart
-        h={180}
-        data={data}
-        dataKey="at"
-        series={chart.series}
-        connectNulls={false}
-        withLegend={chart.series.length > 1}
-      />
-    </figure>
-  ));
-}
 
 function RequestTable({
   state,
@@ -290,88 +156,99 @@ function RequestTable({
   );
 }
 
-function RequestSeries({
+function RequestChart({
   runtime,
   query,
 }: {
   readonly runtime: AppRuntime;
-  readonly query: Extract<SubscriptionQuery, { kind: "requests.series" }>;
+  readonly query: Extract<SubscriptionQuery, { kind: "requests.chart" }>;
 }) {
   const subscription = useVisibleSubscription(runtime, query);
   const state =
     subscription.result._tag === "Success" ? subscription.result.value : null;
-  const entries =
-    state === null ? [] : collectionEntries<Aggregate>(state, "request_usage");
-  const rows = entries.map(({ value }) => value);
-  const stats = aggregateStats(rows);
+  const charts = useMemo(() => {
+    const window = state?.meta?.window;
+    const precision = state?.meta?.chart;
+    if (state === null || window == null || precision === undefined)
+      return null;
+    const rows = values<UsageChartRow>(state, "request_chart");
+    const axis = {
+      startUnix: window.since_unix,
+      endUnix: window.until_unix,
+      bucketSeconds: precision.bucket_seconds,
+    };
+    return {
+      requests: buildUsageChart(rows, axis, {
+        metric: { kind: "requests" },
+        group: "none",
+        breakdown: "none",
+      }),
+      tokens: buildUsageChart(rows, axis, {
+        metric: { kind: "tokens", part: "total" },
+        group: "none",
+        breakdown: "none",
+      }),
+    };
+  }, [state]);
+  const chart = charts?.requests ?? null;
+  const tokenChart = charts?.tokens ?? null;
   return (
     <Card ref={subscription.targetRef} withBorder>
       <Stack>
-        <Title order={2}>Request counts and tokens</Title>
+        <Title order={2}>All routed requests</Title>
+        <Text>
+          Last 24 hours. Raw-table filters and paging apply only to the table.
+        </Text>
         {state !== null && <Status state={state} />}
-        {rows.length === 0 ? (
-          state === null ? (
-            <ConnectionNotice
-              result={subscription.result}
-              subject="request series"
-            />
-          ) : (
-            <Text>
-              {state.meta === null
-                ? "Waiting for request snapshot."
-                : "No requests in this recorded range."}
-            </Text>
-          )
+        {chart === null ? (
+          <ConnectionNotice
+            result={subscription.result}
+            subject="request chart"
+          />
+        ) : !chart.ok || tokenChart === null || !tokenChart.ok ? (
+          <Alert title="Chart unavailable">
+            This range cannot be displayed.
+          </Alert>
         ) : (
           <>
-            {stats.incompleteEvents > 0 && (
+            <Text>
+              Coverage: {time(chart.requestedStartUnix)} to{" "}
+              {time(chart.requestedEndUnix)}; buckets{" "}
+              {number(chart.bucketSeconds)} seconds.
+            </Text>
+            {chart.summary.incompleteEvents > 0 && (
               <Alert title="Incomplete aggregate usage" color="orange">
-                {number(stats.incompleteEvents)} of {number(stats.events)}{" "}
-                request events have incomplete usage.
+                {number(chart.summary.incompleteEvents)} of{" "}
+                {number(chart.summary.requests)} request events have incomplete
+                usage.
               </Alert>
             )}
             <Text>
-              {number(stats.events)} requests; {number(stats.inputTokens)} input
-              and {number(stats.outputTokens)} output tokens.
+              {number(chart.summary.requests)} requests;{" "}
+              {number(chart.summary.tokens.input)} input and{" "}
+              {number(chart.summary.tokens.output)} output tokens.
             </Text>
-            <RequestTrend rows={rows} />
-            <Text>
-              Total duration {number(stats.latency)} ms; mean duration{" "}
-              {stats.meanLatency === null
-                ? "unknown"
-                : `${stats.meanLatency.toFixed(1)} ms per request`}
-              . No percentile or first-token timing is inferred.
-            </Text>
-            <Table striped>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Bucket</Table.Th>
-                  <Table.Th>Provider / model</Table.Th>
-                  <Table.Th>Requests</Table.Th>
-                  <Table.Th>Input / output tokens</Table.Th>
-                  <Table.Th>Mean duration</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {entries.map(({ key, value: row }) => (
-                  <Table.Tr key={key}>
-                    <Table.Td>{time(row.bucket_start_unix)}</Table.Td>
-                    <Table.Td>
-                      {row.provider} / {row.model}
-                    </Table.Td>
-                    <Table.Td>{number(row.events)}</Table.Td>
-                    <Table.Td>
-                      {number(row.input_tokens)} / {number(row.output_tokens)}
-                    </Table.Td>
-                    <Table.Td>
-                      {row.events === 0
-                        ? "unknown"
-                        : `${(row.latency_ms / row.events).toFixed(1)} ms`}
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+            {chart.summary.requests === 0 && (
+              <Text>No requests in this recorded range.</Text>
+            )}
+            {[
+              { label: "Request count over time", chart },
+              { label: "Token usage over time", chart: tokenChart },
+            ].map(({ label, chart: values }) => (
+              <figure key={label} aria-label={label}>
+                <figcaption>{label}</figcaption>
+                <LineChart
+                  h={180}
+                  data={values.axis.map((at, index) => ({
+                    at,
+                    value: values.bucketTotals[index],
+                  }))}
+                  dataKey="at"
+                  series={[{ name: "value", color: "blue.6" }]}
+                  connectNulls={false}
+                />
+              </figure>
+            ))}
           </>
         )}
       </Stack>
@@ -442,15 +319,14 @@ export function RequestHistory({ runtime }: { readonly runtime: AppRuntime }) {
       }) as const,
     [window, filters, before],
   );
-  const seriesQuery = useMemo(
+  const chartQuery = useMemo(
     () =>
       ({
-        kind: "requests.series",
-        window,
-        bucket_seconds: 60,
-        ...filters,
+        kind: "requests.chart",
+        window: { last_seconds: 86400 },
+        dimensions: [],
       }) as const,
-    [window, filters],
+    [],
   );
   const onOlder = (cursor: string, range: Window) => {
     setFixedWindow(range);
@@ -470,7 +346,7 @@ export function RequestHistory({ runtime }: { readonly runtime: AppRuntime }) {
   return (
     <Stack>
       <Card withBorder>
-        <Title order={2}>Filters and live tail</Title>
+        <Title order={2}>Raw-table filters and live tail</Title>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -553,7 +429,7 @@ export function RequestHistory({ runtime }: { readonly runtime: AppRuntime }) {
       )}
       {!paused && (
         <Collapsible title="request charts">
-          <RequestSeries runtime={runtime} query={seriesQuery} />
+          <RequestChart runtime={runtime} query={chartQuery} />
         </Collapsible>
       )}
     </Stack>

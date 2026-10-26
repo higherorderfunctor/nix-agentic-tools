@@ -239,36 +239,9 @@ describe("closed query and frame boundaries", () => {
         usage_complete: true,
       },
     };
-    const aggregateEntry = {
-      key: JSON.stringify([
-        1_792_886_400,
-        null,
-        "g",
-        "provider-a",
-        "credential-a",
-        "m",
-        "completed",
-      ]),
-      value: {
-        credential: "credential-a",
-        group: "g",
-        model: "m",
-        provider: "provider-a",
-        client: null,
-        outcome: "completed",
-        bucket_start_unix: 1_792_886_400,
-        complete_events: 1,
-        error_events: 0,
-        events: 1,
-        latency_ms: 1,
-        request_bytes: 1,
-        response_bytes: 1,
-        successful_events: 1,
-        cache_read_tokens: null,
-        cache_write_tokens: null,
-        input_tokens: null,
-        output_tokens: null,
-      },
+    const chartEntry = {
+      key: JSON.stringify([1792886400, null, "m"]),
+      value: [1792886400, null, "m", 1, 1, 0, null, null, null, null],
     };
 
     await expect(
@@ -295,9 +268,15 @@ describe("closed query and frame boundaries", () => {
     ).resolves.toMatchObject({ type: "snapshot" });
     await expect(
       Effect.runPromise(
-        decodeServerFrame(
-          frameWithCollection({ request_usage: [aggregateEntry] }),
-        ),
+        decodeServerFrame({
+          ...snapshot,
+          collections: { request_chart: [chartEntry] },
+          meta: {
+            ...metadata,
+            window: { since_unix: 1792886400, until_unix: 1792890000 },
+            chart: { bucket_seconds: 3600, dimensions: ["client", "model"] },
+          },
+        }),
       ),
     ).resolves.toMatchObject({ type: "snapshot" });
   });
@@ -450,5 +429,171 @@ describe("closed query and frame boundaries", () => {
     await expect(
       Effect.runPromise(Effect.flip(decodeServerJson(oversized))),
     ).resolves.toMatchObject({ reason: "frame_byte_limit_exceeded" });
+  });
+});
+
+describe("compact chart codec", () => {
+  const entry = {
+    key: JSON.stringify([0, null, "model-a"]),
+    value: [0, null, "model-a", 12, 11, 2, null, 0, 100, 40],
+  };
+  const frame = {
+    v: 1,
+    type: "snapshot",
+    id: "chart",
+    epoch: "e",
+    seq: 1,
+    collections: { request_chart: [entry] },
+    meta: {
+      ...metadata,
+      as_of_unix: 1000,
+      window: { since_unix: 1, until_unix: 1000 },
+      chart: { bucket_seconds: 3600, dimensions: ["client", "model"] },
+    },
+  };
+  it("decodes through both ingress paths into the same narrow selected identities", async () => {
+    const { decodeServerJsonSync } = await import("../src/data/protocol.ts");
+    const decoded = decodeServerJsonSync(JSON.stringify(frame));
+    expect(await Effect.runPromise(decodeServerFrame(frame))).toEqual(decoded);
+    expect(decoded).toMatchObject({
+      collections: {
+        request_chart: [
+          {
+            key: entry.key,
+            value: {
+              bucket_start_unix: 0,
+              dimensions: { client: null, model: "model-a" },
+              events: 12,
+              complete_events: 11,
+              error_events: 2,
+              cache_read_tokens: null,
+              cache_write_tokens: 0,
+              input_tokens: 100,
+              output_tokens: 40,
+            },
+          },
+        ],
+      },
+    });
+    for (const dimensions of [[], ["model"], ["client", "provider"]]) {
+      const identities = dimensions.map((dimension) =>
+        dimension === "client" ? null : "valid-id",
+      );
+      const tuple = [0, ...identities, 1, 1, 0, 0, 0, 0, 0];
+      const view = {
+        ...frame,
+        meta: { ...frame.meta, chart: { bucket_seconds: 3600, dimensions } },
+        collections: {
+          request_chart: [
+            {
+              key: JSON.stringify(tuple.slice(0, 1 + dimensions.length)),
+              value: tuple,
+            },
+          ],
+        },
+      };
+      const result = decodeServerJsonSync(JSON.stringify(view));
+      if (
+        result.type !== "snapshot" ||
+        !("request_chart" in result.collections)
+      )
+        throw new Error("chart missing");
+      expect(
+        Object.keys(
+          result.collections.request_chart[0]?.value.dimensions ?? {},
+        ),
+      ).toEqual(dimensions);
+    }
+  });
+  it("rejects malformed tuples, metadata, unsafe numbers and canonical identities in both paths", async () => {
+    const { decodeServerJsonSync } = await import("../src/data/protocol.ts");
+    const malformed = [
+      { ...entry, value: entry.value.slice(1) },
+      { ...entry, key: "ordinal-0" },
+      { ...entry, value: [0, null, "model-a", 12, 13, 2, null, 0, 100, 40] },
+      { ...entry, value: [0, null, "model-a", 12, 11, -1, null, 0, 100, 40] },
+      {
+        ...entry,
+        value: [
+          0,
+          null,
+          "model-a",
+          12,
+          11,
+          2,
+          null,
+          0,
+          Number.MAX_SAFE_INTEGER + 1,
+          40,
+        ],
+      },
+      { ...entry, value: [0, null, null, 12, 11, 2, null, 0, 100, 40] },
+      { ...entry, value: [0, null, "", 12, 11, 2, null, 0, 100, 40] },
+    ];
+    const badFrames: unknown[] = malformed.map((row) => ({
+      ...frame,
+      collections: { request_chart: [row] },
+    }));
+    for (const dimensions of [
+      ["model", "client"],
+      ["client", "client"],
+      ["client", "model", "provider"],
+    ])
+      badFrames.push({
+        ...frame,
+        collections: { request_chart: [] },
+        meta: { ...frame.meta, chart: { bucket_seconds: 3600, dimensions } },
+      });
+    badFrames.push({
+      ...frame,
+      collections: { request_chart: [] },
+      meta: metadata,
+    });
+    badFrames.push({ ...snapshot, meta: frame.meta });
+    for (const bad of badFrames) {
+      expect(() => decodeServerJsonSync(JSON.stringify(bad))).toThrow();
+      expect(await failure(bad)).toMatchObject({ _tag: "ProtocolDecodeError" });
+    }
+  });
+  it("accepts chart30-day and all windows while rejecting obsolete and unsupported fields", async () => {
+    const query = {
+      kind: "requests.chart",
+      dimensions: ["model", "provider"],
+      window: { last_seconds: 2592000 },
+      client: null,
+    };
+    await expect(
+      Effect.runPromise(decodeSubscriptionQuery(query)),
+    ).resolves.toEqual(query);
+    await expect(
+      Effect.runPromise(
+        decodeSubscriptionQuery({ ...query, window: { all: true } }),
+      ),
+    ).resolves.toMatchObject({ window: { all: true } });
+    for (const extra of [
+      { bucket_seconds: 3600 },
+      { credential: "key" },
+      { group: "g" },
+      { outcome: "completed" },
+    ])
+      await expect(
+        Effect.runPromise(decodeSubscriptionQuery({ ...query, ...extra })),
+      ).rejects.toBeDefined();
+    for (const window of [
+      { last_seconds: 2592001 },
+      { all: false },
+      { since_unix: 0, until_unix: 10 },
+    ])
+      await expect(
+        Effect.runPromise(decodeSubscriptionQuery({ ...query, window })),
+      ).rejects.toBeDefined();
+    await expect(
+      Effect.runPromise(
+        decodeSubscriptionQuery({
+          ...query,
+          dimensions: ["provider", "model"],
+        }),
+      ),
+    ).rejects.toBeDefined();
   });
 });
