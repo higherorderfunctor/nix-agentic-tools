@@ -16,6 +16,7 @@ import {
   initialExplorerState,
   selectExplorer,
 } from "../src/usage/explorer.ts";
+import { usageGeometry } from "../src/usage/geometry.ts";
 import type { UsagePlotData } from "../src/usage/plot.ts";
 import {
   type UsageExplorerCompleteView,
@@ -29,6 +30,60 @@ afterEach(() => {
 });
 
 describe("explorer selection", () => {
+  it("keeps split models independent when the user selects Stack by None", () => {
+    const onChange = vi.fn<(state: typeof initialExplorerState) => void>();
+    render(
+      frame(
+        <UsageExplorerView
+          state={initialExplorerState}
+          onChange={onChange}
+          view={null}
+          status={{ kind: "loading", message: "Loading" }}
+        />,
+      ),
+    );
+    fireEvent.change(screen.getByLabelText("Stack by"), {
+      target: { value: "none" },
+    });
+    const selected = onChange.mock.lastCall?.[0];
+    if (!selected) throw new Error("selection callback absent");
+    const options = explorerChartOptions(selected.selection);
+    expect(options).toEqual({
+      group: "model",
+      breakdown: "none",
+      metric: { kind: "requests" },
+    });
+    if (!options) throw new Error("request options absent");
+    const chart = buildUsageChart(
+      [2, 3].map((events, index) => ({
+        bucket_start_unix: 0,
+        dimensions: { model: String(index) },
+        complete_events: events,
+        error_events: 0,
+        events,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        token_unknown_events: {
+          cache_read_tokens: 0,
+          cache_write_tokens: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      })),
+      { startUnix: 0, endUnix: 60, bucketSeconds: 60 },
+      options,
+    );
+    if (!chart.ok) throw new Error(JSON.stringify(chart));
+    expect(new Set(chart.series.map((item) => item.stackId)).size).toBe(2);
+    const geometry = usageGeometry(chart, "bar");
+    expect(geometry?.series.map((item) => item.ranges[0])).toEqual([
+      [0, 2],
+      [0, 3],
+    ]);
+    expect(geometry?.stackMax).toBeCloseTo(3 * 1.05);
+  });
   it("stacks provider segments within independent model stacks", () => {
     const options = explorerChartOptions(initialExplorerState.selection);
     expect(options).toEqual({

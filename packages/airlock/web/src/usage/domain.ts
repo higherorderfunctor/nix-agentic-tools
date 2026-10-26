@@ -346,14 +346,10 @@ export function buildUsageChart(
             limit: usageChartLimits.maxSeries,
           };
         }
-        const stack =
-          group === "none" || breakdown === "none"
-            ? (["total"] as const)
-            : groupIdentity;
         entry = {
           id,
-          stackId: JSON.stringify(stack),
-          stack: label(stack),
+          stackId: JSON.stringify(groupIdentity),
+          stack: label(groupIdentity),
           name:
             group === "none"
               ? label(part)

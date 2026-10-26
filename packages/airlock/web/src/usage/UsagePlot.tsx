@@ -4,13 +4,16 @@ import { useMemo, useState } from "react";
 import {
   Area,
   Bar,
+  type BarShapeProps,
   CartesianGrid,
   ComposedChart,
   type DotItemDotProps,
   Line,
+  Rectangle,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
+  useXAxisScale,
   XAxis,
   YAxis,
 } from "recharts";
@@ -65,6 +68,69 @@ function isolatedDot({ cx, cy, index, points, stroke }: DotItemDotProps) {
   return (
     <circle className="recharts-dot" cx={cx} cy={cy} fill={stroke} r={3} />
   );
+}
+
+function BarSeries({
+  chart,
+  series,
+  stacking,
+}: {
+  chart: UsagePlotData;
+  series: NonNullable<ReturnType<typeof usageGeometry>>["series"];
+  stacking: number;
+}) {
+  const scale = useXAxisScale();
+  if (scale === undefined) return null;
+  const buckets = chart.axis.map((start) => ({
+    left: scale(Math.max(start, chart.requestedStartUnix)),
+    right: scale(Math.min(start + chart.bucketSeconds, chart.requestedEndUnix)),
+  }));
+  const stacks = [...new Set(series.map((item) => item.stackId))];
+  return series.map((item, order) => {
+    const shape = (props: BarShapeProps) => {
+      const bucket = buckets[props.originalDataIndex];
+      const left = bucket?.left;
+      const right = bucket?.right;
+      if (left === undefined || right === undefined || props.height <= 0)
+        return null;
+      const position = (index: number, count: number) => {
+        const slot = Math.min(32, ((right - left) * 0.8) / count);
+        const width = Math.min(28, slot * 0.9);
+        return {
+          x: (left + right) / 2 + (index - (count - 1) / 2) * slot - width / 2,
+          width,
+        };
+      };
+      const overlay = position(order, series.length);
+      const stack = position(stacks.indexOf(item.stackId), stacks.length);
+      return (
+        <Rectangle
+          x={overlay.x + (stack.x - overlay.x) * stacking}
+          width={overlay.width + (stack.width - overlay.width) * stacking}
+          y={props.y}
+          height={props.height}
+          fill={color(item.id)}
+          stroke={color(item.id)}
+          fillOpacity={0.7}
+        />
+      );
+    };
+    return (
+      <Bar
+        key={item.id}
+        name={item.name}
+        isAnimationActive={false}
+        dataKey={({ index }: { index: number }) => {
+          const range = item.ranges[index];
+          if (range == null) return null;
+          const base = range[0] * stacking;
+          return [base, base + range[1]];
+        }}
+        shape={shape}
+        activeBar={shape}
+      />
+    );
+  });
 }
 
 function BucketDetails({
@@ -196,7 +262,6 @@ export function UsagePlot({
           >
             <ComposedChart
               data={data}
-              barGap="-100%"
               margin={{ top: 12, right: 16, bottom: 8, left: 8 }}
               accessibilityLayer
             >
@@ -285,53 +350,51 @@ export function UsagePlot({
                       strokeWidth={1}
                     />
                   ))}
-              {geometry.series.map((item) => {
-                const value = ({ index }: { index: number }) => {
-                  const raw = item.values[index];
-                  const range = item.ranges[index];
-                  if (raw == null || (frame.stacking > 0 && range == null))
-                    return null;
-                  const base = (range?.[0] ?? 0) * frame.stacking;
-                  return render === "line" ? base + raw : [base, base + raw];
-                };
-                const props = {
-                  dataKey: value,
-                  name: item.name,
-                  stroke: color(item.id),
-                  fill: color(item.id),
-                  isAnimationActive: false,
-                };
-                return render === "line" ? (
-                  <Line
-                    key={item.id}
-                    {...props}
-                    type="linear"
-                    connectNulls={false}
-                    dot={isolatedDot}
-                    strokeWidth={2}
-                  />
-                ) : render === "area" ? (
-                  <Area
-                    key={item.id}
-                    {...props}
-                    type="linear"
-                    connectNulls={false}
-                    dot={isolatedDot}
-                    fillOpacity={layout === "stack" ? 0.4 : 0.16}
-                    strokeWidth={2}
-                  />
-                ) : (
-                  <Bar
-                    key={item.id}
-                    {...props}
-                    fillOpacity={0.7}
-                    barSize={Math.max(
-                      1,
-                      Math.min(28, 640 / Math.max(chart.axis.length, 1)),
-                    )}
-                  />
-                );
-              })}
+              {render === "bar" || render === "mixed" ? (
+                <BarSeries
+                  chart={chart}
+                  series={geometry.series}
+                  stacking={frame.stacking}
+                />
+              ) : (
+                geometry.series.map((item) => {
+                  const value = ({ index }: { index: number }) => {
+                    const raw = item.values[index];
+                    const range = item.ranges[index];
+                    if (raw == null || (frame.stacking > 0 && range == null))
+                      return null;
+                    const base = (range?.[0] ?? 0) * frame.stacking;
+                    return render === "line" ? base + raw : [base, base + raw];
+                  };
+                  const props = {
+                    dataKey: value,
+                    name: item.name,
+                    stroke: color(item.id),
+                    fill: color(item.id),
+                    isAnimationActive: false,
+                  };
+                  return render === "line" ? (
+                    <Line
+                      key={item.id}
+                      {...props}
+                      type="linear"
+                      connectNulls={false}
+                      dot={isolatedDot}
+                      strokeWidth={2}
+                    />
+                  ) : (
+                    <Area
+                      key={item.id}
+                      {...props}
+                      type="linear"
+                      connectNulls={false}
+                      dot={isolatedDot}
+                      fillOpacity={layout === "stack" ? 0.4 : 0.16}
+                      strokeWidth={2}
+                    />
+                  );
+                })
+              )}
               {render === "mixed" && (
                 <Line
                   dataKey={({ index }: { index: number }) =>
