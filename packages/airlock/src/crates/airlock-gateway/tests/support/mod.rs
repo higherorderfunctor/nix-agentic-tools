@@ -210,16 +210,35 @@ impl Running {
         Self::start_multiplex_with_usage(roots, zai_port, primary_endpoint, None).await
     }
 
+    pub async fn start_multiplex_with_policy(
+        roots: RootCertStore,
+        zai_port: u16,
+        primary_endpoint: &str,
+        policy: &str,
+    ) -> Self {
+        Self::start_multiplex_config(roots, zai_port, primary_endpoint, None, Some(policy)).await
+    }
+
     pub async fn start_multiplex_with_usage(
         roots: RootCertStore,
         zai_port: u16,
         primary_endpoint: &str,
         usage: Option<Arc<dyn RequestUsageSink>>,
     ) -> Self {
+        Self::start_multiplex_config(roots, zai_port, primary_endpoint, usage, None).await
+    }
+
+    async fn start_multiplex_config(
+        roots: RootCertStore,
+        zai_port: u16,
+        primary_endpoint: &str,
+        usage: Option<Arc<dyn RequestUsageSink>>,
+        authorization: Option<&str>,
+    ) -> Self {
         let directory = tempfile::tempdir().expect("tempdir");
         write_fixtures(&directory, FixtureAuth::OauthBearer);
         std::fs::write(directory.path().join("zai"), "fake-REAL-zai\n").expect("zai secret");
-        let config = Config::try_from(serde_json::from_value::<RawConfig>(json!({
+        let mut value = json!({
             "clients": {"harness": {"grants": ["anthropic"], "token_file": directory.path().join("token")}},
             "credentials": {
                 "claude": {"auth": {"file": directory.path().join("claude"), "type": "oauth_bearer"}, "provider": "claude"},
@@ -235,7 +254,14 @@ impl Running {
             },
             "state_dir": directory.path(),
             "unknown_hosts": "deny"
-        })).expect("raw multiplex config")).expect("multiplex config");
+        });
+        if let Some(authorization) = authorization {
+            value["authorization"] = json!(authorization);
+        }
+        let config = Config::try_from(
+            serde_json::from_value::<RawConfig>(value).expect("raw multiplex config"),
+        )
+        .expect("multiplex config");
         let ca_directory = directory.path().join("ca");
         Self::start_config(directory, config, ca_directory, roots, usage).await
     }
@@ -245,10 +271,28 @@ impl Running {
         Self::start_managed_in(directory, roots, upstream_port).await
     }
 
+    pub async fn start_managed_with_policy(
+        directory: TempDir,
+        roots: RootCertStore,
+        upstream_port: u16,
+        policy: &str,
+    ) -> Self {
+        Self::start_managed_config(directory, roots, upstream_port, Some(policy)).await
+    }
+
     pub async fn start_managed_in(
         directory: TempDir,
         roots: RootCertStore,
         upstream_port: u16,
+    ) -> Self {
+        Self::start_managed_config(directory, roots, upstream_port, None).await
+    }
+
+    async fn start_managed_config(
+        directory: TempDir,
+        roots: RootCertStore,
+        upstream_port: u16,
+        authorization: Option<&str>,
     ) -> Self {
         std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
             .expect("private state directory");
@@ -260,7 +304,7 @@ impl Running {
         .expect("other client token");
         std::fs::write(directory.path().join("spare-key"), "fake-SPARE-key\n")
             .expect("other group credential");
-        let config = Config::try_from(serde_json::from_value::<RawConfig>(json!({
+        let mut value = json!({
             "clients": {
                 "harness": {"grants": ["anthropic"], "token_file": directory.path().join("token")},
                 "stranger": {"grants": ["other"], "token_file": directory.path().join("stranger-token")}
@@ -281,7 +325,14 @@ impl Running {
             "providers": {"claude": {"preset": "claude", "endpoints": {"anthropic": format!("https://localhost:{upstream_port}")}}},
             "state_dir": directory.path(),
             "unknown_hosts": "deny"
-        })).expect("raw managed config")).expect("managed config");
+        });
+        if let Some(authorization) = authorization {
+            value["authorization"] = json!(authorization);
+        }
+        let config = Config::try_from(
+            serde_json::from_value::<RawConfig>(value).expect("raw managed config"),
+        )
+        .expect("managed config");
         let storage = Arc::new(
             SqliteStorage::open(config.state_dir(), config.storage_identities(1))
                 .await

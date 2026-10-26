@@ -1,10 +1,10 @@
 # airlock configuration and Claude integration
 
-> **Last verified:** 2026-10-25 — Cedar CONNECT authorization joins managed
-> OAuth client scoping; M08 adds usage selection and quota reports, while M10
-> verifies real-service classifier/remote-control routing and pinned Claude's
-> signed `cch` identity; the separately enabled control listener serves strict
-> usage APIs, static assets, and bounded WebSocket views; shutdown drains
+> **Last verified:** 2026-10-26 — Cedar CONNECT and request authorization join
+> managed OAuth client scoping; M08 adds usage selection and quota reports,
+> while M10 verifies real-service classifier/remote-control routing and pinned
+> Claude's signed `cch` identity; the separately enabled control listener serves
+> strict usage APIs, static assets, and bounded WebSocket views; shutdown drains
 > upgraded sockets and closes the control reader before the storage owner
 > closes.
 
@@ -24,11 +24,11 @@ and Nix output. `airlock-config-roundtrip` feeds rendered settings to
 
 Set `settings.authorization` to an inline Cedar policy. The default `null` uses
 Airlock's built-in permit-all policy inside its native bounds; `""` supplies an
-empty policy set and denies every Cedar CONNECT decision. The setting is passed
-through by both Home Manager and devenv, accepted or rejected by
-`airlock check-config`, and documented with its `CONNECT`-only schema in
-`docs/routing.md`. This example permits the harness client to intercept Claude
-and tunnel `example.com`:
+empty policy set and denies every Cedar action. The setting is passed through by
+both Home Manager and devenv, accepted or rejected by `airlock check-config`,
+and documented with its CONNECT and REQUEST schema in `docs/routing.md`. This
+example permits the harness client to intercept Claude, tunnel `example.com`,
+and send only primary Claude inference requests that name an allowed model:
 
 ```nix
 ai.airlock.instances.main.settings.authorization = ''
@@ -42,6 +42,18 @@ ai.airlock.instances.main.settings.authorization = ''
     action == Action::"CONNECT",
     resource == Host::"example.com"
   ) when { context.intercepted == false };
+  permit(
+    principal == Client::"harness",
+    action == Action::"REQUEST",
+    resource == Credential::"claude"
+  ) when {
+    context.group == "anthropic" &&
+    context.provider == "claude" &&
+    context has model &&
+    context.model == "claude-sonnet-5" &&
+    context.primary &&
+    context.operation == "inference"
+  };
 '';
 ```
 

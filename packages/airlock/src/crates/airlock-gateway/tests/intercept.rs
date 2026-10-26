@@ -15,8 +15,8 @@ use std::{
 use airlock_core::{
     ids::{ClientId, CredentialId, GroupId, ProviderId},
     storage::{
-        RequestEvent, RequestOutcome, RequestUsageQuery, SqliteStorage, StorageError,
-        StorageIdentities,
+        OauthPairReplacement, RequestEvent, RequestOutcome, RequestUsageQuery, SqliteStorage,
+        StorageError, StorageIdentities, TokenMaterial,
     },
 };
 use airlock_gateway::{CaError, Error, Gateway, RequestUsageSink};
@@ -1757,6 +1757,318 @@ async fn one_http1_connect_routes_each_model_and_keeps_feature_paths_primary() {
             .collect::<Vec<_>>(),
         ["claude", "zai", "claude", "claude"]
     );
+    server.stop().await;
+}
+
+#[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one routed connection exercises every request-fact boundary"
+)]
+async fn request_policy_gates_selected_credential_provider_and_model() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let zai = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let policy = r#"
+        permit(
+            principal == Client::"harness",
+            action == Action::"CONNECT",
+            resource == Host::"localhost"
+        );
+        permit(
+            principal == Client::"harness",
+            action == Action::"REQUEST",
+            resource == Credential::"claude"
+        ) when {
+            context.provider == "claude" && context.primary &&
+            context.operation == "classifier" &&
+            context has model && context.model == "glm-4.7"
+        };
+        permit(
+            principal == Client::"harness",
+            action == Action::"REQUEST",
+            resource == Credential::"claude"
+        ) when {
+            context.provider == "claude" && context.primary &&
+            context.operation == "inference" &&
+            context has model && context.model == "claude-sonnet-5"
+        };
+        permit(
+            principal == Client::"harness",
+            action == Action::"REQUEST",
+            resource == Credential::"claude"
+        ) when {
+            context.provider == "claude" && context.primary &&
+            context.operation == "inference" && !(context has model)
+        };
+        permit(
+            principal == Client::"harness",
+            action == Action::"REQUEST",
+            resource == Credential::"zai"
+        ) when {
+            context.provider == "zai" && !context.primary &&
+            context.operation == "inference" &&
+            context has model && context.model == "glm-4.7"
+        };
+    "#;
+    let server = Running::start_multiplex_with_policy(
+        ca.roots(),
+        zai.port,
+        &format!("https://localhost:{}", primary.port),
+        policy,
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+
+    let claude = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(claude.status(), hyper::StatusCode::OK);
+    let claude_bytes = claude.into_body().collect().await.expect("Claude body");
+    assert_eq!(
+        &claude_bytes.to_bytes()[..],
+        br#"{"model":"claude-sonnet-5","messages":[]}"#
+    );
+
+    let glm = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"glm-4.7","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(glm.status(), hyper::StatusCode::OK);
+    let glm_bytes = glm.into_body().collect().await.expect("GLM body");
+    assert_eq!(
+        &glm_bytes.to_bytes()[..],
+        br#"{"model":"glm-4.7","messages":[]}"#
+    );
+
+    let classifier = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[(
+                HeaderName::from_static("anthropic-beta"),
+                "auto-mode-classifier-2026-07-16",
+            )],
+            full_body(br#"{"model":"glm-4.7","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(classifier.status(), hyper::StatusCode::OK);
+    let classifier_bytes = classifier
+        .into_body()
+        .collect()
+        .await
+        .expect("classifier body");
+    assert_eq!(
+        &classifier_bytes.to_bytes()[..],
+        br#"{"model":"glm-4.7","messages":[]}"#
+    );
+
+    let without_model = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(without_model.status(), hyper::StatusCode::OK);
+    assert_eq!(
+        &without_model
+            .into_body()
+            .collect()
+            .await
+            .expect("without model")
+            .to_bytes()[..],
+        br#"{"messages":[]}"#
+    );
+
+    let unclaimed = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"new-claude-model","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(unclaimed.status(), hyper::StatusCode::FORBIDDEN);
+    assert_eq!(
+        &unclaimed
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes()[..],
+        b"request denied"
+    );
+
+    let other = client
+        .send(request("GET", "/api/example", &[], full_body(b"")))
+        .await;
+    assert_eq!(other.status(), hyper::StatusCode::FORBIDDEN);
+    assert_eq!(
+        &other.into_body().collect().await.expect("body").to_bytes()[..],
+        b"request denied"
+    );
+
+    let primary_requests = records(&primary);
+    let zai_requests = records(&zai);
+    assert_eq!(primary_requests.len(), 3);
+    assert_eq!(zai_requests.len(), 1);
+    assert_eq!(zai_requests[0].path, "/api/anthropic/v1/messages");
+    let events = server.capture.request_events();
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| event["fields"]["credential"].as_str().expect("credential"))
+            .collect::<Vec<_>>(),
+        ["claude", "zai", "claude", "claude", "claude", "claude"]
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event["fields"]["outcome"] == "policy_denied")
+            .count(),
+        2
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn request_policy_evaluation_errors_fail_closed() {
+    let ca = TestCa::new();
+    let primary = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let policy = r#"
+        permit(principal, action, resource);
+        permit(
+            principal == Client::"harness",
+            action == Action::"REQUEST",
+            resource == Credential::"claude"
+        ) when {
+            "request-error-marker" == "request-error-marker" &&
+            9223372036854775807 + 1 == 1
+        };
+    "#;
+    let server = Running::start_multiplex_with_policy(
+        ca.roots(),
+        primary.port,
+        &format!("https://localhost:{}", primary.port),
+        policy,
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, primary.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[],
+            full_body(br#"{"model":"claude-sonnet-5","messages":[]}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::FORBIDDEN);
+    assert_eq!(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes()[..],
+        b"request denied"
+    );
+    drop(client);
+    assert!(records(&primary).is_empty());
+    let logs = server.capture.text();
+    assert!(!logs.contains("request-error-marker"), "{logs}");
+    let events = server.capture.request_events();
+    assert_eq!(events[0]["fields"]["outcome"], "policy_error");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn request_policy_denies_oauth_before_exchange_or_mapping_change() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Oauth).await;
+    let directory = tempfile::tempdir().expect("private state");
+    let policy = r#"
+        permit(
+            principal == Client::"harness",
+            action == Action::"CONNECT",
+            resource == Host::"localhost"
+        );
+        permit(
+            principal == Client::"harness",
+            action == Action::"REQUEST",
+            resource == Credential::"claude"
+        ) when { context.operation == "other" };
+    "#;
+    let server =
+        Running::start_managed_with_policy(directory, ca.roots(), upstream.port, policy).await;
+    let client_id = ClientId::try_from("harness").expect("client");
+    let credential = CredentialId::try_from("claude").expect("credential");
+    let provider = ProviderId::try_from("claude").expect("provider");
+    let storage = server.storage.as_ref().expect("managed storage");
+    storage
+        .replace_oauth_pair(OauthPairReplacement {
+            client: client_id.clone(),
+            credential: credential.clone(),
+            expected_generation: 0,
+            fake_access_token: TokenMaterial::new("fake-existing-access".to_owned())
+                .expect("fake access"),
+            fake_access_expires_at_unix: 2_000_000_000,
+            fake_refresh_token: TokenMaterial::new("fake-existing-refresh".to_owned())
+                .expect("fake refresh"),
+            real_access_token: TokenMaterial::new("fake-REAL-existing-access".to_owned())
+                .expect("real access"),
+            real_access_expires_at_unix: 2_000_000_000,
+            real_refresh_token: TokenMaterial::new("fake-REAL-existing-refresh".to_owned())
+                .expect("real refresh"),
+            real_refresh_expires_at_unix: None,
+            updated_at_unix: 1_000_000_000,
+        })
+        .await
+        .expect("seed OAuth pair");
+
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/oauth/token",
+            &[],
+            full_body(br#"{"grant_type":"refresh_token","refresh_token":"fake-existing-refresh"}"#),
+        ))
+        .await;
+    assert_eq!(response.status(), hyper::StatusCode::FORBIDDEN);
+    assert_eq!(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes()[..],
+        b"request denied"
+    );
+    drop(client);
+    assert!(records(&upstream).is_empty());
+    let pair = storage
+        .oauth_pair(&client_id, &credential, &provider)
+        .await
+        .expect("unchanged OAuth pair");
+    assert_eq!(pair.generation, 1);
+    assert_eq!(pair.fake_refresh_token.as_str(), "fake-existing-refresh");
+    let events = server.capture.request_events();
+    assert_eq!(events[0]["fields"]["outcome"], "policy_denied");
+    assert_eq!(events[0]["fields"]["credential"], "claude");
+    assert_eq!(events[0]["fields"]["model"], "");
+    let logs = server.capture.text();
+    assert!(!logs.contains("fake-existing-refresh"), "{logs}");
     server.stop().await;
 }
 

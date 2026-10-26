@@ -7,7 +7,7 @@ use std::{
 use serde::Deserialize;
 
 use crate::{
-    authorization::{Authorization, AuthorizationError},
+    authorization::{Authorization, AuthorizationError, Evaluation, RequestFacts},
     error::{ConfigError, ConfigErrors, NameError},
     ids::{ClientId, CredentialId, GroupId, HostName, ProviderId},
     secret::SecretFile,
@@ -34,6 +34,7 @@ pub struct Route<'config> {
     pub endpoint: &'config str,
     pub is_primary: bool,
     pub primary_credential: &'config CredentialId,
+    pub provider: &'config ProviderId,
 }
 
 #[derive(Clone)]
@@ -543,6 +544,7 @@ impl Config {
             endpoint: endpoint.url.as_str(),
             is_primary: credential_id == &group.primary,
             primary_credential: &group.primary,
+            provider: &credential.provider,
         })
     }
 
@@ -566,6 +568,11 @@ impl Config {
     #[must_use]
     pub(crate) fn authorization(&self) -> Authorization {
         self.authorization.clone()
+    }
+
+    #[must_use]
+    pub fn authorize_request(&self, facts: &RequestFacts<'_>) -> Evaluation {
+        self.authorization.evaluate_request(facts)
     }
 
     /// Refuse active routes whose configured behavior the current transport cannot execute.

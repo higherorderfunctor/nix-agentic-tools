@@ -58,7 +58,7 @@ pub enum ConfigError {
     ControlListenPortZero,
     #[error("authorization policy could not be parsed")]
     InvalidAuthorizationParse,
-    #[error("authorization policy does not match the CONNECT schema")]
+    #[error("authorization policy does not match the action schema")]
     InvalidAuthorizationSchema,
     #[error("control listen address {value:?} is not a valid socket address")]
     InvalidControlListen { value: String },
