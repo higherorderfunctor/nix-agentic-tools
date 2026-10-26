@@ -1712,7 +1712,7 @@ async fn forward_managed_token(
     request
         .headers_mut()
         .insert(ACCEPT_ENCODING, HeaderValue::from_static("identity"));
-    let Some((_, endpoint)) = state.route.config.route(&state.route.group, None) else {
+    let Some(route) = state.route.config.route(&state.route.group, None) else {
         completion.finish(StatusCode::FORBIDDEN);
         return crate::response(StatusCode::FORBIDDEN, "route unavailable");
     };
@@ -1721,7 +1721,7 @@ async fn forward_managed_token(
         return crate::response(StatusCode::SERVICE_UNAVAILABLE, "oauth_clock_unavailable");
     };
     let exchange = timeout(OAUTH_EXCHANGE_TIMEOUT, async {
-        let selected = select_upstream(state, endpoint, true, false)
+        let selected = select_upstream(state, route.endpoint, true, false)
             .await
             .map_err(|_| "upstream connection failed")?;
         let request =
@@ -2117,21 +2117,18 @@ async fn forward(
             return Ok(crate::response(status, reason));
         }
     };
-    let Some((credential_id, endpoint)) = state.route.config.route(
+    let Some(route) = state.route.config.route(
         &state.route.group,
         if classifier { None } else { model.as_deref() },
     ) else {
         completion.finish(StatusCode::FORBIDDEN);
         return Ok(crate::response(StatusCode::FORBIDDEN, "route unavailable"));
     };
-    let credential_id = credential_id.clone();
+    let credential_id = route.credential.clone();
+    let endpoint = route.endpoint;
+    let primary = route.is_primary;
     let has_model = model.is_some();
     completion.selected(credential_id.clone(), model.clone());
-    let Some((primary_id, _)) = state.route.config.route(&state.route.group, None) else {
-        completion.finish(StatusCode::FORBIDDEN);
-        return Ok(crate::response(StatusCode::FORBIDDEN, "route unavailable"));
-    };
-    let primary = *primary_id == credential_id;
     let managed = state.route.config.managed_provider(&credential_id).cloned();
     if let Some(provider) = managed.as_ref() {
         if !state
@@ -2283,7 +2280,7 @@ async fn forward(
             "upstream connection failed",
         ));
     };
-    let quota = quota_context(&state, &credential_id, primary_id, primary);
+    let quota = quota_context(&state, &credential_id, route.primary_credential, primary);
     Ok(finish_response(
         response,
         shim,
