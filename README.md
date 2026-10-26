@@ -302,6 +302,7 @@ Temporarily unclassified supporting packages live in the split-ready
 <!-- prettier-ignore -->
 | Package | Description |
 |---------|-------------|
+| `airlock` | Local egress proxy for coding harnesses |
 | `bruno` | Open-source IDE for exploring and testing APIs |
 | `btop` | Resource monitor for processes, CPU, memory, disks and network |
 | `bun` | JavaScript runtime, bundler, transpiler and package manager |
