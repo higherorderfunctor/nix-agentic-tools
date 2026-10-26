@@ -50,7 +50,7 @@ export interface AppliedFrame {
   readonly recovery: RecoveryAction;
 }
 
-export const retainedViewByteLimit = 1_048_576;
+export const retainedViewByteLimit = 2_097_152;
 
 export function initialViewState(): ViewState {
   return {

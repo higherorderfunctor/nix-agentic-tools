@@ -43,6 +43,7 @@ use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 const MAX_SESSIONS: usize = 4;
 const MAX_SUBSCRIPTIONS: usize = 8;
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
+const MAX_RETAINED_VIEW_BYTES: usize = 2 * 1024 * 1024;
 const MAX_UNACKED_FRAMES: usize = 16;
 const MAX_UNACKED_BYTES: usize = 2 * 1024 * 1024;
 const PING_INTERVAL: Duration = Duration::from_secs(15);
@@ -1771,7 +1772,7 @@ fn chart_row_json(row: &RequestChartRow) -> Value {
     json!({"bucket_start_unix":row.bucket_start_unix, "dimensions":dimensions,
         "events":row.events,"complete_events":row.complete_events,"error_events":row.error_events,
         "cache_read_tokens":row.cache_read_tokens,"cache_write_tokens":row.cache_write_tokens,
-        "input_tokens":row.input_tokens,"output_tokens":row.output_tokens})
+        "input_tokens":row.input_tokens,"output_tokens":row.output_tokens,"token_unknown_events":row.token_unknown_events})
 }
 
 fn wire_entry(collection: ViewCollection, key: &ViewKey, value: &Value, meta: &Value) -> Value {
@@ -1794,6 +1795,16 @@ fn wire_entry(collection: ViewCollection, key: &ViewKey, value: &Value, meta: &V
             ]
             .iter()
             .map(|field| value[field].clone()),
+        );
+        tuple.extend(
+            [
+                "cache_read_tokens",
+                "cache_write_tokens",
+                "input_tokens",
+                "output_tokens",
+            ]
+            .iter()
+            .map(|field| value["token_unknown_events"][field].clone()),
         );
         json!(tuple)
     } else {
@@ -2182,7 +2193,7 @@ async fn evaluate(
             );
             view.meta["chart"] =
                 json!({"bucket_seconds":page.bucket_seconds,"dimensions":query.dimensions});
-            if retained_view_bytes(&view) > MAX_FRAME_BYTES {
+            if retained_view_bytes(&view) > MAX_RETAINED_VIEW_BYTES {
                 return Err("range_too_large");
             }
             Ok(view)
@@ -4004,8 +4015,8 @@ mod view_tests {
             },
         );
         view.meta["chart"] = json!({"bucket_seconds":3600,"dimensions":["model"]});
-        for index in 0..4000 {
-            let model = format!("m{index:04}{}", "x".repeat(80));
+        for index in 0..6000 {
+            let model = format!("m{index:04}{}", "x".repeat(35));
             let row = super::RequestChartRow {
                 bucket_start_unix: 1_799_996_400,
                 dimensions: std::collections::BTreeMap::from([(
@@ -4019,6 +4030,12 @@ mod view_tests {
                 cache_write_tokens: None,
                 input_tokens: Some(1),
                 output_tokens: Some(2),
+                token_unknown_events: airlock_core::storage::RequestChartTokenUnknownEvents {
+                    cache_read_tokens: 1,
+                    cache_write_tokens: 1,
+                    input_tokens: 0,
+                    output_tokens: 0,
+                },
             };
             view.insert(
                 ViewCollection::RequestChart,
@@ -4034,9 +4051,12 @@ mod view_tests {
             .to_string()
             .len();
         assert!(wire < super::MAX_FRAME_BYTES, "wire={wire}");
-        assert_eq!(retained, 1_564_000);
-        assert!(retained > super::MAX_FRAME_BYTES, "retained={retained}");
-        println!("chart size:4000 rows, wire={wire}, decoded retained={retained}");
+        assert_eq!(retained, 2_436_000);
+        assert!(
+            retained > super::MAX_RETAINED_VIEW_BYTES,
+            "retained={retained}"
+        );
+        println!("chart size:6000 rows, wire={wire}, decoded retained={retained}");
     }
 
     #[test]

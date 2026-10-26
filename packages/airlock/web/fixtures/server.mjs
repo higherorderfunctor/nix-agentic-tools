@@ -204,7 +204,7 @@ function chartRows(query) {
     const id = key(identity);
     const row = rows.get(id) ?? {
       key: id,
-      value: [...identity, 0, 0, 0, 0, 0, 0, 0],
+      value: [...identity, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
     const offset = identity.length;
     row.value[offset] += 1;
@@ -217,12 +217,16 @@ function chartRows(query) {
       "output_tokens",
     ].forEach((field, index) => {
       const at = offset + 3 + index;
-      row.value[at] =
-        row.value[at] === null || event[field] === null
-          ? null
-          : row.value[at] + event[field];
+      row.value[at] += event[field] ?? 0;
+      row.value[offset + 7 + index] += Number(event[field] === null);
     });
     rows.set(id, row);
+  }
+  for (const row of rows.values()) {
+    const offset = 1 + query.dimensions.length;
+    for (let part = 0; part < 4; part++)
+      if (row.value[offset + 7 + part] === row.value[offset])
+        row.value[offset + 3 + part] = null;
   }
   return { rows: [...rows.values()], bucket };
 }

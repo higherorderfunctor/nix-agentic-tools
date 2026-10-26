@@ -241,7 +241,22 @@ describe("closed query and frame boundaries", () => {
     };
     const chartEntry = {
       key: JSON.stringify([1792886400, null, "m"]),
-      value: [1792886400, null, "m", 1, 1, 0, null, null, null, null],
+      value: [
+        1792886400,
+        null,
+        "m",
+        1,
+        1,
+        0,
+        null,
+        null,
+        null,
+        null,
+        1,
+        1,
+        1,
+        1,
+      ],
     };
 
     await expect(
@@ -435,7 +450,7 @@ describe("closed query and frame boundaries", () => {
 describe("compact chart codec", () => {
   const entry = {
     key: JSON.stringify([0, null, "model-a"]),
-    value: [0, null, "model-a", 12, 11, 2, null, 0, 100, 40],
+    value: [0, null, "model-a", 12, 11, 2, null, 0, 100, 40, 12, 0, 3, 0],
   };
   const frame = {
     v: 1,
@@ -470,6 +485,12 @@ describe("compact chart codec", () => {
               cache_write_tokens: 0,
               input_tokens: 100,
               output_tokens: 40,
+              token_unknown_events: {
+                cache_read_tokens: 12,
+                cache_write_tokens: 0,
+                input_tokens: 3,
+                output_tokens: 0,
+              },
             },
           },
         ],
@@ -479,7 +500,7 @@ describe("compact chart codec", () => {
       const identities = dimensions.map((dimension) =>
         dimension === "client" ? null : "valid-id",
       );
-      const tuple = [0, ...identities, 1, 1, 0, 0, 0, 0, 0];
+      const tuple = [0, ...identities, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
       const view = {
         ...frame,
         meta: { ...frame.meta, chart: { bucket_seconds: 3600, dimensions } },
@@ -509,9 +530,33 @@ describe("compact chart codec", () => {
     const { decodeServerJsonSync } = await import("../src/data/protocol.ts");
     const malformed = [
       { ...entry, value: entry.value.slice(1) },
+      { ...entry, value: entry.value.slice(0, -4) },
+      { ...entry, value: [...entry.value.slice(0, 10), -1, 0, 0, 0] },
+      {
+        ...entry,
+        value: [
+          ...entry.value.slice(0, 10),
+          Number.MAX_SAFE_INTEGER + 1,
+          0,
+          0,
+          0,
+        ],
+      },
+      { ...entry, value: [...entry.value.slice(0, 10), 13, 0, 0, 0] },
+      { ...entry, value: [...entry.value.slice(0, 10), 0, 0, 0, 0] },
+      {
+        ...entry,
+        value: [0, null, "model-a", 12, 11, 2, 0, 0, 100, 40, 12, 0, 0, 0],
+      },
       { ...entry, key: "ordinal-0" },
-      { ...entry, value: [0, null, "model-a", 12, 13, 2, null, 0, 100, 40] },
-      { ...entry, value: [0, null, "model-a", 12, 11, -1, null, 0, 100, 40] },
+      {
+        ...entry,
+        value: [0, null, "model-a", 12, 13, 2, null, 0, 100, 40, 12, 0, 0, 0],
+      },
+      {
+        ...entry,
+        value: [0, null, "model-a", 12, 11, -1, null, 0, 100, 40, 12, 0, 0, 0],
+      },
       {
         ...entry,
         value: [
@@ -525,10 +570,20 @@ describe("compact chart codec", () => {
           0,
           Number.MAX_SAFE_INTEGER + 1,
           40,
+          12,
+          0,
+          0,
+          0,
         ],
       },
-      { ...entry, value: [0, null, null, 12, 11, 2, null, 0, 100, 40] },
-      { ...entry, value: [0, null, "", 12, 11, 2, null, 0, 100, 40] },
+      {
+        ...entry,
+        value: [0, null, null, 12, 11, 2, null, 0, 100, 40, 12, 0, 0, 0],
+      },
+      {
+        ...entry,
+        value: [0, null, "", 12, 11, 2, null, 0, 100, 40, 12, 0, 0, 0],
+      },
     ];
     const badFrames: unknown[] = malformed.map((row) => ({
       ...frame,

@@ -12,6 +12,9 @@ export type UsageTokenDimension =
   | "cache_write_tokens"
   | "input_tokens"
   | "output_tokens";
+export type UsageTokenUnknownEvents = Readonly<
+  Record<UsageTokenDimension, number>
+>;
 export type UsageTokenPart = "total" | UsageTokenDimension;
 export type UsageMetric =
   | { readonly kind: "requests" }
@@ -30,6 +33,7 @@ export interface UsageChartRow {
   readonly cache_write_tokens: number | null;
   readonly input_tokens: number | null;
   readonly output_tokens: number | null;
+  readonly token_unknown_events: UsageTokenUnknownEvents;
 }
 
 export interface UsageChartOptions {
@@ -51,6 +55,7 @@ export interface UsageSeries {
   readonly name: string;
   readonly stack: string;
   readonly values: readonly (number | null)[];
+  readonly partial: readonly boolean[];
 }
 
 export interface UsageErrorMark {
@@ -73,6 +78,7 @@ export interface UsageSummary {
   readonly errorEvents: number;
   readonly incompleteEvents: number;
   readonly tokens: UsageTokenTotals;
+  readonly tokenUnknownEvents: UsageTokenUnknownEvents;
 }
 
 export interface UsageChart {
@@ -81,6 +87,7 @@ export interface UsageChart {
   readonly axis: readonly number[];
   readonly bucketSeconds: number;
   readonly bucketTotals: readonly (number | null)[];
+  readonly bucketTotalsPartial: readonly boolean[];
   readonly errors: readonly UsageErrorMark[];
   readonly series: readonly UsageSeries[];
   readonly summary: UsageSummary;
@@ -106,14 +113,14 @@ export type UsageChartResult =
   | ({ readonly ok: true } & UsageChart)
   | ({ readonly ok: false } & UsageChartRefusal);
 
-const tokenDimensions = [
+export const usageTokenDimensions = [
   "cache_read_tokens",
   "cache_write_tokens",
   "input_tokens",
   "output_tokens",
 ] as const satisfies readonly UsageTokenDimension[];
 
-const tokenLabels = {
+export const usageTokenLabels = {
   cache_read_tokens: "Cache read",
   cache_write_tokens: "Cache write",
   input_tokens: "Input",
@@ -126,7 +133,12 @@ const unknownLabels = {
   provider: "Unknown provider",
 } as const satisfies Record<UsageChartDimensionName, string>;
 
-type Sum = bigint | null;
+type Sum = {
+  readonly value: bigint;
+  readonly known: bigint;
+  readonly unknown: bigint;
+};
+const emptySum = (): Sum => ({ value: 0n, known: 0n, unknown: 0n });
 type Identity =
   | readonly ["total"]
   | readonly [UsageChartDimensionName, string | null]
@@ -149,17 +161,52 @@ function at<T>(values: readonly T[], index: number): T {
 }
 
 function nullableNumber(value: Sum): number | null {
-  return value === null ? null : safeNumber(value);
+  return value.known === 0n && value.unknown > 0n
+    ? null
+    : safeNumber(value.value);
+}
+
+function partial(value: Sum): boolean {
+  return value.known > 0n && value.unknown > 0n;
 }
 
 function add(left: Sum, right: Sum): Sum {
-  return left === null || right === null ? null : left + right;
+  return {
+    value: left.value + right.value,
+    known: left.known + right.known,
+    unknown: left.unknown + right.unknown,
+  };
 }
 
-function tokens(row: UsageChartRow): Sum[] {
-  return tokenDimensions.map((key) =>
-    row[key] === null ? null : BigInt(row[key]),
-  );
+function tokens(row: UsageChartRow): Sum[] | null {
+  const values: Sum[] = [];
+  if (
+    ![row.events, row.complete_events, row.error_events].every(
+      (value) => Number.isSafeInteger(value) && value >= 0,
+    ) ||
+    row.complete_events > row.events ||
+    row.error_events > row.events
+  )
+    return null;
+  for (const key of usageTokenDimensions) {
+    const unknown = row.token_unknown_events?.[key];
+    const value = row[key];
+    if (
+      !Number.isSafeInteger(unknown) ||
+      unknown < 0 ||
+      unknown > row.events ||
+      (value !== null && (!Number.isSafeInteger(value) || value < 0)) ||
+      (row.events > 0 && (value === null) !== (unknown === row.events)) ||
+      (row.events === 0 && value !== null && value !== 0)
+    )
+      return null;
+    values.push({
+      value: BigInt(value ?? 0),
+      known: BigInt(row.events - unknown),
+      unknown: BigInt(unknown),
+    });
+  }
+  return values;
 }
 
 function identity(
@@ -173,7 +220,7 @@ function identity(
 
 function label(value: Identity): string {
   if (value[0] === "total") return "Total";
-  if (value[0] === "token") return tokenLabels[value[1]];
+  if (value[0] === "token") return usageTokenLabels[value[1]];
   return value[1] ?? unknownLabels[value[0]];
 }
 
@@ -223,17 +270,18 @@ export function buildUsageChart(
   );
   const indexes = new Map(axis.map((start, i) => [start, i]));
   const zeros = () => new Array<bigint>(axis.length).fill(0n);
-  const bucketTotals: Sum[] = zeros();
+  const sums = () => axis.map(emptySum);
+  const bucketTotals: Sum[] = sums();
   const events = zeros();
   const errors = zeros();
   const series = new Map<
     string,
-    Omit<UsageSeries, "values"> & { values: Sum[] }
+    Omit<UsageSeries, "values" | "partial"> & { values: Sum[] }
   >();
   let requests = 0n;
   let errorEvents = 0n;
   let incompleteEvents = 0n;
-  const tokenTotals: Sum[] = [0n, 0n, 0n, 0n];
+  const tokenTotals: Sum[] = usageTokenDimensions.map(emptySum);
 
   for (const row of rows) {
     for (const dimension of [group, breakdown]) {
@@ -258,13 +306,19 @@ export function buildUsageChart(
       };
     }
     const parts = tokens(row);
-    const tokenTotal = parts.reduce<Sum>(add, 0n);
+    if (parts === null)
+      return {
+        ok: false,
+        kind: "inconsistent_view",
+        message: "invalid token counts or known-subtotal coverage",
+      };
+    const tokenTotal = parts.reduce(add, emptySum());
     const value =
       metric.kind === "requests"
-        ? BigInt(row.events)
+        ? { value: BigInt(row.events), known: BigInt(row.events), unknown: 0n }
         : metric.part === "total"
           ? tokenTotal
-          : at(parts, tokenDimensions.indexOf(metric.part));
+          : at(parts, usageTokenDimensions.indexOf(metric.part));
     requests += BigInt(row.events);
     errorEvents += BigInt(row.error_events);
     incompleteEvents += BigInt(row.events) - BigInt(row.complete_events);
@@ -277,7 +331,7 @@ export function buildUsageChart(
     const groupIdentity = identity(row, group);
     const split: Identity[] =
       breakdown === "token"
-        ? tokenDimensions.map((dimension) => ["token", dimension])
+        ? usageTokenDimensions.map((dimension) => ["token", dimension])
         : [identity(row, breakdown)];
     for (const part of split) {
       const id = JSON.stringify([groupIdentity, part]);
@@ -306,13 +360,13 @@ export function buildUsageChart(
               : breakdown === "none"
                 ? label(groupIdentity)
                 : `${label(groupIdentity)} / ${label(part)}`,
-          values: zeros(),
+          values: sums(),
         };
         series.set(id, entry);
       }
       const contribution =
         part[0] === "token"
-          ? at(parts, tokenDimensions.indexOf(part[1]))
+          ? at(parts, usageTokenDimensions.indexOf(part[1]))
           : value;
       entry.values[index] = add(at(entry.values, index), contribution);
     }
@@ -327,6 +381,7 @@ export function buildUsageChart(
       axis,
       bucketSeconds,
       bucketTotals: bucketTotals.map(nullableNumber),
+      bucketTotalsPartial: bucketTotals.map(partial),
       errors: axis.map((start, i) => ({
         bucketStartUnix: start,
         bucketSeconds,
@@ -338,17 +393,24 @@ export function buildUsageChart(
         .map((entry) => ({
           ...entry,
           values: entry.values.map(nullableNumber),
+          partial: entry.values.map(partial),
         })),
       summary: {
         requests: safeNumber(requests),
         errorEvents: safeNumber(errorEvents),
         incompleteEvents: safeNumber(incompleteEvents),
+        tokenUnknownEvents: Object.fromEntries(
+          usageTokenDimensions.map((key, index) => [
+            key,
+            safeNumber(at(tokenTotals, index).unknown),
+          ]),
+        ) as Record<UsageTokenDimension, number>,
         tokens: {
           cacheRead: at(totals, 0),
           cacheWrite: at(totals, 1),
           input: at(totals, 2),
           output: at(totals, 3),
-          total: nullableNumber(tokenTotals.reduce<Sum>(add, 0n)),
+          total: nullableNumber(tokenTotals.reduce(add, emptySum())),
         },
       },
     };

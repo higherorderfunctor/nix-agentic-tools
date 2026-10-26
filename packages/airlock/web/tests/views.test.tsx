@@ -169,6 +169,12 @@ function chartRow(fields: Partial<UsageChartRow> = {}): UsageChartRow {
     cache_write_tokens: null,
     input_tokens: 10,
     output_tokens: null,
+    token_unknown_events: {
+      cache_read_tokens: 2,
+      cache_write_tokens: 2,
+      input_tokens: 0,
+      output_tokens: 2,
+    },
     ...fields,
   };
 }

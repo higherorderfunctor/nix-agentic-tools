@@ -14,6 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { usageTokenLabels } from "./domain.ts";
 import {
   bucketPosition,
   type UsageLayout,
@@ -42,7 +43,11 @@ const date = (unix: number) => new Date(unix * 1000).toLocaleString();
 const valueLabel = (
   value: number | null | undefined,
   format: (value: number) => string,
-) => (value == null ? "Unknown" : format(value));
+  partial = false,
+) =>
+  value == null
+    ? "Unknown"
+    : `${partial ? "Known subtotal: " : ""}${format(value)}`;
 function color(id: string) {
   let hash = 0;
   for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) | 0;
@@ -81,11 +86,17 @@ function BucketDetails({
       </Text>
       {chart.series.map((item) => (
         <Text key={item.id} size="xs" c={color(item.id)}>
-          {item.name}: {valueLabel(item.values[index], format)}
+          {item.name}:{" "}
+          {valueLabel(item.values[index], format, item.partial[index])}
         </Text>
       ))}
       <Text size="xs">
-        Total: {valueLabel(chart.bucketTotals[index], format)}
+        Total:{" "}
+        {valueLabel(
+          chart.bucketTotals[index],
+          format,
+          chart.bucketTotalsPartial[index],
+        )}
       </Text>
       {error && (
         <Text size="xs">
@@ -154,6 +165,24 @@ export function UsagePlot({
     });
   return (
     <Stack gap="xs">
+      {(chart.bucketTotalsPartial.some(Boolean) ||
+        chart.bucketTotals.some((value) => value === null)) && (
+        <Alert title="Incomplete token observations" color="orange">
+          <Text>
+            Some token dimensions are missing; values show known subtotals.
+            Wholly unavailable parts remain Unknown.
+          </Text>
+          {Object.entries(chart.summary.tokenUnknownEvents)
+            .filter(([, count]) => count > 0)
+            .map(([part, count]) => (
+              <Text key={part}>
+                {usageTokenLabels[part as keyof typeof usageTokenLabels]}{" "}
+                unavailable for {number.format(count)} of{" "}
+                {number.format(chart.summary.requests)} requests.
+              </Text>
+            ))}
+        </Alert>
+      )}
       <Box component="figure" m={0} aria-label={label}>
         <Text component="figcaption" size="sm">
           {label}
@@ -178,6 +207,11 @@ export function UsagePlot({
               />
               <XAxis
                 type="number"
+                tick={{
+                  fontFamily: "var(--mantine-font-family)",
+                  fontSize: 12,
+                  fill: "var(--mantine-color-dimmed)",
+                }}
                 dataKey="at"
                 domain={[chart.requestedStartUnix, chart.requestedEndUnix]}
                 allowDataOverflow
@@ -206,6 +240,11 @@ export function UsagePlot({
               />
               <YAxis
                 type="number"
+                tick={{
+                  fontFamily: "var(--mantine-font-family)",
+                  fontSize: 12,
+                  fill: "var(--mantine-color-dimmed)",
+                }}
                 domain={[0, frame.maximum]}
                 allowDataOverflow
                 width={64}

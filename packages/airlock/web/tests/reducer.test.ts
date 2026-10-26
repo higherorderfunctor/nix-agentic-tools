@@ -506,6 +506,12 @@ describe("chart metadata and atomic precision changes", () => {
       cache_write_tokens: 0,
       input_tokens: events,
       output_tokens: events,
+      token_unknown_events: {
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+      },
     },
   });
   const meta = (until: number, bucket: number) => ({
@@ -688,11 +694,11 @@ describe("chart decoded memory accounting", () => {
       window: { since_unix: since, until_unix: until },
       dimensions: ["model"],
     };
-    const rows = Array.from({ length: 4000 }, (_, index) => {
-      const model = `m${String(index).padStart(4, "0")}${"x".repeat(80)}`;
+    const rows = Array.from({ length: 6000 }, (_, index) => {
+      const model = `m${String(index).padStart(4, "0")}${"x".repeat(35)}`;
       return {
         key: JSON.stringify([since, model]),
-        value: [since, model, 1, 1, 0, null, null, 1, 2],
+        value: [since, model, 1, 1, 0, null, null, 1, 2, 1, 1, 0, 0],
       };
     });
     const wire = JSON.stringify({
@@ -724,7 +730,7 @@ describe("chart decoded memory accounting", () => {
         ).byteLength,
       0,
     );
-    expect(retained).toBe(1_564_000);
+    expect(retained).toBe(2_436_000);
     const ready = applyServerFrame(
       initialViewState(),
       { v: 1, type: "subscribed", id: "chart", epoch: "e", interval_ms: 5000 },

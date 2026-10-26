@@ -5,6 +5,7 @@ import {
   type UsageChartResult,
   type UsageChartRow,
   usageChartLimits,
+  usageTokenDimensions,
 } from "../src/usage/domain.ts";
 
 const axis = { startUnix: 0, endUnix: 240, bucketSeconds: 60 };
@@ -18,7 +19,7 @@ const totalTokens: UsageChartOptions = {
   metric: { kind: "tokens", part: "total" },
 };
 function row(fields: Partial<UsageChartRow> = {}): UsageChartRow {
-  return {
+  const value = {
     bucket_start_unix: 0,
     dimensions: { client: null, model: "model", provider: "provider" },
     complete_events: 1,
@@ -29,6 +30,17 @@ function row(fields: Partial<UsageChartRow> = {}): UsageChartRow {
     input_tokens: 1,
     output_tokens: 2,
     ...fields,
+  };
+  return {
+    ...value,
+    token_unknown_events:
+      fields.token_unknown_events ??
+      (Object.fromEntries(
+        usageTokenDimensions.map((part) => [
+          part,
+          value[part] === null ? value.events : 0,
+        ]),
+      ) as UsageChartRow["token_unknown_events"]),
   };
 }
 function ok(result: UsageChartResult) {
@@ -86,27 +98,27 @@ describe("usage chart domain", () => {
     }
   });
 
-  it("preserves unknown totals in either row order and keeps all known token parts", () => {
+  it("combines known subtotals in either row order and keeps independent token coverage", () => {
     const rows = [row({ input_tokens: null }), row()];
     for (const ordered of [rows, [...rows].reverse()]) {
       const chart = ok(
         buildUsageChart(ordered, axis, { ...totalTokens, breakdown: "token" }),
       );
-      expect(chart.bucketTotals).toEqual([null, 0, 0, 0]);
+      expect(chart.bucketTotals).toEqual([19, 0, 0, 0]);
       expect(
         ok(buildUsageChart(ordered, axis, totalTokens)).series[0]?.values,
-      ).toEqual([null, 0, 0, 0]);
+      ).toEqual([19, 0, 0, 0]);
       expect(chart.summary.tokens).toEqual({
         cacheRead: 6,
         cacheWrite: 8,
-        input: null,
+        input: 1,
         output: 4,
-        total: null,
+        total: 19,
       });
       expect(chart.series.map(({ name, values }) => [name, values])).toEqual([
         ["Cache read", [6, 0, 0, 0]],
         ["Cache write", [8, 0, 0, 0]],
-        ["Input", [null, 0, 0, 0]],
+        ["Input", [1, 0, 0, 0]],
         ["Output", [4, 0, 0, 0]],
       ]);
     }
@@ -133,7 +145,15 @@ describe("usage chart domain", () => {
           breakdown: "token",
         }),
       );
-      expect(chart.summary.tokens.total).toBeNull();
+      expect(chart.summary.tokens.total).toBe(
+        10 -
+          {
+            cache_read_tokens: 3,
+            cache_write_tokens: 4,
+            input_tokens: 1,
+            output_tokens: 2,
+          }[unknownPart],
+      );
       expect(
         chart.series.filter(({ values }) => values[0] === null),
       ).toHaveLength(1);
@@ -148,7 +168,7 @@ describe("usage chart domain", () => {
       }),
     );
     expect(output.bucketTotals).toEqual([2, 0, 0, 0]);
-    expect(output.summary.tokens.total).toBeNull();
+    expect(output.summary.tokens.total).toBe(9);
   });
 
   it("keeps raw identities separate when display labels or separators collide", () => {
@@ -340,4 +360,106 @@ describe("usage chart domain", () => {
       observed: 257,
     });
   });
+});
+
+it("distinguishes wholly unknown, partial known zero, ordinary totals and empty buckets", () => {
+  const unknown = row({
+    cache_read_tokens: null,
+    cache_write_tokens: null,
+    input_tokens: null,
+    output_tokens: null,
+    complete_events: 2,
+  });
+  const wholly = ok(buildUsageChart([unknown], axis, totalTokens));
+  expect(wholly.bucketTotals).toEqual([null, 0, 0, 0]);
+  expect(wholly.bucketTotalsPartial).toEqual([false, false, false, false]);
+  expect(wholly.summary.tokens.total).toBeNull();
+  expect(wholly.summary.tokenUnknownEvents).toEqual({
+    cache_read_tokens: 2,
+    cache_write_tokens: 2,
+    input_tokens: 2,
+    output_tokens: 2,
+  });
+  expect(wholly.summary.incompleteEvents).toBe(0);
+  const zero = row({
+    ...unknown,
+    input_tokens: 0,
+    token_unknown_events: { ...unknown.token_unknown_events, input_tokens: 0 },
+  });
+  const partial = ok(
+    buildUsageChart([zero], axis, { ...totalTokens, breakdown: "token" }),
+  );
+  expect(partial.bucketTotals).toEqual([0, 0, 0, 0]);
+  expect(partial.bucketTotalsPartial).toEqual([true, false, false, false]);
+  expect(
+    partial.series.find((series) => series.name === "Input")?.values[0],
+  ).toBe(0);
+  expect(
+    partial.series.find((series) => series.name === "Output")?.values[0],
+  ).toBeNull();
+  const combined = ok(
+    buildUsageChart(
+      [unknown, row({ dimensions: { provider: "known", model: "m" } })],
+      axis,
+      { ...totalTokens, group: "provider" },
+    ),
+  );
+  expect(combined.bucketTotals[0]).toBe(10);
+  expect(combined.bucketTotalsPartial[0]).toBe(true);
+  expect(combined.summary.tokenUnknownEvents.input_tokens).toBe(2);
+  expect(combined.summary.requests).toBe(4);
+  expect(combined.summary.tokens.total).toBe(10);
+});
+
+it("refuses missing, unsafe, excessive and inconsistent per-token coverage", () => {
+  const good = row();
+  for (const value of [-1, Number.MAX_SAFE_INTEGER + 1, good.events + 1])
+    expect(
+      buildUsageChart(
+        [
+          row({
+            token_unknown_events: {
+              ...good.token_unknown_events,
+              input_tokens: value,
+            },
+          }),
+        ],
+        axis,
+        totalTokens,
+      ),
+    ).toMatchObject({ ok: false, kind: "inconsistent_view" });
+  expect(
+    buildUsageChart(
+      [
+        row({
+          input_tokens: null,
+          token_unknown_events: good.token_unknown_events,
+        }),
+      ],
+      axis,
+      totalTokens,
+    ),
+  ).toMatchObject({ ok: false, kind: "inconsistent_view" });
+  expect(
+    buildUsageChart(
+      [
+        row({
+          input_tokens: 0,
+          token_unknown_events: {
+            ...good.token_unknown_events,
+            input_tokens: good.events,
+          },
+        }),
+      ],
+      axis,
+      totalTokens,
+    ),
+  ).toMatchObject({ ok: false, kind: "inconsistent_view" });
+  expect(
+    buildUsageChart(
+      [row({ input_tokens: Number.MAX_SAFE_INTEGER }), row()],
+      axis,
+      { ...requests, metric: { kind: "tokens", part: "input_tokens" } },
+    ),
+  ).toMatchObject({ ok: false, kind: "numeric_overflow" });
 });
