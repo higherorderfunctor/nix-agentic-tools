@@ -1,4 +1,3 @@
-import { LineChart } from "@mantine/charts";
 import {
   Alert,
   Button,
@@ -13,7 +12,6 @@ import {
 } from "@mantine/core";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Collapsible,
   ConnectionNotice,
   number,
   Status,
@@ -28,7 +26,6 @@ import type {
 } from "../data/protocol.ts";
 import type { ViewState } from "../data/reducer.ts";
 import { useVisibleSubscription } from "../data/visibility.ts";
-import { buildUsageChart, type UsageChartRow } from "../usage/domain.ts";
 
 type Filters = {
   client?: string;
@@ -156,106 +153,6 @@ function RequestTable({
   );
 }
 
-function RequestChart({
-  runtime,
-  query,
-}: {
-  readonly runtime: AppRuntime;
-  readonly query: Extract<SubscriptionQuery, { kind: "requests.chart" }>;
-}) {
-  const subscription = useVisibleSubscription(runtime, query);
-  const state =
-    subscription.result._tag === "Success" ? subscription.result.value : null;
-  const charts = useMemo(() => {
-    const window = state?.meta?.window;
-    const precision = state?.meta?.chart;
-    if (state === null || window == null || precision === undefined)
-      return null;
-    const rows = values<UsageChartRow>(state, "request_chart");
-    const axis = {
-      startUnix: window.since_unix,
-      endUnix: window.until_unix,
-      bucketSeconds: precision.bucket_seconds,
-    };
-    return {
-      requests: buildUsageChart(rows, axis, {
-        metric: { kind: "requests" },
-        group: "none",
-        breakdown: "none",
-      }),
-      tokens: buildUsageChart(rows, axis, {
-        metric: { kind: "tokens", part: "total" },
-        group: "none",
-        breakdown: "none",
-      }),
-    };
-  }, [state]);
-  const chart = charts?.requests ?? null;
-  const tokenChart = charts?.tokens ?? null;
-  return (
-    <Card ref={subscription.targetRef} withBorder>
-      <Stack>
-        <Title order={2}>All routed requests</Title>
-        <Text>
-          Last 24 hours. Raw-table filters and paging apply only to the table.
-        </Text>
-        {state !== null && <Status state={state} />}
-        {chart === null ? (
-          <ConnectionNotice
-            result={subscription.result}
-            subject="request chart"
-          />
-        ) : !chart.ok || tokenChart === null || !tokenChart.ok ? (
-          <Alert title="Chart unavailable">
-            This range cannot be displayed.
-          </Alert>
-        ) : (
-          <>
-            <Text>
-              Coverage: {time(chart.requestedStartUnix)} to{" "}
-              {time(chart.requestedEndUnix)}; buckets{" "}
-              {number(chart.bucketSeconds)} seconds.
-            </Text>
-            {chart.summary.incompleteEvents > 0 && (
-              <Alert title="Incomplete aggregate usage" color="orange">
-                {number(chart.summary.incompleteEvents)} of{" "}
-                {number(chart.summary.requests)} request events have incomplete
-                usage.
-              </Alert>
-            )}
-            <Text>
-              {number(chart.summary.requests)} requests;{" "}
-              {number(chart.summary.tokens.input)} input and{" "}
-              {number(chart.summary.tokens.output)} output tokens.
-            </Text>
-            {chart.summary.requests === 0 && (
-              <Text>No requests in this recorded range.</Text>
-            )}
-            {[
-              { label: "Request count over time", chart },
-              { label: "Token usage over time", chart: tokenChart },
-            ].map(({ label, chart: values }) => (
-              <figure key={label} aria-label={label}>
-                <figcaption>{label}</figcaption>
-                <LineChart
-                  h={180}
-                  data={values.axis.map((at, index) => ({
-                    at,
-                    value: values.bucketTotals[index],
-                  }))}
-                  dataKey="at"
-                  series={[{ name: "value", color: "blue.6" }]}
-                  connectNulls={false}
-                />
-              </figure>
-            ))}
-          </>
-        )}
-      </Stack>
-    </Card>
-  );
-}
-
 function LiveTable({
   runtime,
   query,
@@ -297,6 +194,7 @@ function LiveTable({
 }
 
 export function RequestHistory({ runtime }: { readonly runtime: AppRuntime }) {
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<Filters>({});
   const [filters, setFilters] = useState<Filters>({});
   const [paused, setPaused] = useState(false);
@@ -319,15 +217,6 @@ export function RequestHistory({ runtime }: { readonly runtime: AppRuntime }) {
       }) as const,
     [window, filters, before],
   );
-  const chartQuery = useMemo(
-    () =>
-      ({
-        kind: "requests.chart",
-        window: { last_seconds: 86400 },
-        dimensions: [],
-      }) as const,
-    [],
-  );
   const onOlder = (cursor: string, range: Window) => {
     setFixedWindow(range);
     setCursors((previous) => [...previous, cursor]);
@@ -345,92 +234,98 @@ export function RequestHistory({ runtime }: { readonly runtime: AppRuntime }) {
   };
   return (
     <Stack>
-      <Card withBorder>
-        <Title order={2}>Raw-table filters and live tail</Title>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            setFilters(
-              Object.fromEntries(
-                Object.entries(draft).filter(([, value]) => value !== ""),
-              ) as Filters,
-            );
-            setCursors([]);
-            setFixedWindow(null);
-            setLastGood(null);
-          }}
-        >
-          <Group align="end">
-            {fields.map((field) => (
-              <TextInput
-                key={field}
-                label={field}
-                value={draft[field] ?? ""}
-                onChange={(event) => {
-                  const value = event.currentTarget.value;
-                  setDraft((previous) => ({ ...previous, [field]: value }));
-                }}
-              />
-            ))}
-            <Select
-              label="outcome"
-              data={["cancelled", "completed", "failed", "rejected"]}
-              clearable
-              value={draft.outcome ?? null}
-              onChange={(value) =>
-                setDraft((previous) => {
-                  const { outcome: _old, ...rest } = previous;
-                  return value === null
-                    ? rest
-                    : {
-                        ...rest,
-                        outcome: value as NonNullable<Filters["outcome"]>,
-                      };
-                })
-              }
-            />
-            <Button type="submit">Apply filters</Button>
-            <Button type="button" onClick={togglePause}>
-              {paused ? "Resume live tail" : "Pause live tail"}
-            </Button>
-          </Group>
-        </form>
-        <Text>
-          {fixedWindow !== null && "since_unix" in fixedWindow
-            ? `Historical range: ${time(fixedWindow.since_unix)} to ${time(fixedWindow.until_unix)}. Newer returns to the rolling last hour.`
-            : "Live range: rolling last hour; older pages freeze the range at the first page boundary."}
-        </Text>
-      </Card>
-      {paused ? (
-        <Card withBorder>
-          <Title order={2}>Request history · paused</Title>
-          {lastGood === null ? (
-            <Text>No recorded data before pause.</Text>
+      <Button
+        variant="subtle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+      >
+        {expanded
+          ? "Collapse raw request details"
+          : "Expand raw request details"}
+      </Button>
+      {expanded && (
+        <Stack>
+          <Card withBorder>
+            <Title order={2}>Raw-table filters and live tail</Title>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                setFilters(
+                  Object.fromEntries(
+                    Object.entries(draft).filter(([, value]) => value !== ""),
+                  ) as Filters,
+                );
+                setCursors([]);
+                setFixedWindow(null);
+                setLastGood(null);
+              }}
+            >
+              <Group align="end">
+                {fields.map((field) => (
+                  <TextInput
+                    key={field}
+                    label={field}
+                    value={draft[field] ?? ""}
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
+                      setDraft((previous) => ({ ...previous, [field]: value }));
+                    }}
+                  />
+                ))}
+                <Select
+                  label="outcome"
+                  data={["cancelled", "completed", "failed", "rejected"]}
+                  clearable
+                  value={draft.outcome ?? null}
+                  onChange={(value) =>
+                    setDraft((previous) => {
+                      const { outcome: _old, ...rest } = previous;
+                      return value === null
+                        ? rest
+                        : {
+                            ...rest,
+                            outcome: value as NonNullable<Filters["outcome"]>,
+                          };
+                    })
+                  }
+                />
+                <Button type="submit">Apply filters</Button>
+                <Button type="button" onClick={togglePause}>
+                  {paused ? "Resume live tail" : "Pause live tail"}
+                </Button>
+              </Group>
+            </form>
+            <Text>
+              {fixedWindow !== null && "since_unix" in fixedWindow
+                ? `Historical range: ${time(fixedWindow.since_unix)} to ${time(fixedWindow.until_unix)}. Newer returns to the rolling last hour.`
+                : "Live range: rolling last hour; older pages freeze the range at the first page boundary."}
+            </Text>
+          </Card>
+          {paused ? (
+            <Card withBorder>
+              <Title order={2}>Request history · paused</Title>
+              {lastGood === null ? (
+                <Text>No recorded data before pause.</Text>
+              ) : (
+                <RequestTable
+                  state={{ ...lastGood, phase: "paused" }}
+                  onOlder={onOlder}
+                  onNewer={onNewer}
+                  hasPrevious={cursors.length > 0}
+                />
+              )}
+            </Card>
           ) : (
-            <RequestTable
-              state={{ ...lastGood, phase: "paused" }}
+            <LiveTable
+              runtime={runtime}
+              query={tableQuery}
+              onState={setLastGood}
               onOlder={onOlder}
               onNewer={onNewer}
               hasPrevious={cursors.length > 0}
             />
           )}
-        </Card>
-      ) : (
-        <Collapsible title="request table">
-          <LiveTable
-            runtime={runtime}
-            query={tableQuery}
-            onState={setLastGood}
-            onOlder={onOlder}
-            onNewer={onNewer}
-            hasPrevious={cursors.length > 0}
-          />
-        </Collapsible>
-      )}
-      {!paused && (
-        <Collapsible title="request charts">
-          <RequestChart runtime={runtime} query={chartQuery} />
-        </Collapsible>
+        </Stack>
       )}
     </Stack>
   );

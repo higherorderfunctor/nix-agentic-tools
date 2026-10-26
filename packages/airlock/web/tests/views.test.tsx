@@ -20,7 +20,6 @@ import type {
   Snapshot,
 } from "../src/data/protocol.ts";
 import { initialViewState, type ViewState } from "../src/data/reducer.ts";
-import type { UsageChartRow } from "../src/usage/domain.ts";
 import { App } from "../src/views/App.tsx";
 import { Overview } from "../src/views/Overview.tsx";
 import { chartPoints, ProviderHistory } from "../src/views/ProviderHistory.tsx";
@@ -155,20 +154,6 @@ function credential(fields: Partial<Credential> = {}): Credential {
     latest_header: null,
     status: "fresh",
     routes: [],
-    ...fields,
-  };
-}
-function chartRow(fields: Partial<UsageChartRow> = {}): UsageChartRow {
-  return {
-    bucket_start_unix: 0,
-    dimensions: {},
-    complete_events: 1,
-    error_events: 0,
-    events: 2,
-    cache_read_tokens: null,
-    cache_write_tokens: null,
-    input_tokens: 10,
-    output_tokens: null,
     ...fields,
   };
 }
@@ -616,6 +601,9 @@ describe("screen contracts", () => {
       },
     };
     render(frame(<RequestHistory runtime={staticRuntime(view)} />));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand raw request details" }),
+    );
     expect(
       await screen.findByText(/At least one request has incomplete usage/),
     ).toBeTruthy();
@@ -651,6 +639,9 @@ describe("screen contracts", () => {
         />,
       ),
     );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand raw request details" }),
+    );
     const table = (await screen.findByText("newest-id")).closest("table");
     expect(table).not.toBeNull();
     expect(
@@ -663,33 +654,6 @@ describe("screen contracts", () => {
       expect.stringContaining("new"),
       expect.stringContaining("old"),
     ]);
-  });
-  it("shows request charts and incomplete aggregate coverage", async () => {
-    vi.stubGlobal("IntersectionObserver", VisibleObserver);
-    render(
-      frame(
-        <RequestHistory
-          runtime={staticRuntime({
-            ...state([["request_chart:one", chartRow()]]),
-            meta: {
-              ...metadata(),
-              as_of_unix: 86401,
-              window: { since_unix: 1, until_unix: 86401 },
-              chart: { bucket_seconds: 3600, dimensions: [] },
-            },
-          })}
-        />,
-      ),
-    );
-    expect(
-      await screen.findByRole("figure", { name: "Request count over time" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("figure", { name: "Token usage over time" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(/1 of 2 request events have incomplete usage/),
-    ).toBeTruthy();
   });
   it("freezes older-page bounds and applies request filters", async () => {
     vi.stubGlobal("IntersectionObserver", VisibleObserver);
@@ -711,6 +675,9 @@ describe("screen contracts", () => {
       },
     };
     render(frame(<RequestHistory runtime={runtime} />));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand raw request details" }),
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Older page" }));
     await waitFor(() =>
       expect(queries).toContainEqual(
@@ -751,6 +718,9 @@ describe("screen contracts", () => {
       },
     };
     render(frame(<RequestHistory runtime={runtime} />));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand raw request details" }),
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Older page" }));
     await waitFor(() =>
       expect(queries).toContainEqual(
@@ -1017,8 +987,11 @@ describe("screen contracts", () => {
           message.includes('"type":"unsubscribe","id":"usage-overview'),
         ).length;
     const beforeNavigation = unsubscribeCount();
-    window.location.hash = "#requests";
+    window.location.hash = "#usage";
     window.dispatchEvent(new Event("hashchange"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand raw request details" }),
+    );
     await waitFor(() =>
       expect(
         BrowserSocket.instances.some((socket) =>
@@ -1057,7 +1030,7 @@ describe("screen contracts", () => {
         message.includes('"type":"unsubscribe","id":"requests-table'),
       ).length;
     fireEvent.click(
-      screen.getByRole("button", { name: "Collapse request table" }),
+      screen.getByRole("button", { name: "Collapse raw request details" }),
     );
     await waitFor(() =>
       expect(
