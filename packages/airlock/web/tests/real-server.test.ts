@@ -434,10 +434,15 @@ describe.skipIf(binary === undefined || frontend === undefined)(
         database = new DatabaseSync(join(state, "airlock.sqlite3"));
         database.exec("PRAGMA foreign_keys=ON");
         seedIdentities(database, Math.floor(Date.now() / 1000));
+        insertRequest(database, "a", "chart-model");
+        database.exec(
+          "UPDATE request_events SET occurred_at_unix=occurred_at_unix-1 WHERE model_id='chart-model'",
+        );
 
         const { layer, received, sent } = observedClient(controlPort);
         const requests: ViewState[] = [];
         const quota: ViewState[] = [];
+        const chart: ViewState[] = [];
         let releaseRequests: () => void = () => undefined;
         let releaseQuota: () => void = () => undefined;
         const requestsGate = new Promise<void>((resolve) => {
@@ -461,6 +466,14 @@ describe.skipIf(binary === undefined || frontend === undefined)(
           surface: "zai_quota",
           window: { last_seconds: 3600 },
         };
+        const chartQuery: SubscriptionQuery = {
+          kind: "requests.chart",
+          window: { last_seconds: 3600 },
+          dimensions: ["client", "model"],
+          client: null,
+          model: "chart-model",
+          provider: "provider-a",
+        };
         const program = Effect.gen(function* () {
           const requestFiber = yield* Effect.forkChild(
             consume(requestQuery, requests),
@@ -468,10 +481,14 @@ describe.skipIf(binary === undefined || frontend === undefined)(
           const quotaFiber = yield* Effect.forkChild(
             consume(quotaQuery, quota),
           );
+          const chartFiber = yield* Effect.forkChild(
+            consume(chartQuery, chart),
+          );
           yield* Effect.promise(() => requestsGate);
           yield* Fiber.interrupt(requestFiber);
           yield* Effect.promise(() => quotaGate);
           yield* Fiber.interrupt(quotaFiber);
+          yield* Fiber.interrupt(chartFiber);
         });
         dataFiber = Effect.runFork(
           Effect.scoped(Effect.provide(program, layer)),
@@ -491,6 +508,32 @@ describe.skipIf(binary === undefined || frontend === undefined)(
         expect(typeof requestId).toBe("string");
         expect(typeof quotaId).toBe("string");
 
+        await until(
+          () =>
+            chart.some(
+              (state) =>
+                state.phase === "live" &&
+                [...state.entries.values()].some(
+                  (row) => "dimensions" in row && row.events === 1,
+                ),
+            ),
+          "filtered chart snapshot",
+        );
+        const chartId = sent.find(
+          (item) => item.type === "subscribe" && item.kind === "requests.chart",
+        )?.id;
+        const chartSnapshot = await frameMatching(
+          received,
+          (item) => item.type === "snapshot" && item.id === chartId,
+          "chart snapshot",
+        );
+        expect(chartSnapshot).toMatchObject({
+          meta: {
+            chart: { bucket_seconds: 3600, dimensions: ["client", "model"] },
+          },
+        });
+        insertRequest(database, "a", "chart-model");
+        insertRequest(database, "b", "chart-model");
         insertRequest(database, "b", "unrelated");
         insertRequest(database, "a", "relevant");
         insertSnapshot(database, "b", "success");
@@ -527,9 +570,55 @@ describe.skipIf(binary === undefined || frontend === undefined)(
             requests: Array<{ value: { provider: string } }>;
           }
         ).requests;
-        expect(upserts.map((item) => item.value.provider)).toEqual([
-          "provider-a",
+        expect(upserts.length).toBeGreaterThan(0);
+        expect(
+          upserts.every((item) => item.value.provider === "provider-a"),
+        ).toBe(true);
+        await until(
+          () =>
+            chart.some(
+              (state) =>
+                state.phase === "live" &&
+                [...state.entries.values()].some(
+                  (row) =>
+                    "dimensions" in row &&
+                    row.events === 2 &&
+                    row.dimensions.client === null &&
+                    row.dimensions.model === "chart-model",
+                ),
+            ),
+          "filtered chart delta",
+          12000,
+        );
+        const chartDelta = await frameMatching(
+          received,
+          (item) =>
+            item.type === "delta" &&
+            item.id === chartId &&
+            ((item.upserts as { request_chart?: unknown[] })?.request_chart
+              ?.length ?? 0) > 0,
+          "chart tuple delta",
+        );
+        const chartTuple = (
+          chartDelta.upserts as {
+            request_chart: Array<{ key: string; value: unknown[] }>;
+          }
+        ).request_chart[0];
+        expect(chartTuple?.value).toHaveLength(10);
+        expect(chartTuple?.value.slice(1)).toEqual([
+          null,
+          "chart-model",
+          2,
+          2,
+          0,
+          null,
+          null,
+          2,
+          4,
         ]);
+        expect(chartTuple?.key).toBe(
+          JSON.stringify(chartTuple?.value.slice(0, 3)),
+        );
         const quotaDelta = await frameMatching(
           received,
           (item) =>
@@ -745,6 +834,49 @@ describe.skipIf(binary === undefined || frontend === undefined)(
         );
         expect(slow.connections.length).toBeGreaterThanOrEqual(2);
         await Effect.runPromise(Fiber.interrupt(slowFiber));
+        const insertedAt = Math.floor(Date.now() / 1000) - 1;
+        database.exec("BEGIN");
+        for (let index = 0; index < 4000; index++) {
+          const model = `m${String(index).padStart(4, "0")}${"x".repeat(80)}`;
+          database
+            .prepare(
+              "INSERT INTO request_events (occurred_at_unix,group_id,credential_id,model_id,outcome,status_code,request_bytes,response_bytes,latency_ms,input_tokens,output_tokens,usage_complete,dropped_events) VALUES (?, 'group-b', 'credential-b', ?, 'completed',200,0,0,0,1,2,1,0)",
+            )
+            .run(insertedAt, model);
+        }
+        database.exec("COMMIT");
+        const refusedClient = observedClient(controlPort);
+        const refusedStates: ViewState[] = [];
+        const refusalFiber = Effect.runFork(
+          Effect.scoped(
+            Effect.provide(
+              consume(
+                {
+                  kind: "requests.chart",
+                  window: {
+                    since_unix: insertedAt - 1,
+                    until_unix: insertedAt + 1,
+                  },
+                  dimensions: ["model"],
+                  provider: "provider-b",
+                },
+                refusedStates,
+              ),
+              refusedClient.layer,
+            ),
+          ),
+        );
+        recoveryFibers.push(refusalFiber);
+        await until(
+          () =>
+            refusedStates.some(
+              (state) => state.terminal && state.error === "range_too_large",
+            ),
+          "server decoded chart memory refusal",
+        );
+        expect(
+          refusedClient.received.some((frame) => frame.type === "snapshot"),
+        ).toBe(false);
       } finally {
         for (const fiber of recoveryFibers)
           await Effect.runPromise(Fiber.interrupt(fiber));

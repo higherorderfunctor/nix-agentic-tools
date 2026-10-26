@@ -9,12 +9,11 @@ import {
 } from "@mantine/core";
 import { useEffect, useMemo, useState } from "react";
 import { fixtureAppRuntime } from "../data/app.ts";
-import { ApiKeyUsage } from "./ApiKeyUsage.tsx";
 import { Overview } from "./Overview.tsx";
 import { ProviderHistory } from "./ProviderHistory.tsx";
 import { RequestHistory } from "./RequestHistory.tsx";
 
-const screens = ["overview", "providers", "requests", "api-keys"] as const;
+const screens = ["overview", "providers", "requests"] as const;
 type Screen = (typeof screens)[number];
 
 function selectedScreen(): Screen {
@@ -81,13 +80,11 @@ export function App() {
                     href={`#${entry}`}
                     variant={screen === entry ? "filled" : "light"}
                   >
-                    {entry === "api-keys"
-                      ? "API-key usage"
-                      : entry === "providers"
-                        ? "Provider history"
-                        : entry === "requests"
-                          ? "Request history"
-                          : "Overview"}
+                    {entry === "providers"
+                      ? "Provider history"
+                      : entry === "requests"
+                        ? "Request history"
+                        : "Overview"}
                   </Button>
                 ))}
                 <Button variant="subtle" onClick={() => setToken(null)}>
@@ -100,10 +97,8 @@ export function App() {
                 <Overview runtime={runtime} />
               ) : screen === "providers" ? (
                 <ProviderHistory runtime={runtime} />
-              ) : screen === "requests" ? (
-                <RequestHistory runtime={runtime} />
               ) : (
-                <ApiKeyUsage runtime={runtime} />
+                <RequestHistory runtime={runtime} />
               )}
             </main>
           </>

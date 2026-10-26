@@ -59,5 +59,17 @@
       "stream": "requests",
       "limit": 200
     }
+  },
+  {
+    "v": 1,
+    "type": "subscribe",
+    "id": "requests-chart",
+    "kind": "requests.chart",
+    "query": {
+      "window": {
+        "all": true
+      },
+      "dimensions": ["client", "model"]
+    }
   }
 ]

@@ -488,7 +488,7 @@ function wireQuery(query: SubscriptionQuery): WireSubscriptionQuery {
       const { kind: _kind, ...wire } = query;
       return wire;
     }
-    case "requests.series": {
+    case "requests.chart": {
       const { kind: _kind, ...wire } = query;
       return wire;
     }

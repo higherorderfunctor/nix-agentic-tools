@@ -14,22 +14,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { time } from "../src/components/data.tsx";
 import type { AppRuntime } from "../src/data/app.ts";
 import type {
-  Aggregate,
   CollectionValue,
   Credential,
   RequestRow,
   Snapshot,
 } from "../src/data/protocol.ts";
 import { initialViewState, type ViewState } from "../src/data/reducer.ts";
-import { ApiKeyUsage } from "../src/views/ApiKeyUsage.tsx";
+import type { UsageChartRow } from "../src/usage/domain.ts";
 import { App } from "../src/views/App.tsx";
 import { Overview } from "../src/views/Overview.tsx";
 import { chartPoints, ProviderHistory } from "../src/views/ProviderHistory.tsx";
-import {
-  aggregateStats,
-  RequestHistory,
-  requestChartData,
-} from "../src/views/RequestHistory.tsx";
+import { RequestHistory } from "../src/views/RequestHistory.tsx";
 
 class VisibleObserver implements IntersectionObserver {
   static instances: VisibleObserver[] = [];
@@ -163,22 +158,13 @@ function credential(fields: Partial<Credential> = {}): Credential {
     ...fields,
   };
 }
-function aggregate(fields: Partial<Aggregate> = {}): Aggregate {
+function chartRow(fields: Partial<UsageChartRow> = {}): UsageChartRow {
   return {
-    credential: "key",
-    group: "g",
-    model: "m",
-    provider: "p",
-    client: null,
-    outcome: "completed",
-    bucket_start_unix: 100,
+    bucket_start_unix: 0,
+    dimensions: {},
     complete_events: 1,
     error_events: 0,
     events: 2,
-    latency_ms: 500,
-    request_bytes: 1,
-    response_bytes: 1,
-    successful_events: 2,
     cache_read_tokens: null,
     cache_write_tokens: null,
     input_tokens: 10,
@@ -250,33 +236,6 @@ describe("screen contracts", () => {
       { key: "later", at: 2000, value: 10 },
     ]);
   });
-  it("keeps unknown aggregate tokens unknown and labels a real mean", () => {
-    const base = aggregate();
-    expect(aggregateStats([base])).toEqual({
-      events: 2,
-      incompleteEvents: 1,
-      latency: 500,
-      meanLatency: 250,
-      inputTokens: 10,
-      outputTokens: null,
-    });
-  });
-  it("marks request chart gaps without treating unknown tokens as zero", () => {
-    expect(
-      requestChartData([
-        aggregate(),
-        aggregate({
-          bucket_start_unix: 280,
-          input_tokens: null,
-          output_tokens: 4,
-        }),
-      ]),
-    ).toEqual([
-      { at: 100, count: 2, input: 10, output: null, mean: 250 },
-      { at: 160, count: null, input: null, output: null, mean: null },
-      { at: 280, count: 2, input: null, output: 4, mean: 250 },
-    ]);
-  });
   it("preserves measured stale and exhausted values and interrupts actual gaps", () => {
     expect(
       chartPoints([
@@ -338,7 +297,7 @@ describe("screen contracts", () => {
     vi.stubGlobal("IntersectionObserver", VisibleObserver);
     render(
       frame(
-        <ApiKeyUsage
+        <ProviderHistory
           runtime={staticRuntime(
             state([
               ["credentials:claude", credential()],
@@ -620,7 +579,7 @@ describe("screen contracts", () => {
         />,
       ),
     );
-    expect(await screen.findByText(/fetch_failed/)).toBeTruthy();
+    expect(await screen.findAllByText(/fetch_failed/)).toBeTruthy();
     expect(screen.getByText(/Selected claude_subscription/)).toBeTruthy();
   });
   it("shows unknown row tokens, incomplete usage, and truncation", async () => {
@@ -710,7 +669,15 @@ describe("screen contracts", () => {
     render(
       frame(
         <RequestHistory
-          runtime={staticRuntime(state([["request_usage:one", aggregate()]]))}
+          runtime={staticRuntime({
+            ...state([["request_chart:one", chartRow()]]),
+            meta: {
+              ...metadata(),
+              as_of_unix: 86401,
+              window: { since_unix: 1, until_unix: 86401 },
+              chart: { bucket_seconds: 3600, dimensions: [] },
+            },
+          })}
         />,
       ),
     );
@@ -719,9 +686,6 @@ describe("screen contracts", () => {
     ).toBeTruthy();
     expect(
       screen.getByRole("figure", { name: "Token usage over time" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("figure", { name: "Mean duration over time (ms)" }),
     ).toBeTruthy();
     expect(
       screen.getByText(/1 of 2 request events have incomplete usage/),
@@ -825,7 +789,7 @@ describe("screen contracts", () => {
     );
     expect(screen.getByText(/Live range: rolling last hour/)).toBeTruthy();
   });
-  it("shows OAuth fetch and metric gaps plus API-key aggregate coverage", async () => {
+  it("shows OAuth fetch and metric gaps in provider observations", async () => {
     vi.stubGlobal("IntersectionObserver", VisibleObserver);
     const oauth = snapshot({
       gap_reason: "oauth_fetch_failed",
@@ -834,7 +798,7 @@ describe("screen contracts", () => {
     });
     render(
       frame(
-        <ApiKeyUsage
+        <ProviderHistory
           runtime={staticRuntime(
             state([
               ["credentials:oauth", credential({ latest_fetch: oauth })],
@@ -846,7 +810,6 @@ describe("screen contracts", () => {
                   latest_fetch: null,
                 }),
               ],
-              ["request_usage:one", aggregate()],
             ]),
           )}
         />,
@@ -864,39 +827,23 @@ describe("screen contracts", () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.getByText(/1 of 2 routed request events have incomplete usage/),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("figure", { name: "Request count over time" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("figure", { name: "Token usage over time" }),
-    ).toBeTruthy();
-    expect(
       screen.getAllByText(/provider snapshots lost/).length,
     ).toBeGreaterThan(0);
   });
-  it("selects duplicate credential names by provider and sends both filters", async () => {
+  it("selects duplicate credential names by provider for quota observations", async () => {
     vi.stubGlobal("IntersectionObserver", VisibleObserver);
     const view = state([
-      [
-        `credentials:${JSON.stringify(["p1", "same"])}`,
-        credential({
-          provider: "p1",
-          credential: "same",
-          auth: "api_key",
-          latest_fetch: null,
-        }),
-      ],
-      [
-        `credentials:${JSON.stringify(["p2", "same"])}`,
-        credential({
-          provider: "p2",
-          credential: "same",
-          auth: "api_key",
-          latest_fetch: null,
-        }),
-      ],
+      ...["p1", "p2"].map(
+        (provider) =>
+          [
+            `credentials:${provider}:same`,
+            credential({
+              provider,
+              credential: "same",
+              latest_fetch: snapshot({ provider, credential: "same" }),
+            }),
+          ] as [string, CollectionValue],
+      ),
     ]);
     const queries: unknown[] = [];
     const atom = Atom.make(AsyncResult.success(view));
@@ -906,86 +853,46 @@ describe("screen contracts", () => {
         return atom;
       },
     };
-    render(frame(<ApiKeyUsage runtime={runtime} />));
+    render(frame(<ProviderHistory runtime={runtime} />));
     await waitFor(() =>
       expect(queries).toContainEqual(
         expect.objectContaining({
-          kind: "requests.series",
+          kind: "usage.series",
           provider: "p1",
           credential: "same",
         }),
       ),
     );
-    fireEvent.click(screen.getByRole("combobox", { name: "Routed API key" }));
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Provider and credential" }),
+    );
     fireEvent.click(await screen.findByText("p2 · same"));
     await waitFor(() =>
       expect(queries).toContainEqual(
         expect.objectContaining({
-          kind: "requests.series",
+          kind: "usage.series",
           provider: "p2",
           credential: "same",
         }),
       ),
     );
+    expect(
+      queries.every(
+        (query) =>
+          !(
+            typeof query === "object" &&
+            query !== null &&
+            "kind" in query &&
+            String(query.kind).startsWith("requests.")
+          ),
+      ),
+    ).toBe(true);
   });
-  it.each(["history", "api key"] as const)(
-    "keeps distinct aggregate rows and removes stale rows in the %s table",
-    async (table) => {
-      vi.stubGlobal("IntersectionObserver", VisibleObserver);
-      const aggregateKey = (client: string | null) =>
-        `request_usage:${JSON.stringify([100, client, "g", "p", "key", "m", "completed"])}`;
-      const view = (includeUnknown: boolean) =>
-        state([
-          [
-            "credentials:key",
-            credential({
-              provider: "p",
-              credential: "key",
-              auth: "api_key",
-              latest_fetch: null,
-            }),
-          ],
-          ...(includeUnknown
-            ? [
-                [aggregateKey(null), aggregate({ input_tokens: 11 })] as [
-                  string,
-                  CollectionValue,
-                ],
-              ]
-            : []),
-          [
-            aggregateKey("null"),
-            aggregate({ client: "null", input_tokens: 22 }),
-          ],
-          [
-            aggregateKey("other"),
-            aggregate({ client: "other", input_tokens: 33 }),
-          ],
-        ]);
-      const component = (includeUnknown: boolean) =>
-        table === "history" ? (
-          <RequestHistory runtime={staticRuntime(view(includeUnknown))} />
-        ) : (
-          <ApiKeyUsage runtime={staticRuntime(view(includeUnknown))} />
-        );
-      const unknownCell = table === "history" ? "11 / unknown" : "11";
-      const namedCell = table === "history" ? "22 / unknown" : "22";
-      const otherCell = table === "history" ? "33 / unknown" : "33";
-      const { rerender } = render(frame(component(true)));
-      expect(await screen.findByText(unknownCell)).toBeTruthy();
-      expect(screen.getByText(namedCell)).toBeTruthy();
-      expect(screen.getByText(otherCell)).toBeTruthy();
-      rerender(frame(component(false)));
-      await waitFor(() => expect(screen.queryByText(unknownCell)).toBeNull());
-      expect(screen.getByText(namedCell)).toBeTruthy();
-      expect(screen.getByText(otherCell)).toBeTruthy();
-    },
-  );
   it("attributes disagreeing OAuth metrics to their accounts", async () => {
     vi.stubGlobal("IntersectionObserver", VisibleObserver);
     render(
       frame(
-        <ApiKeyUsage
+        <ProviderHistory
           runtime={staticRuntime(
             state([
               [
@@ -1037,48 +944,29 @@ describe("screen contracts", () => {
     expect(unavailable.textContent).toContain("claude/second");
     expect(unavailable.textContent).not.toContain("enabled (read-only)");
   });
-  it("keeps the shared overview subscription while OAuth credits remain visible", async () => {
+  it("shares one provider overview with credential observations", async () => {
     vi.stubGlobal("IntersectionObserver", VisibleObserver);
     vi.stubGlobal("WebSocket", BrowserSocket);
-    window.location.hash = "#api-keys";
+    window.location.hash = "#providers";
     render(frame(<App />));
     fireEvent.change(screen.getByLabelText(/Airlock read token/), {
       target: { value: "fake-token" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    await waitFor(() =>
-      expect(
-        BrowserSocket.instances
-          .flatMap((socket) => socket.sent)
-          .some((message) => message.includes('"kind":"usage.overview"')),
-      ).toBe(true),
-    );
-    const cards = VisibleObserver.instances.filter(
-      (observer) =>
-        observer.target?.tagName === "DIV" &&
-        observer.target?.className.includes("mantine-Card"),
-    );
-    const top = cards.find((observer) =>
-      observer.target?.textContent?.includes("API-key usage and credits"),
-    );
-    const oauth = cards.find((observer) =>
-      observer.target?.textContent?.includes(
-        "OAuth subscription credits and limits",
-      ),
-    );
-    expect(top).toBeDefined();
-    expect(oauth).toBeDefined();
-    const unsubscribes = () =>
+    const overviewMessages = () =>
       BrowserSocket.instances
         .flatMap((socket) => socket.sent)
-        .filter((message) =>
-          message.includes('"type":"unsubscribe","id":"usage-overview'),
-        ).length;
-    top?.set(false);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(unsubscribes()).toBe(0);
-    oauth?.set(false);
-    await waitFor(() => expect(unsubscribes()).toBeGreaterThan(0));
+        .filter((message) => message.includes('"kind":"usage.overview"'));
+    await waitFor(() => expect(overviewMessages()).toHaveLength(1));
+    expect(
+      screen.getByText("OAuth subscription credits and limits"),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "API-key usage" })).toBeNull();
+    expect(
+      BrowserSocket.instances
+        .flatMap((socket) => socket.sent)
+        .every((message) => !message.includes('"kind":"requests.')),
+    ).toBe(true);
   });
   it("authenticates once in memory and releases subscriptions on navigation and collapse", async () => {
     vi.stubGlobal("IntersectionObserver", VisibleObserver);

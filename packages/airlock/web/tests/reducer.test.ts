@@ -481,3 +481,258 @@ describe("reducer round-2 regressions", () => {
     expect(removal.acknowledgements).toEqual([1, 2, 3]);
   });
 });
+
+describe("chart metadata and atomic precision changes", () => {
+  const day = 86400;
+  const chartQuery: SubscriptionQuery = {
+    kind: "requests.chart",
+    window: { all: true },
+    dimensions: ["client", "model"],
+  };
+  const row = (
+    at: number,
+    client: string | null,
+    model: string,
+    events = 1,
+  ) => ({
+    key: JSON.stringify([at, client, model]),
+    value: {
+      bucket_start_unix: at,
+      dimensions: { client, model },
+      events,
+      complete_events: events,
+      error_events: 0,
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
+      input_tokens: events,
+      output_tokens: events,
+    },
+  });
+  const meta = (until: number, bucket: number) => ({
+    ...metadata,
+    as_of_unix: until,
+    oldest_at_unix: day,
+    window: { since_unix: day, until_unix: until },
+    chart: { bucket_seconds: bucket, dimensions: ["client", "model"] as const },
+  });
+  const initial: ServerFrame = {
+    v: 1,
+    type: "snapshot",
+    id: "chart",
+    epoch: "ce",
+    seq: 1,
+    collections: {
+      request_chart: [row(2 * day, null, "m"), row(3 * day, "harness", "m")],
+    },
+    meta: meta(32 * day + 1, day),
+  };
+  const start = () =>
+    applyServerFrame(
+      initialViewState(),
+      { v: 1, type: "subscribed", id: "chart", epoch: "ce", interval_ms: 5000 },
+      chartQuery,
+      "chart",
+    ).state;
+  it("removes departed buckets, replaces overlapping keys and ACKs adaptive changes together", () => {
+    const previous = applyServerFrame(
+      start(),
+      initial,
+      chartQuery,
+      "chart",
+    ).state;
+    expect(previous.phase).toBe("live");
+    const delta: ServerFrame = {
+      v: 1,
+      type: "delta",
+      id: "chart",
+      epoch: "ce",
+      seq: 2,
+      prev_seq: 1,
+      upserts: {
+        request_chart: [
+          row(2 * day, null, "m", 2),
+          row(4 * day, "harness", "m"),
+        ],
+      },
+      removes: {
+        request_chart: [
+          {
+            key: JSON.stringify([3 * day, "harness", "m"]),
+            reason: "left_window",
+          },
+        ],
+      },
+      meta: meta(33 * day + 1, 2 * day),
+    };
+    const next = applyServerFrame(previous, delta, chartQuery, "chart");
+    expect(next.acknowledgement).toEqual({ epoch: "ce", seq: 2 });
+    expect([...next.state.entries.keys()]).toEqual([
+      `request_chart:${JSON.stringify([2 * day, null, "m"])}`,
+      `request_chart:${JSON.stringify([4 * day, "harness", "m"])}`,
+    ]);
+    expect(next.state.meta?.chart?.bucket_seconds).toBe(2 * day);
+    expect(
+      applyServerFrame(next.state, delta, chartQuery, "chart").acknowledgement,
+    ).toEqual({ epoch: "ce", seq: 2 });
+  });
+  it("validates a metadata-only change against the complete retained row set", () => {
+    const one = {
+      ...initial,
+      collections: { request_chart: [row(2 * day, null, "m")] },
+    };
+    const previous = applyServerFrame(start(), one, chartQuery, "chart").state;
+    const next = applyServerFrame(
+      previous,
+      {
+        v: 1,
+        type: "delta",
+        id: "chart",
+        epoch: "ce",
+        seq: 2,
+        prev_seq: 1,
+        upserts: { request_chart: [] },
+        removes: { request_chart: [] },
+        meta: meta(33 * day + 1, 2 * day),
+      },
+      chartQuery,
+      "chart",
+    );
+    expect(next.state.phase).toBe("live");
+    expect(next.state.entries).toEqual(previous.entries);
+    const rejected = applyServerFrame(
+      applyServerFrame(start(), initial, chartQuery, "chart").state,
+      {
+        v: 1,
+        type: "delta",
+        id: "chart",
+        epoch: "ce",
+        seq: 2,
+        prev_seq: 1,
+        upserts: { request_chart: [] },
+        removes: { request_chart: [] },
+        meta: meta(33 * day + 1, 2 * day),
+      },
+      chartQuery,
+      "chart",
+    );
+    expect(rejected.state.gap?.code).toBe("invalid_frame");
+    expect(rejected.acknowledgement).toBeNull();
+  });
+  it("rejects cross-query dimensions, bounds and precision before ACK", () => {
+    for (const bad of [
+      {
+        ...initial.meta,
+        chart: {
+          bucket_seconds: day,
+          dimensions: ["model", "provider"] as const,
+        },
+      },
+      {
+        ...initial.meta,
+        chart: {
+          bucket_seconds: 3600,
+          dimensions: ["client", "model"] as const,
+        },
+      },
+      { ...initial.meta, window: { since_unix: day, until_unix: 2 * day } },
+    ])
+      expect(
+        applyServerFrame(
+          start(),
+          { ...initial, meta: bad },
+          chartQuery,
+          "chart",
+        ).acknowledgement,
+      ).toBeNull();
+    const fixed: SubscriptionQuery = {
+      kind: "requests.chart",
+      window: { since_unix: 1, until_unix: 1000 },
+      dimensions: [],
+    };
+    const ready = applyServerFrame(
+      initialViewState(),
+      { v: 1, type: "subscribed", id: "f", epoch: "e", interval_ms: 5000 },
+      fixed,
+      "f",
+    ).state;
+    expect(
+      applyServerFrame(
+        ready,
+        {
+          v: 1,
+          type: "snapshot",
+          id: "f",
+          epoch: "e",
+          seq: 1,
+          collections: { request_chart: [] },
+          meta: {
+            ...metadata,
+            window: { since_unix: 2, until_unix: 1000 },
+            chart: { bucket_seconds: 3600, dimensions: [] },
+          },
+        },
+        fixed,
+        "f",
+      ).acknowledgement,
+    ).toBeNull();
+  });
+});
+
+describe("chart decoded memory accounting", () => {
+  it("refuses a valid tuple frame below the wire limit when decoded rows exceed retained memory", async () => {
+    const { decodeServerJsonSync } = await import("../src/data/protocol.ts");
+    const since = 1_799_996_400;
+    const until = 1_800_000_000;
+    const chartQuery: SubscriptionQuery = {
+      kind: "requests.chart",
+      window: { since_unix: since, until_unix: until },
+      dimensions: ["model"],
+    };
+    const rows = Array.from({ length: 4000 }, (_, index) => {
+      const model = `m${String(index).padStart(4, "0")}${"x".repeat(80)}`;
+      return {
+        key: JSON.stringify([since, model]),
+        value: [since, model, 1, 1, 0, null, null, 1, 2],
+      };
+    });
+    const wire = JSON.stringify({
+      v: 1,
+      type: "snapshot",
+      id: "chart",
+      epoch: "e",
+      seq: 1,
+      collections: { request_chart: rows },
+      meta: {
+        ...metadata,
+        as_of_unix: until,
+        window: { since_unix: since, until_unix: until },
+        chart: { bucket_seconds: 3600, dimensions: ["model"] },
+      },
+    });
+    expect(new TextEncoder().encode(wire).byteLength).toBeLessThan(1_048_576);
+    const decoded = decodeServerJsonSync(wire);
+    if (
+      decoded.type !== "snapshot" ||
+      !("request_chart" in decoded.collections)
+    )
+      throw new Error("missing chart");
+    const retained = decoded.collections.request_chart.reduce(
+      (total, entry) =>
+        total +
+        new TextEncoder().encode(
+          `request_chart:${entry.key}${JSON.stringify(entry.value)}`,
+        ).byteLength,
+      0,
+    );
+    expect(retained).toBe(1_564_000);
+    const ready = applyServerFrame(
+      initialViewState(),
+      { v: 1, type: "subscribed", id: "chart", epoch: "e", interval_ms: 5000 },
+      chartQuery,
+      "chart",
+    ).state;
+    const refused = applyServerFrame(ready, decoded, chartQuery, "chart");
+    expect(refused.state.gap?.code).toBe("resource_limit");
+    expect(refused.acknowledgement).toBeNull();
+  });
+});

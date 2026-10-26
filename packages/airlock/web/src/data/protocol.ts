@@ -1,4 +1,8 @@
 import { Effect, Schema } from "effect";
+import type {
+  UsageChartDimensionName,
+  UsageChartRow,
+} from "../usage/domain.ts";
 
 const safeInteger = Schema.Int.pipe(
   Schema.check(
@@ -198,7 +202,7 @@ export const RequestRow = Schema.Struct({
 });
 export type RequestRow = Schema.Schema.Type<typeof RequestRow>;
 
-export const Aggregate = Schema.Struct({
+export const ReportAggregate = Schema.Struct({
   credential: Schema.String,
   group: Schema.String,
   model: Schema.String,
@@ -218,7 +222,6 @@ export const Aggregate = Schema.Struct({
   input_tokens: Schema.NullOr(safeInteger),
   output_tokens: Schema.NullOr(safeInteger),
 });
-export type Aggregate = Schema.Schema.Type<typeof Aggregate>;
 
 export const ResetEvent = Schema.Struct({
   credential: Schema.String,
@@ -235,7 +238,7 @@ export type CollectionValue =
   | Credential
   | Snapshot
   | RequestRow
-  | Aggregate
+  | UsageChartRow
   | ResetEvent;
 
 const CredentialEntry = Schema.Struct({
@@ -245,26 +248,35 @@ const CredentialEntry = Schema.Struct({
 const SnapshotEntry = Schema.Struct({ key: Schema.String, value: Snapshot });
 const ResetEntry = Schema.Struct({ key: Schema.String, value: ResetEvent });
 const RequestEntry = Schema.Struct({ key: Schema.String, value: RequestRow });
-const AggregateEntry = Schema.Struct({ key: Schema.String, value: Aggregate });
+const ChartEntry = Schema.Struct({
+  key: Schema.String,
+  value: Schema.Array(Schema.Union([Schema.String, Schema.Null, safeInteger])),
+});
 const Removal = Schema.Struct({
   key: Schema.String,
   reason: Schema.Literals(["left_window"]),
 });
 
-const SnapshotCollections = Schema.Union([
+const WireSnapshotCollections = Schema.Union([
   Schema.Struct({ credentials: Schema.Array(CredentialEntry) }),
   Schema.Struct({
     snapshots: Schema.Array(SnapshotEntry),
     reset_events: Schema.Array(ResetEntry),
   }),
   Schema.Struct({ requests: Schema.Array(RequestEntry) }),
-  Schema.Struct({ request_usage: Schema.Array(AggregateEntry) }),
+  Schema.Struct({ request_chart: Schema.Array(ChartEntry) }),
 ]);
-export type SnapshotCollections = Schema.Schema.Type<
-  typeof SnapshotCollections
+type WireSnapshotCollections = Schema.Schema.Type<
+  typeof WireSnapshotCollections
 >;
-
-const DeltaOperations = SnapshotCollections;
+export type SnapshotCollections =
+  | Exclude<WireSnapshotCollections, { readonly request_chart: unknown }>
+  | {
+      readonly request_chart: readonly {
+        readonly key: string;
+        readonly value: UsageChartRow;
+      }[];
+    };
 export type DeltaOperations = SnapshotCollections;
 const DeltaRemovals = Schema.Union([
   Schema.Struct({ credentials: Schema.Array(Removal) }),
@@ -273,7 +285,7 @@ const DeltaRemovals = Schema.Union([
     reset_events: Schema.Array(Removal),
   }),
   Schema.Struct({ requests: Schema.Array(Removal) }),
-  Schema.Struct({ request_usage: Schema.Array(Removal) }),
+  Schema.Struct({ request_chart: Schema.Array(Removal) }),
 ]);
 export type DeltaRemovals = Schema.Schema.Type<typeof DeltaRemovals>;
 
@@ -312,10 +324,20 @@ const RequestsTableBody = Schema.Struct({
   ...requestFilters,
   before: Schema.optionalKey(opaqueString),
 });
-const RequestsSeriesBody = Schema.Struct({
-  window: Window,
-  bucket_seconds: Schema.Literals([60, 300, 3600]),
-  ...requestFilters,
+const chartDimension = Schema.Literals(["client", "model", "provider"]);
+const ChartWindow = Schema.Union([
+  Schema.Struct({
+    last_seconds: boundedInteger(1, 2_592_000, "window_out_of_range"),
+  }),
+  AbsoluteWindow,
+  Schema.Struct({ all: Schema.Literals([true]) }),
+]);
+const RequestsChartBody = Schema.Struct({
+  window: ChartWindow,
+  dimensions: Schema.Array(chartDimension),
+  client: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  model: Schema.optionalKey(Schema.String),
+  provider: Schema.optionalKey(Schema.String),
 });
 const LogsTailBody = Schema.Struct({
   stream: Schema.Literals(["requests", "audit"]),
@@ -335,9 +357,9 @@ export const RequestsTableQuery = Schema.Struct({
   kind: Schema.Literals(["requests.table"]),
   ...RequestsTableBody.fields,
 });
-export const RequestsSeriesQuery = Schema.Struct({
-  kind: Schema.Literals(["requests.series"]),
-  ...RequestsSeriesBody.fields,
+export const RequestsChartQuery = Schema.Struct({
+  kind: Schema.Literals(["requests.chart"]),
+  ...RequestsChartBody.fields,
 });
 export const LogsTailQuery = Schema.Struct({
   kind: Schema.Literals(["logs.tail"]),
@@ -347,7 +369,7 @@ export const SubscriptionQuery = Schema.Union([
   UsageOverviewQuery,
   UsageSeriesQuery,
   RequestsTableQuery,
-  RequestsSeriesQuery,
+  RequestsChartQuery,
   LogsTailQuery,
 ]);
 export type SubscriptionQuery = Schema.Schema.Type<typeof SubscriptionQuery>;
@@ -355,7 +377,7 @@ const WireSubscriptionQuery = Schema.Union([
   UsageOverviewBody,
   UsageSeriesBody,
   RequestsTableBody,
-  RequestsSeriesBody,
+  RequestsChartBody,
   LogsTailBody,
 ]);
 export type WireSubscriptionQuery = Schema.Schema.Type<
@@ -387,8 +409,8 @@ const SubscribeFrame = Schema.Union([
     v: Schema.Literals([1]),
     type: Schema.Literals(["subscribe"]),
     id: subscriptionId,
-    kind: Schema.Literals(["requests.series"]),
-    query: RequestsSeriesBody,
+    kind: Schema.Literals(["requests.chart"]),
+    query: RequestsChartBody,
   }),
   Schema.Struct({
     v: Schema.Literals([1]),
@@ -414,14 +436,22 @@ const ViewMeta = Schema.Struct({
   provider_snapshot_loss_total: safeInteger,
   reset_events_observed_only: Schema.Literals([true]),
   reset_events_complete_since_unix: Schema.Null,
+  chart: Schema.optionalKey(
+    Schema.Struct({
+      bucket_seconds: boundedInteger(
+        1,
+        Number.MAX_SAFE_INTEGER,
+        "invalid_bucket",
+      ),
+      dimensions: Schema.Array(chartDimension),
+    }),
+  ),
 });
 type ViewMeta = Schema.Schema.Type<typeof ViewMeta>;
 export type ViewMetadata = ViewMeta;
 
 const gapCode = Schema.Literals([
   "query_budget_exceeded",
-  "sequence_gap",
-  "server_restart",
   "slow_consumer",
   "storage_busy",
   "storage_unavailable",
@@ -454,7 +484,7 @@ export const ClientFrame = Schema.Union([
 ]);
 export type ClientFrame = Schema.Schema.Type<typeof ClientFrame>;
 
-export const ServerFrame = Schema.Union([
+const WireServerFrame = Schema.Union([
   Schema.Struct({
     v: Schema.Literals([1]),
     type: Schema.Literals(["hello"]),
@@ -479,7 +509,7 @@ export const ServerFrame = Schema.Union([
     id: subscriptionId,
     epoch: opaqueString,
     seq: safeInteger,
-    collections: SnapshotCollections,
+    collections: WireSnapshotCollections,
     meta: ViewMeta,
   }),
   Schema.Struct({
@@ -489,7 +519,7 @@ export const ServerFrame = Schema.Union([
     epoch: opaqueString,
     seq: safeInteger,
     prev_seq: safeInteger,
-    upserts: DeltaOperations,
+    upserts: WireSnapshotCollections,
     removes: DeltaRemovals,
     meta: ViewMeta,
   }),
@@ -535,7 +565,16 @@ export const ServerFrame = Schema.Union([
     server_time_unix: safeInteger,
   }),
 ]);
-export type ServerFrame = Schema.Schema.Type<typeof ServerFrame>;
+type WireServerFrame = Schema.Schema.Type<typeof WireServerFrame>;
+export type ServerFrame =
+  | Exclude<WireServerFrame, { readonly type: "snapshot" | "delta" }>
+  | (Omit<
+      Extract<WireServerFrame, { readonly type: "snapshot" }>,
+      "collections"
+    > & { readonly collections: SnapshotCollections })
+  | (Omit<Extract<WireServerFrame, { readonly type: "delta" }>, "upserts"> & {
+      readonly upserts: DeltaOperations;
+    });
 
 export class ProtocolDecodeError extends Schema.TaggedError<ProtocolDecodeError>()(
   "ProtocolDecodeError",
@@ -602,19 +641,15 @@ function validEntryIdentity(
       return "fetched_at_unix" in value && validSnapshotKey(entry.key);
     case "requests":
       return "occurred_at_unix" in value && entry.key === value.id;
-    case "request_usage":
-      return "bucket_start_unix" in value
-        ? entry.key ===
-            canonicalKey([
-              value.bucket_start_unix,
-              value.client,
-              value.group,
-              value.provider,
-              value.credential,
-              value.model,
-              value.outcome,
-            ])
-        : false;
+    case "request_chart":
+      return (
+        "dimensions" in value &&
+        entry.key ===
+          canonicalKey([
+            value.bucket_start_unix,
+            ...Object.values(value.dimensions),
+          ])
+      );
     case "reset_events":
       return "detected_at_unix" in value
         ? validResetKey(entry.key, value)
@@ -641,26 +676,154 @@ function validateEntryIdentity(frame: ServerFrame): boolean {
   );
 }
 
+function validDimensions(
+  dimensions: readonly UsageChartDimensionName[],
+): boolean {
+  return (
+    dimensions.length <= 2 &&
+    dimensions.every(
+      (dimension, index) =>
+        index === 0 || (dimensions[index - 1] ?? "") < dimension,
+    )
+  );
+}
+
+function decodeChartEntry(
+  entry: Schema.Schema.Type<typeof ChartEntry>,
+  meta: ViewMetadata,
+): { readonly key: string; readonly value: UsageChartRow } {
+  const chart = meta.chart;
+  if (
+    chart === undefined ||
+    !validDimensions(chart.dimensions) ||
+    entry.value.length !== 8 + chart.dimensions.length
+  )
+    throw new ProtocolDecodeError({ reason: "invalid_chart_tuple" });
+  const count = (index: number): number => {
+    const value = entry.value[index];
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+      throw new ProtocolDecodeError({ reason: "invalid_chart_count" });
+    return value;
+  };
+  const token = (index: number): number | null =>
+    entry.value[index] === null ? null : count(index);
+  const dimensions: Partial<Record<UsageChartDimensionName, string | null>> =
+    {};
+  chart.dimensions.forEach((dimension, index) => {
+    const value = entry.value[index + 1];
+    if (value !== null && (typeof value !== "string" || value.length === 0))
+      throw new ProtocolDecodeError({ reason: "invalid_chart_identity" });
+    if ((dimension !== "client" && value === null) || value === undefined)
+      throw new ProtocolDecodeError({ reason: "invalid_chart_identity" });
+    dimensions[dimension] = value;
+  });
+  const offset = 1 + chart.dimensions.length;
+  const value: UsageChartRow = {
+    bucket_start_unix: count(0),
+    dimensions,
+    events: count(offset),
+    complete_events: count(offset + 1),
+    error_events: count(offset + 2),
+    cache_read_tokens: token(offset + 3),
+    cache_write_tokens: token(offset + 4),
+    input_tokens: token(offset + 5),
+    output_tokens: token(offset + 6),
+  };
+  if (
+    value.complete_events > value.events ||
+    value.error_events > value.events ||
+    entry.key !== canonicalKey(entry.value.slice(0, offset))
+  )
+    throw new ProtocolDecodeError({ reason: "entry_key_mismatch" });
+  return { key: entry.key, value };
+}
+
+function decodeChartEntries(
+  entries: readonly Schema.Schema.Type<typeof ChartEntry>[],
+  meta: ViewMetadata,
+) {
+  if (
+    meta.chart === undefined ||
+    !validDimensions(meta.chart.dimensions) ||
+    meta.window === null ||
+    meta.window.since_unix < 0 ||
+    meta.window.until_unix <= meta.window.since_unix ||
+    meta.as_of_unix <= 0 ||
+    (meta.oldest_at_unix !== null && meta.oldest_at_unix <= 0) ||
+    meta.request_loss_total < 0 ||
+    meta.provider_snapshot_loss_total < 0
+  )
+    throw new ProtocolDecodeError({ reason: "invalid_chart_metadata" });
+  return entries.map((entry) => decodeChartEntry(entry, meta));
+}
+
+// Both JSON and Effect ingress normalize the same validated tuple once.
+function decodeUnknownServerFrame(input: unknown): ServerFrame {
+  try {
+    if (utf8.encode(JSON.stringify(input)).byteLength > 1_048_576)
+      throw new ProtocolDecodeError({ reason: "frame_byte_limit_exceeded" });
+    const frame = Schema.decodeUnknownSync(
+      WireServerFrame,
+      parseOptions,
+    )(input);
+    let decoded: ServerFrame;
+    if (frame.type === "snapshot") {
+      if ("request_chart" in frame.collections) {
+        decoded = {
+          ...frame,
+          collections: {
+            request_chart: decodeChartEntries(
+              frame.collections.request_chart,
+              frame.meta,
+            ),
+          },
+        };
+      } else {
+        if (frame.meta.chart !== undefined)
+          throw new ProtocolDecodeError({
+            reason: "unexpected_chart_metadata",
+          });
+        decoded = { ...frame, collections: frame.collections };
+      }
+    } else if (frame.type === "delta") {
+      if ("request_chart" in frame.upserts) {
+        decoded = {
+          ...frame,
+          upserts: {
+            request_chart: decodeChartEntries(
+              frame.upserts.request_chart,
+              frame.meta,
+            ),
+          },
+        };
+      } else {
+        if (frame.meta.chart !== undefined)
+          throw new ProtocolDecodeError({
+            reason: "unexpected_chart_metadata",
+          });
+        decoded = { ...frame, upserts: frame.upserts };
+      }
+    } else decoded = frame;
+    if (!validateEntryIdentity(decoded))
+      throw new ProtocolDecodeError({ reason: "entry_key_mismatch" });
+    return decoded;
+  } catch (error) {
+    throw error instanceof ProtocolDecodeError
+      ? error
+      : new ProtocolDecodeError({ reason: "schema_mismatch" });
+  }
+}
+
 export const decodeServerFrame = (
   input: unknown,
 ): Effect.Effect<ServerFrame, ProtocolDecodeError> =>
-  Schema.decodeUnknownEffect(
-    ServerFrame,
-    parseOptions,
-  )(input).pipe(
-    Effect.flatMap((frame) =>
-      validateEntryIdentity(frame)
-        ? Effect.succeed(frame)
-        : Effect.fail(
-            new ProtocolDecodeError({ reason: "entry_key_mismatch" }),
-          ),
-    ),
-    Effect.mapError((error) =>
+  Effect.try({
+    try: () => decodeUnknownServerFrame(input),
+    catch: (error) =>
       error instanceof ProtocolDecodeError
         ? error
         : new ProtocolDecodeError({ reason: "schema_mismatch" }),
-    ),
-  );
+  });
 
 export function decodeServerJsonSync(input: string): ServerFrame {
   if (input.length === 0) {
@@ -675,17 +838,7 @@ export function decodeServerJsonSync(input: string): ServerFrame {
   } catch {
     throw new ProtocolDecodeError({ reason: "invalid_json" });
   }
-  try {
-    const frame = Schema.decodeUnknownSync(ServerFrame, parseOptions)(parsed);
-    if (!validateEntryIdentity(frame)) {
-      throw new ProtocolDecodeError({ reason: "entry_key_mismatch" });
-    }
-    return frame;
-  } catch (error) {
-    throw error instanceof ProtocolDecodeError
-      ? error
-      : new ProtocolDecodeError({ reason: "schema_mismatch" });
-  }
+  return decodeUnknownServerFrame(parsed);
 }
 
 export function decodeClientFrameSync(input: unknown): ClientFrame {
@@ -720,19 +873,46 @@ function validWindow(window: Window): boolean {
   );
 }
 
+function validChartQuery(
+  query: Schema.Schema.Type<typeof RequestsChartBody>,
+): boolean {
+  const window = query.window;
+  const validRange =
+    "all" in window ||
+    ("last_seconds" in window
+      ? window.last_seconds > 0
+      : window.since_unix > 0 &&
+        window.until_unix > window.since_unix &&
+        window.until_unix - window.since_unix <= 2_592_000);
+  const id = (value: string | undefined | null) =>
+    value === undefined ||
+    value === null ||
+    /^[a-z0-9][a-z0-9-]{0,62}$/.test(value);
+  return (
+    validRange &&
+    validDimensions(query.dimensions) &&
+    id(query.client) &&
+    id(query.provider) &&
+    (query.model === undefined ||
+      (utf8.encode(query.model).byteLength > 0 &&
+        utf8.encode(query.model).byteLength <= 128))
+  );
+}
+
 function validQuery(query: SubscriptionQuery): boolean {
-  if (
-    query.kind === "usage.series" ||
-    query.kind === "requests.table" ||
-    query.kind === "requests.series"
-  ) {
+  if (query.kind === "requests.chart") return validChartQuery(query);
+  if (query.kind === "usage.series" || query.kind === "requests.table") {
     return validWindow(query.window);
   }
   return true;
 }
 
 function validWireQuery(query: WireSubscriptionQuery): boolean {
-  return "window" in query ? validWindow(query.window) : true;
+  return "dimensions" in query
+    ? validChartQuery(query)
+    : "window" in query
+      ? validWindow(query.window)
+      : true;
 }
 
 export function decodeSubscriptionQuery(

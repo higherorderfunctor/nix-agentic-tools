@@ -4,7 +4,7 @@
     "type": "hello",
     "server_time_unix": 1792886400,
     "capabilities": [
-      "requests.series",
+      "requests.chart",
       "requests.table",
       "usage.overview",
       "usage.series"
@@ -87,9 +87,9 @@
     "id": "quota-claude",
     "epoch": "fixture-epoch",
     "after_seq": 1,
-    "code": "sequence_gap",
+    "code": "storage_busy",
     "retryable": true,
-    "action": "resnapshot"
+    "action": "retry"
   },
   {
     "v": 1,
@@ -108,5 +108,79 @@
     "type": "ping",
     "nonce": "fixture-nonce",
     "server_time_unix": 1792886430
+  },
+  {
+    "v": 1,
+    "type": "snapshot",
+    "id": "requests-chart",
+    "epoch": "chart-epoch",
+    "seq": 1,
+    "collections": {
+      "request_chart": [
+        {
+          "key": "[1792800000,null,\"model-a\"]",
+          "value": [1792800000, null, "model-a", 12, 11, 2, null, 0, 100, 40]
+        }
+      ]
+    },
+    "meta": {
+      "as_of_unix": 1792886400,
+      "window": {
+        "since_unix": 1792800000,
+        "until_unix": 1792886400
+      },
+      "oldest_at_unix": 1792800000,
+      "has_more": false,
+      "next_before": null,
+      "truncated": false,
+      "known_gaps": [],
+      "request_loss_total": 0,
+      "provider_snapshot_loss_total": 0,
+      "reset_events_observed_only": true,
+      "reset_events_complete_since_unix": null,
+      "chart": {
+        "bucket_seconds": 3600,
+        "dimensions": ["client", "model"]
+      }
+    }
+  },
+  {
+    "v": 1,
+    "type": "delta",
+    "id": "requests-chart",
+    "epoch": "chart-epoch",
+    "seq": 2,
+    "prev_seq": 1,
+    "upserts": {
+      "request_chart": [
+        {
+          "key": "[1792800000,null,\"model-a\"]",
+          "value": [1792800000, null, "model-a", 13, 12, 2, null, 0, 110, 40]
+        }
+      ]
+    },
+    "removes": {
+      "request_chart": []
+    },
+    "meta": {
+      "as_of_unix": 1792886400,
+      "window": {
+        "since_unix": 1792800000,
+        "until_unix": 1792886400
+      },
+      "oldest_at_unix": 1792800000,
+      "has_more": false,
+      "next_before": null,
+      "truncated": false,
+      "known_gaps": [],
+      "request_loss_total": 0,
+      "provider_snapshot_loss_total": 0,
+      "reset_events_observed_only": true,
+      "reset_events_complete_since_unix": null,
+      "chart": {
+        "bucket_seconds": 3600,
+        "dimensions": ["client", "model"]
+      }
+    }
   }
 ]

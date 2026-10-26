@@ -424,18 +424,18 @@ describe("fixture backend", () => {
     });
 
     const requestSeries = await liveState("normal", {
-      kind: "requests.series",
+      kind: "requests.chart",
       window: { last_seconds: 600 },
-      bucket_seconds: 60,
+      dimensions: ["model", "provider"],
       provider: "provider-a",
       model: "model-a",
     });
     expect(requestSeries.entries.size).toBe(1);
     const aggregate = [...requestSeries.entries.values()][0];
-    expect(aggregate).toMatchObject({ bucket_start_unix: 960 });
+    expect(aggregate).toMatchObject({ bucket_start_unix: 1_799_996_400 });
     expect(requestSeries.meta?.window).toEqual({
-      since_unix: 600,
-      until_unix: 1200,
+      since_unix: 1_799_999_400,
+      until_unix: 1_800_000_000,
     });
   });
 
@@ -465,23 +465,64 @@ describe("fixture backend", () => {
     expect(outsideWindow.intervalMs).toBe(1000);
 
     const selected = await liveState("normal", {
-      kind: "requests.series",
+      kind: "requests.chart",
       window: { last_seconds: 600 },
-      bucket_seconds: 300,
+      dimensions: ["client"],
       provider: "provider-a",
-      credential: "credential-a",
       client: null,
     });
     expect([...selected.entries.values()][0]).toMatchObject({
-      bucket_start_unix: 900,
+      bucket_start_unix: 1_799_996_400,
     });
     const excluded = await liveState("normal", {
-      kind: "requests.series",
+      kind: "requests.chart",
       window: { last_seconds: 600 },
-      bucket_seconds: 300,
+      dimensions: ["client"],
       client: "different-client",
     });
     expect(excluded.entries.size).toBe(0);
+  });
+
+  it("advertises hourly, daily and adaptive all precision with exact filtered coverage", async () => {
+    for (const [window, bucket] of [
+      [{ last_seconds: 86400 }, 3600],
+      [{ last_seconds: 7 * 86400 }, 86400],
+      [{ last_seconds: 30 * 86400 }, 86400],
+      [{ all: true }, 2 * 86400],
+      [
+        { since_unix: 1_800_000_000 - 25 * 3600, until_unix: 1_800_000_000 },
+        3600,
+      ],
+    ] as const) {
+      const view = await liveState("normal", {
+        kind: "requests.chart",
+        window,
+        dimensions: [],
+      });
+      expect(view.meta?.chart).toEqual({
+        bucket_seconds: bucket,
+        dimensions: [],
+      });
+      expect(view.meta?.window?.until_unix).toBe(1_800_000_000);
+    }
+    const query = {
+      kind: "requests.chart",
+      window: { all: true },
+      dimensions: ["client", "model"],
+    } as const;
+    const all = await liveState("normal", query);
+    const unknown = await liveState("normal", { ...query, client: null });
+    expect([...unknown.entries.values()]).toMatchObject([
+      { dimensions: { client: null, model: "model-a" }, events: 1 },
+    ]);
+    const named = await liveState("normal", { ...query, client: "harness" });
+    expect([...named.entries.values()]).toMatchObject([
+      { dimensions: { client: "harness", model: "model-a" }, events: 1 },
+    ]);
+    const empty = await liveState("normal", { ...query, model: "absent" });
+    expect(empty.entries.size).toBe(0);
+    expect(empty.meta?.window).toEqual(all.meta?.window);
+    expect(empty.meta?.oldest_at_unix).toBe(all.meta?.oldest_at_unix);
   });
 
   it("rejects logs.tail through the actual Effect layer", async () => {

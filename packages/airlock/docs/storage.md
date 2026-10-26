@@ -96,10 +96,10 @@ a 200-row request page took about 109 ms and a 1,000-snapshot provider view
 about 219 ms; those near-budget timings are host-sensitive, while the tests
 enforce the query plan and the 250 ms boundary.
 
-Aggregation uses caller-selected time buckets and groups by provider, client,
-served credential, model, and outcome. It counts HTTP 2xx successes, 4xx/5xx
-errors and complete observations, and sums known latency, bytes, and token
-dimensions. A token total stays unknown when any included event lacks that
+CLI report aggregation uses caller-selected time buckets and groups by provider,
+client, served credential, model, and outcome. It counts HTTP 2xx successes,
+4xx/5xx errors and complete observations, and sums known latency, bytes, and
+token dimensions. A token total stays unknown when any included event lacks that
 dimension. It fetches at most 10,001 groups and returns `UsageRangeIncomplete`
 when a range has more than 10,000 groups, rather than silently truncating the
 result.
@@ -117,8 +117,8 @@ Daily rows retain event, complete-observation and HTTP-error counts
 known sum and unknown-event count. Consumers must return a null token total
 whenever its unknown count is nonzero. These counters do not attribute global
 dropped events. A private empty client key encodes SQL null; typed client IDs
-cannot be empty. Existing series, table and CLI report queries still read raw
-events.
+cannot be empty. The raw table and CLI report queries still read raw events. The
+old request-series reader is retired with its wire caller.
 
 The bounded chart reader groups a canonical sorted selection of zero to two
 client/model/provider dimensions and applies every filter before aggregation.
