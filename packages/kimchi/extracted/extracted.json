@@ -3536,7 +3536,7 @@
         "bundledModule": null,
         "file": "src/extensions/billing/status.ts",
         "library": "fetch",
-        "line": 180,
+        "line": 189,
         "readBy": "kimchi",
         "targets": [
           {
@@ -3563,7 +3563,7 @@
         "bundledModule": null,
         "file": "src/extensions/billing/status.ts",
         "library": "fetch",
-        "line": 216,
+        "line": 225,
         "readBy": "kimchi",
         "targets": [
           {
@@ -3605,7 +3605,7 @@
         "bundledModule": null,
         "file": "src/extensions/memory/backend.ts",
         "library": "fetch",
-        "line": 105,
+        "line": 119,
         "readBy": "kimchi",
         "targets": [
           {
@@ -3632,13 +3632,13 @@
         "bundledModule": null,
         "file": "src/extensions/memory/backend.ts",
         "library": "fetch",
-        "line": 145,
+        "line": 171,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/memory/backend.ts:145",
+            "origin": "src/extensions/memory/backend.ts:171",
             "value": "input"
           }
         ]
@@ -3647,13 +3647,43 @@
         "bundledModule": null,
         "file": "src/extensions/memory/backend.ts",
         "library": "fetch",
-        "line": 150,
+        "line": 186,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/memory/backend.ts:150",
+            "origin": "src/extensions/memory/backend.ts:186",
+            "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/memory/backend.ts",
+        "library": "fetch",
+        "line": 187,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/memory/backend.ts:187",
+            "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/memory/backend.ts",
+        "library": "fetch",
+        "line": 192,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/memory/backend.ts:192",
             "value": "input"
           }
         ]
@@ -3662,13 +3692,13 @@
         "bundledModule": null,
         "file": "src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 189,
+        "line": 192,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/pr-cost-reporting/worker.ts:189",
+            "origin": "src/extensions/pr-cost-reporting/worker.ts:192",
             "value": "input"
           }
         ]
@@ -3692,13 +3722,13 @@
         "bundledModule": null,
         "file": "src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 182,
+        "line": 183,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/session-name.ts:182",
+            "origin": "src/extensions/session-name.ts:183",
             "value": "url"
           }
         ]
@@ -3737,7 +3767,7 @@
         "bundledModule": null,
         "file": "src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 338,
+        "line": 339,
         "readBy": "kimchi",
         "targets": [
           {
@@ -3902,67 +3932,67 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:1123",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:1124",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:1164",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:1165",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:529",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:530",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:566",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:567",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:615",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:616",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:657",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:658",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/remote-run/post-completion.ts:340",
+            "origin": "src/extensions/remote-run/post-completion.ts:341",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/remote-run/post-completion.ts:507",
+            "origin": "src/extensions/remote-run/post-completion.ts:508",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/remote-run/post-completion.ts:535",
+            "origin": "src/extensions/remote-run/post-completion.ts:536",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/remote-run/post-completion.ts:791",
+            "origin": "src/extensions/remote-run/post-completion.ts:792",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/remote-run/post-completion.ts:980",
+            "origin": "src/extensions/remote-run/post-completion.ts:981",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
