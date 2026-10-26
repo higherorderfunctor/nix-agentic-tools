@@ -3050,6 +3050,7 @@ async fn append_request_event(
             })
         })
         .transpose()?;
+    let mut transaction = connection.begin().await?;
     sqlx::query!(
         r"
         INSERT INTO request_events
@@ -3076,7 +3077,52 @@ async fn append_request_event(
         event.usage_complete,
         dropped_events,
     )
-    .execute(&mut *connection)
+    .execute(&mut *transaction)
+    .await?;
+    update_request_chart_daily(&mut transaction).await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+// Consume the just-inserted raw event on this transaction's connection.
+async fn update_request_chart_daily(connection: &mut SqliteConnection) -> Result<(), StorageError> {
+    sqlx::query!(
+        r"
+        INSERT INTO request_chart_daily
+        SELECT
+          (r.occurred_at_unix / 86400) * 86400,
+          c.provider_id,
+          COALESCE(r.client_id, ''),
+          r.model_id,
+          1,
+          r.usage_complete,
+          r.status_code >= 400,
+          COALESCE(r.input_tokens, 0),
+          r.input_tokens IS NULL,
+          COALESCE(r.output_tokens, 0),
+          r.output_tokens IS NULL,
+          COALESCE(r.cache_read_tokens, 0),
+          r.cache_read_tokens IS NULL,
+          COALESCE(r.cache_write_tokens, 0),
+          r.cache_write_tokens IS NULL
+        FROM request_events r
+        JOIN credentials c ON c.id = r.credential_id
+        WHERE r.id = last_insert_rowid()
+        ON CONFLICT (day_unix, provider_id, client_key, model_id) DO UPDATE SET
+          events = request_chart_daily.events + excluded.events,
+          complete_events = request_chart_daily.complete_events + excluded.complete_events,
+          error_events = request_chart_daily.error_events + excluded.error_events,
+          input_tokens = request_chart_daily.input_tokens + excluded.input_tokens,
+          input_tokens_unknown = request_chart_daily.input_tokens_unknown + excluded.input_tokens_unknown,
+          output_tokens = request_chart_daily.output_tokens + excluded.output_tokens,
+          output_tokens_unknown = request_chart_daily.output_tokens_unknown + excluded.output_tokens_unknown,
+          cache_read_tokens = request_chart_daily.cache_read_tokens + excluded.cache_read_tokens,
+          cache_read_tokens_unknown = request_chart_daily.cache_read_tokens_unknown + excluded.cache_read_tokens_unknown,
+          cache_write_tokens = request_chart_daily.cache_write_tokens + excluded.cache_write_tokens,
+          cache_write_tokens_unknown = request_chart_daily.cache_write_tokens_unknown + excluded.cache_write_tokens_unknown
+        "
+    )
+    .execute(connection)
     .await?;
     Ok(())
 }
@@ -3849,6 +3895,203 @@ mod tests {
         assert_eq!(snapshots[0].pools.len(), 1);
         assert_eq!(snapshots[0].credits.len(), 1);
         assert_eq!(snapshots[0].metrics.len(), 1);
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn daily_rollup_preserves_independent_unknowns_and_http_errors_after_restart() {
+        type DailyRow = (
+            i64,
+            String,
+            String,
+            String,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+        );
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        for missing in 0..4 {
+            let mut event = request(RequestOutcome::Failed, 86_401 + missing);
+            event.input_tokens = Some(11);
+            event.cache_write_tokens = Some(17);
+            // Outcome deliberately disagrees: only HTTP status defines chart errors.
+            event.status_code = if missing == 0 { 500 } else { 200 };
+            event.usage_complete = missing != 1;
+            match missing {
+                0 => event.input_tokens = None,
+                1 => event.output_tokens = None,
+                2 => event.cache_read_tokens = None,
+                _ => event.cache_write_tokens = None,
+            }
+            storage
+                .try_append_request_event(event)
+                .await
+                .expect("append");
+        }
+        close(storage).await;
+        let storage = open(directory.path()).await;
+        let row: DailyRow = sqlx::query_as("SELECT * FROM request_chart_daily")
+            .fetch_one(&mut test_connection(&storage.database_path).await)
+            .await
+            .expect("daily row");
+        assert_eq!(
+            (row.0, row.1.as_str(), row.2.as_str(), row.3.as_str()),
+            (86_400, "claude", "harness", "claude-sonnet-4-5")
+        );
+        assert_eq!(
+            [
+                row.4, row.5, row.6, row.7, row.8, row.9, row.10, row.11, row.12, row.13, row.14
+            ],
+            [4, 3, 1, 33, 1, 39, 1, 21, 1, 51, 1]
+        );
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn daily_upsert_failure_rolls_back_raw_insert_and_exact_integer_overflow() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut event = request(RequestOutcome::Completed, 10);
+        event.input_tokens = Some(i64::MAX as u64);
+        storage
+            .try_append_request_event(event.clone())
+            .await
+            .expect("exact maximum");
+        let mut connection = test_connection(&storage.database_path).await;
+        sqlx::query("CREATE TRIGGER reject_daily BEFORE UPDATE ON request_chart_daily BEGIN SELECT RAISE(ABORT, 'test daily failure'); END")
+            .execute(&mut connection).await.expect("failure injection");
+        assert!(matches!(
+            storage.try_append_request_event(event.clone()).await,
+            Err(StorageError::Database(_))
+        ));
+        sqlx::query("DROP TRIGGER reject_daily")
+            .execute(&mut connection)
+            .await
+            .expect("remove injection");
+        event.input_tokens = Some(1);
+        assert!(matches!(
+            storage.try_append_request_event(event).await,
+            Err(StorageError::Database(_))
+        ));
+        let raw: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM request_events")
+            .fetch_one(&mut connection)
+            .await
+            .expect("raw count");
+        let daily: (i64, i64) =
+            sqlx::query_as("SELECT events, input_tokens FROM request_chart_daily")
+                .fetch_one(&mut connection)
+                .await
+                .expect("daily count");
+        assert_eq!(raw, 1);
+        assert_eq!(daily, (1, i64::MAX));
+        connection.close().await.expect("close test connection");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn daily_migration_interruption_rolls_back_and_restart_backfills_once() {
+        type BackfillRow = (i64, String, i64, i64, i64, i64, i64, i64);
+        let directory = tempfile::tempdir().expect("state directory");
+        let path = directory.path().join(DATABASE_FILE);
+        let mut connection = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true)
+            .foreign_keys(true)
+            .connect()
+            .await
+            .expect("legacy connection");
+        let mut legacy = sqlx::migrate!("./migrations");
+        legacy.migrations = legacy
+            .iter()
+            .filter(|migration| migration.version < 3)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into();
+        legacy
+            .run(&mut connection)
+            .await
+            .expect("legacy migrations");
+        seed_identities(&mut connection, identities())
+            .await
+            .expect("legacy identities");
+        sqlx::query(
+            "WITH RECURSIVE n(value) AS (SELECT 1 UNION ALL SELECT value + 1 FROM n WHERE value < 2000)
+             INSERT INTO request_events (occurred_at_unix, client_id, group_id, credential_id, model_id, outcome, status_code, request_bytes, response_bytes, latency_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, usage_complete, dropped_events)
+             SELECT value * 100, CASE WHEN value % 2 = 0 THEN NULL ELSE 'harness' END, 'anthropic', 'claude', 'model', 'completed', 500, 0, 0, 0, 1, NULL, 3, 4, 0, 0 FROM n",
+        ).execute(&mut connection).await.expect("legacy events");
+        let mut callbacks = 0;
+        connection
+            .lock_handle()
+            .await
+            .expect("handle")
+            .set_progress_handler(1000, move || {
+                callbacks += 1;
+                callbacks < 20
+            });
+        let interrupted = sqlx::migrate!("./migrations")
+            .run(&mut connection)
+            .await
+            .expect_err("interrupt backfill");
+        assert!(
+            matches!(interrupted,
+            sqlx::migrate::MigrateError::ExecuteMigration(sqlx::Error::Database(ref error), 3)
+                if error.code().as_deref() == Some("9")),
+            "{interrupted}"
+        );
+        connection
+            .lock_handle()
+            .await
+            .expect("handle")
+            .remove_progress_handler();
+        connection
+            .close()
+            .await
+            .expect("close interrupted connection");
+        let mut connection = test_connection(&path).await;
+        let absent: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'request_chart_daily'",
+        )
+        .fetch_one(&mut connection)
+        .await
+        .expect("rolled back table");
+        let versions: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE version = 3")
+                .fetch_one(&mut connection)
+                .await
+                .expect("rolled back version");
+        assert_eq!((absent, versions), (0, 0));
+        sqlx::migrate!("./migrations")
+            .run(&mut connection)
+            .await
+            .expect("retry migration");
+        // The NULL key remains distinct, and all sufficient statistics match raw data.
+        let rows: Vec<BackfillRow> = sqlx::query_as(
+            "SELECT day_unix, client_key, events, complete_events, error_events, input_tokens, output_tokens_unknown, cache_read_tokens FROM request_chart_daily ORDER BY day_unix, client_key",
+        ).fetch_all(&mut connection).await.expect("backfilled rows");
+        let raw: Vec<BackfillRow> = sqlx::query_as(
+            "SELECT (occurred_at_unix / 86400) * 86400, COALESCE(client_id, ''), COUNT(*), SUM(usage_complete), SUM(status_code >= 400), SUM(input_tokens), SUM(output_tokens IS NULL), SUM(cache_read_tokens) FROM request_events GROUP BY 1, 2 ORDER BY 1, 2",
+        ).fetch_all(&mut connection).await.expect("raw reference");
+        assert_eq!(rows, raw);
+        assert_eq!(rows.iter().map(|row| row.2).sum::<i64>(), 2000);
+        connection.close().await.expect("close migrated connection");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("private database");
+        let storage = open(directory.path()).await;
+        let mut connection = test_connection(&path).await;
+        let total: i64 = sqlx::query_scalar("SELECT SUM(events) FROM request_chart_daily")
+            .fetch_one(&mut connection)
+            .await
+            .expect("no duplicate backfill");
+        assert_eq!(total, 2000);
+        connection.close().await.expect("close test connection");
         close(storage).await;
     }
 

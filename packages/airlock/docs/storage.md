@@ -1,11 +1,9 @@
 # airlock storage
 
-> **Last verified:** 2026-10-25 — client-owned managed OAuth and bounded request
-> usage, typed provider history, bounded control reads, and a read-only report
-> share migrations 0001 and 0002; all snapshot producers share bounded loss
-> recovery, control history is window-bounded, and reports reset changes only
-> between observed samples. Control shutdown closes its private reader before
-> the main storage owner closes.
+> **Last verified:** 2026-10-26 — migration 0003 backfills daily request
+> statistics in one transaction; each usage write commits its raw event and
+> daily statistics together. Bounded readers and the read-only report retain
+> their existing contracts.
 
 ## Scope
 
@@ -105,6 +103,22 @@ dimensions. A token total stays unknown when any included event lacks that
 dimension. It fetches at most 10,001 groups and returns `UsageRangeIncomplete`
 when a range has more than 10,000 groups, rather than silently truncating the
 result.
+
+Migration 0003 adds chart sufficient statistics keyed by UTC day and actual
+provider, client and model. Startup backfills all existing raw events before the
+usage worker starts. Each subsequent append inserts the raw event and updates
+its daily row in one transaction; acknowledgement follows commit. A failed
+update, including integer overflow, rolls back the raw insert. SQLite
+interruption rolls back both the migration table and backfill so restart can
+retry it.
+
+Daily rows retain event, complete-observation and HTTP-error counts
+(`status_code >= 400`, independent of outcome), plus each token dimension's
+known sum and unknown-event count. Consumers must return a null token total
+whenever its unknown count is nonzero. These counters do not attribute global
+dropped events. A private empty client key encodes SQL null; typed client IDs
+cannot be empty. Existing series, table and CLI report queries still read raw
+events.
 
 Identified usage-series history loads its page and same-filter reset predecessor
 in one SQLite transaction. The query applies both `since_unix` and exclusive
