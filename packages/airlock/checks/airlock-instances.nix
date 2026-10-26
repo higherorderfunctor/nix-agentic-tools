@@ -114,6 +114,14 @@
     fileOf (evaluate backend {
       airlock.instances.main.settings.credentials.claude.auth.type = lib.mkForce "oauth_managed";
     });
+  authorization = backend:
+    fileOf (evaluate backend {
+      airlock.instances.main.settings.authorization = "permit(principal, action, resource);";
+    });
+  invalidAuthorization = backend:
+    fileOf (evaluate backend {
+      airlock.instances.main.settings.authorization = "permit(not cedar);";
+    });
   override = backend: fileOf (evaluate backend {airlock.instances.main.settings.providers.zai.endpoints.anthropic = "https://api.z.ai/api/anthropic";});
   usage = backend:
     fileOf (evaluate backend {
@@ -139,6 +147,10 @@
   checked = pkgs.writeText "airlock-config-roundtrip.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") hm.secrets) hm.content);
   checkedManaged = pkgs.writeText "airlock-config-managed.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (managed "hm").secrets) (managed "hm").content);
   checkedManagedWithFile = pkgs.writeText "airlock-config-managed-with-file.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (managedWithFile "hm").secrets) (managedWithFile "hm").content);
+  checkedAuthorization = backend:
+    pkgs.writeText "airlock-config-authorization-${backend}.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (authorization backend).secrets) (authorization backend).content);
+  checkedInvalidAuthorization = backend:
+    pkgs.writeText "airlock-config-invalid-authorization-${backend}.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (invalidAuthorization backend).secrets) (invalidAuthorization backend).content);
   checkedOverride = pkgs.writeText "airlock-config-override.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (override "hm").secrets) (override "hm").content);
   checkedUsage = pkgs.writeText "airlock-config-usage.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (usage "hm").secrets) (usage "hm").content);
   checkedWithoutControl = backend: let
@@ -155,15 +167,21 @@ in {
         airlock check-config --config ${checkedManaged}
         airlock check-config --config ${checkedOverride}
         airlock check-config --config ${checkedUsage}
+        airlock check-config --config ${checkedAuthorization "hm"}
+        airlock check-config --config ${checkedAuthorization "devenv"}
         airlock check-config --config ${checkedWithoutControl "hm"}
         airlock check-config --config ${checkedWithoutControl "devenv"}
         grep -F -- 'serve --config "$AIRLOCK_CONFIG" --web-root ' ${builtins.head (evaluate "hm" {}).config.ai.services.airlock-main.command}
         grep -F -- 'serve --config "$AIRLOCK_CONFIG" --web-root ' ${builtins.head (evaluate "devenv" {}).config.ai.services.airlock-main.command}
+        if airlock check-config --config ${checkedInvalidAuthorization "hm"} || airlock check-config --config ${checkedInvalidAuthorization "devenv"}; then
+          echo "malformed authorization unexpectedly accepted" >&2
+          exit 1
+        fi
         if airlock check-config --config ${checkedManagedWithFile}; then
           echo "managed OAuth unexpectedly accepted a file" >&2
           exit 1
         fi
-        echo "ok — airlock check-config accepts preset, managed-OAuth and explicit-override renders" >"$out"
+        echo "ok — airlock check-config accepts authorization, preset, managed-OAuth and explicit-override renders" >"$out"
       '';
 
       airlock-module-eval = mkTest "airlock-module-eval" (
@@ -177,6 +195,8 @@ in {
           && !(builtins.hasAttr "file" (builtins.fromJSON (managed backend).content).credentials.claude.auth)
           && managedWithFile backend == managedWithFile "hm"
           && builtins.hasAttr "file" (builtins.fromJSON (managedWithFile backend).content).credentials.claude.auth
+          && authorization backend == authorization "hm"
+          && (builtins.fromJSON (authorization backend).content).authorization == "permit(principal, action, resource);"
           && override backend == override "hm"
           && usage backend == usage "hm"
           && (builtins.fromJSON (usage backend).content).usage.credentials == ["codex"]

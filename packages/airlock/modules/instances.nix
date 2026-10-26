@@ -61,6 +61,11 @@ backend: {lib, ...}: let
   };
   settingsType = types.submodule {
     options = {
+      authorization = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Optional inline Cedar policy for CONNECT; null permits within native bounds and an empty string denies all Cedar actions.";
+      };
       clients = mkOption {
         type = types.attrsOf client;
         default = {};
@@ -160,6 +165,7 @@ in {
           prefix = "AIRLOCK";
           settings =
             {
+              inherit (settings) authorization;
               clients =
                 lib.mapAttrs (_: client: {
                   inherit (client) grants;

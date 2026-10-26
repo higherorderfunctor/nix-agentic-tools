@@ -23,7 +23,7 @@ use airlock_core::{
     config::{Auth, Config, UnsupportedExecution},
     error::SecretError,
     ids::{ClientId, CredentialId, GroupId},
-    policy::{Decision, Policy},
+    policy::{Decision, DenyReason, Policy},
     secret::Secret,
     storage::SqliteStorage,
     target::ConnectTarget,
@@ -368,8 +368,13 @@ async fn handle(
     audit.port = target.port();
     match state.policy.decide(&client, target.host()) {
         Decision::Deny(reason) => {
-            audit.outcome = "policy_denied";
-            Ok(response(StatusCode::FORBIDDEN, format!("{reason:?}")))
+            audit.outcome = match reason {
+                DenyReason::CedarError => "policy_error",
+                DenyReason::CedarDenied | DenyReason::UnknownClient | DenyReason::UnknownHost => {
+                    "policy_denied"
+                }
+            };
+            Ok(response(StatusCode::FORBIDDEN, "connect denied"))
         }
         Decision::Intercept { group, .. } => {
             audit.decision = "intercept";

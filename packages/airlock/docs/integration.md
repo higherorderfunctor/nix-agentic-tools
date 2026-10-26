@@ -1,11 +1,12 @@
 # airlock configuration and Claude integration
 
-> **Last verified:** 2026-10-25 — managed OAuth uses client-scoped fake tokens;
-> M08 adds usage selection and quota reports, while M10 verifies real-service
-> classifier/remote-control routing and pinned Claude's signed `cch` identity;
-> the separately enabled control listener serves strict usage APIs, static
-> assets, and bounded WebSocket views; shutdown drains upgraded sockets and
-> closes the control reader before the storage owner closes.
+> **Last verified:** 2026-10-25 — Cedar CONNECT authorization joins managed
+> OAuth client scoping; M08 adds usage selection and quota reports, while M10
+> verifies real-service classifier/remote-control routing and pinned Claude's
+> signed `cch` identity; the separately enabled control listener serves strict
+> usage APIs, static assets, and bounded WebSocket views; shutdown drains
+> upgraded sockets and closes the control reader before the storage owner
+> closes.
 
 ## Nix configuration
 
@@ -20,6 +21,29 @@ claims its port and service name.
 IDs, references, URLs, protocols, primary and model ownership for direct JSON
 and Nix output. `airlock-config-roundtrip` feeds rendered settings to
 `check-config`; raw structs deny unknown fields.
+
+Set `settings.authorization` to an inline Cedar policy. The default `null` uses
+Airlock's built-in permit-all policy inside its native bounds; `""` supplies an
+empty policy set and denies every Cedar CONNECT decision. The setting is passed
+through by both Home Manager and devenv, accepted or rejected by
+`airlock check-config`, and documented with its `CONNECT`-only schema in
+`docs/routing.md`. This example permits the harness client to intercept Claude
+and tunnel `example.com`:
+
+```nix
+ai.airlock.instances.main.settings.authorization = ''
+  permit(
+    principal == Client::"harness",
+    action == Action::"CONNECT",
+    resource == Host::"api.anthropic.com"
+  ) when { context.intercepted == true };
+  permit(
+    principal == Client::"harness",
+    action == Action::"CONNECT",
+    resource == Host::"example.com"
+  ) when { context.intercepted == false };
+'';
+```
 
 `providers.<id>` holds a `claude`, `codex`, or `zai` preset and optional
 protocol-keyed endpoint overrides. Rust expands each preset once: Claude

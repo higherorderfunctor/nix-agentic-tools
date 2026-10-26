@@ -1,9 +1,9 @@
 # airlock transport and routing
 
-> **Last verified:** 2026-10-25 — CONNECT, model and classifier routing,
-> ToolSearch, remote-control paths, quota substitution, and M08 primary-header
-> observation share the gateway path; the control listener remains a separate
-> authenticated surface.
+> **Last verified:** 2026-10-25 — Cedar CONNECT authorization, model and
+> classifier routing, ToolSearch, remote-control paths, quota substitution, and
+> M08 primary-header observation share the gateway path; the control listener
+> remains a separate authenticated surface.
 
 ## Transport
 
@@ -17,6 +17,37 @@ connection goes through airlock, but only the hosts an upstream lists in
 The optional control listener is not a CONNECT proxy and must use a different
 port. Its dedicated bearer token never authenticates gateway clients, and no
 control route can select an inference credential or bypass model routing.
+
+## CONNECT authorization
+
+Airlock evaluates an optional inline Cedar policy before it opens either an
+intercepted or tunnelled upstream. `authorization` is `null` or omitted by
+default: a built-in `permit(principal, action, resource);` allows CONNECT inside
+the native client, group, host, and `unknownHosts` bounds. An empty string is an
+empty Cedar policy set and denies both intercepted CONNECT and tunnelled unknown
+hosts.
+
+The host-owned schema has only `Client` principals, `Host` resources, the
+`CONNECT` action, and context `{ intercepted: Bool, group?: String }`. There is
+no entity graph or parent membership: `principal` and `resource` are direct IDs.
+For an intercepted host, `intercepted` is `true` and `group` names the granted
+route group. For a tunnelled unknown host, `intercepted` is `false` and `group`
+is absent. A policy can therefore distinguish the two modes without a separate
+caller-supplied flag.
+
+Native bounds still run first. An unknown client, an ungranted configured group
+or host, and `unknownHosts = "deny"` deny before Cedar. Cedar then sees every
+remaining intercepted CONNECT and every unknown host eligible for tunneling, so
+a restrictive policy can remove access but a permissive policy cannot widen it.
+Any Cedar evaluation diagnostic fails closed even when another policy would
+permit.
+
+Airlock parses and strictly schema-validates the policy once while converting
+configuration, before secret loading or binding. Malformed and schema-invalid
+policies fail startup and `airlock check-config`. Configuration and audit errors
+identify only parse or schema failure; they never include policy source, and a
+Cedar denial returns the generic response `connect denied`. Evaluation errors
+are audited as `policy_error`, while denials use `policy_denied`.
 
 Interception follows this order:
 

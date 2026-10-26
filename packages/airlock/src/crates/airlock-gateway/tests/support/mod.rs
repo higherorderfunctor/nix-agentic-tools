@@ -156,6 +156,25 @@ impl Running {
         .await
     }
 
+    pub async fn start_with_policy(
+        unknown_hosts: &str,
+        intercepted: &[&str],
+        policy: &str,
+    ) -> Self {
+        let directory = tempfile::tempdir().expect("tempdir");
+        write_fixtures(&directory, FixtureAuth::OauthBearer);
+        let ca_directory = directory.path().join("ca");
+        let config = config_with_auth(
+            &directory,
+            unknown_hosts,
+            intercepted,
+            FixtureAuth::OauthBearer,
+            None,
+            Some(policy),
+        );
+        Self::start_config(directory, config, ca_directory, TestCa::new().roots(), None).await
+    }
+
     pub async fn start_with_auth(
         unknown_hosts: &str,
         intercepted: &[&str],
@@ -167,7 +186,14 @@ impl Running {
         let directory = tempfile::tempdir().expect("tempdir");
         write_fixtures(&directory, auth);
         let ca_directory = ca_directory.map_or_else(|| directory.path().join("ca"), Path::to_owned);
-        let config = config_with_auth(&directory, unknown_hosts, intercepted, auth, upstream_port);
+        let config = config_with_auth(
+            &directory,
+            unknown_hosts,
+            intercepted,
+            auth,
+            upstream_port,
+            None,
+        );
         Self::start_config(directory, config, ca_directory, roots, None).await
     }
 
@@ -477,6 +503,7 @@ pub fn config(directory: &TempDir, unknown_hosts: &str, intercepted: &[&str]) ->
         intercepted,
         FixtureAuth::OauthBearer,
         None,
+        None,
     )
 }
 
@@ -486,6 +513,7 @@ fn config_with_auth(
     intercepted: &[&str],
     auth: FixtureAuth,
     upstream_port: Option<u16>,
+    authorization: Option<&str>,
 ) -> Config {
     let primary = match auth {
         FixtureAuth::ApiKey => json!({
@@ -502,7 +530,7 @@ fn config_with_auth(
         ),
         None => format!("https://{}", intercepted.first().unwrap_or(&"localhost")),
     };
-    Config::try_from(serde_json::from_value::<RawConfig>(json!({
+    let mut value = json!({
         "clients": {"harness": {
             "grants": ["anthropic"],
             "token_file": directory.path().join("token")
@@ -523,7 +551,12 @@ fn config_with_auth(
         "providers": {"claude": {"endpoints": {"anthropic": endpoint}}},
         "state_dir": directory.path(),
         "unknown_hosts": unknown_hosts
-    })).expect("raw config")).expect("validated config")
+    });
+    if let Some(authorization) = authorization {
+        value["authorization"] = json!(authorization);
+    }
+    let raw = serde_json::from_value::<RawConfig>(value).expect("raw config");
+    Config::try_from(raw).expect("validated config")
 }
 
 pub fn basic(client: &str, token: &str) -> String {

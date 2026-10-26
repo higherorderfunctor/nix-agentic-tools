@@ -56,6 +56,10 @@ pub enum ConfigError {
     ControlListenConflict { port: u16 },
     #[error("control listen port must be explicit and nonzero")]
     ControlListenPortZero,
+    #[error("authorization policy could not be parsed")]
+    InvalidAuthorizationParse,
+    #[error("authorization policy does not match the CONNECT schema")]
+    InvalidAuthorizationSchema,
     #[error("control listen address {value:?} is not a valid socket address")]
     InvalidControlListen { value: String },
     #[error("control listen address {address} is not loopback")]
