@@ -306,11 +306,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1788575406,
-        "narHash": "sha256-EjSyb5FcVnZOW0qFbcvxzor/je02duSe/RhJsL5p+14=",
+        "lastModified": 1792973494,
+        "narHash": "sha256-TQGE/HFmpzOluJQR0Bxt4JPT76zj2QxUU1zhb+LfCSo=",
         "owner": "utensils",
         "repo": "mcp-nixos",
-        "rev": "6a517811658c21f97bd7703b35546085117fc310",
+        "rev": "2e88096695bef9c41c5fa9157211d52a45d9a913",
         "type": "github"
       },
       "original": {

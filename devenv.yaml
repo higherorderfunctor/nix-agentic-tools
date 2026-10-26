@@ -24,7 +24,7 @@ inputs:
   jail-nix:
     url: github:higherorderfunctor/jail.nix/7cd53acef3ad51b9c775be759f5643f8d3bcf6eb
   mcp-nixos:
-    url: github:utensils/mcp-nixos/6a517811658c21f97bd7703b35546085117fc310
+    url: github:utensils/mcp-nixos/2e88096695bef9c41c5fa9157211d52a45d9a913
     inputs:
       nixpkgs:
         follows: nixpkgs
