@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        WITH raw_windows(lo, hi) AS (VALUES (?, ?), (?, ?)),\n        facts AS (\n          SELECT r.occurred_at_unix AS at_unix, c.provider_id,\n                 COALESCE(r.client_id, '') AS client_key, r.model_id,\n                 1 AS events, r.usage_complete AS complete_events,\n                 r.status_code >= 400 AS error_events,\n                 COALESCE(r.cache_read_tokens, 0) AS cache_read_tokens,\n                 r.cache_read_tokens IS NULL AS cache_read_unknown,\n                 COALESCE(r.cache_write_tokens, 0) AS cache_write_tokens,\n                 r.cache_write_tokens IS NULL AS cache_write_unknown,\n                 COALESCE(r.input_tokens, 0) AS input_tokens,\n                 r.input_tokens IS NULL AS input_unknown,\n                 COALESCE(r.output_tokens, 0) AS output_tokens,\n                 r.output_tokens IS NULL AS output_unknown\n          FROM raw_windows w\n          JOIN request_events r ON r.occurred_at_unix >= w.lo AND r.occurred_at_unix < w.hi\n          JOIN credentials c ON c.id = r.credential_id\n          WHERE (? = 0 OR r.client_id IS ?)\n            AND (? IS NULL OR r.model_id = ?) AND (? IS NULL OR c.provider_id = ?)\n          UNION ALL\n          SELECT day_unix, provider_id, client_key, model_id, events, complete_events, error_events,\n                 cache_read_tokens, cache_read_tokens_unknown, cache_write_tokens, cache_write_tokens_unknown,\n                 input_tokens, input_tokens_unknown, output_tokens, output_tokens_unknown\n          FROM request_chart_daily\n          WHERE ? AND day_unix >= ? AND day_unix < ?\n            AND (? = 0 OR NULLIF(client_key, '') IS ?)\n            AND (? IS NULL OR model_id = ?) AND (? IS NULL OR provider_id = ?)\n        )\n        SELECT (at_unix / ?) * ? AS \"bucket_start_unix!: i64\",\n               CASE WHEN ? THEN NULLIF(client_key, '') END AS \"client?: String\",\n               CASE WHEN ? THEN model_id END AS \"model?: String\",\n               CASE WHEN ? THEN provider_id END AS \"provider?: String\",\n               SUM(events) AS \"events!: i64\",\n               SUM(complete_events) AS \"complete_events!: i64\",\n               SUM(error_events) AS \"error_events!: i64\",\n               CASE WHEN SUM(cache_read_unknown) = 0 THEN SUM(cache_read_tokens) END AS \"cache_read_tokens?: i64\",\n               CASE WHEN SUM(cache_write_unknown) = 0 THEN SUM(cache_write_tokens) END AS \"cache_write_tokens?: i64\",\n               CASE WHEN SUM(input_unknown) = 0 THEN SUM(input_tokens) END AS \"input_tokens?: i64\",\n               CASE WHEN SUM(output_unknown) = 0 THEN SUM(output_tokens) END AS \"output_tokens?: i64\"\n        FROM facts\n        GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4 LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "bucket_start_unix!: i64",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "client?: String",
+        "ordinal": 1,
+        "type_info": "Null"
+      },
+      {
+        "name": "model?: String",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "provider?: String",
+        "ordinal": 3,
+        "type_info": "Null"
+      },
+      {
+        "name": "events!: i64",
+        "ordinal": 4,
+        "type_info": "Null"
+      },
+      {
+        "name": "complete_events!: i64",
+        "ordinal": 5,
+        "type_info": "Null"
+      },
+      {
+        "name": "error_events!: i64",
+        "ordinal": 6,
+        "type_info": "Null"
+      },
+      {
+        "name": "cache_read_tokens?: i64",
+        "ordinal": 7,
+        "type_info": "Null"
+      },
+      {
+        "name": "cache_write_tokens?: i64",
+        "ordinal": 8,
+        "type_info": "Null"
+      },
+      {
+        "name": "input_tokens?: i64",
+        "ordinal": 9,
+        "type_info": "Null"
+      },
+      {
+        "name": "output_tokens?: i64",
+        "ordinal": 10,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 25
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e27b74029c8d51594431a5a4d232775e96c1269b391b53d5138aa7c452f863cc"
+}

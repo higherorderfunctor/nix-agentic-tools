@@ -850,6 +850,45 @@ impl ControlReader {
         })
     }
 
+    /// Reads exact chart statistics, resolved precision and coverage in one bounded transaction.
+    ///
+    /// # Errors
+    /// Refuses invalid windows/dimensions, excess groups, unsafe counts and corrupt identities.
+    pub async fn request_chart(
+        &mut self,
+        query: RequestChartQuery,
+    ) -> Result<RequestChartPage, StorageError> {
+        if query.dimensions.len() > 2 || query.dimensions.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return Err(StorageError::Input {
+                field: "chart dimensions must be sorted, unique and at most two",
+            });
+        }
+        if let Some(model) = &query.model {
+            validate_model(model)?;
+        }
+        let (since, until) = match query.window {
+            RequestChartWindow::All { until_unix } => (None, until_unix),
+            RequestChartWindow::Range {
+                since_unix,
+                until_unix,
+            } => (Some(since_unix), until_unix),
+        };
+        validate_chart_time(until)?;
+        if let Some(since) = since {
+            validate_chart_time(since)?;
+            if since >= until || until - since > 30 * 86_400 {
+                return Err(StorageError::Input {
+                    field: "chart range must be positive and at most 30 days",
+                });
+            }
+        }
+        self.read(move |connection, path| {
+            Box::pin(read_request_chart_transaction(connection, path, query))
+        })
+        .await
+    }
+
     /// Reads filtered request aggregates and totals in one transaction.
     ///
     /// # Errors
@@ -988,6 +1027,51 @@ impl ControlReport<'_> {
                 .await?;
         stored_count(row.unwrap_or(0), self.database_path)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RequestChartDimension {
+    Client,
+    Model,
+    Provider,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RequestChartWindow {
+    All { until_unix: i64 },
+    Range { since_unix: i64, until_unix: i64 },
+}
+
+#[derive(Debug, Clone)]
+pub struct RequestChartQuery {
+    pub client: Option<Option<ClientId>>,
+    pub dimensions: Vec<RequestChartDimension>,
+    pub model: Option<String>,
+    pub provider: Option<ProviderId>,
+    pub window: RequestChartWindow,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct RequestChartRow {
+    pub bucket_start_unix: i64,
+    pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub complete_events: u64,
+    pub dimensions: BTreeMap<RequestChartDimension, Option<String>>,
+    pub error_events: u64,
+    pub events: u64,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+}
+
+#[derive(Debug)]
+pub struct RequestChartPage {
+    pub bucket_seconds: u64,
+    pub metadata: ControlMetadata,
+    pub oldest_at_unix: Option<i64>,
+    pub rows: Vec<RequestChartRow>,
+    pub since_unix: i64,
+    pub until_unix: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -1785,6 +1869,209 @@ async fn control_metadata(
             database_path,
         )?,
         request_loss_total: stored_count(request_loss_total.total, database_path)?,
+    })
+}
+
+const MAX_CHART_INTEGER: i64 = 9_007_199_254_740_991;
+
+fn validate_chart_time(value: i64) -> Result<(), StorageError> {
+    validate_time(value, "chart time must be positive")?;
+    if value > MAX_CHART_INTEGER {
+        return Err(StorageError::Input {
+            field: "chart time must be a safe integer",
+        });
+    }
+    Ok(())
+}
+
+fn chart_count(value: i64, path: &Path) -> Result<u64, StorageError> {
+    if value > MAX_CHART_INTEGER {
+        return Err(StorageError::UsageRangeIncomplete);
+    }
+    stored_count(value, path)
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "fixed chart SQL and validated projection share one bounded transaction"
+)]
+async fn read_request_chart_transaction(
+    connection: &mut SqliteConnection,
+    path: &Path,
+    query: RequestChartQuery,
+) -> Result<RequestChartPage, StorageError> {
+    let mut transaction = connection.begin().await?;
+    let oldest_at_unix = sqlx::query_scalar!(
+        r#"SELECT MIN(occurred_at_unix) AS "oldest?: i64" FROM request_events"#
+    )
+    .fetch_one(&mut *transaction)
+    .await?;
+    if let Some(oldest) = oldest_at_unix {
+        validate_chart_time(oldest)?;
+    }
+    let (since, until, bucket) = match query.window {
+        RequestChartWindow::All { until_unix } => {
+            let since = oldest_at_unix
+                .filter(|oldest| *oldest < until_unix)
+                .unwrap_or((until_unix - 86_400).max(0));
+            let days = (until_unix - 1) / 86_400 - since / 86_400 + 1;
+            (since, until_unix, ((days + 31) / 32).max(1) * 86_400)
+        }
+        RequestChartWindow::Range {
+            since_unix,
+            until_unix,
+        } => (
+            since_unix,
+            until_unix,
+            if until_unix - since_unix <= 2 * 86_400 {
+                3600
+            } else {
+                86_400
+            },
+        ),
+    };
+    let day_from = ((since + 86_399) / 86_400) * 86_400;
+    let day_until = (until / 86_400) * 86_400;
+    let interior = bucket >= 86_400 && day_from < day_until;
+    let first_until = if interior { day_from } else { until };
+    let last_since = if interior { day_until } else { until };
+    let client_filter = query.client.is_some();
+    let client_value = query
+        .client
+        .as_ref()
+        .and_then(|value| value.as_ref())
+        .map(AsRef::as_ref);
+    let model = query.model.as_deref();
+    let provider = query.provider.as_ref().map(AsRef::as_ref);
+    let select_client = query.dimensions.contains(&RequestChartDimension::Client);
+    let select_model = query.dimensions.contains(&RequestChartDimension::Model);
+    let select_provider = query.dimensions.contains(&RequestChartDimension::Provider);
+    let limit = i64::try_from(MAX_AGGREGATE_ROWS + 1).expect("constant row limit");
+    let rows = sqlx::query!(
+        r#"
+        WITH raw_windows(lo, hi) AS (VALUES (?, ?), (?, ?)),
+        facts AS (
+          SELECT r.occurred_at_unix AS at_unix, c.provider_id,
+                 COALESCE(r.client_id, '') AS client_key, r.model_id,
+                 1 AS events, r.usage_complete AS complete_events,
+                 r.status_code >= 400 AS error_events,
+                 COALESCE(r.cache_read_tokens, 0) AS cache_read_tokens,
+                 r.cache_read_tokens IS NULL AS cache_read_unknown,
+                 COALESCE(r.cache_write_tokens, 0) AS cache_write_tokens,
+                 r.cache_write_tokens IS NULL AS cache_write_unknown,
+                 COALESCE(r.input_tokens, 0) AS input_tokens,
+                 r.input_tokens IS NULL AS input_unknown,
+                 COALESCE(r.output_tokens, 0) AS output_tokens,
+                 r.output_tokens IS NULL AS output_unknown
+          FROM raw_windows w
+          JOIN request_events r ON r.occurred_at_unix >= w.lo AND r.occurred_at_unix < w.hi
+          JOIN credentials c ON c.id = r.credential_id
+          WHERE (? = 0 OR r.client_id IS ?)
+            AND (? IS NULL OR r.model_id = ?) AND (? IS NULL OR c.provider_id = ?)
+          UNION ALL
+          SELECT day_unix, provider_id, client_key, model_id, events, complete_events, error_events,
+                 cache_read_tokens, cache_read_tokens_unknown, cache_write_tokens, cache_write_tokens_unknown,
+                 input_tokens, input_tokens_unknown, output_tokens, output_tokens_unknown
+          FROM request_chart_daily
+          WHERE ? AND day_unix >= ? AND day_unix < ?
+            AND (? = 0 OR NULLIF(client_key, '') IS ?)
+            AND (? IS NULL OR model_id = ?) AND (? IS NULL OR provider_id = ?)
+        )
+        SELECT (at_unix / ?) * ? AS "bucket_start_unix!: i64",
+               CASE WHEN ? THEN NULLIF(client_key, '') END AS "client?: String",
+               CASE WHEN ? THEN model_id END AS "model?: String",
+               CASE WHEN ? THEN provider_id END AS "provider?: String",
+               SUM(events) AS "events!: i64",
+               SUM(complete_events) AS "complete_events!: i64",
+               SUM(error_events) AS "error_events!: i64",
+               CASE WHEN SUM(cache_read_unknown) = 0 THEN SUM(cache_read_tokens) END AS "cache_read_tokens?: i64",
+               CASE WHEN SUM(cache_write_unknown) = 0 THEN SUM(cache_write_tokens) END AS "cache_write_tokens?: i64",
+               CASE WHEN SUM(input_unknown) = 0 THEN SUM(input_tokens) END AS "input_tokens?: i64",
+               CASE WHEN SUM(output_unknown) = 0 THEN SUM(output_tokens) END AS "output_tokens?: i64"
+        FROM facts
+        GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4 LIMIT ?
+        "#,
+        since, first_until, last_since, until,
+        client_filter, client_value, model, model, provider, provider,
+        interior, day_from, day_until,
+        client_filter, client_value, model, model, provider, provider,
+        bucket, bucket, select_client, select_model, select_provider, limit,
+    ).fetch_all(&mut *transaction).await?;
+    if rows.len() > MAX_AGGREGATE_ROWS {
+        return Err(StorageError::UsageRangeIncomplete);
+    }
+    let mut result = Vec::with_capacity(rows.len());
+    for row in rows {
+        let mut dimensions = BTreeMap::new();
+        if select_client {
+            let client = row
+                .client
+                .map(ClientId::try_from)
+                .transpose()
+                .map_err(|error| StorageError::StoredId {
+                    kind: "client",
+                    value: error.into_name(),
+                })?;
+            dimensions.insert(
+                RequestChartDimension::Client,
+                client.map(|id| id.to_string()),
+            );
+        }
+        if let Some(model) = row.model {
+            validate_model(&model).map_err(|_| StorageError::StoredId {
+                kind: "model",
+                value: model.clone(),
+            })?;
+            dimensions.insert(RequestChartDimension::Model, Some(model));
+        }
+        if let Some(provider) = row.provider {
+            let id = ProviderId::try_from(provider).map_err(|error| StorageError::StoredId {
+                kind: "provider",
+                value: error.into_name(),
+            })?;
+            dimensions.insert(RequestChartDimension::Provider, Some(id.to_string()));
+        }
+        result.push(RequestChartRow {
+            bucket_start_unix: row.bucket_start_unix,
+            cache_read_tokens: row
+                .cache_read_tokens
+                .map(|value| chart_count(value, path))
+                .transpose()?,
+            cache_write_tokens: row
+                .cache_write_tokens
+                .map(|value| chart_count(value, path))
+                .transpose()?,
+            complete_events: chart_count(row.complete_events, path)?,
+            dimensions,
+            error_events: chart_count(row.error_events, path)?,
+            events: chart_count(row.events, path)?,
+            input_tokens: row
+                .input_tokens
+                .map(|value| chart_count(value, path))
+                .transpose()?,
+            output_tokens: row
+                .output_tokens
+                .map(|value| chart_count(value, path))
+                .transpose()?,
+        });
+    }
+    let metadata = control_metadata(&mut transaction, path).await?;
+    chart_count(
+        i64::try_from(metadata.request_loss_total).expect("stored signed count"),
+        path,
+    )?;
+    chart_count(
+        i64::try_from(metadata.provider_snapshot_loss_total).expect("stored signed count"),
+        path,
+    )?;
+    transaction.rollback().await?;
+    Ok(RequestChartPage {
+        bucket_seconds: bucket.unsigned_abs(),
+        metadata,
+        oldest_at_unix,
+        rows: result,
+        since_unix: since,
+        until_unix: until,
     })
 }
 
@@ -3895,6 +4182,365 @@ mod tests {
         assert_eq!(snapshots[0].pools.len(), 1);
         assert_eq!(snapshots[0].credits.len(), 1);
         assert_eq!(snapshots[0].metrics.len(), 1);
+        close(storage).await;
+    }
+
+    async fn assert_chart_raw(
+        connection: &mut SqliteConnection,
+        query: &RequestChartQuery,
+        page: RequestChartPage,
+    ) {
+        use RequestChartDimension::{Client, Model, Provider};
+        type Facts = (
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            i64,
+            i64,
+            i64,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+        );
+        let dimensions = &query.dimensions;
+        let since = page.since_unix;
+        let until = page.until_unix;
+        let bucket = i64::try_from(page.bucket_seconds).expect("bucket");
+        let select_client = dimensions.contains(&Client);
+        let select_model = dimensions.contains(&Model);
+        let select_provider = dimensions.contains(&Provider);
+        let client_filter = query.client.is_some();
+        let client_value = query
+            .client
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(AsRef::as_ref);
+        let model = query.model.as_deref();
+        let provider = query.provider.as_ref().map(AsRef::as_ref);
+        let raw: Vec<Facts> = sqlx::query_as(
+            "SELECT (r.occurred_at_unix / ?) * ?, CASE WHEN ? THEN r.client_id END, CASE WHEN ? THEN r.model_id END, CASE WHEN ? THEN c.provider_id END,
+             COUNT(*), SUM(r.usage_complete), SUM(r.status_code>=400),
+             CASE WHEN COUNT(r.cache_read_tokens)=COUNT(*) THEN SUM(r.cache_read_tokens) END,
+             CASE WHEN COUNT(r.cache_write_tokens)=COUNT(*) THEN SUM(r.cache_write_tokens) END,
+             CASE WHEN COUNT(r.input_tokens)=COUNT(*) THEN SUM(r.input_tokens) END,
+             CASE WHEN COUNT(r.output_tokens)=COUNT(*) THEN SUM(r.output_tokens) END
+             FROM request_events r JOIN credentials c ON c.id=r.credential_id
+             WHERE r.occurred_at_unix>=? AND r.occurred_at_unix<? AND (?=0 OR r.client_id IS ?)
+               AND (? IS NULL OR r.model_id=?) AND (? IS NULL OR c.provider_id=?) GROUP BY 1,2,3,4 ORDER BY 1,2,3,4",
+        ).bind(bucket).bind(bucket).bind(select_client).bind(select_model).bind(select_provider)
+            .bind(since).bind(until).bind(client_filter).bind(client_value).bind(model).bind(model).bind(provider).bind(provider)
+            .fetch_all(connection).await.expect("independent raw reference");
+        let actual: Vec<Facts> = page
+            .rows
+            .iter()
+            .map(|row| {
+                assert_eq!(
+                    row.dimensions.keys().copied().collect::<Vec<_>>(),
+                    *dimensions
+                );
+                (
+                    row.bucket_start_unix,
+                    row.dimensions.get(&Client).cloned().flatten(),
+                    row.dimensions.get(&Model).cloned().flatten(),
+                    row.dimensions.get(&Provider).cloned().flatten(),
+                    i64::try_from(row.events).unwrap(),
+                    i64::try_from(row.complete_events).unwrap(),
+                    i64::try_from(row.error_events).unwrap(),
+                    row.cache_read_tokens.map(|v| i64::try_from(v).unwrap()),
+                    row.cache_write_tokens.map(|v| i64::try_from(v).unwrap()),
+                    row.input_tokens.map(|v| i64::try_from(v).unwrap()),
+                    row.output_tokens.map(|v| i64::try_from(v).unwrap()),
+                )
+            })
+            .collect();
+        assert_eq!(actual, raw, "query={query:?}");
+    }
+
+    #[tokio::test]
+    async fn chart_matches_raw_for_every_dimension_filter_and_clipped_window() {
+        use RequestChartDimension::{Client, Model, Provider};
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut connection = test_connection(&storage.database_path).await;
+        sqlx::query(
+            "WITH RECURSIVE n(value) AS (SELECT 1 UNION ALL SELECT value+1 FROM n WHERE value<600)
+             INSERT INTO request_events (occurred_at_unix, client_id, group_id, credential_id, model_id, outcome, status_code, request_bytes, response_bytes, latency_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, usage_complete, dropped_events)
+             SELECT 86401+value*7200, CASE value%3 WHEN 0 THEN NULL WHEN 1 THEN 'harness' ELSE 'claude' END,
+               CASE WHEN value%4=0 THEN 'openai' ELSE 'anthropic' END, CASE WHEN value%4=0 THEN 'zai' ELSE 'claude' END,
+               CASE WHEN value%2=0 THEN 'model-a' ELSE 'model-b' END, 'completed', CASE WHEN value%5=0 THEN 500 ELSE 200 END,
+               0,0,0,CASE WHEN value%5=0 THEN NULL ELSE 11 END,CASE WHEN value%7=0 THEN NULL ELSE 13 END,
+               CASE WHEN value%11=0 THEN NULL ELSE 0 END,CASE WHEN value%13=0 THEN NULL ELSE 17 END,value%2,
+               CASE WHEN value=1 THEN 7 ELSE 0 END FROM n",
+        ).execute(&mut connection).await.expect("raw fixture");
+        let migration = include_str!("../migrations/0003_request_chart_daily.sql");
+        let backfill = &migration[migration
+            .find("INSERT INTO request_chart_daily")
+            .expect("backfill")..];
+        sqlx::raw_sql(backfill)
+            .execute(&mut connection)
+            .await
+            .expect("daily fixture");
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        for dimensions in [
+            vec![],
+            vec![Client],
+            vec![Model],
+            vec![Provider],
+            vec![Client, Model],
+            vec![Client, Provider],
+            vec![Model, Provider],
+        ] {
+            for client in [None, Some(None), Some(Some(client("harness")))] {
+                for filtered in [false, true] {
+                    for (since, until) in [
+                        (86_401, 122_401),
+                        (86_411, 345_619),
+                        (86_400, 691_200),
+                        (93_601, 4_500_000),
+                    ] {
+                        let query = RequestChartQuery {
+                            dimensions: dimensions.clone(),
+                            client: client.clone(),
+                            model: filtered.then(|| "model-a".to_owned()),
+                            provider: filtered.then(|| provider("claude")),
+                            window: if until == 4_500_000 {
+                                RequestChartWindow::All { until_unix: until }
+                            } else {
+                                RequestChartWindow::Range {
+                                    since_unix: since,
+                                    until_unix: until,
+                                }
+                            },
+                        };
+                        let page = reader.request_chart(query.clone()).await.expect("chart");
+                        assert_eq!((page.since_unix, page.until_unix), (since, until));
+                        assert_eq!(page.metadata.request_loss_total, 7);
+                        let bucket = i64::try_from(page.bucket_seconds).expect("bucket");
+                        assert_eq!(
+                            bucket,
+                            if until == 4_500_000 {
+                                2 * 86400
+                            } else if until - since <= 2 * 86400 {
+                                3600
+                            } else {
+                                86400
+                            }
+                        );
+                        assert_chart_raw(&mut connection, &query, page).await;
+                    }
+                }
+            }
+        }
+        let all = reader
+            .request_chart(RequestChartQuery {
+                client: Some(None),
+                dimensions: vec![Client],
+                model: Some("absent".to_owned()),
+                provider: None,
+                window: RequestChartWindow::All {
+                    until_unix: 4_500_000,
+                },
+            })
+            .await
+            .expect("filtered all");
+        assert_eq!(
+            (all.since_unix, all.oldest_at_unix, all.bucket_seconds),
+            (93_601, Some(93_601), 2 * 86400)
+        );
+        assert_eq!(all.rows, Vec::<RequestChartRow>::new());
+        reader.close().await.expect("close reader");
+        connection.close().await.expect("close fixture");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn chart_refuses_excess_groups_and_corrupt_selected_identities() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut connection = test_connection(&storage.database_path).await;
+        sqlx::query(
+            "WITH RECURSIVE n(value) AS (SELECT 1 UNION ALL SELECT value+1 FROM n WHERE value<10001)
+             INSERT INTO request_events (occurred_at_unix, group_id, credential_id, model_id, outcome, status_code, request_bytes, response_bytes, latency_ms, usage_complete, dropped_events)
+             SELECT 100, 'anthropic', 'claude', 'model-'||value, 'completed', 200, 0,0,0,0,0 FROM n",
+        ).execute(&mut connection).await.expect("high cardinality fixture");
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        let mut query = RequestChartQuery {
+            client: None,
+            dimensions: vec![RequestChartDimension::Model],
+            model: None,
+            provider: None,
+            window: RequestChartWindow::Range {
+                since_unix: 1,
+                until_unix: 1000,
+            },
+        };
+        assert!(matches!(
+            reader.request_chart(query.clone()).await,
+            Err(StorageError::UsageRangeIncomplete)
+        ));
+        sqlx::query("DELETE FROM request_events")
+            .execute(&mut connection)
+            .await
+            .expect("clear fixture");
+        storage
+            .try_append_request_event(request(RequestOutcome::Completed, 86_401))
+            .await
+            .expect("one daily event");
+        sqlx::query("UPDATE request_chart_daily SET client_key='invalid client'")
+            .execute(&mut connection)
+            .await
+            .expect("corrupt identity fixture");
+        query.dimensions = vec![RequestChartDimension::Client];
+        query.window = RequestChartWindow::Range {
+            since_unix: 1,
+            until_unix: 3 * 86_400,
+        };
+        assert!(matches!(
+            reader.request_chart(query).await,
+            Err(StorageError::StoredId { kind: "client", .. })
+        ));
+        reader.close().await.expect("close reader");
+        connection.close().await.expect("close fixture");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn chart_rejects_invalid_windows_filters_and_dimensions() {
+        use RequestChartDimension::{Client, Model, Provider};
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        let query = RequestChartQuery {
+            client: None,
+            dimensions: vec![],
+            model: None,
+            provider: None,
+            window: RequestChartWindow::All { until_unix: 10 },
+        };
+        for dimensions in [
+            vec![Client, Client],
+            vec![Provider, Client],
+            vec![Client, Model, Provider],
+        ] {
+            assert!(matches!(
+                reader
+                    .request_chart(RequestChartQuery {
+                        dimensions,
+                        ..query.clone()
+                    })
+                    .await,
+                Err(StorageError::Input { .. })
+            ));
+        }
+        for window in [
+            RequestChartWindow::Range {
+                since_unix: 0,
+                until_unix: 10,
+            },
+            RequestChartWindow::Range {
+                since_unix: 10,
+                until_unix: 10,
+            },
+            RequestChartWindow::Range {
+                since_unix: 1,
+                until_unix: 31 * 86400,
+            },
+            RequestChartWindow::All {
+                until_unix: MAX_CHART_INTEGER + 1,
+            },
+        ] {
+            assert!(matches!(
+                reader
+                    .request_chart(RequestChartQuery {
+                        window,
+                        ..query.clone()
+                    })
+                    .await,
+                Err(StorageError::Input { .. })
+            ));
+        }
+        assert!(matches!(
+            reader
+                .request_chart(RequestChartQuery {
+                    model: Some(String::new()),
+                    ..query.clone()
+                })
+                .await,
+            Err(StorageError::Input { .. })
+        ));
+        reader.close().await.expect("close reader");
+        close(storage).await;
+    }
+
+    #[tokio::test]
+    async fn chart_empty_axes_and_exact_safe_counts() {
+        let directory = tempfile::tempdir().expect("state directory");
+        let storage = open(directory.path()).await;
+        let mut reader = ReadOnlyStorage::open(directory.path())
+            .await
+            .expect("reader")
+            .into_control_reader();
+        let query = RequestChartQuery {
+            client: None,
+            dimensions: vec![],
+            model: None,
+            provider: None,
+            window: RequestChartWindow::All { until_unix: 10 },
+        };
+        let empty = reader
+            .request_chart(query.clone())
+            .await
+            .expect("empty all near epoch");
+        assert_eq!(
+            (empty.since_unix, empty.until_unix, empty.oldest_at_unix),
+            (0, 10, None)
+        );
+        assert_eq!(empty.rows, Vec::<RequestChartRow>::new());
+        let mut event = request(RequestOutcome::Completed, 10);
+        event.input_tokens = Some(MAX_CHART_INTEGER.unsigned_abs());
+        storage
+            .try_append_request_event(event.clone())
+            .await
+            .expect("exact safe count");
+        let at_end = reader
+            .request_chart(query.clone())
+            .await
+            .expect("event at excluded end");
+        assert_eq!((at_end.since_unix, at_end.oldest_at_unix), (0, Some(10)));
+        assert_eq!(at_end.rows, Vec::<RequestChartRow>::new());
+        let query = RequestChartQuery {
+            window: RequestChartWindow::All { until_unix: 11 },
+            ..query
+        };
+        let exact = reader
+            .request_chart(query.clone())
+            .await
+            .expect("exact count");
+        assert_eq!(
+            exact.rows[0].input_tokens,
+            Some(MAX_CHART_INTEGER.unsigned_abs())
+        );
+        event.input_tokens = Some(1);
+        storage
+            .try_append_request_event(event)
+            .await
+            .expect("unsafe aggregate fixture");
+        assert!(matches!(
+            reader.request_chart(query).await,
+            Err(StorageError::UsageRangeIncomplete)
+        ));
+        reader.close().await.expect("close reader");
         close(storage).await;
     }
 
