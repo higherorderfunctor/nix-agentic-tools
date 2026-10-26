@@ -16,12 +16,12 @@
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
-  rev = "3fbef5bac00fca75d54d7a07b5d280e102f5b63b";
+  rev = "190bb1e67fc3ff041aa04821bc0e3fdf7ac19c90";
   unpatchedSrc = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-IN06l/qF8MwcZqO3fWA4bS45XIuKe++rH+DWnRPGkjM=";
+    hash = "sha256-XUjRE0UTvfG5YaiEMvWCxWvhB18oxlBd2nQzPZq7CJs=";
   };
   # Keep pnpm responsible for patching every peer variant. A name-only key
   # follows upstream versions; context application and the behavioral probe
@@ -63,14 +63,14 @@ in
     inherit version src;
     cargoDeps = rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-RaqHEZY5tfTeC6iDxAu4geD8QNbjKcVY2aNwmYq33Yc=";
+      hash = "sha256-gyT/qzPfW1bPgh9mmugyv2CMTU84EZNb4YOIMYnK4ME=";
     };
     pnpmDeps = pkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       pnpm = pkgs.ai.generic.pnpm_11;
       fetcherVersion = 4;
       postInstall = verifyNapiPatch;
-      hash = "sha256-ieOHNN9vSoxF3UuAw8Y/xEmIzitIA9k+mdKIOdlklns=";
+      hash = "sha256-6Njw2NKa36Jb70Ey7XfM/Pm6CQd1z2VH9w5kCfmDabI=";
     };
     # Validate cached dependency materialization too, before compiling Rust.
     preBuild = verifyNapiPatch + (prev.preBuild or "");
