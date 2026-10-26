@@ -198,7 +198,8 @@ in {
         && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
         && devenvConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
-        && devenvConfig.ai.internal.agentsMdTargets.copilot == "AGENTS.md"
+        && devenvConfig.ai.copilot._generatedFiles ? ".github/copilot-instructions.md"
+        && !(devenvConfig.ai.internal.agentsMdTargets ? copilot)
         && devenvConfig.ai.copilot._generatedFiles ? ".github/instructions/scoped.instructions.md"
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"

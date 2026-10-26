@@ -2,7 +2,7 @@
 # that read a repository's committed tree.
 #
 # One record carries two option namespaces. `ai.copilot.github` holds the
-# pools github.com reads: context (the shared AGENTS.md), rules
+# pools github.com reads: context (`copilot-instructions.md`), rules
 # (`.github/instructions/`) and skills (`.github/skills/`). Agents declare a gap.
 # `ai.copilot.cli` is reserved for the Copilot CLI's
 # launcher, which this module does not ship: the record has no package, so
@@ -22,10 +22,12 @@
   ...
 }: let
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   docs = path: "https://docs.github.com/en/copilot/${path}";
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   homeManagerReason = surface: "github.com Copilot reads ${surface} from a repository's committed tree, and Home Manager has no repository to write. Configure it through the devenv module. See ${docs "reference/custom-instructions-support"}.";
   # Where each unit lands, shared by the staged entries and `contentTargets`.
+  contextPath = cfg: "${cfg.github.projectDir}/${cfg.github.context.filename}";
   instructionPath = cfg: name: "${cfg.github.projectDir}/instructions/${name}.instructions.md";
 in
   lib.ai.app.mkRuntime {
@@ -36,14 +38,14 @@ in
       launcher = ["cli"];
       pools = ["github"];
     };
-    contextFilename = "AGENTS.md";
+    contextFilename = "copilot-instructions.md";
     contextDescription = ''
-      Copilot-specific context appended after `ai.context`. Devenv contributes
-      it to the repository `AGENTS.md`, which github.com's cloud agent and code
-      review read from the root; Codex and Kiro write the same file, and their
-      shared contributions must agree byte for byte. Home Manager declares the
-      option and warns when it is non-empty. When `text` and `source` are
-      defined at different module priorities, the higher-priority definition
+      Copilot-specific context appended after `ai.context`. Devenv writes
+      `<projectDir>/<context.filename>` (by default
+      `.github/copilot-instructions.md`), independently of the shared
+      `AGENTS.md`. Named rules remain separate instruction files. Home Manager
+      declares the option and warns when it is non-empty. When `text` and
+      `source` are defined at different module priorities, the higher-priority definition
       supplies the content whichever field it targets; definitions at the same
       priority conflict. Same-priority `text` definitions concatenate in module
       order. Set `enable = false` to omit this context.
@@ -63,7 +65,7 @@ in
       };
       context = {
         backends = ["devenv"];
-        reason = homeManagerReason "AGENTS.md";
+        reason = homeManagerReason "copilot-instructions.md";
       };
       environmentVariables = {
         backends = [];
@@ -106,6 +108,8 @@ in
     config = {
       backend,
       cfg,
+      hasMergedContext,
+      mergedContext,
       mergedRules,
       mergedSkills,
       ...
@@ -129,6 +133,14 @@ in
           # github.com reads the COMMITTED tree, where a store symlink
           # dangles, so instructions and skill files are read-only copies.
           ai.copilot._generatedFiles = lib.mkMerge [
+            (lib.mkIf hasMergedContext {
+              ${contextPath cfg} = {
+                content = aiTypes.textSourceFile mergedContext;
+                format = "markdown";
+                method = "ro";
+                surface = "context";
+              };
+            })
             (lib.mapAttrs (_path: text: {
                 content = {inherit text;};
                 format = "markdown";
@@ -148,8 +160,6 @@ in
           ];
         })
       ];
-    # The context joins the repository AGENTS.md through its one owner.
-    sharedAgentsMd = {cfg, ...}: {key = cfg.github.context.filename;};
     # Home Manager writes nothing, so nothing there can be switched off.
     contentTargets = {
       backend,
@@ -158,7 +168,7 @@ in
       ...
     }:
       lib.optionalAttrs (backend == "devenv") {
-        context = cfg.github.context.filename;
+        context = contextPath cfg;
         rules = lib.mapAttrs (name: _rule: instructionPath cfg name) mergedRules;
       };
     # The old writer's directory ledgers, declared while Copilot is disabled

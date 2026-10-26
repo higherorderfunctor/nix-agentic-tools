@@ -281,7 +281,7 @@ ai.kiro.context.filename = "AGENTS.md";
 | ----------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | **Claude**  | `~/.claude/CLAUDE.md`                                         | `~/.claude/rules/<name>.md` with `paths:` frontmatter when matched               |
 | **Kiro**    | HM `~/.kiro/steering/AGENTS.md`; devenv repo-root `AGENTS.md` | `~/.kiro/steering/<name>.md` with `inclusion:` + `fileMatchPattern:` frontmatter |
-| **Copilot** | devenv repo-root `AGENTS.md`; Home Manager warns              | devenv `.github/instructions/<name>.instructions.md`; Home Manager warns         |
+| **Copilot** | devenv `.github/copilot-instructions.md`; Home Manager warns  | devenv `.github/instructions/<name>.instructions.md`; Home Manager warns         |
 | **Codex**   | HM `~/.codex/AGENTS.md`; devenv repo-root `AGENTS.md`         | **concat** into the same AGENTS.md after context                                 |
 
 ### Concat format (Codex and shared repo-root AGENTS.md)

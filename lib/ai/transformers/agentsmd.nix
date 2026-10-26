@@ -124,6 +124,23 @@ in rec {
       && builtins.length (lib.unique (map builtins.dirOf entry.references)) == 1)
     index;
     candidates = lib.groupBy (name: builtins.dirOf (builtins.head eligible.${name}.references)) (lib.attrNames eligible);
+    # Prefer the document group (packages/kimchi/docs -> kimchi). Preserve the
+    # full directory hierarchy when two parents have the same readable name.
+    # Reversible underscore tokens keep links URL-safe. Escaping dots also
+    # prevents a directory component from colliding with an
+    # index.md file, and keeps literal . and .. components inside this tree.
+    pathComponent = lib.replaceStrings ["_" "%" "."] ["__" "_percent_" "_dot_"];
+    pathHierarchy = path: lib.concatMapStringsSep "/" pathComponent (lib.splitString "/" path);
+    preferredName = parent:
+      pathComponent (builtins.baseNameOf (
+        if builtins.baseNameOf parent == "docs" && builtins.dirOf parent != "."
+        then builtins.dirOf parent
+        else parent
+      ));
+    preferredGroups = lib.groupBy preferredName (lib.attrNames candidates);
+    childDirectory =
+      ".agents/rules/"
+      + lib.optionalString (builtins.baseNameOf filename != "AGENTS.md") "targets/${pathComponent (builtins.baseNameOf filename)}/";
     # Only a literal directory followed by /** proves coverage by prefix.
     # Wildcard-bearing directory prefixes are not a glob-subsumption proof.
     rootMatchers = names: let
@@ -140,10 +157,14 @@ in rec {
       lib.foldl' (state: parent: let
         names = candidates.${parent};
         entries = lib.getAttrs names index;
-        # Full digest: no truncated-ID collision assumption or path escaping.
-        groupId = builtins.hashString "sha256" parent;
-        childName = "${builtins.baseNameOf filename}.rules/${groupId}.md";
-        childPath = "${filename}.rules/${groupId}.md";
+        groupName = preferredName parent;
+        groupPath =
+          if builtins.length preferredGroups.${groupName} == 1
+          then "${groupName}.md"
+          else "by-path/${pathHierarchy parent}/index.md";
+        childName = childDirectory + groupPath;
+        childPath = lib.optionalString (builtins.dirOf filename != ".") "${builtins.dirOf filename}/" + childName;
+        childRootPrefix = lib.concatStrings (lib.replicate (builtins.length (lib.splitString "/" childPath) - 1) "../");
         group = {
           name = parent;
           audiences = lib.sort builtins.lessThan (lib.unique (lib.concatMap (name: audiences.${name} or []) names));
@@ -164,7 +185,7 @@ in rec {
                 "Match globs use the same workspace-relative paths as the parent index. Document links below are relative to this file.\n\n"
                 + renderKeyed {
                   audiences = builtins.intersectAttrs entries audiences;
-                  index = lib.mapAttrs (_: entry: entry // {references = map (ref: "../${rootPrefix}${ref}") entry.references;}) entries;
+                  index = lib.mapAttrs (_: entry: entry // {references = map (ref: "${childRootPrefix}${ref}") entry.references;}) entries;
                 };
             };
         };

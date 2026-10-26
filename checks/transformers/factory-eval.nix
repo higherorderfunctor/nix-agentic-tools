@@ -183,7 +183,7 @@ in {
           inherit audiences index;
           hasOnDemandIndex = true;
         };
-        childPath = "nested/CUSTOM.md.rules/${builtins.hashString "sha256" "docs/guidance"}.md";
+        childPath = "nested/.agents/rules/targets/CUSTOM_dot_md/guidance.md";
         root = transformer.renderKeyed {
           inherit audiences;
           inherit (tier) index indexGroups;
@@ -227,7 +227,6 @@ in {
         && lib.hasInfix "`src/beta/**`" tier.children.${childPath}
         && builtins.stringLength root < builtins.stringLength original
         && lib.all (refs: (ungrouped refs).children == {}) [
-          ["a.md"]
           ["https://example.org/docs/one.md"]
           ["docs/a.md#anchor"]
           ["docs/a.md?query"]
@@ -235,12 +234,83 @@ in {
           ["docs/a.md" "other/b.md"]
         ]
         && (transformer.tierIndex {
+          filename = "${lib.concatStrings (lib.replicate 100 "long-custom-target-")}.md";
+          audiences = {};
+          hasOnDemandIndex = false;
+          index = lib.genAttrs ["a" "b"] (_: scoped // {references = ["a.md"];});
+        }).children
+        == {}
+        && (transformer.tierIndex {
           filename = "AGENTS.md";
           audiences = {};
           hasOnDemandIndex = false;
           index.alpha = scoped;
         }).children
         == {}
+    );
+
+    factory-transformer-agentsmd-tier-readable-paths = mkTest "transformer-agentsmd-tier-readable-paths" (
+      let
+        transformer = ai.transformers.agentsmd;
+        parents = [
+          "dev/fragments/ai-module"
+          "docs/guidance"
+          "docs/guidance/index.md"
+          "other/guidance"
+          "other/index.md"
+          "packages/kimchi/docs"
+          "packages/kiro-cli/docs"
+        ];
+        index = lib.listToAttrs (lib.concatMap (parent:
+          map (name: {
+            name = "${parent}-${name}";
+            value = {
+              description = "";
+              inclusion = "fileMatch";
+              matcher = ["src/${name}/**"];
+              references = map (n: "${parent}/long-document-name-${n}.md") ["one" "two" "three" "four" "five" "six"];
+            };
+          }) ["alpha" "beta"])
+        parents);
+        makeTier = filename:
+          transformer.tierIndex {
+            inherit filename index;
+            audiences = {};
+            hasOnDemandIndex = false;
+          };
+        expected = [
+          "ai-module.md"
+          "by-path/docs/guidance/index.md"
+          "by-path/docs/guidance/index_dot_md/index.md"
+          "by-path/other/guidance/index.md"
+          "by-path/other/index_dot_md/index.md"
+          "kimchi.md"
+          "kiro-cli.md"
+        ];
+        targets = ["AGENTS.md" "CUSTOM.md" "nested/AGENTS.md" "nested/CUSTOM.md"];
+        tiers = lib.genAttrs targets makeTier;
+        # Each child resolves its links to the original workspace documents,
+        # regardless of target namespace or collision-disambiguation depth.
+        sourceLinksResolve = filename: tier:
+          lib.all (group: let
+            child = builtins.head group.entry.references;
+            childPath = lib.optionalString (builtins.dirOf filename != ".") "${builtins.dirOf filename}/" + child;
+            original = lib.unique (lib.concatMap (entry: entry.references) (lib.attrValues (lib.filterAttrs (name: _: lib.hasPrefix "${group.name}-" name) index)));
+            actual = lib.unique (map
+              (capture: toString (/. + "/workspace/${builtins.dirOf childPath}/${builtins.head capture}"))
+              (builtins.filter builtins.isList (builtins.split "[]][(]([^()]*)[)]" tier.children.${childPath})));
+          in
+            lib.sort builtins.lessThan actual == lib.sort builtins.lessThan (map (ref: "/workspace/${ref}") original))
+          tier.indexGroups;
+        allPaths = lib.concatMap (target: lib.attrNames tiers.${target}.children) targets;
+      in
+        lib.attrNames tiers."AGENTS.md".children
+        == map (name: ".agents/rules/${name}") expected
+        && lib.attrNames tiers."CUSTOM.md".children == map (name: ".agents/rules/targets/CUSTOM_dot_md/${name}") expected
+        && lib.attrNames tiers."nested/AGENTS.md".children == map (name: "nested/.agents/rules/${name}") expected
+        && lib.attrNames tiers."nested/CUSTOM.md".children == map (name: "nested/.agents/rules/targets/CUSTOM_dot_md/${name}") expected
+        && builtins.length allPaths == builtins.length (lib.unique allPaths)
+        && lib.all (target: sourceLinksResolve target tiers.${target}) targets
     );
 
     factory-transformer-agentsmd-index-audience-deduplication = mkTest "transformer-agentsmd-index-audience-deduplication" (

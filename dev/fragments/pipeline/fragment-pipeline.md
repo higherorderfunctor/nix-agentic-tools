@@ -1,16 +1,11 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-10-01 — `render` returns text (no frontmatter marker
-> metadata); normalized rules default their priority-ordered trigger list from
-> matcher presence before each runtime resolves support. Fragment locations are
-> limited to the dev and package trees; category declaration is SPLIT: shared
-> categories in `config/fragment-categories.nix`, owner-specific ones in the
-> owning package's `registry.nix`, merged by `lib/facets/registry.nix`. The
-> orchestration layer produces content; `ai.*` renders and writes it, with
-> AGENTS.md's index and rules ahead of the context. Kiro's multi-path
-> `fileMatchPattern` is a block sequence, emitted by the shared
-> `lib/frontmatter.nix` renderer. Callers pass raw Nix values; the renderer
-> JSON-quotes every supported scalar into valid YAML.
+> **Last verified:** 2026-10-26 — the generator emits named always-on shared
+> rules and scoped category rules, with no monolithic orientation context.
+> Copilot writes GitHub files independently; local flat-document indexes use
+> readable `.agents/rules/` children. Source registration remains split between
+> workspace and owner registries. `lib/frontmatter.nix` emits valid YAML from
+> raw Nix values, including Kiro's block sequence for multiple path patterns.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -46,23 +41,23 @@ fan out to many different consumers without duplication:
    both read from the same passthru surface.
 
 4. **Orchestration (`dev/generate.nix`)** — composes dev-only fragments with
-   published fragments into CONTENT: the orientation (`context`), one rule per
-   scoped category (`rules`), README and CONTRIBUTING. It renders no instruction
-   file. `dev/ai.nix` hands `context` and `rules` to `ai.*`, whose runtimes
-   apply the transforms and write the files.
+   published fragments into CONTENT: named always-on shared rules, one rule per
+   scoped category, README and CONTRIBUTING. It renders no instruction file.
+   `dev/ai.nix` hands `rules` to `ai.*`, whose runtimes apply the transforms and
+   write the files.
 
 ### Data flow for a scoped rule
 
 Concrete example: the `claude-code` category reaching every runtime:
 
-1. `mkDevComposed "claude-code"` in `dev/generate.nix` reads the fragment
-   sources from `config.fragments.categories.claude-code.sources` and calls
-   `mkDevFragment` on each. The location discriminator (`"dev" | "package"`)
-   controls where on disk the markdown is read from.
+1. `scopedRules` in `dev/generate.nix` reads the fragment sources from
+   `config.fragments.categories.claude-code.sources` and calls `mkDevFragment`
+   on each. The location discriminator (`"dev" | "package"`) controls where on
+   disk the markdown is read from.
 2. `compose { fragments = devFrags; }` sorts by priority, dedupes by SHA256, and
-   concatenates. Scoped categories do NOT include commonFragments — only the
-   root `monorepo` profile does, to avoid duplicating shared content across the
-   always-loaded context and every scoped rule.
+   concatenates. Scoped categories do NOT include commonFragments. Each shared
+   fragment has its own always-on rule, so a scoped rule never duplicates shared
+   content.
 3. `rules.claude-code` becomes
    `{ text; matcher = <the category's scopes>; references = <its source documents>; }`,
    and `dev/ai.nix` sets it as `ai.rules.claude-code`.
@@ -112,17 +107,17 @@ them.
   AGENTS.md is a flat file, so it cannot enforce native trigger metadata. Its
   `renderKeyed` writes a compact path-scoped index for `fileMatch` rules with
   references and a generic rule index when `auto` or `manual` entries are
-  present, then the inlined rules and context. Codex's default 32 KiB read keeps
-  the index and every rule and cuts only the context's tail; Codex applies that
-  index manually.
+  present, then the inlined rules and context. Codex applies that index
+  manually. Readable child indexes under `.agents/rules/` preserve scoped
+  coverage when grouping shortens the root.
 
 ### Orchestration details worth knowing
 
 - **Scoped files skip commonFragments.** Before commit 1075bc4, every scoped
   rule file prepended the full coding-standards header on top of its
   scope-specific content, duplicating ~80 lines against the always-loaded
-  orientation. Fixed in `mkDevComposed` by gating `commonFragments` on
-  `package == "monorepo"`.
+  orientation. Shared fragments now become individual always-on rules; scoped
+  composition includes only category-specific fragments.
 - **Dev fragment location discriminator.** Since commit de3dd12, each entry in
   `config.fragments.categories.<category>.sources` may be either a bare string
   (legacy, reads `dev/fragments/<category>/<name>.md`) or an attrset
@@ -180,8 +175,9 @@ them.
   file, THEN run the generate task, or the nix build won't find it.
 - **devenv caches nix eval** in `.devenv/nix-eval-cache.db`. If task definitions
   change and the tasks look stale, delete that file.
-- **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
-  gets commonFragments. Scoped categories are intentionally lean. The
-  delegate-routing and stacked-workflow routing rules are separate `ai.*` rules,
-  never orientation text. Don't "fix" this by re-adding commonFragments — that's
-  the context-rot bug that was removed.
+- **Shared rules and scoped categories differ semantically.** Published
+  coding-standard fragments and selected `monorepo` sources retain their own
+  names as always-on rules. Scoped categories remain lean. Existing per-runtime
+  rule disables select the GitHub reviewer's subset while local runtimes retain
+  all shared guidance. Do not re-add commonFragments to scoped compositions:
+  that duplicates always-loaded content.

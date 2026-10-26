@@ -26,6 +26,9 @@
     "ai-config-scope"
     "ai-module-contract"
     "beads"
+    "coding-standards"
+    "commit-convention"
+    "config-parity"
     "facets"
     "git"
     "kiro-agents"
@@ -35,6 +38,7 @@
     "microvm"
     "open-keys"
     "packaging"
+    "project-overview"
   ];
   # A runtime may omit a fragment, but replacement content would silently hide
   # its source. The stacked-workflows router must also use its own key.
@@ -57,7 +61,6 @@ in {
   ];
 
   ai = {
-    context.text = gen.context;
     rules = gen.rules // swsRouter;
 
     # Fresh guests have no host/project config paths; select the raw harnesses.
@@ -255,7 +258,8 @@ in {
     codex = {
       inherit shell;
       enable = true;
-      # AGENTS.md exceeds Codex's 32 KiB default; raise its read limit to keep the tail.
+      # Named local guidance exceeds the default budget; activation delivers
+      # this configuration together with the generated AGENTS.md.
       projectDocMaxBytes = 131072;
     };
     copilot = {

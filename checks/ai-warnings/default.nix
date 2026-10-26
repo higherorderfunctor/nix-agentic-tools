@@ -676,11 +676,12 @@ in {
           messages;
         # Shared context and rules warn when another runtime overrides the
         # final AGENTS.md entry.
-        sharedRuntimes = ["codex" "copilot" "kimchi" "kiro"];
+        sharedRuntimes = ["codex" "kimchi" "kiro"];
         sharedWarnings = extra:
           evaluate "devenv" (lib.foldl' lib.recursiveUpdate {
               ai = {
                 context.text = "CTX";
+                copilot.enable = true;
                 rules.probe.text = "RULE";
               };
             }
@@ -688,6 +689,24 @@ in {
         sharedCodexOff = sharedWarnings {ai.codex.files."AGENTS.md".enable = false;};
         sharedOff = sharedWarnings {ai.kiro.files."AGENTS.md".enable = false;};
         sharedReplaced = sharedWarnings {ai.kiro.files."AGENTS.md".content.text = "MINE";};
+        # Copilot carries shared and runtime context in its own file. Dropping
+        # that file warns for both inputs, while its named rules remain intact.
+        copilotWarnings = entry:
+          evaluate "devenv" {
+            ai = {
+              context.text = "CTX";
+              copilot = {
+                enable = true;
+                files.".github/copilot-instructions.md" = entry;
+                github.context.text = "COPILOT-CTX";
+              };
+              rules.probe.text = "RULE";
+            };
+          };
+        copilotOff = copilotWarnings {enable = false;};
+        copilotReplaced = copilotWarnings {content.text = "MINE";};
+        copilotContextFile = ''ai.copilot.files.".github/copilot-instructions.md"'';
+        copilotContextRemedy = "ai.copilot.github.normalized.context = lib.mkForce null";
         # Codex's user AGENTS.md on Home Manager.
         hmCodexOff = evaluate "hm" {
           ai = {
@@ -818,17 +837,16 @@ in {
           offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
           && offMessage sharedCodexOff "ai.context" ''ai.codex.files."AGENTS.md"'' contextRemedy
           && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
-          # Copilot's rules have their own instruction files; only its context
-          # shares AGENTS.md with the other three runtimes.
-          && (
-            if runtime == "copilot"
-            then !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced))
-            else
-              offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
-              && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
-              && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
-          ))
+          && offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
+          && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
+          && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy)
         sharedRuntimes
+        && lib.all (unit:
+          offMessage copilotOff unit copilotContextFile copilotContextRemedy
+          && replacedMessage copilotReplaced unit copilotContextFile copilotContextRemedy)
+        ["ai.context" "ai.copilot.github.context"]
+        && !(contains "does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced))
+        && !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (copilotOff ++ copilotReplaced))
         && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
         && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
         && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"

@@ -172,7 +172,7 @@
       default = {};
       description = ''
         Cross-app context fanned out to Claude, Codex, Kiro, Kimchi, and
-        Copilot on devenv, where it joins the shared repository AGENTS.md;
+        Copilot on devenv, where it writes `.github/copilot-instructions.md`.
         Copilot's Home Manager module warns instead.
         When `text` and `source` are defined at different module priorities,
         the higher-priority definition supplies the content whichever field it

@@ -2160,6 +2160,8 @@ in {
     # inlined: the flat file carries its globs and links, never its body. An
     # unscoped rule with references stays inline, because an index entry with
     # no globs could never tell the reader when to follow it.
+    # Distinct source directories keep this a direct root-index fixture;
+    # shared child-index delivery has its own ai-context checks.
     module-codex-scoped-references-render-index = mkTest "codex-scoped-references-render-index" (
       let
         config = {
@@ -2173,7 +2175,7 @@ in {
               };
               beta = {
                 matcher = ["b/**"];
-                references = ["docs/b.md"];
+                references = ["beta/b.md"];
                 text = "Beta body";
               };
               alpha = {
@@ -2193,7 +2195,7 @@ in {
             + "for it. When several entries match, their guidance composes.\n\n"
             + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
             + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
-            + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)\n"
+            + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`beta/b.md`](beta/b.md)\n"
           )
           "<!-- rule: always -->\n\nAlways body"
           "Shared context"
@@ -2213,7 +2215,7 @@ in {
             + "If your runtime is not named, skip this index.\n\n"
             + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
             + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
-            + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)\n"
+            + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`beta/b.md`](beta/b.md)\n"
           )
           "<!-- rule: always -->\n\nApply this rule only in: `codex`.\n\nAlways body"
           "Shared context"

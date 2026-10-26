@@ -2,7 +2,7 @@
 #
 # Two writers, two comparisons:
 #
-#   * The agent instruction files (AGENTS.md, .github/instructions/) are
+#   * The GitHub instruction files (.github/instructions/) are
 #     `ai.*`'s own read-only copies. The expected
 #     files are the ones its writers' plans point at for THIS repository's
 #     configuration (dev/ai.nix), evaluated the way devenv evaluates it: the
@@ -12,8 +12,9 @@
 #   * README.md and CONTRIBUTING.md are human documents dev/generate.nix
 #     renders; the `repo-*` packages are what `generate:repo:*` copies out.
 #
-# The gitignored instruction files (.claude/, .kiro/steering/) have no
-# tracked bytes to compare; enterTest asserts they land as files.
+# The local instruction files (AGENTS.md, .agents/rules/, .claude/,
+# .kiro/steering/) have no tracked bytes to compare. Their generated composition
+# remains checked, and enterTest asserts they land as files.
 #
 # Why it exists: nothing else asserted tracked generated files matched their
 # source. Both repo-root documents once drifted far enough to be wrong —
@@ -44,11 +45,14 @@
       ];
     repo = evalRepo false;
     repoCI = evalRepo true;
-    # Compare the inputs for tracked instructions. One generated tree can also
+    # Compare instruction inputs and destinations. One generated tree can also
     # contain structured files whose CI-only configuration changes its store
     # path while these Markdown bytes remain identical.
     instructionPlans = evaluated:
-      map (target: harness.markdownInput evaluated target.path)
+      map (target: {
+        inherit (target) path;
+        content = harness.markdownInput evaluated target.path;
+      })
       ((composed evaluated).targets ++ (harness.ownPlan "copilot" "files-apply" evaluated).targets);
     # The shared AGENTS.md composer's files, as the files engine writes them.
     composed = harness.ownPlan "internal" "files-apply";
@@ -65,21 +69,6 @@
       "ai.skills is set but devenv does not deliver it to ${runtime} (reason: ${support.reason})")
     (builtins.attrNames records);
 
-    composerInstructions = pkgs.linkFarm "expected-agents-md" (map (target: {
-        name = target.path;
-        path = target.content.source;
-      })
-      (composed repo).targets);
-    # Include the complete tracked child directories, not just expected names:
-    # a stale child must fail alongside a missing newly generated one.
-    trackedComposer = pkgs.linkFarm "tracked-agents-md" (lib.concatMap (filename:
-      lib.concatMap (name:
-        lib.optional (builtins.pathExists "${self}/${name}") {
-          inherit name;
-          path = "${self}/${name}";
-        }) [filename "${filename}.rules"])
-    (lib.attrNames repo.config.ai.internal.agentsMd));
-
     agentsMd = (lib.findFirst (target: target.path == "AGENTS.md") (throw "instructions-drift: the composer writes no AGENTS.md") (composed repo).targets).content.source;
     # The Copilot instruction files the files engine copies, as the built files
     # in Copilot's generated tree.
@@ -88,34 +77,37 @@
       path = target.content.source;
     }) (lib.filter (target: lib.hasPrefix ".github/instructions/" target.path) (harness.ownPlan "copilot" "files-apply" repo).targets));
 
+    copilotContext = lib.findFirst (target: target.path == ".github/copilot-instructions.md") null (harness.ownPlan "copilot" "files-apply" repo).targets;
+
     # Each entry: the tracked path, and the file to compare it against.
     # `regenerate` is the task the failure message names.
-    files = [
-      {
-        label = "AGENTS.md and child indexes";
-        tracked = trackedComposer;
-        generated = composerInstructions;
+    files =
+      [
+        {
+          label = ".github/instructions/";
+          tracked = ../../.github/instructions;
+          generated = copilotInstructions;
+          regenerate = "generate:all";
+        }
+        {
+          label = "CONTRIBUTING.md";
+          tracked = ../../CONTRIBUTING.md;
+          generated = "${drv.repo-contributing}/CONTRIBUTING.md";
+          regenerate = "generate:repo:contributing";
+        }
+        {
+          label = "README.md";
+          tracked = ../../README.md;
+          generated = "${drv.repo-readme}/README.md";
+          regenerate = "generate:repo:readme";
+        }
+      ]
+      ++ lib.optional (copilotContext != null) {
+        label = ".github/copilot-instructions.md";
+        tracked = "${self}/.github/copilot-instructions.md";
+        generated = copilotContext.content.source;
         regenerate = "generate:all";
-      }
-      {
-        label = ".github/instructions/";
-        tracked = ../../.github/instructions;
-        generated = copilotInstructions;
-        regenerate = "generate:all";
-      }
-      {
-        label = "CONTRIBUTING.md";
-        tracked = ../../CONTRIBUTING.md;
-        generated = "${drv.repo-contributing}/CONTRIBUTING.md";
-        regenerate = "generate:repo:contributing";
-      }
-      {
-        label = "README.md";
-        tracked = ../../README.md;
-        generated = "${drv.repo-readme}/README.md";
-        regenerate = "generate:repo:readme";
-      }
-    ];
+      };
 
     # `2>&1` so a diff-level error (a missing path, a permission fault)
     # lands in the captured output too — otherwise it goes to the real
@@ -130,22 +122,15 @@
       fi
     '';
 
-    # Codex reads only the first 32 KiB of AGENTS.md wherever this
-    # repository's raised `project_doc_max_bytes` is absent or untrusted (a
-    # fresh clone, a linked worktree). The index and every inlined rule must
-    # end inside that window; only the orientation's tail may fall past it.
-    # Measured on the built file, as byte offsets.
-    codexDefaultLimit = 32768;
-    windowNeedles =
-      ["Before editing a path that matches an entry below, read every document listed"]
-      ++ map (key: "<!-- rule: ${key} -->") (builtins.attrNames repo.config.ai.internal.agentsMd."AGENTS.md".rules);
-    endsInWindow = needle: ''
-      if ! hit="$(grep -b -o -F -m 1 -e ${lib.escapeShellArg needle} "$agentsMd")"; then
+    # Local documents are generated alongside their runtime configuration.
+    # Check the complete built composition against the configured byte budget;
+    # the composer's generated tree also enforces each target's maxBytes.
+    codexLimit = repo.config.ai.codex.projectDocMaxBytes;
+    ruleNeedles = map (key: "<!-- rule: ${key} -->") (builtins.attrNames repo.config.ai.internal.agentsMd."AGENTS.md".rules);
+    containsRule = needle: ''
+      if ! grep -q -F -e ${lib.escapeShellArg needle} "$agentsMd"; then
         failed=1
         echo "AGENTS.md does not contain: "${lib.escapeShellArg needle} >&2
-      elif [ "$(( ''${hit%%:*} + ${toString (builtins.stringLength needle)} ))" -gt ${toString codexDefaultLimit} ]; then
-        failed=1
-        echo "AGENTS.md puts this past Codex's default ${toString codexDefaultLimit}-byte read limit: "${lib.escapeShellArg needle} >&2
       fi
     '';
   in {
@@ -154,6 +139,9 @@
         "ai-config-scope"
         "ai-module-contract"
         "beads"
+        "coding-standards"
+        "commit-convention"
+        "config-parity"
         "facets"
         "git"
         "kiro-agents"
@@ -163,7 +151,20 @@
         "microvm"
         "open-keys"
         "packaging"
+        "project-overview"
       ];
+      sharedAlways = [
+        "build-commands"
+        "change-propagation"
+        "coding-standards"
+        "commit-convention"
+        "config-parity"
+        "operating-policy"
+        "project-overview"
+        "tooling-preference"
+        "validation"
+      ];
+      reviewerAlways = ["coding-standards" "commit-convention" "config-parity" "project-overview"];
       copilotPaths = map (target: target.path) (harness.ownPlan "copilot" "files-apply" repo).targets;
       localRuntimes = ["claude" "codex" "kimchi" "kiro"];
       localRules = runtime: repo.config.ai.${runtime}.normalized.rules;
@@ -179,6 +180,23 @@
       observation = {
         reviewerRules = builtins.attrNames repo.config.ai.copilot.github.normalized.rules;
         reviewerPaths = copilotPaths;
+        reviewerAlways = lib.all (name:
+          lib.hasInfix ''applyTo: "**"'' (harness.markdownInput repo ".github/instructions/${name}.instructions.md").text)
+        reviewerAlways;
+        sharedAlways = lib.all (name:
+          repo.config.ai.rules.${name}.inclusion
+          == ["always"]
+          && repo.config.ai.rules.${name}.matcher == null)
+        sharedAlways;
+        independentCopilot =
+          !(repo.config.ai.internal.agentsMdTargets ? copilot)
+          && lib.all (target:
+            lib.all (audience: !(builtins.elem "copilot" audience)) (builtins.attrValues target.audiences))
+          (builtins.attrValues repo.config.ai.internal.agentsMd);
+        namedComposition =
+          repo.config.ai.internal.agentsMd."AGENTS.md".context
+          == null
+          && lib.all (name: builtins.hasAttr name repo.config.ai.internal.agentsMd."AGENTS.md".rules) sharedAlways;
         localFragments = lib.genAttrs localRuntimes (runtime:
           lib.all (name: let
             root = repo.config.ai.rules.${name};
@@ -208,6 +226,10 @@
         observation.reviewerRules
         == expected
         && copilotPaths == map (name: ".github/instructions/${name}.instructions.md") expected
+        && observation.independentCopilot
+        && observation.namedComposition
+        && observation.reviewerAlways
+        && observation.sharedAlways
         && lib.all (value: value) (builtins.attrValues observation.localFragments)
         && lib.all (value: value) (builtins.attrValues observation.localRouters)
         && observation.disablesAllowed
@@ -216,7 +238,9 @@
       ))
       // {passthru = {inherit observation;};};
 
-    instructions-drift = assert lib.assertMsg (instructionPlans repo == instructionPlans repoCI)
+    instructions-drift = assert lib.assertMsg (copilotContext != null || !(builtins.pathExists "${self}/.github/copilot-instructions.md"))
+    "instructions-drift: tracked .github/copilot-instructions.md has no generated writer; remove the stale instruction file.";
+    assert lib.assertMsg (instructionPlans repo == instructionPlans repoCI)
     "instructions-drift: dev/ai.nix writes different instruction files when isCI is set; the committed bytes must not depend on the environment.";
     assert lib.assertMsg (failedAssertions == [])
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
@@ -237,7 +261,11 @@
         ${builtins.concatStringsSep "\n" (map compareOne files)}
 
         agentsMd=${agentsMd}
-        ${lib.concatMapStrings endsInWindow windowNeedles}
+        ${lib.concatMapStrings containsRule ruleNeedles}
+        if [ "$(wc -c < "$agentsMd")" -gt ${toString codexLimit} ]; then
+          failed=1
+          echo "AGENTS.md exceeds Codex's configured ${toString codexLimit}-byte read limit" >&2
+        fi
 
         if [ "$failed" -ne 0 ]; then
           echo "" >&2

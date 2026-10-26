@@ -1,14 +1,10 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-10-25 — the monorepo category selects concise
-> operating policy and leaves its full workflow, instruction and linting guides
-> as mandatory action-triggered references; shared AGENTS.md indexes may use one
-> manually followed child tier; `generate:all` regenerates instructions, repo
-> documents and devenv.yaml; devenv.lock is synced separately with
-> `devenv update <input>`; fragment sources live in the dev or package tree;
-> package categories live in owner registries; `dev/generate.nix` turns them
-> into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
-> first; devenv warns where AGENTS.md is past the limit Codex will apply there.
+> **Last verified:** 2026-10-26 — shared guidance uses individually named
+> always-on rules; scoped rules keep registry matchers and references. Local
+> AGENTS.md and readable `.agents/rules/` indexes are generated and gitignored.
+> Copilot receives selected named rules through `.github/instructions/` and
+> writes unnamed context independently to `.github/copilot-instructions.md`.
 
 This repo ships path-scoped architecture fragments as dev-only context for
 agents working on it. They are SEPARATE from the published consumer-facing
@@ -16,10 +12,11 @@ content. Two location flavors are supported by `dev/generate.nix`:
 
 - `dev/fragments/<category>/<name>.md` (default `location = "dev"`) —
   orientation and topic-scoped categories not tied to a single package. The
-  `monorepo` category's source list selects the always-loaded orientation,
-  delivered to every runtime as `ai.context`. Other documents in that directory
-  remain authoritative references loaded by the operating policy's action
-  triggers; their directory alone does not make them always-loaded.
+  `monorepo` category's source list selects named always-on rules, delivered
+  through `ai.rules` alongside the published coding standards. Other documents
+  in that directory remain authoritative references loaded by the operating
+  policy's action triggers; their directory alone does not make them
+  always-loaded.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
 
@@ -37,33 +34,30 @@ it per runtime through the `lib/ai/transformers/` pipeline:
   comma-joined globs
 - Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
   `fileMatchPattern:`
-- Codex / AGENTS.md: always-loaded orientation plus a compact
+- Codex / AGENTS.md: named always-on bodies plus a compact
   `## Path-scoped rules` index. Codex has no glob-scoped instruction primitive,
-  so matching remains a manual progressive-disclosure step: the index maps the
-  same registry scopes to the authoritative source documents. Shorter
-  shared-parent `fileMatch` groups become manual child indexes under
-  `AGENTS.md.rules/`; pointers preserve coverage and children retain exact
-  scopes and audiences. Auto/manual entries stay at root. AGENTS.md used to
-  concatenate every scoped fragment body, but that bloated it to ~2k lines;
-  Phase 2.4 removed the bodies (commit c4f4aff), and `ai.*` renders a scoped
-  rule that names `references` as an index entry for the same reason. The index
-  and the always-on rules come before the orientation, so Codex's default 32 KiB
-  read keeps them in a fresh clone or a linked worktree, where the raised
-  `project_doc_max_bytes` in the gitignored `.codex/` does not apply. Every
-  module-provided Codex launcher warns on stderr when its byte budget truncates
-  or omits project documentation, including in repos without devenv. The check
-  reads local docs and reuses the effective-limit resolver, which adds a trust
-  remedy when an untrusted project config raises the limit. The
-  instructions-drift build check still guards this repo's index and rule markers
-  within 32 KiB.
+  so the index maps registry scopes to authoritative source documents. Shorter
+  groups with a common source directory become manually followed child indexes
+  under `.agents/rules/`, with readable names derived from that directory;
+  children retain exact scopes and audiences. Auto/manual entries stay at root.
+  The index precedes inline bodies. Codex's launcher warns when its effective
+  document budget truncates or omits documentation; the generated tree enforces
+  this repository's configured document limit.
 
 The source fragments are authoritative. Every runtime file above is a generated
-projection that `ai.*` writes: AGENTS.md, its generated child indexes and
-`.github/` are committed, the Claude and Kiro ones are gitignored and written on
-devenv shell entry. Never edit a projection directly; the next shell entry, or
-the drift check, undoes it. `devenv tasks run --mode before generate:all`
-regenerates all of them, committed and gitignored, after source or registry
-changes.
+projection written by `ai.*`. Only the `.github/` instruction files are
+committed; AGENTS.md, `.agents/rules/`, Claude rules and Kiro steering are
+gitignored and written on devenv shell entry. Copilot does not contribute to the
+shared AGENTS.md composer. Named rules become separate
+`.github/instructions/<name>.instructions.md` files, including `applyTo: "**"`
+for selected always-on rules. An explicit unnamed Copilot context independently
+uses `.github/copilot-instructions.md`; this repository declares none.
+
+Never edit a projection directly; the next generation replaces it.
+`devenv tasks run --mode before generate:all` regenerates instructions and
+repository documents after source or registry changes. The drift check compares
+committed GitHub instructions and human documents while also validating
+generated local composition.
 
 ### Maintenance is mandatory
 
@@ -183,11 +177,11 @@ directory that no longer exists. Keep the example about the record's shape and
 let `config/fragment-categories.nix` be the source of real rows.
 
 `scopes` is a Nix list of globs, and `null` means always-loaded (what the
-`monorepo` orientation category uses). The option itself is declared in
+`monorepo` category uses). The option itself is declared in
 `lib/fragments-registry.nix`; `lib/facets/registry.nix` composes the
 contributions with `lib.evalModules`, and `dev/generate.nix` reads its result
-into the `context` and `rules` that `dev/ai.nix` hands to `ai.*`. The transforms
-handle per-ecosystem emission — do not hand-format frontmatter.
+into named `rules` that `dev/ai.nix` hands to `ai.*`. The transforms handle
+per-ecosystem emission — do not hand-format frontmatter.
 
 After adding or editing fragments, run
 `devenv tasks run --mode before generate:all` to regenerate instruction and
