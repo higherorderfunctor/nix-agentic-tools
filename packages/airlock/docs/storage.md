@@ -1,9 +1,9 @@
 # airlock storage
 
-> **Last verified:** 2026-10-26 — migration 0003 backfills daily request
-> statistics in one transaction; each usage write commits its raw event and
-> daily statistics together. Bounded readers and the read-only report retain
-> their existing contracts.
+> **Last verified:** 2026-10-26 — migration 0003 backfills daily statistics and
+> each usage write commits raw and daily facts together. Bounded chart reads
+> resolve exact windows, precision, identities and loss metadata in one
+> transaction; existing readers and reports retain their contracts.
 
 ## Scope
 
@@ -119,6 +119,29 @@ whenever its unknown count is nonzero. These counters do not attribute global
 dropped events. A private empty client key encodes SQL null; typed client IDs
 cannot be empty. Existing series, table and CLI report queries still read raw
 events.
+
+The bounded chart reader groups a canonical sorted selection of zero to two
+client/model/provider dimensions and applies every filter before aggregation.
+Omitted client includes all clients; explicit null selects only unknown clients.
+Selected null clients remain null; unselected dimensions are absent. Finite
+ranges are half-open and at most 30 days: up to two days uses hourly buckets,
+longer ranges use UTC daily buckets. All-history uses the global oldest event
+and evaluation end, choosing integer-day multiples from
+`ceil(intersecting UTC days / 32)`; global bucket alignment can add a display
+bucket. An empty eligible history uses the prior 24 hours (clipped at epoch
+zero), including when the oldest event is exactly at or after the exclusive end.
+The actual oldest retained event remains separately reported, even when filters
+select no rows.
+
+Daily and coarser queries combine full UTC days with two disjoint raw edge
+windows; hourly queries use raw events. Non-midnight endpoints clip events
+exactly. The same deadline-bounded read transaction resolves bounds, precision,
+oldest-event coverage, rows and global loss totals. No filtered option
+dictionary or local-midnight daily reconstruction is inferred from daily
+aggregates. The reader refuses unsorted/duplicate dimensions, invalid
+filters/windows, more than 10,000 groups and counts beyond exact JSON integers
+instead of truncating. The wire caller still enforces frame and decoded-memory
+limits.
 
 Identified usage-series history loads its page and same-filter reset predecessor
 in one SQLite transaction. The query applies both `since_unix` and exclusive

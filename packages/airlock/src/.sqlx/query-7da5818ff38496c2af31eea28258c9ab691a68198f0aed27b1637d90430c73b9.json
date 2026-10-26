@@ -1,0 +1,18 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT MIN(occurred_at_unix) AS \"oldest?: i64\" FROM request_events",
+  "describe": {
+    "columns": [
+      {
+        "name": "oldest?: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [true]
+  },
+  "hash": "7da5818ff38496c2af31eea28258c9ab691a68198f0aed27b1637d90430c73b9"
+}
