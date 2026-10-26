@@ -1,23 +1,25 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-25 — shared AGENTS.md uses one optional child index
-> tier, preserves runtime audiences and retains structured index metadata;
-> non-AI owners use the same layer-1 helper; delivery facts derive delivered and
-> absent cells, keyed withdrawal and normalized gaps from option and runtime
-> declarations; `poolOptions` covers `agentsDir` and `environmentVariables`
-> only; `optionNamespaces` places launcher and pool options; the devenv file
-> observer lives in ai-module and reads the files plan; the shared AGENTS.md
-> composer reaches the files plan as the owner `internal`; Claude stages every
-> surface, including HM `.claude.json` as `rw`; the files engine writes its
-> rules copies on devenv; staged Markdown and raw entries are whole-content
-> defaults; Kiro stages every surface, with hooks, settings and steering legacy
-> ledgers declared outside its enable gate; Kimchi stages every surface, with
-> every legacy ledger ungated; Codex stages every surface and declares both copy
-> ledgers while disabled; hand rows are confined to the policy-only permissions
-> surface; named CPA routing replaces runtime proxy defaults; Claude's
-> `native.installMethod` and `native.unpinLaunchEffort` are declared for Home
-> Manager only, so delivery facts carry no supplement rows; backend lowering and
-> validation live only in ai-module.
+> **Last verified:** 2026-10-26 — shared AGENTS.md uses readable
+> `.agents/rules/` child indexes, preserves runtime audiences and retains
+> structured index metadata; Copilot writes named rules and unnamed context
+> independently under `.github/`; non-AI owners use the same layer-1 helper;
+> delivery facts derive delivered and absent cells, keyed withdrawal and
+> normalized gaps from option and runtime declarations; `poolOptions` covers
+> `agentsDir` and `environmentVariables` only; `optionNamespaces` places
+> launcher and pool options; the devenv file observer lives in ai-module and
+> reads the files plan; the shared AGENTS.md composer reaches the files plan as
+> the owner `internal`; Claude stages every surface, including HM `.claude.json`
+> as `rw`; the files engine writes its rules copies on devenv; staged Markdown
+> and raw entries are whole-content defaults; Kiro stages every surface, with
+> hooks, settings and steering legacy ledgers declared outside its enable gate;
+> Kimchi stages every surface, with every legacy ledger ungated; Codex stages
+> every surface and declares both copy ledgers while disabled; hand rows are
+> confined to the policy-only permissions surface; named CPA routing replaces
+> runtime proxy defaults; Claude's `native.installMethod` and
+> `native.unpinLaunchEffort` are declared for Home Manager only, so delivery
+> facts carry no supplement rows; backend lowering and validation live only in
+> ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -241,7 +243,10 @@ rather than a second path field: a runtime names exactly the groups it moves.
   structural `hasMergedContext` bit gates the generated default without reading
   composed sources; rendered bytes remain lazy until that default survives B7.
   Repository-local Codex, Kimchi, and Kiro targets contribute to the shared L4
-  owner instead of creating competing runtime writers.
+  owner instead of creating competing runtime writers. Copilot instead writes
+  unnamed context to `.github/copilot-instructions.md`; its named rules remain
+  separate `.github/instructions/<name>.instructions.md` files. It never
+  contributes to the shared composer.
 - **Rule triggers resolve before L4.** Each runtime selects the first supported
   entry from the portable `inclusion` list through `aiCommon.resolveInclusion`.
   `fileMatch` consumes `matcher` and becomes native routing metadata where one
@@ -359,39 +364,41 @@ cells without policy edits.
   trigger data rather than rendered Markdown. Codex and Kimchi list a scoped
   rule that names `references` as an index entry (its globs plus links to those
   documents) and inline every other rule, a scoped one behind a prose scope
-  note. `agentsmd.renderKeyed` writes the general `## Rule index` when that bit
-  is set and `## Path-scoped rules` otherwise, then the inlined rules and
-  context. The builder supplies an audience map from each contributing runtime's
-  name; equal index/body payloads deduplicate while audiences combine, and
-  divergent payloads still fail. Index entries and inline bodies name their
+  note. Copilot has no `sharedAgentsMd` callback: context and rules use its own
+  generated tree. `agentsmd.renderKeyed` writes the general `## Rule index` when
+  that bit is set and `## Path-scoped rules` otherwise, then the inlined rules
+  and context. The builder supplies an audience map from each contributing
+  runtime's name; equal index/body payloads deduplicate while audiences combine,
+  and divergent payloads still fail. Index entries and inline bodies name their
   intended runtimes. An index whose entries all share one audience names it once
   above the entries; mixed audiences remain per-entry. The fallback index tells
   runtimes with native rule injection to use that injected guidance instead of
   following additional references. Standalone runtime documents omit these
   shared-target audience notes. A file with many scoped rules stays under
-  Codex's document limit, and a long context that does not (read at the 32 KiB
-  default because the raised limit is absent or untrusted) loses only its own
-  tail. The builder adds the merged context and publishes it on devenv. A limit
-  is published even without content, because the runtime reads the file whoever
-  wrote it. Codex's launcher checks actual truncation independently, on either
-  backend and in any repo; there is no shell-entry window notice. The Markdown
-  formatter handles the generated layout (one blank line between units and after
-  each rule comment, one glob or link per index line) before the tree is
-  installed. The shared composer groups two or more `fileMatch` entries only
-  when every reference in each entry is a plain relative file path under one
-  common parent directory and the rendered root index becomes strictly shorter.
-  It uses sorted matcher unions for root pointers, dropping only patterns
-  already covered by a literal `directory/**` prefix; children retain each
-  original matcher and audience. Auto/manual rules, mixed-parent references,
-  URLs and anchors stay at root. Child names are
-  `<target>.rules/<full SHA-256 of parent>.md`, never an automatically loaded
-  `AGENTS.md`; links are rebased relative to their containing file, including
-  nested custom targets. There is one child tier and no grouping option.
-  Children use the existing internal generated tree and read-only file
-  ownership; replacing or disabling the root disables its generated children,
-  and removing a group retires its files. Child/root target collisions fail
-  rather than overwrite. Tier selection reads index metadata, never discarded
-  context or inline rule sources.
+  Codex's document limit; named inline rules and context still count against
+  that limit. A long context follows the index and inline rules, so truncation
+  reaches its tail first. The builder adds the merged context and publishes it
+  on devenv. A limit is published even without content, because the runtime
+  reads the file whoever wrote it. Codex's launcher checks actual truncation
+  independently, on either backend and in any repo; there is no shell-entry
+  window notice. The Markdown formatter handles the generated layout (one blank
+  line between units and after each rule comment, one glob or link per index
+  line) before the tree is installed. The shared composer groups two or more
+  `fileMatch` entries only when every reference in each entry is a plain
+  relative file path under one common parent directory and the rendered root
+  index becomes strictly shorter. It uses sorted matcher unions for root
+  pointers, dropping only patterns already covered by a literal `directory/**`
+  prefix; children retain each original matcher and audience. Auto/manual rules,
+  mixed-parent references, URLs and anchors stay at root. Child names live under
+  `.agents/rules/` beside the target and use readable names derived from the
+  common source directory; path collisions retain distinct identities. They are
+  never an automatically loaded `AGENTS.md`. Links are rebased relative to their
+  containing file, including nested custom targets. There is one child tier and
+  no grouping option. Children use the existing internal generated tree and
+  read-only file ownership; replacing or disabling the root disables its
+  generated children, and removing a group retires its files. Child/root target
+  collisions fail rather than overwrite. Tier selection reads index metadata,
+  never discarded context or inline rule sources.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit

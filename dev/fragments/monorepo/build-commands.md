@@ -1,6 +1,6 @@
 ## Build & Validation Commands
 
-> **Last verified:** 2026-10-25 — context measurements estimate Copilot tuning
+> **Last verified:** 2026-10-26 — context measurements estimate Copilot tuning
 > costs; generation includes devenv.yaml; lock resolution remains an explicit
 > network operation.
 
@@ -29,10 +29,10 @@ or supply repository-relative paths, including deleted paths:
 bash dev/scripts/measure-context.sh packages/chatgpt-codex/checks/module-eval.nix
 ```
 
-The initial soft engineering target is **128 KiB for root AGENTS.md plus matched
-Copilot native instructions**, counting each file once: roughly 32K tokens at 4
+The initial soft engineering target is **128 KiB for Copilot context plus
+matched native instructions**, counting each file once: roughly 32K tokens at 4
 bytes/token, with sensitivity about 26K–44K at 5–3 bytes/token. This chosen
 target is neither a GitHub limit nor a pass/fail gate. Estimates exclude diff,
 system, organization, and retrieved content; path matching approximates native
-globs. Fallback child indexes are excluded from native instruction totals.
-Codex's separate 32 KiB project-document read window remains its own contract.
+globs. Local `AGENTS.md` and its child indexes are excluded from Copilot totals.
+Codex's configured project-document byte budget is a separate contract.

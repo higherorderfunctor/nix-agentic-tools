@@ -1,23 +1,16 @@
 ## Copilot config delivery — github.com Copilot
 
-> **Last verified:** 2026-10-25 — `ai.copilot` is github.com Copilot: pools
-> under `ai.copilot.github`, devenv-only delivery as staged read-only copies the
-> ai-module files engine writes, the old writer's ledgers declared as legacy
-> ledgers; `ai.copilot.cli` reserved for a launcher the module does not ship;
-> skills use `mkSkillFiles` with `method = "ro"`; agents declare a gap.
+> **Last verified:** 2026-10-26 — `ai.copilot.github` writes its own context to
+> `<projectDir>/<context.filename>` (default `.github/copilot-instructions.md`)
+> and each named rule to its native instructions file, independently of the
+> shared AGENTS.md composer. Home Manager retains explicit unsupported warnings.
 >
 > **Settled — do not relitigate.**
 >
-> - **One record per product, not backend as product, and no
->   `.github/copilot-instructions.md`.** `ai.copilot` used to be copilot-cli
->   under Home Manager and github.com under devenv, chosen by backend, and the
->   context went to `.github/copilot-instructions.md`. The operator dropped the
->   CLI arm on 2026-10-14. github.com loads that file and the root AGENTS.md
->   additively (no dedupe outside the CLI), so a context copy in both doubled
->   every review prompt; the context now joins the shared AGENTS.md, which the
->   cloud agent and code review both read. Chat on github.com reads only
->   `copilot-instructions.md` and loses the always-on context, accepted. The CLI
->   arm, its measured discovery and the rejected `COPILOT_HOME` route:
+> - **One record per product.** The operator dropped the backend-dependent CLI
+>   arm on 2026-10-14. `ai.copilot` serves github.com; the reserved CLI
+>   namespace declares no launcher. The old CLI discovery and rejected
+>   `COPILOT_HOME` route:
 >   `git show 6a45d50c:dev/fragments/ai-clis/copilot-config-delivery.md`.
 > - **No agents writer.** The operator dropped it on 2026-10-15: this arm serves
 >   github.com code review, which never reads `.github/agents`. The writer:
@@ -32,7 +25,7 @@ through `optionNamespaces.pools = ["github"]`. Only devenv writes:
 
 | pool    | file                                            | github.com readers                     |
 | ------- | ----------------------------------------------- | -------------------------------------- |
-| context | root `AGENTS.md`, through the shared owner      | cloud agent, code review (root only)   |
+| context | `<projectDir>/<context.filename>`               | chat, cloud agent, code review         |
 | rules   | `<projectDir>/instructions/<n>.instructions.md` | cloud agent, code review, by `applyTo` |
 | skills  | `<projectDir>/skills/<n>/`                      | cloud agent                            |
 
@@ -40,11 +33,18 @@ through `optionNamespaces.pools = ["github"]`. Only devenv writes:
 reads the PR's head branch, so a PR that regenerates these files is reviewed
 with its own copies.
 
-- **Context** contributes `{key = "AGENTS.md";}` to `sharedAgentsMd`, with
-  Codex, Kimchi and Kiro; contributions to one key must agree byte for byte.
+- **Context** composes the unnamed shared `ai.context` and
+  `ai.copilot.github.context` into its own file using the generic text/source
+  conversion and generated-tree writer. `context.filename` defaults to
+  `copilot-instructions.md` beneath `projectDir`. Copilot contributes nothing to
+  the shared AGENTS.md composer or its cross-runtime deduplication. GitHub
+  products may additionally read a committed AGENTS.md; the library does not
+  route Copilot context through that file.
 - **Rules**: the matcher becomes the comma-joined `applyTo` and `null` becomes
   `"**"` (`lib/ai/transformers/copilot.nix`). Code review loads every file whose
-  globs match a changed file, so a `**` rule rides on every review.
+  globs match a changed file, so a `**` rule rides on every review. Named
+  always-on rules stay separate files just like scoped rules; a runtime-local
+  `enable = false` suppresses an inherited rule at the same key.
 - **Skills** use `helpers.mkSkillFiles`, the same builder as every runtime, with
   `configDir = projectDir` and `method = "ro"`. The engine expands each source
   directory into owned real files, preserving nested references, assets and
@@ -60,8 +60,7 @@ with its own copies.
   (`copilot-instructions.manifest`, `copilot-github-agents.manifest`) stay
   declared in `ai.copilot.legacyLedgers` while Copilot is disabled too, so the
   copies they recorded are imported once and then follow the plan; the agents
-  ledger thereby retires the profiles the old writer left. Existing consumers
-  delete `.github/copilot-instructions.md` once by hand when migrating.
+  ledger thereby retires the profiles the old writer left.
 
 ### What it refuses, and why
 

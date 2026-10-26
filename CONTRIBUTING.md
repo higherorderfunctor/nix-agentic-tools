@@ -12,7 +12,7 @@ devenv shell          # enter dev shell with all tools
 
 ## Build & Validation Commands
 
-> **Last verified:** 2026-10-25 — context measurements estimate Copilot tuning
+> **Last verified:** 2026-10-26 — context measurements estimate Copilot tuning
 > costs; generation includes devenv.yaml; lock resolution remains an explicit
 > network operation.
 
@@ -41,13 +41,13 @@ or supply repository-relative paths, including deleted paths:
 bash dev/scripts/measure-context.sh packages/chatgpt-codex/checks/module-eval.nix
 ```
 
-The initial soft engineering target is **128 KiB for root AGENTS.md plus matched
-Copilot native instructions**, counting each file once: roughly 32K tokens at 4
+The initial soft engineering target is **128 KiB for Copilot context plus
+matched native instructions**, counting each file once: roughly 32K tokens at 4
 bytes/token, with sensitivity about 26K–44K at 5–3 bytes/token. This chosen
 target is neither a GitHub limit nor a pass/fail gate. Estimates exclude diff,
 system, organization, and retrieved content; path matching approximates native
-globs. Fallback child indexes are excluded from native instruction totals.
-Codex's separate 32 KiB project-document read window remains its own contract.
+globs. Local `AGENTS.md` and its child indexes are excluded from Copilot totals.
+Codex's configured project-document byte budget is a separate contract.
 
 ## Tests
 
@@ -58,18 +58,13 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-10-25 — `dev/ai.nix` selects reviewer categories with
-> runtime rule disables; local runtimes keep every category. Repo documents and
-> agent files are built by `mkTree` with the evaluated `ai.formatter` treefmt
-> config and the named guards; scoped rules rely on the normalized
-> matcher-derived `fileMatch` trigger default. `generate:all` writes instruction
-> and repo-document projections plus devenv.yaml, waiting on `ai:files-ready`
-> for AGENTS.md, the `.github/` instruction files and Claude's and Kiro's rules;
-> devenv.lock requires a separate network update; the generator produces content
-> only; `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction
-> file from its generated-file tree, formatted there with this repository's
-> treefmt; the drift check compares the built files; ai-module is the sole
-> backend delivery path.
+> **Last verified:** 2026-10-26 — shared guidance is individually named
+> always-on rules, selected per runtime through existing rule disables. Copilot
+> writes its own GitHub files and does not contribute to shared AGENTS.md. Local
+> AGENTS.md and `.agents/rules/` are generated and gitignored; drift compares
+> tracked GitHub instructions and human documents. `generate:all` waits on
+> `ai:files-ready`, writes repo documents and devenv.yaml, and leaves
+> devenv.lock to an explicit network update.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -80,17 +75,19 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 Two kinds of generated content, two owners:
 
-- **Agent instructions** — `dev/generate.nix` returns `context` (the
-  always-loaded orientation) and `rules` (one path-scoped rule per registry
-  category: its composed text, its scope globs as `matcher`, its source
-  documents as `references`, and the matcher-derived default `fileMatch`
-  trigger). `dev/ai.nix` sets them as `ai.context` and `ai.rules` in this
-  repository's own devenv, and `ai.*` renders and writes each runtime's files
-  exactly as it would for any consumer: AGENTS.md (Codex, Copilot, Kiro, Kimchi,
-  with a path-scoped index of the rules and, when smaller, manually followed
-  child indexes), `.claude/CLAUDE.md` and `.claude/rules/`,
-  `.github/instructions/`, and `.kiro/steering/`. The committed ones (AGENTS.md
-  and `.github/`) are read-only copies.
+- **Agent instructions** — `dev/generate.nix` returns `rules`: one named
+  always-on rule per published coding-standard fragment and selected `monorepo`
+  source, plus one scoped rule per other registry category. Scoped rules carry
+  composed text, scope globs as `matcher`, source documents as `references`, and
+  the matcher-derived `fileMatch` default. `dev/ai.nix` assigns `ai.rules`;
+  `ai.*` renders and writes each runtime's files through its generated tree.
+  Codex, Kimchi and Kiro share local AGENTS.md, with a path-scoped index and
+  readable child indexes under `.agents/rules/` when shorter. Claude receives
+  `.claude/rules/`, Copilot receives `.github/instructions/`, and Kiro receives
+  `.kiro/steering/`. All local instruction projections are gitignored; GitHub
+  instructions are committed read-only copies. An explicitly declared unnamed
+  Copilot context independently writes `.github/copilot-instructions.md`; this
+  repository declares none.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
@@ -98,14 +95,15 @@ Two kinds of generated content, two owners:
   `generate:repo:*` copies them out.
 
 `dev/ai.nix` bounds github.com's reviewer instructions with an explicit category
-allowlist and `ai.copilot.github.rules.<category>.enable = false` for every
-other category and the root stacked-workflows router. Newly registered
-categories stay out until selected. Local runtimes keep every category. The
+allowlist and `ai.copilot.github.rules.<name>.enable = false` for every other
+shared rule and the root stacked-workflows router. Newly registered categories
+stay out until selected. Local runtimes keep every named shared rule. The
 fragment-shadow guard accepts content-free runtime disables but rejects same-key
 replacement text or sources, including disabled replacements. Peer communication
 uses its existing Copilot program disable; delegate-routing and Semble already
 exclude Copilot. `instructions-reviewer-policy` checks the emitted instruction
-set, local content retention, and the shadow guard.
+set, always-on metadata, the absence of Copilot from shared AGENTS.md, local
+content retention, and the shadow guard.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
@@ -128,26 +126,24 @@ deleted by hand.
   `devenv.nix` and evaluated by the drift check. Its generated trees use the
   default `ai.formatter`, which is this flake's exported treefmt module, so a
   committed file is already in the same house style as `nix fmt` produces.
-- `packages/coding-standards/fragments/` — published coding standards, part of
-  the orientation.
+- `packages/coding-standards/fragments/` — published coding standards, delivered
+  as named rules.
 - `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
   always-on routing rules, delivered as `ai.*` rules of their own (the
-  delegate-routing program and a root rule) rather than inlined into the
-  orientation.
+  delegate-routing program and a root rule) through the same rule pool.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
 ### Committed files and the drift check
 
-`checks/instructions/instructions-drift.nix` evaluates `dev/ai.nix` through the
-module harness with `isCI = false` (Semble, and so its AGENTS.md rule, is gated
-on it, and committed bytes must not depend on who evaluates them) and compares
-the tracked AGENTS.md, its complete `.rules/` child tree and the
-`.github/instructions/` tree with the built files the `ai.*` writers' plans
-point at: each is a file in its runtime's generated-file store tree, already
-formatted and checked. README.md and CONTRIBUTING.md compare against the
-`repo-*` packages. `treefmt.nix` excludes none of the committed instruction
-files: they come out of the tree in the house format, and `checks.formatting`
-reads them like any tracked file.
+`checks/instructions/instructions-drift.nix` evaluates `dev/ai.nix` with both
+`isCI` values and requires identical instruction plans. It compares the tracked
+`.github/instructions/` tree and `.github/copilot-instructions.md` when
+generated with the built files the Copilot writer's plan points at. README.md
+and CONTRIBUTING.md compare against the `repo-*` packages. Local AGENTS.md and
+child indexes have no tracked bytes to compare; generated composition, audience
+rules and the configured Codex byte limit remain checked. `treefmt.nix` excludes
+none of the committed instruction files: they come out of the generated tree in
+the house format, and `checks.formatting` reads them like any tracked file.
 
 ### Running Generation
 
@@ -155,7 +151,7 @@ reads them like any tracked file.
 devenv tasks run --mode before generate:all  # instructions, repo docs, devenv.yaml
 ```
 
-`generate:all` orders the projection writers whose files are committed:
+`generate:all` orders the instruction and repository projection writers:
 `ai:files-ready`, by which the files engine has written AGENTS.md, the
 `.github/` instruction files and the gitignored Claude and Kiro rules; then
 `devenv:files` for the other gitignored links, `generate:devenv-yaml`, and
@@ -192,8 +188,10 @@ pushed to its `update/<name>` branch.
 ## Code Standards
 
 Coding standards, ordering rules, DRY principle, and Bash strict mode are
-documented in [AGENTS.md](AGENTS.md), the always-loaded instructions every agent
-runtime shares. Do not duplicate — read that file first.
+documented in
+[Coding Standards](packages/coding-standards/fragments/coding-standards.md).
+Devshell activation generates each runtime's instructions from these named
+sources; local `AGENTS.md` and `.agents/rules/` are generated and gitignored.
 
 ## Linting
 
@@ -238,8 +236,9 @@ Keep descriptions lowercase, imperative mood, no trailing period.
 
 ### AI CLI or MCP Server
 
-See [Packaging](docs/packaging.md) and the scoped architecture routing in
-[AGENTS.md](AGENTS.md) for recipe patterns and package-specific guidance.
+See [Packaging](docs/packaging.md) and the scoped architecture routing in the
+devshell-generated `AGENTS.md` for recipe patterns and package-specific
+guidance.
 
 ### General pattern
 
@@ -256,14 +255,14 @@ tree. Register checks through the owner's native `checks.nix` module.
 Owner discovery exports native package namespaces, flat flake packages, and
 backend modules automatically. New owners need no root export entry.
 
-See [Change Propagation](AGENTS.md#change-propagation) — when removing or
-renaming a concept, all surfaces must be updated in the same commit.
+See [Change Propagation](dev/fragments/monorepo/change-propagation.md) — when
+removing or renaming a concept, all surfaces must be updated in the same commit.
 
 ## Adding a Fragment
 
 Fragments are composable instruction blocks. `dev/generate.nix` composes them
-into the context and rules that `ai.*` writes for every runtime (AGENTS.md,
-Claude, Copilot, Kiro), and into CONTRIBUTING.md.
+into named rules that `ai.*` writes for every runtime (AGENTS.md, Claude,
+Copilot, Kiro), and into CONTRIBUTING.md.
 
 <!-- TODO: refine with maintainer input -->
 
@@ -299,9 +298,9 @@ To add a published fragment (consumed by external users):
 
 - One logical change per PR
 - CI must pass (formatting, linting, spelling, module evaluation)
-- Committed generated files (AGENTS.md, README.md, CONTRIBUTING.md,
-  `.github/instructions/`) must be regenerated if their source fragments
-  changed: run `devenv tasks run --mode before generate:all`. `nix flake check`
-  fails on drift.
+- Committed generated files (README.md, CONTRIBUTING.md, `.github/`
+  instructions) must be regenerated if their source fragments changed: run
+  `devenv tasks run --mode before generate:all`. `nix flake check` fails on
+  drift.
 - Keep commits atomic using the stacked workflow skills (`/stack-plan`,
   `/stack-fix`, `/stack-submit`)

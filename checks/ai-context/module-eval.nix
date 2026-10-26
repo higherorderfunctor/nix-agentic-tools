@@ -171,8 +171,10 @@ in {
         empty.config.ai.copilot.github.context.text
         == ""
         && !((deliveredFiles empty.config) ? "AGENTS.md")
+        && !((deliveredFiles empty.config) ? ".github/copilot-instructions.md")
         && withContent.config.ai.copilot.github.context.text == "Disabled content remains inspectable."
         && !((deliveredFiles withContent.config) ? "AGENTS.md")
+        && !((deliveredFiles withContent.config) ? ".github/copilot-instructions.md")
     );
 
     module-text-source-force-empty-disables = mkTest "text-source-force-empty-disables" (
@@ -319,7 +321,7 @@ in {
           });
         };
         active = evalDevenv base;
-        childrenOf = result: lib.filter (path: lib.hasPrefix "AGENTS.md.rules/" path) (lib.attrNames (deliveredFiles result.config));
+        childrenOf = result: lib.filter (path: lib.hasPrefix ".agents/rules/" path) (lib.attrNames (deliveredFiles result.config));
         child = builtins.head (childrenOf active);
         disabled = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".enable = false;});
         replaced = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".content.text = "Consumer root.";});
@@ -346,9 +348,10 @@ in {
       in
         builtins.length (childrenOf active)
         == 1
+        && child == ".agents/rules/guidance.md"
         && active.config.ai.files.${child}.method == "ro"
         && fromGeneratedTree child (deliveredFiles active.config).${child}
-        && lib.hasInfix "../docs/guidance/" (markdownInput active child).text
+        && lib.hasInfix "../../docs/guidance/" (markdownInput active child).text
         && !(lib.hasInfix "RULE-BODY-MUST-NOT-BE-INLINED" (markdownInput active child).text)
         && childrenOf disabled == []
         && childrenOf replaced == []

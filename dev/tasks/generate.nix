@@ -139,8 +139,8 @@ in {
 
     # Instruction, repo-document and devenv.yaml projections: devenv:files
     # writes the gitignored ones (Claude rules, Kiro steering, …); the files
-    # engine (done by ai:files-ready) the committed instruction files
-    # (AGENTS.md, .github/). Syncing devenv.lock needs network access, so it
+    # engine (done by ai:files-ready) writes local AGENTS.md and the committed
+    # .github/ instructions. Syncing devenv.lock needs network access, so it
     # stays outside this aggregate.
     "generate:all" = {
       description = "Generate instructions, repo documents and devenv.yaml";

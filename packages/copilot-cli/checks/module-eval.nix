@@ -138,8 +138,7 @@ in {
 
     # `projectDir` keeps one type and default in both trees, but only devenv
     # has a project root: Home Manager rejects an override, and devenv moves
-    # every project writer with it. The context is not under it: github.com
-    # reads AGENTS.md from the repository root.
+    # every project writer with it, including the standalone context.
     module-copilot-project-dir-is-project-local = mkTest "copilot-project-dir-is-project-local" (
       let
         config = lib.recursiveUpdate populated {ai.copilot.github.projectDir = ".custom-github";};
@@ -152,34 +151,64 @@ in {
           && lib.hasInfix "project-local" assertion.message)
         hm.config.assertions
         && fromGeneratedTree ".custom-github/instructions/security.instructions.md" files.".custom-github/instructions/security.instructions.md"
-        && files ? "AGENTS.md"
+        && fromGeneratedTree ".custom-github/copilot-instructions.md" files.".custom-github/copilot-instructions.md"
+        && !(files ? ".github/copilot-instructions.md")
+        && !(files ? "AGENTS.md")
         && !(files ? ".github/instructions/security.instructions.md")
         && lib.all (path: files ? ${path}) (skillPaths ".custom-github/skills/example" ++ skillPaths ".custom-github/skills/local")
         && !(files ? ".github/skills/example/SKILL.md")
         && declaresLedgers ".custom-github" devenv
     );
 
-    # The context joins the repository AGENTS.md through its one owner,
-    # after the root context.
-    module-copilot-devenv-context-is-agents-md = mkTest "copilot-devenv-context-is-agents-md" (
+    # Unnamed shared and runtime context compose once in Copilot's own file;
+    # the shared AGENTS.md owner receives no Copilot contribution.
+    module-copilot-devenv-independent-context = mkTest "copilot-devenv-independent-context" (
       let
         result = evalDevenv populated;
+        files = deliveredFiles result.config;
+        renamed = evalDevenv (lib.recursiveUpdate populated {ai.copilot.github.context.filename = "custom.md";});
+        alongside = evalDevenv (lib.recursiveUpdate populated {
+          ai = {
+            codex = {
+              enable = true;
+              context.text = "LOCAL-CONTEXT";
+            };
+            kimchi = {
+              enable = true;
+              context.text = "LOCAL-CONTEXT";
+            };
+          };
+        });
       in
-        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
-        && (markdownInput result "AGENTS.md").text == "ROOT-CONTEXT\n\nCOPILOT-CONTEXT"
-        && result.config.ai.internal.agentsMdTargets.copilot == "AGENTS.md"
+        fromGeneratedTree ".github/copilot-instructions.md" files.".github/copilot-instructions.md"
+        && (markdownInput result ".github/copilot-instructions.md").text == "ROOT-CONTEXT\n\nCOPILOT-CONTEXT"
+        && !(files ? "AGENTS.md")
+        && !(result.config.ai.internal.agentsMdTargets ? copilot)
+        && (markdownInput alongside "AGENTS.md").text == "ROOT-CONTEXT\n\nLOCAL-CONTEXT"
+        && (markdownInput alongside ".github/copilot-instructions.md").text == "ROOT-CONTEXT\n\nCOPILOT-CONTEXT"
+        && (markdownInput renamed ".github/custom.md").text == "ROOT-CONTEXT\n\nCOPILOT-CONTEXT"
+        && !((deliveredFiles renamed.config) ? ".github/copilot-instructions.md")
     );
 
     # Rules become path-specific instruction files with `applyTo` from their
     # scopes; an unscoped rule applies everywhere.
     module-copilot-devenv-rules = mkTest "copilot-devenv-rules" (
       let
-        result = evalDevenv (lib.recursiveUpdate populated {ai.rules.shared.text = "SHARED-RULE";});
+        result = evalDevenv (lib.recursiveUpdate populated {
+          ai.rules = {
+            shared.text = "SHARED-RULE";
+            suppressed.text = "SUPPRESSED-RULE";
+          };
+          ai.copilot.github.rules.suppressed.enable = false;
+        });
       in
         (markdownInput result ".github/instructions/security.instructions.md").text
         == "---\napplyTo: \"**/*.ts\"\n---\n\nSECURITY-RULE"
         && lib.hasInfix "applyTo: \"**\"" (markdownInput result ".github/instructions/shared.instructions.md").text
-        && !(lib.hasInfix "SECURITY-RULE" (markdownInput result "AGENTS.md").text)
+        && lib.hasInfix "SHARED-RULE" (markdownInput result ".github/instructions/shared.instructions.md").text
+        && !((deliveredFiles result.config) ? ".github/instructions/suppressed.instructions.md")
+        && !(lib.hasInfix "SHARED-RULE" (markdownInput result ".github/copilot-instructions.md").text)
+        && !(lib.hasInfix "SECURITY-RULE" (markdownInput result ".github/copilot-instructions.md").text)
     );
 
     # github.com code review never reads .github/agents: a root agent warns
@@ -208,7 +237,7 @@ in {
         linked = evalDevenv (lib.recursiveUpdate populated {ai.copilot.files.".github/instructions/security.instructions.md".method = "symlink";});
         disabled = evalDevenv (lib.recursiveUpdate populated {ai.copilot.enable = false;});
         empty = evalDevenv {ai.copilot.enable = true;};
-        targets = lib.filterAttrs (path: _: lib.hasPrefix ".github/instructions/" path) (copies enabled);
+        targets = lib.filterAttrs (path: _: lib.hasPrefix ".github/" path && lib.hasSuffix ".md" path && !(lib.hasPrefix ".github/skills/" path)) (copies enabled);
         copied = path:
           targets.${path}.method
           == "ro"
@@ -218,7 +247,7 @@ in {
           && targets.${path}.content.source == "${enabled.config.ai.copilot._generatedTree}/${path}";
       in
         builtins.attrNames targets
-        == [".github/instructions/security.instructions.md"]
+        == [".github/copilot-instructions.md" ".github/instructions/security.instructions.md"]
         && lib.all (path: copied path && !(enabled.config.files ? ${path})) (builtins.attrNames targets)
         && linked.config.ai.files.".github/instructions/security.instructions.md".method == "symlink"
         && linked.config.files ? ".github/instructions/security.instructions.md"

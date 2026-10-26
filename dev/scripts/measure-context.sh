@@ -50,7 +50,9 @@ print("Token estimates assume bytes/4; sensitivity assumes bytes/5..bytes/3.")
 print("These are rough tuning estimates, not a GitHub limit or a pass/fail gate.")
 print("Copilot known-file estimates exclude diff, system, and organization context.")
 print("Fallback child indexes are excluded from Copilot native instruction totals.\n")
-root = [Path("AGENTS.md")]
+local_context = [Path("AGENTS.md")]
+copilot_context = [path for path in [Path(".github/copilot-instructions.md")]
+                   if path.is_file()]
 claude_always = [path for path in Path(".claude/rules").glob("*.md")
                  if not any(line.startswith("paths:")
                             for line in path.read_text().splitlines())]
@@ -58,9 +60,9 @@ native = sorted(Path(".github/instructions").glob("*.instructions.md"))
 scopes = {path: patterns(path) for path in native}
 always = [path for path in native if "**" in scopes[path]]
 report("Claude always-on steering", [Path(".claude/CLAUDE.md"), *claude_always])
-report("AGENTS.md (Codex, Copilot, Kiro, Kimchi)", root)
-report("Copilot root + always-on native instructions", [*root, *always])
-report("Copilot root + entire emitted native instruction corpus", [*root, *native])
+report("Local AGENTS.md (Codex, Kiro, Kimchi)", local_context)
+report("Copilot context + always-on native instructions", [*copilot_context, *always])
+report("Copilot context + entire emitted native instruction corpus", [*copilot_context, *native])
 
 if sys.argv[1:]:
     candidates = []
@@ -74,8 +76,8 @@ if sys.argv[1:]:
     matched = [path for path in native
                if any(fnmatch.fnmatchcase(candidate, pattern)
                       for candidate in candidates for pattern in scopes[path])]
-    report("Copilot root + matched native instructions (each file counted once)",
-           [*root, *matched])
+    report("Copilot context + matched native instructions (each file counted once)",
+           [*copilot_context, *matched])
 
 report("Monorepo policy and reference sources",
        Path("dev/fragments/monorepo").glob("*.md"))

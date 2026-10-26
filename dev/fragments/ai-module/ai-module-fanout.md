@@ -1,27 +1,27 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-25 — gap predicates and dynamic reasons also
+> **Last verified:** 2026-10-26 — gap predicates and dynamic reasons also
 > receive the backend; runtime factories stage surfaces in `_generatedFiles`
 > (every runtime surface included) and forward them through the ai-module
 > layer-1 helper over one generated tree, which every staged entry's delivery
 > requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
 > the ai-module devenv module writes the treefmt excludes; Copilot stages its
-> instructions and copied skills on devenv, declares an agents gap and keeps
-> both old ledgers, and Claude every surface including HM `.claude.json` with
-> both legacy ledgers; the root-option provenance guard exempts the ai-module
-> layer-1 forwarding helper for its forwarded options; option declarations
-> supply policy surfaces and keyed withdrawal; runtime declarations supply
-> normalized policy gaps and the warning suite generates coverage for every
-> runtime, surface and backend; a record's `optionNamespaces` places launcher
-> and pool options, and `ai.copilot` is github.com Copilot with its pools under
-> `ai.copilot.github`; an undelivered surface warns once per runtime and
-> backend, set at the root, the runtime pool or its normalized option, and
-> record gaps are `path`, `each`, `when` and `reason` only; ai-module owns the
-> delivered-path inventory and backend lowering; `ai.proxy` selects a shared
-> endpoint with a whole per-runtime override, gated by runtime capability;
-> Claude consumes it and suppresses its inherited API-key descriptor through the
-> installed launcher; `ai.jail` folds field by field and jails the finished
-> launcher in place at the install seam on Linux, warning elsewhere.
+> standalone context, named instructions and copied skills on devenv, declares
+> an agents gap and keeps both old ledgers, and Claude every surface including
+> HM `.claude.json` with both legacy ledgers; the root-option provenance guard
+> exempts the ai-module layer-1 forwarding helper for its forwarded options;
+> option declarations supply policy surfaces and keyed withdrawal; runtime
+> declarations supply normalized policy gaps and the warning suite generates
+> coverage for every runtime, surface and backend; a record's `optionNamespaces`
+> places launcher and pool options, and `ai.copilot` is github.com Copilot with
+> its pools under `ai.copilot.github`; an undelivered surface warns once per
+> runtime and backend, set at the root, the runtime pool or its normalized
+> option, and record gaps are `path`, `each`, `when` and `reason` only;
+> ai-module owns the delivered-path inventory and backend lowering; `ai.proxy`
+> selects a shared endpoint with a whole per-runtime override, gated by runtime
+> capability; Claude consumes it and suppresses its inherited API-key descriptor
+> through the installed launcher; `ai.jail` folds field by field and jails the
+> finished launcher in place at the install seam on Linux, warning elsewhere.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -377,11 +377,11 @@ The ai module fans out TWO kinds of configuration:
   that file when it saves it, so it is a staged `ro` JSON entry the files engine
   restores; `pinDaemonToPackage` defaults `updater.autoUpdateEnabled` to false.
 - `ai.copilot.github.projectDir` — the project-native `.github` root used by
-  devenv for rules and skills. It is declared identically in both backends so
-  generated option discovery and types cannot drift, but only devenv has a
-  project root. Home Manager therefore rejects a non-default override instead of
-  silently interpreting it relative to `$HOME`; use the devenv module when this
-  path needs customization.
+  devenv for context, rules and skills. It is declared identically in both
+  backends so generated option discovery and types cannot drift, but only devenv
+  has a project root. Home Manager therefore rejects a non-default override
+  instead of silently interpreting it relative to `$HOME`; use the devenv module
+  when this path needs customization.
 
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):
@@ -495,11 +495,13 @@ enabled ecosystem whose native model preserves the option's semantics):
   dormant prose explicit. The shared evaluation check rejects non-empty outer
   defaults on direct text-source submodule declarations reachable through the
   repository HM/devenv harnesses. Claude defaults to `CLAUDE.md`; Codex, Kiro,
-  and Kimchi default to `AGENTS.md`; so does Copilot, which contributes its
-  context to the shared repository AGENTS.md on devenv only, because its live
-  surface is the repository github.com reads. The transform derives structural
-  `hasMergedContext` metadata before composition, so a final-file replacement or
-  disable does not read discarded source-backed root/runtime context.
+  and Kimchi default to `AGENTS.md`. Copilot defaults to
+  `copilot-instructions.md` beneath `ai.copilot.github.projectDir` on devenv; it
+  contributes nothing to the shared AGENTS.md composer. Named Copilot rules
+  remain independent instruction files, including always-on rules. The transform
+  derives structural `hasMergedContext` metadata before composition, so a
+  final-file replacement or disable does not read discarded source-backed
+  root/runtime context.
 - `ai.rules` — named Markdown rules. `inclusion` is a priority-ordered list of
   trigger kinds; `lib/ai/ai-common.nix:resolveInclusion` chooses the first kind
   the target runtime supports and fails when none match. Its one support table

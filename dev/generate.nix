@@ -9,8 +9,7 @@
 # (coding-standards, stacked-workflows).
 #
 # Returns:
-#   context        — the always-loaded orientation (`ai.context.text`)
-#   rules          — one path-scoped rule per registry category:
+#   rules          — named always-loaded guidance and path-scoped categories:
 #                    { text; matcher; references; } (`ai.rules`)
 #   readmeMd       — README.md content string
 #   contributingMd — CONTRIBUTING.md content string
@@ -28,7 +27,7 @@
   fragmentCategories = registry.config.fragments.categories;
 
   # ── Fragments from content packages (via overlay) ────────────────────
-  commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
+  commonFragments = pkgs.coding-standards.passthru.fragments;
   swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
   # ── Dev-only fragment reader ─────────────────────────────────────────
@@ -104,55 +103,51 @@
     stacked-workflows = swsFragments;
   };
 
-  # ── Compose fragments for a dev package profile ──────────────────────
-  # The monorepo (root) profile includes shared content (coding standards,
-  # commit conventions, etc. from commonFragments) because its output is
-  # the always-loaded context. Scoped profiles include ONLY their
-  # scope-specific content — repeating the shared content in every scoped
-  # rule amplifies context rot (duplicate tokens loaded when a scoped rule
-  # triggers alongside the always-loaded context).
-  # Per Checkpoint 2 research on context dilution.
-  mkDevComposed = package: let
-    devFrags = map (mkDevFragment package) (fragmentCategories.${package}.sources or []);
-    extraFrags = extraPublishedFragments.${package} or [];
-    isRoot = package == "monorepo";
-  in
-    fragments.compose {
-      fragments =
-        if isRoot
-        then commonFragments ++ extraFrags ++ devFrags
-        else extraFrags ++ devFrags;
+  # Named always-loaded units use the same rule pool and per-runtime opt-outs
+  # as scoped categories. Flat runtimes collapse them through their keyed
+  # AGENTS.md composer; native runtimes keep the individual rule files.
+  compose = units:
+    (fragments.compose {
+      fragments = units;
       generator = "dev/generate.nix";
-    };
-
-  # ── Instruction content ──────────────────────────────────────────────
-  nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") fragmentCategories;
-
-  # The always-loaded orientation. Every runtime receives it through
-  # `ai.context`; Codex, Kiro and Kimchi share it in AGENTS.md.
-  context =
-    ''
-      # nix-agentic-tools
-
-      Project instructions for AI coding assistants working in this repository.
-
-    ''
-    + (mkDevComposed "monorepo").text;
-
-  # One rule per scoped category. `matcher` is the registry's scope globs,
-  # which each runtime lowers to its own scoping (Claude `paths:`, Copilot
-  # `applyTo:`, Kiro `fileMatchPattern`). `references` names the source
-  # documents: Codex, which has no path scoping, lists the rule in AGENTS.md's
-  # path-scoped index with links to them instead of inlining every body. Link
-  # the SOURCES, not runtime projections: they exist in every checkout, and a
-  # projection is regenerated over any edit.
-  rules =
-    lib.mapAttrs (category: record: {
-      inherit (mkDevComposed category) text;
-      matcher = record.scopes;
-      references = map (entry: (normalizeDevFragmentSource category entry).repoRelative) (record.sources or []);
+    }).text;
+  alwaysCategories = lib.filterAttrs (_: record: record.scopes == null) fragmentCategories;
+  scopedCategories = lib.filterAttrs (_: record: record.scopes != null) fragmentCategories;
+  namedFragments =
+    lib.mapAttrsToList (name: fragment: {
+      ${name} = {
+        text = compose [fragment];
+        matcher = null;
+        references = [fragment.source];
+      };
     })
-    nonRootPackages;
+    commonFragments
+    ++ lib.concatLists (lib.mapAttrsToList (category: record:
+      map (entry: let
+        source = normalizeDevFragmentSource category entry;
+      in {
+        ${source.name} = {
+          text = compose [(mkDevFragment category entry)];
+          matcher = null;
+          references = [source.repoRelative];
+        };
+      })
+      record.sources)
+    alwaysCategories);
+  scopedRules =
+    lib.mapAttrs (category: record: {
+      text = compose ((extraPublishedFragments.${category} or []) ++ map (mkDevFragment category) record.sources);
+      matcher = record.scopes;
+      references = map (entry: (normalizeDevFragmentSource category entry).repoRelative) record.sources;
+    })
+    scopedCategories;
+  # A shared key is the identity used for suppression and deduplication; two
+  # different source declarations must never silently replace each other.
+  rules = lib.zipAttrsWith (name: values:
+    if builtins.length values == 1
+    then builtins.head values
+    else throw "dev/generate.nix: multiple instruction sources use rule key `${name}`")
+  (namedFragments ++ [scopedRules]);
 
   mkInlineCodeList = values:
     lib.concatMapStringsSep ", " (value: "`${value}`") values;
@@ -550,7 +545,7 @@
     | Git configuration | `git config` | `git.settings` + typed `git.{branchless,absorb,revise}.settings` → `programs.git.settings` | Same options; a repository-local include that wins key by key |
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `redact.file`, `redact.command`, or `redact.concat` | `redact.file`, `redact.command`, or `redact.concat` |
-    | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
+    | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Generated rule files and local AGENTS.md are read-only copies; only the selected `.github/` instructions are committed in this repository |
     | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
     | Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro); explicit Copilot requests warn because Home Manager has no repository | Same, plus Copilot's committed `.github/skills/` copies |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Kimchi) | Same; Kimchi's lands in its project harness settings (see below). Kiro has only per-model native effort |
@@ -620,7 +615,7 @@
 
     | Pool | devenv delivery |
     | ---- | --------------- |
-    | Context | root `AGENTS.md`, shared with Codex and Kiro |
+    | Context | `.github/copilot-instructions.md`, independent of local `AGENTS.md` |
     | Rules | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes |
     | Skills | `.github/skills/<name>/`, with nested references, assets and executable bits preserved |
 
@@ -1382,8 +1377,9 @@
     ## Code Standards
 
     Coding standards, ordering rules, DRY principle, and Bash strict mode
-    are documented in [AGENTS.md](AGENTS.md), the always-loaded instructions
-    every agent runtime shares. Do not duplicate — read that file first.
+    are documented in [Coding Standards](packages/coding-standards/fragments/coding-standards.md).
+    Devshell activation generates each runtime's instructions from these named sources;
+    local `AGENTS.md` and `.agents/rules/` are generated and gitignored.
 
     ## Linting
 
@@ -1410,7 +1406,7 @@
     ### AI CLI or MCP Server
 
     See [Packaging](docs/packaging.md) and the scoped architecture routing
-    in [AGENTS.md](AGENTS.md) for recipe patterns and package-specific guidance.
+    in the devshell-generated `AGENTS.md` for recipe patterns and package-specific guidance.
 
     ### General pattern
 
@@ -1426,13 +1422,13 @@
     Owner discovery exports native package namespaces, flat flake packages,
     and backend modules automatically. New owners need no root export entry.
 
-    See [Change Propagation](AGENTS.md#change-propagation) — when removing
+    See [Change Propagation](dev/fragments/monorepo/change-propagation.md) — when removing
     or renaming a concept, all surfaces must be updated in the same commit.
 
     ## Adding a Fragment
 
     Fragments are composable instruction blocks. `dev/generate.nix` composes
-    them into the context and rules that `ai.*` writes for every runtime
+    them into named rules that `ai.*` writes for every runtime
     (AGENTS.md, Claude, Copilot, Kiro), and into CONTRIBUTING.md.
 
     <!-- TODO: refine with maintainer input -->
@@ -1469,8 +1465,8 @@
 
     - One logical change per PR
     - CI must pass (formatting, linting, spelling, module evaluation)
-    - Committed generated files (AGENTS.md, README.md, CONTRIBUTING.md,
-      `.github/instructions/`) must be
+    - Committed generated files (README.md, CONTRIBUTING.md,
+      `.github/` instructions) must be
       regenerated if their source fragments changed: run
       `devenv tasks run --mode before generate:all`. `nix flake check`
       fails on drift.
@@ -1478,5 +1474,5 @@
       (`/stack-plan`, `/stack-fix`, `/stack-submit`)
   '';
 in {
-  inherit context contributingMd readmeMd rules;
+  inherit contributingMd readmeMd rules;
 }

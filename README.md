@@ -375,7 +375,7 @@ instruction building.
 | Git configuration | `git config` | `git.settings` + typed `git.{branchless,absorb,revise}.settings` → `programs.git.settings` | Same options; a repository-local include that wins key by key |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `redact.file`, `redact.command`, or `redact.concat` | `redact.file`, `redact.command`, or `redact.concat` |
-| Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
+| Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Generated rule files and local AGENTS.md are read-only copies; only the selected `.github/` instructions are committed in this repository |
 | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
 | Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro); explicit Copilot requests warn because Home Manager has no repository | Same, plus Copilot's committed `.github/skills/` copies |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Kimchi) | Same; Kimchi's lands in its project harness settings (see below). Kiro has only per-model native effort |
@@ -446,7 +446,7 @@ a committed store link dangles on github.com:
 
 | Pool    | devenv delivery                                                                        |
 | ------- | -------------------------------------------------------------------------------------- |
-| Context | root `AGENTS.md`, shared with Codex and Kiro                                           |
+| Context | `.github/copilot-instructions.md`, independent of local `AGENTS.md`                    |
 | Rules   | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes        |
 | Skills  | `.github/skills/<name>/`, with nested references, assets and executable bits preserved |
 

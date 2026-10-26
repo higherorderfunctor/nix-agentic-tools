@@ -1,6 +1,6 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-10-25 — Kiro steering uses engine copies; Codex skill
+> **Last verified:** 2026-10-26 — Kiro steering uses engine copies; Codex skill
 > discovery was re-probed on 0.161.0; skills are staged entries the ai-module
 > files engine walks. Codex declares its skill migration through activation,
 > before linkCheck on both backends. The repository's committed instruction
@@ -229,13 +229,13 @@ the user-space walker is a viable fix while waiting for upstream.
 ### Instruction files are copies, not `files.*` symlinks
 
 This repository's instruction files are written by `ai.*` (configured in
-`dev/ai.nix`) like any consumer's. On devenv the committed ones (AGENTS.md,
-`.github/instructions/*`), Claude's and Kiro's project rules are read-only
-COPIES the ai-module files engine writes on every `devenv shell`,
-`direnv reload`, `devenv up`, `devenv reload` and manual `devenv test`, after
-`devenv:files:cleanup` and before `devenv:enterShell`. Claude's
-`.claude/CLAUDE.md` stays a store link (its project context loader follows one;
-its scoped-rule loader does not).
+`dev/ai.nix`) like any consumer's. On devenv local `AGENTS.md`, its
+`.agents/rules/` child indexes, committed `.github/` instructions, and Claude's
+and Kiro's project rules are read-only COPIES the ai-module files engine writes
+on every `devenv shell`, `direnv reload`, `devenv up`, `devenv reload` and
+manual `devenv test`, after `devenv:files:cleanup` and before
+`devenv:enterShell`. Claude's `.claude/CLAUDE.md` stays a store link (its
+project context loader follows one; its scoped-rule loader does not).
 
 Why copies rather than `files.*` symlinks:
 

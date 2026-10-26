@@ -48,7 +48,7 @@ for path, expected_contracts, expected_helpers in [
     matches = [
         reference
         for rule in rules.values()
-        if any(PurePosixPath(path).full_match(glob) for glob in rule["matcher"])
+        if any(PurePosixPath(path).full_match(glob) for glob in (rule["matcher"] or ["**"]))
         for reference in rule["references"]
     ]
     actual = (matches.count(contract), matches.count(directory_helpers))
