@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO oauth_tokens\n          (credential_id, access_token, refresh_token, refresh_token_expires_at_unix,\n           access_expires_at_unix, updated_at_unix)\n        VALUES (?, ?, ?, ?, ?, ?)\n        ON CONFLICT (credential_id) DO UPDATE SET\n          access_token = excluded.access_token,\n          refresh_token = excluded.refresh_token,\n          refresh_token_expires_at_unix = excluded.refresh_token_expires_at_unix,\n          access_expires_at_unix = excluded.access_expires_at_unix,\n          updated_at_unix = excluded.updated_at_unix\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "a4af1a0ed617a1f21a1a3ac85584e6fc182cfcb8af793a53e842fc2140d69993"
+}

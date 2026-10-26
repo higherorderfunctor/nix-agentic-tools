@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT snapshot_id, label, utilization_milli, reset_at_unix, status FROM response_header_windows\n        WHERE snapshot_id IN (SELECT value FROM json_each(?))\n        ORDER BY snapshot_id, label LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "snapshot_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "label",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "utilization_milli",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "reset_at_unix",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "status",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [false, false, false, true, true]
+  },
+  "hash": "a94f09767455f5467c623125be66d751ab90cd0ee56e535088648ece90896f25"
+}

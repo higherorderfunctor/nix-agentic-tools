@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE oauth_mappings\n            SET generation = ?, fake_access_token = ?, fake_refresh_token = ?,\n                fake_access_expires_at_unix = ?, updated_at_unix = ?\n            WHERE client_id = ? AND credential_id = ? AND generation = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "5349f5ab0896d20cf2cfd4c05959bfae7d80c2073ce62c30121fe1d2bee1e747"
+}

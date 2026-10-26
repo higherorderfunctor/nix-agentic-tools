@@ -116,21 +116,40 @@
   # it too would nest a second bubblewrap. No passthru is forwarded, so a
   # later `launcherPackage` flatten cannot unwrap the jail.
   wrap = {
+    airlock ? false,
     executables,
+    extraPermissions ? _: [],
     jail,
     name,
     package,
     pkgs,
     profile,
   }: let
+    proxyNames = ["ALL_PROXY" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" "all_proxy" "http_proxy" "https_proxy" "no_proxy"];
+    blocked = builtins.filter (name: builtins.elem name proxyNames) (lib.defaultTo [] profile.exclude.environment);
     jailed = jail.extend {
       inherit basePermissions pkgs;
       additionalCombinators = jail.combinators pkgs;
     };
     permissions = c:
-      map c.mask-path (lib.defaultTo [] profile.exclude.paths)
-      ++ map c.unset-env (lib.defaultTo [] profile.exclude.environment)
-      ++ lib.optionals (profile.permissions != null) (profile.permissions c);
+      assert lib.assertMsg (!airlock || blocked == []) "airlock jail cannot exclude proxy environment: ${lib.concatStringsSep ", " blocked}";
+        map c.mask-path (lib.defaultTo [] profile.exclude.paths)
+        ++ map c.unset-env (lib.defaultTo [] profile.exclude.environment)
+        ++ lib.optionals (profile.permissions != null) (profile.permissions c)
+        ++ extraPermissions c
+        ++ lib.optionals airlock [
+          (c.defer (state:
+            assert lib.assertMsg (
+              builtins.filter (name: builtins.elem name proxyNames) (builtins.attrNames state.env)
+              == []
+              && lib.all (name:
+                !lib.hasInfix "--unsetenv ${name}" state.cmd
+                && !lib.hasInfix "--unsetenv '${name}'" state.cmd
+                && !lib.hasInfix "--setenv ${name}" state.cmd
+                && !lib.hasInfix "--setenv '${name}'" state.cmd)
+              proxyNames
+            ) "airlock jail permissions cannot change proxy environment"; state))
+        ];
   in
     pkgs.symlinkJoin {
       name = "${name}-jail";

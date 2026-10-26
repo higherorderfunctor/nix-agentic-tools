@@ -57,6 +57,7 @@
     lib.unique ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates);
   proxyLib = import ../../../lib/ai/proxy {inherit lib;};
   redact = import ../../../lib/redact {inherit lib;};
+  services = import ../../ai-module/lib/services.nix {inherit lib;};
   usageFor = runtime: let
     unselected = {
       instance = null;
@@ -64,8 +65,10 @@
     };
     selection = proxyLib.selectionFor (config.ai.proxy or unselected) (config.ai.${runtime}.proxy or unselected);
     instances = lib.attrByPath ["ai" "cliproxyapi" "instances"] {} config;
+    airlockInstances = lib.attrByPath ["ai" "airlock" "instances"] {} config;
+    airlockSelected = selection.instance != null && builtins.hasAttr selection.instance airlockInstances;
     selected =
-      if selection.instance == null
+      if selection.instance == null || airlockSelected
       then null
       else
         (import ../../ai-module/lib/instances.nix {inherit lib;}).select {
@@ -83,8 +86,26 @@
       then redact.filePaths key
       else [];
     prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
+    airlockPrefix = "DELEGATE_USAGE_AIRLOCK_${lib.toUpper runtime}";
+    airlockConfigHelper =
+      if !airlockSelected
+      then null
+      else let
+        serviceName = "airlock-${selection.instance}";
+        service = config.ai.services.${serviceName};
+      in
+        pkgs.writeShellScriptBin "delegate-airlock-${runtime}-config-path" ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${services.runtimeDirectoryPath pkgs serviceName service}
+          printf '%s/config.json\n' "$_ai_dir"
+        '';
   in
-    lib.optionalAttrs (managementKeyFiles != []) {
+    lib.optionalAttrs airlockSelected {
+      "${airlockPrefix}_CLIENT" = lib.mkDefault selection.clientKey;
+      "${airlockPrefix}_CONFIG_HELPER" = lib.mkDefault (lib.getExe airlockConfigHelper);
+    }
+    // lib.optionalAttrs (managementKeyFiles != []) {
       "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault (lib.head managementKeyFiles);
       "${prefix}_URL" = lib.mkDefault selected.url;
     };

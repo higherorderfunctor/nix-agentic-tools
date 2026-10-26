@@ -385,6 +385,11 @@ this index.
     - `packages/kiro-cli/lib/mkKiro.nix`
   - Read:
     - [`dev/fragments/open-keys/open-keys.md`](dev/fragments/open-keys/open-keys.md)
+- **`packages/airlock/docs`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`AGENTS.md.rules/56e5ace927f982b1ea2da5f33d1ded002bdfc53bdc2b9d3a3ada174cb4e1073d.md`](AGENTS.md.rules/56e5ace927f982b1ea2da5f33d1ded002bdfc53bdc2b9d3a3ada174cb4e1073d.md)
 - **`packages/kimchi/docs`**
   - Match:
     - `checks/references/kimchi-egress-report.nix`
@@ -537,6 +542,13 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
+- **Proxy instance names share one claim group.** CPA and airlock instances
+  register names under `ai.claims.proxy-instance`; the existing selection's
+  `instance` identifies the owner without another discriminator. Claude may
+  select airlock for CONNECT transport, while CPA remains the default. The
+  service writer's rendered client token path and the jail runtime permission
+  supply launch inputs. See `lib/ai/proxy/default.nix` and
+  `packages/jail-nix/lib/combinators.nix`.
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;

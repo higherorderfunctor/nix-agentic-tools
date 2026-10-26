@@ -28,7 +28,7 @@ class UsageTests(unittest.TestCase):
         self.helpers = {}
         for vendor in ["claude", "codex", "zai"]:
             helper = self.home / f"{vendor}-usage"
-            helper.write_text(f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
+            helper.write_text(f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + (SCRIPTS / "usage-airlock.sh").read_text() + "\n" + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
             helper.chmod(0o755)
             self.helpers[vendor] = str(helper)
         self.key = self.home / "management-key"
@@ -214,6 +214,51 @@ print({json.dumps(json.dumps(ZAI))})
         result = subprocess.run([self.helpers["zai"]], env=self.env, text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("expected route", result.stderr)
+
+    def test_airlock_selected_usage_and_partial_refusal(self):
+        binary = self.home / "bin"
+        binary.mkdir()
+        executable = binary / "airlock"
+        executable.write_text(f"#!{sys.executable}\n" + '''import json, os, sys
+assert sys.argv[1:3] == ["usage", "--config"]
+assert sys.argv[3] == "/run/selected-airlock/ai-service-airlock-main/config.json"
+assert sys.argv[4] == "--json"
+print(os.environ["FAKE_AIRLOCK_REPORT"])
+''')
+        executable.chmod(0o755)
+        config_helper = binary / "selected-config-path"
+        config_helper.write_text(f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nprintf '%s\\n' '/run/selected-airlock/ai-service-airlock-main/config.json'\n")
+        config_helper.chmod(0o755)
+        selected = {"DELEGATE_USAGE_AIRLOCK_CLAUDE_CONFIG_HELPER": str(config_helper),
+                    "DELEGATE_USAGE_AIRLOCK_CLAUDE_CLIENT": "harness",
+                    "PATH": str(binary) + os.pathsep + self.env["PATH"]}
+        def credential(surface, label, used, client="harness", usable=True):
+            return {"surface": surface, "credential": label, "global_quota_complete": usable, "status": "fresh",
+                    "routes": [{"client": client}], "latest_fetch": {"pools": [
+                        {"label": "five_hour" if surface == "claude_subscription" else "zai_5h",
+                         "limit": 100000, "utilized": used, "reset_at_unix": 1900000000},
+                        *([{"label": "seven_day", "limit": 100000, "utilized": used,
+                            "reset_at_unix": 1900000000}] if surface == "claude_subscription" else [])]}}
+        report = {"schema_version": 1, "credentials": [
+            credential("claude_subscription", "unselected", 90000, "other"),
+            credential("claude_subscription", "selected", 20000),
+            credential("zai_quota", "zai", 30000)]}
+        result = self.run_helper("claude", cpa=False, **selected, FAKE_AIRLOCK_REPORT=json.dumps(report))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["five_hour"]["utilization"], 20)
+        result = self.run_helper("zai", cpa=False, route="claude", **selected, FAKE_AIRLOCK_REPORT=json.dumps(report))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["windows"]["5h"]["remainingPercent"], 70)
+        report["credentials"][1]["status"] = "exhausted"
+        report["credentials"][1]["latest_fetch"]["pools"][0]["utilized"] = 100000
+        result = self.run_helper("claude", cpa=False, **selected, FAKE_AIRLOCK_REPORT=json.dumps(report))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["five_hour"]["utilization"], 100)
+        report["credentials"][1]["global_quota_complete"] = False
+        result = self.run_helper("claude", cpa=False, **selected, FAKE_AIRLOCK_REPORT=json.dumps(report))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("incomplete usage report", result.stderr)
+        self.assertEqual(result.stdout, "")
 
     def test_partial_configuration(self):
         for env in [

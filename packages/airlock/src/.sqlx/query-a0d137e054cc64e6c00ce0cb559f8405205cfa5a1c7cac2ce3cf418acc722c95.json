@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO response_header_windows\n              (snapshot_id, label, utilization_milli, reset_at_unix, status)\n            VALUES (?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "a0d137e054cc64e6c00ce0cb559f8405205cfa5a1c7cac2ce3cf418acc722c95"
+}

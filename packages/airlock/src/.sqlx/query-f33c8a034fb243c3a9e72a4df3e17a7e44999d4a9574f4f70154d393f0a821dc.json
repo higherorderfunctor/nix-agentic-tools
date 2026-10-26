@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO group_members (group_id, credential_id)\n            VALUES (?, ?) ON CONFLICT (group_id, credential_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f33c8a034fb243c3a9e72a4df3e17a7e44999d4a9574f4f70154d393f0a821dc"
+}

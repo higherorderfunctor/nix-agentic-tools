@@ -1,0 +1,18 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT generation FROM oauth_mappings WHERE client_id = ? AND credential_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "generation",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [false]
+  },
+  "hash": "50adde4ddd294e6be0bd6bd371ad9b2554c33e7474f414798f7aab1c357baaea"
+}

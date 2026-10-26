@@ -233,7 +233,7 @@
       ${tree.installCheckPhase}
     '';
   expectedMutationFailure = pkgs.testers.testBuildFailure (makeTree (lib.findFirst (case: case.name == "frontmatter-value-change-bad") (throw "generated-files: the value-change fixture is gone") cases));
-  treefmtConfig = (inputs.treefmt-nix.lib.evalModule pkgs (import ../../treefmt.nix)).config;
+  treefmtConfig = (inputs.treefmt-nix.lib.evalModule pkgs (import ../../treefmt.nix {inherit inputs;})).config;
   treefmtTree = generated.mkTree {
     name = "generated-fixture-treefmt-eval-module";
     files = markdown "#   Heading\n";

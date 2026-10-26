@@ -1,0 +1,116 @@
+[
+  {
+    "v": 1,
+    "type": "hello",
+    "session": "fixture-session",
+    "server_time_unix": 1792886400,
+    "capabilities": [
+      "requests.series",
+      "requests.table",
+      "usage.overview",
+      "usage.series"
+    ],
+    "limits": {
+      "max_subscriptions": 8,
+      "max_frame_bytes": 1048576,
+      "max_unacked_frames": 16,
+      "replay_ttl_seconds": 60
+    }
+  },
+  {
+    "v": 1,
+    "type": "subscribed",
+    "id": "quota-claude",
+    "epoch": "fixture-epoch",
+    "mode": "snapshot",
+    "head_seq": 0,
+    "interval_ms": 5000
+  },
+  {
+    "v": 1,
+    "type": "snapshot",
+    "id": "quota-claude",
+    "epoch": "fixture-epoch",
+    "seq": 1,
+    "collections": {
+      "snapshots": [],
+      "reset_events": []
+    },
+    "meta": {
+      "as_of_unix": 1792886400,
+      "window": {
+        "since_unix": 1792800000,
+        "until_unix": 1792886400
+      },
+      "oldest_at_unix": null,
+      "has_more": false,
+      "next_before": null,
+      "truncated": false,
+      "known_gaps": [],
+      "request_loss_total": 0,
+      "provider_snapshot_loss_total": 0,
+      "reset_events_observed_only": true,
+      "reset_events_complete_since_unix": null
+    }
+  },
+  {
+    "v": 1,
+    "type": "delta",
+    "id": "quota-claude",
+    "epoch": "fixture-epoch",
+    "seq": 2,
+    "prev_seq": 1,
+    "upserts": {
+      "snapshots": [],
+      "reset_events": []
+    },
+    "removes": {
+      "snapshots": [],
+      "reset_events": []
+    },
+    "meta": {
+      "as_of_unix": 1792886405,
+      "window": {
+        "since_unix": 1792800005,
+        "until_unix": 1792886405
+      },
+      "oldest_at_unix": null,
+      "has_more": false,
+      "next_before": null,
+      "truncated": false,
+      "known_gaps": [],
+      "request_loss_total": 0,
+      "provider_snapshot_loss_total": 0,
+      "reset_events_observed_only": true,
+      "reset_events_complete_since_unix": null
+    }
+  },
+  {
+    "v": 1,
+    "type": "gap",
+    "id": "quota-claude",
+    "epoch": "fixture-epoch",
+    "after_seq": 2,
+    "code": "resume_expired",
+    "retryable": true,
+    "action": "resnapshot"
+  },
+  {
+    "v": 1,
+    "type": "error",
+    "id": null,
+    "code": "unauthorized",
+    "retryable": false
+  },
+  {
+    "v": 1,
+    "type": "unsubscribed",
+    "id": "quota-claude"
+  },
+  {
+    "v": 1,
+    "type": "ping",
+    "nonce": "fixture-nonce",
+    "server_time_unix": 1792886430
+  }
+]

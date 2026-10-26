@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO oauth_mappings\n              (client_id, credential_id, generation, fake_access_token, fake_refresh_token,\n               fake_access_expires_at_unix, updated_at_unix)\n            VALUES (?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "7194ffb52b3d3d8f6cba6e3126edc0826b074a737f04bfe7ef699747fc0041bb"
+}

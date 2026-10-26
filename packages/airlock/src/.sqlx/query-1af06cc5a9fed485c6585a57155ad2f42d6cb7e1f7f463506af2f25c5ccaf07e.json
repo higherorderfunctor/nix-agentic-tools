@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO quota_pools\n              (snapshot_id, ordinal, label, utilized, limit_value, reset_at_unix)\n            VALUES (?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "1af06cc5a9fed485c6585a57155ad2f42d6cb7e1f7f463506af2f25c5ccaf07e"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT mappings.generation, mappings.fake_refresh_token\n            FROM oauth_mappings AS mappings\n            JOIN credentials ON credentials.id = mappings.credential_id\n            WHERE mappings.client_id = ? AND mappings.credential_id = ?\n              AND credentials.provider_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "generation",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "fake_refresh_token",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [false, false]
+  },
+  "hash": "65b249520e6786edbdf81c6c36266a64f59b3cca8b4ce52ef0de071d53f217ef"
+}
