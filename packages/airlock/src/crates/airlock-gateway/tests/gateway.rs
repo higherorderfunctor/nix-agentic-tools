@@ -296,7 +296,14 @@ async fn startup_reports_all_empty_and_missing_client_token_files() {
     }
     let initial = config(&directory, "tunnel", &[]);
     assert!(matches!(
-        Gateway::bind(initial, &directory.path().join("ca"), TestCa::new().roots()).await,
+        Gateway::bind(
+            initial,
+            &directory.path().join("ca"),
+            TestCa::new().roots(),
+            None,
+            None,
+        )
+        .await,
         Err(Error::Secrets(_))
     ));
     let raw = json!({
@@ -313,6 +320,8 @@ async fn startup_reports_all_empty_and_missing_client_token_files() {
         Config::try_from(raw).expect("config"),
         &directory.path().join("ca"),
         TestCa::new().roots(),
+        None,
+        None,
     )
     .await
     else {
@@ -361,6 +370,8 @@ async fn startup_reports_each_granted_credential_file_error() {
         Config::try_from(raw).expect("config"),
         &directory.path().join("ca"),
         TestCa::new().roots(),
+        None,
+        None,
     )
     .await
     else {
@@ -404,6 +415,8 @@ async fn startup_does_not_load_credentials_without_grants() {
         Config::try_from(raw).expect("config"),
         &directory.path().join("ca"),
         TestCa::new().roots(),
+        None,
+        None,
     )
     .await
     .expect("unused credential is not loaded");
@@ -424,7 +437,14 @@ async fn unsupported_managed_oauth_fails_before_secret_loading() {
     })).expect("raw config");
     let config = Config::try_from(raw).expect("valid shape");
     assert!(matches!(
-        Gateway::bind(config, &directory.path().join("ca"), TestCa::new().roots()).await,
+        Gateway::bind(
+            config,
+            &directory.path().join("ca"),
+            TestCa::new().roots(),
+            None,
+            None,
+        )
+        .await,
         Err(Error::UnsupportedExecution(_))
     ));
     assert!(!directory.path().join("ca").exists());
@@ -484,6 +504,8 @@ async fn startup_refuses_an_empty_upstream_root_store() {
         config(&directory, "tunnel", &[]),
         &directory.path().join("ca"),
         RootCertStore::empty(),
+        None,
+        None,
     )
     .await;
     assert!(matches!(result, Err(Error::NoUpstreamRoots)));

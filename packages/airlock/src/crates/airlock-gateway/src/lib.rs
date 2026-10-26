@@ -135,44 +135,6 @@ impl Gateway {
         config: Config,
         ca_directory: &Path,
         upstream_roots: RootCertStore,
-    ) -> Result<Self, Error> {
-        Self::bind_with_storage(config, ca_directory, upstream_roots, None).await
-    }
-
-    /// Binds a gateway with initialized durable storage for managed OAuth.
-    ///
-    /// # Errors
-    /// Returns a storage, configuration, secret, TLS, or socket error.
-    pub async fn bind_with_storage(
-        config: Config,
-        ca_directory: &Path,
-        upstream_roots: RootCertStore,
-        storage: Option<Arc<SqliteStorage>>,
-    ) -> Result<Self, Error> {
-        Self::bind_with_storage_and_usage(config, ca_directory, upstream_roots, storage, None).await
-    }
-
-    /// Binds with a request-usage sink; telemetry is bounded and never delays response bodies.
-    ///
-    /// # Errors
-    /// Returns the ordinary bind errors; telemetry is fail-visible rather than startup-critical.
-    pub async fn bind_with_usage(
-        config: Config,
-        ca_directory: &Path,
-        upstream_roots: RootCertStore,
-        usage: Option<Arc<dyn RequestUsageSink>>,
-    ) -> Result<Self, Error> {
-        Self::bind_with_storage_and_usage(config, ca_directory, upstream_roots, None, usage).await
-    }
-
-    /// Binds with managed OAuth storage and a request-usage sink.
-    ///
-    /// # Errors
-    /// Returns configuration, secret, TLS, or socket errors.
-    pub async fn bind_with_storage_and_usage(
-        config: Config,
-        ca_directory: &Path,
-        upstream_roots: RootCertStore,
         storage: Option<Arc<SqliteStorage>>,
         usage: Option<Arc<dyn RequestUsageSink>>,
     ) -> Result<Self, Error> {

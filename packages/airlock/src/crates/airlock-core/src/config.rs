@@ -1208,8 +1208,7 @@ mod tests {
             std::path::Path::new("/var/lib/airlock")
         );
         assert_eq!(
-            baseline.clients[&ClientId::try_from("harness").expect("id")]
-                .token_file,
+            baseline.clients[&ClientId::try_from("harness").expect("id")].token_file,
             SecretFile::try_from(std::path::PathBuf::from("/run/airlock/harness"))
                 .expect("absolute token file")
         );

@@ -251,7 +251,7 @@ async fn run() -> Result<(), Error> {
                 None => None,
             };
             let roots = upstream_roots();
-            let gateway = Gateway::bind_with_storage_and_usage(
+            let gateway = Gateway::bind(
                 config.clone(),
                 &ca_directory,
                 roots.clone(),

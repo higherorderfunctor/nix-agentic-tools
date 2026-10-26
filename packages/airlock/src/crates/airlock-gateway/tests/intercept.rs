@@ -3935,6 +3935,8 @@ async fn symlinked_ca_directory_or_files_are_refused() {
             config(&directory, "deny", &["localhost"]),
             ca_directory,
             ca.roots(),
+            None,
+            None,
         )
         .await
         .err()
@@ -4011,6 +4013,8 @@ async fn ca_is_reused_across_binds_and_refused_when_exposed_or_incomplete() {
             config(&directory, "deny", &["localhost"]),
             &ca_directory,
             ca.roots(),
+            None,
+            None,
         )
         .await
         .err()

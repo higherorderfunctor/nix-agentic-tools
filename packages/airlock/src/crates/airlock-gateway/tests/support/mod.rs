@@ -284,15 +284,9 @@ impl Running {
         storage: Option<Arc<SqliteStorage>>,
         usage: Option<Arc<dyn RequestUsageSink>>,
     ) -> Self {
-        let gateway = Gateway::bind_with_storage_and_usage(
-            config,
-            &ca_directory,
-            roots,
-            storage.clone(),
-            usage,
-        )
-        .await
-        .expect("bind gateway");
+        let gateway = Gateway::bind(config, &ca_directory, roots, storage.clone(), usage)
+            .await
+            .expect("bind gateway");
         let address = gateway.local_addr();
         assert_eq!(address.ip(), std::net::Ipv4Addr::LOCALHOST);
         let capture = Capture::default();
