@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
+import type { ClientFrame } from "../src/data/protocol.ts";
 import {
   decodeServerFrame,
   decodeServerJson,
@@ -347,7 +348,6 @@ describe("closed query and frame boundaries", () => {
         window: { last_seconds: 86_400 },
         limit: 1000,
       },
-      resume: null,
     } as const;
     await expect(Effect.runPromise(encodeClientFrame(subscribe))).resolves.toBe(
       JSON.stringify({
@@ -414,25 +414,24 @@ describe("closed query and frame boundaries", () => {
     ).resolves.toMatchObject({ reason: "invalid_query" });
   });
 
-  it("validates outbound client frames", async () => {
+  it("rejects retired resume fields on outbound subscribes", async () => {
+    const retired = {
+      v: 1,
+      type: "subscribe",
+      id: "usage-overview-1",
+      kind: "usage.series",
+      query: {
+        provider: "provider-a",
+        credential: "credential-a",
+        source: "out_of_band_fetch",
+        surface: "zai_quota",
+        window: { last_seconds: 86_400 },
+        limit: 1000,
+      },
+      resume: null,
+    } as ClientFrame;
     await expect(
-      Effect.runPromise(
-        encodeClientFrame({
-          v: 1,
-          type: "subscribe",
-          id: "usage-overview-1",
-          kind: "usage.series",
-          query: {
-            provider: "provider-a",
-            credential: "credential-a",
-            source: "out_of_band_fetch",
-            surface: "zai_quota",
-            window: { last_seconds: 604_801 },
-            limit: 1,
-          },
-          resume: null,
-        }),
-      ),
+      Effect.runPromise(encodeClientFrame(retired)),
     ).rejects.toMatchObject({ reason: "schema_mismatch" });
   });
 

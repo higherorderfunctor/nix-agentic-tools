@@ -17,7 +17,6 @@ import {
 const endpoint: ControlEndpoint = {
   url: "ws://127.0.0.1/test",
   token: "fake-token",
-  resumeSession: null,
 };
 
 const query: SubscriptionQuery = { kind: "usage.overview" };

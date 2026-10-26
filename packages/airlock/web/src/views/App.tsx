@@ -38,7 +38,6 @@ export function App() {
         : fixtureAppRuntime({
             url: `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/api/v1/live`,
             token,
-            resumeSession: null,
           }),
     [token],
   );

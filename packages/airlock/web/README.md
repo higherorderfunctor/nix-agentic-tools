@@ -7,7 +7,7 @@ The browser data layer uses one scoped Effect transport for all visible widget
 subscriptions. `ControlTransport` owns the authenticated WebSocket, its single
 message listener, bounded per-widget ingress queues, heartbeat timeout, and
 connection generation. `Subscriptions` owns widget IDs, applied sequence state,
-replay negotiation, and retry. The root Atom runtime shares these layers; a
+fresh reconnection, and retry. The root Atom runtime shares these layers; a
 widget's scope sends `unsubscribe` and releases its reference when hidden or
 unmounted. The socket closes after a 250 ms idle grace following the final
 reference, or when the app runtime shuts down.
@@ -31,11 +31,10 @@ signals and remembers the raw intersection result through its 250 ms leave
 debounce.
 
 `fixtures/server.mjs` is a loopback-only fake with a separate fake read token.
-It independently emits the four supported kinds, filters and windows, bounded
-session replay, and explicit normal, stale, partial, failed, Console gap,
-disconnect replay, expired replay, slow consumer, client overflow, malformed,
-unknown-field, and unsafe-number cases. `logs.tail` returns
-`unsupported_subscription`. Run `npm run fixture` for Vite development and
-`npm test` for offline data-layer and loopback tests. The fixture is never
-selected by a production build. Do not put real provider credentials or
-request/response bodies in fixture data.
+It independently emits the four supported kinds, filters and windows, fresh
+subscriptions, and explicit normal, stale, partial, failed, Console gap,
+reconnect, slow consumer, client overflow, malformed, unknown-field, and
+unsafe-number cases. `logs.tail` returns `unsupported_subscription`. Run
+`npm run fixture` for Vite development and `npm test` for offline data-layer and
+loopback tests. The fixture is never selected by a production build. Do not put
+real provider credentials or request/response bodies in fixture data.

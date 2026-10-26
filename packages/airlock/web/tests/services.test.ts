@@ -20,7 +20,6 @@ import { serverFrame } from "./protocol-fixtures.ts";
 const endpoint: ControlEndpoint = {
   url: "ws://127.0.0.1/test",
   token: "fake-token",
-  resumeSession: null,
 };
 
 const query: SubscriptionQuery = { kind: "usage.overview" };
@@ -47,7 +46,6 @@ const snapshot = JSON.stringify({
 
 const hello = JSON.stringify({
   ...serverFrame("hello"),
-  session: "session-1",
   server_time_unix: 100,
 });
 
@@ -98,41 +96,6 @@ describe("subscription service", () => {
     );
     expect(sentTypes(socket)).toEqual(["auth", "subscribe", "ack"]);
     expect(socket.closed).toBe(true);
-  });
-
-  it("tolerates duplicate replay without treating it as new data", async () => {
-    const socket = new MemorySocket();
-    const program = Effect.gen(function* () {
-      const stream = yield* Subscriptions.useSync((service) =>
-        service.stream(query),
-      );
-      const pull = yield* Stream.toPull(stream);
-      yield* pull;
-      const subscribedPull = yield* Effect.forkChild(pull);
-      yield* Effect.sleep("10 millis");
-      socket.receive(subscribed);
-      yield* Fiber.join(subscribedPull);
-      const replayPull = yield* Effect.forkChild(pull);
-      yield* Effect.sleep("10 millis");
-      socket.receive(snapshot);
-      socket.receive(snapshot);
-      const replay = yield* Fiber.join(replayPull);
-      const states = [...replay];
-      while (states.length < 2) states.push(...(yield* pull));
-      expect(states.map((state) => state.lastSeq)).toEqual([1, 1]);
-      const acks = socket.sent.filter(
-        (frame) => JSON.parse(frame).type === "ack",
-      );
-      expect(acks).toHaveLength(2);
-    });
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.provide(
-          program,
-          makeMemoryDataLayer(endpoint, () => socket),
-        ),
-      ),
-    );
   });
 
   it("treats a nonretryable server error as terminal without a second socket", async () => {
@@ -226,6 +189,67 @@ describe("subscription service", () => {
     await stopping;
     expect(interrupted).toBe(true);
     expect(openingCleaned).toBe(true);
+    expect(socket.closed).toBe(true);
+  });
+
+  it("processes a terminal server gap buffered before ordinary close", async () => {
+    const socket = new MemorySocket();
+    const terminalGap = JSON.stringify({
+      ...serverFrame("gap"),
+      id: "usage-overview-1",
+      epoch: "epoch-a",
+      after_seq: 1,
+      code: "slow_consumer",
+      retryable: false,
+      action: "resnapshot",
+    });
+    const states: ViewState[] = [];
+    const program = Effect.gen(function* () {
+      const stream = yield* Subscriptions.useSync((service) =>
+        service.stream(query),
+      );
+      yield* Effect.forkChild(
+        Stream.runForEach(stream, (state) =>
+          Effect.sync(() => {
+            states.push(state);
+          }),
+        ),
+      );
+      for (
+        let attempt = 0;
+        sentTypes(socket).length < 2 && attempt < 100;
+        attempt += 1
+      )
+        yield* Effect.sleep("1 millis");
+      socket.receive(subscribed);
+      yield* Effect.sleep("5 millis");
+      socket.receive(snapshot);
+      yield* Effect.sleep("5 millis");
+      socket.receive(terminalGap);
+      socket.close();
+      yield* Effect.sleep("50 millis");
+    });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.provide(
+          program,
+          makeMemoryDataLayer(endpoint, () => socket, {
+            retryInitialMs: 10_000,
+          }),
+        ),
+      ),
+    );
+    expect(states.some((state) => state.gap?.code === "slow_consumer")).toBe(
+      true,
+    );
+    expect(states.at(-1)).toMatchObject({
+      phase: "reconnecting",
+      gap: {
+        code: "slow_consumer",
+        retryable: false,
+        action: "resnapshot",
+      },
+    });
     expect(socket.closed).toBe(true);
   });
 
@@ -334,7 +358,7 @@ describe("subscription service", () => {
 });
 
 describe("connection-wide control frames", () => {
-  it("saves hello sessions, answers pings, and exposes anonymous errors", async () => {
+  it("answers pings and exposes anonymous errors", async () => {
     const socket = new MemorySocket();
     const program = Effect.gen(function* () {
       const stream = yield* Subscriptions.useSync((service) =>
@@ -377,57 +401,80 @@ describe("connection-wide control frames", () => {
     );
   });
 
-  it("resumes the saved hello session after reconnect", async () => {
+  it("reconnects with fresh authentication and a fresh subscription", async () => {
     const first = new MemorySocket();
     const second = new MemorySocket();
     const sockets = [first, second];
+    const states: ViewState[] = [];
     const program = Effect.gen(function* () {
       const stream = yield* Subscriptions.useSync((service) =>
         service.stream(query),
       );
-      const pull = yield* Stream.toPull(stream);
-      yield* pull;
-      const helloPull = yield* Effect.forkChild(pull);
-      yield* Effect.sleep("10 millis");
-      first.receive(hello);
-      yield* Fiber.join(helloPull);
-      const subscribedPull = yield* Effect.forkChild(pull);
+      yield* Effect.forkScoped(
+        Stream.runForEach(stream, (state) =>
+          Effect.sync(() => {
+            states.push(state);
+          }),
+        ),
+      );
       yield* Effect.sleep("10 millis");
       first.receive(subscribed);
-      yield* Fiber.join(subscribedPull);
-      const snapshotPull = yield* Effect.forkChild(pull);
-      yield* Effect.sleep("10 millis");
       first.receive(snapshot);
-      yield* Fiber.join(snapshotPull);
-      const resumedPull = yield* Effect.forkChild(pull);
       yield* Effect.sleep("10 millis");
+      const firstLive = states.find((state) => state.phase === "live");
+      expect(firstLive?.epoch).toBe("epoch-a");
       first.close();
       for (
         let attempt = 0;
-        second.sent.length < 2 && attempt < 100;
+        second.sent.length < 2 && attempt < 200;
         attempt += 1
       ) {
-        yield* Effect.sleep("25 millis");
+        yield* Effect.sleep("10 millis");
       }
-      const auth = JSON.parse(second.sent[0] ?? "{}");
-      expect(auth).toMatchObject({ type: "auth", resume_session: "session-1" });
-      const subscribe = JSON.parse(second.sent[1] ?? "{}");
-      expect(subscribe).toMatchObject({
-        type: "subscribe",
-        resume: { epoch: "epoch-a", after_seq: 1 },
-      });
+      const auth = JSON.parse(second.sent[0] ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(auth).toMatchObject({ type: "auth" });
+      expect(auth).not.toHaveProperty("resume_session");
+      const subscribe = JSON.parse(second.sent[1] ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(subscribe).toMatchObject({ type: "subscribe" });
+      expect(subscribe).not.toHaveProperty("resume");
       second.receive(
         JSON.stringify({
-          ...JSON.parse(subscribed),
-          mode: "resume",
-          head_seq: 1,
+          ...serverFrame("subscribed"),
+          id: "usage-overview-1",
+          epoch: "epoch-b",
         }),
       );
-      const reconnecting = yield* Fiber.join(resumedPull);
-      expect(reconnecting[0]?.phase).toBe("reconnecting");
-      const livePull = yield* Effect.forkChild(pull);
-      const live = yield* Fiber.join(livePull);
-      expect(live.at(-1)?.phase ?? live[0]?.phase).toBe("live");
+      second.receive(
+        JSON.stringify({
+          ...serverFrame("snapshot"),
+          id: "usage-overview-1",
+          epoch: "epoch-b",
+          collections: { credentials: [] },
+          meta: metadata,
+        }),
+      );
+      for (
+        let attempt = 0;
+        attempt < 100 &&
+        !states.some(
+          (state) => state.phase === "live" && state.epoch === "epoch-b",
+        );
+        attempt += 1
+      ) {
+        yield* Effect.sleep("10 millis");
+      }
+      expect(states.some((state) => state.phase === "reconnecting")).toBe(true);
+      expect(
+        states.some(
+          (state) => state.phase === "live" && state.epoch === "epoch-b",
+        ),
+      ).toBe(true);
     });
     await Effect.runPromise(
       Effect.scoped(
@@ -859,10 +906,12 @@ describe("transport lifecycle regressions", () => {
         attempt += 1
       )
         yield* Effect.sleep("1 millis");
-      expect(JSON.parse(replacement.sent[1] ?? "{}")).toMatchObject({
-        type: "subscribe",
-        resume: null,
-      });
+      const retrySubscribe = JSON.parse(replacement.sent[1] ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(retrySubscribe).toMatchObject({ type: "subscribe" });
+      expect(retrySubscribe).not.toHaveProperty("resume");
     });
     await Effect.runPromise(Effect.scoped(Effect.provide(program, layer)));
     expect(openings).toBe(2);
@@ -910,9 +959,12 @@ describe("transport lifecycle regressions", () => {
         "unsubscribe",
         "subscribe",
       ]);
-      expect(JSON.parse(socket.sent.at(-1) ?? "{}")).toMatchObject({
-        resume: null,
-      });
+      const freshSubscribe = JSON.parse(socket.sent.at(-1) ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(freshSubscribe).toMatchObject({ type: "subscribe" });
+      expect(freshSubscribe).not.toHaveProperty("resume");
     });
     await Effect.runPromise(
       Effect.scoped(

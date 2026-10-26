@@ -14,7 +14,6 @@ import { useVisibleSubscription } from "../src/data/visibility.ts";
 const endpoint: ControlEndpoint = {
   url: "ws://127.0.0.1/test",
   token: "fake-token",
-  resumeSession: null,
 };
 const query: SubscriptionQuery = { kind: "usage.overview" };
 const metadata = {
@@ -35,8 +34,6 @@ const subscribed = JSON.stringify({
   type: "subscribed",
   id: "usage-overview-1",
   epoch: "epoch-a",
-  mode: "snapshot",
-  head_seq: 0,
   interval_ms: 1000,
 });
 const snapshot = JSON.stringify({

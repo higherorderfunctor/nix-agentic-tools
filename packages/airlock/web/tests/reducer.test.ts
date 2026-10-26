@@ -206,15 +206,13 @@ describe("subscription reducer", () => {
         usage_complete: true,
       },
     };
-    const tableSnapshot: ServerFrame = {
+    const tableSnapshot = {
       v: 1,
       type: "subscribed",
       id: "table-1",
       epoch: "epoch-table",
-      mode: "snapshot",
-      head_seq: 0,
       interval_ms: 1000,
-    };
+    } as const;
     const first: ServerFrame = {
       ...tableSnapshot,
       type: "snapshot",
@@ -283,8 +281,6 @@ describe("reducer round-2 regressions", () => {
     type: "subscribed",
     id: "requests-table-1",
     epoch: "table-epoch",
-    mode: "snapshot",
-    head_seq: 0,
     interval_ms: 1000,
   };
   const row = {
@@ -357,31 +353,24 @@ describe("reducer round-2 regressions", () => {
     expect(result.acknowledgements).toEqual([]);
   });
 
-  it("does not let a duplicate old snapshot roll back a resumed view", () => {
+  it("rejects a duplicate snapshot after live state", () => {
     const before = tableReduce([tableSubscribed, tableSnapshot]);
-    const resumed = applyServerFrame(
+    const duplicate = applyServerFrame(
       before.state,
-      { ...tableSubscribed, mode: "resume", head_seq: 1 },
-      tableQuery,
-      "requests-table-1",
-    );
-    expect(resumed.state.phase).toBe("live");
-    const rollback = applyServerFrame(
-      resumed.state,
       tableSnapshot,
       tableQuery,
       "requests-table-1",
     );
-    expect(rollback.state.phase).toBe("resynchronizing");
-    expect(rollback.state.epoch).toBeNull();
-    expect(rollback.acknowledgement).toBeNull();
+    expect(duplicate.state.phase).toBe("resynchronizing");
+    expect(duplicate.state.epoch).toBeNull();
+    expect(duplicate.acknowledgement).toBeNull();
   });
 
   it("rejects a fresh snapshot handshake that reuses the live epoch", () => {
     const before = tableReduce([tableSubscribed, tableSnapshot]);
     const unsolicited = applyServerFrame(
       before.state,
-      { ...tableSubscribed, head_seq: 0 },
+      tableSubscribed,
       tableQuery,
       "requests-table-1",
     );
@@ -407,8 +396,6 @@ describe("reducer round-2 regressions", () => {
         type: "subscribed",
         id: "other-subscription",
         epoch: "other-epoch",
-        mode: "snapshot",
-        head_seq: 0,
         interval_ms: 1000,
       },
       tableQuery,
@@ -426,18 +413,6 @@ describe("reducer round-2 regressions", () => {
     );
     expect(appliedDelta.state.lastServerContactUnix).toBe(1_792_886_401);
     expect(appliedDelta.state.meta?.as_of_unix).toBe(100);
-  });
-
-  it("marks a fully applied resume live without waiting for another delta", () => {
-    const before = tableReduce([tableSubscribed, tableSnapshot]);
-    const result = applyServerFrame(
-      before.state,
-      { ...tableSubscribed, mode: "resume", head_seq: 1 },
-      tableQuery,
-      "requests-table-1",
-    );
-    expect(result.state.phase).toBe("live");
-    expect(result.state.syncPhase).toBe("none");
   });
 
   it("makes nonretryable failures terminal while preserving last-good data", () => {

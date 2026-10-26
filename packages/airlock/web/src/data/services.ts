@@ -52,7 +52,6 @@ export class ControlSocketFactoryService extends Context.Service<
 export interface ControlEndpoint {
   readonly url: string;
   readonly token: string;
-  readonly resumeSession: string | null;
 }
 
 export class ControlEndpointService extends Context.Service<
@@ -128,7 +127,7 @@ function makeTransport(
   const clearTimer =
     options.clearTimer ??
     ((timer: TransportTimer) => clearTimeout(timer as never));
-  const state = { generation: 0, session: null as string | null };
+  const state = { generation: 0 };
 
   return Effect.gen(function* () {
     const failQueues = (connection: SharedConnection, error: ControlError) => {
@@ -226,7 +225,6 @@ function makeTransport(
                 );
                 return;
               }
-              if (frame.type === "hello") state.session = frame.session;
               if (frame.type === "ping") {
                 try {
                   socket.send(
@@ -260,7 +258,6 @@ function makeTransport(
                   v: 1,
                   type: "auth",
                   token: endpoint.token,
-                  resume_session: state.session ?? endpoint.resumeSession,
                 }),
               );
             } catch {
@@ -423,11 +420,13 @@ class ReconnectNow extends Error {}
 class TerminalNow extends Error {}
 
 function reconnectingView(state: ViewState, code: string): ViewState {
+  const explicitTerminalGap =
+    state.gap !== null && !state.gap.retryable ? state.gap : null;
   return {
     ...state,
     phase: "reconnecting",
     syncPhase: "none",
-    gap: { code, retryable: true, action: "retry" },
+    gap: explicitTerminalGap ?? { code, retryable: true, action: "retry" },
   };
 }
 
@@ -437,7 +436,6 @@ function overflowView(state: ViewState): ViewState {
     phase: "resynchronizing",
     syncPhase: "none",
     epoch: null,
-    headSeq: 0,
     lastSeq: 0,
     entries: state.lastGoodEntries,
     retainedBytes: state.retainedBytes,
@@ -501,21 +499,14 @@ function wireQuery(query: SubscriptionQuery): WireSubscriptionQuery {
   }
 }
 
-function subscribeFrame(
-  id: string,
-  query: SubscriptionQuery,
-  state: ViewState,
-): ClientFrame {
+function subscribeFrame(id: string, query: SubscriptionQuery): ClientFrame {
+  // wireQuery is total over SubscriptionQuery and preserves query.kind.
   return {
     v: 1,
     type: "subscribe",
     id,
     kind: query.kind,
     query: wireQuery(query),
-    resume:
-      state.epoch === null || state.lastSeq === 0
-        ? null
-        : { epoch: state.epoch, after_seq: state.lastSeq },
   } as ClientFrame;
 }
 
@@ -575,7 +566,7 @@ export const SubscriptionsLayer = Layer.effect(
                       );
 
                       yield* connection.send(
-                        subscribeFrame(lease.id, validatedQuery, view),
+                        subscribeFrame(lease.id, validatedQuery),
                       );
                       yield* Stream.runForEach(connection.frames, (frame) =>
                         Effect.gen(function* () {
@@ -586,7 +577,8 @@ export const SubscriptionsLayer = Layer.effect(
                               !(
                                 closedFailure instanceof TransportFailure &&
                                 closedFailure.reason === "connection_closed" &&
-                                frame.type === "error" &&
+                                (frame.type === "error" ||
+                                  frame.type === "gap") &&
                                 !frame.retryable
                               ))
                           ) {
@@ -633,11 +625,7 @@ export const SubscriptionsLayer = Layer.effect(
                               })
                               .pipe(Effect.ignore);
                             yield* connection.send(
-                              subscribeFrame(
-                                lease.id,
-                                validatedQuery,
-                                applied.state,
-                              ),
+                              subscribeFrame(lease.id, validatedQuery),
                             );
                           }
                         }),

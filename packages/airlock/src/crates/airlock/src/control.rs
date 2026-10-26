@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU64, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -42,18 +42,8 @@ use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 const MAX_SESSIONS: usize = 4;
 const MAX_SUBSCRIPTIONS: usize = 8;
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
-const MAX_SAFE_JSON_INTEGER: u64 = 9_007_199_254_740_991;
 const MAX_UNACKED_FRAMES: usize = 16;
 const MAX_UNACKED_BYTES: usize = 2 * 1024 * 1024;
-const REPLAY_TTL_SECONDS: u64 = 60;
-const REPLAY_FRAME_LIMIT: usize = 128;
-const REPLAY_SESSION_BYTES: usize = 2 * 1024 * 1024;
-const REPLAY_TOTAL_BYTES: usize = 8 * 1024 * 1024;
-// Reserve allowance for map nodes, keys, deque capacity and allocator overhead
-// alongside actual payload allocation. These are conservative estimates, not
-// measurements of allocator-specific heap usage.
-const REPLAY_SUBSCRIPTION_OVERHEAD: usize = 256;
-const REPLAY_ITEM_OVERHEAD: usize = 128;
 const PING_INTERVAL: Duration = Duration::from_secs(15);
 const PONG_TIMEOUT: Duration = Duration::from_secs(30);
 const SEVEN_DAYS: i64 = 7 * 24 * 60 * 60;
@@ -84,8 +74,6 @@ struct ControlState {
     sessions_changed: Arc<Notify>,
     socket_tasks: Arc<std::sync::Mutex<JoinSet<()>>>,
     socket_task_error: Arc<std::sync::Mutex<Option<tokio::task::JoinError>>>,
-    replay: Arc<Mutex<BTreeMap<String, ReplaySession>>>,
-    replay_bytes: Arc<AtomicUsize>,
     session_counter: Arc<AtomicU64>,
     shutdown: watch::Sender<bool>,
     #[cfg(test)]
@@ -136,8 +124,6 @@ impl ControlServer {
                 sessions_changed: Arc::new(Notify::new()),
                 socket_tasks: Arc::new(std::sync::Mutex::new(JoinSet::new())),
                 socket_task_error: Arc::new(std::sync::Mutex::new(None)),
-                replay: Arc::new(Mutex::new(BTreeMap::new())),
-                replay_bytes: Arc::new(AtomicUsize::new(0)),
                 session_counter: Arc::new(AtomicU64::new(1)),
                 shutdown: watch::channel(false).0,
                 #[cfg(test)]
@@ -661,10 +647,6 @@ impl SubscriptionQuery {
             Self::UsageSeries { .. } => SubscriptionKind::UsageSeries,
         }
     }
-
-    fn identity(&self) -> Result<String, &'static str> {
-        serde_json::to_string(self).map_err(|_| "invalid_query")
-    }
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -707,23 +689,6 @@ enum SnapshotSurfaceWire {
     ZaiQuota,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-struct Resume {
-    after_seq: u64,
-    epoch: String,
-}
-
-fn selected_epoch(new_epoch: String, mode: &str, resume: Option<&Resume>) -> String {
-    if mode == "resume"
-        && let Some(resume) = resume
-    {
-        resume.epoch.clone()
-    } else {
-        new_epoch
-    }
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum ClientFrame {
@@ -736,8 +701,6 @@ enum ClientFrame {
     Auth {
         v: u8,
         token: String,
-        #[serde(default)]
-        resume_session: Option<String>,
     },
     Pong {
         v: u8,
@@ -748,8 +711,6 @@ enum ClientFrame {
         id: String,
         kind: SubscriptionKind,
         query: QueryBody,
-        #[serde(default)]
-        resume: Option<Resume>,
     },
     Unsubscribe {
         v: u8,
@@ -781,122 +742,20 @@ fn close_message(code: Option<u16>) -> axum::extract::ws::Message {
     })
 }
 
-#[derive(Debug)]
-struct ReplayItem {
-    epoch: String,
-    seq: u64,
-    bytes: Vec<u8>,
-    budget: Option<Arc<AtomicUsize>>,
-    charged_bytes: usize,
-}
-
-impl Drop for ReplayItem {
-    fn drop(&mut self) {
-        if let Some(budget) = &self.budget {
-            budget.fetch_sub(self.charged_bytes, Ordering::Relaxed);
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct ReplaySubscription {
-    items: VecDeque<ReplayItem>,
-    bytes: usize,
-    query: String,
-    budget: Option<Arc<AtomicUsize>>,
-    metadata_bytes: usize,
-}
-
-impl Drop for ReplaySubscription {
-    fn drop(&mut self) {
-        if let Some(budget) = &self.budget {
-            budget.fetch_sub(self.metadata_bytes, Ordering::Relaxed);
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ReplaySession {
-    disconnected_at_unix: i64,
-    subscriptions: BTreeMap<String, ReplaySubscription>,
-}
-
-use std::collections::VecDeque;
-
-#[derive(Debug, Default)]
-struct ReplayActive {
-    subscriptions: BTreeMap<String, ReplaySubscription>,
-}
-
 #[derive(Debug, Default)]
 struct FlowState {
-    acked: BTreeMap<(String, String), u64>,
     delivered: BTreeMap<(String, String), u64>,
     unacked: BTreeMap<(String, String), BTreeMap<u64, usize>>,
     total_bytes: usize,
-    replay: ReplayActive,
-}
-
-impl FlowState {
-    fn make_replay_room(
-        &mut self,
-        id: &str,
-        item_bytes: usize,
-        metadata_bytes: usize,
-        global_bytes: &AtomicUsize,
-    ) -> Option<usize> {
-        loop {
-            let frames = self
-                .replay
-                .subscriptions
-                .values()
-                .map(|sub| sub.items.len())
-                .sum::<usize>();
-            let session_bytes = self
-                .replay
-                .subscriptions
-                .values()
-                .map(|sub| sub.bytes)
-                .sum::<usize>();
-            let needed = item_bytes
-                + if self.replay.subscriptions.contains_key(id) {
-                    0
-                } else {
-                    metadata_bytes
-                };
-            if frames < REPLAY_FRAME_LIMIT
-                && session_bytes + needed <= REPLAY_SESSION_BYTES
-                && global_bytes.load(Ordering::Relaxed) + needed <= REPLAY_TOTAL_BYTES
-            {
-                return Some(needed);
-            }
-            let oldest_id = self.replay.subscriptions.keys().next()?.clone();
-            let subscription = self.replay.subscriptions.get_mut(&oldest_id)?;
-            if let Some(item) = subscription.items.pop_front() {
-                subscription.bytes -= item.charged_bytes;
-            }
-            if subscription.items.is_empty() {
-                self.replay.subscriptions.remove(&oldest_id);
-            }
-        }
-    }
 }
 
 #[derive(Debug, Default)]
 struct Flow {
     state: Mutex<FlowState>,
     notify: Notify,
-    replay_bytes: Arc<AtomicUsize>,
 }
 
 impl Flow {
-    async fn resume(&self, id: &str, epoch: &str, applied_seq: u64) {
-        let mut state = self.state.lock().await;
-        let key = (id.to_owned(), epoch.to_owned());
-        state.delivered.insert(key.clone(), applied_seq);
-        state.acked.insert(key, applied_seq);
-    }
-
     async fn acquire(&self, id: &str, epoch: &str, seq: u64, bytes: usize) -> Result<(), Value> {
         let started = Instant::now();
         loop {
@@ -939,81 +798,6 @@ impl Flow {
         }
     }
 
-    async fn record(&self, id: &str, query: &str, frame: &Value, epoch: &str, seq: u64) {
-        let Ok(bytes) = serde_json::to_vec(frame) else {
-            return;
-        };
-        let item_bytes = bytes.capacity() + epoch.len() + REPLAY_ITEM_OVERHEAD;
-        let metadata_bytes = query.len() + id.len() + REPLAY_SUBSCRIPTION_OVERHEAD;
-        if item_bytes + metadata_bytes > REPLAY_SESSION_BYTES {
-            return;
-        }
-        let mut state = self.state.lock().await;
-        state
-            .acked
-            .entry((id.to_owned(), epoch.to_owned()))
-            .or_insert(0);
-        if state
-            .replay
-            .subscriptions
-            .get(id)
-            .is_some_and(|subscription| {
-                subscription.query == query
-                    && subscription
-                        .items
-                        .back()
-                        .is_some_and(|item| item.seq == seq)
-            })
-        {
-            return;
-        }
-        if state
-            .replay
-            .subscriptions
-            .get(id)
-            .is_some_and(|subscription| subscription.query != query)
-        {
-            state.replay.subscriptions.remove(id);
-        }
-        // One ring covers all widgets; reservations follow retained data through
-        // disconnect, import and expiry. A skipped reservation yields a later
-        // sequence gap rather than claiming unavailable replay.
-        let Some(needed) =
-            state.make_replay_room(id, item_bytes, metadata_bytes, &self.replay_bytes)
-        else {
-            return;
-        };
-        if self
-            .replay_bytes
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |used| {
-                used.checked_add(needed)
-                    .filter(|total| *total <= REPLAY_TOTAL_BYTES)
-            })
-            .is_err()
-        {
-            return;
-        }
-        let subscription = state
-            .replay
-            .subscriptions
-            .entry(id.to_owned())
-            .or_insert_with(|| ReplaySubscription {
-                items: VecDeque::new(),
-                bytes: metadata_bytes,
-                query: query.to_owned(),
-                budget: Some(Arc::clone(&self.replay_bytes)),
-                metadata_bytes,
-            });
-        subscription.bytes += item_bytes;
-        subscription.items.push_back(ReplayItem {
-            epoch: epoch.to_owned(),
-            seq,
-            bytes,
-            budget: Some(Arc::clone(&self.replay_bytes)),
-            charged_bytes: item_bytes,
-        });
-    }
-
     async fn ack(&self, id: &str, epoch: &str, seq: u64) -> Result<(), ()> {
         let mut state = self.state.lock().await;
         let key = (id.to_owned(), epoch.to_owned());
@@ -1038,9 +822,6 @@ impl Flow {
             }
         }
         state.total_bytes = state.total_bytes.saturating_sub(bytes);
-        if let Some(acknowledged) = state.acked.get_mut(&key) {
-            *acknowledged = (*acknowledged).max(seq);
-        }
         drop(state);
         if bytes > 0 {
             self.notify.notify_waiters();
@@ -1050,34 +831,21 @@ impl Flow {
 
     async fn discard(&self, id: &str) {
         let mut state = self.state.lock().await;
-        state.replay.subscriptions.remove(id);
-        let prefix: Vec<(String, String)> = state
+        let keys: Vec<(String, String)> = state
             .delivered
             .keys()
             .filter(|(subscription_id, _)| subscription_id == id)
             .cloned()
             .collect();
-        for key in prefix {
+        for key in keys {
             if let Some(entry) = state.unacked.remove(&key) {
                 let bytes: usize = entry.values().sum();
                 state.total_bytes = state.total_bytes.saturating_sub(bytes);
             }
-            state.acked.remove(&key);
             state.delivered.remove(&key);
         }
         drop(state);
         self.notify.notify_waiters();
-    }
-
-    async fn take_replay(&self, disconnected_at_unix: i64) -> ReplaySession {
-        let active = {
-            let mut state = self.state.lock().await;
-            std::mem::take(&mut state.replay).subscriptions
-        };
-        ReplaySession {
-            disconnected_at_unix,
-            subscriptions: active,
-        }
     }
 }
 
@@ -1099,30 +867,24 @@ fn close_subscription(sender: &mpsc::Sender<Outbound>, error: Value, close: &Not
 
 struct Connection {
     state: ControlState,
-    session: String,
     sender: mpsc::Sender<Outbound>,
     flow: Arc<Flow>,
     close: Arc<Notify>,
     subscriptions: BTreeMap<String, tokio::task::JoinHandle<()>>,
-    resume_unavailable: Option<&'static str>,
     expected_ping: Option<String>,
 }
 
 async fn run_socket(state: ControlState, session: String, socket: axum::extract::ws::WebSocket) {
-    run_socket_inner(state.clone(), session.clone(), socket).await;
+    run_socket_inner(state.clone(), socket).await;
     state.active_sessions.lock().await.remove(&session);
     state.sessions_changed.notify_one();
 }
 
 #[expect(
     clippy::too_many_lines,
-    reason = "socket authentication, writer, and cleanup share one session lifecycle"
+    reason = "socket authentication, writer, and cleanup share one connection lifecycle"
 )]
-async fn run_socket_inner(
-    state: ControlState,
-    session: String,
-    socket: axum::extract::ws::WebSocket,
-) {
+async fn run_socket_inner(state: ControlState, socket: axum::extract::ws::WebSocket) {
     let (mut sink, mut stream) = socket.split();
     let mut daemon_shutdown = state.shutdown.subscribe();
     let first = tokio::select! {
@@ -1135,15 +897,11 @@ async fn run_socket_inner(
         return;
     };
     let auth = decode_client_frame(message).and_then(|frame| match frame {
-        ClientFrame::Auth {
-            v: 1,
-            token,
-            resume_session,
-        } => Ok((token, resume_session)),
+        ClientFrame::Auth { v: 1, token } => Ok(token),
         _ => Err("unauthorized"),
     });
-    let (token, resume_session) = match auth.and_then(|value| {
-        if state.token.matches(value.0.as_bytes()) {
+    let token = match auth.and_then(|value| {
+        if state.token.matches(value.as_bytes()) {
             Ok(value)
         } else {
             Err("unauthorized")
@@ -1169,59 +927,24 @@ async fn run_socket_inner(
         return;
     }
 
-    let mut replay_source = None;
-    let mut resume_unavailable = None;
-    if let Some(resume) = &resume_session {
-        let now = now_unix();
-        let mut replay = state.replay.lock().await;
-        if let Some(old) = replay.get_mut(resume) {
-            if now.saturating_sub(old.disconnected_at_unix)
-                >= i64::try_from(REPLAY_TTL_SECONDS).unwrap_or(i64::MAX)
-            {
-                replay.remove(resume);
-                resume_unavailable = Some("resume_expired");
-            } else if let Some(old) = replay.remove(resume) {
-                replay_source = Some(old);
-            }
-        } else {
-            resume_unavailable = Some("resume_unavailable");
-        }
-    }
-
-    if *daemon_shutdown.borrow() {
-        return;
-    }
-
     let (sender, mut receiver) = mpsc::channel(MAX_UNACKED_FRAMES + MAX_SUBSCRIPTIONS);
-    let flow = Arc::new(Flow {
-        state: Mutex::new(FlowState {
-            replay: ReplayActive {
-                subscriptions: replay_source
-                    .map_or_else(BTreeMap::new, |source| source.subscriptions),
-            },
-            ..FlowState::default()
-        }),
-        replay_bytes: Arc::clone(&state.replay_bytes),
-        ..Flow::default()
-    });
+    let flow = Arc::new(Flow::default());
     let socket_close = Arc::new(Notify::new());
     let hello = json!({
-        "v":1,"type":"hello","session":session,"server_time_unix":now_unix(),
+        "v":1,"type":"hello","server_time_unix":now_unix(),
         "capabilities":["requests.series","requests.table","usage.overview","usage.series"],
         "limits":{"max_subscriptions":MAX_SUBSCRIPTIONS,"max_frame_bytes":MAX_FRAME_BYTES,
-            "max_unacked_frames":MAX_UNACKED_FRAMES,"replay_ttl_seconds":REPLAY_TTL_SECONDS}
+            "max_unacked_frames":MAX_UNACKED_FRAMES}
     });
     if sender.send(Outbound::Text(hello)).await.is_err() {
         return;
     }
     let mut connection = Connection {
         state: state.clone(),
-        session: session.clone(),
         sender: sender.clone(),
         flow: Arc::clone(&flow),
         close: Arc::clone(&socket_close),
         subscriptions: BTreeMap::new(),
-        resume_unavailable,
         expected_ping: None,
     };
     let mut writer_shutdown = state.shutdown.subscribe();
@@ -1307,12 +1030,6 @@ async fn run_socket_inner(
     for task in connection.subscriptions.into_values() {
         let _ = task.await;
     }
-    let replay_session = flow.take_replay(now_unix()).await;
-    if !replay_session.subscriptions.is_empty() {
-        let mut global = state.replay.lock().await;
-        global.insert(connection.session.clone(), replay_session);
-        expire_replay(&mut global, now_unix());
-    }
     drop(sender);
     drop(connection.sender);
     if tokio::time::timeout(WRITE_TIMEOUT, &mut writer)
@@ -1326,12 +1043,6 @@ async fn run_socket_inner(
 
 impl Connection {
     async fn handle_message(&mut self, message: axum::extract::ws::Message) -> Result<(), ()> {
-        {
-            let state = self.flow.state.lock().await;
-            self.subscriptions.retain(|id, task| {
-                !task.is_finished() || state.replay.subscriptions.contains_key(id)
-            });
-        }
         let decoded = match decode_client_frame(message) {
             Ok(frame) => frame,
             Err(code) => {
@@ -1371,14 +1082,10 @@ impl Connection {
                 Ok(())
             }
             ClientFrame::Subscribe {
-                id,
-                kind,
-                query,
-                resume,
-                ..
+                id, kind, query, ..
             } => {
                 if let Some(query) = SubscriptionQuery::new(kind, query) {
-                    self.subscribe(id, query, resume).await
+                    self.subscribe(id, query).await
                 } else {
                     let _ = send_text(&self.sender, error_frame(Some(&id), "invalid_query", false))
                         .await;
@@ -1388,16 +1095,7 @@ impl Connection {
         }
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "subscription validation, replay, and task setup form one protocol transition"
-    )]
-    async fn subscribe(
-        &mut self,
-        id: String,
-        query: SubscriptionQuery,
-        resume: Option<Resume>,
-    ) -> Result<(), ()> {
+    async fn subscribe(&mut self, id: String, query: SubscriptionQuery) -> Result<(), ()> {
         if self.subscriptions.contains_key(&id) {
             let _ = send_text(
                 &self.sender,
@@ -1422,98 +1120,16 @@ impl Connection {
             let _ = send_text(&self.sender, error_frame(Some(&id), error, false)).await;
             return Ok(());
         }
-        let identity = query.identity().map_err(|_| ())?;
-        let mut mode = "snapshot";
-        let mut head_seq = 0;
-        let mut replay_after_seq = 0;
-        let retained = self
-            .flow
-            .state
-            .lock()
-            .await
-            .replay
-            .subscriptions
-            .remove(&id);
-        if let Some(ref resume) = resume {
-            if let Some(subscription) = retained {
-                let epoch_items: Vec<_> = subscription
-                    .items
-                    .iter()
-                    .filter(|item| item.epoch == resume.epoch)
-                    .collect();
-                if subscription.query != identity {
-                    let after = epoch_items.last().map_or(0, |item| item.seq);
-                    let _ = send_text(
-                        &self.sender,
-                        gap_frame(&id, &resume.epoch, after, "resume_mismatch", false),
-                    )
-                    .await;
-                } else if epoch_items.first().is_some_and(|item| item.seq > 1)
-                    && resume.after_seq < epoch_items.first().map_or(0, |item| item.seq)
-                {
-                    let _ = send_text(
-                        &self.sender,
-                        gap_frame(
-                            &id,
-                            &resume.epoch,
-                            resume.after_seq,
-                            "client_overflow",
-                            false,
-                        ),
-                    )
-                    .await;
-                } else if epoch_items.first().is_none_or(|item| item.seq != 1)
-                    || epoch_items
-                        .windows(2)
-                        .any(|items| items[1].seq != items[0].seq + 1)
-                    || epoch_items
-                        .last()
-                        .is_none_or(|item| item.seq < resume.after_seq)
-                {
-                    // Deltas alone cannot reconstruct the delivered view after
-                    // the baseline snapshot has been evicted, even at the head.
-                    let after = epoch_items.last().map_or(0, |item| item.seq);
-                    let _ = send_text(
-                        &self.sender,
-                        gap_frame(&id, &resume.epoch, after, "sequence_gap", false),
-                    )
-                    .await;
-                } else {
-                    mode = "resume";
-                    head_seq = epoch_items.last().map_or(0, |item| item.seq);
-                    replay_after_seq = resume.after_seq;
-                    drop(epoch_items);
-                    self.flow
-                        .state
-                        .lock()
-                        .await
-                        .replay
-                        .subscriptions
-                        .insert(id.clone(), subscription);
-                }
-            } else {
-                let code = self.resume_unavailable.unwrap_or("sequence_gap");
-                let _ = send_text(
-                    &self.sender,
-                    gap_frame(&id, &resume.epoch, resume.after_seq, code, false),
-                )
-                .await;
-            }
-        }
         let interval = match query {
             SubscriptionQuery::RequestsTable { .. } => 1_000,
             _ => 5_000,
         };
-        let new_epoch = format!("e-{}", opaque_id(&self.state, id.as_str()));
-        let epoch = selected_epoch(new_epoch, mode, resume.as_ref());
-        if mode == "resume" {
-            self.flow.resume(&id, &epoch, replay_after_seq).await;
-        }
+        let epoch = format!("e-{}", opaque_id(&self.state, id.as_str()));
         let _ = send_text(
             &self.sender,
             json!({
-                "v":1,"type":"subscribed","id":id,"epoch":epoch,"mode":mode,
-                "head_seq":head_seq,"interval_ms":interval
+                "v":1,"type":"subscribed","id":id,"epoch":epoch,
+                "interval_ms":interval
             }),
         )
         .await;
@@ -1523,9 +1139,6 @@ impl Connection {
             self.sender.clone(),
             id.clone(),
             query,
-            identity,
-            head_seq,
-            replay_after_seq,
             epoch,
             Arc::clone(&self.close),
             self.state.shutdown.subscribe(),
@@ -1554,26 +1167,13 @@ fn decode_client_frame(message: axum::extract::ws::Message) -> Result<ClientFram
     if version != 1 {
         return Err("unsupported_version");
     }
-    if matches!(
-        &frame,
-        ClientFrame::Subscribe { resume: Some(resume), .. }
-            if resume.after_seq > MAX_SAFE_JSON_INTEGER
-    ) {
-        return Err("numeric_range_unsupported");
-    }
     let fields_valid = match &frame {
         ClientFrame::Ack { id, epoch, .. } => valid_subscription_id(id) && valid_wire_handle(epoch),
-        ClientFrame::Auth { resume_session, .. } => {
-            resume_session.as_deref().is_none_or(valid_wire_handle)
-        }
+        ClientFrame::Auth { .. } => true,
         ClientFrame::Pong { nonce, .. } => valid_wire_handle(nonce),
-        ClientFrame::Subscribe { id, resume, .. } => {
+        ClientFrame::Subscribe { id, .. } | ClientFrame::Unsubscribe { id, .. } => {
             valid_subscription_id(id)
-                && resume
-                    .as_ref()
-                    .is_none_or(|resume| valid_wire_handle(&resume.epoch))
         }
-        ClientFrame::Unsubscribe { id, .. } => valid_subscription_id(id),
     };
     if fields_valid {
         Ok(frame)
@@ -1823,7 +1423,7 @@ impl SnapshotSurfaceWire {
 #[allow(clippy::too_many_arguments)]
 #[expect(
     clippy::too_many_lines,
-    reason = "replay, live evaluation, and shutdown cancellation form one subscription loop"
+    reason = "live evaluation and shutdown cancellation form one subscription loop"
 )]
 async fn run_subscription(
     state: ControlState,
@@ -1831,73 +1431,14 @@ async fn run_subscription(
     sender: mpsc::Sender<Outbound>,
     id: String,
     query: SubscriptionQuery,
-    identity: String,
-    replay_head: u64,
-    replay_after_seq: u64,
     initial_epoch: String,
     close: Arc<Notify>,
     mut shutdown: watch::Receiver<bool>,
 ) {
     let mut epoch = initial_epoch;
-    let mut seq = replay_after_seq;
+    let mut seq = 0;
     let mut previous: Option<ViewState> = None;
     let mut invalidated = None;
-    for item_seq in 1..=replay_head {
-        if *shutdown.borrow() {
-            return;
-        }
-        let bytes = {
-            let state = flow.state.lock().await;
-            state
-                .replay
-                .subscriptions
-                .get(&id)
-                .and_then(|subscription| {
-                    subscription
-                        .items
-                        .iter()
-                        .find(|item| item.epoch == epoch && item.seq == item_seq)
-                })
-                .map(|item| item.bytes.clone())
-        };
-        let Some(bytes) = bytes else {
-            let _ = send_text(
-                &sender,
-                gap_frame(&id, &epoch, seq, "client_overflow", false),
-            )
-            .await;
-            flow.discard(&id).await;
-            epoch = format!("e-{}", opaque_id(&state, id.as_str()));
-            seq = 0;
-            previous = None;
-            break;
-        };
-        let Ok(frame) = serde_json::from_slice::<Value>(&bytes) else {
-            flow.discard(&id).await;
-            close_subscription(
-                &sender,
-                error_frame(Some(&id), "storage_corrupt", false),
-                &close,
-            );
-            return;
-        };
-        if item_seq > seq {
-            if let Err(error) = flow.acquire(&id, &epoch, item_seq, bytes.len()).await {
-                close_subscription(&sender, error, &close);
-                return;
-            }
-            if send_text(&sender, frame.clone()).await.is_err() {
-                return;
-            }
-            seq = item_seq;
-        }
-        if previous.is_none() {
-            previous = ViewState::from_frame(&frame);
-        } else if let Some(view) = previous.as_mut() {
-            view.apply(&frame);
-        }
-    }
-
     loop {
         if *shutdown.borrow() {
             break;
@@ -1939,9 +1480,7 @@ async fn run_subscription(
                 if previous.is_none() {
                     seq += 1;
                     let frame = data_frame("snapshot", &id, &epoch, seq, None, &view, None);
-                    if let Err(error) =
-                        send_data(&flow, &sender, &id, &identity, &epoch, seq, frame).await
-                    {
+                    if let Err(error) = send_data(&flow, &sender, &id, &epoch, seq, frame).await {
                         if error["type"] == "error" {
                             flow.discard(&id).await;
                         }
@@ -1967,9 +1506,7 @@ async fn run_subscription(
                         &view,
                         Some((&upserts, &removes)),
                     );
-                    if let Err(error) =
-                        send_data(&flow, &sender, &id, &identity, &epoch, seq, frame).await
-                    {
+                    if let Err(error) = send_data(&flow, &sender, &id, &epoch, seq, frame).await {
                         if error["type"] == "error" {
                             flow.discard(&id).await;
                         }
@@ -2025,17 +1562,6 @@ impl ViewCollection {
             Self::RequestUsage => "request_usage",
         }
     }
-
-    fn from_wire(value: &str) -> Option<Self> {
-        match value {
-            "credentials" => Some(Self::Credentials),
-            "snapshots" => Some(Self::Snapshots),
-            "reset_events" => Some(Self::ResetEvents),
-            "requests" => Some(Self::Requests),
-            "request_usage" => Some(Self::RequestUsage),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -2069,66 +1595,6 @@ enum ViewKey {
 }
 
 impl ViewKey {
-    fn parse(collection: ViewCollection, value: &str) -> Option<Self> {
-        match collection {
-            ViewCollection::Credentials => {
-                let value = serde_json::from_str::<Value>(value).ok()?;
-                let [provider, credential] = value.as_array()?.as_slice() else {
-                    return None;
-                };
-                Some(Self::Credential {
-                    credential: credential.as_str()?.to_owned(),
-                    provider: provider.as_str()?.to_owned(),
-                })
-            }
-            ViewCollection::Snapshots => Some(Self::Snapshot {
-                id: value.to_owned(),
-            }),
-            ViewCollection::ResetEvents => {
-                let value = serde_json::from_str::<Value>(value).ok()?;
-                let [preceding, current, dimension, pool, kind] = value.as_array()?.as_slice()
-                else {
-                    return None;
-                };
-                Some(Self::ResetEvent {
-                    current: current.as_str()?.to_owned(),
-                    dimension: match dimension.as_str()? {
-                        "quota" => ResetDimension::Quota,
-                        "credit" => ResetDimension::Credit,
-                        _ => return None,
-                    },
-                    kind: kind.as_str()?.to_owned(),
-                    pool: pool.as_str()?.to_owned(),
-                    preceding: preceding.as_str()?.to_owned(),
-                })
-            }
-            ViewCollection::Requests => Some(Self::Request {
-                id: value.to_owned(),
-            }),
-            ViewCollection::RequestUsage => {
-                let value = serde_json::from_str::<Value>(value).ok()?;
-                let [bucket, client, group, provider, credential, model, outcome] =
-                    value.as_array()?.as_slice()
-                else {
-                    return None;
-                };
-                Some(Self::RequestUsage {
-                    bucket_start_unix: bucket.as_i64()?,
-                    client: match client {
-                        Value::Null => None,
-                        Value::String(client) => Some(client.clone()),
-                        _ => return None,
-                    },
-                    credential: credential.as_str()?.to_owned(),
-                    group: group.as_str()?.to_owned(),
-                    model: model.as_str()?.to_owned(),
-                    outcome: outcome.as_str()?.to_owned(),
-                    provider: provider.as_str()?.to_owned(),
-                })
-            }
-        }
-    }
-
     fn wire_key(&self) -> String {
         match self {
             Self::Credential {
@@ -2223,74 +1689,6 @@ impl ViewState {
             .insert(key, value);
     }
 
-    fn from_frame(frame: &Value) -> Option<Self> {
-        if frame.get("type").and_then(Value::as_str) != Some("snapshot") {
-            return None;
-        }
-        let collections = frame.get("collections")?.as_object()?;
-        let mut view = Self {
-            collections: BTreeMap::new(),
-            meta: frame.get("meta")?.clone(),
-        };
-        for (name, entries) in collections {
-            let collection = ViewCollection::from_wire(name)?;
-            let rows = view.collections.entry(collection).or_default();
-            for entry in entries.as_array()? {
-                let key = ViewKey::parse(collection, entry.get("key")?.as_str()?)?;
-                rows.insert(key, entry.get("value")?.clone());
-            }
-        }
-        Some(view)
-    }
-
-    fn apply(&mut self, frame: &Value) {
-        if frame.get("type").and_then(Value::as_str) != Some("delta") {
-            if let Some(view) = Self::from_frame(frame) {
-                *self = view;
-            }
-            return;
-        }
-        if let Some(upserts) = frame.get("upserts").and_then(Value::as_object) {
-            for (name, entries) in upserts {
-                let Some(collection) = ViewCollection::from_wire(name) else {
-                    continue;
-                };
-                for entry in entries.as_array().into_iter().flatten() {
-                    let Some(key) = entry.get("key").and_then(Value::as_str) else {
-                        continue;
-                    };
-                    let Some(key) = ViewKey::parse(collection, key) else {
-                        continue;
-                    };
-                    if let Some(value) = entry.get("value") {
-                        self.insert(collection, key, value.clone());
-                    }
-                }
-            }
-        }
-        if let Some(removes) = frame.get("removes").and_then(Value::as_object) {
-            for (name, entries) in removes {
-                let Some(collection) = ViewCollection::from_wire(name) else {
-                    continue;
-                };
-                for entry in entries.as_array().into_iter().flatten() {
-                    let Some(key) = entry.get("key").and_then(Value::as_str) else {
-                        continue;
-                    };
-                    let Some(key) = ViewKey::parse(collection, key) else {
-                        continue;
-                    };
-                    if let Some(rows) = self.collections.get_mut(&collection) {
-                        rows.remove(&key);
-                    }
-                }
-            }
-        }
-        if let Some(meta) = frame.get("meta") {
-            self.meta = meta.clone();
-        }
-    }
-
     fn diff(&self, next: &Self) -> ViewDiff {
         let mut upserts = next
             .collections
@@ -2374,7 +1772,6 @@ async fn send_data(
     flow: &Flow,
     sender: &mpsc::Sender<Outbound>,
     id: &str,
-    identity: &str,
     epoch: &str,
     seq: u64,
     frame: Value,
@@ -2388,7 +1785,6 @@ async fn send_data(
         return Err(error_frame(Some(id), "numeric_range_unsupported", false));
     }
     flow.acquire(id, epoch, seq, bytes.len()).await?;
-    flow.record(id, identity, &frame, epoch, seq).await;
     sender
         .send(Outbound::Text(frame))
         .await
@@ -2757,21 +2153,13 @@ fn safe_json_numbers(value: &Value) -> bool {
     }
 }
 
-fn expire_replay(replay: &mut BTreeMap<String, ReplaySession>, now: i64) {
-    replay.retain(|_, session| {
-        now.saturating_sub(session.disconnected_at_unix)
-            < i64::try_from(REPLAY_TTL_SECONDS).unwrap_or(i64::MAX)
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         ClientFrame, ControlServer, ControlState, Flow, MAX_UNACKED_BYTES, MAX_UNACKED_FRAMES,
-        Outbound, QueryBody, REPLAY_FRAME_LIMIT, REPLAY_SESSION_BYTES, ReplayItem, ReplaySession,
-        ReplaySubscription, SubscriptionKind, SubscriptionQuery, ViewState, close_subscription,
-        data_frame, decode_client_frame, expire_replay, gap_frame, now_unix, router,
-        validate_query,
+        Outbound, QueryBody, RequestCursor, RequestsTableQuery, SubscriptionKind,
+        SubscriptionQuery, Window, close_subscription, cursor_string, decode_client_frame,
+        gap_frame, now_unix, router,
     };
     use airlock_core::config::{Config, RawConfig};
     use airlock_core::storage::SqliteStorage;
@@ -2784,7 +2172,7 @@ mod tests {
     use http_body_util::BodyExt;
     use serde_json::Value;
     use sqlx::Connection;
-    use std::{collections::BTreeMap, os::unix::fs::PermissionsExt, sync::Arc, time::Duration};
+    use std::{os::unix::fs::PermissionsExt, sync::Arc, time::Duration};
     use tokio::sync::{Notify, mpsc, watch};
     use tower::ServiceExt;
 
@@ -2826,8 +2214,7 @@ mod tests {
                 "window": {"last_seconds": 86400},
                 "limit": 1000,
                 "unexpected": true
-            },
-            "resume": null
+            }
         });
         assert!(decode_client_frame(Message::Text(unknown.to_string().into())).is_err());
 
@@ -2844,7 +2231,6 @@ mod tests {
                 "window": {"last_seconds": 86400},
                 "limit": 1000
             },
-            "resume": null
         });
         let ClientFrame::Subscribe {
             kind,
@@ -2863,37 +2249,6 @@ mod tests {
         assert!(SubscriptionQuery::new(kind, overview).is_none());
     }
 
-    #[test]
-    fn preserves_literal_rolling_window_in_normalized_query_identity() {
-        let value = serde_json::json!({
-            "v": 1,
-            "type": "subscribe",
-            "id": "quota-claude",
-            "kind": "usage.series",
-            "query": {
-                "provider": "claude",
-                "credential": "claude",
-                "source": "out_of_band_fetch",
-                "surface": "claude_subscription",
-                "window": {"last_seconds": 86400},
-                "limit": 1000
-            },
-            "resume": null
-        });
-        let ClientFrame::Subscribe {
-            kind,
-            query: QueryBody::UsageSeries(query),
-            ..
-        } = decode(&value)
-        else {
-            panic!("usage series fixture");
-        };
-        let query = SubscriptionQuery::new(kind, QueryBody::UsageSeries(query)).expect("query");
-        validate_query(&query).expect("valid query");
-        let identity = query.identity().expect("identity");
-        assert!(identity.contains(r#""kind":"usage.series""#));
-        assert!(identity.contains(r#""window":{"last_seconds":86400}"#));
-    }
     async fn control_server_fixture() -> (ControlServer, tempfile::TempDir, tempfile::TempDir) {
         let directory = tempfile::tempdir().expect("test state");
         std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
@@ -3021,8 +2376,6 @@ mod tests {
             .expect("hello text");
         let hello = serde_json::from_str::<serde_json::Value>(hello.as_ref()).expect("hello json");
         assert_eq!(hello["type"], "hello");
-        let session = hello["session"].as_str().expect("session").to_owned();
-
         socket
             .send(tokio_tungstenite::tungstenite::Message::Text(
                 serde_json::json!({
@@ -3072,7 +2425,6 @@ mod tests {
             .await
             .expect("serve task")
             .expect("serve clean shutdown");
-        let _ = session;
     }
 
     async fn response_parts(
@@ -3287,19 +2639,6 @@ mod tests {
         serde_json::from_str(message.as_ref()).expect("frame json")
     }
 
-    fn overview_identity() -> String {
-        SubscriptionQuery::new(
-            super::SubscriptionKind::UsageOverview,
-            super::QueryBody::UsageOverview(super::OverviewQuery {
-                credential: None,
-                provider: None,
-            }),
-        )
-        .expect("overview query")
-        .identity()
-        .expect("identity")
-    }
-
     async fn connect_control(
         authority: &str,
     ) -> tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>
@@ -3402,67 +2741,19 @@ mod tests {
         socket: &mut tokio_tungstenite::WebSocketStream<
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
         >,
-        resume_session: Option<&str>,
-    ) -> String {
+    ) {
         socket_send(
             socket,
-            serde_json::json!({
-                "v":1,
-                "type":"auth",
-                "token":"fake-control-token",
-                "resume_session":resume_session
-            }),
+            serde_json::json!({"v":1,"type":"auth","token":"fake-control-token"}),
         )
         .await;
         let hello = websocket_json(socket).await;
         assert_eq!(hello["type"], "hello");
-        hello["session"].as_str().expect("session").to_owned()
-    }
-
-    async fn seed_replay(
-        state: &ControlState,
-        session: &str,
-        disconnected_at_unix: i64,
-        query: &str,
-        sequences: &[u64],
-    ) {
-        let view = ViewState::empty(super::SubscriptionKind::UsageOverview);
-        state.replay.lock().await.insert(
-            session.to_owned(),
-            ReplaySession {
-                disconnected_at_unix,
-                subscriptions: BTreeMap::from([(
-                    "overview".to_owned(),
-                    ReplaySubscription {
-                        bytes: 1,
-                        query: query.to_owned(),
-                        items: sequences
-                            .iter()
-                            .map(|seq| {
-                                let frame = data_frame(
-                                    if *seq == 1 { "snapshot" } else { "delta" },
-                                    "overview",
-                                    "retained-epoch",
-                                    *seq,
-                                    Some(seq.saturating_sub(1)),
-                                    &view,
-                                    None,
-                                );
-                                let bytes = serde_json::to_vec(&frame).expect("replay bytes");
-                                ReplayItem {
-                                    budget: None,
-                                    charged_bytes: 0,
-                                    bytes,
-                                    epoch: "retained-epoch".to_owned(),
-                                    seq: *seq,
-                                }
-                            })
-                            .collect(),
-                        budget: None,
-                        metadata_bytes: 0,
-                    },
-                )]),
-            },
+        assert!(
+            hello
+                .get("limits")
+                .and_then(|limits| limits.get("replay_ttl_seconds"))
+                .is_none()
         );
     }
 
@@ -3483,13 +2774,255 @@ mod tests {
         (authority, state, shutdown, serve)
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn stalled_flow_closes_1013_while_independent_flow_continues() {
+        let stalled = Arc::new(Flow::default());
+        let independent = Flow::default();
+        for seq in 1..=MAX_UNACKED_FRAMES {
+            stalled
+                .acquire("widget", "epoch", seq as u64, 1)
+                .await
+                .expect("fill credit");
+        }
+        let blocked = Arc::clone(&stalled);
+        let slow = tokio::spawn(async move {
+            blocked
+                .acquire("widget", "epoch", MAX_UNACKED_FRAMES as u64 + 1, 1)
+                .await
+                .expect_err("credit exhausted")
+        });
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(10)).await;
+        let gap = tokio::time::timeout(Duration::from_secs(1), slow)
+            .await
+            .expect("slow deadline")
+            .expect("slow task");
+        assert_eq!(gap["code"], "slow_consumer");
+        independent
+            .acquire("other", "epoch", 1, 1)
+            .await
+            .expect("independent flow has fresh credit");
+        let (sender, mut receiver) = mpsc::channel(2);
+        close_subscription(&sender, gap, &Notify::new());
+        assert!(matches!(receiver.try_recv(), Ok(Outbound::Text(_))));
+        assert!(matches!(
+            receiver.try_recv(),
+            Ok(Outbound::Close(Some(1013)))
+        ));
+    }
+
+    fn fixed_cursor_query() -> serde_json::Value {
+        let mut query = RequestsTableQuery {
+            before: None,
+            client: None,
+            credential: None,
+            group: None,
+            limit: 1,
+            model: None,
+            outcome: None,
+            provider: None,
+            window: Window::Fixed {
+                since_unix: 1,
+                until_unix: 2,
+            },
+        };
+        let cursor = RequestCursor::first(
+            &query,
+            airlock_core::storage::RequestRowCursor {
+                cutoff_id: 1,
+                occurred_at_unix: 1,
+                row_id: 1,
+            },
+            1,
+            2,
+        );
+        query.before = cursor_string(&cursor);
+        serde_json::to_value(&query).expect("fixed cursor query")
+    }
+
+    async fn subscribe_ack_fixed_cursor(
+        socket: &mut tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        id: &str,
+    ) -> String {
+        socket_send(
+            socket,
+            serde_json::json!({
+                "v":1,"type":"subscribe","id":id,"kind":"requests.table",
+                "query":fixed_cursor_query()
+            }),
+        )
+        .await;
+        let subscribed = websocket_json(socket).await;
+        assert_eq!(subscribed["type"], "subscribed");
+        let epoch = subscribed["epoch"].as_str().expect("epoch").to_owned();
+        let snapshot = websocket_json(socket).await;
+        assert_eq!(snapshot["type"], "snapshot");
+        assert_eq!(snapshot["id"], id);
+        socket_send(
+            socket,
+            serde_json::json!({"v":1,"type":"ack","id":id,"epoch":epoch,"seq":1}),
+        )
+        .await;
+        epoch
+    }
+
+    #[tokio::test]
+    async fn completed_cursor_subscriptions_retain_ownership_until_unsubscribe() {
+        let (server, _directory, _web) = control_server_fixture().await;
+        let (authority, state, shutdown, serve) = start_control(server);
+        let mut socket = connect_control(&authority).await;
+        authenticate(&mut socket).await;
+
+        let mut retired_epoch = String::new();
+        for index in 0..super::MAX_SUBSCRIPTIONS {
+            let id = format!("fixed-{index}");
+            let epoch = subscribe_ack_fixed_cursor(&mut socket, &id).await;
+            if index == 0 {
+                retired_epoch = epoch;
+            }
+        }
+
+        socket_send(
+            &mut socket,
+            serde_json::json!({
+                "v":1,"type":"subscribe","id":"ninth","kind":"requests.table",
+                "query":fixed_cursor_query()
+            }),
+        )
+        .await;
+        let refusal = websocket_json(&mut socket).await;
+        assert_eq!(refusal["type"], "error");
+        assert_eq!(refusal["id"], "ninth");
+        assert_eq!(refusal["code"], "resource_limit");
+
+        socket_send(
+            &mut socket,
+            serde_json::json!({"v":1,"type":"unsubscribe","id":"fixed-0"}),
+        )
+        .await;
+        assert_eq!(websocket_json(&mut socket).await["type"], "unsubscribed");
+
+        let replacement_epoch = subscribe_ack_fixed_cursor(&mut socket, "replacement").await;
+        assert_ne!(replacement_epoch, retired_epoch);
+
+        socket_send(
+            &mut socket,
+            serde_json::json!({
+                "v":1,"type":"ack","id":"fixed-0","epoch":retired_epoch,"seq":1
+            }),
+        )
+        .await;
+        let invalid = websocket_json(&mut socket).await;
+        assert_eq!(invalid["type"], "error");
+        assert_eq!(invalid["code"], "invalid_frame");
+        assert!(matches!(
+            websocket_message(&mut socket).await,
+            tokio_tungstenite::tungstenite::Message::Close(_)
+        ));
+        drop(socket);
+        wait_for_active_sessions(&state, 0).await;
+        shutdown.send(()).expect("shutdown");
+        serve.await.expect("serve task").expect("serve clean");
+    }
+
+    #[tokio::test]
+    async fn real_reconnect_authenticates_and_resubscribes_with_fresh_snapshots() {
+        let (server, directory, _web) = control_server_fixture().await;
+        let (authority, state, shutdown, serve) = start_control(server);
+        let subscribe = serde_json::json!({
+            "v":1,"type":"subscribe","id":"rows","kind":"requests.table",
+            "query":{"limit":200,"window":{"last_seconds":3600}}
+        });
+        let mut first = connect_control(&authority).await;
+        authenticate(&mut first).await;
+        socket_send(&mut first, subscribe.clone()).await;
+        let first_subscribed = websocket_json(&mut first).await;
+        assert_eq!(first_subscribed["type"], "subscribed");
+        let first_snapshot = websocket_json(&mut first).await;
+        assert_eq!(first_snapshot["type"], "snapshot");
+        assert_eq!(first_snapshot["seq"], 1);
+        drop(first);
+        wait_for_active_sessions(&state, 0).await;
+
+        let database = directory.path().join("airlock.sqlite3");
+        let mut writer =
+            sqlx::SqliteConnection::connect(&format!("sqlite://{}", database.display()))
+                .await
+                .expect("seed first request");
+        sqlx::query("INSERT INTO request_events (occurred_at_unix, client_id, group_id, credential_id, model_id, outcome, status_code, request_bytes, response_bytes, latency_ms, input_tokens, output_tokens, usage_complete, dropped_events) VALUES (?, NULL, 'anthropic', 'claude', 'model', 'completed', 200, 1, 1, 1, 1, 1, 1, 0)")
+            .bind(now_unix() - 1)
+            .execute(&mut writer)
+            .await
+            .expect("insert first request");
+        writer.close().await.expect("close first writer");
+
+        let mut second = connect_control(&authority).await;
+        authenticate(&mut second).await;
+        socket_send(&mut second, subscribe).await;
+        let second_subscribed = websocket_json(&mut second).await;
+        assert_eq!(second_subscribed["type"], "subscribed");
+        assert_ne!(second_subscribed["epoch"], first_subscribed["epoch"]);
+        let second_snapshot = websocket_json(&mut second).await;
+        assert_eq!(second_snapshot["type"], "snapshot");
+        assert_eq!(second_snapshot["seq"], 1);
+        assert_eq!(second_snapshot["epoch"], second_subscribed["epoch"]);
+        assert_eq!(
+            second_snapshot["collections"]["requests"]
+                .as_array()
+                .expect("rows")
+                .len(),
+            1
+        );
+        socket_send(
+            &mut second,
+            serde_json::json!({
+                "v":1,"type":"ack","id":"rows",
+                "epoch":second_subscribed["epoch"],"seq":1
+            }),
+        )
+        .await;
+
+        let mut writer =
+            sqlx::SqliteConnection::connect(&format!("sqlite://{}", database.display()))
+                .await
+                .expect("seed second request");
+        sqlx::query("INSERT INTO request_events (occurred_at_unix, client_id, group_id, credential_id, model_id, outcome, status_code, request_bytes, response_bytes, latency_ms, input_tokens, output_tokens, usage_complete, dropped_events) VALUES (?, NULL, 'anthropic', 'claude', 'model', 'completed', 200, 1, 1, 1, 1, 1, 1, 0)")
+            .bind(now_unix() - 1)
+            .execute(&mut writer)
+            .await
+            .expect("insert second request");
+        writer.close().await.expect("close second writer");
+        let delta = tokio::time::timeout(Duration::from_secs(2), websocket_json(&mut second))
+            .await
+            .expect("delta deadline");
+        assert_eq!(delta["type"], "delta");
+        assert_eq!(delta["epoch"], second_subscribed["epoch"]);
+        assert_eq!(delta["seq"], 2);
+        assert_eq!(delta["prev_seq"], 1);
+        socket_send(
+            &mut second,
+            serde_json::json!({
+                "v":1,"type":"ack","id":"rows",
+                "epoch":second_subscribed["epoch"],"seq":2
+            }),
+        )
+        .await;
+        second.close(None).await.expect("close second socket");
+        drop(second);
+        wait_for_active_sessions(&state, 0).await;
+        shutdown.send(()).expect("shutdown");
+        serve.await.expect("serve task").expect("serve clean");
+    }
+
     #[tokio::test]
     async fn shutdown_drains_preauth_and_subscribed_sockets_before_closing_reader() {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, state, shutdown, serve) = start_control(server);
         let mut preauth = connect_control(&authority).await;
         let mut subscribed = connect_control(&authority).await;
-        authenticate(&mut subscribed, None).await;
+        authenticate(&mut subscribed).await;
         socket_send(
             &mut subscribed,
             serde_json::json!({"v":1,"type":"subscribe","id":"before","kind":"usage.overview","query":{}}),
@@ -3546,352 +3079,6 @@ mod tests {
                 "no hello or new snapshot after shutdown: {next:?}"
             );
         }
-    }
-
-    #[tokio::test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one loopback socket observes slow flow, isolation, and clean shutdown"
-    )]
-    async fn real_stalled_consumer_closes_1013_while_other_sessions_continue() {
-        let (server, directory, _web) = control_server_fixture().await;
-        let (authority, state, shutdown, serve) = start_control(server);
-        let sequences = (1..=MAX_UNACKED_FRAMES as u64).collect::<Vec<_>>();
-        seed_replay(
-            &state,
-            "slow-session",
-            now_unix() - 1,
-            &overview_identity(),
-            &sequences,
-        )
-        .await;
-
-        let mut slow = connect_control(&authority).await;
-        authenticate(&mut slow, Some("slow-session")).await;
-        socket_send(
-            &mut slow,
-            serde_json::json!({
-                "v":1, "type":"subscribe", "id":"overview",
-                "kind":"usage.overview", "query":{},
-                "resume":{"after_seq":0, "epoch":"retained-epoch"}
-            }),
-        )
-        .await;
-        let subscribed = websocket_json(&mut slow).await;
-        assert_eq!(subscribed["type"], "subscribed");
-        assert_eq!(subscribed["mode"], "resume");
-        for expected in 1..=MAX_UNACKED_FRAMES as u64 {
-            let replayed = websocket_json(&mut slow).await;
-            assert_eq!(replayed["seq"], expected, "replayed sequence");
-        }
-
-        let mut independent = connect_control(&authority).await;
-        authenticate(&mut independent, None).await;
-        socket_send(
-            &mut independent,
-            serde_json::json!({
-                "v":1, "type":"subscribe", "id":"overview",
-                "kind":"usage.overview", "query":{}
-            }),
-        )
-        .await;
-        assert_eq!(websocket_json(&mut independent).await["type"], "subscribed");
-        assert_eq!(websocket_json(&mut independent).await["type"], "snapshot");
-
-        let writer = airlock_core::storage::SqliteStorage::open(
-            directory.path(),
-            state.config.storage_identities(1),
-        )
-        .await
-        .expect("writer alongside control server");
-        writer
-            .append_provider_snapshot_observed(airlock_core::storage::ProviderSnapshot {
-                account_id: "concurrent-account".to_owned(),
-                client: None,
-                claude_limits: Vec::new(),
-                credential: airlock_core::ids::CredentialId::try_from("claude")
-                    .expect("credential"),
-                credits: Vec::new(),
-                fetched_at_unix: now_unix(),
-                fetch_status: airlock_core::storage::SnapshotFetchStatus::Success,
-                gap_reason: None,
-                group: None,
-                header_windows: Vec::new(),
-                metrics: Vec::new(),
-                pools: Vec::new(),
-                provider: airlock_core::ids::ProviderId::try_from("claude").expect("provider"),
-                source: airlock_core::storage::SnapshotSource::OutOfBandFetch,
-                surface: airlock_core::storage::SnapshotSurface::ClaudeSubscription,
-            })
-            .await;
-        writer.close().await.expect("close concurrent writer");
-
-        let gap = tokio::time::timeout(Duration::from_secs(12), async {
-            loop {
-                match slow.next().await.expect("slow stream") {
-                    Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
-                        let frame: serde_json::Value =
-                            serde_json::from_str(text.as_ref()).expect("slow frame JSON");
-                        if frame["type"] == "gap" {
-                            break frame;
-                        }
-                    }
-                    Ok(tokio_tungstenite::tungstenite::Message::Close(frame)) => {
-                        panic!("close arrived before slow_consumer gap: {frame:?}");
-                    }
-                    other => panic!("unexpected slow frame: {other:?}"),
-                }
-            }
-        })
-        .await
-        .expect("slow-consumer deadline");
-        assert_eq!(gap["code"], "slow_consumer");
-        let closed = slow.next().await.expect("close stream");
-        let close_code = match closed {
-            Ok(tokio_tungstenite::tungstenite::Message::Close(frame)) => {
-                frame.map_or(0, |frame| u16::from(frame.code))
-            }
-            other => panic!("unexpected slow close: {other:?}"),
-        };
-        assert_eq!(close_code, 1013, "slow consumer must close 1013");
-        drop(slow);
-        wait_for_active_sessions(&state, 1).await;
-
-        independent
-            .close(None)
-            .await
-            .expect("close independent socket");
-        drop(independent);
-        wait_for_active_sessions(&state, 0).await;
-        shutdown.send(()).expect("shutdown");
-        serve.await.expect("serve task").expect("serve clean");
-    }
-
-    #[tokio::test]
-    async fn repeat_unsubscribe_discards_replay_permanently() {
-        let (server, _directory, _web) = control_server_fixture().await;
-        let (authority, state, shutdown, serve) = start_control(server);
-        let mut first = connect_control(&authority).await;
-        let session = authenticate(&mut first, None).await;
-        socket_send(
-            &mut first,
-            serde_json::json!({
-                "v":1, "type":"subscribe", "id":"overview",
-                "kind":"usage.overview", "query":{}
-            }),
-        )
-        .await;
-        let subscribed = websocket_json(&mut first).await;
-        assert_eq!(subscribed["type"], "subscribed");
-        let snapshot = websocket_json(&mut first).await;
-        assert_eq!(snapshot["type"], "snapshot");
-        socket_send(
-            &mut first,
-            serde_json::json!({
-                "v":1, "type":"ack", "id":"overview",
-                "epoch":subscribed["epoch"], "seq":snapshot["seq"]
-            }),
-        )
-        .await;
-        for _ in 0..2 {
-            socket_send(
-                &mut first,
-                serde_json::json!({"v":1, "type":"unsubscribe", "id":"overview"}),
-            )
-            .await;
-            let unsubscribed = websocket_json(&mut first).await;
-            assert_eq!(unsubscribed["type"], "unsubscribed");
-        }
-        first.close(None).await.expect("close first socket");
-        drop(first);
-        wait_for_active_sessions(&state, 0).await;
-        assert!(state.replay.lock().await.is_empty());
-
-        let mut second = connect_control(&authority).await;
-        authenticate(&mut second, Some(&session)).await;
-        socket_send(
-            &mut second,
-            serde_json::json!({
-                "v":1, "type":"subscribe", "id":"overview",
-                "kind":"usage.overview", "query":{},
-                "resume":{"after_seq":1, "epoch":subscribed["epoch"]}
-            }),
-        )
-        .await;
-        let gap = websocket_json(&mut second).await;
-        assert_eq!(gap["type"], "gap");
-        assert_eq!(gap["code"], "resume_unavailable");
-        assert_eq!(websocket_json(&mut second).await["type"], "subscribed");
-        second.close(None).await.expect("close second socket");
-        drop(second);
-        wait_for_active_sessions(&state, 0).await;
-        shutdown.send(()).expect("shutdown");
-        serve.await.expect("serve task").expect("serve clean");
-    }
-
-    #[tokio::test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one reconnect scenario covers replay, resnapshot, ack, and head resume"
-    )]
-    async fn real_reconnect_replays_contiguous_frames_then_head_resume_skips_duplicates() {
-        let (server, _directory, _web) = control_server_fixture().await;
-        let (authority, state, shutdown, serve) = start_control(server);
-
-        let mut first = connect_control(&authority).await;
-        let session = authenticate(&mut first, None).await;
-        socket_send(
-            &mut first,
-            serde_json::json!({
-                "v":1,"type":"subscribe","id":"overview","kind":"usage.overview","query":{}
-            }),
-        )
-        .await;
-        let subscribed = websocket_json(&mut first).await;
-        assert_eq!(subscribed["type"], "subscribed");
-        assert_eq!(subscribed["mode"], "snapshot");
-        let snapshot = websocket_json(&mut first).await;
-        assert_eq!(snapshot["type"], "snapshot");
-        assert_eq!(snapshot["seq"], 1);
-        let retained_epoch = subscribed["epoch"].as_str().expect("epoch").to_owned();
-        socket_send(
-            &mut first,
-            serde_json::json!({
-                "v":1,"type":"ack","id":"overview","epoch":subscribed["epoch"],"seq":1
-            }),
-        )
-        .await;
-        drop(first);
-        wait_for_replay(&state, &session).await;
-
-        // One organic retained frame proves disconnect persistence; a second is
-        // synthetic so this test deterministically covers contiguous replay.
-        {
-            let mut replay = state.replay.lock().await;
-            let old = replay.get_mut(&session).expect("recorded replay");
-            let subscription = old
-                .subscriptions
-                .get_mut("overview")
-                .expect("recorded subscription");
-            let view = ViewState::empty(super::SubscriptionKind::UsageOverview);
-            let epoch = subscription
-                .items
-                .front()
-                .expect("organic epoch")
-                .epoch
-                .clone();
-            let (upserts, removes) = view.diff(&view);
-            let frame = data_frame(
-                "delta",
-                "overview",
-                &epoch,
-                2,
-                Some(1),
-                &view,
-                Some((&upserts, &removes)),
-            );
-            let bytes = serde_json::to_vec(&frame).expect("second frame");
-            subscription.bytes += bytes.len();
-            subscription.items.push_back(ReplayItem {
-                budget: None,
-                charged_bytes: 0,
-                bytes,
-                epoch,
-                seq: 2,
-            });
-        }
-
-        let mut second = connect_control(&authority).await;
-        let new_session = authenticate(&mut second, Some(&session)).await;
-        assert_ne!(new_session, session);
-        socket_send(
-            &mut second,
-            serde_json::json!({
-                "v":1,"type":"subscribe","id":"overview","kind":"usage.overview","query":{},
-                "resume":{"after_seq":1,"epoch":retained_epoch}
-            }),
-        )
-        .await;
-        let resumed = websocket_json(&mut second).await;
-        assert_eq!(resumed["type"], "subscribed");
-        assert_eq!(resumed["mode"], "resume");
-        assert_eq!(resumed["epoch"], retained_epoch);
-        assert_eq!(resumed["head_seq"], 2);
-        let two = websocket_json(&mut second).await;
-        assert_eq!(two["seq"], 2);
-        socket_send(
-            &mut second,
-            serde_json::json!({
-                "v":1,"type":"ack","id":"overview","epoch":retained_epoch,"seq":2
-            }),
-        )
-        .await;
-        // Replay alone may leave no parseable prior view, so the subscription's
-        // next snapshot is legitimate later data. Ack its head before testing
-        // a zero-frame head resume.
-        let third = websocket_json(&mut second).await;
-        assert_eq!(third["seq"], 3);
-        let head_epoch = third["epoch"].as_str().expect("head epoch").to_owned();
-        socket_send(
-            &mut second,
-            serde_json::json!({
-                "v":1,"type":"ack","id":"overview","epoch":retained_epoch,"seq":3
-            }),
-        )
-        .await;
-        drop(second);
-        wait_for_replay(&state, &new_session).await;
-        let applied_head = state
-            .replay
-            .lock()
-            .await
-            .get(&new_session)
-            .and_then(|session| session.subscriptions.get("overview"))
-            .and_then(|subscription| subscription.items.back())
-            .map(|item| item.seq)
-            .expect("retained head");
-        assert!(applied_head >= 3);
-
-        let mut head = connect_control(&authority).await;
-        let _head_session = authenticate(&mut head, Some(&new_session)).await;
-        socket_send(
-            &mut head,
-            serde_json::json!({
-                "v":1,"type":"subscribe","id":"overview","kind":"usage.overview","query":{},
-                "resume":{"after_seq":applied_head,"epoch":head_epoch}
-            }),
-        )
-        .await;
-        let head_subscribed = websocket_json(&mut head).await;
-        assert_eq!(head_subscribed["mode"], "resume");
-        assert_eq!(head_subscribed["head_seq"], applied_head);
-        if let Ok(Some(Ok(message))) =
-            tokio::time::timeout(Duration::from_millis(50), head.next()).await
-        {
-            let text = message.into_text().expect("live head update text");
-            let frame: Value = serde_json::from_str(text.as_ref()).expect("live head update JSON");
-            assert_eq!(frame["type"], "delta");
-            assert_eq!(frame["epoch"], head_epoch);
-            assert_eq!(frame["seq"], applied_head + 1);
-            assert_eq!(frame["prev_seq"], applied_head);
-        }
-        drop(head);
-
-        shutdown.send(()).expect("shutdown");
-        serve.await.expect("serve task").expect("serve clean");
-    }
-
-    async fn wait_for_replay(state: &ControlState, session: &str) {
-        tokio::time::timeout(Duration::from_secs(2), async {
-            loop {
-                if state.replay.lock().await.contains_key(session) {
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("replay deadline");
     }
 
     async fn wait_for_active_sessions(state: &ControlState, expected: usize) {
@@ -4017,7 +3204,7 @@ mod tests {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
 
         tokio::time::advance(super::PING_INTERVAL).await;
         for _ in 0..10 {
@@ -4076,7 +3263,7 @@ mod tests {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
 
         tokio::time::advance(super::PING_INTERVAL).await;
         for _ in 0..10 {
@@ -4113,50 +3300,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn real_resume_gaps_distinguish_expiry_mismatch_overflow_restart_and_holes() {
-        let (server, _directory, _web) = control_server_fixture().await;
-        let (authority, state, shutdown, serve) = start_control(server);
-        let now = now_unix();
-        let cases: &[(&str, i64, &str, &[u64], u64)] = &[
-            ("resume_expired", now - 61, "expired-session", &[1, 2], 1),
-            ("resume_mismatch", now - 1, "mismatch-session", &[1, 2], 1),
-            ("sequence_gap", now - 1, "gap-session", &[1, 3], 1),
-            ("client_overflow", now - 1, "overflow-session", &[2, 3], 0),
-            ("resume_unavailable", now - 1, "unknown-session", &[1, 2], 1),
-        ];
-        for (code, disconnected, session, sequences, after) in cases.iter().copied() {
-            let query = if code == "resume_mismatch" {
-                "wrong"
-            } else {
-                &overview_identity()
-            };
-            if code != "resume_unavailable" {
-                seed_replay(&state, session, disconnected, query, sequences).await;
-            }
-            let mut socket = connect_control(&authority).await;
-            authenticate(&mut socket, Some(session)).await;
-            socket_send(
-                &mut socket,
-                serde_json::json!({
-                    "v":1,"type":"subscribe","id":"overview","kind":"usage.overview","query":{},
-                    "resume":{"after_seq":after,"epoch":"retained-epoch"}
-                }),
-            )
-            .await;
-            let gap = websocket_json(&mut socket).await;
-            assert_eq!(gap["type"], "gap", "{code}");
-            assert_eq!(gap["code"], code, "{code}");
-            let subscribed = websocket_json(&mut socket).await;
-            assert_eq!(subscribed["type"], "subscribed", "{code}");
-            socket.close(None).await.expect("explicit client close");
-            drop(socket);
-            wait_for_active_sessions(&state, 0).await;
-        }
-        shutdown.send(()).expect("shutdown");
-        serve.await.expect("serve task").expect("serve clean");
-    }
-
-    #[tokio::test]
     async fn real_storage_gap_recovers_with_fresh_epoch_resnapshot() {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, state, shutdown, serve) = start_control(server);
@@ -4167,7 +3310,7 @@ mod tests {
             .push_back("query_budget_exceeded");
 
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
         socket_send(
             &mut socket,
             serde_json::json!({
@@ -4204,16 +3347,13 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn flow_rejects_seventeenth_frame_as_slow_consumer() {
+    async fn flow_rejects_seventeenth_frame_and_accepts_cumulative_ack() {
         let flow = Arc::new(Flow::default());
         let frame_bytes = MAX_UNACKED_BYTES / MAX_UNACKED_FRAMES;
-        let frame = serde_json::json!({"seq":"credit"});
         for seq in 1..=MAX_UNACKED_FRAMES {
             flow.acquire("sub", "epoch", seq as u64, frame_bytes)
                 .await
                 .expect("credit budget");
-            flow.record("sub", "query", &frame, "epoch", seq as u64)
-                .await;
         }
         let blocked = Arc::clone(&flow);
         let slow = tokio::spawn(async move {
@@ -4231,16 +3371,13 @@ mod tests {
             .expect("slow task");
         assert_eq!(slow["code"], "slow_consumer");
         assert_eq!(slow["action"], "resnapshot");
-
         flow.ack("sub", "epoch", MAX_UNACKED_FRAMES as u64)
             .await
             .expect("cumulative ack");
         {
             let state = flow.state.lock().await;
-            assert_eq!(
-                state.acked.get(&("sub".to_owned(), "epoch".to_owned())),
-                Some(&(MAX_UNACKED_FRAMES as u64))
-            );
+            assert!(state.unacked.is_empty());
+            assert_eq!(state.total_bytes, 0);
         }
         flow.ack("sub", "epoch", MAX_UNACKED_FRAMES as u64)
             .await
@@ -4273,40 +3410,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn replay_ring_enforces_frame_and_byte_limits() {
+    async fn repeated_epoch_retirement_releases_credit() {
         let flow = Flow::default();
-        let frame = serde_json::json!({"padding":"0".repeat(1_024)});
-        for seq in 1..=REPLAY_FRAME_LIMIT + 1 {
-            flow.record("sub", "query", &frame, "epoch", seq as u64)
-                .await;
-        }
-        {
+        for _ in 0..100 {
+            flow.acquire("widget", "epoch", 1, 10)
+                .await
+                .expect("fresh credit");
+            {
+                let state = flow.state.lock().await;
+                assert_eq!(state.delivered.len(), 1);
+            }
+            flow.discard("widget").await;
             let state = flow.state.lock().await;
-            let subscription = state.replay.subscriptions.get("sub").expect("ring");
-            assert_eq!(subscription.items.len(), REPLAY_FRAME_LIMIT);
-            assert_eq!(subscription.items.front().map(|item| item.seq), Some(2));
-            assert!(subscription.bytes <= REPLAY_SESSION_BYTES);
+            assert!(state.delivered.is_empty());
+            assert!(state.unacked.is_empty());
+            assert_eq!(state.total_bytes, 0);
         }
-
-        let byte_limited = Flow::default();
-        let large_frame = serde_json::json!({"padding":"0".repeat(16_000)});
-        for seq in 1..=REPLAY_FRAME_LIMIT + 1 {
-            byte_limited
-                .record("sub", "query", &large_frame, "epoch", seq as u64)
-                .await;
-        }
-        let state = byte_limited.state.lock().await;
-        let subscription = state.replay.subscriptions.get("sub").expect("byte ring");
-        assert!(subscription.items.len() < REPLAY_FRAME_LIMIT);
-        assert!(subscription.bytes <= REPLAY_SESSION_BYTES);
-        drop(state);
     }
+
     #[tokio::test]
     async fn real_snapshot_ack_delta_keeps_closed_collections_and_sibling_alive() {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, _state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
         socket_send(
             &mut socket,
             serde_json::json!({
@@ -4353,35 +3480,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn imported_unsubscribe_removes_old_session_replay() {
-        let (server, _directory, _web) = control_server_fixture().await;
-        let (authority, state, shutdown, serve) = start_control(server);
-        seed_replay(&state, "old", now_unix(), &overview_identity(), &[1, 2]).await;
-        let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, Some("old")).await;
-        socket_send(
-            &mut socket,
-            serde_json::json!({"v":1,"type":"unsubscribe","id":"overview"}),
-        )
-        .await;
-        assert_eq!(websocket_json(&mut socket).await["type"], "unsubscribed");
-        socket_send(
-            &mut socket,
-            serde_json::json!({
-                "v":1,"type":"subscribe","id":"overview","kind":"usage.overview","query":{},
-                "resume":{"epoch":"retained-epoch","after_seq":1}
-            }),
-        )
-        .await;
-        assert_eq!(websocket_json(&mut socket).await["type"], "gap");
-        assert_eq!(websocket_json(&mut socket).await["mode"], "snapshot");
-        assert_eq!(websocket_json(&mut socket).await["seq"], 1);
-        drop(socket);
-        shutdown.send(()).expect("shutdown");
-        serve.await.expect("serve task").expect("serve clean");
-    }
-
-    #[tokio::test]
     async fn failed_upgrades_release_slots_before_valid_socket() {
         let (server, _directory, _web) = control_server_fixture().await;
         let state = server.state.clone();
@@ -4408,7 +3506,7 @@ mod tests {
         }
         let (authority, _state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
         drop(socket);
         shutdown.send(()).expect("shutdown");
         serve.await.expect("serve task").expect("serve clean");
@@ -4425,7 +3523,7 @@ mod tests {
             ("rows", "valid", 2),
         ] {
             let mut socket = connect_control(&authority).await;
-            authenticate(&mut socket, None).await;
+            authenticate(&mut socket).await;
             socket_send(
                 &mut socket,
                 serde_json::json!({
@@ -4462,7 +3560,7 @@ mod tests {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, _state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
         for (index, (since, until, code)) in [
             (-60, 60, "invalid_query"),
             (0, 60, "invalid_query"),
@@ -4510,12 +3608,9 @@ mod tests {
             serde_json::json!({"v":1,"type":"unsubscribe","id":""}),
             serde_json::json!({"v":1,"type":"ack","id":"","epoch":"e","seq":1}),
             serde_json::json!({"v":1,"type":"ack","id":"ok","epoch":"","seq":1}),
-            serde_json::json!({"v":1,"type":"subscribe","id":"ok","kind":"usage.overview","query":{},"resume":{"epoch":"","after_seq":0}}),
         ] {
             let empty_len = frame.to_string().len();
-            let field = if frame["type"] == "subscribe" && frame.get("resume").is_some() {
-                &mut frame["resume"]["epoch"]
-            } else if frame["type"] == "ack" && frame["id"] == "ok" {
+            let field = if frame["type"] == "ack" && frame["id"] == "ok" {
                 &mut frame["epoch"]
             } else {
                 &mut frame["id"]
@@ -4523,7 +3618,7 @@ mod tests {
             *field = serde_json::Value::String("x".repeat(super::MAX_FRAME_BYTES - empty_len));
             assert_eq!(frame.to_string().len(), super::MAX_FRAME_BYTES);
             let mut socket = connect_control(&authority).await;
-            authenticate(&mut socket, None).await;
+            authenticate(&mut socket).await;
             socket_send(&mut socket, frame).await;
             let error = websocket_json(&mut socket).await;
             assert_eq!(error["code"], "invalid_frame");
@@ -4536,29 +3631,8 @@ mod tests {
             drop(socket);
             wait_for_active_sessions(&state, 0).await;
         }
-        for after_seq in [super::MAX_SAFE_JSON_INTEGER + 1, u64::MAX] {
-            let mut socket = connect_control(&authority).await;
-            authenticate(&mut socket, None).await;
-            socket_send(
-                &mut socket,
-                serde_json::json!({
-                    "v":1,"type":"subscribe","id":"ok","kind":"usage.overview","query":{},
-                    "resume":{"epoch":"e","after_seq":after_seq}
-                }),
-            )
-            .await;
-            let error = websocket_json(&mut socket).await;
-            assert_eq!(error["code"], "numeric_range_unsupported");
-            assert!(error["id"].is_null());
-            assert!(matches!(
-                websocket_message(&mut socket).await,
-                tokio_tungstenite::tungstenite::Message::Close(_)
-            ));
-            drop(socket);
-            wait_for_active_sessions(&state, 0).await;
-        }
         let mut sibling = connect_control(&authority).await;
-        authenticate(&mut sibling, None).await;
+        authenticate(&mut sibling).await;
         socket_send(&mut sibling, serde_json::json!({"v":1,"type":"subscribe","id":"ok","kind":"usage.overview","query":{}})).await;
         assert_eq!(websocket_json(&mut sibling).await["type"], "subscribed");
         assert_eq!(websocket_json(&mut sibling).await["type"], "snapshot");
@@ -4568,19 +3642,29 @@ mod tests {
     }
 
     #[test]
-    fn resume_is_closed_and_wrong_version_is_explicit() {
-        let mut frame = serde_json::json!({
+    fn retired_resume_fields_are_closed_and_wrong_version_is_explicit() {
+        let subscribe = serde_json::json!({
             "v":1,"type":"subscribe","id":"rows","kind":"usage.overview","query":{},
-            "resume":{"epoch":"e","after_seq":1,"extra":true}
+            "resume":{"epoch":"e","after_seq":1}
         });
-        assert!(decode_client_frame(Message::Text(frame.to_string().into())).is_err());
-        frame["resume"]
-            .as_object_mut()
-            .expect("resume")
-            .remove("extra");
-        frame["v"] = serde_json::json!(2);
         assert_eq!(
-            decode_client_frame(Message::Text(frame.to_string().into())).expect_err("version"),
+            decode_client_frame(Message::Text(subscribe.to_string().into()))
+                .expect_err("retired subscribe field"),
+            "invalid_frame"
+        );
+        let auth = serde_json::json!({
+            "v":1,"type":"auth","token":"fake-control-token","resume_session":"e"
+        });
+        assert_eq!(
+            decode_client_frame(Message::Text(auth.to_string().into()))
+                .expect_err("retired auth field"),
+            "invalid_frame"
+        );
+        let version = serde_json::json!({
+            "v":2,"type":"subscribe","id":"rows","kind":"usage.overview","query":{}
+        });
+        assert_eq!(
+            decode_client_frame(Message::Text(version.to_string().into())).expect_err("version"),
             "unsupported_version"
         );
     }
@@ -4608,102 +3692,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn replay_bounds_span_widgets_active_and_disconnected_sessions() {
-        let budget = Arc::new(super::AtomicUsize::new(0));
-        let mut retained = Vec::new();
-        let mut active = Vec::new();
-        for index in 0..6 {
-            let flow = Flow {
-                replay_bytes: Arc::clone(&budget),
-                ..Flow::default()
-            };
-            let frame = serde_json::json!({"padding":"x".repeat(32_000)});
-            for seq in 1..=80 {
-                flow.record(
-                    if seq % 2 == 0 { "a" } else { "b" },
-                    "query",
-                    &frame,
-                    "epoch",
-                    seq,
-                )
-                .await;
-            }
-            let state = flow.state.lock().await;
-            let frames: usize = state
-                .replay
-                .subscriptions
-                .values()
-                .map(|sub| sub.items.len())
-                .sum();
-            let bytes: usize = state
-                .replay
-                .subscriptions
-                .values()
-                .map(|sub| sub.bytes)
-                .sum();
-            assert!(frames <= REPLAY_FRAME_LIMIT);
-            assert!(bytes <= REPLAY_SESSION_BYTES);
-            assert!(budget.load(super::Ordering::Relaxed) <= super::REPLAY_TOTAL_BYTES);
-            drop(state);
-            if index % 2 == 0 {
-                retained.push(flow.take_replay(now_unix()).await);
-            } else {
-                // Keep active Flow ownership while later sessions try to fill the daemon ceiling.
-                active.push(flow);
-            }
-        }
-        drop(retained);
-        drop(active);
-        assert_eq!(budget.load(super::Ordering::Relaxed), 0);
-    }
-
-    #[tokio::test]
-    async fn large_unmatched_queries_remain_charged_across_reconnect_and_expiry() {
-        let (server, _directory, _web) = control_server_fixture().await;
-        let (authority, state, shutdown, serve) = start_control(server);
-        let mut socket = connect_control(&authority).await;
-        let mut session = authenticate(&mut socket, None).await;
-        for index in 0..8 {
-            socket_send(
-                &mut socket,
-                serde_json::json!({
-                    "v":1,"type":"subscribe","id":format!("rows-{index}"),
-                    "kind":"requests.table","query":{"limit":10,"model":"x".repeat(900_000),
-                        "window":{"since_unix":1,"until_unix":60}}
-                }),
-            )
-            .await;
-            assert_eq!(websocket_json(&mut socket).await["type"], "subscribed");
-            assert_eq!(websocket_json(&mut socket).await["type"], "snapshot");
-            let flow_bytes = state.replay_bytes.load(super::Ordering::Relaxed);
-            assert!(flow_bytes <= REPLAY_SESSION_BYTES);
-        }
-        drop(socket);
-        wait_for_replay(&state, &session).await;
-        for _ in 0..3 {
-            let replay = state.replay.lock().await;
-            let retained = replay.get(&session).expect("retained session");
-            let charged: usize = retained.subscriptions.values().map(|sub| sub.bytes).sum();
-            assert_eq!(charged, state.replay_bytes.load(super::Ordering::Relaxed));
-            assert!(charged <= REPLAY_SESSION_BYTES);
-            assert!(retained.subscriptions.len() <= 2);
-            drop(replay);
-            let mut resumed = connect_control(&authority).await;
-            let next = authenticate(&mut resumed, Some(&session)).await;
-            drop(resumed);
-            wait_for_replay(&state, &next).await;
-            session = next;
-        }
-        let mut replay = state.replay.lock().await;
-        expire_replay(&mut replay, now_unix() + 61);
-        assert!(replay.is_empty());
-        assert_eq!(state.replay_bytes.load(super::Ordering::Relaxed), 0);
-        drop(replay);
-        shutdown.send(()).expect("shutdown");
-        serve.await.expect("serve task").expect("serve clean");
-    }
-
-    #[tokio::test]
     async fn wire_client_null_selects_unknown_rows_and_binds_cursor() {
         let (server, directory, _web) = control_server_fixture().await;
         let path = directory.path().join("airlock.sqlite3");
@@ -4717,7 +3705,7 @@ mod tests {
         writer.close().await.expect("close test writer");
         let (authority, _state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
         for (id, client, expected) in [
             ("unknown", Some(Value::Null), 2),
             ("all", None, 3),
@@ -4768,7 +3756,7 @@ mod tests {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
         for code in [
             "storage_corrupt",
             "range_too_large",
@@ -4808,41 +3796,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn repeated_epoch_retirement_releases_credit_and_replay() {
-        let flow = Flow::default();
-        for seq in 0..100 {
-            let epoch = format!("epoch-{seq}");
-            flow.acquire("widget", &epoch, 1, 10)
-                .await
-                .expect("fresh credit");
-            flow.record(
-                "widget",
-                "identity",
-                &serde_json::json!({"seq":1}),
-                &epoch,
-                1,
-            )
-            .await;
-            let state = flow.state.lock().await;
-            assert_eq!(state.delivered.len(), 1);
-            assert_eq!(state.acked.len(), 1);
-            drop(state);
-            flow.discard("widget").await;
-            let state = flow.state.lock().await;
-            assert!(state.delivered.is_empty());
-            assert!(state.acked.is_empty());
-            assert!(state.unacked.is_empty());
-            assert_eq!(state.total_bytes, 0);
-            assert_eq!(flow.replay_bytes.load(super::Ordering::Relaxed), 0);
-        }
-    }
-
-    #[tokio::test]
     async fn real_series_metadata_delta_has_every_closed_collection() {
         let (server, _directory, _web) = control_server_fixture().await;
         let (authority, _state, shutdown, serve) = start_control(server);
         let mut socket = connect_control(&authority).await;
-        authenticate(&mut socket, None).await;
+        authenticate(&mut socket).await;
         socket_send(&mut socket, serde_json::json!({
             "v":1,"type":"subscribe","id":"series","kind":"usage.series",
             "query":{"provider":"claude","credential":"claude","source":"out_of_band_fetch","surface":"claude_subscription","limit":1000,"window":{"last_seconds":3600}}
@@ -4868,27 +3826,6 @@ mod tests {
         drop(socket);
         shutdown.send(()).expect("shutdown");
         serve.await.expect("serve task").expect("serve clean");
-    }
-}
-
-#[cfg(test)]
-mod epoch_tests {
-    use super::{Resume, selected_epoch};
-
-    #[test]
-    fn successful_resume_reuses_epoch_and_resnapshot_uses_fresh_epoch() {
-        let resume = Resume {
-            after_seq: 7,
-            epoch: "retained-epoch".to_owned(),
-        };
-        assert_eq!(
-            selected_epoch("new-epoch".to_owned(), "resume", Some(&resume)),
-            "retained-epoch"
-        );
-        assert_eq!(
-            selected_epoch("new-epoch".to_owned(), "snapshot", Some(&resume)),
-            "new-epoch"
-        );
     }
 }
 

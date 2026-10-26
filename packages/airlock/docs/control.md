@@ -25,20 +25,18 @@ report defaults; duplicate, unknown, or unsafe values fail with distinct errors.
 `airlock.v1` subprotocol. The first frame must authenticate within five seconds;
 invalid or non-auth frames close without a hello. Protocol v1 carries sibling
 `kind` and `query`, literal rolling windows, sequence numbers, epochs,
-cumulative acknowledgements, and resumable subscriptions.
+cumulative acknowledgements, and fresh subscriptions after reconnect.
 
 Each socket supports at most eight subscriptions, a 1 MiB frame limit, 16
-unacknowledged frames, and 2 MiB of unacknowledged data. Replay expires after 60
-seconds and is bounded to 128 frames, 2 MiB per session, and 8 MiB across active
-and disconnected sessions. Retained query identities, keys, epochs, and frame
-bookkeeping share those byte limits. When an older replay entry is evicted to
-make room, a later resume gets a sequence gap and must resnapshot. A 17th
-unacknowledged frame emits `slow_consumer`, closes 1013, and leaves other
-sessions and storage writers independent. Server pings every 15 seconds and
-closes after 30 seconds unless the exact nonce is returned. Replay gaps
-distinguish expiry, identity mismatch, sequence holes, client overflow, restart,
-and storage trouble. Unsubscribe is idempotent and permanently discards that
-subscription's replay. Retryable storage gaps use `action: retry`; the next
+unacknowledged frames, and 2 MiB of unacknowledged data. A 17th unacknowledged
+frame emits `slow_consumer`, closes 1013, and leaves other sockets and storage
+writers independent. Server pings every 15 seconds and closes after 30 seconds
+unless the exact nonce is returned. A reconnect authenticates a replacement
+socket and subscribes afresh; it carries over neither prior sequence credit nor
+retained frames. Server gaps distinguish sequence holes, restarts, slow
+consumers, and storage trouble, while client ingress overflow is reported
+separately by the web transport. Unsubscribe is idempotent and releases that
+subscription's flow credit. Retryable storage gaps use `action: retry`; the next
 successful evaluation resets the epoch and sends a fresh sequence-one snapshot
 rather than continuing a possibly partial delta chain. Snapshot and delta views
 contain every collection permitted by the subscription kind, including empty

@@ -2,7 +2,6 @@
   {
     "v": 1,
     "type": "hello",
-    "session": "fixture-session",
     "server_time_unix": 1792886400,
     "capabilities": [
       "requests.series",
@@ -13,8 +12,7 @@
     "limits": {
       "max_subscriptions": 8,
       "max_frame_bytes": 1048576,
-      "max_unacked_frames": 16,
-      "replay_ttl_seconds": 60
+      "max_unacked_frames": 16
     }
   },
   {
@@ -22,8 +20,6 @@
     "type": "subscribed",
     "id": "quota-claude",
     "epoch": "fixture-epoch",
-    "mode": "snapshot",
-    "head_seq": 0,
     "interval_ms": 5000
   },
   {
@@ -90,8 +86,8 @@
     "type": "gap",
     "id": "quota-claude",
     "epoch": "fixture-epoch",
-    "after_seq": 2,
-    "code": "resume_expired",
+    "after_seq": 1,
+    "code": "sequence_gap",
     "retryable": true,
     "action": "resnapshot"
   },

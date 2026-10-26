@@ -368,9 +368,6 @@ const SubscribeFrame = Schema.Union([
     id: subscriptionId,
     kind: Schema.Literals(["usage.overview"]),
     query: UsageOverviewBody,
-    resume: Schema.NullOr(
-      Schema.Struct({ epoch: opaqueString, after_seq: safeInteger }),
-    ),
   }),
   Schema.Struct({
     v: Schema.Literals([1]),
@@ -378,9 +375,6 @@ const SubscribeFrame = Schema.Union([
     id: subscriptionId,
     kind: Schema.Literals(["usage.series"]),
     query: UsageSeriesBody,
-    resume: Schema.NullOr(
-      Schema.Struct({ epoch: opaqueString, after_seq: safeInteger }),
-    ),
   }),
   Schema.Struct({
     v: Schema.Literals([1]),
@@ -388,9 +382,6 @@ const SubscribeFrame = Schema.Union([
     id: subscriptionId,
     kind: Schema.Literals(["requests.table"]),
     query: RequestsTableBody,
-    resume: Schema.NullOr(
-      Schema.Struct({ epoch: opaqueString, after_seq: safeInteger }),
-    ),
   }),
   Schema.Struct({
     v: Schema.Literals([1]),
@@ -398,9 +389,6 @@ const SubscribeFrame = Schema.Union([
     id: subscriptionId,
     kind: Schema.Literals(["requests.series"]),
     query: RequestsSeriesBody,
-    resume: Schema.NullOr(
-      Schema.Struct({ epoch: opaqueString, after_seq: safeInteger }),
-    ),
   }),
   Schema.Struct({
     v: Schema.Literals([1]),
@@ -408,9 +396,6 @@ const SubscribeFrame = Schema.Union([
     id: subscriptionId,
     kind: Schema.Literals(["logs.tail"]),
     query: LogsTailBody,
-    resume: Schema.NullOr(
-      Schema.Struct({ epoch: opaqueString, after_seq: safeInteger }),
-    ),
   }),
 ]);
 
@@ -434,11 +419,7 @@ type ViewMeta = Schema.Schema.Type<typeof ViewMeta>;
 export type ViewMetadata = ViewMeta;
 
 const gapCode = Schema.Literals([
-  "client_overflow",
   "query_budget_exceeded",
-  "resume_expired",
-  "resume_mismatch",
-  "resume_unavailable",
   "sequence_gap",
   "server_restart",
   "slow_consumer",
@@ -451,7 +432,6 @@ export const ClientFrame = Schema.Union([
     v: Schema.Literals([1]),
     type: Schema.Literals(["auth"]),
     token: Schema.String,
-    resume_session: Schema.NullOr(opaqueString),
   }),
   SubscribeFrame,
   Schema.Struct({
@@ -478,14 +458,12 @@ export const ServerFrame = Schema.Union([
   Schema.Struct({
     v: Schema.Literals([1]),
     type: Schema.Literals(["hello"]),
-    session: opaqueString,
     server_time_unix: safeInteger,
     capabilities: Schema.Array(Schema.String),
     limits: Schema.Struct({
       max_subscriptions: safeInteger,
       max_frame_bytes: safeInteger,
       max_unacked_frames: safeInteger,
-      replay_ttl_seconds: safeInteger,
     }),
   }),
   Schema.Struct({
@@ -493,8 +471,6 @@ export const ServerFrame = Schema.Union([
     type: Schema.Literals(["subscribed"]),
     id: subscriptionId,
     epoch: opaqueString,
-    mode: Schema.Literals(["snapshot", "resume"]),
-    head_seq: safeInteger,
     interval_ms: safeInteger,
   }),
   Schema.Struct({

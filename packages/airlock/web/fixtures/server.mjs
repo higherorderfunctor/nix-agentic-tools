@@ -33,8 +33,6 @@ const expectedOrigin =
 const expectedHost =
   process.env.AIRLOCK_FIXTURE_HOST_HEADER ?? "127.0.0.1:5173";
 const token = clientTranscript[0].token;
-const sessionTtlMs = frames.hello.limits.replay_ttl_seconds * 1_000;
-const sessionLimit = 4;
 const nowUnix = 1_200;
 const cadence = {
   "requests.series": 5_000,
@@ -42,8 +40,7 @@ const cadence = {
   "usage.overview": 5_000,
   "usage.series": 5_000,
 };
-const sessions = new Map();
-let nextSession = 0;
+let nextEpoch = 0;
 const scenarioTriggered = new Set();
 const timers = new Set();
 
@@ -348,13 +345,11 @@ function unchangedCollections(query, scenario) {
   );
 }
 
-function subscribedFrame(id, kind, epoch, mode, headSeq) {
+function subscribedFrame(id, kind, epoch) {
   return {
     ...frames.subscribed,
     id,
     epoch,
-    mode,
-    head_seq: headSeq,
     interval_ms: cadence[kind],
   };
 }
@@ -396,31 +391,6 @@ function deltaFrame(query, scenario, id, epoch, seq) {
 
 function errorFrame(id, code, retryable = false) {
   return { ...frames.error, id, code, retryable };
-}
-
-function retainSession(session, id, subscription) {
-  const prior = sessions.get(session);
-  const subscriptions = new Map(prior?.subscriptions ?? []);
-  subscriptions.set(id, subscription);
-  sessions.delete(session);
-  sessions.set(session, {
-    expiresAt: Date.now() + sessionTtlMs,
-    subscriptions,
-  });
-  while (sessions.size > sessionLimit)
-    sessions.delete(sessions.keys().next().value);
-}
-
-function retireSubscription(session, id) {
-  const retained = sessions.get(session);
-  retained?.subscriptions.delete(id);
-}
-
-function expireOldSessions() {
-  const now = Date.now();
-  for (const [session, value] of sessions) {
-    if (value.expiresAt <= now) sessions.delete(session);
-  }
 }
 
 function scheduleClose(socket) {
@@ -481,7 +451,6 @@ wss.on("connection", (socket, request) => {
   const url = new URL(request.url ?? "/api/v1/live", `http://${expectedHost}`);
   const scenario = url.searchParams.get("scenario") ?? defaultScenario;
   let authenticated = false;
-  let session = "";
   const active = new Map();
 
   socket.on("message", (data, isBinary) => {
@@ -511,26 +480,10 @@ wss.on("connection", (socket, request) => {
         return;
       }
       authenticated = true;
-      expireOldSessions();
-      const requested = frame.resume_session;
-      const replayable =
-        requested !== null &&
-        sessions.has(requested) &&
-        sessions.get(requested).expiresAt > Date.now();
-      if (replayable) {
-        session = requested;
-        const retained = sessions.get(session);
-        sessions.delete(session);
-        sessions.set(session, retained);
-      } else {
-        if (requested !== null) sessions.delete(requested);
-        session = `fixture-session-${nextSession + 1}`;
-        nextSession += 1;
-      }
+      nextEpoch += 1;
       socket.send(
         JSON.stringify({
           ...frames.hello,
-          session,
           server_time_unix: nowUnix,
         }),
       );
@@ -563,62 +516,9 @@ wss.on("connection", (socket, request) => {
         );
         return;
       }
-      const resumed =
-        frame.resume !== null
-          ? sessions.get(session)?.subscriptions.get(frame.id)
-          : undefined;
-      if (frame.resume !== null) {
-        if (
-          resumed === undefined ||
-          normalizedQuery(resumed.query) !== normalizedQuery(query) ||
-          resumed.epoch !== frame.resume.epoch ||
-          frame.resume.after_seq > resumed.lastSeq
-        ) {
-          const code =
-            resumed === undefined
-              ? scenario === "expired-resume"
-                ? "resume_expired"
-                : "resume_unavailable"
-              : "resume_mismatch";
-          socket.send(
-            JSON.stringify({
-              ...frames.gap,
-              id: frame.id,
-              epoch: "expired-epoch",
-              after_seq: frame.resume.after_seq,
-              code,
-              retryable: true,
-              action: "resnapshot",
-            }),
-          );
-        } else {
-          const afterSeq = frame.resume.after_seq;
-          socket.send(
-            JSON.stringify(
-              subscribedFrame(
-                frame.id,
-                frame.kind,
-                resumed.epoch,
-                "resume",
-                resumed.lastSeq,
-              ),
-            ),
-          );
-          for (const replay of resumed.frames) {
-            if (replay.seq > afterSeq) socket.send(JSON.stringify(replay));
-          }
-          active.set(frame.id, query);
-          return;
-        }
-      }
-
-      const epoch = `fixture-epoch-${++nextSession}`;
+      const epoch = `fixture-epoch-${++nextEpoch}`;
       active.set(frame.id, query);
-      socket.send(
-        JSON.stringify(
-          subscribedFrame(frame.id, frame.kind, epoch, "snapshot", 0),
-        ),
-      );
+      socket.send(JSON.stringify(subscribedFrame(frame.id, frame.kind, epoch)));
       const snapshot = snapshotFrame(query, scenario, frame.id, epoch);
       if (scenario === "malformed") {
         socket.send("{");
@@ -641,30 +541,8 @@ wss.on("connection", (socket, request) => {
         return;
       }
       socket.send(JSON.stringify(snapshot));
-      retainSession(session, frame.id, {
-        epoch,
-        query,
-        lastSeq: 1,
-        frames: [snapshot],
-      });
-
-      if (
-        (scenario === "disconnect-replay" || scenario === "expired-resume") &&
-        !scenarioTriggered.has(scenario)
-      ) {
+      if (scenario === "disconnect" && !scenarioTriggered.has(scenario)) {
         scenarioTriggered.add(scenario);
-        if (scenario === "expired-resume") {
-          const retained = sessions.get(session);
-          if (retained !== undefined) retained.expiresAt = Date.now();
-        } else {
-          const delta = deltaFrame(query, scenario, frame.id, epoch, 2);
-          retainSession(session, frame.id, {
-            epoch,
-            query,
-            lastSeq: 2,
-            frames: [snapshot, delta],
-          });
-        }
         scheduleClose(socket);
         return;
       }
@@ -696,18 +574,11 @@ wss.on("connection", (socket, request) => {
       }
       const delta = deltaFrame(query, scenario, frame.id, epoch, 2);
       socket.send(JSON.stringify(delta));
-      retainSession(session, frame.id, {
-        epoch,
-        query,
-        lastSeq: 2,
-        frames: [snapshot, delta],
-      });
       return;
     }
 
     if (frame.type === "unsubscribe") {
       active.delete(frame.id);
-      retireSubscription(session, frame.id);
       socket.send(JSON.stringify({ ...frames.unsubscribed, id: frame.id }));
       return;
     }

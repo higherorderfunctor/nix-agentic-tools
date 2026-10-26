@@ -131,7 +131,6 @@ function observedClient(
   port: number,
   options: {
     readonly withholdFirstAcknowledgements?: boolean;
-    readonly sleep?: (milliseconds: number) => Effect.Effect<void>;
   } = {},
 ) {
   const authority = `127.0.0.1:${port}`;
@@ -145,7 +144,7 @@ function observedClient(
     closeCode: number | null;
   }> = [];
   const layer = makeMemoryDataLayerWithFactory(
-    { url: `ws://${authority}/api/v1/live`, token, resumeSession: null },
+    { url: `ws://${authority}/api/v1/live`, token },
     {
       open: () => {
         const socket = new WebSocket(
@@ -191,11 +190,7 @@ function observedClient(
         return openBrowserSocket(socket as unknown as globalThis.WebSocket);
       },
     },
-    {
-      retryInitialMs: 50,
-      retryJitter: () => 0.5,
-      ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
-    },
+    { retryInitialMs: 50, retryJitter: () => 0.5 },
   );
   return { connections, layer, received, sent };
 }
@@ -339,7 +334,7 @@ describe.skipIf(binary === undefined || frontend === undefined)(
       }
     }, 10_000);
 
-    it("serves built assets and propagates persisted scoped changes, gaps, replay expiry, and slow-consumer backpressure", async () => {
+    it("serves built assets and propagates persisted scoped changes, reconnects, gaps, and slow-consumer backpressure", async () => {
       if (binary === undefined || frontend === undefined)
         throw new Error("integration inputs missing");
       const state = mkdtempSync(join(tmpdir(), "airlock-web-state-"));
@@ -584,39 +579,63 @@ describe.skipIf(binary === undefined || frontend === undefined)(
         releaseQuota();
         await Effect.runPromise(Fiber.await(dataFiber));
 
-        let resumeAfterExpiry: () => void = () => undefined;
-        const expiryGate = new Promise<void>((resolve) => {
-          resumeAfterExpiry = resolve;
-        });
-        const replay = observedClient(controlPort, {
-          sleep: () => Effect.promise(() => expiryGate),
-        });
-        const replayStates: ViewState[] = [];
-        const replayFiber = Effect.runFork(
+        const reconnect = observedClient(controlPort);
+        const reconnectStates: ViewState[] = [];
+        const reconnectFiber = Effect.runFork(
           Effect.scoped(
-            Effect.provide(consume(requestQuery, replayStates), replay.layer),
+            Effect.provide(
+              consume(requestQuery, reconnectStates),
+              reconnect.layer,
+            ),
           ),
         );
-        recoveryFibers.push(replayFiber);
+        recoveryFibers.push(reconnectFiber);
         await until(
-          () => replayStates.some((item) => item.phase === "live"),
-          "Effect replay widget initially live",
+          () => reconnectStates.some((item) => item.phase === "live"),
+          "Effect reconnect widget initially live",
         );
-        const initialReplay = replayStates.at(-1);
-        const replayConnection = replay.connections[0];
-        if (initialReplay === undefined || replayConnection === undefined)
-          throw new Error("replay baseline missing");
-        const replaySession = replayConnection.frames.find(
-          (item) => item.type === "hello",
-        )?.session;
-        replayConnection.socket.close();
+        const initialReconnect = reconnectStates.at(-1);
+        const reconnectConnection = reconnect.connections[0];
+        if (initialReconnect === undefined || reconnectConnection === undefined)
+          throw new Error("reconnect baseline missing");
+        const initialReconnectIndex = reconnectStates.length - 1;
+        reconnectConnection.socket.close();
         await until(
           () =>
-            replayConnection.closeCode !== null &&
-            replayStates.at(-1)?.phase === "reconnecting",
-          "Effect replay widget sees disconnection",
+            reconnectConnection.closeCode !== null &&
+            reconnectStates.at(-1)?.phase === "reconnecting",
+          "Effect reconnect widget sees disconnection",
         );
-        const disconnectedAt = Date.now();
+        await until(
+          () =>
+            reconnect.connections[1]?.sent.some(
+              (item) => item.type === "auth",
+            ) === true &&
+            reconnect.connections[1]?.sent.some(
+              (item) => item.type === "subscribe",
+            ) === true,
+          "Effect reconnect replacement authenticates and subscribes",
+        );
+        const secondAuth = reconnect.connections[1]?.sent.find(
+          (item) => item.type === "auth",
+        );
+        const secondSubscribe = reconnect.connections[1]?.sent.find(
+          (item) => item.type === "subscribe",
+        );
+        expect(secondAuth).not.toHaveProperty("resume_session");
+        expect(secondSubscribe).not.toHaveProperty("resume");
+        await until(
+          () =>
+            reconnectStates
+              .slice(initialReconnectIndex + 1)
+              .some(
+                (item) =>
+                  item.phase === "live" &&
+                  item.epoch !== initialReconnect.epoch,
+              ),
+          "Effect reconnect widget recovers with a fresh epoch",
+        );
+        await Effect.runPromise(Fiber.interrupt(reconnectFiber));
 
         const slow = observedClient(controlPort, {
           withholdFirstAcknowledgements: true,
@@ -689,7 +708,7 @@ describe.skipIf(binary === undefined || frontend === undefined)(
             slowStates.some((states) =>
               states.some((item) => item.gap?.code === "slow_consumer"),
             ),
-          "Effect slow-consumer gap remains visible",
+          `Effect slow-consumer gap remains visible (delivered=${delivered().length}, suppressed=${slowConnection.suppressedAcknowledgements}, gaps=${slowConnection.frames.filter((item) => item.type === "gap").length}, close=${slowConnection.closeCode})`,
           20_000,
         );
         await until(
@@ -726,49 +745,6 @@ describe.skipIf(binary === undefined || frontend === undefined)(
         );
         expect(slow.connections.length).toBeGreaterThanOrEqual(2);
         await Effect.runPromise(Fiber.interrupt(slowFiber));
-
-        await pause(Math.max(0, 61_000 - (Date.now() - disconnectedAt)));
-        expect(replay.connections).toHaveLength(1);
-        resumeAfterExpiry();
-        await until(
-          () =>
-            replayStates.some((item) => item.gap?.code === "resume_expired"),
-          "Effect replay-expiry gap remains visible",
-        );
-        const expiryIndex = replayStates.findIndex(
-          (item) => item.gap?.code === "resume_expired",
-        );
-        expect(replayStates[expiryIndex]).toMatchObject({
-          phase: "resynchronizing",
-          epoch: null,
-          gap: { code: "resume_expired", action: "resnapshot" },
-        });
-        expect(replayStates[expiryIndex]?.entries).toEqual(
-          initialReplay.entries,
-        );
-        await until(
-          () =>
-            replayStates
-              .slice(expiryIndex + 1)
-              .some(
-                (item) =>
-                  item.phase === "live" &&
-                  item.epoch !== initialReplay.epoch &&
-                  hasValue(item, "model", "pending-while-credit-exhausted"),
-              ),
-          "Effect expired-replay widget recovers with a fresh snapshot",
-        );
-        expect(
-          replay.connections[1]?.sent.find((item) => item.type === "auth")
-            ?.resume_session,
-        ).toBe(replaySession);
-        expect(
-          replay.connections[1]?.sent.find((item) => item.type === "subscribe")
-            ?.resume,
-        ).toEqual({
-          epoch: initialReplay.epoch,
-          after_seq: initialReplay.lastSeq,
-        });
       } finally {
         for (const fiber of recoveryFibers)
           await Effect.runPromise(Fiber.interrupt(fiber));

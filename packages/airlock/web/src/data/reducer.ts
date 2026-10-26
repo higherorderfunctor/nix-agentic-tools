@@ -14,7 +14,7 @@ export interface ViewGap {
   readonly action: "retry" | "resnapshot";
 }
 
-export type SyncPhase = "none" | "snapshot" | "resume";
+export type SyncPhase = "none" | "snapshot";
 
 export interface ViewState {
   readonly phase:
@@ -27,7 +27,6 @@ export interface ViewState {
     | "failed";
   readonly syncPhase: SyncPhase;
   readonly epoch: string | null;
-  readonly headSeq: number;
   readonly lastSeq: number;
   readonly intervalMs: number;
   readonly entries: ReadonlyMap<string, CollectionValue>;
@@ -37,7 +36,6 @@ export interface ViewState {
   readonly gap: ViewGap | null;
   readonly error: string | null;
   readonly terminal: boolean;
-  readonly snapshotDuplicateAllowed: boolean;
   readonly lastServerContactUnix: number | null;
 }
 
@@ -59,7 +57,6 @@ export function initialViewState(): ViewState {
     phase: "idle",
     syncPhase: "none",
     epoch: null,
-    headSeq: 0,
     lastSeq: 0,
     intervalMs: 0,
     entries: new Map(),
@@ -69,7 +66,6 @@ export function initialViewState(): ViewState {
     gap: null,
     error: null,
     terminal: false,
-    snapshotDuplicateAllowed: false,
     lastServerContactUnix: null,
   };
 }
@@ -136,6 +132,7 @@ function resynchronizing(
   state: ViewState,
   code: string,
   recovery: RecoveryAction = "resnapshot",
+  retryable = true,
 ): AppliedFrame {
   return {
     state: {
@@ -143,9 +140,8 @@ function resynchronizing(
       phase: "resynchronizing",
       syncPhase: "none",
       epoch: null,
-      headSeq: 0,
       lastSeq: 0,
-      gap: { code, retryable: true, action: "resnapshot" },
+      gap: { code, retryable, action: "resnapshot" },
     },
     acknowledgement: null,
     recovery,
@@ -279,50 +275,19 @@ export function applyServerFrame(
       if (frame.interval_ms <= 0) {
         return resynchronizing(state, "invalid_frame");
       }
-      if (frame.mode === "snapshot") {
-        if (frame.head_seq !== 0) {
-          return resynchronizing(state, "invalid_frame");
-        }
-        if (state.epoch !== null && state.epoch === frame.epoch) {
-          return resynchronizing(state, "server_restart");
-        }
-        return {
-          state: {
-            ...state,
-            phase: "subscribed",
-            syncPhase: "snapshot",
-            epoch: frame.epoch,
-            headSeq: 0,
-            lastSeq: 0,
-            intervalMs: frame.interval_ms,
-            gap: null,
-            error: null,
-            snapshotDuplicateAllowed: false,
-          },
-          acknowledgement: null,
-          recovery: "none",
-        };
+      if (state.epoch !== null && state.epoch === frame.epoch) {
+        return resynchronizing(state, "server_restart");
       }
-
-      if (
-        state.epoch !== frame.epoch ||
-        state.lastSeq === 0 ||
-        frame.head_seq < state.lastSeq
-      ) {
-        return resynchronizing(state, "resume_mismatch");
-      }
-      const alreadyCurrent = frame.head_seq === state.lastSeq;
       return {
         state: {
           ...state,
-          phase: alreadyCurrent ? "live" : "subscribed",
-          syncPhase: alreadyCurrent ? "none" : "resume",
+          phase: "subscribed",
+          syncPhase: "snapshot",
           epoch: frame.epoch,
-          headSeq: frame.head_seq,
+          lastSeq: 0,
           intervalMs: frame.interval_ms,
           gap: null,
           error: null,
-          snapshotDuplicateAllowed: false,
         },
         acknowledgement: null,
         recovery: "none",
@@ -331,18 +296,6 @@ export function applyServerFrame(
 
     case "snapshot": {
       if (state.syncPhase !== "snapshot") {
-        if (
-          state.phase === "live" &&
-          state.snapshotDuplicateAllowed &&
-          state.epoch === frame.epoch &&
-          frame.seq <= state.lastSeq
-        ) {
-          return {
-            state,
-            acknowledgement: { epoch: frame.epoch, seq: state.lastSeq },
-            recovery: "none",
-          };
-        }
         return resynchronizing(state, "sequence_gap");
       }
       if (state.epoch !== frame.epoch || frame.seq !== state.lastSeq + 1) {
@@ -362,11 +315,9 @@ export function applyServerFrame(
             phase: "live",
             syncPhase: "none",
             lastSeq: frame.seq,
-            headSeq: Math.max(state.headSeq, frame.seq),
             meta: frame.meta,
             gap: null,
             error: null,
-            snapshotDuplicateAllowed: true,
           },
           entries,
           true,
@@ -377,10 +328,7 @@ export function applyServerFrame(
     }
 
     case "delta": {
-      if (
-        state.phase !== "live" &&
-        !(state.phase === "subscribed" && state.syncPhase === "resume")
-      ) {
+      if (state.phase !== "live") {
         return resynchronizing(state, "sequence_gap");
       }
       if (state.epoch === null || state.epoch !== frame.epoch) {
@@ -422,11 +370,9 @@ export function applyServerFrame(
             phase: "live",
             syncPhase: "none",
             lastSeq: frame.seq,
-            headSeq: Math.max(state.headSeq, frame.seq),
             meta: frame.meta,
             gap: null,
             error: null,
-            snapshotDuplicateAllowed: true,
           },
           entries,
           true,
@@ -453,7 +399,7 @@ export function applyServerFrame(
           recovery: "reconnect",
         };
       }
-      return resynchronizing(state, frame.code);
+      return resynchronizing(state, frame.code, "resnapshot", frame.retryable);
     }
 
     case "unsubscribed":

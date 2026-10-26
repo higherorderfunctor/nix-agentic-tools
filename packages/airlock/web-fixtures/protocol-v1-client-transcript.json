@@ -2,8 +2,7 @@
   {
     "v": 1,
     "type": "auth",
-    "token": "fixture-read-token",
-    "resume_session": null
+    "token": "fixture-read-token"
   },
   {
     "v": 1,
@@ -19,8 +18,7 @@
         "last_seconds": 86400
       },
       "limit": 1000
-    },
-    "resume": null
+    }
   },
   {
     "v": 1,
@@ -50,8 +48,7 @@
       },
       "limit": 200,
       "provider": "claude"
-    },
-    "resume": null
+    }
   },
   {
     "v": 1,
@@ -61,7 +58,6 @@
     "query": {
       "stream": "requests",
       "limit": 200
-    },
-    "resume": null
+    }
   }
 ]

@@ -106,7 +106,7 @@ function fixtureLayer(scenario: string) {
   return {
     sent,
     layer: makeMemoryDataLayerWithFactory(
-      { url: `ws://${host}:${port}/api/v1/live`, token, resumeSession: null },
+      { url: `ws://${host}:${port}/api/v1/live`, token },
       {
         open: () => {
           const socket = new WebSocket(
@@ -180,17 +180,6 @@ async function liveState(
   return state;
 }
 
-async function liveTwice(
-  scenario: string,
-  query: SubscriptionQuery,
-): Promise<{ states: ViewState[]; sent: string[][] }> {
-  let liveCount = 0;
-  return runFixtureScenario(scenario, query, (state) => {
-    if (state.phase === "live") liveCount += 1;
-    return liveCount >= 2;
-  });
-}
-
 describe("fixture backend", () => {
   let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
   let logs: string[] = [];
@@ -214,7 +203,6 @@ describe("fixture backend", () => {
     socket.send(JSON.stringify(auth));
     await expect(next()).resolves.toEqual({
       ...serverFrame("hello"),
-      session: "fixture-session-1",
       server_time_unix: 1200,
     });
 
@@ -225,13 +213,11 @@ describe("fixture backend", () => {
         id: "usage-overview",
         kind: "usage.overview",
         query: {},
-        resume: null,
       }),
     );
     await expect(next()).resolves.toMatchObject({
       type: "subscribed",
       id: "usage-overview",
-      mode: "snapshot",
     });
     await expect(next()).resolves.toMatchObject({
       type: "snapshot",
@@ -284,7 +270,6 @@ describe("fixture backend", () => {
       id: "page",
       kind: "requests.table",
       query: { window: { last_seconds: 600 }, limit: 2 },
-      resume: null,
     };
     socket.send(JSON.stringify(subscribe));
     await next();
@@ -336,7 +321,6 @@ describe("fixture backend", () => {
           id: "invalid-table",
           kind: "requests.table",
           query,
-          resume: null,
         }),
       );
       await expect(next()).resolves.toMatchObject({
@@ -349,25 +333,23 @@ describe("fixture backend", () => {
     },
   );
 
-  it("resumes with reordered query fields and nested window fields", async () => {
+  it("accepts reordered fresh query fields and nested window fields", async () => {
     const first = connect();
     const firstNext = messageQueue(first);
     await opened(first);
     first.send(JSON.stringify(auth));
-    const hello = await firstNext();
-    const query = { window: { since_unix: 900, until_unix: 1100 }, limit: 2 };
+    await firstNext();
     first.send(
       JSON.stringify({
         v: 1,
         type: "subscribe",
         id: "reordered",
         kind: "requests.table",
-        query,
-        resume: null,
+        query: { window: { since_unix: 900, until_unix: 1100 }, limit: 2 },
       }),
     );
-    const subscribed = await firstNext();
-    await firstNext();
+    const firstSubscribed = await firstNext();
+    const firstSnapshot = await firstNext();
     await firstNext();
     first.close();
     await closed(first);
@@ -375,14 +357,7 @@ describe("fixture backend", () => {
     const second = connect();
     const secondNext = messageQueue(second);
     await opened(second);
-    second.send(
-      JSON.stringify({
-        v: 1,
-        type: "auth",
-        token,
-        resume_session: hello.session,
-      }),
-    );
+    second.send(JSON.stringify(auth));
     await secondNext();
     second.send(
       JSON.stringify({
@@ -391,17 +366,16 @@ describe("fixture backend", () => {
         id: "reordered",
         kind: "requests.table",
         query: { limit: 2, window: { until_unix: 1100, since_unix: 900 } },
-        resume: { epoch: subscribed.epoch, after_seq: 1 },
       }),
     );
-    await expect(secondNext()).resolves.toMatchObject({
-      type: "subscribed",
-      mode: "resume",
-      head_seq: 2,
-    });
-    await expect(secondNext()).resolves.toMatchObject({
-      type: "delta",
-      seq: 2,
+    const secondSubscribed = await secondNext();
+    const secondSnapshot = await secondNext();
+    expect(secondSubscribed.epoch).not.toBe(firstSubscribed.epoch);
+    expect(secondSnapshot).toMatchObject({
+      type: "snapshot",
+      seq: 1,
+      collections: firstSnapshot.collections,
+      meta: firstSnapshot.meta,
     });
     second.close();
     await closed(second);
@@ -527,41 +501,35 @@ describe("fixture backend", () => {
     });
   });
 
-  it("resumes a recorded session after a real loopback disconnect", async () => {
-    const result = await liveTwice("disconnect-replay", {
-      kind: "usage.overview",
-    });
-    expect(
-      result.states.filter((state) => state.phase === "live"),
-    ).toHaveLength(2);
+  it("reconnects with fresh authentication and subscriptions after disconnect", async () => {
+    const seenLiveEpochs = new Set<string>();
+    const result = await runFixtureScenario(
+      "disconnect",
+      {
+        kind: "usage.overview",
+      },
+      (state) => {
+        if (state.phase === "live" && state.epoch !== null)
+          seenLiveEpochs.add(state.epoch);
+        return seenLiveEpochs.size >= 2;
+      },
+    );
     expect(result.sent).toHaveLength(2);
-    const secondAuth = JSON.parse(result.sent[1]?.[0] ?? "{}");
-    const secondSubscribe = JSON.parse(result.sent[1]?.[1] ?? "{}");
-    expect(secondAuth.resume_session).toMatch(/^fixture-session-/);
-    expect(secondSubscribe.resume).toMatchObject({
-      epoch: expect.stringMatching(/^fixture-epoch-/),
-      after_seq: 1,
-    });
-    expect(result.states.at(-1)?.lastSeq).toBe(2);
-    expect(result.states.some((state) => state.syncPhase === "resume")).toBe(
+    const secondAuth = JSON.parse(result.sent[1]?.[0] ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    const secondSubscribe = JSON.parse(result.sent[1]?.[1] ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(secondAuth).not.toHaveProperty("resume_session");
+    expect(secondSubscribe).not.toHaveProperty("resume");
+    expect([...seenLiveEpochs]).toHaveLength(2);
+    expect(result.states.some((state) => state.phase === "reconnecting")).toBe(
       true,
     );
-  });
-
-  it("recovers from expired resume with a fresh epoch and snapshot", async () => {
-    const result = await liveTwice("expired-resume", {
-      kind: "usage.overview",
-    });
-    const live = result.states.filter((state) => state.phase === "live");
-    expect(live).toHaveLength(2);
-    expect(live[0]?.epoch).not.toBe(live[1]?.epoch);
-    expect(
-      result.states.some((state) => state.gap?.code === "resume_expired"),
-    ).toBe(true);
-    const firstTypes =
-      result.sent[0]?.map((frame) => JSON.parse(frame).type) ?? [];
-    expect(firstTypes).toContain("ack");
-    expect(firstTypes).not.toContain("unsubscribe");
+    expect(result.states.at(-1)?.lastSeq).toBe(1);
   });
 
   it("recovers from a deterministic slow consumer with a fresh snapshot", async () => {
@@ -576,10 +544,12 @@ describe("fixture backend", () => {
     );
     expect(overflowed).toBe(true);
     expect(result.sent).toHaveLength(2);
-    expect(JSON.parse(result.sent[1]?.[1] ?? "{}")).toMatchObject({
-      type: "subscribe",
-      resume: null,
-    });
+    const retrySubscribe = JSON.parse(result.sent[1]?.[1] ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(retrySubscribe).toMatchObject({ type: "subscribe" });
+    expect(retrySubscribe).not.toHaveProperty("resume");
   });
 
   it("reports a server slow_consumer gap separately from client overflow", async () => {
