@@ -1,4 +1,5 @@
-import { type UsageChart, usageChartLimits } from "./domain.ts";
+import { usageChartLimits } from "./domain.ts";
+import type { UsagePlotData } from "./plot.ts";
 
 export type UsageLayout = "overlay" | "stack";
 export type UsageRender = "area" | "bar" | "line" | "mixed";
@@ -8,13 +9,13 @@ export const usageRenderLimits = {
   points: { area: 10000, bar: 2000, line: 10000, mixed: 2000 },
 } as const;
 
-export function usageRenderPoints(chart: UsageChart, render: UsageRender) {
+export function usageRenderPoints(chart: UsagePlotData, render: UsageRender) {
   return (
     chart.axis.length * (chart.series.length + (render === "mixed" ? 1 : 0))
   );
 }
 
-export function usageRenderFits(chart: UsageChart, render: UsageRender) {
+export function usageRenderFits(chart: UsagePlotData, render: UsageRender) {
   return (
     chart.axis.length <= usageChartLimits.maxBuckets &&
     chart.series.length <= usageChartLimits.maxSeries &&
@@ -23,7 +24,7 @@ export function usageRenderFits(chart: UsageChart, render: UsageRender) {
 }
 
 // A missing lower contribution makes the stack above it unknown too.
-export function usageGeometry(chart: UsageChart, render: UsageRender) {
+export function usageGeometry(chart: UsagePlotData, render: UsageRender) {
   if (!usageRenderFits(chart, render)) return null;
   const bases = new Map<string, (number | null)[]>();
   let overlayMax = 1;
@@ -57,7 +58,7 @@ export function usageGeometry(chart: UsageChart, render: UsageRender) {
   };
 }
 
-export function bucketPosition(chart: UsageChart, start: number) {
+export function bucketPosition(chart: UsagePlotData, start: number) {
   return Math.max(
     chart.requestedStartUnix,
     Math.min(chart.requestedEndUnix, start + chart.bucketSeconds / 2),

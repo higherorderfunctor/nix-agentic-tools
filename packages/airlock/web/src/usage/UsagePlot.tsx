@@ -14,7 +14,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { UsageChart } from "./domain.ts";
 import {
   bucketPosition,
   type UsageLayout,
@@ -25,9 +24,11 @@ import {
   usageRenderPoints,
 } from "./geometry.ts";
 import { useUsageMotion } from "./motion.ts";
+import type { UsagePlotData } from "./plot.ts";
 
 export interface UsagePlotProps {
-  readonly chart: UsageChart;
+  readonly chart: UsagePlotData;
+  readonly formatValue?: (value: number) => string;
   readonly label: string;
   readonly layout: UsageLayout;
   readonly render: UsageRender;
@@ -38,8 +39,10 @@ export interface UsagePlotProps {
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
 const date = (unix: number) => new Date(unix * 1000).toLocaleString();
-const valueLabel = (value: number | null | undefined) =>
-  value == null ? "Unknown" : number.format(value);
+const valueLabel = (
+  value: number | null | undefined,
+  format: (value: number) => string,
+) => (value == null ? "Unknown" : format(value));
 function color(id: string) {
   let hash = 0;
   for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) | 0;
@@ -59,7 +62,15 @@ function isolatedDot({ cx, cy, index, points, stroke }: DotItemDotProps) {
   );
 }
 
-function BucketDetails({ chart, index }: { chart: UsageChart; index: number }) {
+function BucketDetails({
+  chart,
+  index,
+  format,
+}: {
+  chart: UsagePlotData;
+  index: number;
+  format: (value: number) => string;
+}) {
   const at = chart.axis[index];
   if (at === undefined) return null;
   const error = chart.errors.find((mark) => mark.bucketStartUnix === at);
@@ -70,10 +81,12 @@ function BucketDetails({ chart, index }: { chart: UsageChart; index: number }) {
       </Text>
       {chart.series.map((item) => (
         <Text key={item.id} size="xs" c={color(item.id)}>
-          {item.name}: {valueLabel(item.values[index])}
+          {item.name}: {valueLabel(item.values[index], format)}
         </Text>
       ))}
-      <Text size="xs">Total: {valueLabel(chart.bucketTotals[index])}</Text>
+      <Text size="xs">
+        Total: {valueLabel(chart.bucketTotals[index], format)}
+      </Text>
       {error && (
         <Text size="xs">
           {number.format(error.errorEvents)} errors within bucket /{" "}
@@ -86,6 +99,7 @@ function BucketDetails({ chart, index }: { chart: UsageChart; index: number }) {
 
 export function UsagePlot({
   chart,
+  formatValue,
   label,
   layout,
   render,
@@ -125,6 +139,19 @@ export function UsagePlot({
   if (chart.series.length === 0)
     return <Text>No requests in this recorded range.</Text>;
   const selectedIndex = chart.axis.findIndex((at) => String(at) === selected);
+  const legend = chart.series.map((item) => ({
+    id: `series:${item.id}`,
+    name: item.name,
+    color: color(item.id),
+    dashed: false,
+  }));
+  if (render === "mixed")
+    legend.push({
+      id: "total",
+      name: "Total",
+      color: "var(--mantine-color-text)",
+      dashed: true,
+    });
   return (
     <Stack gap="xs">
       <Box component="figure" m={0} aria-label={label}>
@@ -155,7 +182,7 @@ export function UsagePlot({
                 domain={[chart.requestedStartUnix, chart.requestedEndUnix]}
                 allowDataOverflow
                 tickFormatter={(at: number) =>
-                  chart.requestedEndUnix - chart.requestedStartUnix >= 86400
+                  chart.bucketSeconds >= 86400
                     ? new Date(at * 1000).toLocaleDateString([], {
                         month: "short",
                         day: "numeric",
@@ -166,7 +193,11 @@ export function UsagePlot({
                           ? { year: "numeric" }
                           : {}),
                       })
-                    : new Date(at * 1000).toLocaleTimeString([], {
+                    : new Date(at * 1000).toLocaleString([], {
+                        ...(chart.requestedEndUnix - chart.requestedStartUnix >=
+                        86400
+                          ? { day: "numeric", month: "short" }
+                          : {}),
                         hour: "2-digit",
                         minute: "2-digit",
                       })
@@ -178,7 +209,7 @@ export function UsagePlot({
                 domain={[0, frame.maximum]}
                 allowDataOverflow
                 width={64}
-                tickFormatter={(value: number) => compact.format(value)}
+                tickFormatter={formatValue ?? compact.format}
               />
               <Tooltip
                 filterNull={false}
@@ -195,7 +226,11 @@ export function UsagePlot({
                         overflowY: "auto",
                       }}
                     >
-                      <BucketDetails chart={chart} index={index} />
+                      <BucketDetails
+                        chart={chart}
+                        index={index}
+                        format={formatValue ?? number.format}
+                      />
                     </Box>
                   ) : null;
                 }}
@@ -281,6 +316,53 @@ export function UsagePlot({
           {showErrors &&
             "Red 1px marks show errors within a bucket; incident timing is unavailable."}
         </Text>
+        <Box
+          role="list"
+          aria-label="Chart series"
+          mt="xs"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "6px 16px",
+            maxHeight: 80,
+            overflowX: "hidden",
+            overflowY: "auto",
+          }}
+        >
+          {legend.map((item) => (
+            <Text
+              role="listitem"
+              key={item.id}
+              size="xs"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                minWidth: 0,
+                maxWidth: "100%",
+              }}
+            >
+              <Box
+                component="span"
+                w={12}
+                style={{
+                  borderTop: `2px ${item.dashed ? "dashed" : "solid"} ${item.color}`,
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                title={item.name}
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {item.name}
+              </span>
+            </Text>
+          ))}
+        </Box>
       </Box>
       <Text role="status" size="xs" mih={18}>
         {frame.phase}
@@ -295,7 +377,11 @@ export function UsagePlot({
         clearable
       />
       {selectedIndex >= 0 && (
-        <BucketDetails chart={chart} index={selectedIndex} />
+        <BucketDetails
+          chart={chart}
+          index={selectedIndex}
+          format={formatValue ?? number.format}
+        />
       )}
     </Stack>
   );
