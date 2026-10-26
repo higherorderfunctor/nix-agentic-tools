@@ -64,7 +64,7 @@ backend: {lib, ...}: let
       authorization = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Optional inline Cedar policy for CONNECT; null permits within native bounds and an empty string denies all Cedar actions.";
+        description = "Optional inline Cedar policy for CONNECT and REQUEST; null permits within native bounds and an empty string denies all Cedar actions.";
       };
       clients = mkOption {
         type = types.attrsOf client;
