@@ -1,5 +1,3 @@
-#[cfg(test)]
-use std::path::Path;
 use std::{fmt, io::Read, path::PathBuf};
 
 use subtle::ConstantTimeEq;
@@ -31,11 +29,6 @@ impl Secret {
     pub fn into_value(self) -> Zeroizing<String> {
         self.value
     }
-
-    #[cfg(test)]
-    fn expose(&self) -> &str {
-        self.as_str()
-    }
 }
 
 impl fmt::Debug for Secret {
@@ -60,11 +53,6 @@ impl TryFrom<PathBuf> for SecretFile {
 }
 
 impl SecretFile {
-    #[cfg(test)]
-    pub(crate) fn path(&self) -> &Path {
-        &self.0
-    }
-
     /// Reads and returns the secret.
     ///
     /// # Errors
@@ -163,7 +151,7 @@ mod tests {
             value: Zeroizing::new("fake-SECRET-token".to_owned()),
         };
         assert_eq!(format!("{secret:?}"), "[redacted]");
-        assert_eq!(secret.expose(), "fake-SECRET-token");
+        assert_eq!(secret.as_str(), "fake-SECRET-token");
     }
 
     #[test]
@@ -184,7 +172,7 @@ mod tests {
             match expected {
                 Some(expected) => {
                     let loaded = file.load().expect("load token");
-                    assert_eq!(loaded.expose(), expected);
+                    assert_eq!(loaded.as_str(), expected);
                 }
                 None => assert!(matches!(
                     file.load().expect_err("zero-byte token was accepted"),
@@ -204,7 +192,7 @@ mod tests {
             SecretFile(token.clone())
                 .load_bounded_regular(10)
                 .expect("bounded token")
-                .expose(),
+                .as_str(),
             "fake-token"
         );
         assert!(matches!(

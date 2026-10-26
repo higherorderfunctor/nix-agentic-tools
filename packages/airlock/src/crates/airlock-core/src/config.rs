@@ -1209,9 +1209,9 @@ mod tests {
         );
         assert_eq!(
             baseline.clients[&ClientId::try_from("harness").expect("id")]
-                .token_file
-                .path(),
-            std::path::Path::new("/run/airlock/harness")
+                .token_file,
+            SecretFile::try_from(std::path::PathBuf::from("/run/airlock/harness"))
+                .expect("absolute token file")
         );
         let storage_identities = baseline.storage_identities(1);
         assert_eq!(storage_identities.clients.len(), 1);
