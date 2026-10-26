@@ -5,6 +5,7 @@ license.workspace = true
 version.workspace = true
 
 [dependencies]
+cedar-policy.workspace = true
 log.workspace = true
 rustix = { workspace = true, features = ["fs"] }
 serde = { workspace = true, features = ["derive"] }

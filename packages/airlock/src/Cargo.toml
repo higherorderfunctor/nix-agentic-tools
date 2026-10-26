@@ -12,6 +12,7 @@ airlock-core = { path = "crates/airlock-core" }
 airlock-gateway = { path = "crates/airlock-gateway" }
 axum = { version = "0.8.7", features = ["ws"] }
 base64 = "0.23.1"
+cedar-policy = { version = "4.14.0", default-features = false }
 clap = { version = "4.6.7", features = ["derive"] }
 flate2 = { version = "1.1.2", default-features = false, features = ["zlib-rs"] }
 futures-util = "0.3.34"

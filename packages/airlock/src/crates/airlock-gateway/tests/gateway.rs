@@ -148,6 +148,56 @@ async fn denied_targets_and_non_connect_never_reach_upstream() {
 }
 
 #[tokio::test]
+async fn cedar_forbid_returns_generic_denial_without_policy_source() {
+    let listener = sink().await;
+    let port = listener.local_addr().expect("sink address").port();
+    let policy = r#"permit(principal, action, resource);
+forbid(
+    principal == Client::"harness",
+    action == Action::"CONNECT",
+    resource == Host::"localhost"
+) when { context.intercepted == true || "policy-source-marker" == "policy-source-marker" };"#;
+    let server = Running::start_with_policy("tunnel", &["localhost"], policy).await;
+    let (mut socket, header) = server
+        .request(
+            "CONNECT",
+            &format!("localhost:{port}"),
+            Some(&basic("harness", TOKEN)),
+        )
+        .await;
+    assert!(header.starts_with("HTTP/1.1 403 "), "{header}");
+    let length = header
+        .to_ascii_lowercase()
+        .lines()
+        .find_map(|line| line.strip_prefix("content-length:"))
+        .map(|value| value.trim().parse::<usize>().expect("content length"));
+    if let Some(length) = length {
+        let mut body = vec![0; length];
+        timeout(Duration::from_secs(1), socket.read_exact(&mut body))
+            .await
+            .expect("denial body deadline")
+            .expect("denial body");
+        assert_eq!(body, b"connect denied");
+    }
+    drop(socket);
+    assert!(
+        timeout(Duration::from_millis(50), listener.accept())
+            .await
+            .is_err()
+    );
+    let capture = server.capture.clone();
+    let events = server.stop().await;
+    assert_eq!(events.len(), 1);
+    let audit = fields(&events[0]);
+    assert_eq!(audit["decision"], "deny");
+    assert_eq!(audit["outcome"], "policy_denied");
+    assert!(
+        !capture.text().contains("policy-source-marker"),
+        "audit exposed policy source"
+    );
+}
+
+#[tokio::test]
 async fn client_half_close_cancels_upstream_even_when_it_keeps_writing() {
     let listener = sink().await;
     let port = listener.local_addr().expect("sink address").port();

@@ -7,6 +7,7 @@ use std::{
 use serde::Deserialize;
 
 use crate::{
+    authorization::{Authorization, AuthorizationError},
     error::{ConfigError, ConfigErrors, NameError},
     ids::{ClientId, CredentialId, GroupId, HostName, ProviderId},
     secret::SecretFile,
@@ -15,6 +16,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Config {
+    authorization: Authorization,
     clients: BTreeMap<ClientId, ClientConfig>,
     control: Option<ControlConfig>,
     credentials: BTreeMap<CredentialId, CredentialConfig>,
@@ -136,6 +138,8 @@ pub enum UnknownHosts {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawConfig {
+    #[serde(default)]
+    pub authorization: Option<String>,
     pub clients: BTreeMap<String, RawClient>,
     #[serde(default)]
     pub control: Option<RawControl>,
@@ -559,6 +563,11 @@ impl Config {
         self.unknown_hosts
     }
 
+    #[must_use]
+    pub(crate) fn authorization(&self) -> Authorization {
+        self.authorization.clone()
+    }
+
     /// Refuse active routes whose configured behavior the current transport cannot execute.
     ///
     /// # Errors
@@ -617,6 +626,17 @@ impl TryFrom<RawConfig> for Config {
     fn try_from(raw: RawConfig) -> Result<Self, Self::Error> {
         let mut errors = Vec::new();
         validate_usage_projection(&raw, &mut errors);
+        let authorization = match Authorization::compile(raw.authorization.as_deref()) {
+            Ok(authorization) => Some(authorization),
+            Err(AuthorizationError::Parse) => {
+                errors.push(ConfigError::InvalidAuthorizationParse);
+                None
+            }
+            Err(AuthorizationError::Schema) => {
+                errors.push(ConfigError::InvalidAuthorizationSchema);
+                None
+            }
+        };
         let listen = match raw.listen.parse::<SocketAddr>() {
             Ok(address) if address.ip().is_loopback() => Some(address),
             Ok(address) => {
@@ -657,9 +677,12 @@ impl TryFrom<RawConfig> for Config {
         let usage_credentials = parse_usage(&raw, &mut errors);
         validate_references(&raw, &providers, &mut errors);
 
-        match (listen, state_dir, unknown_hosts, control) {
-            (Some(listen), Some(state_dir), Some(unknown_hosts), control) if errors.is_empty() => {
+        match (listen, state_dir, unknown_hosts, control, authorization) {
+            (Some(listen), Some(state_dir), Some(unknown_hosts), control, Some(authorization))
+                if errors.is_empty() =>
+            {
                 Ok(Self {
+                    authorization,
                     clients,
                     control,
                     credentials,
