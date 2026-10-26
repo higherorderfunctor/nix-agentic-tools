@@ -273,5 +273,9 @@ mod tests {
             r#"permit(principal == User::"harness", action, resource);"#,
             &ConfigError::InvalidAuthorizationSchema,
         );
+        rejected(
+            r#"permit(principal, action == Action::"REQUEST", resource) when { context.intercepted };"#,
+            &ConfigError::InvalidAuthorizationSchema,
+        );
     }
 }

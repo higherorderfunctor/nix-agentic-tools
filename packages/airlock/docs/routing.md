@@ -1,9 +1,9 @@
 # airlock transport and routing
 
-> **Last verified:** 2026-10-25 — Cedar CONNECT authorization, model and
-> classifier routing, ToolSearch, remote-control paths, quota substitution, and
-> M08 primary-header observation share the gateway path; the control listener
-> remains a separate authenticated surface.
+> **Last verified:** 2026-10-26 — Cedar CONNECT and request authorization, model
+> and classifier routing, ToolSearch, remote-control paths, quota substitution,
+> and M08 primary-header observation share the gateway path; the control
+> listener remains a separate authenticated surface.
 
 ## Transport
 
@@ -18,36 +18,56 @@ The optional control listener is not a CONNECT proxy and must use a different
 port. Its dedicated bearer token never authenticates gateway clients, and no
 control route can select an inference credential or bypass model routing.
 
-## CONNECT authorization
+## CONNECT and request authorization
 
-Airlock evaluates an optional inline Cedar policy before it opens either an
-intercepted or tunnelled upstream. `authorization` is `null` or omitted by
-default: a built-in `permit(principal, action, resource);` allows CONNECT inside
-the native client, group, host, and `unknownHosts` bounds. An empty string is an
-empty Cedar policy set and denies both intercepted CONNECT and tunnelled unknown
-hosts.
+Airlock evaluates one optional inline Cedar policy at two boundaries. It first
+evaluates `CONNECT` before opening either an intercepted or tunnelled upstream.
+After inspecting a request and selecting its deterministic route, it evaluates
+`REQUEST` before managed OAuth handling, usage creation, ToolSearch
+transformation, a selected-route dial, or credential injection. The original
+intercepted TLS connection to the CONNECT host may already exist for ALPN;
+denial still means no denied request or selected credential goes upstream.
 
-The host-owned schema has only `Client` principals, `Host` resources, the
-`CONNECT` action, and context `{ intercepted: Bool, group?: String }`. There is
-no entity graph or parent membership: `principal` and `resource` are direct IDs.
-For an intercepted host, `intercepted` is `true` and `group` names the granted
-route group. For a tunnelled unknown host, `intercepted` is `false` and `group`
-is absent. A policy can therefore distinguish the two modes without a separate
-caller-supplied flag.
+`authorization` is `null` or omitted by default: the built-in
+`permit(principal, action, resource);` allows both actions inside the native
+client, group, host, route, and `unknownHosts` bounds. An empty string is an
+empty Cedar policy set and denies both actions.
+
+The host-owned schema has `Client` principals, `Host` and `Credential`
+resources, and the `CONNECT` and `REQUEST` actions. `CONNECT` uses a `Host`
+resource and context `{ intercepted: Bool, group?: String }`. `REQUEST` uses the
+selected `Credential` resource and context
+`{ group: String, provider: String, model?: String, primary: Bool, operation: String }`.
+There is no entity graph or parent membership: principals and resources are
+direct IDs. For an intercepted CONNECT, `intercepted` is `true` and `group`
+names the granted route group; for a tunnelled unknown host, `intercepted` is
+`false` and `group` is absent. For `REQUEST`, `provider` belongs to the selected
+credential, `primary` says whether that credential owns the group primary route,
+and `model` is present only when request inspection found a bounded top-level
+model ID.
+
+`operation` is Airlock’s real classification, not a protocol echo: a
+classifier-fingerprint inference request is `classifier`, other inference
+requests are `inference`, recognized OAuth token endpoints are `oauth`, and
+everything else is `other`. No path, headers, body, credentials, or other
+protocol context are exposed to Cedar.
 
 Native bounds still run first. An unknown client, an ungranted configured group
-or host, and `unknownHosts = "deny"` deny before Cedar. Cedar then sees every
-remaining intercepted CONNECT and every unknown host eligible for tunneling, so
-a restrictive policy can remove access but a permissive policy cannot widen it.
-Any Cedar evaluation diagnostic fails closed even when another policy would
-permit.
+or host, an unavailable route, and `unknownHosts = "deny"` deny before Cedar.
+Cedar then sees every remaining intercepted CONNECT, every unknown host eligible
+for tunneling, and every selected request route, so a restrictive policy can
+remove access but a permissive policy cannot widen it. Any Cedar evaluation
+diagnostic fails closed even when another policy would permit.
 
 Airlock parses and strictly schema-validates the policy once while converting
 configuration, before secret loading or binding. Malformed and schema-invalid
-policies fail startup and `airlock check-config`. Configuration and audit errors
-identify only parse or schema failure; they never include policy source, and a
-Cedar denial returns the generic response `connect denied`. Evaluation errors
-are audited as `policy_error`, while denials use `policy_denied`.
+policies fail startup and `airlock check-config`. Because `model` is optional, a
+policy must guard access with `context has model` before comparing
+`context.model`. Configuration and audit errors identify only parse or schema
+failure; they never include policy source. CONNECT denial returns
+`connect denied`; request denial returns `request denied`. Evaluation errors are
+audited as `policy_error`, while denials use `policy_denied`; request audit also
+records the selected credential and bounded model ID.
 
 Interception follows this order:
 
@@ -74,6 +94,10 @@ Interception follows this order:
   and paths stream. A selected endpoint gets its own verified TLS connection,
   independent ALPN, authority and path prefix. Responses stream without waiting
   for completion; HTTP/1.1, h2 and Upgrade remain supported.
+- The request gate runs after deterministic model routing and before every side
+  effect or selected-route forward. A classifier request selects primary even
+  when its body names a member model, and the policy sees
+  `operation = "classifier"` rather than the inference classification.
 - The selected z.ai Anthropic preset aliases `ToolSearch` in declarations,
   choice, history and references inside one tool-result level, then restores
   response tool-use names in JSON and SSE. Deeper tool results are refused.

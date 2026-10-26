@@ -12,6 +12,7 @@ use std::{
 };
 
 use airlock_core::{
+    authorization::{Evaluation, RequestFacts, RequestOperation},
     config::Config,
     ids::{ClientId, CredentialId, GroupId, HostName, ProviderId},
     storage::{
@@ -2129,6 +2130,37 @@ async fn forward(
     let primary = route.is_primary;
     let has_model = model.is_some();
     completion.selected(credential_id.clone(), model.clone());
+    let operation = if classifier {
+        RequestOperation::Classifier
+    } else if inference {
+        RequestOperation::Inference
+    } else if oauth {
+        RequestOperation::Oauth
+    } else {
+        RequestOperation::Other
+    };
+    let facts = RequestFacts {
+        client: &state.client,
+        credential: route.credential,
+        group: &state.route.group,
+        model: model.as_deref(),
+        operation,
+        primary,
+        provider: route.provider,
+    };
+    match state.route.config.authorize_request(&facts) {
+        Evaluation::Allow => {}
+        Evaluation::Deny => {
+            completion.outcome = Some("policy_denied");
+            completion.finish(StatusCode::FORBIDDEN);
+            return Ok(crate::response(StatusCode::FORBIDDEN, "request denied"));
+        }
+        Evaluation::Error => {
+            completion.outcome = Some("policy_error");
+            completion.finish(StatusCode::FORBIDDEN);
+            return Ok(crate::response(StatusCode::FORBIDDEN, "request denied"));
+        }
+    }
     let managed = state.route.config.managed_provider(&credential_id).cloned();
     if let Some(provider) = managed.as_ref() {
         if !state
