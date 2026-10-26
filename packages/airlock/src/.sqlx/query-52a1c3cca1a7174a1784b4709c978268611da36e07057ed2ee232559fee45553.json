@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO request_chart_daily\n        SELECT\n          (r.occurred_at_unix / 86400) * 86400,\n          c.provider_id,\n          COALESCE(r.client_id, ''),\n          r.model_id,\n          1,\n          r.usage_complete,\n          r.status_code >= 400,\n          COALESCE(r.input_tokens, 0),\n          r.input_tokens IS NULL,\n          COALESCE(r.output_tokens, 0),\n          r.output_tokens IS NULL,\n          COALESCE(r.cache_read_tokens, 0),\n          r.cache_read_tokens IS NULL,\n          COALESCE(r.cache_write_tokens, 0),\n          r.cache_write_tokens IS NULL\n        FROM request_events r\n        JOIN credentials c ON c.id = r.credential_id\n        WHERE r.id = last_insert_rowid()\n        ON CONFLICT (day_unix, provider_id, client_key, model_id) DO UPDATE SET\n          events = request_chart_daily.events + excluded.events,\n          complete_events = request_chart_daily.complete_events + excluded.complete_events,\n          error_events = request_chart_daily.error_events + excluded.error_events,\n          input_tokens = request_chart_daily.input_tokens + excluded.input_tokens,\n          input_tokens_unknown = request_chart_daily.input_tokens_unknown + excluded.input_tokens_unknown,\n          output_tokens = request_chart_daily.output_tokens + excluded.output_tokens,\n          output_tokens_unknown = request_chart_daily.output_tokens_unknown + excluded.output_tokens_unknown,\n          cache_read_tokens = request_chart_daily.cache_read_tokens + excluded.cache_read_tokens,\n          cache_read_tokens_unknown = request_chart_daily.cache_read_tokens_unknown + excluded.cache_read_tokens_unknown,\n          cache_write_tokens = request_chart_daily.cache_write_tokens + excluded.cache_write_tokens,\n          cache_write_tokens_unknown = request_chart_daily.cache_write_tokens_unknown + excluded.cache_write_tokens_unknown\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "52a1c3cca1a7174a1784b4709c978268611da36e07057ed2ee232559fee45553"
+}
