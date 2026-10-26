@@ -1,11 +1,15 @@
 # Airlock
 
-Airlock is the package owner for a local egress proxy for coding harnesses.
+Airlock is the package owner for a local egress proxy for coding harnesses. For
+the Claude and devenv opt-in, see [HTTPS passthrough](docs/passthrough.md).
 
 The current binary implements an unauthenticated, loopback-only HTTP `CONNECT`
-tunnel. `airlock serve` listens on `127.0.0.1:8318` by default; `--listen`
-accepts an IP loopback socket address and permits port `0` for tests. After a
-valid authority-form target is parsed and the upstream TCP connection succeeds,
+tunnel. `airlock serve` listens on `127.0.0.1:8318` by default. Use either
+`--listen` with an IP loopback socket address or `--config FILE` with a strict
+JSON document such as `{"listen":"127.0.0.1:8318"}`. The config requires
+`listen`, rejects unknown fields and non-loopback addresses, and cannot be
+combined with `--listen` or followed by trailing arguments. After a valid
+authority-form target is parsed and the upstream TCP connection succeeds,
 Airlock returns HTTP 200 and forwards opaque bytes in both directions. It does
 not inspect or modify TLS, so a native HTTPS client’s own client certificate and
 authentication behavior remain unchanged.
@@ -25,11 +29,12 @@ blocking system resolver, so an aborted lookup itself is not cancelable; process
 shutdown also uses a bounded runtime wait so such a lookup cannot hang Airlock
 indefinitely.
 
-Airlock does not yet read configuration, manage provider credentials, define
-domains, intercept traffic, or expose a Home Manager instance. The Nix package
-builds the in-tree Cargo workspace with the repository’s locked Rust toolchain,
-and `checks.airlock-package` executes the current `--help` and `--version` entry
-points.
+Airlock does not manage provider credentials, define policy domains, intercept
+traffic, or expand proxy selection. The Nix package builds the in-tree Cargo
+workspace with the repository’s locked Rust toolchain. `checks.airlock-package`
+executes the current `--help` and `--version` entry points, while
+`checks.airlock-instance-runtime` runs each generated service launcher against a
+loopback-only fake upstream.
 
 ## Build and validate
 

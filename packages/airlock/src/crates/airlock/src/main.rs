@@ -1,10 +1,14 @@
 use std::{net::SocketAddr, process::ExitCode, time::Duration};
 
+mod config;
+
+use crate::config::Config;
 use airlock::tunnel;
 
 const DEFAULT_LISTEN: &str = "127.0.0.1:8318";
 const PROCESS_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
-const USAGE: &str = "Usage: airlock [--help|--version | serve [--listen <loopback-address>]]";
+const USAGE: &str =
+    "Usage: airlock [--help|--version | serve [--listen <loopback-address> | --config <file>]]";
 
 fn main() -> ExitCode {
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -73,21 +77,35 @@ fn parse_listen(arguments: &mut std::env::ArgsOs) -> Result<SocketAddr, String> 
             .parse()
             .map_err(|error| format!("invalid default listen address: {error}"));
     };
-    if flag != "--listen" {
-        return Err("serve accepts only --listen".to_owned());
+
+    if flag == "--listen" {
+        let Some(address) = arguments.next() else {
+            return Err("--listen requires an address".to_owned());
+        };
+        let listen = address
+            .to_str()
+            .and_then(|address| address.parse::<SocketAddr>().ok())
+            .ok_or_else(|| "--listen requires an IP socket address".to_owned())?;
+        reject_trailing(arguments)?;
+        return Ok(listen);
     }
 
-    let Some(address) = arguments.next() else {
-        return Err("--listen requires an address".to_owned());
-    };
+    if flag == "--config" {
+        let Some(path) = arguments.next() else {
+            return Err("--config requires a file".to_owned());
+        };
+        reject_trailing(arguments)?;
+        return Config::read(path).map(|config| config.listen);
+    }
+
+    Err("serve accepts only --listen and --config".to_owned())
+}
+
+fn reject_trailing(arguments: &mut std::env::ArgsOs) -> Result<(), String> {
     if arguments.next().is_some() {
-        return Err("--listen does not accept additional arguments".to_owned());
+        return Err("serve accepts only one of --listen and --config".to_owned());
     }
-
-    address
-        .to_str()
-        .and_then(|address| address.parse::<SocketAddr>().ok())
-        .ok_or_else(|| "--listen requires an IP socket address".to_owned())
+    Ok(())
 }
 
 async fn start(listen: SocketAddr) -> ExitCode {
@@ -134,12 +152,15 @@ async fn start(listen: SocketAddr) -> ExitCode {
 
 fn print_help() {
     println!("Airlock is a local egress proxy for coding harnesses.");
-    println!("R03 listens on loopback and accepts unauthenticated CONNECT tunnels only.");
+    println!("Airlock listens on loopback and accepts unauthenticated CONNECT tunnels only.");
     println!();
     println!("{USAGE}");
-    println!("  serve                 Listen on {DEFAULT_LISTEN}");
+    println!("  serve                  Listen on {DEFAULT_LISTEN}");
     println!(
-        "  serve --listen ADDR   Listen on an IP loopback address; port 0 is useful for tests"
+        "  serve --listen ADDR    Listen on an IP loopback address; port 0 is useful for tests"
+    );
+    println!(
+        "  serve --config FILE    Read a strict JSON document such as {{\"listen\":\"127.0.0.1:8318\"}}"
     );
     println!();
     println!("The proxy forwards opaque bytes without TLS interception.");
