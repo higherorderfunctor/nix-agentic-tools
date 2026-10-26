@@ -8,7 +8,7 @@ use airlock_core::{
     secret::Secret,
     storage::{
         ClaudeLimit, CreditPool, ProviderSnapshot, QuotaMetric, QuotaPool, SnapshotFetchStatus,
-        SnapshotSource, SnapshotSurface, SqliteStorage, Storage,
+        SnapshotSource, SnapshotSurface, SqliteStorage,
     },
 };
 use http_body_util::{BodyExt, Full};

@@ -734,7 +734,7 @@ mod tests {
         config::RawConfig,
         storage::{
             ClaudeLimit, CreditPool, QuotaMetric, RequestEvent, ResponseHeaderWindow,
-            ResponseWindowLabel, SnapshotFetchStatus, SnapshotSource, SqliteStorage, Storage,
+            ResponseWindowLabel, SnapshotFetchStatus, SnapshotSource, SqliteStorage,
         },
     };
     use serde_json::json;

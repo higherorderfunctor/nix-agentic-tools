@@ -3,7 +3,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, DirBuilder, OpenOptions},
-    future::Future,
     io,
     num::NonZeroU64,
     os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
@@ -534,47 +533,6 @@ pub struct RequestRowCursor {
     pub cutoff_id: i64,
     pub occurred_at_unix: i64,
     pub row_id: i64,
-}
-
-pub trait Storage {
-    fn replace_oauth_pair(
-        &self,
-        replacement: OauthPairReplacement,
-    ) -> impl Future<Output = Result<OauthPairRecord, StorageError>> + Send;
-
-    fn oauth_pair(
-        &self,
-        client: &ClientId,
-        credential: &CredentialId,
-        provider: &ProviderId,
-    ) -> impl Future<Output = Result<OauthPairRecord, StorageError>> + Send;
-
-    fn retire_oauth_pair(
-        &self,
-        retirement: OauthPairRetirement,
-    ) -> impl Future<Output = Result<(), StorageError>> + Send;
-
-    fn try_append_request_event(
-        &self,
-        event: RequestEvent,
-    ) -> impl Future<Output = Result<(), StorageError>> + Send;
-
-    fn request_usage(
-        &self,
-        query: RequestUsageQuery,
-    ) -> impl Future<Output = Result<Vec<RequestUsageAggregate>, StorageError>> + Send;
-
-    fn request_usage_loss_total(&self) -> impl Future<Output = Result<u64, StorageError>> + Send;
-
-    fn append_provider_snapshot(
-        &self,
-        snapshot: ProviderSnapshot,
-    ) -> impl Future<Output = Result<(), StorageError>> + Send;
-
-    fn provider_snapshots(
-        &self,
-        query: SnapshotQuery,
-    ) -> impl Future<Output = Result<Vec<ProviderSnapshot>, StorageError>> + Send;
 }
 
 type UsageWork = (
@@ -1282,8 +1240,13 @@ impl SqliteStorage {
     }
 }
 
-impl Storage for SqliteStorage {
-    async fn replace_oauth_pair(
+impl SqliteStorage {
+    /// Replaces a managed OAuth pair when its expected generation still matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, concurrent-generation, or SQLite errors.
+    pub async fn replace_oauth_pair(
         &self,
         replacement: OauthPairReplacement,
     ) -> Result<OauthPairRecord, StorageError> {
@@ -1330,7 +1293,12 @@ impl Storage for SqliteStorage {
         })
     }
 
-    async fn oauth_pair(
+    /// Returns the managed OAuth pair scoped to its client, credential, and provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns missing-pair, stored-identity, or SQLite errors.
+    pub async fn oauth_pair(
         &self,
         client: &ClientId,
         credential: &CredentialId,
@@ -1411,7 +1379,15 @@ impl Storage for SqliteStorage {
         })
     }
 
-    async fn retire_oauth_pair(&self, retirement: OauthPairRetirement) -> Result<(), StorageError> {
+    /// Retires a matching managed OAuth pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, missing-pair, concurrent-generation, or SQLite errors.
+    pub async fn retire_oauth_pair(
+        &self,
+        retirement: OauthPairRetirement,
+    ) -> Result<(), StorageError> {
         let expected =
             i64::try_from(retirement.expected_generation).map_err(|_| StorageError::Input {
                 field: "OAuth generation is too large",
@@ -1470,7 +1446,12 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
-    async fn try_append_request_event(&self, event: RequestEvent) -> Result<(), StorageError> {
+    /// Appends one request event through the bounded usage worker.
+    ///
+    /// # Errors
+    ///
+    /// Returns input errors, `UsageUnavailable` for queue or worker contention, or the durable write result.
+    pub async fn try_append_request_event(&self, event: RequestEvent) -> Result<(), StorageError> {
         validate_request_event(&event)?;
         let (acknowledgement, receipt) = tokio::sync::oneshot::channel();
         self.usage_sender
@@ -1479,7 +1460,12 @@ impl Storage for SqliteStorage {
         receipt.await.map_err(|_| StorageError::UsageUnavailable)?
     }
 
-    async fn request_usage(
+    /// Returns bounded request-usage aggregates for a group and time range.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, aggregate-bound, integrity, or SQLite errors.
+    pub async fn request_usage(
         &self,
         query: RequestUsageQuery,
     ) -> Result<Vec<RequestUsageAggregate>, StorageError> {
@@ -1487,7 +1473,12 @@ impl Storage for SqliteStorage {
         read_request_usage(&mut connection, &self.database_path, query).await
     }
 
-    async fn request_usage_loss_total(&self) -> Result<u64, StorageError> {
+    /// Returns the lifetime total of dropped request events.
+    ///
+    /// # Errors
+    ///
+    /// Returns integrity or SQLite errors.
+    pub async fn request_usage_loss_total(&self) -> Result<u64, StorageError> {
         let row = sqlx::query!(
             r#"SELECT COALESCE(SUM(dropped_events), 0) AS "total!: i64" FROM request_events"#
         )
@@ -1496,14 +1487,24 @@ impl Storage for SqliteStorage {
         stored_count(row.total, &self.database_path)
     }
 
-    async fn append_provider_snapshot(
+    /// Appends one typed provider snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, integrity, or SQLite errors.
+    pub async fn append_provider_snapshot(
         &self,
         snapshot: ProviderSnapshot,
     ) -> Result<(), StorageError> {
         append_provider_snapshot_to(&self.connection, snapshot).await
     }
 
-    async fn provider_snapshots(
+    /// Returns bounded provider-snapshot history.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, history-bound, integrity, or SQLite errors.
+    pub async fn provider_snapshots(
         &self,
         query: SnapshotQuery,
     ) -> Result<Vec<ProviderSnapshot>, StorageError> {
