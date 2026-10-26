@@ -2,16 +2,13 @@ use std::collections::BTreeMap;
 
 use crate::{
     config::Config,
-    ids::{ClientId, CredentialId, GroupId, HostName},
+    ids::{ClientId, GroupId, HostName},
 };
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Decision<'policy> {
     Deny(DenyReason),
-    Intercept {
-        credentials: &'policy [CredentialId],
-        group: &'policy GroupId,
-    },
+    Intercept { group: &'policy GroupId },
     Tunnel,
 }
 
@@ -25,7 +22,6 @@ pub enum DenyReason {
 pub struct Policy {
     clients: BTreeMap<ClientId, Vec<GroupId>>,
     intercepted_hosts: BTreeMap<HostName, GroupId>,
-    primary: BTreeMap<GroupId, Vec<CredentialId>>,
     unknown_hosts: crate::config::UnknownHosts,
 }
 
@@ -40,19 +36,9 @@ impl Policy {
             .client_grants()
             .map(|(client, grants)| (client.clone(), grants.to_vec()))
             .collect();
-        let primary = config
-            .client_grants()
-            .flat_map(|(_, grants)| grants)
-            .filter_map(|group| {
-                config
-                    .group_primary(group)
-                    .map(|credential| (group.clone(), vec![credential.clone()]))
-            })
-            .collect();
         Self {
             clients,
             intercepted_hosts,
-            primary,
             unknown_hosts: config.unknown_hosts(),
         }
     }
@@ -71,11 +57,7 @@ impl Policy {
         if !grants.contains(group) {
             return Decision::Deny(DenyReason::UnknownHost);
         }
-        self.primary
-            .get(group)
-            .map_or(Decision::Deny(DenyReason::UnknownHost), |credentials| {
-                Decision::Intercept { credentials, group }
-            })
+        Decision::Intercept { group }
     }
 }
 
@@ -105,7 +87,6 @@ mod tests {
     fn decision_table_covers_group_grants_hosts_clients_and_policies() {
         let harness = ClientId::try_from("harness").expect("client");
         let stranger = ClientId::try_from("stranger").expect("client");
-        let claude = CredentialId::try_from("claude").expect("credential");
         let group = GroupId::try_from("anthropic").expect("group");
         let anthropic = HostName::try_from("api.anthropic.com").expect("host");
         let other = HostName::try_from("api.other.test").expect("host");
@@ -116,10 +97,7 @@ mod tests {
             let policy = Policy::from_config(&config);
             assert_eq!(
                 policy.decide(&harness, &anthropic),
-                Decision::Intercept {
-                    credentials: std::slice::from_ref(&claude),
-                    group: &group,
-                }
+                Decision::Intercept { group: &group }
             );
             assert_eq!(
                 policy.decide(&harness, &other),

@@ -26,6 +26,14 @@ pub struct Config {
     usage_credentials: BTreeSet<CredentialId>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Route<'config> {
+    pub credential: &'config CredentialId,
+    pub endpoint: &'config str,
+    pub is_primary: bool,
+    pub primary_credential: &'config CredentialId,
+}
+
 #[derive(Clone)]
 struct ClientConfig {
     grants: Vec<GroupId>,
@@ -482,7 +490,7 @@ impl Config {
             return true;
         }
         self.route(group, None)
-            .and_then(|(_, endpoint)| endpoint.strip_prefix("https://"))
+            .and_then(|route| route.endpoint.strip_prefix("https://"))
             .and_then(|authority| authority.split('/').next())
             .and_then(|authority| authority.split(':').next())
             .is_some_and(|endpoint_host| endpoint_host == host.as_ref())
@@ -506,13 +514,9 @@ impl Config {
             .flat_map(|(group_id, group)| group.hosts.iter().map(move |host| (host, group_id)))
     }
 
-    pub(crate) fn group_primary(&self, group: &GroupId) -> Option<&CredentialId> {
-        self.groups.get(group).map(|config| &config.primary)
-    }
-
     /// Selects one credential and its protocol endpoint. Unclaimed models belong to the primary.
     #[must_use]
-    pub fn route(&self, group: &GroupId, model: Option<&str>) -> Option<(&CredentialId, &str)> {
+    pub fn route(&self, group: &GroupId, model: Option<&str>) -> Option<Route<'_>> {
         let group = self.groups.get(group)?;
         let credential_id = model
             .and_then(|model| {
@@ -530,7 +534,12 @@ impl Config {
             .get(&credential.provider)?
             .endpoints
             .get(&group.protocol)?;
-        Some((credential_id, endpoint.url.as_str()))
+        Some(Route {
+            credential: credential_id,
+            endpoint: endpoint.url.as_str(),
+            is_primary: credential_id == &group.primary,
+            primary_credential: &group.primary,
+        })
     }
 
     /// The `ToolSearch` spelling shim belongs to the selected z.ai Anthropic preset.
@@ -1404,20 +1413,22 @@ mod tests {
         let config = converted(valid_raw()).expect("valid multiplex config");
         assert!(config.validate_executable().is_ok());
         let group = GroupId::try_from("anthropic").expect("group");
+        let zai = config
+            .route(&group, Some("glm-4.7"))
+            .expect("claimed model route");
+        assert_eq!(zai.credential.as_ref(), "zai");
+        assert_eq!(zai.endpoint, "https://api.z.ai/api/anthropic");
+        assert!(!zai.is_primary);
+        assert_eq!(zai.primary_credential.as_ref(), "claude");
+        let claude = config
+            .route(&group, Some("new-claude-model"))
+            .expect("unclaimed model route");
+        assert!(claude.is_primary);
+        assert_eq!(claude.primary_credential.as_ref(), "claude");
         assert_eq!(
             config
-                .route(&group, Some("glm-4.7"))
-                .map(|(id, _)| id.as_ref()),
-            Some("zai")
-        );
-        assert_eq!(
-            config
-                .route(&group, Some("new-claude-model"))
-                .map(|(id, _)| id.as_ref()),
-            Some("claude")
-        );
-        assert_eq!(
-            config.route(&group, None).map(|(id, _)| id.as_ref()),
+                .route(&group, None)
+                .map(|route| route.credential.as_ref()),
             Some("claude")
         );
 
@@ -1436,7 +1447,7 @@ mod tests {
         let config = converted(value).expect("valid override config");
         assert!(config.validate_executable().is_ok());
         assert_eq!(
-            config.route(&group, None).map(|(_, endpoint)| endpoint),
+            config.route(&group, None).map(|route| route.endpoint),
             Some("https://other.example")
         );
 
@@ -1477,7 +1488,7 @@ mod tests {
                     &GroupId::try_from("anthropic").expect("group ID"),
                     Some("codex")
                 )
-                .map(|(id, _)| id.as_ref()),
+                .map(|route| route.credential.as_ref()),
             Some("claude")
         );
         let usage = config
