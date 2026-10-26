@@ -15,7 +15,7 @@ use std::{
 use airlock_core::{
     ids::{ClientId, CredentialId, GroupId, ProviderId},
     storage::{
-        RequestEvent, RequestOutcome, RequestUsageQuery, SqliteStorage, Storage, StorageError,
+        RequestEvent, RequestOutcome, RequestUsageQuery, SqliteStorage, StorageError,
         StorageIdentities,
     },
 };

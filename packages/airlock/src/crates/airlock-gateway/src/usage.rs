@@ -12,7 +12,7 @@ use std::{
 
 use airlock_core::{
     ids::{ClientId, CredentialId, GroupId},
-    storage::{RequestEvent, RequestOutcome, Storage, StorageError},
+    storage::{RequestEvent, RequestOutcome, SqliteStorage, StorageError},
 };
 use flate2::{Decompress, FlushDecompress, Status, read::MultiGzDecoder};
 use serde::Deserialize;
@@ -37,10 +37,7 @@ pub trait RequestUsageSink: Send + Sync + 'static {
     ) -> Pin<Box<dyn std::future::Future<Output = Result<(), StorageError>> + Send + 'a>>;
 }
 
-impl<T> RequestUsageSink for T
-where
-    T: Storage + Send + Sync + 'static,
-{
+impl RequestUsageSink for SqliteStorage {
     fn append_request_event<'a>(
         &'a self,
         event: RequestEvent,
