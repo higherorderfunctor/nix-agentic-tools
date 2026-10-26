@@ -92,41 +92,6 @@ this index.
     - `packages/stacked-workflows/modules/**`
   - Read:
     - [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
-- **`airlock`**
-  - Match:
-    - `packages/airlock/**`
-  - Read:
-    - [`packages/airlock/docs/airlock.md`](packages/airlock/docs/airlock.md)
-- **`airlock-control`**
-  - Match:
-    - `packages/airlock/**`
-  - Read:
-    - [`packages/airlock/docs/control.md`](packages/airlock/docs/control.md)
-- **`airlock-integration`**
-  - Match:
-    - `packages/airlock/**`
-  - Read:
-    - [`packages/airlock/docs/integration.md`](packages/airlock/docs/integration.md)
-- **`airlock-oauth`**
-  - Match:
-    - `packages/airlock/**`
-  - Read:
-    - [`packages/airlock/docs/oauth.md`](packages/airlock/docs/oauth.md)
-- **`airlock-routing`**
-  - Match:
-    - `packages/airlock/**`
-  - Read:
-    - [`packages/airlock/docs/routing.md`](packages/airlock/docs/routing.md)
-- **`airlock-storage`**
-  - Match:
-    - `packages/airlock/**`
-  - Read:
-    - [`packages/airlock/docs/storage.md`](packages/airlock/docs/storage.md)
-- **`airlock-usage-storage`**
-  - Match:
-    - `packages/airlock/**`
-  - Read:
-    - [`packages/airlock/docs/usage-storage.md`](packages/airlock/docs/usage-storage.md)
 - **`beads`**
   - Match:
     - `packages/beads/**`
@@ -420,6 +385,11 @@ this index.
     - `packages/kiro-cli/lib/mkKiro.nix`
   - Read:
     - [`dev/fragments/open-keys/open-keys.md`](dev/fragments/open-keys/open-keys.md)
+- **`packages/airlock/docs`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`AGENTS.md.rules/56e5ace927f982b1ea2da5f33d1ded002bdfc53bdc2b9d3a3ada174cb4e1073d.md`](AGENTS.md.rules/56e5ace927f982b1ea2da5f33d1ded002bdfc53bdc2b9d3a3ada174cb4e1073d.md)
 - **`packages/kimchi/docs`**
   - Match:
     - `checks/references/kimchi-egress-report.nix`
