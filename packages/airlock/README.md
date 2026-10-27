@@ -5,16 +5,17 @@ Rust workspace.
 
 The server listens only on IP loopback addresses and detects HTTP/1.1 or
 cleartext HTTP/2 prior knowledge on the same port. CONNECT opens a TCP tunnel to
-a hostname or IP address with an explicit port, forwarding opaque bytes without
-TLS interception. Native HTTPS client authentication is unchanged. The listener
-currently accepts CONNECT without proxy authentication; domain policy is not
-implemented yet.
+a hostname or IP address with an explicit port. By default it forwards opaque
+bytes; explicit DNS-and-port selections enable verified TLS interception. Native
+HTTPS client authentication is unchanged. The listener currently accepts CONNECT
+without proxy authentication; domain policy is not implemented yet.
 
 Cleartext clients choose HTTP/2 by sending its prior-knowledge preface; HTTP/1.1
 clients use the same listener automatically. The proxy listener does not yet
-offer TLS or ALPN negotiation. TLS inside a CONNECT tunnel remains opaque.
-Native Claude traffic through `HTTPS_PROXY` has not been validated to use
-HTTP/2; the HTTP/2 tests here select it with a prior-knowledge client.
+offer TLS or ALPN negotiation. Unselected TLS tunnels remain opaque; selected
+destinations negotiate inner HTTP/1.1 independently on each TLS leg. Native
+Claude traffic through `HTTPS_PROXY` has not been validated to use HTTP/2; the
+HTTP/2 tests here select it with a prior-knowledge client.
 
 HTTP/1.1 clients can also send absolute-form `http://` proxy requests. Airlock
 streams request and response bodies without buffering a complete body, following
@@ -78,17 +79,57 @@ The same `ai.airlock.instances.<name>` declaration starts an instance through
 `ai.services` on Home Manager and devenv. For the explicit Claude opt-in and
 rollback procedure, see [HTTPS passthrough](docs/passthrough.md).
 
+## Selective TLS interception
+
+Add `interception` to the JSON configuration to select exact DNS names and
+ports:
+
+```json
+{
+  "interception": {
+    "ca_directory": "/private/airlock/ca",
+    "destinations": ["api.example.test:443"]
+  },
+  "listen": "127.0.0.1:9000"
+}
+```
+
+Startup creates or validates the CA before binding the listener. No trust is
+installed: the client must explicitly trust the public `ca.pem`. Unselected
+names, ports and IP literals retain opaque CONNECT behavior. Both outer HTTP/1.1
+and prior-knowledge HTTP/2 support interception. This unit supports **inner
+HTTP/1.1 only**: both TLS legs offer only `http/1.1` ALPN. Inner HTTP/2 and
+translation are a separate follow-up.
+
+Airlock parses the ClientHello and requires SNI to match the CONNECT DNS name
+before dialing. It verifies the upstream certificate chain, name and validity
+before completing the downstream handshake. System certificate roots are the
+default; optional `upstream_roots` names a PEM certificate file added to those
+roots for private origins. There is no insecure verification mode. Leaves exist
+only in memory, with one cache slot per configured name, a seven-day lifetime
+capped by CA expiry, and renewal during their final day.
+
+Each selected tunnel owns one verified upstream connection. Inner Host, absolute
+URI authority, scheme and effective port must match the CONNECT destination.
+Nested CONNECT, upgrades and unsupported authorities are refused. Native
+destination Authorization and request bodies stream through the existing HTTP
+framing and hop-header filters. TLS setup and client header reads have
+ten-second deadlines; inference may wait for its first response header without a
+duration limit, and response bodies and SSE have no lifetime timeout.
+Cancellation releases the owned upstream, while a plain half-close permits a
+final response.
+
 ## Local CA
 
-`airlock ca init DIRECTORY` creates the local CA material that a later TLS
-interception unit can consume: `DIRECTORY` is mode 0700 and owned by the current
-user, `ca.key` is a PKCS#8 key with mode 0600, and `ca.pem` is the matching
-self-signed CA certificate with mode 0644. The command prints only `ca.pem`'s
-path. Re-running it validates and reuses the existing pair, and refuses partial,
-expired, non-CA, mismatched, badly signed, symlinked, exposed, or otherwise
-unusable material instead of rotating it. It does not install the certificate
-into a system or browser trust store, change trust configuration, or alter the
-passthrough `serve` behavior.
+`airlock ca init DIRECTORY` creates the same local CA material used by
+interception: `DIRECTORY` is mode 0700 and owned by the current user, `ca.key`
+is a PKCS#8 key with mode 0600, and `ca.pem` is the matching self-signed CA
+certificate with mode 0644. The command prints only `ca.pem`'s path. Re-running
+it validates and reuses the existing pair, and refuses partial, expired, non-CA,
+mismatched, badly signed, symlinked, exposed, or otherwise unusable material
+instead of rotating it. It does not install the certificate into a system or
+browser trust store or change trust configuration. Default `serve` behavior
+remains opaque.
 
 If publishing the certificate fails after the key was written, init leaves the
 partial material for inspection and reports the failure. Inspect the directory
