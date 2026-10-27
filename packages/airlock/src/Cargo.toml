@@ -1,3 +1,4 @@
+# cspell:words rustls
 # cspell:words rcgen rustix serde zeroize
 [workspace]
 resolver = "3"
@@ -21,6 +22,7 @@ pem = "4.0.0"
 rcgen = { version = "0.14.10", default-features = false, features = [
   "pem",
   "ring",
+  "x509-parser",
   "zeroize",
 ] }
 rustix = { version = "1.1.5", default-features = false, features = [
@@ -28,6 +30,12 @@ rustix = { version = "1.1.5", default-features = false, features = [
   "process",
   "std",
 ] }
+rustls = { version = "=0.23.46", default-features = false, features = [
+  "ring",
+  "std",
+  "tls12",
+] }
+rustls-native-certs = "0.8.3"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tempfile = "3.27.0"
@@ -40,6 +48,10 @@ tokio = { version = "1.54.1", features = [
   "signal",
   "sync",
   "time",
+] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = [
+  "ring",
+  "tls12",
 ] }
 tower-service = "0.3.3"
 x509-parser = { version = "0.18.1", default-features = false, features = [

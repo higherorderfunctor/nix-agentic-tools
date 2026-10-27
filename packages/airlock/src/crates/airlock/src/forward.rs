@@ -48,31 +48,8 @@ impl Forwarder {
             return response(StatusCode::BAD_REQUEST, "malformed HTTP proxy target");
         };
 
-        if request.version() != Version::HTTP_11 {
-            return response(
-                StatusCode::HTTP_VERSION_NOT_SUPPORTED,
-                "HTTP/1.1 absolute-form requests are required",
-            );
-        }
-
-        if !supported_transfer_encoding(request.headers()) {
-            return response(
-                StatusCode::BAD_REQUEST,
-                "unsupported request transfer coding",
-            );
-        }
-        let chunked = request.headers().contains_key(TRANSFER_ENCODING);
-
-        if !strip_hop_by_hop(request.headers_mut()) {
-            return response(StatusCode::BAD_REQUEST, "malformed Connection header");
-        }
-
-        // Incoming has decoded the chunks. Explicitly request fresh framing:
-        // Hyper otherwise treats unknown-length GET and HEAD bodies as empty.
-        if chunked {
-            request
-                .headers_mut()
-                .insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
+        if let Err((status, message)) = prepare_request(&mut request) {
+            return response(status, message);
         }
         request
             .headers_mut()
@@ -88,20 +65,9 @@ impl Forwarder {
             }
         };
 
-        if !supported_transfer_encoding(upstream.headers())
-            || (upstream.headers().contains_key(TRANSFER_ENCODING)
-                && upstream.headers().contains_key(CONTENT_LENGTH))
-        {
+        if let Err(message) = prepare_response(&mut upstream) {
             self.remove_current().await;
-            return response(StatusCode::BAD_GATEWAY, "unsupported upstream framing");
-        }
-
-        if !strip_hop_by_hop(upstream.headers_mut()) {
-            self.remove_current().await;
-            return response(
-                StatusCode::BAD_GATEWAY,
-                "malformed upstream Connection header",
-            );
+            return response(StatusCode::BAD_GATEWAY, message);
         }
 
         upstream.map(Either::Right)
@@ -193,6 +159,47 @@ impl ForwardTarget {
             uri: uri.clone(),
         })
     }
+}
+
+pub(crate) fn prepare_request(
+    request: &mut Request<Incoming>,
+) -> Result<(), (StatusCode, &'static str)> {
+    if request.version() != Version::HTTP_11 {
+        return Err((
+            StatusCode::HTTP_VERSION_NOT_SUPPORTED,
+            "HTTP/1.1 requests are required",
+        ));
+    }
+    if !supported_transfer_encoding(request.headers()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "unsupported request transfer coding",
+        ));
+    }
+    let chunked = request.headers().contains_key(TRANSFER_ENCODING);
+    if !strip_hop_by_hop(request.headers_mut()) {
+        return Err((StatusCode::BAD_REQUEST, "malformed Connection header"));
+    }
+    // Incoming has decoded chunks; unknown-length GET/HEAD need explicit framing.
+    if chunked {
+        request
+            .headers_mut()
+            .insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
+    }
+    Ok(())
+}
+
+pub(crate) fn prepare_response(response: &mut Response<Incoming>) -> Result<(), &'static str> {
+    if !supported_transfer_encoding(response.headers())
+        || (response.headers().contains_key(TRANSFER_ENCODING)
+            && response.headers().contains_key(CONTENT_LENGTH))
+    {
+        return Err("unsupported upstream framing");
+    }
+    if !strip_hop_by_hop(response.headers_mut()) {
+        return Err("malformed upstream Connection header");
+    }
+    Ok(())
 }
 
 fn supported_transfer_encoding(headers: &HeaderMap<HeaderValue>) -> bool {

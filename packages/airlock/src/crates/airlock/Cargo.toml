@@ -1,3 +1,4 @@
+# cspell:words rustls
 # cspell:words rcgen rustix serde zeroize
 [package]
 name = "airlock"
@@ -11,18 +12,21 @@ h2.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
+pem.workspace = true
 rcgen.workspace = true
 rustix.workspace = true
+rustls.workspace = true
+rustls-native-certs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 time.workspace = true
 tokio.workspace = true
+tokio-rustls.workspace = true
 tower-service.workspace = true
 x509-parser.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
 libc = "0.2"
-pem.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
