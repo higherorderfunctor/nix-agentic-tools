@@ -1,15 +1,15 @@
 use std::{
     future::poll_fn,
     io,
+    pin::Pin,
     sync::{Arc, Mutex},
-    task::Poll,
+    task::{Context, Poll},
 };
 
 use h2::{RecvStream, SendStream, server::SendResponse};
 use hyper::{Method, Request, Response, StatusCode, body::Bytes};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
+    io::{AsyncRead, AsyncWrite, ReadBuf},
     task::JoinSet,
     time::{Instant, sleep_until, timeout_at},
 };
@@ -21,7 +21,11 @@ use crate::{
 
 const MAX_STREAMS: usize = 32;
 
-pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
+pub(crate) async fn serve(
+    socket: Prefixed,
+    deadline: Instant,
+    interception: Option<Arc<crate::tls::Interception>>,
+) {
     let handshake = h2::server::Builder::new()
         .max_concurrent_streams(MAX_STREAMS as u32)
         .handshake::<_, Bytes>(socket);
@@ -51,7 +55,7 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
             }) => match accepted {
                 Some(Ok((request, respond))) => {
                     initializing = false;
-                    jobs.spawn(handle(request, respond));
+                    jobs.spawn(handle(request, respond, interception.clone()));
                 }
                 _ => break,
             }
@@ -60,7 +64,11 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
     jobs.shutdown().await;
 }
 
-async fn handle(request: Request<RecvStream>, mut respond: SendResponse<Bytes>) {
+async fn handle(
+    request: Request<RecvStream>,
+    mut respond: SendResponse<Bytes>,
+    interception: Option<Arc<crate::tls::Interception>>,
+) {
     if request.method() != Method::CONNECT {
         let (status, body) = server::route(request.method(), request.uri());
         let _ = reply(&mut respond, status, body);
@@ -70,9 +78,9 @@ async fn handle(request: Request<RecvStream>, mut respond: SendResponse<Bytes>) 
     let opened = tokio::select! {
         biased;
         _ = poll_fn(|cx| respond.poll_reset(cx)) => return,
-        result = tunnel::open(request.uri(), deadline) => result,
+        result = tunnel::prepare(request.uri(), deadline, interception) => result,
     };
-    let upstream = match opened {
+    let action = match opened {
         Ok(upstream) => upstream,
         Err((status, body)) => {
             let _ = reply(&mut respond, status, body);
@@ -89,7 +97,7 @@ async fn handle(request: Request<RecvStream>, mut respond: SendResponse<Bytes>) 
     tokio::select! {
         biased;
         _ = poll_fn(|cx| reset.lock().unwrap().poll_reset(cx)) => {}
-        _ = relay(request.into_body(), send, upstream) => {}
+        _ = action.relay(TunnelIo { recv: request.into_body(), send, buffered: Bytes::new(), ended: false }) => {}
     }
 }
 
@@ -106,48 +114,77 @@ fn reply(
     Ok(())
 }
 
-async fn relay(
-    mut recv: RecvStream,
+struct TunnelIo {
+    recv: RecvStream,
     send: Arc<Mutex<SendStream<Bytes>>>,
-    upstream: TcpStream,
-) -> io::Result<()> {
-    let (mut read, mut write) = upstream.into_split();
-    let upload = async {
-        while let Some(data) = recv.data().await {
-            let data = data.map_err(io::Error::other)?;
-            write.write_all(&data).await?;
-            recv.flow_control()
-                .release_capacity(data.len())
-                .map_err(io::Error::other)?;
+    buffered: Bytes,
+    ended: bool,
+}
+
+impl AsyncRead for TunnelIo {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        output: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        if output.remaining() == 0 {
+            return Poll::Ready(Ok(()));
         }
-        write.shutdown().await
-    };
-    let download = async {
-        let mut buffer = [0; 8192];
         loop {
-            let count = read.read(&mut buffer).await?;
-            if count == 0 {
-                send.lock()
-                    .unwrap()
-                    .send_data(Bytes::new(), true)
+            if !self.buffered.is_empty() {
+                let count = output.remaining().min(self.buffered.len());
+                output.put_slice(&self.buffered.split_to(count));
+                self.recv
+                    .flow_control()
+                    .release_capacity(count)
                     .map_err(io::Error::other)?;
-                return Ok::<(), io::Error>(());
+                return Poll::Ready(Ok(()));
             }
-            let mut bytes = Bytes::copy_from_slice(&buffer[..count]);
-            while !bytes.is_empty() {
-                send.lock().unwrap().reserve_capacity(bytes.len());
-                let capacity = poll_fn(|cx| send.lock().unwrap().poll_capacity(cx))
-                    .await
-                    .ok_or(io::ErrorKind::BrokenPipe)?
-                    .map_err(io::Error::other)?;
-                let count = capacity.min(bytes.len());
-                send.lock()
-                    .unwrap()
-                    .send_data(bytes.split_to(count), false)
-                    .map_err(io::Error::other)?;
+            match self.recv.poll_data(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(None) => return Poll::Ready(Ok(())),
+                Poll::Ready(Some(Err(error))) => return Poll::Ready(Err(io::Error::other(error))),
+                Poll::Ready(Some(Ok(bytes))) => self.buffered = bytes,
             }
         }
-    };
-    tokio::try_join!(upload, download)?;
-    Ok(())
+    }
+}
+
+impl AsyncWrite for TunnelIo {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        if bytes.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
+        let mut send = self.send.lock().unwrap();
+        send.reserve_capacity(bytes.len().min(8192));
+        match send.poll_capacity(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => Poll::Ready(Err(io::ErrorKind::BrokenPipe.into())),
+            Poll::Ready(Some(Err(error))) => Poll::Ready(Err(io::Error::other(error))),
+            Poll::Ready(Some(Ok(capacity))) => {
+                let count = capacity.min(bytes.len()).min(8192);
+                send.send_data(Bytes::copy_from_slice(&bytes[..count]), false)
+                    .map_err(io::Error::other)?;
+                Poll::Ready(Ok(count))
+            }
+        }
+    }
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+        if !self.ended {
+            self.send
+                .lock()
+                .unwrap()
+                .send_data(Bytes::new(), true)
+                .map_err(io::Error::other)?;
+            self.ended = true;
+        }
+        Poll::Ready(Ok(()))
+    }
 }
