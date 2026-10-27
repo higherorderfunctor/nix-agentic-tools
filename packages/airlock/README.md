@@ -13,9 +13,9 @@ without proxy authentication; domain policy is not implemented yet.
 Cleartext clients choose HTTP/2 by sending its prior-knowledge preface; HTTP/1.1
 clients use the same listener automatically. The proxy listener does not yet
 offer TLS or ALPN negotiation. Unselected TLS tunnels remain opaque; selected
-destinations negotiate inner HTTP/1.1 independently on each TLS leg. Native
-Claude traffic through `HTTPS_PROXY` has not been validated to use HTTP/2; the
-HTTP/2 tests here select it with a prior-knowledge client.
+destinations negotiate inner HTTP/2 or HTTP/1.1 independently on each TLS leg.
+Native Claude traffic through `HTTPS_PROXY` has not been validated to use
+HTTP/2; the HTTP/2 tests here select it with a prior-knowledge client.
 
 HTTP/1.1 clients can also send absolute-form `http://` proxy requests. Airlock
 streams request and response bodies without buffering a complete body, following
@@ -114,8 +114,11 @@ Startup creates or validates the CA before binding the listener. No trust is
 installed: the client must explicitly trust the public `ca.pem`. A CONNECT to
 the absolute form `api.example.test.:443` selects the same destination.
 Unselected names, ports and IP literals retain opaque CONNECT behavior. Both
-outer HTTP/1.1 and prior-knowledge HTTP/2 support interception. Interception
-supports **inner HTTP/1.1 only**: both TLS legs offer only `http/1.1` ALPN.
+outer HTTP/1.1 and prior-knowledge HTTP/2 support interception. Each inner TLS
+leg independently prefers `h2`, then `http/1.1` through ALPN; a peer without
+ALPN uses HTTP/1.1. Unsupported-only ALPN offers fail. Airlock translates
+requests and responses between all four HTTP/1.1 and HTTP/2 combinations while
+streaming bodies.
 
 Airlock parses the ClientHello and requires SNI to match the CONNECT DNS name
 before connecting upstream. It verifies the upstream certificate chain, name and
@@ -127,13 +130,21 @@ lifetime capped by CA expiry, and renewal during their final day.
 
 Each selected tunnel owns one verified upstream connection. Inner Host, absolute
 URI authority, scheme and effective port must match the CONNECT destination.
-Nested CONNECT, upgrades and unsupported authorities are refused. Native
-destination Authorization and request bodies stream through the existing HTTP
-framing and hop-header filters. TLS setup and client header reads have
-ten-second deadlines; inference may wait for its first response header without a
-duration limit, and response bodies and SSE have no lifetime timeout.
-Cancellation releases the owned upstream, while a plain half-close permits a
-final response.
+HTTP/2 uses its required `:authority` and `https` scheme, and validates Host
+when supplied. HTTP/1.1 requires Host. Concurrent inner HTTP/2 requests share
+their upstream HTTP/2 connection or serialize on their upstream HTTP/1.1
+connection. Nested CONNECT, upgrades and unsupported authorities are refused.
+Native destination Authorization and request bodies stream through the existing
+HTTP framing and hop-header filters. TLS setup and the first inner request’s
+headers have ten-second deadlines; subsequent HTTP/1.1 header reads retain their
+own ten-second bound. HTTP/2 permits at most 32 concurrent inner streams. Its
+socket, stream and body work share a 128-future session limit, including uploads
+that remain open after early responses; exceeding that limit closes the current
+tunnel. Session termination synchronously drops queued and active protocol
+futures. There is no session duration timer; inference may wait for its first
+response header without a duration limit, and response bodies and SSE have no
+lifetime timeout. Cancellation releases the owned upstream, while a plain
+half-close permits a final response.
 
 ## Local CA
 
@@ -176,9 +187,10 @@ repository's locked Rust toolchain. Rust tests cover HTTP forwarding and framing
 rejection, bounded shared DNS, authority validation, byte streaming and
 half-close in both directions, client cancellation, HTTP/2 multiplexing and flow
 control, stream reset isolation, selective TLS interception, CA leaf issuance,
-loopback binding, listener limits, header deadlines, owned tunnel shutdown,
-local CA validation and CLI signals. `checks.airlock-package` checks the
-packaged `--help` and `--version` entry points.
+inner HTTP/1.1 and HTTP/2 translation, loopback binding, listener limits, header
+deadlines, owned tunnel shutdown, local CA validation and CLI signals.
+`checks.airlock-package` checks the packaged `--help` and `--version` entry
+points.
 
 `checks.airlock-instances` covers module wiring, port and name claims, proxy
 registration and what a selection gives Claude and Codex.
