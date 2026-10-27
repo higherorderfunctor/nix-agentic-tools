@@ -124,17 +124,48 @@
       ${pkgs.coreutils}/bin/mv -f -- "$_ai_file" ${target}
       ${slot.variable}=${target}''
     else assignment;
+  # Shell that sets `_ai_dir` to a service's runtime directory without creating
+  # it. A non-null `entry` applies its literal XDG_RUNTIME_DIR or TMPDIR, so a
+  # caller outside the service finds the directory the daemon uses.
+  runtimeDirectoryPath = pkgs: name: entry: let
+    coreutils = "${pkgs.coreutils}/bin";
+    directoryValue = variable:
+      if entry == null || !(builtins.hasAttr variable entry.environment)
+      then null
+      else if builtins.isString entry.environment.${variable}
+      then entry.environment.${variable}
+      else throw "ai.services.${name}.environment.${variable}: a caller resolving this path needs a literal override";
+    xdg = directoryValue "XDG_RUNTIME_DIR";
+    tmp = directoryValue "TMPDIR";
+  in ''
+    _ai_runtime_xdg=${
+      if xdg == null
+      then ''"''${XDG_RUNTIME_DIR:-}"''
+      else lib.escapeShellArg xdg
+    }
+    _ai_runtime_tmp=${
+      if tmp == null
+      then ''"''${TMPDIR:-/tmp}"''
+      else
+        lib.escapeShellArg (
+          if tmp == ""
+          then "/tmp"
+          else tmp
+        )
+    }
+    if [ -n "$_ai_runtime_xdg" ]; then
+      _ai_dir="$_ai_runtime_xdg"/${lib.escapeShellArg "ai-service-${name}"}
+    else
+      _ai_dir="$_ai_runtime_tmp/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
+    fi
+  '';
   # The 0700 per-service runtime directory every launcher file goes to. It is
   # chosen after the declared environment is applied, so a declared
   # XDG_RUNTIME_DIR or TMPDIR picks it as it does for the daemon.
   runtimeDirectory = pkgs: name: let
     coreutils = "${pkgs.coreutils}/bin";
   in ''
-    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
-      _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
-    else
-      _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
-    fi
+    ${runtimeDirectoryPath pkgs name null}
     umask 077
     if ! ${coreutils}/mkdir -m 0700 -- "$_ai_dir" 2>/dev/null; then
       if [ -L "$_ai_dir" ] || [ ! -d "$_ai_dir" ] || [ ! -O "$_ai_dir" ]; then
@@ -434,5 +465,5 @@
       };
     };
 in {
-  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher serviceEntry triggers;
+  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher runtimeDirectoryPath serviceEntry triggers;
 }

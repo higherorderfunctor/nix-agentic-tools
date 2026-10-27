@@ -1,14 +1,14 @@
-## ai.proxy: local CLIProxyAPI for AI harnesses
+## ai.proxy: named proxy selection for AI harnesses
 
-> **Last verified:** 2026-10-24 — OAuth upstream credentials require vendor and
-> a secret account email; native CPA account rules match logins, including ones
-> added while the service runs. The existing rendered-file launcher lifts
-> accounts into secret placeholders on both backends. Named API-key credentials
-> can select the built-in z.ai vendor defaults and an optional priority.
+> **Last verified:** 2026-10-26 — named selections infer CPA or Airlock
+> ownership; shared instance claims refuse ambiguous names. Claude Airlock
+> launch inputs preserve native authentication; CPA keeps its settings-based
+> credential path.
 
-`ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
-only the proxy's client key, never an upstream credential. The proxy holds the
-logins. `ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an unrelated MCP
+`ai.proxy` selects a named CPA or Airlock instance. CPA holds upstream logins;
+Airlock preserves Claude's native upstream authentication and supplies only
+process-scoped proxy credentials and optional extra trust.
+`ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an unrelated MCP
 credential proxy.
 
 ### Shape
@@ -30,22 +30,28 @@ credential proxy.
 
 A selection is `url` + `key` for a proxy configured by hand, or `instance` +
 `clientKey` for one this flake runs. `instance` names an
-`ai.cliproxyapi.instances` entry (`packages/cliproxyapi/modules/instances.nix`)
-and resolves through `packages/ai-module/lib/instances.nix`'s `select` to
-`http://127.0.0.1:<port>`; `url` and `instance` are mutually exclusive.
-`clientKey` names that instance's `clientKeys` entry. Missing or disabled
+`ai.cliproxyapi.instances` or `ai.airlock.instances` entry and resolves through
+`packages/ai-module/lib/instances.nix`'s `select` to `http://127.0.0.1:<port>`;
+`url` and `instance` are mutually exclusive. `clientKey` names CPA's
+`clientKeys` entry or Airlock's `settings.clients` entry. Both owners claim
+names in `ai.claims.proxy-instance`, including disabled instances, so a shared
+name fails evaluation. A runtime record lists the owners it can launch through
+in `proxyOwners` (default CPA only; Claude adds Airlock); an enabled runtime
+refuses an inherited selection of any other owner. Missing or disabled
 instances, unknown client keys, and incomplete selections fail as assertions at
 either scope, outside the runtime enable gate. An external selection without a
 key is rejected because the harness would send its own login token, if any, to
-the proxy. The instances are read as `config.ai.cliproxyapi.instances or {}`,
-since an evaluation without the owner module (the factory harness) has none.
+the proxy. `instancesFor` reads both owners with empty-map fallbacks, since a
+factory harness may import neither owner module.
 
 A per-runtime selection that selects anything (a `url` or an `instance`)
 replaces the root selection WHOLE. Fields never mix across levels: a runtime
 `key` or `clientKey` alone leaves the root selection in force and fails its own
-assertion. The resolved value is null or `{key; credentials; url;}`. `url` is
-the origin only: each runtime appends its own protocol path, so a path would be
-doubled.
+assertion. CPA, and an external `url`, resolve to
+`{owner = "cliproxyapi"; key; credentials; url;}`. Airlock resolves to
+`{owner = "airlock"; instance; client; port; url; credentials = [];}`;
+normalized optional fields have neutral defaults. `url` is the origin only: each
+runtime appends its own protocol path, so a path would be doubled.
 
 An external `key` or an instance client entry's `key` requires
 `redact.types.redacted`: `redact.file`, `redact.command` or `redact.concat` with

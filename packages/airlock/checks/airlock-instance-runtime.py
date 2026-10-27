@@ -1,51 +1,19 @@
 """Check private config/secret/CA wiring through both actual backend launchers."""
 
-import contextlib
-import http.client
 import json
 import os
 import stat
-import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
-
-@contextlib.contextmanager
-def running(launcher, environment, output):
-    child = subprocess.Popen([launcher], env=environment, stdout=output, stderr=output)
-    try:
-        yield child
-    except BaseException:
-        output.seek(0)
-        sys.stderr.write(output.read())
-        raise
-    finally:
-        if child.poll() is None:
-            child.terminate()
-        try:
-            child.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            child.kill()
-            child.wait()
-            raise
+from airlock_service import healthy, running, wait_ready
 
 
-def healthy(config):
-    host, port = config["listen"].rsplit(":", 1)
-    assert int(port) != 8318, "a default port would not prove the config was read"
-    connection = http.client.HTTPConnection(host, int(port), timeout=0.5)
-    try:
-        connection.request("GET", "/health")
-        response = connection.getresponse()
-        assert response.status == 200, response.status
-        assert response.read() == b"ok\n"
-        return True
-    except OSError:
-        return False
-    finally:
-        connection.close()
+def port(config):
+    port = int(config["listen"].rsplit(":", 1)[1])
+    assert port != 8318, "a default port would not prove the config was read"
+    return port
 
 
 def private(path, mode):
@@ -69,7 +37,7 @@ def check(case):
             if case["authenticated"]:
                 with running(case["launcher"], environment, output) as child:
                     assert child.wait(timeout=10) != 0, "missing secret started the service"
-                    assert not healthy(case["config"]), "missing secret reached readiness"
+                    assert not healthy(port(case["config"])), "missing secret reached readiness"
                 assert not (runtime / "config.json").exists()
                 assert not (runtime / "ca").exists()
             certificate = None
@@ -78,11 +46,7 @@ def check(case):
                 expected_token = f"fixture-token-{attempt}:@%".encode()
                 token.write_bytes(expected_token + b"\n")
                 with running(case["launcher"], environment, output) as child:
-                    deadline = time.monotonic() + 10
-                    while not healthy(case["config"]):
-                        assert child.poll() is None, "service exited before readiness"
-                        assert time.monotonic() < deadline, "service readiness timed out"
-                        time.sleep(0.02)
+                    wait_ready(child, port(case["config"]))
                     private(runtime, 0o700)
                     config_path = runtime / "config.json"
                     private(config_path, 0o600)
@@ -112,7 +76,7 @@ def check(case):
                 token.unlink()
                 with running(case["launcher"], environment, output) as child:
                     assert child.wait(timeout=10) != 0, "missing rotated secret started service"
-                    assert not healthy(case["config"])
+                    assert not healthy(port(case["config"]))
         assert b"fixture-token-" not in (root / "output").read_bytes()
         print(f"ok: {case['backend']} authenticated={case['authenticated']}")
         return certificate

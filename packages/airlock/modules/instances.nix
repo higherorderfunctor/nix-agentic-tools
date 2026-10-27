@@ -1,7 +1,11 @@
 # `ai.airlock.instances.<name>`: Airlock CONNECT proxies, the same on both
 # backends apart from the default state root. The final Rust command reads the
 # strict JSON document rendered at each start through `ai.services`.
-backend: {lib, ...}: let
+backend: {
+  config,
+  lib,
+  ...
+}: let
   instances = import ../../ai-module/lib/instances.nix {inherit lib;};
   redact = import ../../../lib/redact {inherit lib;};
   renderer = import ../../../lib/extracted/render.nix {inherit lib;};
@@ -70,4 +74,8 @@ in {
       variable = "AIRLOCK_CONFIG";
     })
   ];
+
+  # CPA instance names share this group, so `ai.proxy.instance` names exactly
+  # one owner's instance.
+  config.ai.airlock.claims.proxy-instance = builtins.attrNames config.ai.airlock.instances;
 }

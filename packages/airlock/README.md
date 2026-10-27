@@ -213,3 +213,6 @@ validation and CLI signals. `checks.airlock-package` checks the packaged
 settings preservation. `checks.airlock-instance-runtime` starts each backend's
 generated service launcher and requests `/health` at a configured nondefault
 port. Rust protocol tests run through the Nix package's `doCheck`.
+`checks.airlock-claude-selection` covers Claude's Airlock selection and its
+refusals; `checks.airlock-claude-runtime` launches each backend's generated
+Claude launcher against a running instance.
