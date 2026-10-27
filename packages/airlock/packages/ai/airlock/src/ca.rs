@@ -1,17 +1,22 @@
 // cspell:words RGRP RUSR WUSR CLOEXEC Errno fchmod fstat linkat mkdirat NOTDIR RDONLY rustix statat unlinkat WRONLY Zeroizing
-//! Airlock's private local CA: `init` creates it once and validates it on
-//! every later run.
+//! Locally generated certificate authority and the short-lived leaf
+//! certificates it issues for selected DNS names.
 
 use std::{
+    collections::BTreeMap,
     fs::File,
     io::{self, Read as _, Write as _},
     path::{Path, PathBuf},
     process,
-    sync::atomic::{AtomicU64, Ordering::Relaxed},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering::Relaxed},
+    },
 };
 
 use rcgen::{
-    BasicConstraints, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, KeyUsagePurpose,
+    BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, IsCa,
+    Issuer, KeyPair, KeyUsagePurpose,
 };
 use rustix::{
     fd::OwnedFd,
@@ -20,6 +25,7 @@ use rustix::{
         statat, unlinkat,
     },
 };
+use rustls::pki_types::{CertificateDer, DnsName, PrivatePkcs8KeyDer};
 use time::{Duration, OffsetDateTime};
 use x509_parser::{
     der_parser::der::parse_der,
@@ -35,7 +41,93 @@ const CA_KEY: &str = "ca.key";
 const CA_NAME: &str = "airlock local CA";
 const CA_VALIDITY: Duration = Duration::days(3650);
 const CLOCK_SKEW: Duration = Duration::hours(1);
+const LEAF_VALIDITY: Duration = Duration::days(7);
+const RENEW_BEFORE: Duration = Duration::days(1);
 static TEMPORARY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+struct Material {
+    certificate: CertificateDer<'static>,
+    key: Zeroizing<KeyPair>,
+    not_before: OffsetDateTime,
+    not_after: OffsetDateTime,
+}
+
+/// A leaf certificate issued for one selected DNS name, with its private key.
+pub struct Leaf {
+    pub certificate: CertificateDer<'static>,
+    pub key: PrivatePkcs8KeyDer<'static>,
+    not_after: OffsetDateTime,
+}
+
+/// A validated local CA with one in-memory leaf slot per selected DNS name.
+/// Opening creates the CA when absent; it never installs trust or rotates a CA.
+pub struct Authority {
+    material: Material,
+    leaves: Mutex<BTreeMap<String, Option<Arc<Leaf>>>>,
+}
+
+impl Authority {
+    pub fn open(
+        directory: impl AsRef<Path>,
+        selected_names: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Result<Self, String> {
+        let mut leaves = BTreeMap::new();
+        for name in selected_names {
+            let name = name.as_ref();
+            DnsName::try_from(name).map_err(|_| format!("invalid selected DNS name: {name}"))?;
+            leaves.insert(name.to_owned(), None);
+        }
+        let (_, material) = open_material(directory.as_ref())?;
+        Ok(Self {
+            material,
+            leaves: Mutex::new(leaves),
+        })
+    }
+
+    /// Returns a leaf only for an exact name selected at startup.
+    /// Leaves renew during the final day of their seven-day lifetime.
+    pub fn leaf_for(&self, host: &str) -> Result<Arc<Leaf>, String> {
+        self.leaf_at(host, OffsetDateTime::now_utc())
+    }
+
+    fn leaf_at(&self, host: &str, now: OffsetDateTime) -> Result<Arc<Leaf>, String> {
+        let mut leaves = self
+            .leaves
+            .lock()
+            .map_err(|_| "CA leaf cache lock poisoned")?;
+        let slot = leaves
+            .get_mut(host)
+            .ok_or_else(|| format!("DNS name is not selected for interception: {host}"))?;
+        let ca = &self.material;
+        if now <= ca.not_before || now >= ca.not_after {
+            return Err("CA certificate is not currently valid".to_owned());
+        }
+        // A leaf capped at the CA's expiry cannot be renewed past it, so it is
+        // reused until the CA itself expires.
+        if let Some(leaf) = slot
+            && now < leaf.not_after
+            && (leaf.not_after == ca.not_after || now < leaf.not_after - RENEW_BEFORE)
+        {
+            return Ok(Arc::clone(leaf));
+        }
+
+        let key = Zeroizing::new(KeyPair::generate().map_err(mint_error)?);
+        let mut parameters = CertificateParams::new(vec![host.to_owned()]).map_err(mint_error)?;
+        parameters.not_before = (now - CLOCK_SKEW).max(ca.not_before);
+        parameters.not_after = (now + LEAF_VALIDITY).min(ca.not_after);
+        parameters.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+        parameters.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+        let issuer = Issuer::from_ca_cert_der(&ca.certificate, &*ca.key).map_err(mint_error)?;
+        let certificate = parameters.signed_by(&*key, &issuer).map_err(mint_error)?;
+        let leaf = Arc::new(Leaf {
+            certificate: certificate.der().clone(),
+            key: PrivatePkcs8KeyDer::from(key.serialize_der()),
+            not_after: parameters.not_after,
+        });
+        *slot = Some(Arc::clone(&leaf));
+        Ok(leaf)
+    }
+}
 
 /// Creates or validates Airlock's local CA and returns the public certificate path.
 ///
@@ -43,20 +135,29 @@ static TEMPORARY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 /// own key, is a currently valid CA, and meets the private-directory and key
 /// permissions requirements. Nothing is rotated, overwritten, or trusted.
 pub fn init(directory: impl AsRef<Path>) -> Result<PathBuf, String> {
-    let requested = directory.as_ref();
+    open_material(directory.as_ref()).map(|(path, _)| path)
+}
+
+fn open_material(requested: &Path) -> Result<(PathBuf, Material), String> {
     let directory_path = lexical_path(requested);
     let directory = open_private_directory(&directory_path)?;
     let certificate_path = directory_path.join(CA_CERTIFICATE);
     let key_path = directory_path.join(CA_KEY);
 
-    match (
+    let (mut certificate, mut key) = match (
         open_regular_file(&directory, CA_CERTIFICATE, &certificate_path)?,
         open_regular_file(&directory, CA_KEY, &key_path)?,
     ) {
-        (None, None) => create(&directory)?,
-        (Some(mut certificate), Some(mut key)) => {
-            validate(&mut certificate, &mut key, &certificate_path, &key_path)?
+        (None, None) => {
+            create(&directory)?;
+            (
+                open_regular_file(&directory, CA_CERTIFICATE, &certificate_path)?
+                    .ok_or("created CA certificate disappeared")?,
+                open_regular_file(&directory, CA_KEY, &key_path)?
+                    .ok_or("created CA key disappeared")?,
+            )
         }
+        (Some(certificate), Some(key)) => (certificate, key),
         (Some(_), None) => {
             return Err(format!(
                 "{} exists without {}; remove it before creating a new CA",
@@ -71,7 +172,8 @@ pub fn init(directory: impl AsRef<Path>) -> Result<PathBuf, String> {
                 certificate_path.display()
             ));
         }
-    }
+    };
+    let material = validate(&mut certificate, &mut key, &certificate_path, &key_path)?;
 
     if !path_names_directory(&directory, &directory_path)? {
         return Err(format!(
@@ -80,7 +182,7 @@ pub fn init(directory: impl AsRef<Path>) -> Result<PathBuf, String> {
         ));
     }
 
-    Ok(certificate_path)
+    Ok((certificate_path, material))
 }
 
 fn path_error(path: &Path, error: impl Into<io::Error>) -> String {
@@ -279,7 +381,7 @@ fn validate(
     key_file: &mut File,
     certificate_path: &Path,
     key_path: &Path,
-) -> Result<(), String> {
+) -> Result<Material, String> {
     let key_metadata = fstat(&*key_file).map_err(|error| path_error(key_path, error))?;
     if key_metadata.st_mode & 0o777 != 0o600 {
         return Err(format!(
@@ -356,7 +458,14 @@ fn validate(
         .verify_signature(Some(certificate.public_key()))
         .map_err(|_| invalid(certificate_path, "has an invalid signature"))?;
 
-    Ok(())
+    let not_before = validity.not_before.to_datetime();
+    let not_after = validity.not_after.to_datetime();
+    Ok(Material {
+        certificate: certificate_pem.contents.into(),
+        key,
+        not_before,
+        not_after,
+    })
 }
 
 fn pem_contents(bytes: &[u8], path: &Path, label: &str) -> Result<Pem, String> {
@@ -413,6 +522,78 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn leaf_cache_renews_in_final_day_and_never_grows_for_unselected_names() {
+        let root = TempDir::new().expect("create temporary root");
+        let authority =
+            Authority::open(root.path().join("ca"), ["api.example.test"]).expect("open authority");
+        let now = OffsetDateTime::now_utc();
+        let original = authority
+            .leaf_at("api.example.test", now)
+            .expect("mint leaf");
+        let reused = authority
+            .leaf_at("api.example.test", now + Duration::days(5))
+            .expect("reuse leaf");
+        assert!(Arc::ptr_eq(&original, &reused));
+        assert_eq!(
+            authority.leaves.lock().expect("cache lock")["api.example.test"]
+                .as_ref()
+                .expect("cached leaf")
+                .not_after,
+            now + Duration::days(7)
+        );
+        let renewed = authority
+            .leaf_at("api.example.test", now + Duration::days(6))
+            .expect("renew leaf");
+        assert!(!Arc::ptr_eq(&original, &renewed));
+        assert_eq!(
+            authority.leaves.lock().expect("cache lock")["api.example.test"]
+                .as_ref()
+                .expect("renewed leaf")
+                .not_after,
+            now + Duration::days(13)
+        );
+        for index in 0..100 {
+            assert!(
+                authority
+                    .leaf_at(&format!("{index}.example.test"), now)
+                    .is_err()
+            );
+        }
+        assert_eq!(authority.leaves.lock().expect("cache lock").len(), 1);
+        assert!(
+            authority
+                .leaf_at("api.example.test", authority.material.not_after)
+                .is_err()
+        );
+        assert!(
+            authority
+                .leaf_at("api.example.test", authority.material.not_before)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn ca_expiry_capped_leaf_is_reused_until_ca_expires() {
+        let root = TempDir::new().expect("create temporary root");
+        let mut authority =
+            Authority::open(root.path().join("ca"), ["api.example.test"]).expect("open authority");
+        let now = OffsetDateTime::now_utc();
+        authority.material.not_after = now + Duration::hours(2);
+        let original = authority
+            .leaf_at("api.example.test", now)
+            .expect("mint leaf");
+        let reused = authority
+            .leaf_at("api.example.test", now + Duration::hours(1))
+            .expect("reuse capped leaf");
+        assert!(Arc::ptr_eq(&original, &reused));
+        assert!(
+            authority
+                .leaf_at("api.example.test", authority.material.not_after)
+                .is_err()
+        );
+    }
 
     #[test]
     fn checked_directory_stays_anchored_after_rename_and_symlink_substitution() {
