@@ -55,6 +55,15 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(tree["disk"]["turns"], 3)
         self.assertEqual(exact["attribution"]["own_vs_delegate"], "unavailable")
 
+    def test_session_tree_follows_workflow_root_and_owner(self):
+        self.session("sess_root")
+        self.session("sess_step", {"rootConversationId": "sess_root", "role": "workflow-step"})
+        self.session("sess_owned", {"ownerSessionId": "step"})
+        self.session("sess_unrelated", {"rootConversationId": "sess_other", "workflowId": "sess_root"})
+        tree = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(tree["sessions"], ["sess_owned", "sess_root", "sess_step"])
+        self.assertEqual(tree["disk"]["turns"], 3)
+
     def test_request_id_join_and_conversation_deduplicate_capture(self):
         self.session("sess_root")
         self.captured("request-only", request="request-sess_root")
@@ -255,7 +264,7 @@ class QueryTests(unittest.TestCase):
         self.assertIn(query.capture_tables(report["captures"]), output)
         self.assertIn("1,010 (2/3)", output)
         self.assertNotIn("~5.0%", output)
-        self.assertIn("Other linked conversations may include helpers/forks", output)
+        self.assertIn("Other linked holds workflow steps and subagents and may include helpers/forks", output)
 
     def test_compact_summary_only_labels_explicit_estimates(self):
         report = query.query(self.db, "sess_root", "tree")
@@ -265,6 +274,57 @@ class QueryTests(unittest.TestCase):
         with sqlite3.connect(":memory:") as empty:
             missing = query.render_summary(query.query(empty, "sess_root", "tree"))
         self.assertRegex(missing, r"Total\s+—\s+—\s+—\s+—\s+—\s+—\s+—")
+
+    def estimable(self, ident, credits, chars=0, model="claude-opus-5.5", conversation="root", context=3.0):
+        self.captured(ident, conversation=conversation, credits=credits, tokens=None, metadata={"model": model})
+        self.db.execute("UPDATE captures SET context_usage_percentage=?,summary_json=? WHERE id=?",
+                        (context, json.dumps({"output_text_chars": chars}), ident))
+
+    def test_estimates_fill_only_missing_counters_and_mark_coverage(self):
+        miss, hit = ((slope * 3.0 + .5034) / 603 for slope in (74, 20))  # full miss / full hit at 30,000 tokens
+        self.estimable("miss", miss)
+        self.estimable("hit", hit, conversation="child")
+        self.db.execute("""UPDATE captures SET metadata_json=json_set(metadata_json,'$."kiro:root_conversation_id"','root') WHERE id='hit'""")
+        self.estimable("other", hit, model="other-model")  # no window: stays unknown
+        self.estimable("exact", hit)  # exact counters win over its estimate
+        self.db.execute("UPDATE captures SET input_tokens=100,output_tokens=5,cache_read_tokens=0 WHERE id='exact'")
+        report = query.query(self.db, "sess_root", "tree")
+        estimates = report["captures"]["estimates"]
+        self.assertEqual(estimates["total_tokens"], query.metric(60105, 3, 4))
+        self.assertEqual(estimates["input_tokens"], query.metric(60100, 3, 4))
+        self.assertEqual(estimates["output_tokens"], query.metric(5, 3, 4))
+        self.assertEqual(estimates["cache_read_tokens"], query.metric(30000, 3, 4))
+        self.assertEqual(estimates["cache_hit_rate"], {"hits": 1, "evaluable": 3, "unknown": 1, "percentage": 100 / 3})
+        models = {model["requested_model"]: model for model in report["captures"]["models"]}
+        self.assertEqual(models["other-model"]["estimates"], {})
+        self.assertEqual(report["captures"]["metrics"]["input_tokens"], query.metric(100, 1, 4))
+        output = query.render_summary(report)
+        self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~33.3% \(3/4\)")
+        self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
+        self.assertRegex(output, r"other-model\s+1\s+—\s+—\s+—\s+—\s+—")
+
+    def test_tool_and_reasoning_characters_count_as_estimated_output(self):
+        self.estimable("tools", (74 * 3.0 + .5034) / 603)
+        events = [("response.function_call_arguments.delta", {"type": "response.function_call_arguments.delta", "delta": "x" * 40}),
+                  ("response.reasoning_text.delta", {"type": "response.reasoning_text.delta", "delta": "y" * 20}),
+                  ("toolUseEvent", {"input": "z" * 16, "name": "shell"}),
+                  ("reasoningContentEvent", {"text": "w" * 4}),
+                  ("response.function_call_arguments.done", {"type": "response.function_call_arguments.done", "arguments": "x" * 40})]
+        self.db.executemany("INSERT INTO events(capture_id,seq,event_name,data_json) VALUES ('tools',?,?,?)",
+                            [(seq, name, json.dumps(data)) for seq, (name, data) in enumerate(events)])
+        metrics = query.query(self.db, "sess_root")["captures"]["estimates"]
+        self.assertEqual(metrics["output_tokens"], query.metric(20, 1, 1))  # 80 chars / 4; .done is not recounted
+        self.assertEqual(metrics["input_tokens"], query.metric(29980, 1, 1))
+
+    def test_estimator_refuses_unknown_inputs(self):
+        estimate = query.credit_discount.estimate
+        self.assertIsNone(estimate("other-model", 3.0, 1, 0))
+        self.assertIsNone(estimate("claude-opus-5.5", None, 1, 0))
+        self.assertEqual(estimate("claude-opus-5.5", 3.0, None, 8),
+                         {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None})
+        self.assertEqual(estimate("claude-opus-5.5", 3.0, 1, None)["output_tokens"], None)
+        self.assertEqual(estimate("claude-opus-5.5", 3.0, 100, 0)["cache_read_tokens"], 0)  # clamped, not negative
+        self.assertEqual(estimate("claude-opus-5.5", .001, 1, 1000)["input_tokens"], 0)  # output capped at total
 
     def test_human_output_separates_sources_and_exposes_missing_coverage(self):
         self.session("sess_root", credits=8)
@@ -276,7 +336,7 @@ class QueryTests(unittest.TestCase):
         self.assertIn("requested-model", output)
         self.assertRegex(output, r"Total\s+2\s+—\s+0 \(1/2\)\s+—\s+—\s+—\s+0.000000 \(1/2\)")
         self.assertRegex(output, r"requested-model\s+2\s+—\s+0 \(1/2\)\s+—\s+—\s+—\s+0.000000 \(1/2\)")
-        self.assertIn("Partial cells: sum (known/all requests); ~ estimate; — unavailable.", output)
+        self.assertIn("Partial cells: sum (known/all requests); ~ adds estimates where a call lacks the exact counter; — unavailable.", output)
         self.assertIn("must never be added", output)
         self.assertIn("Own-versus-delegate attribution within a session is unavailable", output)
         self.assertIn("credits 1/2; input 1/2; output 0/2", output)

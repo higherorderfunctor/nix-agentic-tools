@@ -1,4 +1,4 @@
-"""Experimental credit-price diagnostic; never a tokenizer or cache-hit counter."""
+"""Experimental credit-price fits: a discount diagnostic and ~token/cache estimates; never exact counters."""
 
 import math
 
@@ -11,6 +11,11 @@ ASSUMPTIONS = (
     "Context is reported percent; no context-window or token conversion.",
     "Credit discounts can reflect billing/routing; they do not prove cache hits.",
 )
+# Fitted curves: credits*SCALE = slope*context% + intercept, for full cache misses and full hits.
+SCALE, MISS, HIT = 603, (74, .5034), (20, .5970)
+OUTPUT_RATE = 270e-6  # Fitted credits per output token.
+WINDOWS = {"claude-opus-5.5": 1_000_000}  # Context-window tokens; context% converts only for these.
+FITTED = {"claude-opus-5.5"}  # Models whose credit rates above were fitted.
 
 
 def preflight(facts):
@@ -43,8 +48,8 @@ def classify(facts):
         if facts.get(key) is not True:
             return {"classification": "excluded", "reason": reason}
     context, credits = facts["context"], facts["credits"]
-    baseline = (74 * context + .5034) / 603
-    discounted = (20 * context + .5970) / 603
+    baseline = (MISS[0] * context + MISS[1]) / SCALE
+    discounted = (HIT[0] * context + HIT[1]) / SCALE
     if abs(credits - baseline) <= EPSILON:
         status = "baseline"
     elif discounted - EPSILON <= credits < baseline - EPSILON:
@@ -76,3 +81,28 @@ def add(report, result, capture_id):
     report["eligible"] = report["baseline"] + report["discount_like"]
     report["percentage"] = (100 * report["discount_like"] / report["eligible"]
                             if report["eligible"] else None)
+
+
+def finite(number):
+    return isinstance(number, (int, float)) and not isinstance(number, bool) and math.isfinite(number)
+
+
+def estimate(model, context, credits, chars):
+    """~Tokens for one call: total from context% and window, output ~chars/4, cached from credits.
+
+    Per-token rates are the miss/hit slopes over the window; the miss intercept is the fixed cost.
+    Unknown parts are None: no window means nothing, no fitted rates or credits means no cache split.
+    """
+    window = WINDOWS.get(model)
+    if window is None or not finite(context) or context < 0:
+        return None
+    total = round(context / 100 * window)  # includes output tokens once
+    if not isinstance(chars, int) or isinstance(chars, bool) or chars < 0:
+        return {"total_tokens": total, "input_tokens": None, "output_tokens": None, "cache_read_tokens": None}
+    output = min(round(chars / 4), total)
+    result = {"total_tokens": total, "input_tokens": total - output, "output_tokens": output, "cache_read_tokens": None}
+    if model in FITTED and finite(credits):
+        miss, hit = (slope / SCALE / (window / 100) for slope in (MISS[0], HIT[0]))
+        cached = (miss * (total - output) + OUTPUT_RATE * output + MISS[1] / SCALE - credits) / (miss - hit)
+        result["cache_read_tokens"] = round(min(max(cached, 0), total - output))
+    return result

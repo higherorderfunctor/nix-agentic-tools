@@ -8,16 +8,18 @@ import os
 from pathlib import Path
 import runtime
 import sqlite3
+import struct
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import unittest
+import zlib
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from capture import Collector, SSE, digest, open_database, request_details
+from capture import Collector, EventStream, SSE, digest, open_database, request_details
 from mitm_addon import UsageCapture
 
 
@@ -29,16 +31,31 @@ def completed(text="é🙂"):
     return {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}, {"type": "reasoning", "summary": [{"text": "private reasoning"}]}, {"type": "function_call", "arguments": "{}"}], "usage": {"kiro:credits": {"unit": "credit", "unit_plural": "credits", "value": 0.25}, "kiro:context_usage_percentage": 12.3, "unknown": {"future": True}}}}
 
 
+def aws_message(headers, payload=b"", extra=b"", corrupt=0):
+    """Synthetic application/vnd.amazon.eventstream message; string headers plus optional raw header bytes."""
+    raw = b"".join(bytes([len(k)]) + k.encode() + b"\x07" + struct.pack(">H", len(v.encode())) + v.encode() for k, v in headers.items()) + extra
+    prelude = struct.pack(">II", 16 + len(raw) + len(payload), len(raw))
+    message = prelude + struct.pack(">I", zlib.crc32(prelude)) + raw + payload
+    return message + struct.pack(">I", zlib.crc32(message) ^ corrupt)
+
+
+def aws_event(name, obj, **options):
+    return aws_message({":message-type": "event", ":event-type": name, ":content-type": "application/json"}, json.dumps(obj).encode(), **options)
+
+
+EVENTSTREAM = "application/vnd.amazon.eventstream"
+
+
 class CaptureTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name) / "private" / "capture.sqlite3"
 
-    def run_capture(self, parts, encoding="identity", finish=True, **options):
+    def run_capture(self, parts, encoding="identity", finish=True, content_type="text/event-stream", **options):
         writer = Collector(self.path, **options)
         ident = writer.begin({"host": "runtime.kiro.dev"}, b'{"model":"synthetic","metadata":{"kiro:conversation_id":"sess_fake"},"tools":[]}')
-        writer.headers(ident, {"content_type": "text/event-stream", "content_encoding": encoding})
+        writer.headers(ident, {"content_type": content_type, "content_encoding": encoding})
         for part in parts:
             self.assertIs(writer.chunk(ident, part), part)
         if finish:
@@ -97,6 +114,77 @@ class CaptureTests(unittest.TestCase):
                 self.assertEqual((state, json.loads(issues), credits, context), ("complete", [], .25, 12.3))
                 usage = json.loads(summary)["usage_objects"][0]["value"]
                 self.assertEqual(usage, obj["response"]["usage"])
+
+    def test_event_stream_split_messages_usage_and_completion(self):
+        # Bool (type 0) and UUID (type 9) headers are skipped without losing the string headers.
+        skipped = b"\x04flag\x00" + b"\x02id\x09" + bytes(16)
+        messages = [aws_event("assistantResponseEvent", {"content": "é🙂"}, extra=skipped),
+                    aws_event("toolUseEvent", {"toolUseId": "t", "name": "n", "input": "{}"}),
+                    aws_event("contextUsageEvent", {"contextUsagePercentage": 12.3}),
+                    aws_event("metadataEvent", {"tokenUsage": {"uncachedInputTokens": 10, "cacheReadInputTokens": 80, "cacheWriteInputTokens": 5, "outputTokens": 4, "totalTokens": 99}, "stopReason": "END_TURN"}),
+                    aws_event("meteringEvent", {"usage": .25, "unit": "credit", "unitPlural": "credits"})]
+        body = b"".join(messages)
+        db, row = self.run_capture([body[i:i+1] for i in range(len(body))], content_type=EVENTSTREAM, max_items=4096)
+        self.assertEqual((row["state"], row["completion_seen"], json.loads(row["issues_json"])), ("complete", 1, []))
+        self.assertEqual(row["response_sha256"], digest(body))
+        self.assertEqual((row["credits"], row["context_usage_percentage"]), (.25, 12.3))
+        self.assertEqual((row["input_tokens"], row["output_tokens"], row["cache_read_tokens"], row["cache_write_tokens"]), (95, 4, 80, 5))
+        summary = json.loads(row["summary_json"])
+        self.assertEqual((summary["output_text_chars"], summary["output_text_bytes"], summary["terminal"]), (2, 6, "END_TURN"))
+        self.assertEqual(summary["usage_objects"][0], {"path": "/tokenUsage", "value": json.loads(messages[3][messages[3].index(b"{"):-4])["tokenUsage"]})
+        events = db.execute("SELECT event_name,frame_gzip,data_json FROM events ORDER BY seq").fetchall()
+        self.assertEqual([e["event_name"] for e in events], ["assistantResponseEvent", "toolUseEvent", "contextUsageEvent", "metadataEvent", "meteringEvent"])
+        self.assertEqual([gzip.decompress(e["frame_gzip"]) for e in events], messages)
+        self.assertEqual(json.loads(events[0]["data_json"]), {"content": "é🙂"})
+
+    def test_event_stream_absent_counters_stay_null(self):
+        _, row = self.run_capture([aws_event("metadataEvent", {"tokenUsage": {"uncachedInputTokens": 7, "outputTokens": 3}})], content_type=EVENTSTREAM)
+        self.assertEqual(row["state"], "complete")
+        self.assertEqual(row["output_tokens"], 3)
+        # Without both cache counters the cache-inclusive input total is unknown, never the uncached part alone.
+        for column in ("input_tokens", "cache_read_tokens", "cache_write_tokens", "credits", "context_usage_percentage"):
+            self.assertIsNone(row[column])
+        self.assertIsNone(json.loads(row["summary_json"])["terminal"])
+        _, row = self.run_capture([aws_event("metadataEvent", {"tokenUsage": {"uncachedInputTokens": 1, "cacheReadInputTokens": -1, "cacheWriteInputTokens": 0}}),
+                                   aws_event("meteringEvent", {"usage": .5, "unit": "token"})], content_type=EVENTSTREAM)
+        self.assertEqual((row["input_tokens"], row["cache_read_tokens"], row["credits"]), (None, None, None))
+        self.assertEqual(json.loads(row["issues_json"]), ["invalid_credit_unit", "invalid_usage_number"])
+
+    def test_event_stream_crc_mismatch_and_untrusted_prelude(self):
+        metering = aws_event("meteringEvent", {"usage": .5, "unit": "credit"})
+        db, row = self.run_capture([aws_event("assistantResponseEvent", {"content": "x"}, corrupt=1) + metering], content_type=EVENTSTREAM)
+        self.assertEqual((row["state"], row["completion_seen"], row["credits"]), ("incomplete", 0, .5))  # the trusted length resynchronizes
+        self.assertIn("event_stream_crc", json.loads(row["issues_json"]))
+        self.assertIsNone(db.execute("SELECT data_json FROM events WHERE capture_id=? AND seq=0", (row["id"],)).fetchone()[0])
+        broken = bytearray(metering)
+        broken[8] ^= 1
+        db, row = self.run_capture([bytes(broken) + metering], content_type=EVENTSTREAM)
+        self.assertIn("event_stream_crc", json.loads(row["issues_json"]))
+        self.assertIsNone(row["credits"])
+        self.assertEqual([gzip.decompress(e[0]) for e in db.execute("SELECT frame_gzip FROM events WHERE capture_id=?", (row["id"],))], [bytes(broken[:12])])
+
+    def test_event_stream_exception_unterminated_and_empty_are_incomplete(self):
+        exception = aws_message({":message-type": "exception", ":exception-type": "ThrottlingException", ":content-type": "application/json"}, b'{"message":"synthetic"}')
+        metering = aws_event("meteringEvent", {"usage": .5, "unit": "credit"})
+        for parts, issue in (([metering, exception], "missing_completion"), ([metering + metering[:5]], "unterminated_event"), ([], "missing_completion")):
+            db, row = self.run_capture(parts, content_type=EVENTSTREAM)
+            self.assertEqual((row["state"], row["completion_seen"]), ("incomplete", 0))
+            self.assertIn(issue, json.loads(row["issues_json"]))
+        db, row = self.run_capture([metering, exception], content_type=EVENTSTREAM)
+        self.assertEqual(json.loads(row["summary_json"])["terminal"], "exception")
+        self.assertEqual(tuple(db.execute("SELECT event_name,data_json FROM events WHERE capture_id=? AND seq=1", (row["id"],)).fetchone()), ("ThrottlingException", '{"message":"synthetic"}'))
+
+    def test_event_stream_size_limit_and_invalid_headers(self):
+        frames = []
+        parser = EventStream(lambda *args: frames.append(args), limit=64)
+        parser.feed(aws_event("assistantResponseEvent", {"content": "x" * 64}))
+        self.assertTrue(parser.disabled)
+        self.assertEqual(frames, [])
+        truncated = aws_message({}, extra=b"\x04name\x07\x00\x09short")
+        unknown = aws_message({}, extra=b"\x04name\x0b")
+        parser = EventStream(lambda *args: frames.append(args))
+        parser.feed(truncated + unknown)
+        self.assertEqual([(frame, problem) for frame, _, _, problem in frames], [(truncated, "invalid_event_frame"), (unknown, "invalid_event_frame")])
 
     def test_multiline_sse_mixed_line_endings(self):
         frames = []
@@ -167,6 +255,17 @@ class CaptureTests(unittest.TestCase):
         self.assertIn("input_items", hashes)
         self.assertNotIn("authorization", meta)
         self.assertNotIn("unknown", hashes)
+
+    def test_generate_assistant_response_request_metadata(self):
+        history = [{"userInputMessage": {"content": "a"}}, {"assistantResponseMessage": {"content": "b"}}]
+        body = json.dumps({"conversationState": {"conversationId": "sess_step", "rootConversationId": "sess_root", "chatTriggerType": "MANUAL", "history": history,
+                                                 "currentMessage": {"userInputMessage": {"content": "c", "modelId": "claude-opus-5.5", "userInputMessageContext": {"tools": [{"toolSpecification": {"name": "t"}}]}}}},
+                           "additionalModelRequestFields": {"output_config": {"effort": "low"}}, "profileArn": "never"}).encode()
+        meta, hashes = request_details(body)
+        self.assertEqual(meta, {"model": "claude-opus-5.5", "effort": "low", "kiro:conversation_id": "sess_step", "kiro:root_conversation_id": "sess_root"})
+        self.assertEqual(set(hashes), {"currentMessage", "history", "history_items", "prefixes", "tools"})
+        self.assertEqual(hashes["history_items"], [digest(json.dumps(item, separators=(",", ":")).encode()) for item in history])
+        self.assertEqual(request_details(b'{"conversationState":{},"additionalModelRequestFields":{"reasoning":{"effort":"high"}}}')[0], {"effort": "high"})
 
     def test_private_database_and_additional_tables(self):
         db = open_database(self.path)
@@ -500,7 +599,7 @@ class CaptureTests(unittest.TestCase):
         self.addCleanup(addon.done)
         def flow(host="runtime.kiro.dev", path="/v1/responses?secret=never", ident="selected"):
             return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method="POST", headers={"authorization": "never", "cookie": "never"}, get_content=lambda strict: b'{"model":"fake"}'), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
-        for host, path in (("not-kiro.dev", "/v1/responses"), ("kiro.dev.evil", "/v1/responses"), ("kiro.dev", "/other")):
+        for host, path in (("not-kiro.dev", "/v1/responses"), ("kiro.dev.evil", "/v1/responses"), ("kiro.dev", "/other"), ("kiro.dev", "/generateAssistantResponse/x")):
             rejected = flow(host, path, host + path)
             addon.request(rejected)
             self.assertNotIn(rejected.id, addon.active)
@@ -511,12 +610,25 @@ class CaptureTests(unittest.TestCase):
         self.assertIs(selected.response.stream(data), data)
         self.assertEqual(selected.response.stream(b""), b"")
         addon.response(selected)
+        step = flow(path="/generateAssistantResponse?secret=never", ident="step")
+        step.request.headers.update({"x-amzn-kiro-agent-mode": "wf-coder", "x-amzn-kiro-conversation-id": "sess_header"})
+        step.response.headers["content-type"] = EVENTSTREAM
+        addon.request(step)
+        addon.responseheaders(step)
+        data = aws_event("meteringEvent", {"usage": .5, "unit": "credit"})
+        self.assertIs(step.response.stream(data), data)
+        addon.response(step)
         addon.done()
         db = sqlite3.connect(self.path)
         try:
-            metadata, response = db.execute("SELECT metadata_json,response_json FROM captures").fetchone()
-            self.assertNotIn("never", metadata + response)
-            self.assertIn("upstream-fake", response)
+            rows = db.execute("SELECT metadata_json,response_json,state,credits FROM captures ORDER BY json_extract(metadata_json,'$.api')").fetchall()
+            for metadata, response, _, _ in rows:
+                self.assertNotIn("never", metadata + response)
+                self.assertIn("upstream-fake", response)
+            self.assertEqual([json.loads(row[0])["api"] for row in rows], ["create_response", "generate_assistant_response"])
+            metadata = json.loads(rows[1][0])
+            self.assertEqual((metadata["path"], metadata["agent_mode"], metadata["kiro:conversation_id"]), ("/generateAssistantResponse", "wf-coder", "sess_header"))
+            self.assertEqual(rows[1][2:], ("complete", .5))
         finally:
             db.close()
 

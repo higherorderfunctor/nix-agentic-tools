@@ -92,7 +92,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.db.set_trace_callback(statements.append)
         report = query.query(self.db, "sess_root")
         self.assertEqual(report["captures"]["credit_discount"]["excluded"], 2)
-        self.assertFalse(any("FROM events e" in statement for statement in statements))
+        self.assertFalse(any("AS no_reasoning_tools" in statement for statement in statements))
 
     def test_missing_chunk_or_terminal_counts_refuse_profile(self):
         ident = self.add(FIXTURE[0])
@@ -152,7 +152,7 @@ class DiscountQueryTests(unittest.TestCase):
         output = query.render_summary(report)
         self.assertIn("Discount %", output)
         self.assertIn("Profile anomalies: 1", output)
-        self.assertNotIn("~0.0%", output)
+        self.assertRegex(output, r"claude-opus-5.5\s+1\s.*\s1.000000\s+—\n")  # Discount % stays unavailable
 
     def test_retained_terminal_and_reasoning_proof_are_required(self):
         ident = self.add(FIXTURE[0], extra_output={"type": "reasoning", "summary": []})

@@ -1,4 +1,4 @@
-"""Read observed usage for an explicit Kiro session; never infer token counts."""
+"""Read observed usage for an explicit Kiro session; exact counters win, ~estimates fill only their gaps."""
 
 import argparse
 from contextlib import closing
@@ -9,11 +9,20 @@ import sqlite3
 import sys
 
 import credit_discount
+from disk_index import LINKS
 from display import table, value
 
 
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
 COUNTERS = (*DIMENSIONS, "total_tokens")
+ESTIMATED = ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")
+# Output characters beyond output_text that still bill as output tokens, from retained events.
+EXTRA_OUTPUT_CHARS = """(SELECT sum(CASE
+      WHEN json_extract(e.data_json,'$.type') IN ('response.function_call_arguments.delta','response.reasoning_text.delta')
+        THEN length(json_extract(e.data_json,'$.delta'))
+      WHEN e.event_name='toolUseEvent' THEN length(json_extract(e.data_json,'$.input'))
+      WHEN e.event_name='reasoningContentEvent' THEN length(json_extract(e.data_json,'$.text')) END)
+    FROM events e WHERE e.capture_id=c.id)"""
 CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
     WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
@@ -47,16 +56,16 @@ def query(db, session, scope="session"):
     selected = {session}
     paths = []
     if disk_available:
-        rows = db.execute("""
+        rows = db.execute(f"""
             WITH RECURSIVE chosen(path, identifiers_json) AS (
               SELECT path,identifiers_json FROM disk_sessions WHERE session_name(path)=?
               UNION
               SELECT d.path,d.identifiers_json FROM disk_sessions d JOIN chosen p
-              ON ?='tree' AND (
-                json_extract(d.identifiers_json,'$.parentSessionId') IN (session_name(p.path),substr(session_name(p.path),6))
-                OR json_extract(d.identifiers_json,'$.rootSessionId') IN (session_name(p.path),substr(session_name(p.path),6)))
+              ON ?='tree' AND EXISTS(SELECT 1 FROM json_each(d.identifiers_json) j
+                WHERE j.key IN ({",".join("?" for _ in LINKS)})
+                AND j.value IN (session_name(p.path),substr(session_name(p.path),6)))
             ) SELECT path FROM chosen
-        """, (session, scope))
+        """, (session, scope, *LINKS))
         for row in rows:
             paths.append(row[0])
             selected.add(Path(row[0]).name)
@@ -69,7 +78,7 @@ def query(db, session, scope="session"):
     path_marks = ",".join("?" for _ in paths) or "NULL"
     warnings = [*FOOTER_WARNINGS, "Context percentages are observations, not token counts."]
     report = {"session": session, "scope": scope, "sessions": sorted(selected),
-              "attribution": {"own_vs_delegate": "unavailable", "tree_identity": "explicit parentSessionId/rootSessionId only"},
+              "attribution": {"own_vs_delegate": "unavailable", "tree_identity": "explicit " + "/".join(LINKS) + " only"},
               "warnings": warnings}
     disk = {"available": disk_available, "turns": 0,
             "metrics": {name: metric() for name in DIMENSIONS}, "model_scope": "session-current"}
@@ -223,22 +232,27 @@ def query(db, session, scope="session"):
         warnings.append("Root-linked lineage may include forks as well as subagents; it is not proof of caller role.")
     report["attribution"]["pool_rule"] = "Root conversation matches the selected session ID (with or without sess_); Other linked conversations have a different recorded conversation ID; Unknown has no recorded conversation ID. This partition does not identify main versus delegate roles."
     if scope == "tree":
-        report["attribution"]["tree_identity"] = "Explicit parentSessionId/rootSessionId or captured root_conversation_id only"
+        report["attribution"]["tree_identity"] = "Explicit " + "/".join(LINKS) + " or captured root_conversation_id only"
     report["captures"] = captures
-    discount_reports(db, report, chosen if captures["available"] else None, parameters if captures["available"] else [])
+    call_reports(db, report, chosen if captures["available"] else None, parameters if captures["available"] else [])
     return report
 
 
-def discount_reports(db, report, chosen, parameters):
+def call_reports(db, report, chosen, parameters):
+    """Per-call credit-discount diagnostic and ~token estimates, aggregated per model and pool."""
     captures = report["captures"]
     sources = [captures, *captures.get("models", []), *captures["pools"].values()]
+    tallies = {}
     for source in sources:
         source["credit_discount"] = credit_discount.aggregate()
+        tallies[id(source)] = {"estimated": dict.fromkeys(ESTIMATED, 0), "sums": dict.fromkeys(ESTIMATED, 0),
+                               "known": dict.fromkeys(ESTIMATED, 0), "hits": 0}
     if chosen is None:
         return
     models = {source["requested_model"]: source for source in captures["models"]}
     event_tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     proof = "0 AS retained,0 AS terminal,0 AS text_only,0 AS no_reasoning_tools"
+    extra_chars = EXTRA_OUTPUT_CHARS if "events" in event_tables else "NULL"
     if {"events", "chunks"} <= event_tables:
         proof = """
           c.request_gzip IS NOT NULL AND EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id)
@@ -267,7 +281,8 @@ def discount_reports(db, report, chosen, parameters):
             OR coalesce(json_extract(e.data_json,'$.part.type'),'output_text')!='output_text')) AS no_reasoning_tools
         """
     for row in db.execute(chosen + f"""SELECT c.id,c.metadata_json,c.credits,c.context_usage_percentage,
-        json_extract(c.summary_json,'$.output_text_chars') AS chars,
+        c.input_tokens,c.output_tokens,c.cache_read_tokens,
+        json_extract(c.summary_json,'$.output_text_chars') AS chars,{extra_chars} AS extra_chars,
         {CONVERSATION_POOL.format(metadata="c.metadata_json")} AS pool,
         c.state='complete' AND c.completion_seen=1 AND c.transport_ended=1 AND c.issues_json='[]'
           AND c.dropped_bytes=0 AND c.dropped_chunks=0 AS complete
@@ -281,15 +296,46 @@ def discount_reports(db, report, chosen, parameters):
             evidence = db.execute("SELECT " + proof + " FROM captures c WHERE c.id=?", (row["id"],)).fetchone()
             facts.update({key: bool(evidence[key]) for key in ("retained", "terminal", "text_only", "no_reasoning_tools")})
             result = credit_discount.classify(facts)
+        values, estimated = call_counters(row, metadata.get("model"))
         for source in (captures, models[metadata.get("model")], captures["pools"][row["pool"]]):
             credit_discount.add(source["credit_discount"], result, row["id"])
+            tally = tallies[id(source)]
+            for name in ESTIMATED:
+                if values[name] is not None:
+                    tally["sums"][name] += values[name]
+                    tally["known"][name] += 1
+                    tally["estimated"][name] += name in estimated
+            tally["hits"] += (values["cache_read_tokens"] or 0) > 0
+    for source in sources:
+        tally, n = tallies[id(source)], source["observations"]
+        # Only groups with at least one estimated call get ~cells; exact-only groups keep their observed sums.
+        for name in ESTIMATED:
+            if tally["estimated"][name]:
+                source["estimates"][name] = metric(tally["sums"][name], tally["known"][name], n)
+        if tally["estimated"]["cache_read_tokens"]:
+            evaluable = tally["known"]["cache_read_tokens"]
+            source["estimates"]["cache_hit_rate"] = {"hits": tally["hits"], "evaluable": evaluable, "unknown": n - evaluable,
+                                                     "percentage": 100 * tally["hits"] / evaluable}
+
+
+def call_counters(row, model):
+    """One call's counters: exact where reported, else its ~estimate; returns (values, estimated names)."""
+    chars = row["chars"]
+    if isinstance(chars, int) and isinstance(row["extra_chars"], int):
+        chars += row["extra_chars"]
+    guess = credit_discount.estimate(model, row["context_usage_percentage"], row["credits"], chars) or {}
+    exact = {name: row[name] for name in ("input_tokens", "output_tokens", "cache_read_tokens")}
+    exact["total_tokens"] = (exact["input_tokens"] + exact["output_tokens"]
+                             if exact["input_tokens"] is not None and exact["output_tokens"] is not None else None)
+    values = {name: exact[name] if exact[name] is not None else guess.get(name) for name in ESTIMATED}
+    return values, {name for name in ESTIMATED if exact[name] is None and values[name] is not None}
 
 
 def capture_tables(captures):
     """Shared model totals and conversation groups for both human reports."""
     def counter(source, name):
         observed = source["metrics"][name]
-        estimated = name != "credits" and observed["observed_sum"] is None and name in source.get("estimates", {})
+        estimated = name in source.get("estimates", {})
         item = source["estimates"][name] if estimated else observed
         total = item["observed_sum"]
         if total is None:
@@ -303,7 +349,7 @@ def capture_tables(captures):
     show_discount = any(source["credit_discount"]["eligible"] or source["credit_discount"]["anomaly"]
                         for source in (captures, *captures.get("models", [])))
     def row(label, source):
-        rate = source.get("cache_hit_rate", {})
+        rate = source.get("estimates", {}).get("cache_hit_rate") or source.get("cache_hit_rate", {})
         hit = rate.get("percentage")
         hit = f"~{hit:.1f}%" if hit is not None else None
         if hit is not None and rate["unknown"]:
@@ -325,9 +371,10 @@ def capture_tables(captures):
 
 
 CAPTURE_NOTES = (
-    "Partial cells: sum (known/all requests); ~ estimate; — unavailable.",
-    "Hit % estimates requests with cached tokens / requests with a reported cache counter.",
-    "Root conversation may include internal delegates; Other linked conversations may include helpers/forks. Disk credits are excluded.",
+    "Partial cells: sum (known/all requests); ~ adds estimates where a call lacks the exact counter; — unavailable.",
+    "~Tokens: total = context % of the model window; output ≈ chars/4 (text, tool arguments, reasoning); cached fitted from credits.",
+    "Hit % = requests with cached tokens (reported or ~estimated) / requests with a cached value.",
+    "Root conversation carries the selected ID; Other linked holds workflow steps and subagents and may include helpers/forks. Disk credits are excluded.",
 )
 
 
