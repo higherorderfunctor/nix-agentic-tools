@@ -60,6 +60,9 @@ async fn http_proxy_forwards_absolute_requests_and_filters_hop_headers() {
             request.contains("authorization: Bearer retained\r\n"),
             "{request}"
         );
+        assert!(request.contains("cookie: session=one\r\n"), "{request}");
+        assert!(request.contains("cookie: theme=dark\r\n"), "{request}");
+        assert_eq!(request.matches("\r\ncookie:").count(), 2, "{request}");
         assert!(!request.contains("proxy-authorization"), "{request}");
         assert!(!request.contains("proxy-connection"), "{request}");
         assert!(!request.contains("connection:"), "{request}");
@@ -85,7 +88,7 @@ async fn http_proxy_forwards_absolute_requests_and_filters_hop_headers() {
             "POST http://{upstream_address}/path?query=1 HTTP/1.1\r\nHost: wrong.test\r\n\
              Authorization: Bearer retained\r\nProxy-Authorization: Basic secret\r\n\
              Proxy-Connection: keep-alive\r\nConnection: x-request-hop\r\n\
-             X-Request-Hop: remove\r\nContent-Length: 0\r\n\r\n"
+             X-Request-Hop: remove\r\nCookie: session=one\r\nCookie: theme=dark\r\nContent-Length: 0\r\n\r\n"
         ),
     )
     .await;
