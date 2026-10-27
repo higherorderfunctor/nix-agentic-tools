@@ -16,20 +16,43 @@ offer TLS or ALPN negotiation. TLS inside a CONNECT tunnel remains opaque.
 Native Claude traffic through `HTTPS_PROXY` has not been validated to use
 HTTP/2; the HTTP/2 tests here select it with a prior-knowledge client.
 
-`GET /health` returns `200 OK` with an `ok` body once the listener is ready.
-Other paths return `404`; other methods on `/health` return `405` with
-`Allow: GET`. Absolute-form HTTP proxy requests are not supported. Malformed
-CONNECT targets return `400`, failed upstream connections return `502`, and a
-connection attempt exceeding 10 seconds returns `504`. At most 16 blocking DNS
-lookups run or wait in the runtime's blocking queue. A timed-out lookup retains
-its slot until the resolver finishes; waiting for a slot shares the connection
-deadline. IP literals bypass DNS.
+HTTP/1.1 clients can also send absolute-form `http://` proxy requests. Airlock
+streams request and response bodies without buffering a complete body, following
+redirects, or imposing a response duration limit. It regenerates HTTP framing
+and removes hop headers and proxy credentials while preserving destination
+authorization. Transfer codings other than a single `chunked` coding are
+rejected: requests receive `400` before connecting upstream, and upstream
+responses receive `502` before their headers are forwarded. Upstream responses
+containing both Transfer-Encoding and Content-Length also receive `502`. HTTP
+upgrades are unsupported: `Upgrade` and `Connection` are stripped, so an
+opportunistic `Upgrade: h2c` request is forwarded as plain HTTP/1.1; an upstream
+`101` receives `502`. Declared request trailers are preserved; declared response
+trailers are preserved when the client sends `TE: trailers`.
+
+HTTP/2 on the proxy connection supports CONNECT tunnels and the local health
+route; it does not support ordinary HTTP forwarding. HTTP/1.1 forwarding keeps
+one upstream connection per downstream connection. Changing authorities releases
+the old socket, and downstream termination closes its current socket and
+connection task. A client reset cancels the upstream request; a FIN waits for
+the response. Requests are not retried.
+
+Origin-form `GET /health` returns `200 OK` with an `ok` body once the listener
+is ready. Other origin-form paths return `404`; other methods on `/health`
+return `405` with `Allow: GET`. Malformed CONNECT targets return `400`, failed
+upstream connections return `502`, and a CONNECT connection attempt exceeding 10
+seconds returns `504`. HTTP forwarding rejects malformed proxy targets with
+`400`, HTTP/1.0 proxy requests with `505`, and upstream request failures with
+`502`. Both paths limit an upstream connection attempt to 10 seconds, including
+DNS capacity waits and lookup. At most 16 blocking DNS lookups run or wait in
+the runtime's blocking queue across CONNECT and HTTP forwarding. A timed-out
+lookup retains its slot until the resolver finishes. IP literals bypass DNS.
 
 ```bash
 airlock serve                         # 127.0.0.1:8318
 airlock serve --listen 127.0.0.1:9000
 curl http://127.0.0.1:9000/health
 curl --proxy http://127.0.0.1:9000 https://example.com/
+curl --proxy http://127.0.0.1:9000 http://example.com/
 curl --http2-prior-knowledge http://127.0.0.1:9000/health
 ```
 
@@ -50,8 +73,7 @@ An `ai.airlock.instances.<name>` entry runs `airlock-<name>` on its loopback
 port (default 8318) through `ai.services`, on Home Manager and devenv alike.
 Selecting it defaults both `HTTP_PROXY` and `HTTPS_PROXY` to that listener for
 supported runtimes. HTTPS uses CONNECT, preserving credentials and TLS. Plain
-HTTP requests through Airlock currently fail; HTTP forwarding comes in a later
-stack change.
+HTTP requests are forwarded to their absolute-form destinations.
 
 ```nix
 ai.airlock.instances.main = {};
@@ -113,12 +135,13 @@ cargo test --locked
 ```
 
 The overlay exposes Airlock as `pkgs.ai.airlock`. The Nix package uses the
-repository's locked Rust toolchain. Rust tests cover HTTP responses, authority
-validation, byte streaming and half-close in both directions, client
-cancellation, HTTP/2 multiplexing and flow control, stream reset isolation,
-loopback binding, listener limits, header deadlines, owned tunnel shutdown,
-local CA validation and CLI signals. `checks.airlock-package` checks the
-packaged `--help` and `--version` entry points.
+repository's locked Rust toolchain. Rust tests cover HTTP forwarding and framing
+rejection, bounded shared DNS, authority validation, byte streaming and
+half-close in both directions, client cancellation, HTTP/2 multiplexing and flow
+control, stream reset isolation, loopback binding, listener limits, header
+deadlines, owned tunnel shutdown, local CA validation and CLI signals.
+`checks.airlock-package` checks the packaged `--help` and `--version` entry
+points.
 
 `checks.airlock-instances` covers module wiring, port and name claims, proxy
 registration, selection defaults and overrides, and Claude settings delivery.
