@@ -16,10 +16,16 @@ pub struct Server {
 }
 
 pub async fn start() -> Server {
+    start_with_clients(None).await
+}
+
+pub async fn start_with_clients(
+    clients: Option<std::collections::BTreeMap<String, airlock::config::Client>>,
+) -> Server {
     let listener = server::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
     let address = listener.local_addr().unwrap();
     let (shutdown, stopped) = oneshot::channel();
-    let task = tokio::spawn(server::serve(listener, None, async {
+    let task = tokio::spawn(server::serve(listener, None, clients, async {
         let _ = stopped.await;
     }));
     Server {

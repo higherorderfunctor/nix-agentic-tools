@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fs,
     net::SocketAddr,
     path::{Path, PathBuf},
@@ -10,7 +11,14 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub listen: SocketAddr,
+    pub clients: Option<BTreeMap<String, Client>>,
     pub interception: Option<Interception>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Client {
+    pub token_file: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
