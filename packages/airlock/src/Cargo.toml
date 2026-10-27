@@ -6,3 +6,17 @@ members = ["crates/airlock"]
 version = "0.1.0"
 edition = "2024"
 license = "Unlicense"
+
+[workspace.dependencies]
+http-body-util = "0.1.5"
+hyper = { version = "1.12.0", features = ["http1", "server"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+tokio = { version = "1.54.1", features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+  "sync",
+  "time",
+] }
