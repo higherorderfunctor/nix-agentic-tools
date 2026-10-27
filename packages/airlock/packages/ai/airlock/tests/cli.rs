@@ -1,14 +1,14 @@
+mod common;
+
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     sync::mpsc,
     time::{Duration, Instant},
 };
 
-fn command() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_airlock"))
-}
+use common::process::command;
 
 // Reap the child even if an assertion fails.
 struct Process(Child);
@@ -23,10 +23,12 @@ impl Drop for Process {
 #[test]
 fn generated_help_and_version_describe_each_command() {
     for (arguments, expected) in [
-        (vec!["--help"], vec!["Usage:", "--version", "serve"]),
+        (vec!["--help"], vec!["Usage:", "--version", "serve", "ca"]),
         (vec!["--version"], vec![env!("CARGO_PKG_VERSION")]),
         (vec!["serve", "--help"], vec!["--listen", "127.0.0.1:8318"]),
         (vec!["help", "serve"], vec!["--listen"]),
+        (vec!["ca", "--help"], vec!["init"]),
+        (vec!["ca", "init", "--help"], vec!["<DIRECTORY>"]),
     ] {
         let output = command().args(&arguments).output().unwrap();
         assert!(output.status.success(), "{arguments:?}: {output:?}");
@@ -40,18 +42,32 @@ fn generated_help_and_version_describe_each_command() {
 
 #[test]
 fn cli_rejects_invalid_commands_and_listen_addresses() {
-    for arguments in [
-        vec![],
-        vec!["unknown"],
-        vec!["serve", "--unknown"],
-        vec!["serve", "--listen"],
-        vec!["serve", "--listen", "localhost:8318"],
-        vec!["serve", "--listen", "127.0.0.1:0", "extra"],
-        vec!["serve", "--listen", "0.0.0.0:0"],
+    for (arguments, expected_error) in [
+        (vec![], "Usage: airlock <COMMAND>"),
+        (vec!["unknown"], "unrecognized subcommand"),
+        (vec!["serve", "--unknown"], "unexpected argument"),
+        (vec!["serve", "--listen"], "a value is required"),
+        (
+            vec!["serve", "--listen", "localhost:8318"],
+            "invalid socket address",
+        ),
+        (
+            vec!["serve", "--listen", "127.0.0.1:0", "extra"],
+            "unexpected argument",
+        ),
+        (
+            vec!["serve", "--listen", "0.0.0.0:0"],
+            "listen address must be loopback",
+        ),
+        (vec!["ca"], "Usage: airlock ca"),
+        (vec!["ca", "init"], "<DIRECTORY>"),
+        (vec!["ca", "rotate", "unused"], "unrecognized subcommand"),
+        (vec!["ca", "init", "unused", "extra"], "unexpected argument"),
     ] {
         let output = command().args(&arguments).output().unwrap();
         assert!(!output.status.success(), "{arguments:?}");
-        assert!(!output.stderr.is_empty(), "{arguments:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(expected_error), "{arguments:?}: {stderr}");
     }
 }
 

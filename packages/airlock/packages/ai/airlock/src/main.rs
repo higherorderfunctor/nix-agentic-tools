@@ -2,9 +2,9 @@ mod cli;
 
 use std::process::ExitCode;
 
-use airlock::server;
+use airlock::{ca, server};
 use clap::Parser;
-use cli::{Cli, Command};
+use cli::{CaCommand, Cli, Command};
 
 fn main() -> ExitCode {
     match run(Cli::parse()) {
@@ -19,5 +19,11 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
         Command::Serve { listen } => server::run(listen).map_err(|error| error.to_string()),
+        Command::Ca {
+            command: CaCommand::Init { directory },
+        } => {
+            println!("{}", ca::init(directory)?.display());
+            Ok(())
+        }
     }
 }
