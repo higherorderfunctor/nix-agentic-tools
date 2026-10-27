@@ -1,6 +1,6 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-17 — Claude's proxy launcher suppresses only the
+> **Last verified:** 2026-10-26 — Claude's CPA launcher suppresses only the
 > inherited API-key descriptor; shell delivery cells derive from each runtime
 > record's `surfaceSupport`, with Copilot's absence and reason from its record;
 > `optionNamespaces.launcher` places `shell`; Copilot is github.com Copilot.
@@ -213,7 +213,8 @@ three runtimes demonstrably do not perform.
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Kimchi and Kiro. Claude is still outside it;
   `native.settings.env` is its native equivalent. Its optional proxy launcher
-  only suppresses the inherited API-key descriptor.
+  suppresses the inherited API-key descriptor for CPA. Airlock instead applies
+  native runtime-directory inputs before scoped proxy/trust launch exports.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more

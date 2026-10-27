@@ -161,18 +161,28 @@
     }
     else {};
 
+  proxyInstances = proxyLib.instancesFor config;
+  # The selection this runtime inherits. A runtime outside the pool still
+  # resolves the root one, so it can refuse an owner it cannot launch.
+  proxySelection = proxyLib.resolve {
+    instances = proxyInstances;
+    root = config.ai.proxy;
+    runtime =
+      if supportsPool "proxy"
+      then poolCfg.proxy
+      else config.ai.proxy;
+  };
+  # Same default as `mkRuntime`: a hand-built record (see `checkRecord.nix`)
+  # reaches the transform without passing the constructor.
+  proxyOwners = appRecord.proxyOwners or ["cliproxyapi"];
+  unsupportedProxyOwner = proxySelection != null && !(builtins.elem proxySelection.owner proxyOwners);
   # The proxy selection is one unit: a runtime selection replaces the root one
   # whole (`proxyLib.resolve`). Null when nothing is selected or the runtime
   # does not consume the pool.
   resolvedProxy =
-    if supportsPool "proxy"
-    then
-      proxyLib.resolve {
-        instances = config.ai.cliproxyapi.instances or {};
-        root = config.ai.proxy;
-        runtime = poolCfg.proxy;
-      }
-    else null;
+    if !supportsPool "proxy" || unsupportedProxyOwner
+    then null
+    else proxySelection;
 
   # The jail folds field by field (`jailLib.resolve`). Null unless the result
   # enables it, or when the runtime does not consume the pool.
@@ -828,7 +838,16 @@ in {
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
+      assertions = proxyLib.assertionsFor proxyInstances (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
+    })
+    (lib.optionalAttrs (options ? assertions) {
+      assertions = lib.optional unsupportedProxyOwner {
+        assertion = !cfg.enable;
+        message =
+          if supportsPool "proxy"
+          then "${poolOptionName "proxy"}: ${appRecord.name} cannot launch through an `ai.${proxySelection.owner}` instance; it supports ${lib.concatStringsSep ", " proxyOwners}."
+          else "ai.proxy: ${appRecord.name} does not use `ai.proxy`, so it cannot launch through the selected `ai.${proxySelection.owner}` instance; move that selection to each runtime that supports it, such as `ai.claude.proxy`.";
+      };
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let
