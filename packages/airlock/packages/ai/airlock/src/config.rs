@@ -26,13 +26,18 @@ pub struct Client {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Interception {
+    // Empty when only `--ca-directory` supplies it; `read` refuses a config
+    // with neither.
+    #[serde(default)]
     pub ca_directory: PathBuf,
     pub destinations: Vec<String>,
     pub upstream_roots: Option<PathBuf>,
 }
 
 impl Config {
-    pub fn read(path: impl AsRef<Path>) -> Result<Self, String> {
+    /// Read the file at `path`; `ca_directory` replaces the configured
+    /// interception CA directory.
+    pub fn read(path: impl AsRef<Path>, ca_directory: Option<PathBuf>) -> Result<Self, String> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
             .map_err(|error| format!("could not read config {}: {error}", path.display()))?;
@@ -44,7 +49,22 @@ impl Config {
             ));
         }
 
-        serde_json::from_str(&content)
-            .map_err(|error| format!("invalid config {}: {error}", path.display()))
+        let mut config: Self = serde_json::from_str(&content)
+            .map_err(|error| format!("invalid config {}: {error}", path.display()))?;
+        if let Some(directory) = ca_directory {
+            config
+                .interception
+                .as_mut()
+                .ok_or("--ca-directory requires interception configuration")?
+                .ca_directory = directory;
+        }
+        if config
+            .interception
+            .as_ref()
+            .is_some_and(|interception| interception.ca_directory.as_os_str().is_empty())
+        {
+            return Err("interception requires ca_directory or --ca-directory".to_owned());
+        }
+        Ok(config)
     }
 }

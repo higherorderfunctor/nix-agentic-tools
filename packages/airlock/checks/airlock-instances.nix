@@ -31,12 +31,39 @@
       }
     )
     .config;
-  runtime = backend:
+  services = import ../../ai-module/lib/services.nix {inherit lib;};
+  strictShellApplication = import ../../../lib/strict-shell-application.nix;
+  tokenReader = strictShellApplication pkgs {
+    name = "airlock-test-token-reader";
+    text = ''exec ${pkgs.coreutils}/bin/cat "$AIRLOCK_TEST_TOKEN"'';
+  };
+  interceptionSettings = {
+    destinations = ["localhost:443"];
+    upstream_roots = "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt";
+  };
+  protected = backend:
+    (evaluate backend {
+      ai = {
+        activationOrder.secretProviders.vault = {
+          nodes = [];
+          unit = "vault-agent.service";
+        };
+        airlock.instances.main.settings = {
+          clients.fixture.token = redact.file "/run/secrets/airlock-test-client";
+          interception = interceptionSettings;
+        };
+      };
+    }).config;
+  runtime = backend: authenticated:
     (
       evaluate backend {
         ai.airlock.instances.main = {
           port = 18439;
           stateDir = "/tmp/airlock-main-runtime-check-${backend}";
+          settings = lib.optionalAttrs authenticated {
+            clients.fixture.token = redact.command (lib.getExe tokenReader);
+            interception = interceptionSettings;
+          };
         };
       }
     )
@@ -180,10 +207,55 @@
   in
     !config.ai.services.airlock-main.enable
     && config.ai.claims.port."8318" == ["airlock:airlock-main.ports.main"];
-  launcher = backend:
+  protectedContract = backend: let
+    config = protected backend;
+    service = config.ai.services.airlock-main;
+    rendered = builtins.fromJSON (builtins.unsafeDiscardStringContext service.files.config.content);
+    native =
+      if backend == "devenv"
+      then config.processes.airlock-main.watch.paths == ["/run/secrets/airlock-test-client"]
+      else if pkgs.stdenv.hostPlatform.isLinux
+      then let
+        unit = config.systemd.user.services.airlock-main.Unit;
+      in
+        builtins.elem "vault-agent.service" unit.After
+        && builtins.elem "vault-agent.service" unit.Wants
+      else true;
+  in
+    rendered.clients.fixture.token_file
+    == "{$AIRLOCK_CLIENTS_FIXTURE_TOKEN_FILE}"
+    && rendered.interception == interceptionSettings
+    && builtins.hasContext service.files.config.content
+    && !(rendered.interception ? ca_directory)
+    && service.files.config.secrets.AIRLOCK_CLIENTS_FIXTURE_TOKEN_FILE
+    == {_redact.asFile = redact.file "/run/secrets/airlock-test-client";}
+    && services.triggers service == ["/run/secrets/airlock-test-client"]
+    && config.ai.airlock.activation == {}
+    && native;
+  invalidSettingsRefused = backend:
+    lib.all (settings:
+      !(builtins.tryEval (builtins.deepSeq
+        (evaluate backend {ai.airlock.instances.main.settings = settings;}).config.ai.services.airlock-main.files.config
+        true)).success) [
+      {clients.fixture.token = "literal-token-is-refused";}
+      {interception.destinations = [443];}
+      {
+        interception = {
+          destinations = ["localhost:443"];
+          upstream_roots = 443;
+        };
+      }
+      {
+        interception = {
+          destinations = ["localhost:443"];
+          ca_directory = "/persistent/ca";
+        };
+      }
+    ];
+  launcher = backend: authenticated:
     if backend == "hm"
-    then (runtime backend).systemd.user.services.airlock-main.Service.ExecStart
-    else (runtime backend).processes.airlock-main.exec;
+    then (runtime backend authenticated).systemd.user.services.airlock-main.Service.ExecStart
+    else (runtime backend authenticated).processes.airlock-main.exec;
   selectionIsClear = selection:
     lib.all (field: selection.${field} == null) selectionLeaves;
   nativeClaudeUntouched = evaluated: let
@@ -212,8 +284,12 @@
     && nativeClaudeUntouched runtimeAfter;
   # Named so a failure reports which condition broke.
   conditions = backend: {
+    "${backend}: an empty clients map renders" =
+      (evaluate backend {ai.airlock.instances.main.settings.clients = {};}).config.ai.services.airlock-main.files.config.content
+      == ''{"clients":{},"listen":"127.0.0.1:8318"}'';
     "${backend}: claim collisions are reported" = claimsCollide backend;
     "${backend}: disabled instances keep their claims" = disabledClaims backend;
+    "${backend}: invalid settings are refused" = invalidSettingsRefused backend;
     "${backend}: listen cannot be overridden" = listenOverrideRefused backend;
     "${backend}: native Claude settings are untouched" = nativeClaudeUntouched (claude backend);
     "${backend}: no instance by default" =
@@ -223,6 +299,7 @@
         (builtins.attrNames ((empty backend).ai.services or {})))
       && noAirlockActivation (empty backend);
     "${backend}: port derives listen" = portDerived backend;
+    "${backend}: protected settings stay out of the store" = protectedContract backend;
     "${backend}: selection opt-out works" = selectionOptOutWorks backend;
     "${backend}: service contract" = serviceContract backend;
   };
@@ -242,10 +319,13 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
 
         ${pkgs.python3}/bin/python3 ${./airlock-instance-runtime.py} \
-          ${lib.escapeShellArg (runtime "hm").ai.services.airlock-main.files.config.content} \
-          ${launcher "hm"} \
-          ${launcher "devenv"}
-        echo "ok — both generated Airlock launchers serve health at the configured nondefault port" >"$out"
+          ${pkgs.writeText "airlock-runtime-cases.json" (builtins.toJSON (lib.concatMap (backend:
+          map (authenticated: {
+            inherit authenticated backend;
+            config = (runtime backend authenticated).ai.services.airlock-main.files.config.content;
+            launcher = launcher backend authenticated;
+          }) [false true]) ["hm" "devenv"]))}
+        echo "ok — both generated Airlock launchers render private tokens and initialize/reuse runtime CAs before readiness" >"$out"
       '';
     };
 }
