@@ -4,7 +4,8 @@ An instance runs a loopback CONNECT proxy while Claude keeps its native
 authentication, base URL, and TLS configuration. The default instance forwards
 opaque TLS. Optional client tokens and selective interception use the same
 shared instance settings described below; they do not configure Claude’s proxy
-identity or trust automatically.
+identity or trust automatically in this manual opt-in. For authenticated managed
+Claude selection, use [the Claude guide](claude.md).
 
 The server handles HTTP/1.1 CONNECT, HTTP/1.1 absolute-form `http://`
 forwarding, and CONNECT over cleartext HTTP/2 prior-knowledge connections to the
