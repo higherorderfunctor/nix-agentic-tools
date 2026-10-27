@@ -125,7 +125,7 @@ impl Authority {
                 .with_no_client_auth()
                 .with_single_cert(vec![certificate.der().clone()], private_key.into())
                 .map_err(|error| format!("could not configure leaf certificate: {error}"))?;
-        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        config.alpn_protocols = crate::tls::alpn_protocols();
         let config = Arc::new(config);
         *slot = Some(Leaf {
             config: Arc::clone(&config),
