@@ -1,76 +1,17 @@
 mod common;
 
-use std::{future::poll_fn, net::SocketAddr, time::Duration};
+use std::{future::poll_fn, time::Duration};
 
-use common::{request, start};
-use h2::{RecvStream, SendStream, client::SendRequest};
+use common::{
+    h2_client::{Client, read_all, send_all},
+    request, start,
+};
 use hyper::{Request, StatusCode, Version, body::Bytes};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-    task::JoinHandle,
+    net::TcpListener,
     time::timeout,
 };
-
-struct Client {
-    sender: SendRequest<Bytes>,
-    driver: JoinHandle<Result<(), h2::Error>>,
-}
-
-impl Drop for Client {
-    fn drop(&mut self) {
-        self.driver.abort();
-    }
-}
-
-impl Client {
-    async fn connect(address: SocketAddr) -> Self {
-        let socket = TcpStream::connect(address).await.unwrap();
-        let (sender, connection) = h2::client::handshake(socket).await.unwrap();
-        Self {
-            sender,
-            driver: tokio::spawn(connection),
-        }
-    }
-
-    async fn tunnel(&self, target: SocketAddr) -> (SendStream<Bytes>, RecvStream) {
-        let mut sender = self.sender.clone().ready().await.unwrap();
-        let request = Request::builder()
-            .method("CONNECT")
-            .uri(target.to_string())
-            .version(Version::HTTP_2)
-            .body(())
-            .unwrap();
-        let (response, send) = sender.send_request(request, false).unwrap();
-        let response = timeout(Duration::from_secs(2), response)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.version(), Version::HTTP_2);
-        (send, response.into_body())
-    }
-}
-
-async fn send_all(send: &mut SendStream<Bytes>, mut bytes: Bytes) {
-    while !bytes.is_empty() {
-        send.reserve_capacity(bytes.len());
-        let capacity = poll_fn(|cx| send.poll_capacity(cx)).await.unwrap().unwrap();
-        let count = capacity.min(bytes.len());
-        send.send_data(bytes.split_to(count), false).unwrap();
-    }
-    send.send_data(Bytes::new(), true).unwrap();
-}
-
-async fn read_all(recv: &mut RecvStream) -> Vec<u8> {
-    let mut result = Vec::new();
-    while let Some(data) = recv.data().await {
-        let data = data.unwrap();
-        recv.flow_control().release_capacity(data.len()).unwrap();
-        result.extend_from_slice(&data);
-    }
-    result
-}
 
 #[tokio::test]
 async fn http1_and_prior_knowledge_http2_share_one_listener() {

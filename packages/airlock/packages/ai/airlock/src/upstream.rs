@@ -1,7 +1,7 @@
 //! TCP connections from airlock to upstream servers. `connect_upstream`
 //! connects to an IP address directly and looks a name up through `resolver`
 //! first. It sets no deadline of its own; callers bound it with
-//! `CONNECT_TIMEOUT`.
+//! `CONNECT_TIMEOUT`, or with the whole TLS setup deadline when intercepting.
 use std::{io, net::IpAddr, time::Duration};
 
 use tokio::net::TcpStream;
