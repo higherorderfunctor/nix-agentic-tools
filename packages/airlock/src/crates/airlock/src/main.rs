@@ -36,7 +36,8 @@ fn run() -> Result<(), String> {
             println!("  serve --config FILE   Read a strict JSON listen configuration");
             println!("  ca init DIRECTORY     Create or validate a private local CA");
             println!();
-            println!("HTTP/1.1 and cleartext HTTP/2 share this listener.");
+            println!("HTTP/1.1 forwarding and cleartext HTTP/2 CONNECT share this listener.");
+            println!("HTTP/1.1 absolute-form http:// requests stream to upstreams.");
             println!(
                 "GET /health reports readiness. CONNECT forwards opaque TCP without TLS interception."
             );
