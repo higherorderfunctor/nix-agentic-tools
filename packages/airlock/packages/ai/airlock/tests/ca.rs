@@ -419,7 +419,10 @@ fn init_refuses_partial_exposed_and_redirected_ca_material() {
 
 fn served_leaf(authority: &ca::Authority, host: &str, ca_der: Vec<u8>) -> Vec<u8> {
     let config = authority.config_for(host).expect("get selected leaf");
-    assert_eq!(config.alpn_protocols, [b"http/1.1".to_vec()]);
+    assert_eq!(
+        config.alpn_protocols,
+        [b"h2".to_vec(), b"http/1.1".to_vec()]
+    );
     let mut roots = RootCertStore::empty();
     roots.add(ca_der.into()).expect("trust fixture CA");
     let mut client_config =
@@ -428,7 +431,7 @@ fn served_leaf(authority: &ca::Authority, host: &str, ca_der: Vec<u8>) -> Vec<u8
             .expect("select protocols")
             .with_root_certificates(roots)
             .with_no_client_auth();
-    client_config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    client_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
     let mut client = ClientConnection::new(
         Arc::new(client_config),
         ServerName::try_from(host.to_owned()).expect("fixture DNS name"),
@@ -449,7 +452,7 @@ fn served_leaf(authority: &ca::Authority, host: &str, ca_der: Vec<u8>) -> Vec<u8
             .expect("read server TLS");
         client.process_new_packets().expect("verify server TLS");
         if !client.is_handshaking() && !server.is_handshaking() {
-            assert_eq!(client.alpn_protocol(), Some(b"http/1.1".as_slice()));
+            assert_eq!(client.alpn_protocol(), Some(b"h2".as_slice()));
             return client.peer_certificates().expect("server certificate")[0].to_vec();
         }
     }
