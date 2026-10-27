@@ -66,9 +66,18 @@ write lock before changing parser state, so transient contention waits without
 replaying stream events. Offline indexing parses outside write transactions and
 commits batches of at most 128 records, ending once 256 KiB of source lines is
 reached (the final complete record may cross that threshold), with each batch's
-checkpoint offset committed atomically. A single record remains limited to 4
-MiB. An invalid batch rolls back that batch; previously committed batches remain
-available.
+checkpoint offset committed atomically. JSONL records up to 64 MiB are parsed
+transiently, so image-bearing tool results can be ignored without retaining
+their contents in the index. Larger complete records are drained in 64 KiB
+chunks. Oversized or invalid complete records, including parse memory failures,
+do not stop indexing: `disk_omissions` retains only their source path, byte
+offset, byte count, and reason. Blank complete lines are ignored. Their usage
+coverage remains unknown; index summaries and selected-session queries warn that
+totals may be incomplete. Incomplete EOF tails, including oversized tails, are
+retried after an append without advancing the checkpoint. Source replacement or
+truncation retires both facts and omission metadata. A database write failure
+rolls back the batch and its checkpoint; previously committed batches remain
+available. Session metadata retains a separate 4 MiB parsing limit.
 
 Request metadata and fingerprints are extracted once, on the request hook,
 before payload queue admission. This adds bounded request-side parsing and
@@ -130,14 +139,19 @@ still write its own tables.
   events and chunks retain their independent evidence subject to the storage
   budget.
 
-`credits` and `context_usage_percentage` come only from observed `kiro:credits`
-and `kiro:context_usage_percentage` fields. Exact `input_tokens`,
-`output_tokens`, and `input_tokens_details.cached_tokens` are extracted only if
-explicitly supplied in a usage object; absent counters remain SQL `NULL`. Token
-counters must be integers from zero through `2**63 - 1`; observed credits and
-context percentages are normalized to finite floating-point values. Invalid
-numeric fields become `NULL` and mark `invalid_usage_number`; their original
-payload evidence is preserved. No token estimate, cache split, or context-window
+`credits` comes from the `value` in the observed `kiro:credits` envelope, for
+example `{"unit":"credit","unit_plural":"credits","value":0.25}`. Extraction
+requires `unit="credit"` and a finite, nonnegative numeric `value`; an invalid
+or missing unit leaves `credits` as `NULL` and marks `invalid_credit_unit`.
+`unit_plural` is retained as evidence. A scalar credit field is invalid.
+`context_usage_percentage` comes from the observed scalar
+`kiro:context_usage_percentage` field. Exact `input_tokens`, `output_tokens`,
+and `input_tokens_details.cached_tokens` are extracted only if explicitly
+supplied in a usage object; absent counters remain SQL `NULL`. Token counters
+must be integers from zero through `2**63 - 1`; observed credits and context
+percentages are normalized to finite floating-point values. Invalid numeric
+fields become `NULL` and mark `invalid_usage_number`; their original payload
+evidence is preserved. No token estimate, cache split, or context-window
 conversion is invented. `cache_write_tokens` remains unknown unless a supported,
 verified source is added. The original usage objects are available for later
 extraction improvements.

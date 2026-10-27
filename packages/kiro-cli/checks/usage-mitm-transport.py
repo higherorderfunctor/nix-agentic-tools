@@ -22,7 +22,7 @@ def run(mitmdump, addon):
     request_entity = gzip.compress(request_body)
     output = "é🙂"
     delta = {"type": "response.output_text.delta", "delta": output}
-    completed = {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": output}]}], "usage": {"kiro:credits": .25, "kiro:context_usage_percentage": 12.3}}}
+    completed = {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": output}]}], "usage": {"kiro:credits": {"unit": "credit", "unit_plural": "credits", "value": .25}, "kiro:context_usage_percentage": 12.3}}}
     body = b"".join(b"data: " + json.dumps(obj, ensure_ascii=False).encode() + b"\r\n\r\n" for obj in (delta, completed))
     entity = gzip.compress(body)
     release = threading.Event()

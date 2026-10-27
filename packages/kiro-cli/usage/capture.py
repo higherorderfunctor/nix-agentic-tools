@@ -205,7 +205,7 @@ class Analysis:
         self.final_counts = None
         self.terminal = None
 
-    def number(self, key, value, integer=False):
+    def number(self, key, value, integer=False, nonnegative=False):
         try:
             if integer:
                 if type(value) is not int or not 0 <= value <= 2**63 - 1:
@@ -214,7 +214,7 @@ class Analysis:
                 if type(value) not in (int, float):
                     raise ValueError()
                 value = float(value)
-                if not math.isfinite(value):
+                if not math.isfinite(value) or (nonnegative and value < 0):
                     raise ValueError()
             self.metrics[key] = value
         except (OverflowError, ValueError):
@@ -238,8 +238,15 @@ class Analysis:
                             self.usage_bytes += size
                         elif "usage_summary_limit" not in self.issues:
                             self.issues.append("usage_summary_limit")
-                    if key in ("kiro:credits", "kiro:context_usage_percentage") and child is not None:
-                        self.number(key.removeprefix("kiro:"), child)
+                    if key == "kiro:credits":
+                        if isinstance(child, dict) and child.get("unit") == "credit":
+                            self.number("credits", child.get("value"), nonnegative=True)
+                        else:
+                            self.metrics["credits"] = None
+                            if "invalid_credit_unit" not in self.issues:
+                                self.issues.append("invalid_credit_unit")
+                    elif key == "kiro:context_usage_percentage" and child is not None:
+                        self.number("context_usage_percentage", child)
                     walk(child, location)
             elif isinstance(value, list):
                 for index, child in enumerate(value):
