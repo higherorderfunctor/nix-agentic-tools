@@ -529,7 +529,7 @@ class RuntimeTests(unittest.TestCase):
             runtime.private_directory(state / "ca", create=True)
             (state / "ca/mitmproxy-ca-cert.pem").write_text("fake CA")
             inherited = {"PATH": "/project/bin", "KEEP": "yes", **{name: "conflict" for name in runtime.PROXY_NAMES}}
-            with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "invocation_summary"):
+            with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "refresh_disk_index", return_value=False), patch.object(runtime, "invocation_summary"):
                 with self.assertRaisesRegex(ValueError, "inherited ALL_PROXY conflicts"):
                     runtime.launch_environment(state, 19001)
                 runtime.exec_command(state, 19001, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])

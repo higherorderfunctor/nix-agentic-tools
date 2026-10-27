@@ -81,7 +81,7 @@ with tempfile.TemporaryDirectory() as directory:
         # Reuse the HM collector with either its own wrapper or a project's
         # PATH-selected, tracking-disabled Kiro, without project configuration.
         for selected in (package, disabled):
-            inherited = environment | {"PATH": str(Path(selected) / "bin") + os.pathsep + environment.get("PATH", ""),
+            inherited = environment | {"KIRO_USAGE_TEST_AUTO_INDEX": "1", "PATH": str(Path(selected) / "bin") + os.pathsep + environment.get("PATH", ""),
                                        "HTTPS_PROXY": "http://inherited.invalid:1", "NO_PROXY": "*", "all_proxy": "http://inherited.invalid:2"}
             result = subprocess.run([tool, "exec", "--", "kiro-cli", "chat", "synthetic spaced argument", "--", "--v3"], env=inherited, text=True, capture_output=True)
             assert result.returncode == 0, result.stderr
@@ -94,6 +94,10 @@ with tempfile.TemporaryDirectory() as directory:
             assert "no captured conversation identity for this invocation" in result.stderr, result.stderr
             assert not body["bypass"], body
             assert body["argv"] == ["--v3", "chat", "synthetic spaced argument", "--", "--v3"], body
+            indexed = subprocess.run([tool, "session", "sess_auto_index", "--json"], env=environment, text=True, capture_output=True)
+            assert indexed.returncode == 0, indexed.stderr
+            disk = json.loads(indexed.stdout)["disk"]
+            assert disk["turns"] == 1 and disk["metrics"]["credits"]["observed_sum"] == .75, disk
         (state / "ca/mitmproxy-ca-cert.pem").unlink()
         result = launch("kiro-cli")
         assert result.returncode != 0, result

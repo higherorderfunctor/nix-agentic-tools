@@ -23,6 +23,9 @@ IDENTIFIERS = ("executionId", "parentExecutionId", "parentSessionId", "rootExecu
 MAX_RECORD = 64 * 1024 * 1024
 MAX_SESSION_METADATA = 4 * 1024 * 1024
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS disk_session_omissions (
+    session_path TEXT PRIMARY KEY, reason TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS disk_sessions (
     path TEXT PRIMARY KEY, model_id TEXT, model_scope TEXT NOT NULL,
     created_at TEXT, last_modified_at TEXT, numeric_metadata_json TEXT NOT NULL,
@@ -156,6 +159,9 @@ def index_messages(db, path, session_path):
             or (stat.st_size == prior["size"] and stat.st_mtime_ns != prior["mtime_ns"])
             or fingerprints(stream, offset) != (prior["head_hash"], prior["checkpoint_hash"])
         )
+        if (prior and not reset and offset == stat.st_size
+                and stat.st_size == prior["size"] and stat.st_mtime_ns == prior["mtime_ns"]):
+            return  # Fully indexed, unchanged sources need no write transaction.
         with db:
             db.execute("BEGIN IMMEDIATE")
             if reset:
@@ -234,6 +240,7 @@ def index_tree(db, sessions):
         raise ValueError("--sessions must be a directory")
     db.execute("PRAGMA foreign_keys=ON")
     db.executescript(SCHEMA)
+    metadata_omissions = {row[0] for row in db.execute("SELECT session_path FROM disk_session_omissions")}
     # Sub-execution logs have no usage records in the observed format.
     for workspace in sessions.iterdir():
         if workspace.is_symlink() or not workspace.is_dir():
@@ -244,7 +251,19 @@ def index_tree(db, sessions):
             metadata = session / "session.json"
             messages = session / "messages.jsonl"
             if metadata.is_file() and not metadata.is_symlink():
-                index_session(db, metadata)
+                try:
+                    index_session(db, metadata)
+                except (OSError, ValueError) as error:
+                    reason = "unreadable_session_metadata" if isinstance(error, OSError) else "invalid_session_metadata"
+                    with db:
+                        db.execute("DELETE FROM disk_sessions WHERE path=?", (str(session),))
+                        db.execute("INSERT OR REPLACE INTO disk_session_omissions VALUES (?,?)", (str(session), reason))
+                    metadata_omissions.add(str(session))
+                else:
+                    if str(session) in metadata_omissions:
+                        with db:
+                            db.execute("DELETE FROM disk_session_omissions WHERE session_path=?", (str(session),))
+                        metadata_omissions.remove(str(session))
             if messages.is_file() and not messages.is_symlink():
                 index_messages(db, messages, session)
 
@@ -260,13 +279,13 @@ def main():
             index_tree(db, args.sessions)
             sources = db.execute("SELECT count(*) FROM disk_sources").fetchone()[0]
             records = db.execute("SELECT count(*) FROM disk_records").fetchone()[0]
-            omitted = db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0]
+            omitted = db.execute("SELECT (SELECT count(*) FROM disk_omissions) + (SELECT count(*) FROM disk_session_omissions)").fetchone()[0]
             if args.json:
                 print(json.dumps({"omitted_records": omitted, "records": records, "sources": sources}, sort_keys=True))
             else:
                 print(f"Index contains {sources} sources, {records} usage/context records, {omitted} omitted records.")
             if omitted:
-                print("Warning: omitted records have unknown usage coverage; totals may be incomplete.", file=sys.stderr)
+                print("Warning: omitted records or session metadata have unknown usage coverage or lineage; totals and descendant discovery may be incomplete.", file=sys.stderr)
         db.close()
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")

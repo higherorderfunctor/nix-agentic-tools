@@ -108,9 +108,25 @@ def service(args, path):
     ])
 
 
-def invocation_summary(path, invocation, timeout=2.0):
+def refresh_disk_index(path):
+    """Reuse incremental indexing for the documented local session tree."""
+    from capture import open_database
+    from disk_index import index_tree
+    try:
+        sessions = Path.home() / ".kiro/sessions"
+        if not sessions.exists():
+            return False
+        with closing(open_database(path / "usage.sqlite3")) as db:
+            index_tree(db, sessions)
+        return True
+    except (OSError, ValueError, sqlite3.Error) as error:
+        print(f"Warning: automatic Kiro session indexing failed: {error}; disk observations may be stale.", file=sys.stderr)
+        return False
+
+
+def invocation_summary(path, invocation, timeout=2.0, disk_refreshed=False):
     """Read only exact marker matches; wait briefly for the async writer."""
-    from query import FOOTER_WARNINGS, query, render
+    from query import FOOTER_WARNINGS, query, render_summary
     deadline = time.monotonic() + timeout
     rows = []
     uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
@@ -119,29 +135,33 @@ def invocation_summary(path, invocation, timeout=2.0):
             previous_rows, settled = None, time.monotonic()
             while True:
                 rows = db.execute("""
-                    SELECT json_extract(metadata_json,'$."kiro:conversation_id"'), state
+                    SELECT json_extract(metadata_json,'$."kiro:root_conversation_id"'),
+                      json_extract(metadata_json,'$."kiro:conversation_id"'), state
                     FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
                 """, (invocation,)).fetchall()
                 if rows != previous_rows:
                     previous_rows, settled = rows, time.monotonic()
-                if rows and all(state != "recording" for _, state in rows) and time.monotonic() - settled >= .1:
+                if rows and all(state != "recording" for _, _, state in rows) and time.monotonic() - settled >= .1:
                     break
                 if time.monotonic() >= deadline:
                     break
                 time.sleep(.05)
+            identities = [root or conversation for root, conversation, _ in rows]
             sessions = sorted({name if name.startswith("sess_") else "sess_" + name
-                               for name, _ in rows if isinstance(name, str) and name})
+                               for name in identities if isinstance(name, str) and name})
             if not sessions:
                 print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
                 return
-            print("\nKiro usage summary (full session totals for sessions observed in this invocation):", file=sys.stderr)
-            if any(state == "recording" for _, state in rows):
+            print("\nKiro usage summary (full root-lineage totals observed in this invocation; includes resumed work and forks):", file=sys.stderr)
+            if any(state == "recording" for _, _, state in rows):
                 print("Warning: capture writer still has unfinished calls; totals may be incomplete.", file=sys.stderr)
-            if any(not name for name, _ in rows):
+            if any(not name for name in identities):
                 print("Warning: some invocation calls have no conversation identity and are excluded.", file=sys.stderr)
             for session in sessions:
-                report = query(db, session)
-                print(render(report), file=sys.stderr)
+                report = query(db, session, "tree")
+                report["disk"]["refreshed"] = disk_refreshed
+                print(f"Session: {session}  Scope: tree", file=sys.stderr)
+                print(render_summary(report), file=sys.stderr)
                 for warning in report["warnings"]:
                     if warning in FOOTER_WARNINGS:
                         continue
@@ -238,7 +258,8 @@ def exec_command(path, port, arguments):
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
                 try:
-                    invocation_summary(path, invocation)
+                    refreshed = refresh_disk_index(path)
+                    invocation_summary(path, invocation, disk_refreshed=refreshed)
                     sys.stderr.flush()
                 except (OSError, ValueError):
                     # Only a failed summary sink is silenced. Redirect its fd so

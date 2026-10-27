@@ -260,6 +260,50 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIn("--db", result.stderr)
         self.assertIn("--sessions", result.stderr)
 
+    def test_invalid_session_metadata_does_not_block_later_sessions(self):
+        self.messages.write_bytes(usage())
+        self.scan()  # Seed metadata that must be retired when it becomes invalid.
+        self.metadata.write_text('{"parentSessionId":')
+        other = self.sessions / "workspace/sess_z_later"
+        other.mkdir()
+        (other / "session.json").write_text(json.dumps({"modelId": "later"}))
+        (other / "messages.jsonl").write_bytes(usage(2))
+        self.scan()
+        self.assertEqual(self.count(), 2)
+        self.assertIsNone(self.db.execute("SELECT path FROM disk_sessions WHERE path=?", (str(self.session),)).fetchone())
+        omission = self.db.execute("SELECT session_path,reason FROM disk_session_omissions").fetchone()
+        self.assertEqual(tuple(omission), (str(self.session), "invalid_session_metadata"))
+        result = subprocess.run([sys.executable, disk_index.__file__, "--db", str(self.path), "--sessions", str(self.sessions), "--json"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"sources": 2, "records": 2, "omitted_records": 1})
+        self.assertIn("descendant discovery may be incomplete", result.stderr)
+        self.metadata.write_text(json.dumps({"modelId": "repaired", "parentSessionId": "parent-repaired"}))
+        self.scan()
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0], 0)
+        row = self.db.execute("SELECT model_id,identifiers_json FROM disk_sessions WHERE path=?", (str(self.session),)).fetchone()
+        self.assertEqual(row["model_id"], "repaired")
+        self.assertEqual(json.loads(row["identifiers_json"])["parentSessionId"], "parent-repaired")
+        changes = self.db.total_changes
+        self.scan()
+        self.assertEqual(self.db.total_changes, changes)
+
+    def test_unreadable_session_metadata_is_visible_but_sql_errors_propagate(self):
+        self.messages.write_bytes(usage())
+        with patch.object(disk_index, "index_session", side_effect=PermissionError("synthetic")):
+            self.scan()
+        self.assertEqual(self.count(), 1)
+        self.assertEqual(self.db.execute("SELECT reason FROM disk_session_omissions").fetchone()[0], "unreadable_session_metadata")
+        with patch.object(disk_index, "index_session", side_effect=sqlite3.OperationalError("synthetic database failure")):
+            with self.assertRaisesRegex(sqlite3.OperationalError, "database failure"):
+                self.scan()
+
+    def test_unchanged_complete_tree_does_not_write(self):
+        self.messages.write_bytes(usage())
+        self.scan()
+        changes = self.db.total_changes
+        self.scan()
+        self.assertEqual(self.db.total_changes, changes)
+
     def test_unchanged_files_are_not_parsed_again_and_model_updates(self):
         self.messages.write_bytes(usage())
         self.scan()

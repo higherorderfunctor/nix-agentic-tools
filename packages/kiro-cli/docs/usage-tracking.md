@@ -63,23 +63,39 @@ launcher is also supported: the identical proxy and CA environment passes its
 conflict checks. No second collector starts.
 
 After `kiro-usage exec kiro-cli` or `kiro-usage exec kiro-cli-chat` exits, the
-tool prints a usage summary to standard error. Kiro inherits the terminal's
-input and output directly; the summary leaves standard output, exit status, and
-signals intact. Tracked chat runs as a child of the summary supervisor, with its
-own process ID and the same terminal descriptors. Explicit help, version, login,
-and administrative commands skip the summary, including when recognized global
-options precede them. Other commands run without a Kiro summary.
+tool prints model totals and a pooled credit/token summary to standard error.
+Kiro inherits the terminal's input and output directly; the summary leaves
+standard output, exit status, and signals intact. Tracked chat runs as a child
+of the summary supervisor, with its own process ID and the same terminal
+descriptors. Explicit help, version, login, and administrative commands skip the
+summary, including when recognized global options precede them. Other commands
+run without a Kiro summary.
 
 A local proxy marker identifies captures from this invocation, and their
 recorded conversation identities select the sessions to report. The tool does
 not parse Kiro's screen or guess a session from its process ID. Reports contain
-full-session totals, including earlier work when you resume a session. If no
-captured conversation identity is available, the tool reports that the summary
-is unavailable. It does not index session files automatically: disk observations
-reflect the last explicit `index` and may be stale. On exit the tool waits up to
-two seconds for the asynchronous capture writer; unfinished calls remain flagged
-as incomplete coverage. Nested `kiro-usage exec` launches share the parent's
-marker and produce one summary when the outer launch exits.
+full root-linked session totals, including earlier work when you resume a
+session and captured calls linked by explicit root conversation identity. Root
+conversation contains calls whose conversation ID matches the selected root;
+Other linked conversations have a different ID; Unknown has no recorded
+conversation ID. These are conversation groups, not caller roles: the root can
+include internal delegates, and other linked conversations can include helpers
+or forks. Disk turn credits never enter these captured-call totals. Requests,
+total/input/output/cached tokens, request hit rate, and credits are grouped by
+model and pool, with no per-delegate listing. Missing counters stay unavailable.
+A `~` marks an estimate; no token estimator is enabled. Hit percentage is the
+share of requests with cached tokens among requests that report a cache counter,
+with partial coverage shown. If no captured conversation identity is available,
+the tool reports that the summary is unavailable. Before the report, it
+automatically refreshes the local disk index from `~/.kiro/sessions` when that
+directory exists. The incremental scan updates session metadata and linkage
+across the tree, reads appended records, and skips writes for fully indexed
+unchanged sources. The first scan can take longer for a large history. Index
+failures warn and leave the child exit status intact; disk observations may then
+be stale. On exit the tool also waits up to two seconds for the asynchronous
+capture writer; unfinished calls remain flagged as incomplete coverage. Nested
+`kiro-usage exec` launches share the parent's marker and produce one summary
+when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -153,12 +169,21 @@ and `kiro-usage list --json` preserves one full JSON object per capture.
 `kiro-usage index --sessions DIR --json` returns index counts. Replay continues
 to write original response bytes; it has no table or JSON mode.
 
-Indexing is explicit. It reads only the sessions directory supplied to that
-command and updates the same separate SQLite database. A session query reports
+Tracked `exec` launches refresh the default local session tree automatically; no
+separate index command is needed for that workflow. Use the explicit
+`index --sessions DIR` command for another tree or to refresh without launching
+Kiro. Both paths update the same separate SQLite database. Session queries use
+the last completed index without refreshing it. A session query reports
 attributed requests and usage, with session-only or descendant-tree scope;
 incomplete joins remain visible. It does not guess an attribution where the
 captured protocol and local index do not establish one. Replay writes private
 payloads to standard output, so choose its destination deliberately.
+
+Malformed or unreadable session metadata does not stop other sessions from
+indexing. Its omission is recorded, stale metadata is retired, and a successful
+re-index after repair clears the omission. Reports show global session metadata
+omissions because unknown ancestry may hide descendants. Index summaries count
+both record and session metadata omissions.
 
 The default payload budget is 256 MiB of compressed payload bytes. Once full,
 collection keeps accounting and exposes omitted-payload counters instead of
