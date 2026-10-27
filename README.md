@@ -332,6 +332,7 @@ nix build .#dns-root-hints
 <!-- prettier-ignore -->
 | Package | Description |
 |---------|-------------|
+| `airlock` | Local egress proxy for coding harnesses |
 | `anthropic-cli` | Official CLI for the Claude Platform |
 | `chatgpt-codex` | OpenAI Codex CLI |
 | `claude-code` | Claude Code CLI |

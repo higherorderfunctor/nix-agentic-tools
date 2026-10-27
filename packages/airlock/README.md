@@ -2,6 +2,27 @@
 
 Airlock is the package owner for a local egress proxy for coding harnesses.
 
-This owner is intentionally registration-only for now. It exports no package,
-executable, derivation, Rust workspace, or configuration interface; each surface
-will be added only as it is rebuilt and validated.
+The current implementation is a minimal Rust binary with `--help` and
+`--version` support. It does not yet start a proxy, read configuration, or
+manage domains. The overlay exposes Airlock as `pkgs.ai.airlock`. The Nix
+package builds the in-tree Cargo workspace with the repository's locked Rust
+toolchain, and `checks.airlock-package` executes both supported CLI entry
+points.
+
+## Build and validate
+
+From the repository root:
+
+```bash
+nix build .#airlock
+nix flake check
+```
+
+Inside the repository development shell, from `packages/airlock`:
+
+```bash
+cargo build --locked
+cargo run --locked -- --help
+cargo fmt --check
+cargo clippy --locked -- -D warnings
+```
