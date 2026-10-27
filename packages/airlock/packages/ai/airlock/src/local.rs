@@ -1,11 +1,13 @@
 //! Replies Airlock writes itself rather than relaying: the health route and
 //! short plain-text status responses.
-use http_body_util::Full;
+use http_body_util::{Either, Full};
 use hyper::{
     Method, Response, StatusCode, Uri,
     body::Bytes,
     header::{ALLOW, CONTENT_TYPE, HeaderValue},
 };
+
+use crate::relayed::ProxyResponse;
 
 /// The status and body for a request addressed to Airlock itself.
 pub(crate) fn route(method: &Method, uri: &Uri) -> (StatusCode, &'static str) {
@@ -33,4 +35,9 @@ pub(crate) fn response(status: StatusCode, body: &'static str) -> Response<Full<
             .insert(ALLOW, HeaderValue::from_static("GET"));
     }
     response
+}
+
+/// `response` in the shape a relayed exchange returns.
+pub(crate) fn proxy_response(status: StatusCode, body: &'static str) -> ProxyResponse {
+    response(status, body).map(Either::Left)
 }
