@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 clap.workspace = true
+futures-util.workspace = true
 h2.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
