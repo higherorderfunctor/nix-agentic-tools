@@ -8,6 +8,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+futures-util.workspace = true
 h2.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
