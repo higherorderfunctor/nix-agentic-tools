@@ -4,10 +4,10 @@ use http_body_util::{Either, Full};
 use hyper::{
     Method, Response, StatusCode, Uri,
     body::Bytes,
-    header::{ALLOW, CONTENT_TYPE, HeaderValue},
+    header::{ALLOW, CONTENT_TYPE, HeaderValue, PROXY_AUTHENTICATE},
 };
 
-use crate::relayed::ProxyResponse;
+use crate::{auth, relayed::ProxyResponse};
 
 /// The status and body for a request addressed to Airlock itself.
 pub(crate) fn route(method: &Method, uri: &Uri) -> (StatusCode, &'static str) {
@@ -27,6 +27,12 @@ pub(crate) fn response(status: StatusCode, body: &'static str) -> Response<Full<
         response.headers_mut().insert(
             CONTENT_TYPE,
             HeaderValue::from_static("text/plain; charset=utf-8"),
+        );
+    }
+    if status == StatusCode::PROXY_AUTHENTICATION_REQUIRED {
+        response.headers_mut().insert(
+            PROXY_AUTHENTICATE,
+            HeaderValue::from_static(auth::CHALLENGE),
         );
     }
     if status == StatusCode::METHOD_NOT_ALLOWED {

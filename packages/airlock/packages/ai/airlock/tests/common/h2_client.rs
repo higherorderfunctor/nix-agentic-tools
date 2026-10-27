@@ -3,13 +3,14 @@
 use std::{fmt::Display, future::poll_fn, net::SocketAddr, time::Duration};
 
 use h2::{RecvStream, SendStream, client::SendRequest};
-use hyper::{Request, StatusCode, Version, body::Bytes};
+use hyper::{Request, StatusCode, Version, body::Bytes, header::PROXY_AUTHORIZATION};
 use tokio::{net::TcpStream, task::JoinHandle, time::timeout};
 
 /// An HTTP/2 connection to Airlock. Dropping it stops the connection driver.
 pub struct Client {
     pub sender: SendRequest<Bytes>,
     pub driver: JoinHandle<Result<(), h2::Error>>,
+    authorization: Option<&'static str>,
 }
 
 impl Drop for Client {
@@ -25,18 +26,27 @@ impl Client {
         Self {
             sender,
             driver: tokio::spawn(connection),
+            authorization: None,
         }
+    }
+
+    /// Send `value` as `Proxy-Authorization` on each tunnel request.
+    pub fn authorized(mut self, value: &'static str) -> Self {
+        self.authorization = Some(value);
+        self
     }
 
     /// Open a CONNECT stream to `target` and require a `200`.
     pub async fn tunnel(&self, target: impl Display) -> (SendStream<Bytes>, RecvStream) {
         let mut sender = self.sender.clone().ready().await.unwrap();
-        let request = Request::builder()
+        let mut request = Request::builder()
             .method("CONNECT")
             .uri(target.to_string())
-            .version(Version::HTTP_2)
-            .body(())
-            .unwrap();
+            .version(Version::HTTP_2);
+        if let Some(value) = self.authorization {
+            request = request.header(PROXY_AUTHORIZATION, value);
+        }
+        let request = request.body(()).unwrap();
         let (response, send) = sender.send_request(request, false).unwrap();
         let response = timeout(Duration::from_secs(2), response)
             .await
