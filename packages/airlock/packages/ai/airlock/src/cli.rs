@@ -23,4 +23,15 @@ pub enum Command {
         #[arg(long, value_name = "FILE")]
         config: Option<PathBuf>,
     },
+    /// Manage the private local CA without installing trust.
+    Ca {
+        #[command(subcommand)]
+        command: CaCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CaCommand {
+    /// Create or validate a private local CA and print its public certificate path.
+    Init { directory: PathBuf },
 }
