@@ -1,4 +1,5 @@
 // cspell:words alpn
+// cspell:ignore Zml4dHVyZTp0b2tlbg
 use super::*;
 use hyper::{Response, Version};
 
@@ -389,14 +390,11 @@ async fn outer_reset_drops_inner_h2_pending_headers_upload_and_sse_on_both_trans
             outer(proxy.address, &format!("localhost:{}", target.port()), true).await
         } else {
             let mut socket = proxy.client().await;
+            socket.write_all(format!("CONNECT localhost:{} HTTP/1.1\r\nHost: localhost:{}\r\nProxy-Authorization: Basic Zml4dHVyZTp0b2tlbg==\r\n\r\n", target.port(), target.port()).as_bytes()).await.unwrap();
             assert!(
-                common::request(
-                    &mut socket,
-                    "CONNECT",
-                    &format!("localhost:{}", target.port())
-                )
-                .await
-                .starts_with("HTTP/1.1 200")
+                common::response(&mut socket)
+                    .await
+                    .starts_with("HTTP/1.1 200")
             );
             socket.set_zero_linger().unwrap();
             (
