@@ -603,18 +603,29 @@ in
             nativeFileWarnings cfg
             # package = null is the config-only opt-out: no launcher can clear
             # the descriptor Claude caches before loading these settings.
-            ++ lib.optional (resolvedProxy != null && cfg.package == null)
+            ++ lib.optional (claudeProxy.isCpa resolvedProxy && cfg.package == null)
             "ai.claude.proxy is selected but ai.claude.package is null; launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup."
             ++ lib.optional (!isHm && cfg.plugins != {})
             "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";
         })
         {
-          assertions = [
-            {
-              assertion = !(lib.attrByPath upstreamEnable false config);
-              message = "ai.claude.enable and ${lib.concatStringsSep "." upstreamEnable} cannot both be on: each writes Claude's files, and they cannot share them. Disable one of the two.";
-            }
-          ];
+          assertions =
+            lib.optionals (claudeProxy.isAirlock resolvedProxy) [
+              {
+                assertion = cfg.package != null;
+                message = "ai.claude.proxy: Airlock requires a managed ai.claude.package launcher.";
+              }
+              {
+                assertion = claudeProxy.conflicts config cfg resolvedProxy == [];
+                message = "ai.claude.native.settings.env: selected Airlock owns proxy/bypass inputs and interception trust; remove conflicting keys: ${lib.concatStringsSep ", " (claudeProxy.conflicts config cfg resolvedProxy)}";
+              }
+            ]
+            ++ [
+              {
+                assertion = !(lib.attrByPath upstreamEnable false config);
+                message = "ai.claude.enable and ${lib.concatStringsSep "." upstreamEnable} cannot both be on: each writes Claude's files, and they cannot share them. Disable one of the two.";
+              }
+            ];
         }
         (lib.mkIf (resolvedSettings.reasoningEffort != null) {
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;

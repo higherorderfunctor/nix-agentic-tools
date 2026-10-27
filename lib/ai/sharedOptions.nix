@@ -573,7 +573,7 @@ in {
     (lib.optionalAttrs hasAssertions {assertions = proxyValidationAssertions;})
     # `ai.proxy`'s root selection; mkBackendTransform.nix asserts each
     # runtime's own.
-    (lib.optionalAttrs hasAssertions {assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) ["ai" "proxy"] config.ai.proxy;})
+    (lib.optionalAttrs hasAssertions {assertions = proxyLib.assertionsFor (proxyLib.instancesFor config) ["ai" "proxy"] config.ai.proxy;})
     {
       ai =
         {internal.services = proxyServices usedTopLevelProxyDeclarations;}

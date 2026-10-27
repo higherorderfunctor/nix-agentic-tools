@@ -286,17 +286,19 @@ environment, never argv. The launcher atomically creates a 0700 directory at
 `$XDG_RUNTIME_DIR/ai-service-<key>`, or, without XDG_RUNTIME_DIR,
 `${TMPDIR:-/tmp}/ai-service-<uid>-<key>` (numeric user ID), the root read after
 the declared environment is applied, so a declared `XDG_RUNTIME_DIR` or `TMPDIR`
-picks it as it does for the daemon. An existing directory must be owned by the
-current user and must not be a symlink; other inputs fail before chmod or
-writes. The runtime root must already exist. jq replaces every placeholder
-string with its secret as a JSON string, writes a 0600 temporary file, renames
-it to `<file key>.json` and exports `variable` with that path. Content and
-secrets are both known at evaluation, so the launcher refuses to build when a
-placeholder has no secret, a secret has no placeholder, or a `variable` repeats
-another file's or an environment name. Declared environment names and file
-variables cannot start with `_ai_`, the launcher's private namespace. JSON is
-the one format: YAML 1.2 readers take it as is. A daemon's own writes to the
-file are lost at the next start.
+picks it as it does for the daemon. `services.runtimeDirectoryPath` is shared
+with Claude's selected Airlock launcher: it honors literal service overrides
+without reading secrets or creating the directory. An existing directory must be
+owned by the current user and must not be a symlink; other inputs fail before
+chmod or writes. The runtime root must already exist. jq replaces every
+placeholder string with its secret as a JSON string, writes a 0600 temporary
+file, renames it to `<file key>.json` and exports `variable` with that path.
+Content and secrets are both known at evaluation, so the launcher refuses to
+build when a placeholder has no secret, a secret has no placeholder, or a
+`variable` repeats another file's or an environment name. Declared environment
+names and file variables cannot start with `_ai_`, the launcher's private
+namespace. JSON is the one format: YAML 1.2 readers take it as is. A daemon's
+own writes to the file are lost at the next start.
 
 A `redact.types.secretFile` value, in `environment` or a file's `secrets`, is
 delivered as a path (`dev/fragments/redact/redact.md`, Secret files). The
@@ -321,8 +323,9 @@ execs the package with the owner's per-instance arguments. The owner fixes the
 settings an instance derives (the listen port, state paths) as ordinary
 definitions, so a consumer value that disagrees fails evaluation. `select`
 resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
-cannot: the name is missing or the instance is disabled. CLIProxyAPI and CPA
-Manager Plus use it.
+cannot: the name is missing or the instance is disabled. Airlock, CLIProxyAPI
+and CPA Manager Plus use it. The two proxy owners enable `claimProxyInstance`:
+the shared `proxy-instance` group rejects duplicate names, even when disabled.
 
 | Backend             | Lowering                                                                                                                                                                                                                                                         |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
