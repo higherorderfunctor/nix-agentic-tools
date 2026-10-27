@@ -1,12 +1,13 @@
 //! The listener: bind a loopback address, accept connections up to a limit,
-//! hand each to the HTTP/1 driver, and drain them on shutdown.
+//! hand each to the HTTP/1 or HTTP/2 driver its first bytes select, and drain
+//! them on shutdown.
 use std::{future::Future, io, net::SocketAddr, time::Duration};
 
 use tokio::{
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     signal::unix::{SignalKind, signal},
     task::JoinSet,
-    time::timeout,
+    time::{Instant, timeout, timeout_at},
 };
 
 const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
@@ -68,7 +69,7 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
             }
             accepted = listener.accept(), if connections.len() < MAX_CONNECTIONS => {
                 match accepted {
-                    Ok((socket, _)) => { connections.spawn(crate::http1::serve(socket, HEADER_TIMEOUT)); }
+                    Ok((socket, _)) => { connections.spawn(connection(socket)); }
                     Err(error) => break Err(error),
                 }
             }
@@ -86,4 +87,18 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
         while connections.join_next().await.is_some() {}
     }
     result
+}
+
+// Detection and the first request share one header deadline, so a client
+// cannot hold a connection slot by sending its first bytes slowly.
+async fn connection(socket: TcpStream) {
+    let deadline = Instant::now() + HEADER_TIMEOUT;
+    let Ok(Ok((socket, http2))) = timeout_at(deadline, crate::detect::detect(socket)).await else {
+        return;
+    };
+    if http2 {
+        crate::http2::serve(socket, deadline).await;
+    } else {
+        crate::http1::serve(socket, deadline, HEADER_TIMEOUT).await;
+    }
 }
