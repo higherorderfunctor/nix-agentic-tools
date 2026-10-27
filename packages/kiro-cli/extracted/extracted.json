@@ -154,7 +154,7 @@
     "v3_prompt": {
       "internal_treatment_percent": 100,
       "segment": "all",
-      "treatment_percent": 50
+      "treatment_percent": 100
     },
     "voice": { "segment": "all", "treatment_percent": 100 },
     "workflows": { "segment": "all", "treatment_percent": 100 }
