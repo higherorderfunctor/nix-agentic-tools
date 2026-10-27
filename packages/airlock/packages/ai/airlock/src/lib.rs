@@ -2,6 +2,7 @@ pub mod ca;
 pub mod server;
 
 mod client;
+mod forward;
 mod http;
 mod private_file;
 mod tunnel;
