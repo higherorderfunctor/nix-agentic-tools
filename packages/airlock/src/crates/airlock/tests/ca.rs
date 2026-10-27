@@ -1,18 +1,24 @@
+// cspell:words alpn
 // cspell:words getuid rustix
 use std::{
     fs,
+    io::Cursor,
     os::unix::{
         ffi::OsStrExt,
         fs::{DirBuilderExt, MetadataExt, PermissionsExt},
     },
     path::{Path, PathBuf},
     process::Command,
+    sync::Arc,
 };
 
 use airlock::ca;
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, IsCa,
     Issuer, KeyPair, KeyUsagePurpose,
+};
+use rustls::{
+    ClientConfig, ClientConnection, RootCertStore, ServerConnection, pki_types::ServerName,
 };
 use tempfile::TempDir;
 use time::{Duration, OffsetDateTime};
@@ -415,4 +421,132 @@ fn init_refuses_partial_exposed_and_redirected_ca_material() {
             .is_symlink(),
         "refusal replaced the certificate symlink"
     );
+}
+
+fn served_leaf(authority: &ca::Authority, host: &str, ca_der: Vec<u8>) -> Vec<u8> {
+    let config = authority.config_for(host).expect("get selected leaf");
+    assert_eq!(config.alpn_protocols, [b"http/1.1".to_vec()]);
+    let mut roots = RootCertStore::empty();
+    roots.add(ca_der.into()).expect("trust fixture CA");
+    let mut client_config =
+        ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .expect("select protocols")
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+    client_config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    let mut client = ClientConnection::new(
+        Arc::new(client_config),
+        ServerName::try_from(host.to_owned()).expect("fixture DNS name"),
+    )
+    .expect("create TLS client");
+    let mut server = ServerConnection::new(config).expect("create TLS server");
+    for _ in 0..8 {
+        let mut bytes = Vec::new();
+        client.write_tls(&mut bytes).expect("write client TLS");
+        server
+            .read_tls(&mut Cursor::new(bytes))
+            .expect("read client TLS");
+        server.process_new_packets().expect("process client TLS");
+        let mut bytes = Vec::new();
+        server.write_tls(&mut bytes).expect("write server TLS");
+        client
+            .read_tls(&mut Cursor::new(bytes))
+            .expect("read server TLS");
+        client.process_new_packets().expect("verify server TLS");
+        if !client.is_handshaking() && !server.is_handshaking() {
+            assert_eq!(client.alpn_protocol(), Some(b"http/1.1".as_slice()));
+            return client.peer_certificates().expect("server certificate")[0].to_vec();
+        }
+    }
+    panic!("TLS fixture handshake did not complete");
+}
+
+#[test]
+fn authority_creates_and_reuses_ca_and_serves_only_exact_selected_dns_leaves() {
+    let root = TempDir::new().expect("create temporary root");
+    let material = Material::new(&root);
+    let names = ["api.example.test", "files.example.test"];
+    let authority = ca::Authority::open(&material.directory, names).expect("open runtime CA");
+    let ca_bytes = fs::read(&material.certificate).expect("read public CA");
+    let (_, ca_pem) = parse_x509_pem(&ca_bytes).expect("parse CA PEM");
+    let ca_certificate = ca_pem.parse_x509().expect("parse CA DER");
+    for host in names {
+        let leaf_der = served_leaf(&authority, host, ca_pem.contents.clone());
+        let (_, leaf) = x509_parser::parse_x509_certificate(&leaf_der).expect("parse leaf");
+        let san = leaf
+            .subject_alternative_name()
+            .expect("parse SAN")
+            .expect("leaf SAN");
+        assert_eq!(
+            san.value.general_names,
+            vec![x509_parser::extensions::GeneralName::DNSName(host)]
+        );
+        assert_eq!(leaf.issuer(), ca_certificate.subject());
+        leaf.verify_signature(Some(ca_certificate.public_key()))
+            .expect("verify leaf signature");
+        assert!(leaf.validity().not_before >= ca_certificate.validity().not_before);
+        assert!(leaf.validity().not_after <= ca_certificate.validity().not_after);
+        let now = OffsetDateTime::now_utc();
+        assert!(leaf.validity().not_before.to_datetime() <= now);
+        assert!(
+            (leaf.validity().not_after.to_datetime() - now - Duration::days(7)).abs()
+                < Duration::seconds(5)
+        );
+    }
+    for host in [
+        "example.test",
+        "other.example.test",
+        "API.example.test",
+        "api.example.test.attacker.test",
+    ] {
+        assert!(
+            authority.config_for(host).is_err(),
+            "accepted unselected {host}"
+        );
+    }
+    let key = fs::read(&material.key).expect("read initial key");
+    ca::init(&material.directory).expect("CLI path reuses runtime material");
+    ca::Authority::open(&material.directory, names).expect("reopen runtime CA");
+    assert_eq!(fs::read(&material.key).expect("read reused key"), key);
+    assert_eq!(
+        fs::read(&material.certificate).expect("read reused certificate"),
+        ca_bytes
+    );
+    assert_eq!(
+        fs::read_dir(&material.directory)
+            .expect("CA directory")
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn authority_caps_leaf_validity_at_existing_ca_expiry_and_rejects_invalid_names() {
+    let now = OffsetDateTime::now_utc();
+    let root = TempDir::new().expect("create temporary root");
+    let material = Material::new(&root);
+    let (certificate, key) = generated(true, now - Duration::minutes(10), now + Duration::hours(2));
+    write_pair(&material.directory, &certificate, &key);
+    let (_, ca_pem) = parse_x509_pem(certificate.as_bytes()).expect("parse CA PEM");
+    let ca_certificate = ca_pem.parse_x509().expect("parse CA");
+    let authority =
+        ca::Authority::open(&material.directory, ["api.example.test"]).expect("open CA");
+    let leaf_der = served_leaf(&authority, "api.example.test", ca_pem.contents.clone());
+    let (_, leaf) = x509_parser::parse_x509_certificate(&leaf_der).expect("parse leaf");
+    assert_eq!(
+        leaf.validity().not_before,
+        ca_certificate.validity().not_before
+    );
+    assert_eq!(
+        leaf.validity().not_after,
+        ca_certificate.validity().not_after
+    );
+    for name in ["*.example.test", "127.0.0.1", "bad/name", ""] {
+        assert!(
+            ca::Authority::open(root.path().join("unused"), [name]).is_err(),
+            "accepted {name}"
+        );
+    }
+    assert!(!root.path().join("unused").exists());
 }
