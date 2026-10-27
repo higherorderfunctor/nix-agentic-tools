@@ -7,7 +7,7 @@ use hyper::{
     HeaderMap, Method, Request, Response, StatusCode, Version,
     body::{Body, Bytes, Incoming},
     header::{
-        CONNECTION, CONTENT_LENGTH, HeaderName, HeaderValue, PROXY_AUTHENTICATE,
+        CONNECTION, CONTENT_LENGTH, COOKIE, HeaderName, HeaderValue, PROXY_AUTHENTICATE,
         PROXY_AUTHORIZATION, TE, TRANSFER_ENCODING, UPGRADE,
     },
 };
@@ -15,13 +15,15 @@ use hyper::{
 /// Either an error Airlock wrote itself or the upstream's streamed response.
 pub(crate) type ProxyResponse = Response<Either<Full<Bytes>, Incoming>>;
 
+/// Check a client request and clean it for sending upstream as `output`.
 pub(crate) fn prepare_request(
     request: &mut Request<Incoming>,
+    output: Version,
 ) -> Result<(), (StatusCode, &'static str)> {
-    if request.version() != Version::HTTP_11 {
+    if !matches!(request.version(), Version::HTTP_11 | Version::HTTP_2) {
         return Err((
             StatusCode::HTTP_VERSION_NOT_SUPPORTED,
-            "HTTP/1.1 requests are required\n",
+            "HTTP/1.1 or HTTP/2 requests are required\n",
         ));
     }
     if !supported_transfer_encoding(request.headers()) {
@@ -30,9 +32,55 @@ pub(crate) fn prepare_request(
             "unsupported request transfer coding\n",
         ));
     }
+    // Only HTTP/2 bodies of unknown length need new framing for HTTP/1.1.
+    let needs_chunked = request.version() == Version::HTTP_2
+        && !request.body().is_end_stream()
+        && request.body().size_hint().exact().is_none();
+    let accepts_trailers = request.headers().get_all(TE).iter().any(|value| {
+        value
+            .as_bytes()
+            .split(|byte| *byte == b',')
+            .any(|token| token.trim_ascii().eq_ignore_ascii_case(b"trailers"))
+    });
     if !strip_hop_by_hop(request.headers_mut()) {
         return Err((StatusCode::BAD_REQUEST, "malformed Connection header\n"));
     }
+    if output == Version::HTTP_2 {
+        request.headers_mut().remove(TRANSFER_ENCODING);
+    } else if needs_chunked {
+        request
+            .headers_mut()
+            .insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
+    }
+    if accepts_trailers {
+        request
+            .headers_mut()
+            .insert(TE, HeaderValue::from_static("trailers"));
+        if output == Version::HTTP_11 {
+            request
+                .headers_mut()
+                .insert(CONNECTION, HeaderValue::from_static("TE"));
+        }
+    }
+    if request.version() == Version::HTTP_2
+        && output == Version::HTTP_11
+        && request.headers().get_all(COOKIE).iter().count() > 1
+    {
+        let cookies = request
+            .headers()
+            .get_all(COOKIE)
+            .iter()
+            .map(HeaderValue::as_bytes)
+            .collect::<Vec<_>>()
+            .join(b"; ".as_slice());
+        request.headers_mut().insert(
+            COOKIE,
+            HeaderValue::from_bytes(&cookies)
+                .expect("joining valid Cookie fields preserves header bytes"),
+        );
+    }
+    // Without this, hyper sends an unknown-length HTTP/2 upload to HTTP/1 with length 0.
+    *request.version_mut() = output;
     Ok(())
 }
 

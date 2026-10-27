@@ -60,6 +60,9 @@ async fn http_proxy_forwards_absolute_requests_and_filters_hop_headers() {
             request.contains("authorization: Bearer retained\r\n"),
             "{request}"
         );
+        assert!(request.contains("cookie: session=one\r\n"), "{request}");
+        assert!(request.contains("cookie: theme=dark\r\n"), "{request}");
+        assert_eq!(request.matches("\r\ncookie:").count(), 2, "{request}");
         assert!(!request.contains("proxy-authorization"), "{request}");
         assert!(!request.contains("proxy-connection"), "{request}");
         assert!(!request.contains("connection:"), "{request}");
@@ -85,7 +88,7 @@ async fn http_proxy_forwards_absolute_requests_and_filters_hop_headers() {
             "POST http://{upstream_address}/path?query=1 HTTP/1.1\r\nHost: wrong.test\r\n\
              Authorization: Bearer retained\r\nProxy-Authorization: Basic secret\r\n\
              Proxy-Connection: keep-alive\r\nConnection: x-request-hop\r\n\
-             X-Request-Hop: remove\r\nContent-Length: 0\r\n\r\n"
+             X-Request-Hop: remove\r\nCookie: session=one\r\nCookie: theme=dark\r\nContent-Length: 0\r\n\r\n"
         ),
     )
     .await;
@@ -722,7 +725,8 @@ async fn http_forwarding_preserves_request_trailers() {
         let (mut socket, _) = listener.accept().await.unwrap();
         let head = message(&mut socket).await;
         assert!(head.contains("trailer: x-request-signature\r\n"), "{head}");
-        assert!(!head.contains("\r\nte:"), "{head}");
+        assert!(head.contains("\r\nte: trailers\r\n"), "{head}");
+        assert!(head.contains("\r\nconnection: TE\r\n"), "{head}");
         head_sent.send(()).unwrap();
         let body = timeout(
             Duration::from_secs(2),
@@ -843,7 +847,9 @@ async fn http_forwarding_preserves_response_trailers() {
     let address = listener.local_addr().unwrap();
     let upstream = tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.unwrap();
-        message(&mut socket).await;
+        let head = message(&mut socket).await;
+        // Like hyper's HTTP/1 server, require TE before sending response trailers.
+        assert!(head.contains("\r\nte: trailers\r\n"), "{head}");
         socket.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nTrailer: x-signature\r\n\r\n4\r\nbody\r\n0\r\nx-signature: abc\r\n\r\n").await.unwrap();
     });
     let proxy = start().await;
