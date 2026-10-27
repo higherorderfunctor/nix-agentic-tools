@@ -27,7 +27,7 @@ fn generated_help_and_version_describe_each_command() {
         (vec!["--version"], vec![env!("CARGO_PKG_VERSION")]),
         (
             vec!["serve", "--help"],
-            vec!["--listen", "127.0.0.1:8318", "--config"],
+            vec!["--listen", "127.0.0.1:8318", "--config", "--ca-directory"],
         ),
         (vec!["help", "serve"], vec!["--listen", "--config"]),
         (vec!["ca", "--help"], vec!["init"]),
