@@ -113,3 +113,41 @@ fn serve_reports_readiness_and_both_signals_release_the_port() {
         std::net::TcpListener::bind(address).expect("port released after signal");
     }
 }
+
+#[test]
+fn invalid_token_files_fail_before_bind_or_readiness_without_secret_output() {
+    use std::{fs, os::unix::fs::PermissionsExt};
+    let directory = tempfile::tempdir().unwrap();
+    let token = directory.path().join("token");
+    let config = directory.path().join("config.json");
+    // An occupied port would report a bind error if loading happened too late.
+    let occupied = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    fs::write(
+        &config,
+        serde_json::to_vec(&serde_json::json!({
+            "listen": occupied.local_addr().unwrap().to_string(),
+            "clients": {"fixture": {"token_file": token}}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    for (bytes, mode) in [
+        (b"secret-fixture ".as_slice(), 0o600),
+        (b"secret-fixture".as_slice(), 0o644),
+    ] {
+        fs::write(&token, bytes).unwrap();
+        fs::set_permissions(&token, fs::Permissions::from_mode(mode)).unwrap();
+        let output = command()
+            .arg("serve")
+            .arg("--config")
+            .arg(&config)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty(), "no readiness before validation");
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(error.contains("token file"), "{error}");
+        assert!(!error.contains("secret-fixture"));
+        assert!(!error.contains("Address already in use"));
+    }
+}

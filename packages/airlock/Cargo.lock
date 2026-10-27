@@ -6,6 +6,7 @@ version = 4
 name = "airlock"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "clap",
  "futures-util",
  "h2",
@@ -20,6 +21,7 @@ dependencies = [
  "rustls-native-certs",
  "serde",
  "serde_json",
+ "subtle",
  "tempfile",
  "time",
  "tokio",
