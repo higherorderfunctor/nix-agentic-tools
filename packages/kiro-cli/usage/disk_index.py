@@ -85,7 +85,8 @@ def session_identifiers(session):
     meta = session.get("_meta")
     kiro = meta.get("kiro") if isinstance(meta, dict) else None
     nested = [kiro.get(key) for key in ("serverSession", "workflow")] if isinstance(kiro, dict) else []
-    return identifiers(session, *(obj for obj in nested if isinstance(obj, dict)),
+    # Reversed so a top-level key is never replaced by a nested one of the same name.
+    return identifiers(*(obj for obj in reversed(nested) if isinstance(obj, dict)), session,
                        keys=(*IDENTIFIERS, *LINKS, "nodeId", "role", "workflowId"))
 
 
@@ -345,8 +346,9 @@ def index_tree(db, sessions, since=None):
             with db:
                 db.execute("DELETE FROM disk_sessions WHERE path=?", (str(session),))
                 db.execute("INSERT OR REPLACE INTO disk_session_omissions VALUES (?,?)", (str(session), facts))
-        elif facts and session.name in scope:
-            index_session(db, session / "session.json", *facts)
+        elif facts:
+            if session.name in scope:
+                index_session(db, session / "session.json", *facts)
             if str(session) in metadata_omissions:
                 with db:
                     db.execute("DELETE FROM disk_session_omissions WHERE session_path=?", (str(session),))
@@ -385,7 +387,7 @@ def main():
             if omitted:
                 print("Warning: omitted records or session metadata have unknown usage coverage or lineage; totals and descendant discovery may be incomplete.", file=sys.stderr)
         db.close()
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, sqlite3.Error) as error:
         parser.exit(1, f"{error}\n")
 
 

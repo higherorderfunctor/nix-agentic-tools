@@ -480,6 +480,22 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.count(), 3)
         self.assertIsNotNone(self.ids(step))
 
+    def test_top_level_lineage_wins_over_nested_keys(self):
+        ids = disk_index.session_identifiers({"parentSessionId": "sess_local", "_meta": {"kiro": {
+            "serverSession": {"parentSessionId": "srv_x", "role": "workflow-step"}}}})
+        self.assertEqual(ids, {"parentSessionId": "sess_local", "role": "workflow-step"})
+
+    def test_since_clears_repaired_omission_out_of_scope(self):
+        self.messages.write_bytes(usage())
+        unlinked = self.child("sess_unlinked", {}, usage(4))
+        (unlinked / "session.json").write_text("{")
+        self.scan()
+        rows = lambda: self.db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0]
+        self.assertEqual(rows(), 1)
+        (unlinked / "session.json").write_text("{}")
+        disk_index.index_tree(self.db, self.sessions, since=0)
+        self.assertEqual(rows(), 0)
+
     def test_cli_vacuums_after_pruning(self):
         self.messages.write_bytes(usage() * 2000)
         self.scan()

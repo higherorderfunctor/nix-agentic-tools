@@ -103,18 +103,18 @@ as that share of the window, output as one token per four output characters
 the difference. Only models with fitted credit rates (`claude-opus-5.5`) and
 reported credits also estimate cached tokens, from the full-miss and full-hit
 curves below, clamped to the estimated input. Other calls stay unavailable. Hit
-percentage is the share of requests with cached tokens (reported or estimated)
-among requests with a cached value, with partial coverage shown. If no captured
-conversation identity is available, the tool reports that the summary is
-unavailable. Before the report, it automatically refreshes the local disk index
-from `~/.kiro/sessions` when that directory exists. This exit scan reads only
-sessions whose `session.json` or `messages.jsonl` changed since the launch,
-among those linked to captures, and never prunes. Index failures warn and leave
-the child exit status intact; disk observations may then be stale. On exit the
-tool also waits up to two seconds for the asynchronous capture writer;
-unfinished calls remain flagged as incomplete coverage. Nested `kiro-usage exec`
-launches share the parent's marker and produce one summary when the outer launch
-exits.
+percentage is the share of requests with cached tokens among requests with a
+cached value; an estimated split counts as a hit only at 1% of input or more,
+with partial coverage shown. If no captured conversation identity is available,
+the tool reports that the summary is unavailable. Before the report, it
+automatically refreshes the local disk index from `~/.kiro/sessions` when that
+directory exists. This exit scan reads the `session.json` of sessions changed
+since the launch, indexes the messages only of those linked to captures, and
+never prunes. Index failures warn and leave the child exit status intact; disk
+observations may then be stale. On exit the tool also waits up to two seconds
+for the asynchronous capture writer; unfinished calls remain flagged as
+incomplete coverage. Nested `kiro-usage exec` launches share the parent's marker
+and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -208,8 +208,9 @@ sessions whose files all predate the earliest capture are skipped without
 reading; Kiro rewrites `session.json` when a session resumes. Children written
 before tracking began are therefore not indexed. The explicit command prunes
 disk rows for sessions no longer in scope and then runs `VACUUM`, so the file
-shrinks. A running collector does not block it; SQLite's busy timeout waits for
-a capture write in progress.
+shrinks. `VACUUM` holds the write lock while it rewrites the file, so a running
+collector waits on its busy timeout meanwhile; after pruning this takes well
+under a second, but run it between Kiro sessions on a large capture store.
 
 Malformed or unreadable session metadata does not stop other sessions from
 indexing. Its omission is recorded, stale metadata is retired, and a successful

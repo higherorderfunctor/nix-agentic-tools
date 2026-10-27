@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from capture import CaptureCapacityError, Collector
 
 # Workflow steps and subagents call GenerateAssistantResponse; root turns call CreateResponse.
-APIS = {"/generateAssistantResponse": "generate_assistant_response", "/v1/responses": "create_response"}
+APIS = {"/generateAssistantResponse", "/v1/responses"}
 
 
 class UsageCapture:
@@ -56,12 +56,7 @@ class UsageCapture:
             self._reject(flow)
             return
         # Never copy URLs, query strings, cookies, or authentication headers.
-        metadata = {"api": APIS[path], "host": host, "method": flow.request.method, "path": path}
-        # Non-secret routing headers; a body conversationState.conversationId takes precedence.
-        for header, key in (("x-amzn-kiro-agent-mode", "agent_mode"), ("x-amzn-kiro-conversation-id", "kiro:conversation_id")):
-            value = flow.request.headers.get(header)
-            if value is not None:
-                metadata[key] = value
+        metadata = {"host": host, "method": flow.request.method, "path": path}
         client = getattr(flow, "client_conn", None)
         invocation = self.invocations.get(client.id) if client else None
         if invocation:

@@ -39,14 +39,12 @@ database are operator decisions.
 Only hosts equal to `kiro.dev` or ending in `.kiro.dev` and the exact paths
 `/v1/responses` (CreateResponse, root turns) and `/generateAssistantResponse`
 (GenerateAssistantResponse, workflow steps and subagents) are selected.
-`metadata_json.api` records `create_response` or `generate_assistant_response`.
 Lookalikes such as `not-kiro.dev` are excluded. Query strings are discarded. The
-addon stores only the host, method, constant path, request content encoding, the
-request `x-amzn-kiro-agent-mode` (as `agent_mode`) and
-`x-amzn-kiro-conversation-id` headers, response status, response content type
-and encoding, and the upstream `x-amzn-requestid` / `x-request-id`. It never
-serializes arbitrary headers, cookies, authorization, or URLs. Full **bodies**
-are deliberately retained and may themselves contain secrets.
+addon stores only the host, method, constant path, request content encoding,
+response status, response content type and encoding, and the upstream
+`x-amzn-requestid` / `x-request-id`. It never serializes arbitrary headers,
+cookies, authorization, or URLs. Full **bodies** are deliberately retained and
+may themselves contain secrets.
 
 The response streaming callback returns the same bytes immediately, including
 the EOF sentinel. It does not wait for SQLite. One worker writes the database; a
@@ -232,8 +230,11 @@ full-miss rate `a = 74/603/(W/100)` (12.272e-6 credits per token), full-hit rate
 reuse the discount curves below; `o = 270e-6` is the fitted output rate. The
 full-hit curve's own intercept (0.5970/603) is not used. Other models get no
 cache estimate, and calls without a context percentage or a known window stay
-unavailable. Estimated hit percentage counts requests whose cached value is
-above zero.
+unavailable. An estimated split counts as a hit only when cached reaches 1% of
+input, which keeps fit noise (tens of tokens on the 1–5 character calibration
+calls) out of the hit percentage. Tool and reasoning characters come from
+retained events, so once the payload budget is full their output share is
+missing and `O` comes out too low.
 
 ## Experimental credit-discount diagnostic
 
@@ -302,16 +303,18 @@ rather than listing individual delegates. Exact counters are used when observed;
 cells that add estimates for calls lacking the exact counter carry `~`, and
 missing values show an em dash (see [Token estimates](#token-estimates)). Hit
 percentage is cache-hit requests divided by requests with a reported or
-estimated cached value; partial coverage remains visible. No captured
-conversation identity means an explicit unavailable summary. Before reporting,
-the outer launch incrementally indexes `~/.kiro/sessions` if present, using the
-existing database and checkpoints. It reads only capture-linked sessions whose
-`session.json` or `messages.jsonl` changed since the launch (less one second for
-coarse file timestamps) and never prunes; already indexed sessions still link
-their new descendants. The explicit `index` command is the full capture-scoped
-pass: it prunes `disk_*` rows for sessions no longer linked to captures and runs
-`VACUUM` plus a WAL checkpoint when free pages remain. Lineage comes from
-`parentSessionId`, `rootSessionId`, `rootConversationId`, and
+estimated cached value, where an estimated split counts as a hit only at 1% of
+input or more; partial coverage remains visible. No captured conversation
+identity means an explicit unavailable summary. Before reporting, the outer
+launch incrementally indexes `~/.kiro/sessions` if present, using the existing
+database and checkpoints. It reads the `session.json` of sessions whose
+`session.json` or `messages.jsonl` changed since the launch, and messages only
+for those linked to captures (less one second for coarse file timestamps) and
+never prunes; already indexed sessions still link their new descendants. The
+explicit `index` command is the full capture-scoped pass: it prunes `disk_*`
+rows for sessions no longer linked to captures and runs `VACUUM` plus a WAL
+checkpoint when free pages remain. Lineage comes from `parentSessionId`,
+`rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
 `workflowId` and `nodeId` are retained as identifiers. Index failures warn
 without replacing the child exit status, and disk observations may then be

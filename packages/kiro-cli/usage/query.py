@@ -9,13 +9,14 @@ import sqlite3
 import sys
 
 import credit_discount
-from disk_index import LINKS
+from disk_index import LINKS, session_id
 from display import table, value
 
 
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
 COUNTERS = (*DIMENSIONS, "total_tokens")
 ESTIMATED = ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")
+HIT_SHARE = .01  # Estimated cached tokens must reach this share of input to count as a hit.
 # Output characters beyond output_text that still bill as output tokens, from retained events.
 EXTRA_OUTPUT_CHARS = """(SELECT sum(CASE
       WHEN json_extract(e.data_json,'$.type') IN ('response.function_call_arguments.delta','response.reasoning_text.delta')
@@ -190,7 +191,7 @@ def query(db, session, scope="session"):
         captures["cache_hit_rate"] = cache_hit_rate(total)
         if scope == "tree":
             report["sessions"] = sorted(selected | {
-                name if name.startswith("sess_") else "sess_" + name
+                session_id(name)
                 for row in db.execute(chosen + "SELECT DISTINCT json_extract(metadata_json,'$.\"kiro:conversation_id\"') FROM chosen", parameters)
                 if isinstance(name := row[0], str) and re.fullmatch(r"(?:sess_)?[A-Za-z0-9_-]+", name)})
         captures["models"] = []
@@ -305,7 +306,9 @@ def call_reports(db, report, chosen, parameters):
                     tally["sums"][name] += values[name]
                     tally["known"][name] += 1
                     tally["estimated"][name] += name in estimated
-            tally["hits"] += (values["cache_read_tokens"] or 0) > 0
+            cached = values["cache_read_tokens"] or 0
+            # An estimated split counts as a hit only above fit noise (tens of tokens on 1-5 char calls).
+            tally["hits"] += (cached >= HIT_SHARE * values["input_tokens"] if "cache_read_tokens" in estimated else cached > 0)
     for source in sources:
         tally, n = tallies[id(source)], source["observations"]
         # Only groups with at least one estimated call get ~cells; exact-only groups keep their observed sums.

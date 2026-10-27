@@ -611,7 +611,6 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(selected.response.stream(b""), b"")
         addon.response(selected)
         step = flow(path="/generateAssistantResponse?secret=never", ident="step")
-        step.request.headers.update({"x-amzn-kiro-agent-mode": "wf-coder", "x-amzn-kiro-conversation-id": "sess_header"})
         step.response.headers["content-type"] = EVENTSTREAM
         addon.request(step)
         addon.responseheaders(step)
@@ -621,13 +620,11 @@ class CaptureTests(unittest.TestCase):
         addon.done()
         db = sqlite3.connect(self.path)
         try:
-            rows = db.execute("SELECT metadata_json,response_json,state,credits FROM captures ORDER BY json_extract(metadata_json,'$.api')").fetchall()
+            rows = db.execute("SELECT metadata_json,response_json,state,credits FROM captures ORDER BY json_extract(metadata_json,'$.path') DESC").fetchall()
             for metadata, response, _, _ in rows:
                 self.assertNotIn("never", metadata + response)
                 self.assertIn("upstream-fake", response)
-            self.assertEqual([json.loads(row[0])["api"] for row in rows], ["create_response", "generate_assistant_response"])
-            metadata = json.loads(rows[1][0])
-            self.assertEqual((metadata["path"], metadata["agent_mode"], metadata["kiro:conversation_id"]), ("/generateAssistantResponse", "wf-coder", "sess_header"))
+            self.assertEqual([json.loads(row[0])["path"] for row in rows], ["/v1/responses", "/generateAssistantResponse"])
             self.assertEqual(rows[1][2:], ("complete", .5))
         finally:
             db.close()

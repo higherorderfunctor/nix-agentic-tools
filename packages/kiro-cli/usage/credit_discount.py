@@ -18,21 +18,28 @@ WINDOWS = {"claude-opus-5.5": 1_000_000}  # Context-window tokens; context% conv
 FITTED = {"claude-opus-5.5"}  # Models whose credit rates above were fitted.
 
 
+def finite(number):
+    return isinstance(number, (int, float)) and not isinstance(number, bool) and math.isfinite(number)
+
+
+def count(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 def preflight(facts):
     """Reject scalar mismatches before callers inspect retained event evidence."""
     checks = (
-        (facts.get("model") == "claude-opus-5.5", "unsupported_model"),
+        (facts.get("model") in FITTED, "unsupported_model"),
         (facts.get("effort") == "low", "unsupported_effort"),
         (facts.get("complete") is True, "incomplete_capture"),
-        (isinstance(facts.get("chars"), int) and not isinstance(facts.get("chars"), bool)
-         and 1 <= facts["chars"] <= 5, "unsupported_output_length"),
+        (count(facts.get("chars")) and 1 <= facts["chars"] <= 5, "unsupported_output_length"),
     )
     for valid, reason in checks:
         if not valid:
             return {"classification": "excluded", "reason": reason}
     context, credits = facts.get("context"), facts.get("credits")
     for number, reason in ((context, "invalid_context"), (credits, "invalid_credits")):
-        if not isinstance(number, (int, float)) or isinstance(number, bool) or not math.isfinite(number):
+        if not finite(number):
             return {"classification": "excluded", "reason": reason}
     if not CONTEXT_RANGE[0] <= context <= CONTEXT_RANGE[1]:
         return {"classification": "excluded", "reason": "context_outside_calibration"}
@@ -83,10 +90,6 @@ def add(report, result, capture_id):
                             if report["eligible"] else None)
 
 
-def finite(number):
-    return isinstance(number, (int, float)) and not isinstance(number, bool) and math.isfinite(number)
-
-
 def estimate(model, context, credits, chars):
     """~Tokens for one call: total from context% and window, output ~chars/4, cached from credits.
 
@@ -97,7 +100,7 @@ def estimate(model, context, credits, chars):
     if window is None or not finite(context) or context < 0:
         return None
     total = round(context / 100 * window)  # includes output tokens once
-    if not isinstance(chars, int) or isinstance(chars, bool) or chars < 0:
+    if not count(chars):
         return {"total_tokens": total, "input_tokens": None, "output_tokens": None, "cache_read_tokens": None}
     output = min(round(chars / 4), total)
     result = {"total_tokens": total, "input_tokens": total - output, "output_tokens": output, "cache_read_tokens": None}

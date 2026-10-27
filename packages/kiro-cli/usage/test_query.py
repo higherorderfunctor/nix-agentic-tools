@@ -303,6 +303,13 @@ class QueryTests(unittest.TestCase):
         self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
         self.assertRegex(output, r"other-model\s+1\s+—\s+—\s+—\s+—\s+—")
 
+    def test_estimated_fit_noise_is_not_a_cache_hit(self):
+        # Full-miss price with 5 chars: the fit leaves ~29 cached tokens, below 1% of input.
+        self.estimable("noise", (74 * 3.0 + .5034) / 603, chars=5)
+        report = query.query(self.db, "sess_root")
+        self.assertGreater(report["captures"]["estimates"]["cache_read_tokens"]["observed_sum"], 0)
+        self.assertEqual(report["captures"]["estimates"]["cache_hit_rate"]["hits"], 0)
+
     def test_tool_and_reasoning_characters_count_as_estimated_output(self):
         self.estimable("tools", (74 * 3.0 + .5034) / 603)
         events = [("response.function_call_arguments.delta", {"type": "response.function_call_arguments.delta", "delta": "x" * 40}),
