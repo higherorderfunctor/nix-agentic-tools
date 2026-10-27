@@ -330,3 +330,97 @@ fn clients_config_is_strict_and_empty_enforcement_fails_startup() {
         );
     }
 }
+
+#[test]
+fn ca_directory_override_finalizes_config_before_startup() {
+    let root = tempfile::TempDir::new().unwrap();
+    let directory = root.path().join("runtime-ca");
+    let configured_directory = root.path().join("unused-ca");
+    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
+    let upstream_roots = root.path().join("roots.pem");
+    fs::write(&upstream_roots, certificate.cert.pem()).unwrap();
+    for ca_directory in [None, Some(&configured_directory)] {
+        let mut content = serde_json::json!({
+            "listen": "127.0.0.1:0",
+            "interception": {"destinations": ["localhost:443"], "upstream_roots": upstream_roots}
+        });
+        if let Some(path) = ca_directory {
+            content["interception"]["ca_directory"] = serde_json::json!(path);
+        } else {
+            assert_config_failure(&content.to_string(), "interception requires ca_directory");
+        }
+        let config = TemporaryConfig::new(&content.to_string());
+        let airlock = AirlockProcess::spawn(&[
+            "serve".as_ref(),
+            "--ca-directory".as_ref(),
+            directory.as_os_str(),
+            "--config".as_ref(),
+            config.path.as_os_str(),
+        ]);
+        airlock.listen_address();
+        assert!(directory.join("ca.pem").exists());
+        assert!(directory.join("ca.key").exists());
+        assert!(!configured_directory.exists());
+        assert!(airlock.stop().success());
+    }
+}
+
+#[test]
+fn ca_directory_override_refuses_missing_duplicate_and_unused_flags() {
+    let config = TemporaryConfig::new(r#"{"listen":"127.0.0.1:0"}"#);
+    for arguments in [
+        vec![
+            "serve".as_ref(),
+            "--ca-directory".as_ref(),
+            "/unused".as_ref(),
+        ],
+        vec![
+            "serve".as_ref(),
+            "--listen".as_ref(),
+            "127.0.0.1:0".as_ref(),
+            "--ca-directory".as_ref(),
+            "/unused".as_ref(),
+        ],
+        vec![
+            "serve".as_ref(),
+            "--config".as_ref(),
+            config.path.as_os_str(),
+            "--ca-directory".as_ref(),
+            "/unused".as_ref(),
+        ],
+    ] {
+        assert_failure(&arguments, "requires");
+    }
+    assert_failure(
+        &["serve".as_ref(), "--ca-directory".as_ref()],
+        "requires a directory",
+    );
+    assert_failure(
+        &[
+            "serve".as_ref(),
+            "--config".as_ref(),
+            config.path.as_os_str(),
+            "--ca-directory".as_ref(),
+            "/unused".as_ref(),
+            "--ca-directory".as_ref(),
+            "/other".as_ref(),
+        ],
+        "duplicate --ca-directory",
+    );
+    for flag in ["--config", "--listen"] {
+        assert_failure(
+            &[
+                "serve".as_ref(),
+                flag.as_ref(),
+                if flag == "--config" {
+                    config.path.as_os_str()
+                } else {
+                    "127.0.0.1:0".as_ref()
+                },
+                flag.as_ref(),
+                "/unused".as_ref(),
+            ],
+            "serve accepts only one",
+        );
+    }
+}
