@@ -1,22 +1,27 @@
 // cspell:words alpn keepalive
-use std::{collections::BTreeSet, convert::Infallible, fs, io, sync::Arc};
+use std::{
+    collections::BTreeSet, convert::Infallible, fs, future::Future, io, pin::Pin, sync::Arc,
+};
 
 use http_body_util::Either;
 use hyper::{
-    Method, Request, StatusCode,
+    Method, Request, StatusCode, Version,
     body::Incoming,
     header::{HOST, UPGRADE},
     service::service_fn,
 };
-use hyper_util::rt::{TokioIo, TokioTimer};
+use hyper_util::{
+    rt::{TokioIo, TokioTimer},
+    server::conn::auto,
+};
 use rustls::{
     ClientConfig, RootCertStore,
     pki_types::{DnsName, ServerName},
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::Mutex,
-    time::{Instant, timeout_at},
+    sync::{Mutex, Notify},
+    time::{Instant, sleep, timeout_at},
 };
 use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
@@ -24,8 +29,11 @@ use crate::{
     authority,
     ca::Authority,
     config, forward,
+    tls_tasks::Tasks,
     upstream::{CONNECT_TIMEOUT, connect_upstream},
 };
+
+type Driver = Pin<Box<dyn Future<Output = Result<(), hyper::Error>> + Send>>;
 
 pub(crate) struct Interception {
     authority: Authority,
@@ -76,7 +84,7 @@ impl Interception {
                 .map_err(io::Error::other)?
                 .with_root_certificates(roots)
                 .with_no_client_auth();
-        upstream.alpn_protocols = vec![b"http/1.1".to_vec()];
+        upstream.alpn_protocols = alpn_protocols();
         let authority = Authority::open(
             config.ca_directory,
             destinations.iter().map(|(host, _)| host),
@@ -119,29 +127,70 @@ impl Interception {
         let (client, upstream) = timeout_at(deadline, setup)
             .await
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "TLS setup timed out"))??;
-        let (sender, driver) = hyper::client::conn::http1::handshake(TokioIo::new(upstream))
+        let downstream_version = version(client.get_ref().1.alpn_protocol())?;
+        let upstream_version = version(upstream.get_ref().1.alpn_protocol())?;
+        let tasks = Tasks::new();
+        let executor = tasks.executor();
+        let (sender, driver): (Sender, Driver) = if upstream_version == Version::HTTP_2 {
+            let (sender, driver) = timeout_at(
+                deadline,
+                hyper::client::conn::http2::handshake(executor.clone(), TokioIo::new(upstream)),
+            )
             .await
+            .map_err(|_| {
+                io::Error::new(io::ErrorKind::TimedOut, "upstream HTTP/2 setup timed out")
+            })?
             .map_err(io::Error::other)?;
-        let sender = Arc::new(Mutex::new(sender));
+            (Sender::H2(sender), Box::pin(driver))
+        } else {
+            let (sender, driver) = hyper::client::conn::http1::handshake(TokioIo::new(upstream))
+                .await
+                .map_err(io::Error::other)?;
+            (Sender::H1(Arc::new(Mutex::new(sender))), Box::pin(driver))
+        };
+        let started = Arc::new(Notify::new());
+        let observed = Arc::clone(&started);
         let service = service_fn(move |request| {
-            let sender = Arc::clone(&sender);
+            observed.notify_one();
+            let sender = sender.clone();
             let host = host.clone();
             async move { Ok::<_, Infallible>(inner(request, &host, port, sender).await) }
         });
-        let downstream = hyper::server::conn::http1::Builder::new()
+        let mut builder = auto::Builder::new(executor);
+        builder
+            .http1()
             .timer(TokioTimer::new())
             .header_read_timeout(CONNECT_TIMEOUT)
-            .half_close(true)
-            .serve_connection(TokioIo::new(client), service);
-        // Driver completion closes keepalive but drains any active response.
-        // Both futures remain owned by the outer connection's cancellation.
+            .half_close(true);
+        builder.http2().max_concurrent_streams(32);
+        let builder = if downstream_version == Version::HTTP_2 {
+            builder.http2_only()
+        } else {
+            builder.http1_only()
+        };
+        let downstream = builder.serve_connection(TokioIo::new(client), service);
+        // Driver completion disables keepalive and drains active responses;
+        // session cancellation drops all internal H2 futures as well as drivers.
         tokio::pin!(downstream);
+        let traffic = async {
+            tokio::select! {
+                result = &mut downstream => result.map_err(io::Error::other),
+                _ = driver => {
+                    downstream.as_mut().graceful_shutdown();
+                    downstream.await.map_err(io::Error::other)
+                },
+            }
+        };
+        let initial = async {
+            tokio::select! {
+                _ = started.notified() => std::future::pending::<()>().await,
+                _ = sleep(CONNECT_TIMEOUT) => {},
+            }
+        };
         tokio::select! {
-            result = &mut downstream => result.map_err(io::Error::other),
-            _ = driver => {
-                downstream.as_mut().graceful_shutdown();
-                downstream.await.map_err(io::Error::other)
-            },
+            result = traffic => result,
+            result = tasks.run() => result,
+            () = initial => Err(io::Error::new(io::ErrorKind::TimedOut, "initial inner HTTP request timed out")),
         }
     }
 }
@@ -150,18 +199,19 @@ async fn inner(
     mut request: Request<Incoming>,
     host: &str,
     port: u16,
-    sender: Arc<Mutex<hyper::client::conn::http1::SendRequest<Incoming>>>,
+    sender: Sender,
 ) -> forward::ProxyResponse {
+    let downstream_version = request.version();
     let bound =
         |authority: &str| authority::parse(authority, Some(443)) == Some((host.to_owned(), port));
     let hosts = request.headers().get_all(HOST);
     let mut hosts = hosts.iter();
     if request.method() == Method::CONNECT
         || request.headers().contains_key(UPGRADE)
-        || !hosts
-            .next()
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(bound)
+        || match hosts.next() {
+            Some(value) => !value.to_str().ok().is_some_and(bound),
+            None => downstream_version != Version::HTTP_2,
+        }
         || hosts.next().is_some()
         || request
             .uri()
@@ -171,6 +221,8 @@ async fn inner(
             .uri()
             .authority()
             .is_some_and(|authority| !bound(authority.as_str()))
+        || (downstream_version == Version::HTTP_2
+            && (request.uri().scheme().is_none() || request.uri().authority().is_none()))
         || !request.uri().path().starts_with('/')
     {
         return forward::response(
@@ -178,25 +230,19 @@ async fn inner(
             "inner request must match CONNECT destination",
         );
     }
-    if let Err((status, message)) = forward::prepare_request(&mut request) {
+    if let Err((status, message)) = forward::prepare_request(&mut request, sender.version()) {
         return forward::response(status, message);
     }
     request
         .headers_mut()
         .insert(HOST, format!("{host}:{port}").parse().unwrap());
-    *request.uri_mut() = request
-        .uri()
-        .path_and_query()
-        .unwrap()
-        .as_str()
-        .parse()
-        .unwrap();
-    let result = async {
-        let mut sender = sender.lock().await;
-        sender.ready().await?;
-        sender.send_request(request).await
-    }
-    .await;
+    let path = request.uri().path_and_query().unwrap().as_str();
+    *request.uri_mut() = if sender.version() == Version::HTTP_2 {
+        format!("https://{host}:{port}{path}").parse().unwrap()
+    } else {
+        path.parse().unwrap()
+    };
+    let result = sender.send(request).await;
     let mut response = match result {
         Ok(response) => response,
         _ => return forward::response(StatusCode::BAD_GATEWAY, "upstream request failed"),
@@ -207,5 +253,47 @@ async fn inner(
     if let Err(message) = forward::prepare_response(&mut response) {
         return forward::response(StatusCode::BAD_GATEWAY, message);
     }
+    *response.version_mut() = downstream_version;
     response.map(Either::Right)
+}
+
+pub(crate) fn alpn_protocols() -> Vec<Vec<u8>> {
+    vec![b"h2".to_vec(), b"http/1.1".to_vec()]
+}
+
+fn version(alpn: Option<&[u8]>) -> io::Result<Version> {
+    match alpn {
+        Some(b"h2") => Ok(Version::HTTP_2),
+        Some(b"http/1.1") | None => Ok(Version::HTTP_11),
+        _ => Err(io::Error::other("unsupported negotiated ALPN")),
+    }
+}
+
+#[derive(Clone)]
+enum Sender {
+    H1(Arc<Mutex<hyper::client::conn::http1::SendRequest<Incoming>>>),
+    H2(hyper::client::conn::http2::SendRequest<Incoming>),
+}
+
+impl Sender {
+    fn version(&self) -> Version {
+        match self {
+            Self::H1(_) => Version::HTTP_11,
+            Self::H2(_) => Version::HTTP_2,
+        }
+    }
+
+    async fn send(
+        &self,
+        request: Request<Incoming>,
+    ) -> Result<hyper::Response<Incoming>, hyper::Error> {
+        match self {
+            Self::H1(sender) => {
+                let mut sender = sender.lock().await;
+                sender.ready().await?;
+                sender.send_request(request).await
+            }
+            Self::H2(sender) => sender.clone().send_request(request).await,
+        }
+    }
 }
