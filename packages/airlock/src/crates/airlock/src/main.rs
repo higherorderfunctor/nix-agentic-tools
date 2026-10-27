@@ -1,13 +1,15 @@
-use std::{env, ffi::OsString, net::SocketAddr, process::ExitCode};
+use std::{env, ffi::OsString, net::SocketAddr, path::PathBuf, process::ExitCode};
 
 mod config;
 
-use airlock::server;
+use airlock::{ca, server};
 use config::Config;
 
 const DEFAULT_LISTEN: &str = "127.0.0.1:8318";
-const USAGE: &str =
-    "Usage: airlock [--help|--version | serve [--listen <loopback-address> | --config <file>]]";
+const USAGE: &str = concat!(
+    "Usage: airlock [--help|--version | serve [--listen <loopback-address> | ",
+    "--config <file>] | ca init DIRECTORY]"
+);
 
 fn main() -> ExitCode {
     match run() {
@@ -32,11 +34,13 @@ fn run() -> Result<(), String> {
             println!("  serve                 Listen on {DEFAULT_LISTEN}");
             println!("  serve --listen ADDR   Listen on an IP loopback address (port 0 allowed)");
             println!("  serve --config FILE   Read a strict JSON listen configuration");
+            println!("  ca init DIRECTORY     Create or validate a private local CA");
             println!();
             println!("HTTP/1.1 and cleartext HTTP/2 share this listener.");
             println!(
                 "GET /health reports readiness. CONNECT forwards opaque TCP without TLS interception."
             );
+            println!("CA initialization writes ca.pem and ca.key without installing trust.");
             Ok(())
         }
         Some("--version") => {
@@ -48,6 +52,12 @@ fn run() -> Result<(), String> {
             let listen = parse_listen(&mut arguments)?;
             server::run(listen).map_err(|error| error.to_string())
         }
+        Some("ca") => {
+            let directory = parse_ca_init(&mut arguments)?;
+            let certificate = ca::init(directory)?;
+            println!("{}", certificate.display());
+            Ok(())
+        }
         _ => Err(format!("unsupported command\n{USAGE}")),
     }
 }
@@ -57,6 +67,18 @@ fn reject_extra(arguments: &mut impl Iterator<Item = OsString>) -> Result<(), St
         return Err(format!("unexpected extra argument\n{USAGE}"));
     }
     Ok(())
+}
+
+fn parse_ca_init(arguments: &mut impl Iterator<Item = OsString>) -> Result<PathBuf, String> {
+    match arguments.next() {
+        Some(subcommand) if subcommand == "init" => {}
+        _ => return Err("ca accepts only init DIRECTORY".to_owned()),
+    }
+    let directory = arguments.next().ok_or("ca init requires a directory")?;
+    if arguments.next().is_some() {
+        return Err("ca init accepts only one directory".to_owned());
+    }
+    Ok(PathBuf::from(directory))
 }
 
 fn parse_listen(arguments: &mut impl Iterator<Item = OsString>) -> Result<SocketAddr, String> {
