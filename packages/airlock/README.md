@@ -84,6 +84,23 @@ $ systemctl --user stop airlock-main.service
 On devenv, use `devenv processes up` and `devenv processes down`. Restart Claude
 and other selected runtimes after changing the selection.
 
+## Local CA
+
+`airlock ca init DIRECTORY` creates the local CA material that a later TLS
+interception unit can consume: `DIRECTORY` is mode 0700 and owned by the
+effective user, `ca.key` is a PKCS#8 key with mode 0600, and `ca.pem` is the
+matching self-signed CA certificate with mode 0644. The command prints only
+`ca.pem`'s path. Re-running it validates and reuses the existing pair, and
+refuses partial, expired, non-CA, mismatched, badly signed, symlinked, exposed,
+or otherwise unusable material instead of rotating it. It does not install the
+certificate into a system or browser trust store, change trust configuration, or
+alter the passthrough `serve` behavior.
+
+If publishing the certificate fails after the key was written, init leaves the
+partial material for inspection and reports the failure. Inspect the directory
+and remove unusable partial material before retrying; init does not delete a key
+that another process may have replaced.
+
 ## Build and validate
 
 From the repository root:
@@ -107,9 +124,9 @@ The overlay exposes Airlock as `pkgs.ai.airlock`. The Nix package uses the
 repository's locked Rust toolchain. Rust tests cover HTTP responses, authority
 validation, byte streaming and half-close in both directions, client
 cancellation, HTTP/2 multiplexing and flow control, stream reset isolation,
-loopback binding, listener limits, header deadlines, owned tunnel shutdown and
-CLI signals. `checks.airlock-package` checks the packaged `--help` and
-`--version` entry points.
+loopback binding, listener limits, header deadlines, owned tunnel shutdown,
+local CA validation and CLI signals. `checks.airlock-package` checks the
+packaged `--help` and `--version` entry points.
 
 `checks.airlock-instances` covers module wiring, port and name claims, proxy
 registration, selection defaults and overrides, and Claude settings delivery.
