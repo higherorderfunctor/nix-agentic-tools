@@ -8,6 +8,9 @@
 //!    through the upgrade future kept in `PendingTunnel`.
 //! 3. `PendingTunnel::relay` copies bytes both ways until both sides have
 //!    closed, so one side's half-close still lets the other finish sending.
+//!
+//! HTTP/2 CONNECT streams share the first step through `open`, then relay in
+//! `http2.rs`.
 use std::{
     io,
     net::{IpAddr, ToSocketAddrs},
@@ -17,11 +20,15 @@ use std::{
 
 use hyper::{Request, StatusCode, Uri, body::Incoming, upgrade::OnUpgrade};
 use hyper_util::rt::TokioIo;
-use tokio::{net::TcpStream, sync::Semaphore, time::timeout};
+use tokio::{
+    net::TcpStream,
+    sync::Semaphore,
+    time::{Instant, timeout_at},
+};
 
 use crate::authority;
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RESOLUTIONS: usize = 16;
 
 // A DNS lookup blocks a thread and cannot be cancelled. This caps how many
@@ -50,23 +57,29 @@ impl PendingTunnel {
 
 pub(crate) async fn open_tunnel(
     mut request: Request<Incoming>,
+    deadline: Instant,
 ) -> Result<PendingTunnel, (StatusCode, &'static str)> {
-    let (host, port) = parse_target(request.uri())
-        .ok_or((StatusCode::BAD_REQUEST, "malformed CONNECT target\n"))?;
-    let upstream = match timeout(CONNECT_TIMEOUT, connect_upstream(host, port)).await {
-        Ok(Ok(upstream)) => upstream,
-        Ok(Err(_)) => return Err((StatusCode::BAD_GATEWAY, "upstream connection failed\n")),
-        Err(_) => {
-            return Err((
-                StatusCode::GATEWAY_TIMEOUT,
-                "upstream connection timed out\n",
-            ));
-        }
-    };
+    let upstream = open(request.uri(), deadline).await?;
     Ok(PendingTunnel {
         upgrade: hyper::upgrade::on(&mut request),
         upstream,
     })
+}
+
+pub(crate) async fn open(
+    target: &Uri,
+    deadline: Instant,
+) -> Result<TcpStream, (StatusCode, &'static str)> {
+    let (host, port) =
+        parse_target(target).ok_or((StatusCode::BAD_REQUEST, "malformed CONNECT target\n"))?;
+    match timeout_at(deadline, connect_upstream(host, port)).await {
+        Ok(Ok(upstream)) => Ok(upstream),
+        Ok(Err(_)) => Err((StatusCode::BAD_GATEWAY, "upstream connection failed\n")),
+        Err(_) => Err((
+            StatusCode::GATEWAY_TIMEOUT,
+            "upstream connection timed out\n",
+        )),
+    }
 }
 
 async fn connect_upstream(host: String, port: u16) -> io::Result<TcpStream> {
@@ -115,7 +128,7 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         mpsc,
     };
-    use tokio::sync::oneshot;
+    use tokio::{sync::oneshot, time::timeout};
 
     #[tokio::test]
     async fn timed_out_lookups_retain_capacity_until_the_blocking_job_ends() {
