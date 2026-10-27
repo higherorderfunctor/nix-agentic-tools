@@ -28,7 +28,9 @@ fn run() -> Result<(), String> {
             println!("  serve                 Listen on {DEFAULT_LISTEN}");
             println!("  serve --listen ADDR   Listen on an IP loopback address (port 0 allowed)");
             println!();
-            println!("GET /health reports readiness. Proxy forwarding is not implemented yet.");
+            println!(
+                "GET /health reports readiness. CONNECT forwards opaque TCP without TLS interception."
+            );
             Ok(())
         }
         Some("--version") => {
