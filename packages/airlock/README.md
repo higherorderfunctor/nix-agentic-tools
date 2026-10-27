@@ -60,6 +60,23 @@ The same `ai.airlock.instances.<name>` declaration starts an instance through
 `ai.services` on Home Manager and devenv. For the explicit Claude opt-in and
 rollback procedure, see [HTTPS passthrough](docs/passthrough.md).
 
+## Local CA
+
+`airlock ca init DIRECTORY` creates the local CA material that a later TLS
+interception unit can consume: `DIRECTORY` is mode 0700 and owned by the current
+user, `ca.key` is a PKCS#8 key with mode 0600, and `ca.pem` is the matching
+self-signed CA certificate with mode 0644. The command prints only `ca.pem`'s
+path. Re-running it validates and reuses the existing pair, and refuses partial,
+expired, non-CA, mismatched, badly signed, symlinked, exposed, or otherwise
+unusable material instead of rotating it. It does not install the certificate
+into a system or browser trust store, change trust configuration, or alter the
+passthrough `serve` behavior.
+
+If publishing the certificate fails after the key was written, init leaves the
+partial material for inspection and reports the failure. Inspect the directory
+and remove unusable partial material before retrying; init does not delete a key
+that another process may have replaced.
+
 ## Build and validate
 
 From the repository root:
