@@ -1,6 +1,10 @@
 //! The strict JSON file `airlock serve --config` reads: unknown or duplicate
 //! fields are errors, never ignored.
-use std::{fs, net::SocketAddr, path::Path};
+use std::{
+    fs,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
@@ -8,6 +12,15 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub listen: SocketAddr,
+    pub interception: Option<Interception>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Interception {
+    pub ca_directory: PathBuf,
+    pub destinations: Vec<String>,
+    pub upstream_roots: Option<PathBuf>,
 }
 
 impl Config {
