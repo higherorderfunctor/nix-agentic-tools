@@ -5,8 +5,10 @@ authentication, base URL, and TLS configuration. Airlock does not configure
 provider credentials, CA certificates, TLS interception, Cedar policy, storage,
 routing, or a user interface.
 
-The server foundation handles HTTP/1 CONNECT and cleartext HTTP/2
-prior-knowledge connections to the proxy. HTTP/2 inside an HTTPS tunnel is
+The server handles HTTP/1.1 CONNECT, HTTP/1.1 absolute-form `http://`
+forwarding, and CONNECT over cleartext HTTP/2 prior-knowledge connections to the
+proxy. Ordinary HTTP forwarding over HTTP/2 is not implemented; the HTTP/2 path
+provides CONNECT and the local health route. HTTP/2 inside an HTTPS tunnel is
 negotiated directly between the client and destination through TLS ALPN; Airlock
 forwards those opaque TLS bytes. This is distinct from HTTP/2 on the
 client-to-proxy connection. Native Claude HTTP/2 behavior through this opt-in
@@ -89,7 +91,8 @@ again only when some other process still needs the supervisor.
 
 Claude honors ordinary `NO_PROXY` rules. A host excluded there bypasses Airlock
 and uses Claude’s native network path, so check the effective environment before
-relying on Airlock for a request. Airlock makes no promise about `HTTP_PROXY`:
-Airlock does not forward absolute plain-HTTP requests. This documentation
-describes the opt-in only; applying it does not create provider credentials or
-send provider traffic.
+relying on Airlock for a request. Plain HTTP clients can use `HTTP_PROXY` with
+HTTP/1.1 absolute-form requests; this opt-in sets only Claude's `HTTPS_PROXY`.
+HTTP forwarding streams bodies with no response duration limit and does not
+follow redirects or retry requests. This documentation describes the opt-in
+only; applying it does not create provider credentials or send provider traffic.

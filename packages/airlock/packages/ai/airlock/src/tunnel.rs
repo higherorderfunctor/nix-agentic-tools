@@ -46,5 +46,5 @@ fn parse_target(uri: &Uri) -> Option<(String, u16)> {
     if uri.scheme().is_some() || uri.path_and_query().is_some() {
         return None;
     }
-    authority::parse(uri.authority()?.as_str())
+    authority::parse(uri.authority()?.as_str(), None)
 }
