@@ -12,7 +12,7 @@ use std::{
 };
 
 use http_body_util::Either;
-use hyper::{Request, StatusCode, Uri, body::Incoming, header::HeaderValue};
+use hyper::{Request, StatusCode, Uri, Version, body::Incoming, header::HeaderValue};
 use hyper_util::{
     client::legacy::{Client, connect::HttpConnector},
     rt::{TokioExecutor, TokioIo, TokioTimer},
@@ -51,7 +51,7 @@ impl Forwarder {
             return proxy_response(StatusCode::BAD_REQUEST, "malformed HTTP proxy target\n");
         };
 
-        if let Err((status, message)) = prepare_request(&mut request) {
+        if let Err((status, message)) = prepare_request(&mut request, Version::HTTP_11) {
             return proxy_response(status, message);
         }
         request

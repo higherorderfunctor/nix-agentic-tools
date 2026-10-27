@@ -2,6 +2,7 @@
 //! selected, which upstream roots are trusted, and the two handshakes that put
 //! Airlock between the client and the upstream. `http` serves the HTTP inside.
 // cspell:words alpn
+pub(crate) mod executor;
 pub(crate) mod http;
 
 use std::{collections::BTreeSet, fs, io, path::Path, sync::Arc, time::Duration};
@@ -21,7 +22,8 @@ use tokio_rustls::{LazyConfigAcceptor, TlsConnector, client, server};
 
 use crate::{ca::Authority, config, http::authority, upstream::connect_upstream};
 
-// Bounds the client hello, the upstream connection and both TLS handshakes.
+// Bounds the client hello, the upstream connection, both TLS handshakes and
+// the upstream HTTP/2 handshake.
 const TLS_SETUP_TIMEOUT: Duration = Duration::from_secs(10);
 // rustls's default size for a server's session cache.
 const SESSION_CACHE_SIZE: usize = 256;
@@ -75,7 +77,7 @@ impl Interceptor {
         let (client, upstream) = timeout_at(deadline, self.accept_and_connect(client, &host, port))
             .await
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "TLS setup timed out"))??;
-        http::serve(client, upstream, host, port).await
+        http::serve(client, upstream, deadline, host, port).await
     }
 
     /// Read the client hello, connect and authenticate the upstream, then
@@ -168,5 +170,5 @@ fn provider() -> Arc<CryptoProvider> {
 }
 
 fn alpn_protocols() -> Vec<Vec<u8>> {
-    vec![b"http/1.1".to_vec()]
+    vec![b"h2".to_vec(), b"http/1.1".to_vec()]
 }
