@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 
@@ -20,4 +20,15 @@ pub enum Command {
         #[arg(long, default_value = "127.0.0.1:8318")]
         listen: SocketAddr,
     },
+    /// Manage the private local CA without installing trust.
+    Ca {
+        #[command(subcommand)]
+        command: CaCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CaCommand {
+    /// Create or validate a private local CA and print its public certificate path.
+    Init { directory: PathBuf },
 }
