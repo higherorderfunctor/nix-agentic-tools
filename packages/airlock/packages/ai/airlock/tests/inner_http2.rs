@@ -4,7 +4,7 @@ mod common;
 use std::{future::poll_fn, io, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{
-    h2_client, headers,
+    FIXTURE_AUTHORIZATION, h2_client, headers,
     tls::{BoxIo, Guards, LIMIT, client_config, fixture_certificate, outer, proxy},
 };
 use hyper::{Request, Response, Version, body::Bytes};
@@ -387,14 +387,11 @@ async fn outer_reset_drops_inner_h2_pending_headers_upload_and_sse_on_both_trans
             outer(proxy.address, &format!("localhost:{}", target.port()), true).await
         } else {
             let mut socket = proxy.client().await;
+            let target = format!("localhost:{}", target.port());
             assert!(
-                common::request(
-                    &mut socket,
-                    "CONNECT",
-                    &format!("localhost:{}", target.port())
-                )
-                .await
-                .starts_with("HTTP/1.1 200")
+                common::connect(&mut socket, &target, FIXTURE_AUTHORIZATION)
+                    .await
+                    .starts_with("HTTP/1.1 200")
             );
             socket.set_zero_linger().unwrap();
             (Box::new(socket) as BoxIo, Guards::default())

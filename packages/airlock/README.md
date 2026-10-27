@@ -7,8 +7,8 @@ The server listens only on IP loopback addresses and detects HTTP/1.1 or
 cleartext HTTP/2 prior knowledge on the same port. CONNECT opens a TCP tunnel to
 a hostname or IP address with an explicit port. By default it forwards opaque
 bytes; explicit DNS-and-port selections enable verified TLS interception. Native
-HTTPS client authentication is unchanged. The listener currently accepts CONNECT
-without proxy authentication; domain policy is not implemented yet.
+HTTPS client authentication is unchanged. Proxy-client authentication is opt-in
+through file-backed client tokens; domain policy is not implemented yet.
 
 Cleartext clients choose HTTP/2 by sending its prior-knowledge preface; HTTP/1.1
 clients use the same listener automatically. The proxy listener does not yet
@@ -72,6 +72,44 @@ duplicate fields, non-loopback addresses, and additional arguments.
 The same `ai.airlock.instances.<name>` declaration starts an instance through
 `ai.services` on Home Manager and devenv. For the explicit Claude opt-in and
 rollback procedure, see [HTTPS passthrough](docs/passthrough.md).
+
+## Proxy-client authentication
+
+Configure client names and token paths in strict JSON:
+
+```json
+{
+  "clients": {
+    "codex": { "token_file": "/run/user/1000/codex.token" }
+  },
+  "listen": "127.0.0.1:9000"
+}
+```
+
+Omitting `clients` preserves loopback passthrough. A present empty map fails
+startup. Names contain 1–64 ASCII letters, digits, underscores, dots or hyphens;
+they are labels, not runtime identities. Each token file must be a regular file
+owned by the effective user with mode 0400 or 0600; symlinks are refused.
+Airlock reads tokens once before binding. Replace the file and restart Airlock
+to rotate a token; running processes retain the loaded value.
+
+A token contains 1–4096 graphic ASCII bytes (`!` through `~`), optionally
+followed by one LF. Spaces, tabs, CRLF, embedded newlines and non-ASCII bytes
+are refused. Airlock neither creates nor changes token files. Token values are
+never printed. Proxy clients send Basic credentials with the configured name as
+username and token as password. If delivering credentials in a proxy URL,
+percent-encode token bytes, including punctuation such as `@`, `%`, `#`, `/`,
+`?` and `:`. The Nix instance opt-in does not yet configure clients or token URL
+delivery.
+
+Every outer HTTP/1 proxy request and HTTP/2 CONNECT stream authenticates before
+Airlock connects upstream. Missing, duplicate, malformed or wrong credentials
+receive the same `407` and Basic challenge. Successful admission removes proxy
+credentials and preserves native destination Authorization. Local readiness
+`GET /health` remains unauthenticated; absolute-form HTTP/1 `/health` requests
+still require credentials. An accepted CONNECT admits its tunnel without inner
+authentication; intercepted HTTP filters inner proxy headers, while opaque
+tunnels relay client bytes unchanged.
 
 ## Selective TLS interception
 
@@ -165,10 +203,10 @@ repository's locked Rust toolchain. Rust tests cover HTTP forwarding and framing
 rejection, bounded shared DNS, authority validation, byte streaming and
 half-close in both directions, client cancellation, HTTP/2 multiplexing and flow
 control, stream reset isolation, selective TLS interception, CA leaf issuance,
-inner HTTP/1.1 and HTTP/2 translation, loopback binding, listener limits, header
-deadlines, owned tunnel shutdown, local CA validation and CLI signals.
-`checks.airlock-package` checks the packaged `--help` and `--version` entry
-points.
+inner HTTP/1.1 and HTTP/2 translation, proxy-client authentication, loopback
+binding, listener limits, header deadlines, owned tunnel shutdown, local CA
+validation and CLI signals. `checks.airlock-package` checks the packaged
+`--help` and `--version` entry points.
 
 `checks.airlock-instances` covers module wiring, port claims and native Claude
 settings preservation. `checks.airlock-instance-runtime` starts each backend's
