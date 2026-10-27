@@ -1,3 +1,4 @@
+// cspell:ignore Zml4dHVyZTp0b2tlbg
 // cspell:words alpn keepalive
 #[allow(dead_code)]
 mod common;
@@ -52,7 +53,8 @@ impl Drop for Guards {
 async fn outer(address: SocketAddr, target: &str, h2: bool) -> (BoxIo, Guards) {
     let mut socket = TcpStream::connect(address).await.unwrap();
     if !h2 {
-        let response = common::request(&mut socket, "CONNECT", target).await;
+        socket.write_all(format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\nProxy-Authorization: Basic Zml4dHVyZTp0b2tlbg==\r\n\r\n").as_bytes()).await.unwrap();
+        let response = common::response(&mut socket).await;
         assert!(response.starts_with("HTTP/1.1 200"), "{response}");
         return (
             Box::new(socket),
@@ -70,6 +72,7 @@ async fn outer(address: SocketAddr, target: &str, h2: bool) -> (BoxIo, Guards) {
         .send_request(
             Request::builder()
                 .method("CONNECT")
+                .header("proxy-authorization", "Basic Zml4dHVyZTp0b2tlbg==")
                 .uri(target)
                 .body(())
                 .unwrap(),
@@ -172,9 +175,22 @@ async fn proxy(directory: &TempDir, target: SocketAddr, root: Option<&str>) -> c
         destinations: vec![format!("localhost:{}", target.port())],
         upstream_roots,
     };
-    let task = tokio::spawn(server::serve(listener, Some(config), async {
-        let _ = stopped.await;
-    }));
+    let token_file = directory.path().join("token");
+    fs::write(&token_file, b"token").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+    let clients = std::collections::BTreeMap::from([(
+        "fixture".into(),
+        airlock::config::Client { token_file },
+    )]);
+    let task = tokio::spawn(server::serve(
+        listener,
+        Some(config),
+        Some(clients),
+        async {
+            let _ = stopped.await;
+        },
+    ));
     common::Server {
         address,
         shutdown,
@@ -564,14 +580,11 @@ async fn pipelined_h1_rst_and_h2_reset_after_end_stream_cancel_owned_tls_upstrea
             outer(proxy.address, &format!("localhost:{}", target.port()), true).await
         } else {
             let mut socket = proxy.client().await;
+            socket.write_all(format!("CONNECT localhost:{} HTTP/1.1\r\nHost: localhost:{}\r\nProxy-Authorization: Basic Zml4dHVyZTp0b2tlbg==\r\n\r\n", target.port(), target.port()).as_bytes()).await.unwrap();
             assert!(
-                common::request(
-                    &mut socket,
-                    "CONNECT",
-                    &format!("localhost:{}", target.port())
-                )
-                .await
-                .starts_with("HTTP/1.1 200")
+                common::response(&mut socket)
+                    .await
+                    .starts_with("HTTP/1.1 200")
             );
             socket.set_zero_linger().unwrap();
             (
