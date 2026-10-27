@@ -5,7 +5,7 @@
 use http_body_util::{Either, Full};
 use hyper::{
     HeaderMap, Request, Response, StatusCode, Version,
-    body::{Bytes, Incoming},
+    body::{Body, Bytes, Incoming},
     header::{
         CONNECTION, CONTENT_LENGTH, HeaderName, HeaderValue, PROXY_AUTHENTICATE,
         PROXY_AUTHORIZATION, TE, TRAILER, TRANSFER_ENCODING, UPGRADE,
@@ -15,13 +15,15 @@ use hyper::{
 /// Either an error Airlock wrote itself or the upstream's streamed response.
 pub(crate) type ProxyResponse = Response<Either<Full<Bytes>, Incoming>>;
 
+/// Check a client request and clean it for sending upstream as `output`.
 pub(crate) fn prepare_request(
     request: &mut Request<Incoming>,
+    output: Version,
 ) -> Result<(), (StatusCode, &'static str)> {
-    if request.version() != Version::HTTP_11 {
+    if !matches!(request.version(), Version::HTTP_11 | Version::HTTP_2) {
         return Err((
             StatusCode::HTTP_VERSION_NOT_SUPPORTED,
-            "HTTP/1.1 requests are required\n",
+            "HTTP/1.1 or HTTP/2 requests are required\n",
         ));
     }
     if !supported_transfer_encoding(request.headers()) {
@@ -30,16 +32,22 @@ pub(crate) fn prepare_request(
             "unsupported request transfer coding\n",
         ));
     }
-    let chunked = request.headers().contains_key(TRANSFER_ENCODING);
+    // HTTP/2 frames bodies itself; one of unknown length needs chunked framing
+    // on HTTP/1.1.
+    let chunked = request.headers().contains_key(TRANSFER_ENCODING)
+        || (request.version() == Version::HTTP_2
+            && !request.body().is_end_stream()
+            && request.body().size_hint().exact().is_none());
     if !strip_hop_by_hop(request.headers_mut()) {
         return Err((StatusCode::BAD_REQUEST, "malformed Connection header\n"));
     }
     // Incoming has decoded chunks; unknown-length GET/HEAD need explicit framing.
-    if chunked {
+    if chunked && output == Version::HTTP_11 {
         request
             .headers_mut()
             .insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
     }
+    *request.version_mut() = output;
     Ok(())
 }
 
