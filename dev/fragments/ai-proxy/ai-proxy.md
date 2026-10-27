@@ -28,9 +28,8 @@ ai.claude.proxy.instance = null; # opt this runtime out of the root instance
 
 Airlock registers both protocols as `"http://127.0.0.1:8318"` at its default
 port. HTTPS uses CONNECT and preserves credentials and TLS. Plain HTTP requests
-through Airlock currently fail; HTTP forwarding is deferred to a later stack
-change. A runtime may select its own instance with
-`ai.<runtime>.proxy.instance`.
+are forwarded to their absolute-form destinations. A runtime may select its own
+instance with `ai.<runtime>.proxy.instance`.
 
 Explicit root or runtime protocol fields, including null, override only that
 protocol's instance default. Each undefined field uses the selected instance's
