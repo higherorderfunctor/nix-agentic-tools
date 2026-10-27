@@ -20,12 +20,18 @@ use crate::{
     first_request::until_first_request,
     forward::Forwarder,
     local::{proxy_response, route},
+    proxy::Proxy,
     relayed::ProxyResponse,
-    tunnel,
+    tunnel::{self, Action},
     upstream::CONNECT_TIMEOUT,
 };
 
-pub(crate) async fn serve(socket: Prefixed, deadline: Instant, header_timeout: Duration) {
+pub(crate) async fn serve(
+    socket: Prefixed,
+    deadline: Instant,
+    header_timeout: Duration,
+    proxy: Arc<Proxy>,
+) {
     let Ok(monitor) = error_monitor(socket.socket()) else {
         return;
     };
@@ -37,7 +43,12 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant, header_timeout: D
     let observed = Arc::clone(&started);
     let service = service_fn(move |request| {
         observed.notify_one();
-        handle(request, sender.clone(), forwarder.clone())
+        handle(
+            request,
+            sender.clone(),
+            forwarder.clone(),
+            Arc::clone(&proxy),
+        )
     });
     let connection = http1::Builder::new()
         .timer(TokioTimer::new())
@@ -84,7 +95,7 @@ async fn transport_error(monitor: &TcpStream) {
 /// An accepted CONNECT waiting for hyper to hand over the client socket.
 struct PendingTunnel {
     upgrade: OnUpgrade,
-    upstream: TcpStream,
+    action: Action,
 }
 
 impl PendingTunnel {
@@ -93,18 +104,19 @@ impl PendingTunnel {
     // grace, then abort, as any other connection.
     async fn relay(self) -> io::Result<()> {
         let upgraded = self.upgrade.await.map_err(io::Error::other)?;
-        tunnel::relay(TokioIo::new(upgraded), self.upstream).await
+        self.action.relay(TokioIo::new(upgraded)).await
     }
 }
 
 async fn open_tunnel(
     mut request: Request<Incoming>,
     deadline: Instant,
+    proxy: &Proxy,
 ) -> Result<PendingTunnel, (StatusCode, &'static str)> {
-    let upstream = tunnel::prepare(request.uri(), deadline).await?;
+    let action = tunnel::prepare(request.uri(), deadline, proxy.interceptor.as_ref()).await?;
     Ok(PendingTunnel {
         upgrade: hyper::upgrade::on(&mut request),
-        upstream,
+        action,
     })
 }
 
@@ -112,10 +124,11 @@ async fn handle(
     request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
     forwarder: Forwarder,
+    proxy: Arc<Proxy>,
 ) -> Result<ProxyResponse, Infallible> {
     if request.method() == Method::CONNECT {
         let deadline = Instant::now() + CONNECT_TIMEOUT;
-        let pending = match open_tunnel(request, deadline).await {
+        let pending = match open_tunnel(request, deadline, &proxy).await {
             Ok(pending) => pending,
             Err((status, body)) => return Ok(proxy_response(status, body)),
         };
