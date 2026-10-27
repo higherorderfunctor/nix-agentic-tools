@@ -2,9 +2,10 @@ use std::net::{IpAddr, Ipv6Addr};
 
 use hyper::http::uri::Authority;
 
-/// Split `host:port` into a lowercase host and a nonzero port. IPv6 hosts come
-/// back without their brackets.
-pub(crate) fn parse(input: &str) -> Option<(String, u16)> {
+/// Split `host:port` into a lowercase host and a nonzero port, using
+/// `default_port` when the port is absent. IPv6 hosts come back without their
+/// brackets.
+pub(crate) fn parse(input: &str, default_port: Option<u16>) -> Option<(String, u16)> {
     let authority = input.parse::<Authority>().ok()?;
     // http drops the `user@` prefix from `host()`; refuse `user@host:443`
     // instead of silently discarding the credentials.
@@ -12,13 +13,19 @@ pub(crate) fn parse(input: &str) -> Option<(String, u16)> {
         return None;
     }
     let host = authority.host();
-    // `port_u16()` accepts `host:+443`, so read the digits after the host here.
-    // An empty or overflowing port fails the `u16` parse.
-    let port = authority.as_str()[host.len()..].strip_prefix(':')?;
-    if !port.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    let port = port.parse::<u16>().ok()?;
+    // `port_u16()` accepts `host:+443` and reads `host:` as `host`, so read the
+    // digits after the host here. An empty or overflowing port fails the `u16`
+    // parse.
+    let port = match &authority.as_str()[host.len()..] {
+        "" => default_port?,
+        port => {
+            let port = port.strip_prefix(':')?;
+            if !port.bytes().all(|byte| byte.is_ascii_digit()) {
+                return None;
+            }
+            port.parse::<u16>().ok()?
+        }
+    };
     // `host()` keeps IPv6 brackets. Refuse anything else inside them, such as
     // `[127.0.0.1]:443` or a zone ID.
     let host = match host

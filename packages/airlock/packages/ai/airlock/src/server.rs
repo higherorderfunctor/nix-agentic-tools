@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use http_body_util::Full;
+use http_body_util::{Either, Full};
 use hyper::{
     Method, Request, Response, StatusCode, Uri,
     body::{Bytes, Incoming},
@@ -18,7 +18,7 @@ use hyper::{
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, Interest, ReadBuf},
     net::{TcpListener, TcpStream},
     signal::unix::{SignalKind, signal},
     sync::{Notify, mpsc},
@@ -181,14 +181,26 @@ async fn connection(socket: TcpStream) {
         crate::http2::serve(socket, deadline).await;
         return;
     }
+    let Prefixed { prefix, socket } = socket;
+    let Ok(socket) = socket.into_std() else {
+        return;
+    };
+    let Ok(monitor) = socket.try_clone().and_then(TcpStream::from_std) else {
+        return;
+    };
+    let Ok(socket) = TcpStream::from_std(socket) else {
+        return;
+    };
+    let socket = Prefixed { prefix, socket };
     // The service must return the `200` before the client socket is upgraded,
     // so it cannot run the relay itself. It sends the pending tunnel back here.
     let (sender, mut receiver) = mpsc::channel(1);
+    let forwarder = crate::forward::Forwarder::new();
     let started = Arc::new(Notify::new());
     let observed = Arc::clone(&started);
     let service = service_fn(move |request| {
         observed.notify_one();
-        handle(request, sender.clone())
+        handle(request, sender.clone(), forwarder.clone())
     });
     let result = {
         let driver = http1::Builder::new()
@@ -197,13 +209,32 @@ async fn connection(socket: TcpStream) {
             .serve_connection(TokioIo::new(socket), service)
             .with_upgrades();
         tokio::pin!(driver);
-        let result = tokio::select! {
-            biased;
-            _ = started.notified() => (&mut driver).await,
-            result = &mut driver => result,
-            _ = sleep_until(deadline) => return,
+        let initial = async {
+            Some(tokio::select! {
+                biased;
+                _ = started.notified() => (&mut driver).await,
+                result = &mut driver => result,
+                _ = sleep_until(deadline) => return None,
+            })
         };
-        result
+        // Hyper can stop reading while a pipelined request is buffered. Watch
+        // transport errors independently; a plain FIN remains a half-close.
+        tokio::select! {
+            result = initial => result,
+            () = async {
+                loop {
+                    match monitor.ready(Interest::ERROR).await {
+                        Ok(ready) if !ready.is_error() => continue,
+                        _ => break,
+                    }
+                }
+            } => return,
+        }
+    };
+    // CONNECT relay owns the only remaining client socket descriptor.
+    drop(monitor);
+    let Some(result) = result else {
+        return;
     };
     if result.is_ok()
         && let Some(pending) = receiver.recv().await
@@ -215,25 +246,30 @@ async fn connection(socket: TcpStream) {
 async fn handle(
     request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+    forwarder: crate::forward::Forwarder,
+) -> Result<crate::forward::ProxyResponse, Infallible> {
     if request.method() == Method::CONNECT {
         let deadline = Instant::now() + tunnel::CONNECT_TIMEOUT;
         // The upstream is already connected when this returns, so the client
         // gets `200` only for a tunnel that can carry bytes.
         let pending = match tunnel::open_tunnel(request, deadline).await {
             Ok(pending) => pending,
-            Err((status, body)) => return Ok(response(status, body)),
+            Err((status, body)) => return Ok(response(status, body).map(Either::Left)),
         };
         if sender.send(pending).await.is_err() {
             return Ok(response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "tunnel connection closed\n",
-            ));
+            )
+            .map(Either::Left));
         }
-        return Ok(response(StatusCode::OK, ""));
+        return Ok(response(StatusCode::OK, "").map(Either::Left));
+    }
+    if request.uri().scheme().is_some() || request.uri().authority().is_some() {
+        return Ok(forwarder.forward(request).await);
     }
     let (status, body) = route(request.method(), request.uri());
-    Ok(response(status, body))
+    Ok(response(status, body).map(Either::Left))
 }
 
 pub(crate) fn route(method: &Method, uri: &Uri) -> (StatusCode, &'static str) {
