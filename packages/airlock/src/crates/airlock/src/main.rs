@@ -5,7 +5,7 @@ use airlock::{ca, config::Config, server};
 const DEFAULT_LISTEN: &str = "127.0.0.1:8318";
 const USAGE: &str = concat!(
     "Usage: airlock [--help|--version | serve [--listen <loopback-address> | ",
-    "--config <file>] | ca init DIRECTORY]"
+    "--config <file> [--ca-directory <directory>]] | ca init DIRECTORY]"
 );
 
 fn main() -> ExitCode {
@@ -31,6 +31,7 @@ fn run() -> Result<(), String> {
             println!("  serve                 Listen on {DEFAULT_LISTEN}");
             println!("  serve --listen ADDR   Listen on an IP loopback address (port 0 allowed)");
             println!("  serve --config FILE   Read strict JSON proxy configuration");
+            println!("    --ca-directory DIR  Override the configured interception CA directory");
             println!("  ca init DIRECTORY     Create or validate a private local CA");
             println!();
             println!("HTTP/1.1 forwarding and cleartext HTTP/2 CONNECT share this listener.");
@@ -80,33 +81,52 @@ fn parse_ca_init(arguments: &mut impl Iterator<Item = OsString>) -> Result<PathB
 }
 
 fn parse_config(arguments: &mut impl Iterator<Item = OsString>) -> Result<Config, String> {
-    let listen = match arguments.next() {
-        None => DEFAULT_LISTEN
-            .parse()
-            .expect("valid default listen address"),
-        Some(flag) if flag == "--listen" => arguments
-            .next()
-            .and_then(|address| address.into_string().ok())
-            .and_then(|address| address.parse().ok())
-            .ok_or("--listen requires an IP socket address")?,
-        Some(flag) if flag == "--config" => {
-            let path = arguments.next().ok_or("--config requires a file")?;
-            reject_serve_extra(arguments)?;
-            return Config::read(path);
+    let mut listen = None;
+    let mut config_path = None;
+    let mut ca_directory = None;
+    while let Some(flag) = arguments.next() {
+        match flag.to_str() {
+            Some("--listen") if listen.is_none() && config_path.is_none() => {
+                listen = Some(
+                    arguments
+                        .next()
+                        .and_then(|address| address.into_string().ok())
+                        .and_then(|address| address.parse().ok())
+                        .ok_or("--listen requires an IP socket address")?,
+                );
+            }
+            Some("--config") if config_path.is_none() && listen.is_none() => {
+                config_path = Some(arguments.next().ok_or("--config requires a file")?);
+            }
+            Some("--ca-directory") => {
+                if ca_directory.is_some() {
+                    return Err("duplicate --ca-directory".to_owned());
+                }
+                ca_directory = Some(PathBuf::from(
+                    arguments
+                        .next()
+                        .ok_or("--ca-directory requires a directory")?,
+                ));
+            }
+            _ => return Err(
+                "serve accepts only one of --listen and --config, and an optional --ca-directory"
+                    .to_owned(),
+            ),
         }
-        Some(_) => return Err(format!("serve accepts only --listen and --config\n{USAGE}")),
-    };
-    reject_serve_extra(arguments)?;
+    }
+    if let Some(path) = config_path {
+        return Config::read_with_ca_directory(path, ca_directory);
+    }
+    if ca_directory.is_some() {
+        return Err("--ca-directory requires --config with interception configuration".to_owned());
+    }
     Ok(Config {
-        listen,
+        listen: listen.unwrap_or_else(|| {
+            DEFAULT_LISTEN
+                .parse()
+                .expect("valid default listen address")
+        }),
         clients: None,
         interception: None,
     })
-}
-
-fn reject_serve_extra(arguments: &mut impl Iterator<Item = OsString>) -> Result<(), String> {
-    if arguments.next().is_some() {
-        return Err("serve accepts only one of --listen and --config".to_owned());
-    }
-    Ok(())
 }
