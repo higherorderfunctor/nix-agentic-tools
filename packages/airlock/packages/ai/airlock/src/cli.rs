@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 
@@ -17,7 +17,10 @@ pub enum Command {
     /// Start the proxy listener.
     Serve {
         /// IP loopback address to listen on (port 0 allowed).
-        #[arg(long, default_value = "127.0.0.1:8318")]
+        #[arg(long, default_value = "127.0.0.1:8318", conflicts_with = "config")]
         listen: SocketAddr,
+        /// Read strict JSON proxy configuration.
+        #[arg(long, value_name = "FILE")]
+        config: Option<PathBuf>,
     },
 }
