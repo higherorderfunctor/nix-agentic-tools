@@ -12,6 +12,7 @@ import json
 import math
 import os
 from pathlib import Path
+import sys
 
 from capture import decoded_json, open_database
 
@@ -252,6 +253,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--sessions", type=Path, required=True)
+    parser.add_argument("--json", action="store_true", help="write index counts as JSON")
     args = parser.parse_args()
     try:
         with open_database(args.db) as db:
@@ -259,9 +261,12 @@ def main():
             sources = db.execute("SELECT count(*) FROM disk_sources").fetchone()[0]
             records = db.execute("SELECT count(*) FROM disk_records").fetchone()[0]
             omitted = db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0]
-            print(f"Index contains {sources} sources, {records} usage/context records, {omitted} omitted records.")
+            if args.json:
+                print(json.dumps({"omitted_records": omitted, "records": records, "sources": sources}, sort_keys=True))
+            else:
+                print(f"Index contains {sources} sources, {records} usage/context records, {omitted} omitted records.")
             if omitted:
-                print("Warning: omitted records have unknown usage coverage; totals may be incomplete.")
+                print("Warning: omitted records have unknown usage coverage; totals may be incomplete.", file=sys.stderr)
         db.close()
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")

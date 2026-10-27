@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+import sys
+
+from display import table, value
 
 
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
@@ -173,16 +176,66 @@ def query(db, session, scope="session"):
     return report
 
 
+def observed_value(metric):
+    total = metric["observed_sum"]
+    if total is not None and metric["unknown"]:
+        return f"{value(total)} ({metric['known']}/{metric['known'] + metric['unknown']})"
+    return total
+
+
+def render(report):
+    captures, disk = report["captures"], report["disk"]
+    lines = [f"Session: {report['session']}  Scope: {report['scope']} ({len(report['sessions'])} sessions)",
+             "", "Captured calls (requested model; observed sums):"]
+    rows = [[model["requested_model"], model["observations"],
+             *(observed_value(model["metrics"][name]) for name in DIMENSIONS)]
+            for model in captures.get("models", [])]
+    rows.append(["TOTAL", captures["observations"] if captures["available"] else None,
+                 *(observed_value(captures["metrics"][name]) for name in DIMENSIONS)])
+    lines.append(table(["Model", "Calls", "Credits", "Input", "Output", "Cache read", "Cache write"], rows))
+    if captures["available"]:
+        count = captures["observations"]
+        lines += ["", f"Capture coverage: {count} attributed calls; {captures['incomplete']} incomplete.",
+                  "Counters present (known/attributed; missing counters stay unknown):",
+                  "; ".join(f"{label} {captures['metrics'][name]['known']}/{count}"
+                            for label, name in zip(("credits", "input", "output", "cache read", "cache write"), DIMENSIONS)),
+                  f"Global unattributed calls: {captures['global_unattributed_observations']} (excluded)."]
+    else:
+        lines.append("Capture coverage unavailable: " + captures["unavailable_reason"])
+    lines += ["", "Disk observations (separate from captures):"]
+    if disk["available"]:
+        credits = disk["metrics"]["credits"]
+        lines += [f"Turns: {disk['turns']}; observed credits: {value(credits['observed_sum'])}; fully known turns: {credits['known']}/{disk['turns']}.",
+                  f"Omitted records: {value(disk['omitted_records'])}; turns without request IDs: {disk['turns_without_request_ids']}.",
+                  "Disk model is session-current metadata, not a per-call model:",
+                  table(["Model", "Sessions"], [[model["model_id"], model["sessions"]] for model in disk["models"]]),
+                  disk["credit_sum_scope"]]
+    else:
+        lines.append("Disk coverage unavailable: " + disk["unavailable_reason"])
+    lines += ["— = unknown or unobserved; sums include only observed values.",
+              "Partial cells show sum (known calls/all calls).",
+              "Disk turn credits and capture credits overlap and must never be added.",
+              "Own-versus-delegate attribution is unavailable; session scope can include delegate work."]
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--session", required=True)
     parser.add_argument("--scope", choices=("session", "tree"), default="session")
+    parser.add_argument("--json", action="store_true", help="write the complete structured report as JSON")
     args = parser.parse_args()
     try:
         uri = args.db.resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(uri, uri=True)) as db:
-            print(json.dumps(query(db, args.session, args.scope), indent=2, sort_keys=True))
+            report = query(db, args.session, args.scope)
+            if args.json:
+                print(json.dumps(report, indent=2, sort_keys=True))
+            else:
+                print(render(report))
+                for warning in report["warnings"]:
+                    print("Warning: " + warning, file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:
         parser.exit(1, f"cannot query calibration database: {error}\n")
 

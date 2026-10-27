@@ -123,6 +123,64 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(result["disk"]["model_scope"], "session-current")
         self.assertEqual(result["disk"]["models"], [{"model_id": "current-model", "sessions": 1}])
 
+    def test_human_output_separates_sources_and_exposes_missing_coverage(self):
+        self.session("sess_root", credits=8)
+        self.captured("zero", conversation="root", credits=0, tokens=0)
+        self.captured("missing", conversation="root", credits=None, tokens=None, state="incomplete")
+        report = query.query(self.db, "sess_root")
+        output = query.render(report)
+        self.assertIn("Session: sess_root  Scope: session (1 sessions)", output)
+        self.assertIn("requested-model", output)
+        self.assertRegex(output, r"TOTAL\s+2\s+0 \(1/2\)\s+0 \(1/2\)\s+—\s+—\s+—")
+        self.assertRegex(output, r"requested-model\s+2\s+0 \(1/2\)\s+0 \(1/2\)")
+        self.assertIn("Partial cells show sum (known calls/all calls).", output)
+        self.assertIn("must never be added", output)
+        self.assertIn("Own-versus-delegate attribution is unavailable", output)
+        self.assertIn("credits 1/2; input 1/2; output 0/2", output)
+        self.assertIn("2 attributed calls; 1 incomplete", output)
+        self.assertIn("Turns: 1; observed credits: 8", output)
+        self.assertIn("not a per-call model", output)
+        self.assertNotIn("observed credits: 8.0", output)
+
+    def test_human_counts_use_grouping(self):
+        self.captured("large", conversation="root", credits=1234.5, tokens=1234567)
+        output = query.render(query.query(self.db, "sess_root"))
+        self.assertRegex(output, r"requested-model\s+1\s+1,234.5\s+1,234,567")
+
+    def test_human_empty_sources_and_unknown_model(self):
+        with sqlite3.connect(":memory:") as empty:
+            output = query.render(query.query(empty, "sess_unknown"))
+        self.assertRegex(output, r"TOTAL\s+—\s+—\s+—\s+—\s+—\s+—")
+        self.assertIn("Capture coverage unavailable", output)
+        self.assertIn("Disk coverage unavailable", output)
+        self.captured("unknown", conversation="root")
+        self.db.execute("UPDATE captures SET metadata_json=?", (json.dumps({"kiro:conversation_id": "root"}),))
+        self.assertIn("—", query.render(query.query(self.db, "sess_root")))
+        self.db.execute("UPDATE captures SET metadata_json=?", (json.dumps({"kiro:conversation_id": "root", "model": "bad\n\x1b[31m"}),))
+        output = query.render(query.query(self.db, "sess_root"))
+        self.assertIn(r"bad\n\x1b[31m", output)
+        self.assertNotIn("\x1b", output)
+
+    def test_cli_json_preserves_report_and_human_diagnostics_use_stderr(self):
+        self.session("sess_root")
+        self.captured("call", conversation="root")
+        expected = query.query(self.db, "sess_root")
+        self.db.commit()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "synthetic.sqlite"
+            with sqlite3.connect(path) as target:
+                self.db.backup(target)
+            command = [sys.executable, query.__file__, "--db", str(path), "--session", "sess_root"]
+            structured = subprocess.run([*command, "--json"], capture_output=True, text=True)
+            self.assertEqual(structured.returncode, 0, structured.stderr)
+            self.assertEqual(json.loads(structured.stdout), expected)
+            self.assertEqual(structured.stderr, "")
+            human = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(human.returncode, 0, human.stderr)
+            self.assertIn("Captured calls", human.stdout)
+            self.assertNotIn("Warning:", human.stdout)
+            self.assertIn("must never be added", human.stderr)
+
     def test_cli_missing_database_is_not_created(self):
         with tempfile.TemporaryDirectory() as temporary:
             missing = Path(temporary) / "absent.sqlite"

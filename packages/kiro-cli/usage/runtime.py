@@ -1,7 +1,15 @@
 """Start the private capture service and fail closed before a tracked launch."""
+# cspell:words getpgrp tcgetpgrp
 
 import argparse
 import os
+import re
+import signal
+import sqlite3
+import subprocess
+import time
+import uuid
+from contextlib import closing
 from pathlib import Path
 import shlex
 import socket
@@ -40,7 +48,7 @@ def private_directory(path, create=False):
         raise ValueError(f"usage directory must be owned by this user, not a symlink, and mode 0700: {path}")
 
 
-def launch_environment(path, port, refuse_conflicts=True):
+def launch_environment(path, port, refuse_conflicts=True, invocation=None):
     private_directory(path)
     ca_dir = path / "ca"
     private_directory(ca_dir)
@@ -52,9 +60,15 @@ def launch_environment(path, port, refuse_conflicts=True):
     # cannot cause a provider call.
     with socket.create_connection(("127.0.0.1", port), timeout=0.5):
         pass
-    url = f"http://127.0.0.1:{port}"
+    invocation = invocation or os.environ.get("KIRO_USAGE_INVOCATION")
+    if invocation and not re.fullmatch(r"[0-9a-f]{32}", invocation):
+        raise ValueError("invalid KIRO_USAGE_INVOCATION marker")
+    credentials = f"kiro-usage-{invocation}:@" if invocation else ""
+    url = f"http://{credentials}127.0.0.1:{port}"
     values = {name: url for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")}
     values["NODE_EXTRA_CA_CERTS"] = str(cert)
+    if invocation:
+        values["KIRO_USAGE_INVOCATION"] = invocation
     for name in PROXY_NAMES:
         value = os.environ.get(name, "")
         if refuse_conflicts and value and value != values.get(name):
@@ -94,6 +108,73 @@ def service(args, path):
     ])
 
 
+def invocation_summary(path, invocation, timeout=2.0):
+    """Read only exact marker matches; wait briefly for the async writer."""
+    from query import query, render
+    deadline = time.monotonic() + timeout
+    rows = []
+    uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
+    try:
+        with closing(sqlite3.connect(uri, uri=True, timeout=.1)) as db:
+            previous_rows, settled = None, time.monotonic()
+            while True:
+                rows = db.execute("""
+                    SELECT json_extract(metadata_json,'$."kiro:conversation_id"'), state
+                    FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
+                """, (invocation,)).fetchall()
+                if rows != previous_rows:
+                    previous_rows, settled = rows, time.monotonic()
+                if rows and all(state != "recording" for _, state in rows) and time.monotonic() - settled >= .1:
+                    break
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(.05)
+            sessions = sorted({name if name.startswith("sess_") else "sess_" + name
+                               for name, _ in rows if isinstance(name, str) and name})
+            if not sessions:
+                print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
+                return
+            print("\nKiro usage summary (full session totals for sessions observed in this invocation):", file=sys.stderr)
+            if any(state == "recording" for _, state in rows):
+                print("Warning: capture writer still has unfinished calls; totals may be incomplete.", file=sys.stderr)
+            if any(not name for name, _ in rows):
+                print("Warning: some invocation calls have no conversation identity and are excluded.", file=sys.stderr)
+            for session in sessions:
+                report = query(db, session)
+                if report["disk"]["available"]:
+                    print("Disk observations are from the last explicit index and may be stale; this launch did not refresh them.", file=sys.stderr)
+                print(render(report), file=sys.stderr)
+                for warning in report["warnings"]:
+                    print("Warning: " + warning, file=sys.stderr)
+    except (OSError, ValueError, sqlite3.Error) as error:
+        print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
+
+
+def wait_command(command, arguments, environment):
+    # Inherit all three descriptors and the foreground process group: interactive
+    # Kiro retains its terminal. Forward signals sent to the supervisor alone.
+    child = subprocess.Popen([command, *arguments], env=environment)
+    previous = {}
+    try:
+        shared_foreground = os.tcgetpgrp(0) == os.getpgrp()
+    except OSError:
+        shared_foreground = False
+    def forward(number, frame):
+        # The terminal already delivers these to the whole foreground group.
+        # Forwarding again turns one Ctrl+C into Kiro's second interrupt.
+        if shared_foreground and number in (signal.SIGINT, signal.SIGQUIT):
+            return
+        if child.poll() is None:
+            child.send_signal(number)
+    try:
+        for number in (signal.SIGHUP, signal.SIGINT, signal.SIGQUIT, signal.SIGTERM):
+            previous[number] = signal.signal(number, forward)
+        return child.wait()
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
 def exec_command(path, port, arguments):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
@@ -119,13 +200,25 @@ def exec_command(path, port, arguments):
             tail.insert(0, "--v3")
         elif not has_v3:
             raise ValueError("kiro-cli-chat requires explicit --v3 or --agent-engine v3")
-    child_environment = launch_environment(path, port, refuse_conflicts=False)
+    tracked = Path(command).name in ("kiro-cli", "kiro-cli-chat")
+    nested = bool(os.environ.get("KIRO_USAGE_INVOCATION"))
+    invocation = (os.environ.get("KIRO_USAGE_INVOCATION") or uuid.uuid4().hex) if tracked else None
+    child_environment = launch_environment(path, port, refuse_conflicts=False, invocation=invocation)
     try:
-        os.execvpe(command, [command, *tail], child_environment)
+        if not tracked or nested:
+            os.execvpe(command, [command, *tail], child_environment)
+            return
+        result = wait_command(command, tail, child_environment)
     except FileNotFoundError as error:
         raise CommandError(f"command not found: {command}; check PATH or pass an executable path") from error
     except OSError as error:
         raise CommandError(f"cannot execute {command}: {error.strerror}; check the executable path and permissions") from error
+    invocation_summary(path, invocation)
+    if result < 0:
+        if -result not in (signal.SIGKILL, signal.SIGSTOP):
+            signal.signal(-result, signal.SIG_DFL)
+        os.kill(os.getpid(), -result)
+    return result
 
 
 def cli(path, arguments, port):
@@ -168,7 +261,7 @@ def main():
     try:
         path = state_directory(args.state_dir)
         if args.mode == "cli":
-            cli(path, args.arguments, args.port)
+            return cli(path, args.arguments, args.port)
         elif args.mode == "service":
             service(args, path)
         else:

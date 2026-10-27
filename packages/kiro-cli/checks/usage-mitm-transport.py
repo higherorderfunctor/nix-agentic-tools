@@ -1,6 +1,7 @@
 """Real mitmdump regression using loopback HTTP only and synthetic payloads."""
 
 import argparse
+import base64
 import gzip
 import hashlib
 from http.client import HTTPConnection
@@ -36,6 +37,7 @@ def run(mitmdump, addon):
 
         def do_POST(self):
             try:
+                assert self.headers.get("Proxy-Authorization") is None
                 assert self.path == "/v1/responses?ignored=private-query"
                 assert self.rfile.read(int(self.headers["content-length"])) == request_entity
                 self.send_response(200)
@@ -107,7 +109,10 @@ def run(mitmdump, addon):
                         raise AssertionError("offline router did not load: " + log_path.read_text())
                     time.sleep(.05)
                 client = HTTPConnection("127.0.0.1", proxy_port, timeout=3)
-                client.request("POST", "http://runtime.us-east-1.kiro.dev/v1/responses?ignored=private-query",
+                marker = "a" * 32
+                authorization = "Basic " + base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
+                client.set_tunnel("runtime.us-east-1.kiro.dev", 443, headers={"Proxy-Authorization": authorization})
+                client.request("POST", "/v1/responses?ignored=private-query",
                                body=request_entity, headers={"Content-Encoding": "gzip", "Content-Type": "application/json",
                                                              "Authorization": "Bearer private-authorization", "Cookie": "private-request-cookie"})
                 response = client.getresponse()
@@ -145,6 +150,7 @@ def run(mitmdump, addon):
             assert gzip.decompress(row["request_gzip"]) == request_body
             assert row["request_sha256"] == hashlib.sha256(request_body).hexdigest()
             assert row["response_sha256"] == hashlib.sha256(body).hexdigest()
+            assert json.loads(row["metadata_json"])["invocation"] == "a" * 32
             metadata = row["metadata_json"] + row["response_json"]
             assert "private-" not in metadata, metadata
             assert "synthetic-upstream-request" in metadata
