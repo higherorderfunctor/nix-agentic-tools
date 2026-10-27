@@ -40,6 +40,9 @@
 #                                    # name/path/value; reason may use those too.
 #                                    # Omitted surfaces always warn from the shared
 #                                    # registry. Native options are independent.
+#     proxyOwners ? ["cliproxyapi"]; # instance owners an `ai.proxy` selection
+#                                    #   may name for this runtime; another
+#                                    #   owner is refused by assertion
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
 #     poolOptions ? {};              # {<pool> = mkOption attrs;} merged over the
@@ -124,6 +127,7 @@
   agentsDirSuffixes ? null,
   agentsDescriptionSuffix ? null,
   poolOptions ? {},
+  proxyOwners ? ["cliproxyapi"],
   config ? null,
   installPackage ? null,
   migrationConfig ? null,
@@ -163,7 +167,7 @@ in
     }
     args);
     {
-      inherit name defaults executables optionNamespaces options poolOptions hm devenv pkgs;
+      inherit name defaults executables optionNamespaces options poolOptions proxyOwners hm devenv pkgs;
       surfaceSupport = declaredSupport;
     }
     // lib.optionalAttrs (config != null) {inherit config;}

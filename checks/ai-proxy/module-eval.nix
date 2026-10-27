@@ -517,7 +517,7 @@ in {
           clientKey = "main";
           url = "http://127.0.0.1:8317";
         })
-        && failsWith ["ai.proxy.instance names `missing`, which is not an `ai.cliproxyapi.instances` entry."] (select {
+        && failsWith ["ai.proxy.instance names `missing`, which is not an `ai.airlock.instances` or `ai.cliproxyapi.instances` entry."] (select {
           instance = "missing";
           clientKey = "main";
         })
@@ -540,7 +540,7 @@ in {
         in
           if proxy == null
           then null
-          else removeAttrs proxy ["credentials"];
+          else {inherit (proxy) key url;};
         root = {
           key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://127.0.0.1:8317";
