@@ -3932,13 +3932,13 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:1124",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:1137",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:1165",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:1178",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
@@ -3950,19 +3950,19 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:567",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:580",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:616",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:629",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/extensions/agents/manager/agent-manager.ts:658",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:671",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
