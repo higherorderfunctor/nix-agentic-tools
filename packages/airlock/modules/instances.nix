@@ -1,5 +1,6 @@
 # `ai.airlock.instances.<name>`: Airlock CONNECT proxies, the same on both
-# backends apart from the default state root.
+# backends apart from the default state root. The final Rust command reads the
+# strict JSON document rendered at each start through `ai.services`.
 #
 # Every instance registers its origin for HTTP and HTTPS on the shared network
 # proxy surface. Generic proxy resolution lives in lib/ai/proxy.nix.
@@ -12,13 +13,25 @@ backend: {
 in {
   imports = [
     (instances.module {
-      arguments = instance: "serve --listen 127.0.0.1:${toString instance.port}";
+      arguments = _: ''serve --config "$AIRLOCK_CONFIG"'';
       inherit backend;
       defaultPort = 8318;
+      derived = {instance, ...}: {listen = "127.0.0.1:${toString instance.port}";};
       owner = "airlock";
       packagePath = "airlock";
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "airlock";
+      render = settings: {
+        content = builtins.toJSON {inherit (settings) listen;};
+        secrets = {};
+      };
+      settingsType = lib.types.submodule {
+        options.listen = lib.mkOption {
+          type = lib.types.str;
+          description = "The strict JSON listen address. The instance fixes it to `127.0.0.1:<port>`.";
+        };
+      };
       tool = "Airlock";
+      variable = "AIRLOCK_CONFIG";
     })
   ];
 

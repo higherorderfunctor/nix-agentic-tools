@@ -30,11 +30,34 @@ pub(super) fn create_and_lock(
     instance: &Instance,
 ) -> Result<(PathBuf, File), String> {
     let walk = Walk::new(base, instance)?;
-    let directory = walk.create()?;
+    let directory = walk
+        .open(Missing::Create)?
+        .expect("a walk that creates what is missing opens every directory");
     directory
         .lock()
         .map_err(|error| path_error(&walk.path, error))?;
     Ok((walk.path, directory))
+}
+
+/// `instance`'s CA directory under `base`, and the directory opened and
+/// checked as `create_and_lock` checks it, or `None` when it does not exist;
+/// nothing is created.
+pub(super) fn open_existing(
+    base: &RuntimeBase,
+    instance: &Instance,
+) -> Result<(PathBuf, Option<File>), String> {
+    let walk = Walk::new(base, instance)?;
+    let directory = walk.open(Missing::Stop)?;
+    Ok((walk.path, directory))
+}
+
+/// What a walk does at a directory that does not exist.
+#[derive(Clone, Copy)]
+enum Missing {
+    /// Create it 0700 and go on.
+    Create,
+    /// Stop: the CA directory does not exist.
+    Stop,
 }
 
 /// The way from a directory no other user can replace to `instance`'s CA
@@ -73,9 +96,9 @@ impl Walk {
         })
     }
 
-    /// Opens each directory on the walk, creating it 0700 when it is missing,
-    /// and returns the CA directory.
-    fn create(&self) -> Result<File, String> {
+    /// Opens each directory on the walk and returns the CA directory, or
+    /// `None` when `missing` stops at one that does not exist.
+    fn open(&self, missing: Missing) -> Result<Option<File>, String> {
         let mut directory = open(
             &self.start,
             OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
@@ -86,20 +109,31 @@ impl Walk {
         let mut reached = self.start.clone();
         for name in &self.components {
             reached.push(name);
-            directory = self.open_or_create(&directory, name, &reached)?;
+            match self.open_component(&directory, name, &reached, missing)? {
+                Some(below) => directory = below,
+                None => return Ok(None),
+            }
         }
-        Ok(directory)
+        Ok(Some(directory))
     }
 
-    /// `name` in `parent`, at `reached`, created 0700 when it is missing and
-    /// refused unless it is a directory, not a link, private to this user.
-    fn open_or_create(&self, parent: &File, name: &OsStr, reached: &Path) -> Result<File, String> {
-        let opened = match open_below(parent, name) {
-            Err(Errno::NOENT) => match mkdirat(parent, name, Mode::RWXU) {
+    /// `name` in `parent`, at `reached`, refused unless it is a directory, not
+    /// a link, private to this user. `missing` decides whether one that does
+    /// not exist is created 0700 or ends the walk.
+    fn open_component(
+        &self,
+        parent: &File,
+        name: &OsStr,
+        reached: &Path,
+        missing: Missing,
+    ) -> Result<Option<File>, String> {
+        let opened = match (open_below(parent, name), missing) {
+            (Err(Errno::NOENT), Missing::Stop) => return Ok(None),
+            (Err(Errno::NOENT), Missing::Create) => match mkdirat(parent, name, Mode::RWXU) {
                 Ok(()) | Err(Errno::EXIST) => open_below(parent, name),
                 Err(error) => return Err(path_error(reached, error)),
             },
-            opened => opened,
+            (opened, _) => opened,
         };
         let directory = match opened {
             Ok(directory) => directory,
@@ -117,7 +151,7 @@ impl Walk {
             .map_err(|error| path_error(reached, error))?;
         match directory_problem(metadata.uid(), metadata.mode(), user()) {
             Some(problem) => Err(refusal(reached, &self.path, problem)),
-            None => Ok(directory),
+            None => Ok(Some(directory)),
         }
     }
 }

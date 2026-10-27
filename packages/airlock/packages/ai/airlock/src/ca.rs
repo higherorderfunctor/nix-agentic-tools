@@ -1,7 +1,8 @@
 //! Airlock's local CA: `init` creates it in an instance's private runtime
-//! directory, or validates the pair already there, and never replaces existing
-//! material.
+//! directory, or validates the pair already there, and `Authority` loads it to
+//! issue short-lived leaf certificates for selected DNS names.
 
+mod authority;
 mod directory;
 mod location;
 mod material;
@@ -12,10 +13,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use time::Duration;
+
+pub use authority::{Authority, Leaf};
 pub use location::{Instance, RuntimeBase};
 
 const CA_CERTIFICATE: &str = "ca.pem";
 const CA_KEY: &str = "ca.key";
+const CLOCK_SKEW: Duration = Duration::hours(1);
 
 /// Creates `instance`'s local CA in its runtime directory under `base`, or
 /// validates the pair already there, and returns the public certificate path.
@@ -35,7 +40,7 @@ pub fn init(base: &RuntimeBase, instance: &Instance) -> Result<PathBuf, String> 
     ) {
         (None, None) => material::create(&certificate_path, &key_path)?,
         (Some(mut certificate), Some(mut key)) => {
-            material::validate(&mut certificate, &mut key, &certificate_path, &key_path)?
+            material::validate(&mut certificate, &mut key, &certificate_path, &key_path)?;
         }
         (Some(_), None) => return Err(material::unpaired(&certificate_path, &key_path)),
         (None, Some(_)) => return Err(material::unpaired(&key_path, &certificate_path)),

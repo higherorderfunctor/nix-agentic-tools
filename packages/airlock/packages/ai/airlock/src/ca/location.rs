@@ -2,7 +2,7 @@
 //! environment selects for it.
 
 use std::{
-    env,
+    env, fmt,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -28,6 +28,12 @@ impl FromStr for Instance {
         } else {
             Err("an instance name is one or more ASCII letters, digits, `_` or `-`".to_owned())
         }
+    }
+}
+
+impl fmt::Display for Instance {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
     }
 }
 
