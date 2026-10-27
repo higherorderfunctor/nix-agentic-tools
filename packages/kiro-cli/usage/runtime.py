@@ -1,7 +1,15 @@
 """Start the private capture service and fail closed before a tracked launch."""
+# cspell:words getpgrp tcgetpgrp
 
 import argparse
 import os
+import re
+import signal
+import sqlite3
+import subprocess
+import time
+import uuid
+from contextlib import closing
 from pathlib import Path
 import shlex
 import socket
@@ -40,7 +48,7 @@ def private_directory(path, create=False):
         raise ValueError(f"usage directory must be owned by this user, not a symlink, and mode 0700: {path}")
 
 
-def launch_environment(path, port, refuse_conflicts=True):
+def launch_environment(path, port, refuse_conflicts=True, invocation=None):
     private_directory(path)
     ca_dir = path / "ca"
     private_directory(ca_dir)
@@ -52,9 +60,15 @@ def launch_environment(path, port, refuse_conflicts=True):
     # cannot cause a provider call.
     with socket.create_connection(("127.0.0.1", port), timeout=0.5):
         pass
-    url = f"http://127.0.0.1:{port}"
+    invocation = invocation or os.environ.get("KIRO_USAGE_INVOCATION")
+    if invocation and not re.fullmatch(r"[0-9a-f]{32}", invocation):
+        raise ValueError("invalid KIRO_USAGE_INVOCATION marker")
+    credentials = f"kiro-usage-{invocation}:@" if invocation else ""
+    url = f"http://{credentials}127.0.0.1:{port}"
     values = {name: url for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")}
     values["NODE_EXTRA_CA_CERTS"] = str(cert)
+    if invocation:
+        values["KIRO_USAGE_INVOCATION"] = invocation
     for name in PROXY_NAMES:
         value = os.environ.get(name, "")
         if refuse_conflicts and value and value != values.get(name):
@@ -94,6 +108,74 @@ def service(args, path):
     ])
 
 
+def invocation_summary(path, invocation, timeout=2.0):
+    """Read only exact marker matches; wait briefly for the async writer."""
+    from query import FOOTER_WARNINGS, query, render
+    deadline = time.monotonic() + timeout
+    rows = []
+    uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
+    try:
+        with closing(sqlite3.connect(uri, uri=True, timeout=.1)) as db:
+            previous_rows, settled = None, time.monotonic()
+            while True:
+                rows = db.execute("""
+                    SELECT json_extract(metadata_json,'$."kiro:conversation_id"'), state
+                    FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
+                """, (invocation,)).fetchall()
+                if rows != previous_rows:
+                    previous_rows, settled = rows, time.monotonic()
+                if rows and all(state != "recording" for _, state in rows) and time.monotonic() - settled >= .1:
+                    break
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(.05)
+            sessions = sorted({name if name.startswith("sess_") else "sess_" + name
+                               for name, _ in rows if isinstance(name, str) and name})
+            if not sessions:
+                print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
+                return
+            print("\nKiro usage summary (full session totals for sessions observed in this invocation):", file=sys.stderr)
+            if any(state == "recording" for _, state in rows):
+                print("Warning: capture writer still has unfinished calls; totals may be incomplete.", file=sys.stderr)
+            if any(not name for name, _ in rows):
+                print("Warning: some invocation calls have no conversation identity and are excluded.", file=sys.stderr)
+            for session in sessions:
+                report = query(db, session)
+                print(render(report), file=sys.stderr)
+                for warning in report["warnings"]:
+                    if warning in FOOTER_WARNINGS:
+                        continue
+                    print("Warning: " + warning, file=sys.stderr)
+    except (OSError, ValueError, sqlite3.Error) as error:
+        print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
+
+
+def wait_command(command, arguments, environment):
+    # Inherit all three descriptors and the foreground process group: interactive
+    # Kiro retains its terminal. Forward signals sent to the supervisor alone.
+    child = subprocess.Popen([command, *arguments], env=environment)
+    previous = {}
+    def forward(number, frame):
+        # Recheck after job-control changes. The terminal already delivers these
+        # signals to every foreground member; forwarding would double Ctrl+C.
+        if number in (signal.SIGINT, signal.SIGQUIT):
+            for descriptor in (0, 1, 2):
+                try:
+                    if os.tcgetpgrp(descriptor) == os.getpgrp():
+                        return
+                except OSError:
+                    continue
+        if child.poll() is None:
+            child.send_signal(number)
+    try:
+        for number in (signal.SIGHUP, signal.SIGINT, signal.SIGQUIT, signal.SIGTERM):
+            previous[number] = signal.signal(number, forward)
+        return child.wait()
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
 def exec_command(path, port, arguments):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
@@ -119,9 +201,62 @@ def exec_command(path, port, arguments):
             tail.insert(0, "--v3")
         elif not has_v3:
             raise ValueError("kiro-cli-chat requires explicit --v3 or --agent-engine v3")
-    child_environment = launch_environment(path, port, refuse_conflicts=False)
+    tracked = Path(command).name in ("kiro-cli", "kiro-cli-chat")
+    if tracked:
+        options = tail[:tail.index("--")] if "--" in tail else tail
+        if any(option in ("--help", "--help-all", "--version", "-h", "-V") for option in options):
+            tracked = False
+        elif Path(command).name == "kiro-cli":
+            # Consume known launcher globals before checking the subcommand;
+            # unknown options keep tracking rather than guessing their arity.
+            value_options = ("--agent", "--agent-engine", "--model", "--repo", "--resume-id")
+            flag_options = ("--classic", "--cloud", "--list", "--resume", "--resume-picker", "--tui", "--v2", "--v3", "--verbose", "-r", "-v")
+            leading = iter(options)
+            administrative = (
+                "agent", "dashboard", "debug", "diagnostic", "doctor", "help", "init",
+                "integrations", "issue", "launch", "login", "logout", "mcp", "powers",
+                "profile", "quit", "restart", "settings", "setup", "theme", "update",
+                "user", "whoami",
+            )
+            for option in leading:
+                if option in value_options:
+                    next(leading, None)
+                elif option in flag_options or option.partition("=")[0] in value_options:
+                    continue
+                else:
+                    tracked = option not in administrative
+                    break
+    nested = bool(os.environ.get("KIRO_USAGE_INVOCATION"))
+    invocation = (os.environ.get("KIRO_USAGE_INVOCATION") or uuid.uuid4().hex) if tracked else None
+    child_environment = launch_environment(path, port, refuse_conflicts=False, invocation=invocation)
     try:
-        os.execvpe(command, [command, *tail], child_environment)
+        if not tracked or nested:
+            os.execvpe(command, [command, *tail], child_environment)
+        else:
+            result = wait_command(command, tail, child_environment)
+            previous = {number: signal.signal(number, signal.SIG_IGN)
+                        for number in (signal.SIGINT, signal.SIGQUIT)}
+            try:
+                try:
+                    invocation_summary(path, invocation)
+                    sys.stderr.flush()
+                except (OSError, ValueError):
+                    # Only a failed summary sink is silenced. Redirect its fd so
+                    # Python's final flush cannot replace the child's exit code.
+                    sink = open(os.devnull, "w")
+                    try:
+                        os.dup2(sink.fileno(), sys.stderr.fileno())
+                    except (OSError, ValueError):
+                        pass
+                    sys.stderr = sink
+            finally:
+                for number, handler in previous.items():
+                    signal.signal(number, handler)
+            if result < 0:
+                if -result not in (signal.SIGKILL, signal.SIGSTOP):
+                    signal.signal(-result, signal.SIG_DFL)
+                os.kill(os.getpid(), -result)
+            return result
     except FileNotFoundError as error:
         raise CommandError(f"command not found: {command}; check PATH or pass an executable path") from error
     except OSError as error:
@@ -168,7 +303,7 @@ def main():
     try:
         path = state_directory(args.state_dir)
         if args.mode == "cli":
-            cli(path, args.arguments, args.port)
+            return cli(path, args.arguments, args.port)
         elif args.mode == "service":
             service(args, path)
         else:

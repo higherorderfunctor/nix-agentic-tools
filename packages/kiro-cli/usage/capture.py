@@ -582,7 +582,8 @@ def main():
     parser = argparse.ArgumentParser(description="Offline inspection; replay writes private payloads to stdout")
     parser.add_argument("--db", required=True)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("list")
+    listing = sub.add_parser("list")
+    listing.add_argument("--json", action="store_true", help="write the existing complete JSON object per capture")
     replay = sub.add_parser("replay")
     replay.add_argument("id")
     replay.add_argument("--entity", action="store_true", help="replay encoded response entity bytes")
@@ -591,8 +592,15 @@ def main():
     db = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
     db.row_factory = sqlite3.Row
     if args.command == "list":
-        for row in db.execute("SELECT id,state,observed_bytes,dropped_bytes,credits,context_usage_percentage,issues_json FROM captures ORDER BY started_utc_ns"):
-            print(packed(dict(row)))
+        rows = db.execute("SELECT id,state,observed_bytes,dropped_bytes,credits,context_usage_percentage,issues_json FROM captures ORDER BY started_utc_ns")
+        if args.json:
+            for row in rows:
+                print(packed(dict(row)))
+        else:
+            from display import table
+            print(table(["Capture", "State", "Bytes", "Dropped", "Credits", "Context %", "Issues"],
+                        [[row["id"], row["state"], row["observed_bytes"], row["dropped_bytes"],
+                          row["credits"], row["context_usage_percentage"], row["issues_json"]] for row in rows]))
     else:
         capture = db.execute("SELECT state FROM captures WHERE id=?", (args.id,)).fetchone()
         if capture is None:

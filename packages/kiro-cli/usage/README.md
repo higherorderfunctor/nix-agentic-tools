@@ -176,9 +176,35 @@ read-only:
 
 ```bash
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 list
+python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 list --json
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 replay CAPTURE_ID
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 replay CAPTURE_ID --entity
 ```
+
+Session queries (`query.py --db DB --session sess_ID`) and capture lists show
+human-readable tables by default. Existing scripts must add `--json` to retain
+the full session JSON report or capture JSON lines. Unknown counters display as
+an em dash; observed zeroes remain zero. Session reports keep disk and capture
+sums separate and show coverage; warnings use standard error. The indexer also
+accepts `--json` for its source, record, and omission counts.
+
+The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
+commands also print a session summary to standard error after Kiro exits. A
+local proxy marker links the invocation's captures to their recorded session
+identities. Kiro uses inherited terminal input and output directly; no screen
+parsing or process-ID guess selects the session. Standard output, exit status,
+and signals are preserved. Tracked chat runs as a child of the summary
+supervisor, retaining the terminal descriptors with its own process ID. Explicit
+help, version, login, and administrative commands skip the summary, including
+after recognized global options. Other commands have no automatic Kiro summary.
+
+These are full-session totals and can include earlier work from a resumed
+session. No captured conversation identity means an explicit unavailable
+summary. No automatic disk indexing runs; disk observations come from the last
+explicit index and may be stale. The exit summary waits at most two seconds for
+the asynchronous capture writer and flags unfinished calls. Nested
+`kiro-usage exec` launches reuse the parent's marker; only the outer launch
+prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload exits with an error. Replay of
