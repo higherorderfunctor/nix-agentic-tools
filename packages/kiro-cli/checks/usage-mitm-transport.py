@@ -13,20 +13,29 @@ import signal
 import socket
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 
 
 def run(mitmdump, addon):
+    sys.path.insert(0, str(addon.parent))
+    from test_capture import EVENTSTREAM, aws_event  # the suite's CRC32 event-stream encoder
     request_body = json.dumps({"model": "synthetic-model", "metadata": {"kiro:conversation_id": "sess_synthetic"}}).encode()
-    request_entity = gzip.compress(request_body)
     output = "é🙂"
     delta = {"type": "response.output_text.delta", "delta": output}
     completed = {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": output}]}], "usage": {"kiro:credits": {"unit": "credit", "unit_plural": "credits", "value": .25}, "kiro:context_usage_percentage": 12.3}}}
     body = b"".join(b"data: " + json.dumps(obj, ensure_ascii=False).encode() + b"\r\n\r\n" for obj in (delta, completed))
-    entity = gzip.compress(body)
-    release = threading.Event()
+    stream_request = json.dumps({"conversationState": {"conversationId": "sess_stream", "currentMessage": {"userInputMessage": {"modelId": "synthetic-model"}}}}).encode()
+    frames = [aws_event("meteringEvent", {"usage": .5, "unit": "credit", "unitPlural": "credits"}),
+              aws_event("contextUsageEvent", {"contextUsagePercentage": 7.5}),
+              aws_event("assistantResponseEvent", {"content": output}),
+              aws_event("metadataEvent", {"tokenUsage": {"uncachedInputTokens": 10, "cacheReadInputTokens": 80, "cacheWriteInputTokens": 5, "outputTokens": 4}, "stopReason": "END_TURN"})]
+    # path -> (request entity, request encoding, response type, response encoding, response entity)
+    routes = {"/v1/responses": (gzip.compress(request_body), "gzip", "text/event-stream", "gzip", gzip.compress(body)),
+              "/generateAssistantResponse": (stream_request, None, EVENTSTREAM, None, b"".join(frames))}
+    releases = {path: threading.Event() for path in routes}
     upstream_errors = []
 
     class Upstream(BaseHTTPRequestHandler):
@@ -38,11 +47,14 @@ def run(mitmdump, addon):
         def do_POST(self):
             try:
                 assert self.headers.get("Proxy-Authorization") is None
-                assert self.path == "/v1/responses?ignored=private-query"
+                path, _, query = self.path.partition("?")
+                assert query == "ignored=private-query"
+                request_entity, _, content_type, encoding, entity = routes[path]
                 assert self.rfile.read(int(self.headers["content-length"])) == request_entity
                 self.send_response(200)
-                self.send_header("Content-Type", "text/event-stream")
-                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Content-Type", content_type)
+                if encoding:
+                    self.send_header("Content-Encoding", encoding)
                 self.send_header("Transfer-Encoding", "chunked")
                 self.send_header("x-amzn-requestid", "synthetic-upstream-request")
                 self.send_header("Set-Cookie", "private-response-cookie")
@@ -54,7 +66,7 @@ def run(mitmdump, addon):
 
                 chunk(entity[:1])
                 # Client must receive this first byte before the upstream sends the rest.
-                assert release.wait(5), "proxy buffered the first response byte"
+                assert releases[path].wait(5), "proxy buffered the first response byte"
                 for offset in range(1, len(entity), 7):
                     chunk(entity[offset:offset + 7])
                 self.wfile.write(b"0\r\n\r\n")
@@ -108,27 +120,29 @@ def run(mitmdump, addon):
                     if process.poll() is not None or time.monotonic() > deadline:
                         raise AssertionError("offline router did not load: " + log_path.read_text())
                     time.sleep(.05)
-                client = HTTPConnection("127.0.0.1", proxy_port, timeout=3)
                 marker = "a" * 32
                 authorization = "Basic " + base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
-                client.set_tunnel("runtime.us-east-1.kiro.dev", 443, headers={"Proxy-Authorization": authorization})
-                client.request("POST", "/v1/responses?ignored=private-query",
-                               body=request_entity, headers={"Content-Encoding": "gzip", "Content-Type": "application/json",
-                                                             "Authorization": "Bearer private-authorization", "Cookie": "private-request-cookie"})
-                response = client.getresponse()
-                assert response.status == 200
-                first = response.read(1)
-                assert first == entity[:1], "first encoded byte changed"
-                release.set()
-                received = first + response.read()
-                assert received == entity, "response entity bytes changed"
-                assert not upstream_errors, upstream_errors
-                client.close()
-                client = None
+                for path, (request_entity, request_encoding, _, _, entity) in routes.items():
+                    client = HTTPConnection("127.0.0.1", proxy_port, timeout=3)
+                    client.set_tunnel("runtime.us-east-1.kiro.dev", 443, headers={"Proxy-Authorization": authorization})
+                    client.request("POST", path + "?ignored=private-query",
+                                   body=request_entity, headers={**({"Content-Encoding": request_encoding} if request_encoding else {}), "Content-Type": "application/json",
+                                                                 "Authorization": "Bearer private-authorization", "Cookie": "private-request-cookie"})
+                    response = client.getresponse()
+                    assert response.status == 200
+                    first = response.read(1)
+                    assert first == entity[:1], path + ": first byte changed"
+                    releases[path].set()
+                    received = first + response.read()
+                    assert received == entity, path + ": response entity bytes changed"
+                    assert not upstream_errors, upstream_errors
+                    client.close()
+                    client = None
                 process.send_signal(signal.SIGINT)
                 assert process.wait(timeout=10) == 0, log_path.read_text()
             finally:
-                release.set()
+                for release in releases.values():
+                    release.set()
                 if client:
                     client.close()
                 if process.poll() is None:
@@ -141,9 +155,10 @@ def run(mitmdump, addon):
         assert "Traceback" not in logs and "Addon error" not in logs, logs
         with sqlite3.connect(database) as db:
             db.row_factory = sqlite3.Row
-            rows = db.execute("SELECT * FROM captures").fetchall()
-            assert len(rows) == 1, [dict(row) for row in rows]
-            row = rows[0]
+            rows = {json.loads(row["metadata_json"])["path"]: row for row in db.execute("SELECT * FROM captures")}
+            assert sorted(rows) == sorted(routes), [dict(row) for row in rows.values()]
+            assert db.execute("SELECT COUNT(*) FROM captures").fetchone()[0] == len(routes)  # one row per call, no duplicates
+            row = rows["/v1/responses"]
             assert row["state"] == "complete", dict(row)
             assert row["credits"] == .25 and row["context_usage_percentage"] == 12.3
             assert row["input_tokens"] is None and row["output_tokens"] is None
@@ -154,13 +169,28 @@ def run(mitmdump, addon):
             metadata = row["metadata_json"] + row["response_json"]
             assert "private-" not in metadata, metadata
             assert "synthetic-upstream-request" in metadata
-            chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
-            assert b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks) == entity
+            chunks = db.execute("SELECT * FROM chunks WHERE capture_id=? ORDER BY seq", (row["id"],)).fetchall()
+            assert b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks) == routes["/v1/responses"][4]
             assert b"".join(gzip.decompress(c["application_gzip"]) for c in chunks) == body
-            assert db.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 2
+            assert db.execute("SELECT COUNT(*) FROM events WHERE capture_id=?", (row["id"],)).fetchone()[0] == 2
             summary = json.loads(row["summary_json"])
             assert summary["output_text_chars"] == 2 and summary["output_text_bytes"] == 6
-    print("PASS real mitmdump: loopback only; addon startup/shutdown; immediate first byte; exact gzip request/response; complete SSE evidence; usage NULL for unknown token counts")
+            row = rows["/generateAssistantResponse"]
+            assert (row["state"], json.loads(row["issues_json"])) == ("complete", []), dict(row)
+            assert (row["credits"], row["context_usage_percentage"]) == (.5, 7.5), dict(row)
+            assert (row["input_tokens"], row["output_tokens"], row["cache_read_tokens"], row["cache_write_tokens"]) == (95, 4, 80, 5), dict(row)
+            assert gzip.decompress(row["request_gzip"]) == stream_request
+            assert row["response_sha256"] == hashlib.sha256(b"".join(frames)).hexdigest()
+            metadata = json.loads(row["metadata_json"])
+            assert (metadata["invocation"], metadata["kiro:conversation_id"], metadata["model"]) == ("a" * 32, "sess_stream", "synthetic-model"), metadata
+            chunks = db.execute("SELECT * FROM chunks WHERE capture_id=? ORDER BY seq", (row["id"],)).fetchall()
+            assert b"".join(gzip.decompress(c["application_gzip"]) for c in chunks) == b"".join(frames)
+            events = db.execute("SELECT event_name,frame_gzip FROM events WHERE capture_id=? ORDER BY seq", (row["id"],)).fetchall()
+            assert [e["event_name"] for e in events] == ["meteringEvent", "contextUsageEvent", "assistantResponseEvent", "metadataEvent"], [e["event_name"] for e in events]
+            assert [gzip.decompress(e["frame_gzip"]) for e in events] == frames
+            summary = json.loads(row["summary_json"])
+            assert (summary["terminal"], summary["metering_events"], summary["output_text_chars"]) == ("END_TURN", 1, 2), summary
+    print("PASS real mitmdump: loopback only; addon startup/shutdown; immediate first byte; exact gzip request/response; complete SSE evidence; usage NULL for unknown token counts; complete event-stream evidence with credits, context and tokens")
 
 
 def main():

@@ -137,6 +137,12 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual([gzip.decompress(e["frame_gzip"]) for e in events], messages)
         self.assertEqual(json.loads(events[0]["data_json"]), {"content": "é🙂"})
 
+    def test_event_stream_multiple_metering_events_keep_last_and_stay_complete(self):
+        _, row = self.run_capture([aws_event("meteringEvent", {"usage": .25, "unit": "credit"}),
+                                   aws_event("meteringEvent", {"usage": .5, "unit": "credit"})], content_type=EVENTSTREAM)
+        self.assertEqual((row["state"], json.loads(row["issues_json"]), row["credits"]), ("complete", [], .5))
+        self.assertEqual(json.loads(row["summary_json"])["metering_events"], 2)
+
     def test_event_stream_absent_counters_stay_null(self):
         _, row = self.run_capture([aws_event("metadataEvent", {"tokenUsage": {"uncachedInputTokens": 7, "outputTokens": 3}})], content_type=EVENTSTREAM)
         self.assertEqual(row["state"], "complete")

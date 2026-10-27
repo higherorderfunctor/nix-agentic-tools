@@ -111,10 +111,15 @@ automatically refreshes the local disk index from `~/.kiro/sessions` when that
 directory exists. This exit scan reads the `session.json` of sessions changed
 since the launch, indexes the messages only of those linked to captures, and
 never prunes. Index failures warn and leave the child exit status intact; disk
-observations may then be stale. On exit the tool also waits up to two seconds
-for the asynchronous capture writer; unfinished calls remain flagged as
-incomplete coverage. Nested `kiro-usage exec` launches share the parent's marker
-and produce one summary when the outer launch exits.
+observations may then be stale. An explicit `kiro-usage index` holds a lock
+beside the database for its whole pass; the exit scan then skips with a one-line
+warning instead of interleaving, and reports disk observations as not refreshed.
+Exit scans of concurrent launches do not skip each other; they queue on a second
+lock and run one at a time, since two scans of one session would index the same
+records. Rerun the index if that pass began before Kiro exited. On exit the tool
+also waits up to two seconds for the asynchronous capture writer; unfinished
+calls remain flagged as incomplete coverage. Nested `kiro-usage exec` launches
+share the parent's marker and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -210,7 +215,9 @@ before tracking began are therefore not indexed. The explicit command prunes
 disk rows for sessions no longer in scope and then runs `VACUUM`, so the file
 shrinks. `VACUUM` holds the write lock while it rewrites the file, so a running
 collector waits on its busy timeout meanwhile; after pruning this takes well
-under a second, but run it between Kiro sessions on a large capture store.
+under a second, but run it between Kiro sessions on a large capture store. A
+second explicit index waits for a running one; a tracked launch's exit scan
+skips while it runs.
 
 Malformed or unreadable session metadata does not stop other sessions from
 indexing. Its omission is recorded, stale metadata is retired, and a successful

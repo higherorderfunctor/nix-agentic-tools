@@ -21,10 +21,13 @@ from pathlib import Path
 import sqlite3
 import sys
 
-from capture import decoded_json, open_database
+from capture import decoded_json, lock_beside, open_database
 
 
 DRAIN_CHUNK = 64 * 1024
+# The full pass waits on it; runtime.refresh_disk_index skips while it is held.
+INDEX_LOCK = ".index.lock"
+REFRESH_LOCK = ".refresh.lock"  # Exit refreshes queue here; index_messages reads its offset before the write transaction.
 IDENTIFIERS = ("executionId", "parentExecutionId", "parentSessionId", "rootExecutionId",
                "rootSessionId", "sessionId", "subExecutionId", "turnId")
 LINKS = ("ownerSessionId", "parentSessionId", "rootConversationId", "rootSessionId")
@@ -376,6 +379,7 @@ def main():
     args = parser.parse_args()
     try:
         with open_database(args.db) as db:
+            lock_beside(args.db, INDEX_LOCK, blocking=True)  # Held until this process exits.
             index_tree(db, args.sessions)
             if db.execute("PRAGMA freelist_count").fetchone()[0]:
                 # Pruned pages only leave the file after VACUUM and a WAL checkpoint.

@@ -385,6 +385,17 @@ class QueryTests(unittest.TestCase):
         self.assertIn(r"bad\n\x1b[31m", output)
         self.assertNotIn("\x1b", output)
 
+    def test_multiple_metering_events_warn_without_changing_totals(self):
+        for ident, conversation, events in (("twice", "root", 2), ("once", "root", 1), ("elsewhere", "other", 3)):
+            self.captured(ident, conversation=conversation)
+            self.db.execute("UPDATE captures SET summary_json=? WHERE id=?", (json.dumps({"metering_events": events}), ident))
+        report = query.query(self.db, "sess_root")
+        self.assertEqual((report["captures"]["multiple_metering_events"], report["captures"]["incomplete"]), (1, 0))
+        self.assertEqual(report["captures"]["metrics"]["credits"]["observed_sum"], 2)
+        self.assertIn("1 selected call(s) carried more than one meteringEvent", " ".join(report["warnings"]))
+        self.db.execute("UPDATE captures SET summary_json=NULL WHERE id='twice'")
+        self.assertFalse(any("meteringEvent" in warning for warning in query.query(self.db, "sess_root")["warnings"]))
+
     def test_cli_json_preserves_report_and_human_diagnostics_use_stderr(self):
         self.session("sess_root")
         self.captured("call", conversation="root")
