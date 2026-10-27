@@ -1,6 +1,6 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-17 — a selected proxy installs a launcher that
+> **Last verified:** 2026-10-26 — selected CPA installs a launcher that
 > suppresses the inherited API-key descriptor before Claude caches it; plugins
 > are staged entries delivered through the ai-module files layers; the personal
 > plugin carries MCP servers only; unknown native settings and stale warning
@@ -19,16 +19,23 @@ Claude Code ships as a **pre-built compiled binary** (a Bun single-exec). The
 base package (`packages/claude-code/packages/ai/claude-code/package.nix`)
 installs it directly as `$out/bin/claude`.
 
-### Proxy credential suppression at launch
+### Proxy inputs at launch
 
 The base package's `$out/bin/claude` is the pre-built binary itself. Without a
 proxy selection, the shared backend transform installs it unchanged. A selected
-`ai.proxy` or `ai.claude.proxy` installs a `lib.ai.mkLauncher` wrapper on both
-backends that unsets `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec. Claude
-Code 2.1.302 caches that descriptor before settings env applies, so clearing it
-in settings alone still sends the inherited key to the proxy. The endpoint and
-reference-reading `apiKeyHelper` stay in settings; no key is baked into the
-launcher.
+CPA through `ai.proxy` or `ai.claude.proxy` installs a `lib.ai.mkLauncher`
+wrapper on both backends that unsets `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`
+before exec. Claude Code 2.1.302 caches that descriptor before settings env
+applies, so clearing it in settings alone still sends the inherited key to the
+proxy. The endpoint and reference-reading `apiKeyHelper` stay in settings; no
+key is baked into the launcher.
+
+An Airlock selection instead preserves native auth and uses the final launcher's
+`--run` to read service inputs and export scoped proxy/trust before exec. Native
+settings' runtime-directory inputs are applied before lookup; literal service
+overrides then select its runtime path. No nested launcher is introduced:
+`mkLauncher` flattens `launcherPackage` and would discard one. See Airlock's
+[`claude.md`](../../airlock/docs/claude.md) for the readiness and HITL limits.
 
 Claude Code 2.1.157 and later discovers a plugin as a personal plugin at
 `<configDir>/skills/<name>` (yes, `skills/`, not `plugins/`), so nothing needs a

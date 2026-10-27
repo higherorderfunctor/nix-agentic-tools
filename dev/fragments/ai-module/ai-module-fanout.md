@@ -19,9 +19,10 @@
 > option, and record gaps are `path`, `each`, `when` and `reason` only;
 > ai-module owns the delivered-path inventory and backend lowering; `ai.proxy`
 > selects a shared endpoint with a whole per-runtime override, gated by runtime
-> capability; Claude consumes it and suppresses its inherited API-key descriptor
-> through the installed launcher; `ai.jail` folds field by field and jails the
-> finished launcher in place at the install seam on Linux, warning elsewhere.
+> capability; Claude's CPA launcher suppresses its inherited API-key descriptor,
+> while Airlock preserves auth and supplies scoped proxy/trust inputs; `ai.jail`
+> folds field by field and jails the finished launcher in place at the install
+> seam on Linux, warning elsewhere.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived

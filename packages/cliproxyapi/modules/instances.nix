@@ -65,6 +65,7 @@ in {
         ''--config "$CPA_CONFIG"''
         + lib.optionalString (!instance.fetchModelCatalogs) " --local-model";
       inherit backend;
+      claimProxyInstance = true;
       defaultPort = 8317;
       derived = {instance, ...}: {
         api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower (providersLib.apiKeys instance));
