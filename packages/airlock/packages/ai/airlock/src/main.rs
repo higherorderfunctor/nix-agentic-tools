@@ -2,7 +2,7 @@ mod cli;
 
 use std::process::ExitCode;
 
-use airlock::{ca, server};
+use airlock::{ca, config::Config, server};
 use clap::Parser;
 use cli::{CaCommand, Cli, Command};
 
@@ -18,7 +18,20 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
-        Command::Serve { listen } => server::run(listen).map_err(|error| error.to_string()),
+        Command::Serve {
+            listen,
+            config,
+            instance,
+        } => {
+            let config = match config {
+                Some(path) => Config::read(path, instance)?,
+                None => Config {
+                    listen,
+                    interception: None,
+                },
+            };
+            server::run(config).map_err(|error| error.to_string())
+        }
         Command::Ca {
             command: CaCommand::Init { instance },
         } => {

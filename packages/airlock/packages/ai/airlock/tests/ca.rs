@@ -1,11 +1,14 @@
+// cspell:words alpn
 // cspell:words getuid rustix
 mod common;
 
 use std::{
     fs::{self, File},
+    io::Cursor,
     os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     process::{Output, Stdio},
+    sync::Arc,
     thread,
     time::Duration as StdDuration,
 };
@@ -19,6 +22,10 @@ use common::{
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, IsCa,
     Issuer, KeyPair, KeyUsagePurpose,
+};
+use rustls::{
+    ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection,
+    pki_types::ServerName,
 };
 use tempfile::TempDir;
 use time::{Duration, OffsetDateTime};
@@ -47,6 +54,10 @@ impl Material {
 
     fn init(&self) -> Result<PathBuf, String> {
         ca::init(&self.base, &Instance::default())
+    }
+
+    fn authority<const N: usize>(&self, names: [&str; N]) -> Result<ca::Authority, String> {
+        ca::Authority::open(&self.base, &Instance::default(), names)
     }
 
     /// Creates the instance directory as `init` would, with nothing in it.
@@ -872,4 +883,137 @@ fn an_empty_airlock_home_leaves_xdg_runtime_dir_in_place() {
         String::from_utf8_lossy(&output.stdout),
         format!("{}\n", material.certificate.display())
     );
+}
+
+fn served_leaf(authority: &ca::Authority, host: &str, ca_der: Vec<u8>) -> Vec<u8> {
+    let leaf = authority.leaf_for(host).expect("get selected leaf");
+    let config =
+        ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .expect("select protocols")
+            .with_no_client_auth()
+            .with_single_cert(vec![leaf.certificate.clone()], leaf.key.clone_key().into())
+            .expect("leaf key matches its certificate");
+    let mut roots = RootCertStore::empty();
+    roots.add(ca_der.into()).expect("trust fixture CA");
+    let client_config =
+        ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .expect("select protocols")
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+    let mut client = ClientConnection::new(
+        Arc::new(client_config),
+        ServerName::try_from(host.to_owned()).expect("fixture DNS name"),
+    )
+    .expect("create TLS client");
+    let mut server = ServerConnection::new(Arc::new(config)).expect("create TLS server");
+    for _ in 0..8 {
+        let mut bytes = Vec::new();
+        client.write_tls(&mut bytes).expect("write client TLS");
+        server
+            .read_tls(&mut Cursor::new(bytes))
+            .expect("read client TLS");
+        server.process_new_packets().expect("process client TLS");
+        let mut bytes = Vec::new();
+        server.write_tls(&mut bytes).expect("write server TLS");
+        client
+            .read_tls(&mut Cursor::new(bytes))
+            .expect("read server TLS");
+        client.process_new_packets().expect("verify server TLS");
+        if !client.is_handshaking() && !server.is_handshaking() {
+            return client.peer_certificates().expect("server certificate")[0].to_vec();
+        }
+    }
+    panic!("TLS fixture handshake did not complete");
+}
+
+#[test]
+fn authority_reuses_the_initialized_ca_and_serves_only_exact_selected_dns_leaves() {
+    let root = private_root();
+    let material = Material::new(&root);
+    let names = ["api.example.test", "files.example.test"];
+    material.init().expect("create CA");
+    let authority = material.authority(names).expect("open runtime CA");
+    let ca_bytes = fs::read(&material.certificate).expect("read public CA");
+    let (_, ca_pem) = parse_x509_pem(&ca_bytes).expect("parse CA PEM");
+    let ca_certificate = ca_pem.parse_x509().expect("parse CA DER");
+    for host in names {
+        let leaf_der = served_leaf(&authority, host, ca_pem.contents.clone());
+        let (_, leaf) = x509_parser::parse_x509_certificate(&leaf_der).expect("parse leaf");
+        let san = leaf
+            .subject_alternative_name()
+            .expect("parse SAN")
+            .expect("leaf SAN");
+        assert_eq!(
+            san.value.general_names,
+            vec![x509_parser::extensions::GeneralName::DNSName(host)]
+        );
+        assert_eq!(leaf.issuer(), ca_certificate.subject());
+        leaf.verify_signature(Some(ca_certificate.public_key()))
+            .expect("verify leaf signature");
+        let now = OffsetDateTime::now_utc();
+        assert!(leaf.validity().not_before.to_datetime() <= now);
+        assert!(
+            (leaf.validity().not_after.to_datetime() - now - Duration::days(7)).abs()
+                < Duration::seconds(5)
+        );
+    }
+    for host in [
+        "example.test",
+        "other.example.test",
+        "API.example.test",
+        "api.example.test.attacker.test",
+    ] {
+        assert!(
+            authority.leaf_for(host).is_err(),
+            "accepted unselected {host}"
+        );
+    }
+    let key = fs::read(&material.key).expect("read initial key");
+    material.authority(names).expect("reopen runtime CA");
+    assert_eq!(fs::read(&material.key).expect("read reused key"), key);
+    assert_eq!(
+        fs::read(&material.certificate).expect("read reused certificate"),
+        ca_bytes
+    );
+    assert_eq!(
+        fs::read_dir(&material.directory)
+            .expect("CA directory")
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn authority_refuses_invalid_names_and_never_creates_a_missing_ca() {
+    let root = private_root();
+    let material = Material::new(&root);
+    material.init().expect("create CA");
+    for name in ["*.example.test", "127.0.0.1", "bad/name", ""] {
+        assert!(material.authority([name]).is_err(), "accepted {name}");
+    }
+
+    let instance = "missing".parse().expect("valid instance");
+    let missing = root.path().join("airlock/missing");
+    let open = || {
+        ca::Authority::open(&material.base, &instance, ["api.example.test"])
+            .err()
+            .expect("a missing CA must be refused")
+    };
+    let instruction = format!(
+        "{} must hold ca.pem and ca.key; create them with `airlock ca init --instance missing`",
+        missing.display()
+    );
+    let error = open();
+    assert!(error.contains(&instruction), "{error}");
+    assert!(!missing.exists(), "opening created a CA directory");
+
+    fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&missing)
+        .expect("create empty CA directory");
+    let error = open();
+    assert!(error.contains(&instruction), "{error}");
+    assert_eq!(entries(&missing), 0, "opening created CA material");
 }

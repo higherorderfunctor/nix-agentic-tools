@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use airlock::ca::Instance;
 use clap::{Parser, Subcommand};
@@ -18,8 +18,14 @@ pub enum Command {
     /// Start the proxy listener.
     Serve {
         /// IP loopback address to listen on (port 0 allowed).
-        #[arg(long, default_value = "127.0.0.1:8318")]
+        #[arg(long, default_value = "127.0.0.1:8318", conflicts_with = "config")]
         listen: SocketAddr,
+        /// Read strict JSON proxy configuration.
+        #[arg(long, value_name = "FILE")]
+        config: Option<PathBuf>,
+        /// The instance whose CA interception loads; `default` unless named.
+        #[arg(long, value_name = "NAME", requires = "config")]
+        instance: Option<Instance>,
     },
     /// Manage the private local CA without installing trust.
     Ca {
