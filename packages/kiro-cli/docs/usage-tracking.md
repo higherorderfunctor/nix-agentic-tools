@@ -135,3 +135,33 @@ retaining new payloads. It does not delete old captures. This is a payload
 budget, not a whole-directory quota: metadata, session indexes, SQLite pages,
 and WAL files need additional space. Inspect storage and omission status before
 relying on a capture as complete evidence.
+
+## Run the calibration experiment
+
+From a checkout, preview the paid experiment without calling Kiro:
+
+```console
+python3 packages/kiro-cli/usage/calibration.py
+python3 packages/kiro-cli/usage/calibration.py --run
+```
+
+The explicit `--run` executes ten sequential non-interactive invocations using
+`claude-opus-5.5` at low effort: repeated medium input, input and output size
+variations, a three-turn conversation resumed by session ID, and a final repeat
+after more than six quiet minutes. These are experiment labels; a cold cache is
+not established. A unique run prefix reduces reuse from earlier experiments, but
+global context remains uncontrolled. Compare captured request hashes offline
+before interpreting cache differences. CLI invocation counts can differ from
+provider request counts.
+
+The script requires an existing collector database and checks complete retained
+captures with credits and context usage after every invocation. Missing or
+incomplete evidence stops the experiment without retrying paid calls.
+`--db /absolute/path/usage.sqlite3` selects a non-default database for these
+read-only checks; it must match the installed collector's state directory.
+`--timeout 180` sets the per-command timeout. The script prints its private
+temporary workspace and manifest path, retains bounded logs and prompt fixtures
+outside the workspace, and records workspace changes. Keep those artifacts for
+offline attribution. Its final session-index step is nonfatal and prints a
+separate retry command if needed. Tests use fake executables and make no
+provider calls.
