@@ -85,9 +85,17 @@ async fn accept_streams(
     jobs.shutdown().await;
 }
 
-async fn handle(request: Request<RecvStream>, mut respond: SendResponse<Bytes>, proxy: Arc<Proxy>) {
+async fn handle(
+    mut request: Request<RecvStream>,
+    mut respond: SendResponse<Bytes>,
+    proxy: Arc<Proxy>,
+) {
     if request.method() != Method::CONNECT {
         let (status, body) = route(request.method(), request.uri());
+        let _ = reply(&mut respond, status, body);
+        return;
+    }
+    if let Err((status, body)) = proxy.clients.admit(&mut request) {
         let _ = reply(&mut respond, status, body);
         return;
     }
