@@ -77,7 +77,15 @@ totals may be incomplete. Incomplete EOF tails, including oversized tails, are
 retried after an append without advancing the checkpoint. Source replacement or
 truncation retires both facts and omission metadata. A database write failure
 rolls back the batch and its checkpoint; previously committed batches remain
-available. Session metadata retains a separate 4 MiB parsing limit.
+available. Session metadata retains a separate 4 MiB parsing limit. Malformed,
+oversized, or unreadable `session.json` files are isolated per session: indexing
+continues through messages and later sessions, while `disk_session_omissions`
+records the omitted metadata and stale metadata is retired. Successfully
+re-indexing repaired metadata clears its omission. Queries report the global
+metadata omission count because unknown ancestry can hide descendants; older
+indexes without tracking show an unknown count. The index CLI's
+`omitted_records` count includes both JSONL record and session metadata
+omissions.
 
 Request metadata and fingerprints are extracted once, on the request hook,
 before payload queue admission. This adds bounded request-side parsing and
@@ -169,6 +177,31 @@ event/summary evidence is also signaled in `issues_json`. A full observed
 response hash can exist even when storage is incomplete; use `state` and the
 nullable BLOBs to determine replay completeness.
 
+## Experimental credit-discount diagnostic
+
+The initial ten-call calibration supports a narrow credit-price diagnostic, not
+token estimates or validated cache-hit detection. Profile
+`opus-5.5-low-text1to5-context-v1` requires model `claude-opus-5.5`, effort
+`low`, retained complete captures, a completed terminal event proving text-only
+output of 1–5 characters, no observed reasoning/tool output, and reported
+context between 0.87679994% and 3.6423001%. The curves consume context percent
+directly: baseline `(74*p + 0.5034)/603`, discounted `(20*p + 0.5970)/603`. The
+0.000001-credit tolerance is numerical, not a statistical confidence interval.
+Scores and residuals remain unclamped; values outside the curve envelope are
+anomalies.
+
+Five of eight eligible initial calls were discount-like (~62.5%), a band that
+includes partial discounts rather than only fully discounted requests; three
+were baseline and two longer-output cases were excluded. Cold/warm/delayed
+requests had matching delivered context, hooks, and tools after metadata
+removal. That comparison does not prove provider caching, establish percentile
+accuracy, or validate character-to-token conversion. Token and cached-token
+counters stay unknown unless reported. `Discount %` appears separately from the
+counter-derived `Hit %`, with classified/all-request coverage and
+exclusion/anomaly counts. Structured `credit_discount` objects retain the
+profile, assumptions, reasons, and numeric diagnostics per total, model, and
+conversation group. No context-window assumption or extrapolation is applied.
+
 ## Offline inspection and replay
 
 These commands use only Python's standard library and open the database
@@ -176,9 +209,52 @@ read-only:
 
 ```bash
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 list
+python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 list --json
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 replay CAPTURE_ID
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 replay CAPTURE_ID --entity
 ```
+
+Session queries (`query.py --db DB --session sess_ID`) and capture lists show
+human-readable tables by default. Existing scripts must add `--json` to retain
+the full session JSON report or capture JSON lines. Unknown counters display as
+an em dash; observed zeroes remain zero. Session reports keep disk and capture
+sums separate and show coverage; warnings use standard error. The indexer also
+accepts `--json` for its source, record, and omission counts.
+
+The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
+commands also print model totals and a pooled credit/token summary to standard
+error after Kiro exits. A local proxy marker links the invocation's captures to
+their recorded session identities. Kiro uses inherited terminal input and output
+directly; no screen parsing or process-ID guess selects the session. Standard
+output, exit status, and signals are preserved. Tracked chat runs as a child of
+the summary supervisor, retaining the terminal descriptors with its own process
+ID. Explicit help, version, login, and administrative commands skip the summary,
+including after recognized global options. Other commands have no automatic Kiro
+summary.
+
+These are full root-linked session totals and can include earlier work from a
+resumed session. Explicit root conversation IDs include related captures without
+requiring an on-disk index. Root-linked lineage may include forks as well as
+subagents. Captured requests and credits are counted once; disk credits never
+enter the total. Root conversation matches the selected root ID; Other linked
+conversations have another ID; Unknown lacks a conversation ID. These groups do
+not identify caller roles: the root may include internal delegates, while other
+linked conversations may include helpers or forks. Tables group requests,
+credits, and tokens by model and pool rather than listing individual delegates.
+Exact counters are used when observed; explicit estimates carry `~` and missing
+values show an em dash. No token estimator is enabled. Hit percentage estimates
+cache-hit requests divided by requests with a reported cache counter; partial
+coverage remains visible. No captured conversation identity means an explicit
+unavailable summary. Before reporting, the outer launch incrementally indexes
+`~/.kiro/sessions` if present, using the existing database and checkpoints.
+Unchanged fully indexed sources require no writes; appended records and session
+metadata are refreshed across the tree, including lineage. The first scan may
+take longer for a large history. Index failures warn without replacing the child
+exit status, and disk observations may then be stale. Manual session queries use
+the last completed index. The exit summary also waits at most two seconds for
+the asynchronous capture writer and flags unfinished calls. Nested
+`kiro-usage exec` launches reuse the parent's marker; only the outer launch
+prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload exits with an error. Replay of

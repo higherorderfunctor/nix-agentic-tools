@@ -29,8 +29,8 @@ class QueryTests(unittest.TestCase):
                         (source, 0, "usage_summary", None, "execution", "turn", None, 20, "success", json.dumps([{"usage": credits, "unit": "credit"}]), "{}"))
         self.db.execute("INSERT INTO disk_request_ids VALUES (?,?,?,?)", (source, 0, 0, "request-" + name))
 
-    def captured(self, ident, conversation=None, request=None, credits=1, tokens=10, state="complete"):
-        meta = {"model": "requested-model"}
+    def captured(self, ident, conversation=None, request=None, credits=1, tokens=10, state="complete", metadata=None):
+        meta = {"model": "requested-model", **(metadata or {})}
         if conversation is not None:
             meta["kiro:conversation_id"] = conversation
         response = {"upstream_request_id": request} if request else {}
@@ -112,6 +112,32 @@ class QueryTests(unittest.TestCase):
         self.assertFalse(legacy["disk"]["omission_tracking"])
         self.assertEqual(legacy["disk"]["turns"], 1)
 
+    def test_global_metadata_omissions_leave_capture_totals_and_repair_visible(self):
+        self.session("sess_root")
+        self.captured("root", conversation="root", credits=1)
+        self.captured("child", conversation="child", credits=2,
+                      metadata={"kiro:root_conversation_id": "root"})
+        for session in ("root", "child"):
+            self.db.execute("INSERT INTO disk_session_omissions VALUES (?,?)",
+                            ("/synthetic/workspace/sess_" + session, "invalid_session_metadata"))
+        self.db.execute("DELETE FROM disk_sessions")
+        report = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(report["disk"]["metadata_omitted_sessions"], 2)
+        self.assertTrue(report["disk"]["metadata_omission_tracking"])
+        self.assertEqual(report["captures"]["metrics"]["credits"]["observed_sum"], 3)
+        self.assertTrue(any("descendant discovery may be incomplete" in warning for warning in report["warnings"]))
+        self.assertIn("Session metadata omissions (global): 2", query.render(report))
+        # A successful metadata re-index retires these omission entries.
+        self.db.execute("DELETE FROM disk_session_omissions")
+        repaired = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(repaired["disk"]["metadata_omitted_sessions"], 0)
+        self.assertFalse(any("descendant discovery may be incomplete" in warning for warning in repaired["warnings"]))
+        self.db.execute("DROP TABLE disk_session_omissions")
+        legacy = query.query(self.db, "sess_root", "tree")
+        self.assertIsNone(legacy["disk"]["metadata_omitted_sessions"])
+        self.assertFalse(legacy["disk"]["metadata_omission_tracking"])
+        self.assertIn("Session metadata omissions (global): —", query.render(legacy))
+
     def test_models_are_scoped_to_their_source(self):
         self.session("sess_root")
         self.captured("call", conversation="root")
@@ -122,6 +148,185 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(model["metrics"]["input_tokens"], {"observed_sum": 10, "known": 1, "unknown": 0})
         self.assertEqual(result["disk"]["model_scope"], "session-current")
         self.assertEqual(result["disk"]["models"], [{"model_id": "current-model", "sessions": 1}])
+
+    def test_wire_root_tree_without_index_and_aliases(self):
+        self.db.executescript("DROP TABLE disk_request_ids; DROP TABLE disk_records; DROP TABLE disk_sources; DROP TABLE disk_sessions;")
+        self.captured("root", conversation="root", credits=2,
+                      metadata={"kiro:root_conversation_id": "sess_root"})
+        self.captured("child", conversation="child", credits=3,
+                      metadata={"kiro:root_conversation_id": "root"})
+        self.captured("root-only", credits=4, metadata={"kiro:root_conversation_id": "root"})
+        self.captured("unrelated", conversation="other", credits=100,
+                      metadata={"kiro:root_conversation_id": "other"})
+        exact = query.query(self.db, "sess_root")
+        tree = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(exact["captures"]["observations"], 1)
+        self.assertEqual(tree["captures"]["observations"], 3)
+        self.assertEqual(tree["captures"]["metrics"]["credits"], {"observed_sum": 9, "known": 3, "unknown": 0})
+        self.assertEqual(tree["sessions"], ["sess_child", "sess_root"])
+        self.assertFalse(tree["disk"]["available"])
+        self.assertEqual(tree["captures"]["global_unattributed_observations"], 0)
+        self.assertFalse(any("global capture store" in warning for warning in tree["warnings"]))
+        # Conversation partition does not infer main versus delegate caller roles.
+        for pool, credits in (("root_conversation", 2), ("other_linked_conversations", 3), ("unknown", 4)):
+            self.assertEqual(tree["captures"]["pools"][pool]["observations"], 1)
+            self.assertEqual(tree["captures"]["pools"][pool]["metrics"]["credits"]["observed_sum"], credits)
+        self.assertEqual(tree["attribution"]["own_vs_delegate"], "unavailable")
+        self.captured("truly-unattributed", credits=99)
+        mixed = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(mixed["captures"]["global_unattributed_observations"], 1)
+        self.assertEqual(mixed["captures"]["observations"], 3)
+        self.assertEqual(mixed["captures"]["pools"]["unknown"]["observations"], 1)
+        self.assertTrue(any("root-conversation lineage" in warning for warning in mixed["warnings"]))
+
+    def test_conversation_partition_normalizes_root_and_keeps_partial_zero(self):
+        self.session("sess_root", credits=50)
+        self.captured("prefixed", conversation="sess_root", credits=0)
+        self.captured("bare", conversation="root", credits=None)
+        self.captured("other", conversation="other", credits=2,
+                      metadata={"kiro:root_conversation_id": "root"})
+        self.captured("request-only", request="request-sess_root", credits=3)
+        report = query.query(self.db, "sess_root", "tree")
+        pools = report["captures"]["pools"]
+        self.assertEqual(pools["root_conversation"]["metrics"]["credits"],
+                         {"observed_sum": 0, "known": 1, "unknown": 1})
+        self.assertEqual(pools["other_linked_conversations"]["metrics"]["credits"]["observed_sum"], 2)
+        self.assertEqual(pools["unknown"]["metrics"]["credits"]["observed_sum"], 3)
+        self.assertEqual(report["captures"]["metrics"]["credits"]["observed_sum"], 5)
+        self.assertRegex(query.render_summary(report), r"Root conversation\s+2.*0.000000 \(1/2\)")
+        self.assertIn("does not identify main versus delegate roles", report["attribution"]["pool_rule"])
+
+    def test_tree_membership_paths_overlap_without_counting_capture_twice(self):
+        self.session("sess_root", credits=100)
+        self.session("sess_child", {"parentSessionId": "root"}, credits=100)
+        self.captured("both", conversation="child", request="request-sess_child", credits=1,
+                      metadata={"kiro:root_conversation_id": "root"})
+        self.captured("duplicate-upstream", conversation="root", request="request-sess_child", credits=2)
+        report = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(report["captures"]["observations"], 2)
+        self.assertEqual(report["captures"]["metrics"]["credits"]["observed_sum"], 3)
+        self.assertEqual(report["disk"]["metrics"]["credits"]["observed_sum"], 200)
+        self.assertEqual(report["captures"]["duplicate_upstream_request_ids"],
+                         [{"request_id": "request-sess_child", "captures": 2}])
+        self.assertTrue(any("ambiguous" in warning for warning in report["warnings"]))
+        self.assertNotIn("200.000000", query.render_summary(report))
+        self.captured("request-only", request="request-sess_root", credits=4)
+        self.captured("no-identity", credits=99)
+        report = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(report["captures"]["observations"], 3)
+        self.assertEqual(report["captures"]["pools"]["unknown"]["metrics"]["credits"]["observed_sum"], 4)
+        self.assertEqual(sum(pool["observations"] for pool in report["captures"]["pools"].values()), 3)
+        self.assertEqual(sum(pool["metrics"]["credits"]["observed_sum"] or 0 for pool in report["captures"]["pools"].values()), 7)
+
+    def test_compact_summary_large_tree_partial_unknown_and_exact_zero(self):
+        for index in range(1000):
+            self.captured(str(index), conversation=f"child{index}", credits=.5,
+                          metadata={"kiro:root_conversation_id": "root"})
+        self.captured("missing", conversation="root", credits=None, tokens=None, state="incomplete")
+        report = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(report["captures"]["observations"], 1001)
+        self.assertEqual(report["captures"]["pools"]["other_linked_conversations"]["metrics"]["credits"],
+                         {"observed_sum": 500, "known": 1000, "unknown": 0})
+        output = query.render_summary(report)
+        self.assertLess(len(output.splitlines()), 16)
+        self.assertRegex(output, r"Total\s+1,001\s+—\s+10,000 \(1000/1001\)\s+—\s+—\s+—\s+500.000000 \(1000/1001\)")
+        self.assertRegex(output, r"Root conversation\s+1\s+—\s+—\s+—\s+—\s+—\s+—")
+        self.assertIn("credits known 1000/1001; incomplete 1", output)
+        self.assertNotIn("child999", output)
+        self.assertNotIn("~500", output)
+        self.db.execute("DELETE FROM captures")
+        self.captured("zero", conversation="root", credits=0, tokens=0)
+        self.assertRegex(query.render_summary(query.query(self.db, "sess_root", "tree")),
+                         r"Total\s+1\s+—\s+0\s+—\s+—\s+—\s+0.000000")
+
+    def test_model_hit_rate_is_request_based_with_coverage_and_total_pairs(self):
+        self.captured("hit", conversation="root", tokens=100)
+        self.captured("miss", conversation="root", tokens=900)
+        self.captured("unknown", conversation="root", tokens=20)
+        self.db.execute("UPDATE captures SET output_tokens=5,cache_read_tokens=50 WHERE id='hit'")
+        self.db.execute("UPDATE captures SET output_tokens=5,cache_read_tokens=0 WHERE id='miss'")
+        report = query.query(self.db, "sess_root", "tree")
+        model = report["captures"]["models"][0]
+        self.assertEqual(model["cache_hit_rate"], {"hits": 1, "evaluable": 2, "unknown": 1, "percentage": 50})
+        self.assertEqual(model["metrics"]["total_tokens"], {"observed_sum": 1010, "known": 2, "unknown": 1})
+        output = query.render_summary(report)
+        self.assertIn("~50.0% (2/3)", output)
+        self.assertIn(query.capture_tables(report["captures"]), query.render(report))
+        self.assertIn(query.capture_tables(report["captures"]), output)
+        self.assertIn("1,010 (2/3)", output)
+        self.assertNotIn("~5.0%", output)
+        self.assertIn("Other linked conversations may include helpers/forks", output)
+
+    def test_compact_summary_only_labels_explicit_estimates(self):
+        report = query.query(self.db, "sess_root", "tree")
+        report["captures"]["estimates"] = {"input_tokens": query.metric(1234, 1, 1)}
+        output = query.render_summary(report)
+        self.assertRegex(output, r"Total\s+0\s+—\s+~1,234\s+—\s+—\s+—\s+—")
+        with sqlite3.connect(":memory:") as empty:
+            missing = query.render_summary(query.query(empty, "sess_root", "tree"))
+        self.assertRegex(missing, r"Total\s+—\s+—\s+—\s+—\s+—\s+—\s+—")
+
+    def test_human_output_separates_sources_and_exposes_missing_coverage(self):
+        self.session("sess_root", credits=8)
+        self.captured("zero", conversation="root", credits=0, tokens=0)
+        self.captured("missing", conversation="root", credits=None, tokens=None, state="incomplete")
+        report = query.query(self.db, "sess_root")
+        output = query.render(report)
+        self.assertIn("Session: sess_root  Scope: session (1 session)", output)
+        self.assertIn("requested-model", output)
+        self.assertRegex(output, r"Total\s+2\s+—\s+0 \(1/2\)\s+—\s+—\s+—\s+0.000000 \(1/2\)")
+        self.assertRegex(output, r"requested-model\s+2\s+—\s+0 \(1/2\)\s+—\s+—\s+—\s+0.000000 \(1/2\)")
+        self.assertIn("Partial cells: sum (known/all requests); ~ estimate; — unavailable.", output)
+        self.assertIn("must never be added", output)
+        self.assertIn("Own-versus-delegate attribution within a session is unavailable", output)
+        self.assertIn("credits 1/2; input 1/2; output 0/2", output)
+        self.assertIn("2 attributed calls; 1 incomplete", output)
+        self.assertIn("Turns: 1; observed credits: 8", output)
+        self.assertIn("not a per-call model", output)
+        self.assertNotIn("observed credits: 8.0", output)
+
+    def test_human_counts_use_grouping(self):
+        self.captured("large", conversation="root", credits=1234.5, tokens=1234567)
+        output = query.render(query.query(self.db, "sess_root"))
+        self.assertRegex(output, r"requested-model\s+1\s+—\s+1,234,567\s+—\s+—\s+—\s+1,234.500000")
+
+    def test_human_empty_sources_and_unknown_model(self):
+        with sqlite3.connect(":memory:") as empty:
+            output = query.render(query.query(empty, "sess_unknown"))
+        self.assertRegex(output, r"Total\s+—\s+—\s+—\s+—\s+—\s+—\s+—")
+        self.assertIn("Capture coverage unavailable", output)
+        self.assertIn("Disk coverage unavailable", output)
+        self.captured("unknown", conversation="root")
+        self.db.execute("UPDATE captures SET metadata_json=?", (json.dumps({"kiro:conversation_id": "root"}),))
+        self.assertIn("—", query.render(query.query(self.db, "sess_root")))
+        self.db.execute("UPDATE captures SET metadata_json=?", (json.dumps({"kiro:conversation_id": "root", "model": "bad\n\x1b[31m"}),))
+        output = query.render(query.query(self.db, "sess_root"))
+        self.assertIn(r"bad\n\x1b[31m", output)
+        self.assertNotIn("\x1b", output)
+
+    def test_cli_json_preserves_report_and_human_diagnostics_use_stderr(self):
+        self.session("sess_root")
+        self.captured("call", conversation="root")
+        expected = query.query(self.db, "sess_root")
+        self.db.commit()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "synthetic.sqlite"
+            with sqlite3.connect(path) as target:
+                self.db.backup(target)
+            command = [sys.executable, query.__file__, "--db", str(path), "--session", "sess_root"]
+            structured = subprocess.run([*command, "--json"], capture_output=True, text=True)
+            self.assertEqual(structured.returncode, 0, structured.stderr)
+            self.assertEqual(json.loads(structured.stdout), expected)
+            self.assertEqual(structured.stderr, "")
+            human = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(human.returncode, 0, human.stderr)
+            self.assertIn("Captured calls", human.stdout)
+            self.assertNotIn("Warning:", human.stdout)
+            self.assertNotIn("must never be added", human.stderr)
+            self.assertIn("must never be added", human.stdout)
+            self.assertIn("Context percentages", human.stderr)
+            self.assertIn("1 attributed call;", human.stdout)
+            self.assertIn("last index and may be stale", human.stdout)
 
     def test_cli_missing_database_is_not_created(self):
         with tempfile.TemporaryDirectory() as temporary:

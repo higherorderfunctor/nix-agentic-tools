@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from urllib.parse import urlsplit
 
 package, service, disabled = sys.argv[1:]
 with tempfile.TemporaryDirectory() as directory:
@@ -72,18 +73,31 @@ with tempfile.TemporaryDirectory() as directory:
         assert result.returncode == 0, result.stderr
         result = subprocess.run([tool, "session", "sess_fixture", "--scope", "tree"], env=environment, text=True, capture_output=True)
         assert result.returncode == 0, result.stderr
+        assert "Session: sess_fixture  Scope: tree" in result.stdout, result.stdout
+        assert "observed credits: 1.25" in result.stdout, result.stdout
+        result = subprocess.run([tool, "session", "sess_fixture", "--scope", "tree", "--json"], env=environment, text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
         assert json.loads(result.stdout)["session"] == "sess_fixture", result.stdout
         # Reuse the HM collector with either its own wrapper or a project's
         # PATH-selected, tracking-disabled Kiro, without project configuration.
         for selected in (package, disabled):
-            inherited = environment | {"PATH": str(Path(selected) / "bin") + os.pathsep + environment.get("PATH", ""),
+            inherited = environment | {"KIRO_USAGE_TEST_AUTO_INDEX": "1", "PATH": str(Path(selected) / "bin") + os.pathsep + environment.get("PATH", ""),
                                        "HTTPS_PROXY": "http://inherited.invalid:1", "NO_PROXY": "*", "all_proxy": "http://inherited.invalid:2"}
             result = subprocess.run([tool, "exec", "--", "kiro-cli", "chat", "synthetic spaced argument", "--", "--v3"], env=inherited, text=True, capture_output=True)
             assert result.returncode == 0, result.stderr
             body = json.loads(result.stdout)
-            assert body["proxy"] == "http://127.0.0.1:18091" and body["ca"] == str(state / "ca/mitmproxy-ca-cert.pem"), body
+            proxy = urlsplit(body["proxy"])
+            assert (proxy.scheme, proxy.hostname, proxy.port) == ("http", "127.0.0.1", 18091), body
+            assert proxy.username.startswith("kiro-usage-") and len(proxy.username) == len("kiro-usage-") + 32, body
+            assert proxy.password == "" and body["ca"] == str(state / "ca/mitmproxy-ca-cert.pem"), body
+            assert result.stderr.count("Kiro usage summary unavailable:") == 1, result.stderr
+            assert "no captured conversation identity for this invocation" in result.stderr, result.stderr
             assert not body["bypass"], body
             assert body["argv"] == ["--v3", "chat", "synthetic spaced argument", "--", "--v3"], body
+            indexed = subprocess.run([tool, "session", "sess_auto_index", "--json"], env=environment, text=True, capture_output=True)
+            assert indexed.returncode == 0, indexed.stderr
+            disk = json.loads(indexed.stdout)["disk"]
+            assert disk["turns"] == 1 and disk["metrics"]["credits"]["observed_sum"] == .75, disk
         (state / "ca/mitmproxy-ca-cert.pem").unlink()
         result = launch("kiro-cli")
         assert result.returncode != 0, result

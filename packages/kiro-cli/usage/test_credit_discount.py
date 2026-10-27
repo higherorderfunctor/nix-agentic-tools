@@ -1,0 +1,177 @@
+"""Sanitized numeric calibration and offline evidence-gating regressions."""
+
+import json
+from pathlib import Path
+import unittest
+
+import credit_discount as discount
+import test_query
+import query
+
+
+FIXTURE = json.loads((Path(__file__).parent / "fixtures/credit-discount.json").read_text())
+
+
+class DiscountTests(unittest.TestCase):
+    def test_initial_numeric_run(self):
+        report = discount.aggregate()
+        for row in FIXTURE:
+            discount.add(report, discount.classify(row), row["label"])
+        self.assertEqual((report["requests"], report["eligible"], report["discount_like"], report["baseline"], report["excluded"]), (10, 8, 5, 3, 2))
+        self.assertEqual(report["percentage"], 62.5)
+        self.assertEqual(report["anomaly"], 0)
+
+    def test_profile_refuses_unsupported_or_unproved_inputs(self):
+        for field, values in {"model": [None, "other"], "effort": [None, "high"],
+                              "complete": [False, None], "retained": [False], "terminal": [False],
+                              "text_only": [False], "no_reasoning_tools": [False], "chars": [None, 0, 6, True],
+                              "context": [None, float("nan"), .8, 4], "credits": [None, float("inf")]}.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    self.assertEqual(discount.classify({**FIXTURE[0], field: value})["classification"], "excluded")
+
+    def test_aggregate_assumptions_are_isolated(self):
+        first, second = discount.aggregate(), discount.aggregate()
+        first["assumptions"].append("local annotation")
+        self.assertNotIn("local annotation", second["assumptions"])
+        self.assertNotIn("local annotation", discount.ASSUMPTIONS)
+
+    def test_finite_extreme_credits_keep_derived_overflow_json_safe(self):
+        for credits in (1e308, -1e308):
+            result = discount.classify({**FIXTURE[0], "context": 1.8, "credits": credits})
+            self.assertEqual(result["classification"], "anomaly")
+            self.assertIsNone(result["raw_discount_score"])
+            self.assertTrue(result["score_overflow"])
+            self.assertEqual(result["baseline_residual"], credits)
+            self.assertEqual(result["discounted_residual"], credits)
+            json.dumps(result, allow_nan=False)
+        normal = discount.classify(FIXTURE[0])
+        self.assertFalse(normal["score_overflow"])
+        json.dumps(normal, allow_nan=False)
+
+    def test_curve_endpoints_numerical_tolerance_and_anomalies_are_not_clamped(self):
+        facts = FIXTURE[0]
+        baseline = (74 * facts["context"] + .5034) / 603
+        hit = (20 * facts["context"] + .5970) / 603
+        for credits, expected in ((baseline, "baseline"), (baseline + discount.EPSILON / 2, "baseline"),
+                                  (hit, "discount_like"), (hit - discount.EPSILON / 2, "discount_like"),
+                                  (hit - 2 * discount.EPSILON, "anomaly"), (baseline + 2 * discount.EPSILON, "anomaly")):
+            result = discount.classify({**facts, "credits": credits})
+            self.assertEqual(result["classification"], expected)
+            self.assertAlmostEqual(result["baseline_residual"], credits - baseline)
+        self.assertGreater(discount.classify({**facts, "credits": hit - 2 * discount.EPSILON})["raw_discount_score"], 1)
+        self.assertLess(discount.classify({**facts, "credits": baseline + 2 * discount.EPSILON})["raw_discount_score"], 0)
+
+
+class DiscountQueryTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = test_query.QueryTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.db = self.fixture.db
+
+    def add(self, facts, conversation="root", extra_output=None):
+        ident = facts["label"]
+        self.fixture.captured(ident, conversation=conversation, credits=facts["credits"], tokens=None,
+                              metadata={"model": facts["model"], "effort": facts["effort"], "kiro:root_conversation_id": "root"})
+        self.db.execute("UPDATE captures SET request_gzip=?,context_usage_percentage=?,transport_ended=1,dropped_bytes=0,dropped_chunks=0,summary_json=? WHERE id=?",
+                        (b"retained", facts["context"], json.dumps({"output_text_chars": facts["chars"], "terminal": "response.completed", "output_count_source": "terminal_output"}), ident))
+        output = [{"type": "message", "content": [{"type": "output_text", "text": "x" * facts["chars"]}]}]
+        if extra_output:
+            output.append(extra_output)
+        terminal = {"type": "response.completed", "response": {"output": output}}
+        self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,0,'response.completed',?,?)",
+                        (ident, b"retained", json.dumps(terminal)))
+        self.db.execute("INSERT INTO chunks(capture_id,seq,application_gzip) VALUES (?,0,?)", (ident, b"retained"))
+        return ident
+
+    def test_scalar_exclusions_never_query_event_proof(self):
+        self.add({**FIXTURE[0], "label": "unsupported", "model": "other"})
+        self.add({**FIXTURE[0], "label": "long", "chars": 691})
+        statements = []
+        self.db.set_trace_callback(statements.append)
+        report = query.query(self.db, "sess_root")
+        self.assertEqual(report["captures"]["credit_discount"]["excluded"], 2)
+        self.assertFalse(any("FROM events e" in statement for statement in statements))
+
+    def test_missing_chunk_or_terminal_counts_refuse_profile(self):
+        ident = self.add(FIXTURE[0])
+        self.db.execute("DELETE FROM chunks")
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
+        self.db.execute("INSERT INTO chunks(capture_id,seq,application_gzip) VALUES (?,0,?)", (ident, b"retained"))
+        self.db.execute("UPDATE captures SET summary_json=?", (json.dumps({"output_text_chars": 5, "terminal": "response.completed", "output_count_source": "deltas"}),))
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_or_ambiguous_terminal": 1})
+
+    def test_query_aggregation_preserves_unknown_tokens_and_separate_hit_counter(self):
+        for index, facts in enumerate(FIXTURE):
+            self.add(facts, "root" if index % 2 else "child")
+        report = query.query(self.db, "sess_root", "tree")
+        captures = report["captures"]
+        self.assertEqual(captures["credit_discount"]["percentage"], 62.5)
+        self.assertEqual(sum(pool["credit_discount"]["eligible"] for pool in captures["pools"].values()), 8)
+        self.assertEqual(captures["models"][0]["credit_discount"]["percentage"], 62.5)
+        for name in ("input_tokens", "output_tokens", "cache_read_tokens", "total_tokens"):
+            self.assertIsNone(captures["metrics"][name]["observed_sum"])
+        self.assertIsNone(captures["cache_hit_rate"]["percentage"])
+        output = query.render_summary(report)
+        self.assertIn("Discount %", output)
+        self.assertIn("~62.5% (8/10)", output)
+        self.assertIn("not observed cache hits", output)
+        self.db.execute("UPDATE captures SET cache_read_tokens=0,input_tokens=100,output_tokens=2")
+        updated = query.query(self.db, "sess_root", "tree")["captures"]
+        self.assertEqual(updated["cache_hit_rate"]["percentage"], 0)
+        self.assertEqual(updated["metrics"]["input_tokens"]["observed_sum"], 1000)
+        self.assertEqual(updated["credit_discount"]["percentage"], 62.5)
+
+    def test_duplicate_terminal_is_ambiguous_without_changing_reported_counters(self):
+        ident = self.add(FIXTURE[0])
+        second = {"type": "response.completed", "response": {"output": [{"type": "reasoning", "summary": []}]}}
+        self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,1,'response.completed',?,?)",
+                        (ident, b"retained", json.dumps(second)))
+        captures = query.query(self.db, "sess_root")["captures"]
+        self.assertEqual(captures["credit_discount"]["exclusion_reasons"], {"missing_or_ambiguous_terminal": 1})
+        self.assertEqual(captures["metrics"]["credits"]["observed_sum"], FIXTURE[0]["credits"])
+        self.assertIsNone(captures["metrics"]["input_tokens"]["observed_sum"])
+        self.assertIsNone(captures["cache_hit_rate"]["percentage"])
+
+    def test_legacy_database_without_events_or_chunks_has_no_profile_evidence(self):
+        self.add(FIXTURE[0])
+        self.db.executescript("DROP TABLE events; DROP TABLE chunks;")
+        report = query.query(self.db, "sess_root")
+        self.assertEqual(report["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
+        self.assertNotIn("Discount %", query.render_summary(report))
+
+    def test_anomaly_is_visible_without_fabricating_a_rate(self):
+        self.add({**FIXTURE[0], "label": "anomaly", "credits": 1})
+        report = query.query(self.db, "sess_root")
+        diagnostic = report["captures"]["credit_discount"]
+        self.assertEqual(diagnostic["anomaly"], 1)
+        self.assertIsNone(diagnostic["percentage"])
+        self.assertLess(diagnostic["diagnostics"][0]["raw_discount_score"], 0)
+        self.assertEqual(diagnostic["diagnostics"][0]["capture_id"], "anomaly")
+        output = query.render_summary(report)
+        self.assertIn("Discount %", output)
+        self.assertIn("Profile anomalies: 1", output)
+        self.assertNotIn("~0.0%", output)
+
+    def test_retained_terminal_and_reasoning_proof_are_required(self):
+        ident = self.add(FIXTURE[0], extra_output={"type": "reasoning", "summary": []})
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["eligible"], 0)
+        self.db.execute("DELETE FROM captures")
+        self.db.execute("DELETE FROM events")
+        self.db.execute("DELETE FROM chunks")
+        ident = self.add(FIXTURE[0])
+        self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,1,'response.reasoning.delta',?,?)",
+                        (ident, b"retained", '{"type":"response.reasoning.delta"}'))
+        report = query.query(self.db, "sess_root")
+        self.assertEqual(report["captures"]["credit_discount"]["eligible"], 0)
+        self.assertNotIn("Discount %", query.render_summary(report))
+        self.db.execute("UPDATE events SET event_name=?,data_json=? WHERE seq=1", ("response.function_call_arguments.delta", json.dumps({"type": "response.function_call_arguments.delta"})))
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["eligible"], 0)
+        self.db.execute("DELETE FROM events WHERE seq=1")
+        self.db.execute("UPDATE events SET frame_gzip=NULL")
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
+
+
+if __name__ == "__main__":
+    unittest.main()

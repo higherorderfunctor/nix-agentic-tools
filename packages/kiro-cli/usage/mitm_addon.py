@@ -1,6 +1,9 @@
 """Load with mitmdump -s /absolute/path/mitm_addon.py; no mitmproxy import required."""
 
+import base64
+import binascii
 import os
+import re
 import sqlite3
 from pathlib import Path
 import sys
@@ -12,6 +15,7 @@ from capture import CaptureCapacityError, Collector
 class UsageCapture:
     def load(self, loader):
         self.active, self.collector, self.failed = {}, None, True
+        self.invocations = {}
         try:
             self.collector = Collector(os.environ["KIRO_USAGE_DB"], max_stored_bytes=int(os.environ.get("KIRO_USAGE_MAX_BYTES", "268435456")))
         except (KeyError, OSError, RuntimeError, TypeError, ValueError, sqlite3.Error):
@@ -19,7 +23,26 @@ class UsageCapture:
         else:
             self.failed = False
 
+    def _invocation(self, flow):
+        # Proxy credentials are local correlation only, never provider auth.
+        authorization = getattr(flow.request, "headers", {}).pop("proxy-authorization", "")
+        try:
+            scheme, encoded = authorization.split(" ", 1)
+            decoded = base64.b64decode(encoded, validate=True).decode("ascii")
+        except (ValueError, UnicodeError, binascii.Error):
+            return
+        match = re.fullmatch(r"kiro-usage-([0-9a-f]{32}):", decoded)
+        if scheme.lower() == "basic" and match:
+            self.invocations[flow.client_conn.id] = match[1]
+
+    def http_connect(self, flow):
+        self._invocation(flow)
+
+    def client_disconnected(self, client):
+        self.invocations.pop(client.id, None)
+
     def request(self, flow):
+        self._invocation(flow)
         host = flow.request.host.lower()
         if not (host == "kiro.dev" or host.endswith(".kiro.dev")):
             return
@@ -30,6 +53,10 @@ class UsageCapture:
             return
         # Never copy URLs, query strings, cookies, or authentication headers.
         metadata = {"host": host, "method": flow.request.method, "path": "/v1/responses"}
+        client = getattr(flow, "client_conn", None)
+        invocation = self.invocations.get(client.id) if client else None
+        if invocation:
+            metadata["invocation"] = invocation
         try:
             body = flow.request.get_content(strict=True)
         except ValueError:

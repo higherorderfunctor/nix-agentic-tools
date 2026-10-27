@@ -23,4 +23,9 @@ if "--listen-host" in sys.argv:
             connection, _ = server.accept()
             connection.close()
 else:
+    if os.environ.get("KIRO_USAGE_TEST_AUTO_INDEX"):
+        session = Path(os.environ["HOME"]) / ".kiro/sessions/workspace/sess_auto_index"
+        session.mkdir(parents=True, exist_ok=True)
+        (session / "session.json").write_text(json.dumps({"modelId": "synthetic-auto-index"}))
+        (session / "messages.jsonl").write_text(json.dumps({"payload": {"type": "usage_summary", "promptTurnSummaries": [{"usage": .75, "unit": "credit"}]}}) + "\n")
     print(json.dumps({"argv": sys.argv[1:], "proxy": os.environ.get("HTTPS_PROXY"), "ca": os.environ.get("NODE_EXTRA_CA_CERTS"), "bypass": {name: os.environ[name] for name in ("ALL_PROXY", "NO_PROXY", "all_proxy", "no_proxy") if name in os.environ}}))
