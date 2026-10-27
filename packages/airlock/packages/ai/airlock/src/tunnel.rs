@@ -1,6 +1,6 @@
-//! CONNECT tunnel steps: `prepare` checks the target and connects upstream
-//! before the client gets any reply, and `relay` copies bytes between the
-//! client stream and that upstream.
+//! CONNECT tunnel steps both HTTP versions share: `prepare` checks the target
+//! and connects upstream before the client gets any reply, and `relay` copies
+//! bytes between the client stream and that upstream.
 use std::io;
 
 use hyper::{StatusCode, Uri};
