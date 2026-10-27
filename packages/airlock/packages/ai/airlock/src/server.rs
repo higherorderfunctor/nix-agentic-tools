@@ -25,6 +25,7 @@ const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
 /// Run the listener until SIGINT or SIGTERM, including bounded runtime teardown.
 pub fn run(config: crate::config::Config) -> io::Result<()> {
+    let clients = Arc::new(crate::auth::Clients::load(config.clients.as_ref())?);
     let interception = config
         .interception
         .map(crate::tls::Interception::open)
@@ -41,7 +42,7 @@ pub fn run(config: crate::config::Config) -> io::Result<()> {
         let listener = bind(config.listen).await?;
         println!("airlock listening on {}", listener.local_addr()?);
 
-        serve_runtime(listener, interception, async {
+        serve_runtime(listener, interception, clients, async {
             tokio::select! {
                 _ = interrupt.recv() => {}
                 _ = terminate.recv() => {}
@@ -69,18 +70,21 @@ pub async fn bind(listen: SocketAddr) -> io::Result<TcpListener> {
 pub async fn serve(
     listener: TcpListener,
     interception: Option<crate::config::Interception>,
+    clients: Option<std::collections::BTreeMap<String, crate::config::Client>>,
     shutdown: impl Future<Output = ()>,
 ) -> io::Result<()> {
+    let clients = Arc::new(crate::auth::Clients::load(clients.as_ref())?);
     let interception = interception
         .map(crate::tls::Interception::open)
         .transpose()?
         .map(Arc::new);
-    serve_runtime(listener, interception, shutdown).await
+    serve_runtime(listener, interception, clients, shutdown).await
 }
 
 async fn serve_runtime(
     listener: TcpListener,
     interception: Option<Arc<crate::tls::Interception>>,
+    clients: Arc<crate::auth::Clients>,
     shutdown: impl Future<Output = ()>,
 ) -> io::Result<()> {
     let mut connections = JoinSet::new();
@@ -98,7 +102,7 @@ async fn serve_runtime(
             }
             accepted = listener.accept(), if connections.len() < MAX_CONNECTIONS => {
                 match accepted {
-                    Ok((socket, _)) => { connections.spawn(connection(socket, interception.clone())); }
+                    Ok((socket, _)) => { connections.spawn(connection(socket, interception.clone(), clients.clone())); }
                     Err(error) => break Err(error),
                 }
             }
@@ -183,15 +187,19 @@ impl AsyncWrite for Prefixed {
     }
 }
 
-async fn connection(socket: TcpStream, interception: Option<Arc<crate::tls::Interception>>) {
+async fn connection(
+    socket: TcpStream,
+    interception: Option<Arc<crate::tls::Interception>>,
+    clients: Arc<crate::auth::Clients>,
+) {
     let deadline = Instant::now() + HEADER_TIMEOUT;
     let Ok(Ok((socket, http2))) = timeout_at(deadline, Prefixed::detect(socket)).await else {
         return;
     };
     if http2 {
-        crate::http2::serve(socket, deadline, interception).await;
+        crate::http2::serve(socket, deadline, interception, clients).await;
     } else {
-        crate::http1::serve(socket, deadline, interception).await;
+        crate::http1::serve(socket, deadline, interception, clients).await;
     }
 }
 
@@ -212,6 +220,12 @@ pub(crate) fn response(status: StatusCode, body: &'static str) -> Response<Full<
         response.headers_mut().insert(
             hyper::header::CONTENT_TYPE,
             hyper::header::HeaderValue::from_static("text/plain; charset=utf-8"),
+        );
+    }
+    if status == StatusCode::PROXY_AUTHENTICATION_REQUIRED {
+        response.headers_mut().insert(
+            hyper::header::PROXY_AUTHENTICATE,
+            hyper::header::HeaderValue::from_static("Basic realm=\"airlock\", charset=\"UTF-8\""),
         );
     }
     if status == StatusCode::METHOD_NOT_ALLOWED {

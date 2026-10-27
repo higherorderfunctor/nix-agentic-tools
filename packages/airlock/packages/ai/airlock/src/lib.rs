@@ -2,6 +2,7 @@ pub mod ca;
 pub mod config;
 pub mod server;
 
+mod auth;
 mod authority;
 mod forward;
 mod http1;

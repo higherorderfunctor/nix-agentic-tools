@@ -25,6 +25,7 @@ pub(crate) async fn serve(
     socket: Prefixed,
     deadline: Instant,
     interception: Option<Arc<crate::tls::Interception>>,
+    clients: Arc<crate::auth::Clients>,
 ) {
     let Prefixed { prefix, socket } = socket;
     let Ok(socket) = socket.into_std() else {
@@ -50,6 +51,7 @@ pub(crate) async fn serve(
             sender.clone(),
             forwarder.clone(),
             interception.clone(),
+            clients.clone(),
         )
     });
     let result = {
@@ -98,11 +100,22 @@ async fn transport_error(monitor: &TcpStream) {
 }
 
 async fn handle(
-    request: Request<Incoming>,
+    mut request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
     forwarder: crate::forward::Forwarder,
     interception: Option<Arc<crate::tls::Interception>>,
+    clients: Arc<crate::auth::Clients>,
 ) -> Result<crate::forward::ProxyResponse, Infallible> {
+    let proxy = request.method() == Method::CONNECT
+        || request.uri().scheme().is_some()
+        || request.uri().authority().is_some();
+    if proxy && clients.admit(&mut request).is_err() {
+        return Ok(response(
+            StatusCode::PROXY_AUTHENTICATION_REQUIRED,
+            "proxy authentication required\n",
+        )
+        .map(Either::Left));
+    }
     if request.method() == Method::CONNECT {
         let deadline = Instant::now() + CONNECT_TIMEOUT;
         // An opaque tunnel's upstream is already connected when this returns,

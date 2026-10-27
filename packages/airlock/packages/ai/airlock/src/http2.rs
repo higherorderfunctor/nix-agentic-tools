@@ -26,6 +26,7 @@ pub(crate) async fn serve(
     socket: Prefixed,
     deadline: Instant,
     interception: Option<Arc<crate::tls::Interception>>,
+    clients: Arc<crate::auth::Clients>,
 ) {
     let handshake = h2::server::Builder::new()
         .max_concurrent_streams(MAX_STREAMS as u32)
@@ -56,7 +57,7 @@ pub(crate) async fn serve(
             }) => match accepted {
                 Some(Ok((request, respond))) => {
                     initializing = false;
-                    jobs.spawn(handle(request, respond, interception.clone()));
+                    jobs.spawn(handle(request, respond, interception.clone(), clients.clone()));
                 }
                 _ => break,
             }
@@ -66,13 +67,22 @@ pub(crate) async fn serve(
 }
 
 async fn handle(
-    request: Request<RecvStream>,
+    mut request: Request<RecvStream>,
     mut respond: SendResponse<Bytes>,
     interception: Option<Arc<crate::tls::Interception>>,
+    clients: Arc<crate::auth::Clients>,
 ) {
     if request.method() != Method::CONNECT {
         let (status, body) = server::route(request.method(), request.uri());
         let _ = reply(&mut respond, status, body);
+        return;
+    }
+    if clients.admit(&mut request).is_err() {
+        let _ = reply(
+            &mut respond,
+            StatusCode::PROXY_AUTHENTICATION_REQUIRED,
+            "proxy authentication required\n",
+        );
         return;
     }
     let deadline = Instant::now() + CONNECT_TIMEOUT;
