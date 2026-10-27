@@ -1,7 +1,7 @@
 //! HTTP/1.1 connections. hyper reads each request and `handle` answers it.
 //! Once a CONNECT is accepted, `serve` runs its tunnel on this connection's
 //! task after hyper hands over the raw socket.
-use std::{convert::Infallible, io, os::fd::AsFd, time::Duration};
+use std::{convert::Infallible, io, os::fd::AsFd, sync::Arc, time::Duration};
 
 use http_body_util::Full;
 use hyper::{
@@ -12,28 +12,44 @@ use hyper::{
     upgrade::OnUpgrade,
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
-use tokio::{io::Interest, net::TcpStream, sync::mpsc, time::Instant};
+use tokio::{
+    io::Interest,
+    net::TcpStream,
+    sync::{Notify, mpsc},
+    time::Instant,
+};
 
 use crate::{
-    client::replies::{response, route},
+    client::{
+        protocol::Prefixed,
+        replies::{response, route},
+        until_first_request,
+    },
     tunnel,
     upstream::CONNECT_TIMEOUT,
 };
 
-pub(crate) async fn serve(socket: TcpStream, header_timeout: Duration) {
-    let Ok(monitor) = error_monitor(&socket) else {
+pub(crate) async fn serve(socket: Prefixed, deadline: Instant, header_timeout: Duration) {
+    let Ok(monitor) = error_monitor(socket.socket()) else {
         return;
     };
     // The service must return the `200` before the client socket is upgraded,
     // so it cannot run the relay itself. It sends the pending tunnel back here.
     let (sender, mut receiver) = mpsc::channel(1);
-    let service = service_fn(move |request| handle(request, sender.clone()));
-    let result = http1::Builder::new()
+    let started = Arc::new(Notify::new());
+    let observed = Arc::clone(&started);
+    let service = service_fn(move |request| {
+        observed.notify_one();
+        handle(request, sender.clone())
+    });
+    let connection = http1::Builder::new()
         .timer(TokioTimer::new())
         .header_read_timeout(header_timeout)
         .serve_connection(TokioIo::new(socket), service)
-        .with_upgrades()
-        .await;
+        .with_upgrades();
+    let Some(result) = until_first_request(&started, deadline, connection).await else {
+        return;
+    };
     if result.is_ok()
         && let Some(pending) = receiver.recv().await
     {
