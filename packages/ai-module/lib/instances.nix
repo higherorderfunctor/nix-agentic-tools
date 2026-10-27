@@ -1,8 +1,8 @@
 # Named instances of one tool, each lowered to one `ai.<owner>.services` entry
 # (and so its service and port claims), with its typed settings rendered to a
-# config file at start through `serviceEntry.files`. CLIProxyAPI and CPA
-# Manager Plus share it; an owner supplies its settings type and render, the
-# settings it derives from an instance, and the instance's command.
+# config file at start through `serviceEntry.files`. Airlock, CLIProxyAPI and
+# CPA Manager Plus share it; an owner supplies its settings type and render,
+# the settings it derives from an instance, and the instance's command.
 {lib}: let
   strictShellApplication = import ../../../lib/strict-shell-application.nix;
   # Where an instance keeps its writable state by default: the user's XDG
