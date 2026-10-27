@@ -8,9 +8,13 @@ use std::{
 
 use hyper::{Request, StatusCode, Uri, body::Incoming, upgrade::OnUpgrade};
 use hyper_util::rt::TokioIo;
-use tokio::{net::TcpStream, sync::Semaphore, time::timeout};
+use tokio::{
+    net::TcpStream,
+    sync::Semaphore,
+    time::{Instant, timeout_at},
+};
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RESOLUTIONS: usize = 16;
 
 static RESOLVER_SLOTS: LazyLock<Arc<Semaphore>> =
@@ -35,23 +39,29 @@ impl PendingTunnel {
 
 pub(crate) async fn connect(
     mut request: Request<Incoming>,
+    deadline: Instant,
 ) -> Result<PendingTunnel, (StatusCode, &'static str)> {
-    let (host, port) = parse_target(request.uri())
-        .ok_or((StatusCode::BAD_REQUEST, "malformed CONNECT target\n"))?;
-    let upstream = match timeout(CONNECT_TIMEOUT, dial(host, port)).await {
-        Ok(Ok(upstream)) => upstream,
-        Ok(Err(_)) => return Err((StatusCode::BAD_GATEWAY, "upstream connection failed\n")),
-        Err(_) => {
-            return Err((
-                StatusCode::GATEWAY_TIMEOUT,
-                "upstream connection timed out\n",
-            ));
-        }
-    };
+    let upstream = open(request.uri(), deadline).await?;
     Ok(PendingTunnel {
         upgrade: hyper::upgrade::on(&mut request),
         upstream,
     })
+}
+
+pub(crate) async fn open(
+    target: &Uri,
+    deadline: Instant,
+) -> Result<TcpStream, (StatusCode, &'static str)> {
+    let (host, port) =
+        parse_target(target).ok_or((StatusCode::BAD_REQUEST, "malformed CONNECT target\n"))?;
+    match timeout_at(deadline, dial(host, port)).await {
+        Ok(Ok(upstream)) => Ok(upstream),
+        Ok(Err(_)) => Err((StatusCode::BAD_GATEWAY, "upstream connection failed\n")),
+        Err(_) => Err((
+            StatusCode::GATEWAY_TIMEOUT,
+            "upstream connection timed out\n",
+        )),
+    }
 }
 
 async fn dial(host: String, port: u16) -> io::Result<TcpStream> {
@@ -145,7 +155,7 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         mpsc,
     };
-    use tokio::sync::oneshot;
+    use tokio::{sync::oneshot, time::timeout};
 
     #[tokio::test]
     async fn timed_out_lookups_retain_capacity_until_the_blocking_job_ends() {
