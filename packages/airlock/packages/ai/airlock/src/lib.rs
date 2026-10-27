@@ -14,6 +14,7 @@ mod local;
 mod private_file;
 mod relayed;
 mod resolver;
+mod session_executor;
 mod tls;
 mod tunnel;
 mod upstream;
