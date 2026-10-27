@@ -21,7 +21,7 @@ use tokio::{
 };
 use tokio_rustls::TlsConnector;
 
-use super::h2_client;
+use super::{FIXTURE_AUTHORIZATION, h2_client};
 
 pub const LIMIT: Duration = Duration::from_secs(3);
 pub trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
@@ -55,11 +55,13 @@ impl Drop for Guards {
 pub async fn outer(address: SocketAddr, target: &str, h2: bool) -> (BoxIo, Guards) {
     let mut socket = TcpStream::connect(address).await.unwrap();
     if !h2 {
-        let response = super::request(&mut socket, "CONNECT", target).await;
+        let response = super::connect(&mut socket, target, FIXTURE_AUTHORIZATION).await;
         assert!(response.starts_with("HTTP/1.1 200"), "{response}");
         return (Box::new(socket), Guards::default());
     }
-    let client = h2_client::Client::connect(address).await;
+    let client = h2_client::Client::connect(address)
+        .await
+        .authorized(FIXTURE_AUTHORIZATION);
     let (send, mut recv) = client.tunnel(target).await;
     // Shared with `Guards`, so a test can reset the stream itself.
     let send = Arc::new(Mutex::new(send));
@@ -135,12 +137,13 @@ pub async fn proxy(directory: &TempDir, target: SocketAddr, root: Option<&str>) 
     let fallback = fixture_certificate("unused.test", false).1;
     let path = directory.path().join("upstream.pem");
     fs::write(&path, root.unwrap_or(&fallback)).unwrap();
-    super::start_with(Some(Interception {
+    let interception = Interception {
         ca_directory,
         destinations: vec![format!("localhost:{}", target.port())],
         upstream_roots: Some(path),
-    }))
-    .await
+    };
+    let clients = super::fixture_clients(directory.path());
+    super::start_with(Some(interception), Some(clients)).await
 }
 
 pub fn client_config(directory: &TempDir) -> Arc<ClientConfig> {

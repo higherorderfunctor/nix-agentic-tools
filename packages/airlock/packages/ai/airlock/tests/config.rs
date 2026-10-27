@@ -3,6 +3,7 @@ mod common;
 use std::{
     ffi::OsStr,
     fs,
+    os::unix::fs::PermissionsExt,
     process::Stdio,
     thread,
     time::{Duration, Instant},
@@ -97,7 +98,7 @@ fn serve_config_requires_a_strict_valid_loopback_listen_object() {
     );
     assert_config_failure(
         r#"{"hostname":"127.0.0.1","listen":"127.0.0.1:0"}"#,
-        "unknown field `hostname`, expected `listen`",
+        "unknown field `hostname`",
     );
     assert_config_failure(
         r#"{"listen":"127.0.0.1:0","listen":"127.0.0.1:0"}"#,
@@ -181,4 +182,63 @@ fn interception_config_rejects_invalid_destinations_and_initializes_ca_before_bi
         "CA must be created before bind is attempted"
     );
     assert!(ca_directory.join("ca.key").exists());
+}
+
+#[test]
+fn invalid_token_files_fail_before_bind_or_readiness_without_secret_output() {
+    let directory = tempfile::tempdir().unwrap();
+    let token = directory.path().join("token");
+    let config = directory.path().join("config.json");
+    // An occupied port would report a bind error if loading happened too late.
+    let occupied = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    fs::write(
+        &config,
+        serde_json::to_vec(&serde_json::json!({
+            "listen": occupied.local_addr().unwrap().to_string(),
+            "clients": {"fixture": {"token_file": token}}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    for (bytes, mode) in [
+        (b"secret-fixture ".as_slice(), 0o600),
+        (b"secret-fixture".as_slice(), 0o644),
+    ] {
+        fs::write(&token, bytes).unwrap();
+        fs::set_permissions(&token, fs::Permissions::from_mode(mode)).unwrap();
+        let output = command()
+            .arg("serve")
+            .arg("--config")
+            .arg(&config)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty(), "no readiness before validation");
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(error.contains("token file"), "{error}");
+        assert!(!error.contains("secret-fixture"));
+        assert!(!error.contains("Address already in use"));
+    }
+}
+
+#[test]
+fn clients_config_is_strict_and_empty_enforcement_fails_startup() {
+    for (clients, error) in [
+        (r#"{}"#, "clients must not be empty"),
+        (r#"[]"#, "invalid type"),
+        (r#"{"fixture":{}}"#, "missing field `token_file`"),
+        (
+            r#"{"fixture":{"token_file":"/unused","token":"unused"}}"#,
+            "unknown field `token`",
+        ),
+        (
+            r#"{"fixture":{"token_file":"/unused","token_file":"/unused"}}"#,
+            "duplicate field `token_file`",
+        ),
+    ] {
+        assert_config_failure(
+            &format!("{{\"listen\":\"127.0.0.1:0\",\"clients\":{clients}}}"),
+            error,
+        );
+    }
 }
