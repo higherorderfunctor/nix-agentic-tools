@@ -1,20 +1,24 @@
 //! CONNECT tunnels. A tunnel moves through these steps, in order:
 //!
-//! 1. `open_tunnel` checks the target and connects upstream before the client
-//!    gets any reply, so an unreachable or slow upstream becomes a `502` or
-//!    `504` rather than a `200` followed by a closed socket.
+//! 1. `open_tunnel` checks the target and chooses an `Action` before the client
+//!    gets any reply. An opaque tunnel connects upstream here, so an
+//!    unreachable or slow upstream becomes a `502` or `504` rather than a
+//!    `200` followed by a closed socket. A destination selected for TLS
+//!    interception connects later, once the client's TLS hello names it.
 //! 2. The server replies `200`, and hyper hands over the raw client socket
 //!    through the upgrade future kept in `PendingTunnel`.
-//! 3. `PendingTunnel::relay` copies bytes both ways until both sides have
-//!    closed, so one side's half-close still lets the other finish sending.
+//! 3. `PendingTunnel::relay` runs the action. An opaque tunnel copies bytes
+//!    both ways until both sides have closed, so one side's half-close still
+//!    lets the other finish sending; an intercepted one is handed to `tls.rs`.
 //!
-//! HTTP/2 CONNECT streams share the first step through `open`, then relay in
-//! `http2.rs`.
-use std::{io, net::IpAddr, time::Duration};
+//! HTTP/2 CONNECT streams share the first and last steps through `prepare`
+//! and `Action::relay`; `http2.rs` carries the bytes in between.
+use std::{io, net::IpAddr, sync::Arc, time::Duration};
 
 use hyper::{Request, StatusCode, Uri, body::Incoming, upgrade::OnUpgrade};
 use hyper_util::rt::TokioIo;
 use tokio::{
+    io::{AsyncRead, AsyncWrite},
     net::TcpStream,
     time::{Instant, timeout_at},
 };
@@ -24,7 +28,7 @@ use crate::authority;
 pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) struct PendingTunnel {
     upgrade: OnUpgrade,
-    upstream: TcpStream,
+    action: Action,
 }
 
 impl PendingTunnel {
@@ -33,32 +37,56 @@ impl PendingTunnel {
     // the same shutdown grace, then abort, as any other connection.
     pub(crate) async fn relay(self) -> io::Result<()> {
         let upgraded = self.upgrade.await.map_err(io::Error::other)?;
-        let mut client = TokioIo::new(upgraded);
-        let mut upstream = self.upstream;
-        tokio::io::copy_bidirectional(&mut client, &mut upstream).await?;
-        Ok(())
+        self.action.relay(TokioIo::new(upgraded)).await
     }
 }
 
 pub(crate) async fn open_tunnel(
     mut request: Request<Incoming>,
     deadline: Instant,
+    interception: Option<Arc<crate::tls::Interception>>,
 ) -> Result<PendingTunnel, (StatusCode, &'static str)> {
-    let upstream = open(request.uri(), deadline).await?;
+    let action = prepare(request.uri(), deadline, interception).await?;
     Ok(PendingTunnel {
         upgrade: hyper::upgrade::on(&mut request),
-        upstream,
+        action,
     })
 }
 
-pub(crate) async fn open(
+pub(crate) enum Action {
+    Opaque(TcpStream),
+    Intercept(Arc<crate::tls::Interception>, String, u16),
+}
+
+impl Action {
+    pub(crate) async fn relay(
+        self,
+        mut client: impl AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    ) -> io::Result<()> {
+        match self {
+            Self::Opaque(mut upstream) => {
+                tokio::io::copy_bidirectional(&mut client, &mut upstream).await?;
+                Ok(())
+            }
+            Self::Intercept(runtime, host, port) => runtime.relay(client, host, port).await,
+        }
+    }
+}
+
+pub(crate) async fn prepare(
     target: &Uri,
     deadline: Instant,
-) -> Result<TcpStream, (StatusCode, &'static str)> {
+    interception: Option<Arc<crate::tls::Interception>>,
+) -> Result<Action, (StatusCode, &'static str)> {
     let (host, port) =
         parse_target(target).ok_or((StatusCode::BAD_REQUEST, "malformed CONNECT target\n"))?;
+    if let Some(runtime) = interception
+        && runtime.selected(&host, port)
+    {
+        return Ok(Action::Intercept(runtime, host, port));
+    }
     match timeout_at(deadline, connect_upstream(host, port)).await {
-        Ok(Ok(upstream)) => Ok(upstream),
+        Ok(Ok(upstream)) => Ok(Action::Opaque(upstream)),
         Ok(Err(_)) => Err((StatusCode::BAD_GATEWAY, "upstream connection failed\n")),
         Err(_) => Err((
             StatusCode::GATEWAY_TIMEOUT,
@@ -67,7 +95,7 @@ pub(crate) async fn open(
     }
 }
 
-async fn connect_upstream(host: String, port: u16) -> io::Result<TcpStream> {
+pub(crate) async fn connect_upstream(host: String, port: u16) -> io::Result<TcpStream> {
     if let Ok(ip) = host.parse::<IpAddr>() {
         return TcpStream::connect((ip, port)).await;
     }

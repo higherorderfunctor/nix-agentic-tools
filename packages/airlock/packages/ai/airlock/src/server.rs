@@ -34,7 +34,12 @@ const PROCESS_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
 /// Run the listener until SIGINT or SIGTERM, including bounded runtime teardown.
-pub fn run(listen: SocketAddr) -> io::Result<()> {
+pub fn run(config: crate::config::Config) -> io::Result<()> {
+    let interception = config
+        .interception
+        .map(crate::tls::Interception::open)
+        .transpose()?
+        .map(Arc::new);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -43,10 +48,10 @@ pub fn run(listen: SocketAddr) -> io::Result<()> {
         // takes the same draining path as one received later.
         let mut interrupt = signal(SignalKind::interrupt())?;
         let mut terminate = signal(SignalKind::terminate())?;
-        let listener = bind(listen).await?;
+        let listener = bind(config.listen).await?;
         println!("airlock listening on {}", listener.local_addr()?);
 
-        serve(listener, async {
+        serve_runtime(listener, interception, async {
             tokio::select! {
                 _ = interrupt.recv() => {}
                 _ = terminate.recv() => {}
@@ -71,7 +76,23 @@ pub async fn bind(listen: SocketAddr) -> io::Result<TcpListener> {
 }
 
 /// Own all accepted connections and drain them for at most three seconds.
-pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) -> io::Result<()> {
+pub async fn serve(
+    listener: TcpListener,
+    interception: Option<crate::config::Interception>,
+    shutdown: impl Future<Output = ()>,
+) -> io::Result<()> {
+    let interception = interception
+        .map(crate::tls::Interception::open)
+        .transpose()?
+        .map(Arc::new);
+    serve_runtime(listener, interception, shutdown).await
+}
+
+async fn serve_runtime(
+    listener: TcpListener,
+    interception: Option<Arc<crate::tls::Interception>>,
+    shutdown: impl Future<Output = ()>,
+) -> io::Result<()> {
     let mut connections = JoinSet::new();
     tokio::pin!(shutdown);
 
@@ -87,7 +108,7 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
             }
             accepted = listener.accept(), if connections.len() < MAX_CONNECTIONS => {
                 match accepted {
-                    Ok((socket, _)) => { connections.spawn(connection(socket)); }
+                    Ok((socket, _)) => { connections.spawn(connection(socket, interception.clone())); }
                     Err(error) => break Err(error),
                 }
             }
@@ -172,13 +193,13 @@ impl AsyncWrite for Prefixed {
     }
 }
 
-async fn connection(socket: TcpStream) {
+async fn connection(socket: TcpStream, interception: Option<Arc<crate::tls::Interception>>) {
     let deadline = Instant::now() + HEADER_TIMEOUT;
     let Ok(Ok((socket, http2))) = timeout_at(deadline, Prefixed::detect(socket)).await else {
         return;
     };
     if http2 {
-        crate::http2::serve(socket, deadline).await;
+        crate::http2::serve(socket, deadline, interception).await;
         return;
     }
     let Prefixed { prefix, socket } = socket;
@@ -200,7 +221,12 @@ async fn connection(socket: TcpStream) {
     let observed = Arc::clone(&started);
     let service = service_fn(move |request| {
         observed.notify_one();
-        handle(request, sender.clone(), forwarder.clone())
+        handle(
+            request,
+            sender.clone(),
+            forwarder.clone(),
+            interception.clone(),
+        )
     });
     let result = {
         let driver = http1::Builder::new()
@@ -221,25 +247,29 @@ async fn connection(socket: TcpStream) {
         // transport errors independently; a plain FIN remains a half-close.
         tokio::select! {
             result = initial => result,
-            () = async {
-                loop {
-                    match monitor.ready(Interest::ERROR).await {
-                        Ok(ready) if !ready.is_error() => continue,
-                        _ => break,
-                    }
-                }
-            } => return,
+            () = transport_error(&monitor) => return,
         }
     };
-    // CONNECT relay owns the only remaining client socket descriptor.
-    drop(monitor);
+
     let Some(result) = result else {
         return;
     };
     if result.is_ok()
         && let Some(pending) = receiver.recv().await
     {
-        let _ = pending.relay().await;
+        tokio::select! {
+            _ = pending.relay() => {},
+            _ = transport_error(&monitor) => {},
+        }
+    }
+}
+
+async fn transport_error(monitor: &TcpStream) {
+    loop {
+        match monitor.ready(Interest::ERROR).await {
+            Ok(ready) if !ready.is_error() => continue,
+            _ => break,
+        }
     }
 }
 
@@ -247,12 +277,13 @@ async fn handle(
     request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
     forwarder: crate::forward::Forwarder,
+    interception: Option<Arc<crate::tls::Interception>>,
 ) -> Result<crate::forward::ProxyResponse, Infallible> {
     if request.method() == Method::CONNECT {
         let deadline = Instant::now() + tunnel::CONNECT_TIMEOUT;
-        // The upstream is already connected when this returns, so the client
-        // gets `200` only for a tunnel that can carry bytes.
-        let pending = match tunnel::open_tunnel(request, deadline).await {
+        // An opaque tunnel's upstream is already connected when this returns,
+        // so the client gets `200` only for a tunnel that can carry bytes.
+        let pending = match tunnel::open_tunnel(request, deadline, interception).await {
             Ok(pending) => pending,
             Err((status, body)) => return Ok(response(status, body).map(Either::Left)),
         };
