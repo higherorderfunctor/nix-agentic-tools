@@ -237,7 +237,7 @@ index e8b08d35..1d758e32 100644
 +			return cliproxyexecutor.Response{}, err
 +		}
 +	} else if fp.MCPAlias && cloaked {
- 		mcpAliases := resolveClaudeMCPAliasOptions(ctx)
+ 		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		bodyForUpstream, oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequest(bodyForUpstream, mcpAliases)
  		if err != nil {
 @@ -366,7 +371,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
@@ -266,14 +266,14 @@ diff --git a/internal/runtime/executor/claude_executor_request.go b/internal/run
 index e5cf769c..6254b7af 100644
 --- a/internal/runtime/executor/claude_executor_request.go
 +++ b/internal/runtime/executor/claude_executor_request.go
-@@ -7,6 +7,7 @@ import (
- 	"compress/gzip"
- 	"compress/zlib"
+@@ -3,6 +3,7 @@ import (
+ 	"bytes"
  	"context"
 +	"encoding/json"
  	"fmt"
  	"io"
  	"net/http"
+ 	"net/url"
 @@ -1841,6 +1842,7 @@ func isClaudeOAuthToken(apiKey string) bool {
  }
  
@@ -500,7 +500,7 @@ index dc6b2fd3..8a10061a 100644
 +			return nil, err
 +		}
 +	} else if fp.MCPAlias && cloaked {
- 		mcpAliases := resolveClaudeMCPAliasOptions(ctx)
+ 		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		bodyForUpstream, oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequest(bodyForUpstream, mcpAliases)
  		if err != nil {
 @@ -445,7 +450,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
@@ -553,7 +553,7 @@ index 8d949940..60c79c64 100644
 +			return cliproxyexecutor.Response{}, err
 +		}
 +	} else if fp.MCPAlias && cloaked {
- 		mcpAliases := resolveClaudeMCPAliasOptions(ctx)
+ 		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		body, _ = prepareClaudeOAuthToolNamesForUpstream(body, mcpAliases)
  	}
 diff --git a/internal/runtime/executor/openai_compat_executor.go b/internal/runtime/executor/openai_compat_executor.go

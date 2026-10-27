@@ -2854,11 +2854,11 @@
     },
     "server.discovery": {
       "description": "Discovery configures local network mDNS / DNS-SD service advertising.",
-      "template": "Enable local network mDNS / DNS-SD service discovery (RFC 6762 / RFC 6763).\nWhen enabled, broadcasts _ai-gateway._tcp with API protocol subtypes on the local network.\nNOTE for Docker users: Link-local multicast (224.0.0.251) cannot cross default NAT bridge networks.\nTo broadcast across the physical LAN, run the container with host networking (--net=host / network_mode: host).",
+      "template": "Enable local network mDNS / DNS-SD service discovery (RFC 6762 / RFC 6763).\nWhen enabled, broadcasts _ai-gateway._tcp with API protocol subtypes on the local network.\nTXT records follow draft-su-ai-gateway-discovery-00:\ntxtvers, path, tls, auth, protocols, auth_type, product, id, role\nThe TXT protocols list mirrors the advertised subtypes. Management endpoints are never advertised.\nNOTE for Docker users: Link-local multicast (224.0.0.251) cannot cross default NAT bridge networks.\nTo broadcast across the physical LAN, run the container with host networking (--net=host / network_mode: host).",
       "type": "object"
     },
     "server.discovery.advertise-management": {
-      "description": "AdvertiseManagement explicitly controls whether management endpoints are exposed (default: false).",
+      "description": "AdvertiseManagement is deprecated and ignored. Management endpoints are never\nadvertised over DNS-SD; the field remains so existing config files still load.",
       "type": "bool"
     },
     "server.discovery.auth-required": {
@@ -2908,6 +2908,21 @@
     "server.port": {
       "description": "Port is the network port on which the API server will listen.",
       "template": "Server port",
+      "type": "int"
+    },
+    "server.response-compression": {
+      "description": "ResponseCompression controls negotiated compression of downstream HTTP responses.\nIt is configured under server.response-compression. Config.ServerResponseCompression\nmirrors it for JSON and programmatic access; read the effective value via\nConfig.EffectiveResponseCompression.",
+      "template": "Negotiated compression of downstream HTTP responses (including SSE streams).\nResponses are compressed only when the client advertises zstd or gzip in\nAccept-Encoding; WebSocket upgrades are never wrapped.",
+      "type": "object"
+    },
+    "server.response-compression.enabled": {
+      "description": "Enabled defaults to true when unset.",
+      "template": "Default: true.",
+      "type": "bool"
+    },
+    "server.response-compression.min-bytes": {
+      "description": "MinBytes defaults to 1024 when zero or negative.",
+      "template": "Non-streaming responses smaller than this many bytes are sent uncompressed.",
       "type": "int"
     },
     "server.tls": {
@@ -3020,6 +3035,21 @@
       "description": "StreamBootstrapTimeout specifies an optional maximum duration to hold back uncommitted response\nheaders during bootstrap buffering before releasing the stream to the client.\nDefaults to \"0\" (unlimited time, relying purely on the 48-frame and 1MB byte bounds).\nWhen set (e.g. \"20s\"), the stream is released once the time ceiling is reached, avoiding\nreverse-proxy timeouts (e.g. Nginx 60s proxy_read_timeout).",
       "template": "Optional maximum duration to hold back uncommitted response headers during bootstrap buffering.\nWhen set (e.g. \"20s\"), if the time ceiling is reached before the first generated token,\nthe stream is released to the client and further in-stream overloads are delivered rather\nthan failed over. This bounds how long trickled heartbeats or early empty frames can delay\nresponse headers before streaming begins.\nRecommendation: If your CPA is deployed behind a reverse proxy with a strict read timeout\n(e.g. Nginx default proxy_read_timeout 60s or Cloudflare 100s timeout), setting this to \"20s\"\nis strongly recommended to guarantee headers commit well before proxy timeouts while retaining\na comfortable 20s window to fail over early scheduling overloads.\nNote: The timeout check is evaluated as upstream frames arrive; it never aborts the upstream\nconnection. Downstream headers are committed as soon as the downstream translator emits chunks\n(for formats that render handshake/heartbeats, headers commit immediately on release; for\nformats like Chat Completions and Gemini that render nothing until the first text token, headers\ncommit when that first token arrives).\nWhen unset or set to \"0\", \"0s\", \"none\", \"unlimited\", \"disabled\", \"off\", or \"never\", no time ceiling\nis applied, and buffering relies purely on the 48-frame and 1MB byte budget.\nDefault: \"0\" (unlimited)",
       "type": "string"
+    },
+    "upstream.codex.upstream-request-compression": {
+      "description": "UpstreamRequestCompression enables zstd request bodies for the ChatGPT Codex backend.",
+      "template": "Compress request bodies sent to the ChatGPT Codex backend with zstd,\nmirroring the official Codex client. Applies only to OAuth credentials\ntargeting https://chatgpt.com/backend-api/codex (API-key credentials,\ncustom base URLs, and SIWC requests are never compressed). A 400/415\nrejection is retried once with an uncompressed body. Default: false.",
+      "type": "bool"
+    },
+    "upstream.codex.upstream-request-compression-min-bytes": {
+      "description": "UpstreamRequestCompressionMinBytes defaults to 1024 when zero or negative.",
+      "template": "Request bodies smaller than this many bytes are sent uncompressed.",
+      "type": "int"
+    },
+    "upstream.codex.websocket-compression": {
+      "description": "WebsocketCompression controls upstream and downstream permessage-deflate; unset means enabled.",
+      "template": "Enable permessage-deflate compression on Codex WebSocket connections\n(upstream and downstream) after negotiation. Default: true.",
+      "type": "bool"
     },
     "upstream.xai": {
       "description": "XAI configures provider-wide xAI request behavior.",
