@@ -45,6 +45,20 @@ pub(super) fn create_and_lock(
     Ok((path, directory))
 }
 
+/// `instance`'s CA directory under `base`, opened and checked as
+/// `create_and_lock` checks it, or `None` when it does not exist; nothing is
+/// created.
+pub(super) fn open_existing(
+    base: &RuntimeBase,
+    instance: &Instance,
+) -> Result<Option<PathBuf>, String> {
+    let (_, path) = resolve(base, instance)?;
+    match fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        _ => open_directory(&path).map(|_| Some(path)),
+    }
+}
+
 /// A directory no other user can replace, and the instance directory below
 /// it. `XDG_RUNTIME_DIR` is the user's own, so its path is used as given; an
 /// `AIRLOCK_HOME` path is canonicalized once, so a symlink swapped later cannot
@@ -120,7 +134,7 @@ fn ancestor_problem(owner: u32, mode: u32, user: u32) -> Option<&'static str> {
     }
 }
 
-fn open_directory(path: &Path) -> Result<File, String> {
+pub(super) fn open_directory(path: &Path) -> Result<File, String> {
     let directory = match open(
         path,
         OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,

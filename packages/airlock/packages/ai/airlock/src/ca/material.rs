@@ -11,21 +11,29 @@ use std::{
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, KeyUsagePurpose,
 };
+use rustls::pki_types::CertificateDer;
 use time::{Duration, OffsetDateTime};
 use x509_parser::parse_x509_certificate;
 use zeroize::Zeroizing;
 
-use super::{path_error, storage};
+use super::{CLOCK_SKEW, path_error, storage};
 
 const CA_NAME: &str = "airlock local CA";
 // A CA serves the session that uses its directory, and a new directory gets a
 // new CA; a year outlasts that session without minting a long-lived root.
 const CA_VALIDITY: Duration = Duration::days(365);
 const CERTIFICATE_MODE: u32 = 0o644;
-const CLOCK_SKEW: Duration = Duration::hours(1);
 const KEY_MODE: u32 = 0o600;
 
-fn mint_error(error: rcgen::Error) -> String {
+/// A validated pair, with the validity window its certificate declares.
+pub(super) struct Material {
+    pub(super) certificate: CertificateDer<'static>,
+    pub(super) key: Zeroizing<KeyPair>,
+    pub(super) not_before: OffsetDateTime,
+    pub(super) not_after: OffsetDateTime,
+}
+
+pub(super) fn mint_error(error: rcgen::Error) -> String {
     format!("could not generate CA material: {error}")
 }
 
@@ -75,7 +83,7 @@ pub(super) fn validate(
     key_file: &mut File,
     certificate_path: &Path,
     key_path: &Path,
-) -> Result<(), String> {
+) -> Result<Material, String> {
     let key_mode = key_file
         .metadata()
         .map_err(|error| path_error(key_path, error))?
@@ -154,7 +162,14 @@ pub(super) fn validate(
         .verify_signature(Some(certificate.public_key()))
         .map_err(|_| invalid(certificate_path, "has an invalid signature"))?;
 
-    Ok(())
+    let not_before = validity.not_before.to_datetime();
+    let not_after = validity.not_after.to_datetime();
+    Ok(Material {
+        certificate: certificate_der.into(),
+        key,
+        not_before,
+        not_after,
+    })
 }
 
 /// The DER of the single PEM block in `bytes`; another block, a mismatched END
