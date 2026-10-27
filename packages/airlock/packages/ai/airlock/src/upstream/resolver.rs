@@ -12,7 +12,7 @@ use tokio::sync::Semaphore;
 const MAX_RESOLUTIONS: usize = 16;
 // A DNS lookup blocks a thread and cannot be cancelled. This caps how many
 // lookups run or queue on the runtime's shared blocking pool, so a burst of
-// CONNECTs to slow names cannot tie that pool up.
+// requests to slow names cannot tie that pool up.
 static RESOLVER_SLOTS: LazyLock<Arc<Semaphore>> =
     LazyLock::new(|| Arc::new(Semaphore::new(MAX_RESOLUTIONS)));
 
@@ -41,7 +41,8 @@ async fn resolve<T: Send + 'static>(
     .map_err(io::Error::other)?
 }
 
-// `resolve` is private, so the integration tests in tests/ cannot reach it.
+// `resolve` and the shared slots are private, so the integration tests in
+// tests/ cannot reach them.
 #[cfg(test)]
 mod tests {
     use super::*;
