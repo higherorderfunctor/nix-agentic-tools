@@ -154,9 +154,9 @@ still write its own tables.
   `conversationState.currentMessage.userInputMessage.modelId`, effort is
   `additionalModelRequestFields.output_config.effort` or `.reasoning.effort`,
   and `kiro:conversation_id` / `kiro:root_conversation_id` are
-  `conversationState.conversationId` / `rootConversationId`; the conversation
-  header applies only when the body lacks an ID. They are observations. No
-  own-versus-delegate relationship is inferred from similar IDs.
+  `conversationState.conversationId` / `rootConversationId`. They are
+  observations. No own-versus-delegate relationship is inferred from similar
+  IDs.
 - `summary_json` includes exact usage objects when observed, an explicit empty
   `estimates` object, terminal status, and output-text byte and character
   counts. Counts use terminal `output_text` parts when available and otherwise
@@ -222,6 +222,10 @@ model with a known window `W` (`claude-opus-5.5`: 1,000,000 tokens):
   deltas, or GenerateAssistantResponse `toolUseEvent.input` and
   `reasoningContentEvent.text`, so tool-only calls are not `O=0`;
 - input `I - O`.
+
+When a call reports exact output or input but not every counter, those exact
+values replace `O` or `I - O` below, so an estimated cached split never exceeds
+the call's exact input.
 
 Cached tokens need reported credits and fitted rates (`claude-opus-5.5` only):
 `cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`. The

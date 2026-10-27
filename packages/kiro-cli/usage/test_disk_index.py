@@ -480,6 +480,20 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.count(), 3)
         self.assertIsNotNone(self.ids(step))
 
+    def test_full_pass_keeps_rows_from_other_session_roots(self):
+        self.messages.write_bytes(usage())
+        self.scan()
+        other = self.root / "other-sessions"
+        (other / "workspace").mkdir(parents=True)
+        disk_index.index_tree(self.db, other)
+        self.assertEqual(self.count(), 1)
+
+    def test_cli_reports_errors_without_traceback(self):
+        result = subprocess.run([sys.executable, str(Path(disk_index.__file__)), "--db", str(self.path),
+                                 "--sessions", str(self.root / "missing")], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_top_level_lineage_wins_over_nested_keys(self):
         ids = disk_index.session_identifiers({"parentSessionId": "sess_local", "_meta": {"kiro": {
             "serverSession": {"parentSessionId": "srv_x", "role": "workflow-step"}}}})

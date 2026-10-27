@@ -172,6 +172,9 @@ class CaptureTests(unittest.TestCase):
             self.assertIn(issue, json.loads(row["issues_json"]))
         db, row = self.run_capture([metering, exception], content_type=EVENTSTREAM)
         self.assertEqual(json.loads(row["summary_json"])["terminal"], "exception")
+        metadata = aws_event("metadataEvent", {"stopReason": "END_TURN"})
+        db, row = self.run_capture([metering, exception, metadata], content_type=EVENTSTREAM)
+        self.assertEqual(json.loads(row["summary_json"])["terminal"], "exception")  # a later stopReason does not hide it
         self.assertEqual(tuple(db.execute("SELECT event_name,data_json FROM events WHERE capture_id=? AND seq=1", (row["id"],)).fetchone()), ("ThrottlingException", '{"message":"synthetic"}'))
 
     def test_event_stream_size_limit_and_invalid_headers(self):

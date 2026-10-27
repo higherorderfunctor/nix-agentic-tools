@@ -318,12 +318,8 @@ class Analysis:
                         elif "usage_summary_limit" not in self.issues:
                             self.issues.append("usage_summary_limit")
                     if key == "kiro:credits":
-                        if isinstance(child, dict) and child.get("unit") == "credit":
-                            self.number("credits", child.get("value"), nonnegative=True)
-                        else:
-                            self.metrics["credits"] = None
-                            if "invalid_credit_unit" not in self.issues:
-                                self.issues.append("invalid_credit_unit")
+                        child = child if isinstance(child, dict) else {}
+                        self.credit(child.get("unit"), child.get("value"))
                     elif key == "kiro:context_usage_percentage" and child is not None:
                         self.number("context_usage_percentage", child)
                     walk(child, location)
@@ -403,6 +399,15 @@ class Analysis:
         self.save(self.seq, name, frame, obj)
         self.seq += 1
 
+    def credit(self, unit, value):
+        """kiro:credits and meteringEvent share one rule: only unit "credit" is a credit count."""
+        if unit == "credit":
+            self.number("credits", value, nonnegative=True)
+        else:
+            self.metrics["credits"] = None
+            if "invalid_credit_unit" not in self.issues:
+                self.issues.append("invalid_credit_unit")
+
     def stream_event(self, name, obj):
         """GenerateAssistantResponse ChatResponseStream members, named by :event-type."""
         self.inspect(obj)  # retains metadataEvent.tokenUsage among usage_objects
@@ -410,16 +415,11 @@ class Analysis:
             self.delta_chars += len(obj["content"])
             self.delta_bytes += len(obj["content"].encode())
         elif name == "meteringEvent":
-            if obj.get("unit") == "credit":
-                self.number("credits", obj.get("usage"), nonnegative=True)
-            else:
-                self.metrics["credits"] = None
-                if "invalid_credit_unit" not in self.issues:
-                    self.issues.append("invalid_credit_unit")
+            self.credit(obj.get("unit"), obj.get("usage"))
         elif name == "contextUsageEvent" and obj.get("contextUsagePercentage") is not None:
             self.number("context_usage_percentage", obj["contextUsagePercentage"])
         elif name == "metadataEvent":
-            if isinstance(obj.get("stopReason"), str):
+            if isinstance(obj.get("stopReason"), str) and not self.stream_failed:
                 self.terminal = obj["stopReason"]
             usage = obj.get("tokenUsage")
             if isinstance(usage, dict):

@@ -18,6 +18,7 @@ import json
 import math
 import os
 from pathlib import Path
+import sqlite3
 import sys
 
 from capture import decoded_json, open_database
@@ -283,8 +284,11 @@ def modified_ns(session):
     return max(times, default=None)
 
 
-def prune(db, table, column, keep):
-    stale = [(row[0],) for row in db.execute(f"SELECT DISTINCT {column} FROM {table}") if row[0] not in keep]
+def prune(db, table, column, keep, root):
+    """Delete rows under root that are not in keep; rows from other session roots stay."""
+    prefix = str(root) + os.sep
+    stale = [(row[0],) for row in db.execute(f"SELECT DISTINCT {column} FROM {table}")
+             if row[0].startswith(prefix) and row[0] not in keep]
     if not stale:
         return
     # One set-based DELETE; per-row deletes made the first prune take seconds.
@@ -358,10 +362,10 @@ def index_tree(db, sessions, since=None):
             index_messages(db, messages, session)
     if since is None:
         keep = {str(session) for session in indexed}
-        prune(db, "disk_sessions", "path", keep)
-        prune(db, "disk_sources", "session_path", keep)
+        prune(db, "disk_sessions", "path", keep, sessions)
+        prune(db, "disk_sources", "session_path", keep, sessions)
         prune(db, "disk_session_omissions", "session_path",
-              {str(session) for session, facts in candidates.items() if isinstance(facts, str)})
+              {str(session) for session, facts in candidates.items() if isinstance(facts, str)}, sessions)
 
 
 def main():

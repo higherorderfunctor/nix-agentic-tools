@@ -310,6 +310,20 @@ class QueryTests(unittest.TestCase):
         self.assertGreater(report["captures"]["estimates"]["cache_read_tokens"]["observed_sum"], 0)
         self.assertEqual(report["captures"]["estimates"]["cache_hit_rate"]["hits"], 0)
 
+    def test_estimates_respect_the_calls_exact_counters(self):
+        estimate = query.credit_discount.estimate
+        # Full-hit price on an exact 1,200-token input: cached is that input, never the ~29,999 guess.
+        hit = 20 / 603 / 1e4 * 1200 + query.credit_discount.OUTPUT_RATE * 1 + .5034 / 603
+        self.assertEqual(estimate("claude-opus-5.5", 3.0, hit, 4, input=1200)["cache_read_tokens"], 1200)
+        self.assertEqual(estimate("claude-opus-5.5", 3.0, 1.0, 4, input=1200)["cache_read_tokens"], 0)
+        guess = estimate("claude-opus-5.5", 3.0, hit, 4, output=2000)
+        self.assertEqual((guess["output_tokens"], guess["input_tokens"]), (2000, 28000))
+
+    def test_zero_input_estimate_is_not_a_cache_hit(self):
+        self.estimable("empty", .001, context=0.0)
+        rate = query.query(self.db, "sess_root")["captures"]["estimates"]["cache_hit_rate"]
+        self.assertEqual(rate["hits"], 0)
+
     def test_tool_and_reasoning_characters_count_as_estimated_output(self):
         self.estimable("tools", (74 * 3.0 + .5034) / 603)
         events = [("response.function_call_arguments.delta", {"type": "response.function_call_arguments.delta", "delta": "x" * 40}),

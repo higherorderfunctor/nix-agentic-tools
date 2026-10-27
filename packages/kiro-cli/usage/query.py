@@ -77,7 +77,7 @@ def query(db, session, scope="session"):
     aliases = sorted(selected | {value.removeprefix("sess_") for value in selected})
     placeholders = ",".join("?" for _ in aliases)
     path_marks = ",".join("?" for _ in paths) or "NULL"
-    warnings = [*FOOTER_WARNINGS, "Context percentages are observations, not token counts."]
+    warnings = [*FOOTER_WARNINGS, "Context percentages are observations; ~token values derived from them are estimates."]
     report = {"session": session, "scope": scope, "sessions": sorted(selected),
               "attribution": {"own_vs_delegate": "unavailable", "tree_identity": "explicit " + "/".join(LINKS) + " only"},
               "warnings": warnings}
@@ -308,7 +308,8 @@ def call_reports(db, report, chosen, parameters):
                     tally["estimated"][name] += name in estimated
             cached = values["cache_read_tokens"] or 0
             # An estimated split counts as a hit only above fit noise (tens of tokens on 1-5 char calls).
-            tally["hits"] += (cached >= HIT_SHARE * values["input_tokens"] if "cache_read_tokens" in estimated else cached > 0)
+            tally["hits"] += (cached > 0 and cached >= HIT_SHARE * values["input_tokens"]
+                              if "cache_read_tokens" in estimated else cached > 0)
     for source in sources:
         tally, n = tallies[id(source)], source["observations"]
         # Only groups with at least one estimated call get ~cells; exact-only groups keep their observed sums.
@@ -326,8 +327,9 @@ def call_counters(row, model):
     chars = row["chars"]
     if isinstance(chars, int) and isinstance(row["extra_chars"], int):
         chars += row["extra_chars"]
-    guess = credit_discount.estimate(model, row["context_usage_percentage"], row["credits"], chars) or {}
     exact = {name: row[name] for name in ("input_tokens", "output_tokens", "cache_read_tokens")}
+    guess = credit_discount.estimate(model, row["context_usage_percentage"], row["credits"], chars,
+                                     exact["output_tokens"], exact["input_tokens"]) or {}
     exact["total_tokens"] = (exact["input_tokens"] + exact["output_tokens"]
                              if exact["input_tokens"] is not None and exact["output_tokens"] is not None else None)
     values = {name: exact[name] if exact[name] is not None else guess.get(name) for name in ESTIMATED}
