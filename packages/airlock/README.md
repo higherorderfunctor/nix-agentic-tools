@@ -5,16 +5,17 @@ Rust workspace.
 
 The server listens only on IP loopback addresses and detects HTTP/1.1 or
 cleartext HTTP/2 prior knowledge on the same port. CONNECT opens a TCP tunnel to
-a hostname or IP address with an explicit port, forwarding opaque bytes without
-TLS interception. Native HTTPS client authentication is unchanged. The listener
-currently accepts CONNECT without proxy authentication; configuration and domain
-policy are not implemented yet.
+a hostname or IP address with an explicit port. By default it forwards opaque
+bytes; explicit DNS-and-port selections enable verified TLS interception. Native
+HTTPS client authentication is unchanged. The listener currently accepts CONNECT
+without proxy authentication; domain policy is not implemented yet.
 
 Cleartext clients choose HTTP/2 by sending its prior-knowledge preface; HTTP/1.1
 clients use the same listener automatically. The proxy listener does not yet
-offer TLS or ALPN negotiation. TLS inside a CONNECT tunnel remains opaque.
-Native Claude traffic through `HTTPS_PROXY` has not been validated to use
-HTTP/2; the HTTP/2 tests here select it with a prior-knowledge client.
+offer TLS or ALPN negotiation. Unselected TLS tunnels remain opaque; selected
+destinations negotiate inner HTTP/1.1 independently on each TLS leg. Native
+Claude traffic through `HTTPS_PROXY` has not been validated to use HTTP/2; the
+HTTP/2 tests here select it with a prior-knowledge client.
 
 HTTP/1.1 clients can also send absolute-form `http://` proxy requests. Airlock
 streams request and response bodies without buffering a complete body, following
@@ -67,13 +68,20 @@ have no lifetime timeout. SIGINT and SIGTERM stop accepting and allow existing
 connections up to 3 seconds to finish before closing them. Runtime teardown has
 a separate 10-second bound.
 
+## Configuration
+
+`--config FILE` instead of `--listen` reads a strict JSON object such as
+`{"listen":"127.0.0.1:9000"}`. It requires `listen` and rejects unknown or
+duplicate fields, non-loopback addresses, and additional arguments.
+
 ## Nix instances
 
 An `ai.airlock.instances.<name>` entry runs `airlock-<name>` on its loopback
 port (default 8318) through `ai.services`, on Home Manager and devenv alike.
 Selecting it defaults both `HTTP_PROXY` and `HTTPS_PROXY` to that listener for
-supported runtimes. HTTPS uses CONNECT, preserving credentials and TLS. Plain
-HTTP requests are forwarded to their absolute-form destinations.
+supported runtimes. HTTPS uses CONNECT, preserving credentials; opaque tunnels
+preserve TLS. Plain HTTP requests are forwarded to their absolute-form
+destinations.
 
 ```nix
 ai.airlock.instances.main = {};
@@ -93,10 +101,52 @@ $ systemctl --user stop airlock-main.service
 On devenv, use `devenv processes up` and `devenv processes down`. Restart Claude
 and other selected runtimes after changing the selection.
 
+## Selective TLS interception
+
+Add `interception` to the JSON configuration to select exact DNS names and
+ports:
+
+```json
+{
+  "interception": {
+    "ca_directory": "/private/airlock/ca",
+    "destinations": ["api.example.test:443"]
+  },
+  "listen": "127.0.0.1:9000"
+}
+```
+
+Startup loads and validates the CA that `airlock ca init` created in
+`ca_directory` before binding the listener. No trust is installed: the client
+must explicitly trust the public `ca.pem`. A CONNECT to the absolute form
+`api.example.test.:443` selects the same destination. Unselected names, ports
+and IP literals retain opaque CONNECT behavior. Both outer HTTP/1.1 and
+prior-knowledge HTTP/2 support interception. Interception supports **inner
+HTTP/1.1 only**: both TLS legs offer only `http/1.1` ALPN.
+
+Airlock parses the ClientHello and requires SNI to match the CONNECT DNS name
+before connecting upstream. It verifies the upstream certificate chain, name and
+validity before completing the downstream handshake. System certificate roots
+are the default; optional `upstream_roots` names a PEM certificate file added to
+those roots for private origins or a corporate TLS-inspecting proxy. This widens
+upstream trust. Upstream client certificates (mTLS) are not supported. There is
+no insecure verification mode. Leaves exist only in memory, with one cache slot
+per configured name, a seven-day lifetime, and renewal during their final day.
+
+Each selected tunnel owns one verified upstream connection. Inner Host, absolute
+URI authority, scheme and effective port must match the CONNECT destination.
+Nested CONNECT, upgrades and unsupported authorities are refused. Native
+destination Authorization and request bodies stream through the existing HTTP
+framing and hop-header filters. TLS setup and client header reads have
+ten-second deadlines; inference may wait for its first response header without a
+duration limit, and response bodies and SSE have no lifetime timeout.
+Cancellation releases the owned upstream, while a plain half-close permits a
+final response.
+
 ## Local CA
 
-`airlock ca init DIRECTORY` creates the local CA material that a later TLS
-interception unit can consume: `DIRECTORY` is created with mode 0700 and must be
+`airlock ca init DIRECTORY` creates the local CA material used by interception;
+`serve` never creates it. `DIRECTORY` is created with mode 0700 and must be
 owned by the effective user with no group or other permissions, `ca.key` is a
 PKCS#8 key created with mode 0600, and `ca.pem` is the matching self-signed CA
 certificate with mode 0644. The command prints only `ca.pem`'s path. Re-running
@@ -104,7 +154,7 @@ it validates and reuses the existing pair, and refuses partial, expired, non-CA,
 mismatched, badly signed, symlinked, exposed, or otherwise unusable material
 instead of replacing it. A key or directory mode stricter than 0600 or 0700 is
 accepted. It does not install the certificate into a system or browser trust
-store, change trust configuration, or alter the passthrough `serve` behavior.
+store or change trust configuration. Default `serve` behavior remains opaque.
 
 `DIRECTORY`'s parent must be owned by the effective user or root and not
 writable by group or others, sticky or not, so no other user can replace
@@ -136,10 +186,10 @@ The overlay exposes Airlock as `pkgs.ai.airlock`. The Nix package uses the
 repository's locked Rust toolchain. Rust tests cover HTTP forwarding and framing
 rejection, bounded shared DNS, authority validation, byte streaming and
 half-close in both directions, client cancellation, HTTP/2 multiplexing and flow
-control, stream reset isolation, loopback binding, listener limits, header
-deadlines, owned tunnel shutdown, local CA validation and CLI signals.
-`checks.airlock-package` checks the packaged `--help` and `--version` entry
-points.
+control, stream reset isolation, selective TLS interception, CA leaf issuance,
+loopback binding, listener limits, header deadlines, owned tunnel shutdown,
+local CA validation and CLI signals. `checks.airlock-package` checks the
+packaged `--help` and `--version` entry points.
 
 `checks.airlock-instances` covers module wiring, port and name claims, proxy
 registration, selection defaults and overrides, and Claude settings delivery.

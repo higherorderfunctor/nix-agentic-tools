@@ -75,7 +75,7 @@ fn parent_problem(owner: u32, mode: u32, user: u32) -> Option<&'static str> {
     }
 }
 
-fn open_directory(path: &Path) -> Result<File, String> {
+pub(super) fn open_directory(path: &Path) -> Result<File, String> {
     let directory = match open(
         path,
         OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,

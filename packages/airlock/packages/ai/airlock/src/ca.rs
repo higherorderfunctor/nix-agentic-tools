@@ -1,6 +1,8 @@
 //! Airlock's local CA: `init` creates it in a private directory, or validates
-//! the pair already there, and never replaces existing material.
+//! the pair already there, and `Authority` loads it to issue short-lived leaf
+//! certificates for selected DNS names.
 
+mod authority;
 mod directory;
 mod material;
 mod storage;
@@ -10,8 +12,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use time::Duration;
+
+pub use authority::{Authority, Leaf};
+
 const CA_CERTIFICATE: &str = "ca.pem";
 const CA_KEY: &str = "ca.key";
+const CLOCK_SKEW: Duration = Duration::hours(1);
 
 /// Creates Airlock's local CA in `directory`, or validates the pair already
 /// there, and returns the public certificate path.
@@ -31,7 +38,7 @@ pub fn init(directory: impl AsRef<Path>) -> Result<PathBuf, String> {
     ) {
         (None, None) => material::create(&certificate_path, &key_path)?,
         (Some(mut certificate), Some(mut key)) => {
-            material::validate(&mut certificate, &mut key, &certificate_path, &key_path)?
+            material::validate(&mut certificate, &mut key, &certificate_path, &key_path)?;
         }
         (Some(_), None) => return Err(material::unpaired(&certificate_path, &key_path)),
         (None, Some(_)) => return Err(material::unpaired(&key_path, &certificate_path)),
