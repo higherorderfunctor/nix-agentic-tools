@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use airlock::ca::Instance;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -19,5 +20,20 @@ pub enum Command {
         /// IP loopback address to listen on (port 0 allowed).
         #[arg(long, default_value = "127.0.0.1:8318")]
         listen: SocketAddr,
+    },
+    /// Manage the private local CA without installing trust.
+    Ca {
+        #[command(subcommand)]
+        command: CaCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CaCommand {
+    /// Create or validate a private local CA and print its public certificate path.
+    Init {
+        /// The instance whose runtime directory holds the CA.
+        #[arg(long, value_name = "NAME", default_value = "default")]
+        instance: Instance,
     },
 }
