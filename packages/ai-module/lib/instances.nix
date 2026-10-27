@@ -1,9 +1,8 @@
 # Named instances of one tool, each lowered to one `ai.<owner>.services` entry
 # (and so its service and port claims), with its typed settings rendered to a
-# config file at start through `serviceEntry.files` when settings are supplied.
-# Airlock, CLIProxyAPI and CPA Manager Plus share it. Each owner supplies the
-# instance command; owners with config files also supply a settings type, render
-# function and the settings derived from each instance.
+# config file at start through `serviceEntry.files`. CLIProxyAPI and CPA
+# Manager Plus share it; an owner supplies its settings type and render, the
+# settings it derives from an instance, and the instance's command.
 {lib}: let
   strictShellApplication = import ../../../lib/strict-shell-application.nix;
   # Where an instance keeps its writable state by default: the user's XDG
@@ -53,17 +52,17 @@ in {
     arguments ? _: "",
     backend,
     defaultPort,
-    derived ? _: {},
+    derived,
     directories ? _: [],
     extraOptions ? {},
     owner,
     packagePath,
     packageText,
     preStart ? _: "",
-    render ? null,
-    settingsType ? null,
+    render,
+    settingsType,
     tool,
-    variable ? null,
+    variable,
   }: {
     config,
     pkgs,
@@ -103,14 +102,6 @@ in {
               default = defaultPort;
               description = "The loopback port this instance listens on; it is claimed, so two instances or services cannot share it.";
             };
-            stateDir = lib.mkOption {
-              type = lib.types.strMatching "/.*";
-              default = "${stateRoots.${backend}.value top}/${owner}/${name}";
-              defaultText = lib.literalExpression ''"${stateRoots.${backend}.text}/${owner}/<name>"'';
-              description = "Absolute directory for this instance's writable state, created 0700 at start.";
-            };
-          }
-          // lib.optionalAttrs (settingsType != null) {
             settings = lib.mkOption {
               type = settingsType;
               default = {};
@@ -122,14 +113,18 @@ in {
                 `stateDir`; setting another value for one fails evaluation.
               '';
             };
+            stateDir = lib.mkOption {
+              type = lib.types.strMatching "/.*";
+              default = "${stateRoots.${backend}.value top}/${owner}/${name}";
+              defaultText = lib.literalExpression ''"${stateRoots.${backend}.text}/${owner}/<name>"'';
+              description = "Absolute directory for this instance's writable state, created 0700 at start.";
+            };
           }
           // extraOptions;
-        config = lib.optionalAttrs (settingsType != null) {
-          settings = derived {
-            inherit name;
-            config = top;
-            instance = config;
-          };
+        config.settings = derived {
+          inherit name;
+          config = top;
+          instance = config;
         };
       }));
       default = {};
@@ -141,10 +136,7 @@ in {
     };
 
     config.ai.${owner}.services = lib.mapAttrs' (name: instance: let
-      rendered =
-        if render == null
-        then {}
-        else render instance.settings;
+      rendered = render instance.settings;
       state = map lib.escapeShellArg ([instance.stateDir] ++ directories instance);
       # The tool resolves relative paths (CLIProxyAPI's `.env` and `logs/`)
       # against its working directory, so it runs in its own state.
@@ -164,11 +156,9 @@ in {
         inherit (instance) enable;
         # Manager Plus's render also returns the environment it reads.
         environment = rendered.environment or {};
-        files = lib.optionalAttrs (render != null) {
-          config = {
-            inherit (rendered) content secrets;
-            inherit variable;
-          };
+        files.config = {
+          inherit (rendered) content secrets;
+          inherit variable;
         };
         ports.main = instance.port;
       })
