@@ -1,9 +1,9 @@
 # Repository treefmt config. It imports the exported treefmt module, then adds the
-# repository root and path-specific exclusions. Consumers: devenv.nix's treefmt
+# repository root, repository-only Rust formatter, and path-specific exclusions. Consumers: devenv.nix's treefmt
 # module, the flake `formatter`, and checks/repository/formatting.nix. The
 # exported module is also the default `ai.formatter`, so generated files use the
 # same formatter programs and style without the repository-only exclusions.
-{
+{inputs}: {pkgs, ...}: {
   imports = [./lib/treefmt-module.nix];
 
   # Use flake.nix as the tree-root marker so `nix fmt` works in git
@@ -13,6 +13,14 @@
   # `nix fmt` from per-input worktrees (see update-input.sh Phase 2.5),
   # so this default must be overridden.
   projectRootFile = "flake.nix";
+
+  # Rust lives only in this repository, so its formatter stays out of the
+  # exported consumer module and its large closure. Use the same locked Rust
+  # toolchain used for repository Rust builds.
+  programs.rustfmt = {
+    enable = true;
+    package = ((import ./lib/toolchains.nix {inherit inputs;}).mkRustPlatform {inherit pkgs;}).rust.rustc;
+  };
 
   settings.global.excludes = [
     "*.lock"
