@@ -1,16 +1,17 @@
-## ai.proxy: local CLIProxyAPI for AI harnesses
+## ai.proxy: local proxies for AI harnesses
 
-> **Last verified:** 2026-10-28 — proxy owners register instances in
-> `ai.internal.proxyInstances`, with or without named clients; root fields copy
-> down by priority and drop for a runtime selecting the other form; the selected
-> instance's backend picks the one lowering a runtime runs. OAuth upstream
-> credentials require vendor and a secret account email; named API-key
+> **Last verified:** 2026-10-28 — proxy owners (CLIProxyAPI with named clients,
+> Airlock clientless) register instances in `ai.internal.proxyInstances`; root
+> fields copy down by priority and drop for a runtime selecting the other form;
+> the selected instance's backend picks the one lowering a runtime runs. OAuth
+> upstream credentials require vendor and a secret account email; named API-key
 > credentials can select the built-in z.ai vendor defaults and a priority.
 
-`ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
-only the proxy's client key, never an upstream credential. The proxy holds the
-logins. `ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an unrelated MCP
-credential proxy.
+`ai.proxy` points a harness at a local proxy. A CLIProxyAPI instance holds the
+logins, so the harness holds only the proxy's client key, never an upstream
+credential. An Airlock instance is an HTTPS CONNECT proxy; the harness keeps its
+own credentials. `ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an
+unrelated MCP credential proxy.
 
 ### Shape
 
@@ -41,8 +42,10 @@ by name alone. The owner also claims each name in `ai.claims.proxy-instance`
 evaluation through the claims registry. CLIProxyAPI registers every
 `ai.cliproxyapi.instances` entry (`packages/cliproxyapi/modules/instances.nix`)
 at `http://127.0.0.1:<port>`, each client key carrying `{key; credentials;}`.
-The registry is internal: a root option would count as a consumer surface and
-fan out.
+Airlock registers every `ai.airlock.instances` entry
+(`packages/airlock/modules/instances.nix`) at the same loopback origin with no
+clients. The registry is internal: a root option would count as a consumer
+surface and fan out.
 
 ### Selection and the resolved endpoint
 
@@ -259,5 +262,7 @@ allowlist check covers account matching and hot-added logins.
 backends, including client routing and the preserved model list.
 `module-service-instances-runtime-providers` sends Anthropic and Responses
 requests through the packaged CPA, including a Codex CLI client key routed to a
-chat-only upstream credential and an unauthorized-model negative control. The
-other proxy checks cover selection, key references and runtime delivery.
+chat-only upstream credential and an unauthorized-model negative control.
+`airlock-instances` covers Airlock's registration and what selecting it gives
+Claude and Codex. The other proxy checks cover selection, key references and
+runtime delivery.
