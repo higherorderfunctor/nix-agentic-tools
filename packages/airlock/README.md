@@ -7,8 +7,8 @@ The server listens only on IP loopback addresses and detects HTTP/1.1 or
 cleartext HTTP/2 prior knowledge on the same port. CONNECT opens a TCP tunnel to
 a hostname or IP address with an explicit port, forwarding opaque bytes without
 TLS interception. Native HTTPS client authentication is unchanged. The listener
-currently accepts CONNECT without proxy authentication; configuration and domain
-policy are not implemented yet.
+currently accepts CONNECT without proxy authentication; domain policy is not
+implemented yet.
 
 Cleartext clients choose HTTP/2 by sending its prior-knowledge preface; HTTP/1.1
 clients use the same listener automatically. The proxy listener does not yet
@@ -50,6 +50,16 @@ side half-closes, so a reset cancels blocked uploads and releases the job slot
 while other streams continue. Prefix detection consumes and replays at most 24
 bytes under the initial request deadline.
 
+## Configuration
+
+`--config FILE` instead of `--listen` reads a strict JSON object such as
+`{"listen":"127.0.0.1:9000"}`. It requires `listen` and rejects unknown or
+duplicate fields, non-loopback addresses, and additional arguments.
+
+The same `ai.airlock.instances.<name>` declaration starts an instance through
+`ai.services` on Home Manager and devenv. For the explicit Claude opt-in and
+rollback procedure, see [HTTPS passthrough](docs/passthrough.md).
+
 ## Build and validate
 
 From the repository root:
@@ -75,3 +85,8 @@ directions, HTTP/2 multiplexing and flow control, stream reset isolation,
 loopback binding, listener limits, header deadlines, owned tunnel shutdown and
 CLI signals. `checks.airlock-package` checks the packaged `--help` and
 `--version` entry points.
+
+`checks.airlock-instances` covers module wiring, port claims and native Claude
+settings preservation. `checks.airlock-instance-runtime` starts each backend's
+generated service launcher and requests `/health` at a configured nondefault
+port. Rust protocol tests run through the Nix package's `doCheck`.

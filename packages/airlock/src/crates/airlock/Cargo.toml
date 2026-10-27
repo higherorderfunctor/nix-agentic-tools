@@ -1,3 +1,4 @@
+# cspell:words serde
 [package]
 name = "airlock"
 description = "Local egress proxy for coding harnesses"
@@ -10,6 +11,8 @@ h2.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
