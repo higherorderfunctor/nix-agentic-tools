@@ -246,7 +246,12 @@ class DiskIndexTests(unittest.TestCase):
                                  "--sessions", str(self.sessions)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("1 sources, 1 usage/context records, 1 omitted records", result.stdout)
-        self.assertIn("unknown usage coverage", result.stdout)
+        self.assertIn("unknown usage coverage", result.stderr)
+        structured = subprocess.run([sys.executable, disk_index.__file__, "--db", str(self.path),
+                                     "--sessions", str(self.sessions), "--json"], capture_output=True, text=True)
+        self.assertEqual(structured.returncode, 0, structured.stderr)
+        self.assertEqual(json.loads(structured.stdout), {"sources": 1, "records": 1, "omitted_records": 1})
+        self.assertIn("unknown usage coverage", structured.stderr)
 
     def test_cli_requires_explicit_inputs(self):
         result = subprocess.run([sys.executable, str(Path(disk_index.__file__))],

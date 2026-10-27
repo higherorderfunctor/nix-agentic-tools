@@ -470,6 +470,23 @@ class CaptureTests(unittest.TestCase):
         self.assertIsNone(addon.collector)
         addon.done()
 
+    def test_offline_list_human_and_original_json_lines(self):
+        command = [sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "list"]
+        Collector(self.path).close()
+        # Empty lists still have readable column headers.
+        empty = subprocess.run(command, capture_output=True, text=True, check=True)
+        self.assertIn("Capture", empty.stdout)
+        _, row = self.run_capture([event(completed())])
+        human = subprocess.run(command, capture_output=True, text=True, check=True)
+        self.assertIn(row["id"], human.stdout)
+        self.assertIn("complete", human.stdout)
+        self.assertRegex(human.stdout, r"complete\s+\d+\s+0\s+0.25\s+12.3")
+        structured = subprocess.run([*command, "--json"], capture_output=True, text=True, check=True)
+        self.assertEqual(structured.stderr, "")
+        listed = [json.loads(line) for line in structured.stdout.splitlines()]
+        self.assertEqual(listed, [{key: row[key] for key in
+                                  ("id", "state", "observed_bytes", "dropped_bytes", "credits", "context_usage_percentage", "issues_json")}])
+
     def test_offline_replay_cli(self):
         body = event(completed())
         _, row = self.run_capture([body])
@@ -512,17 +529,17 @@ class RuntimeTests(unittest.TestCase):
             runtime.private_directory(state / "ca", create=True)
             (state / "ca/mitmproxy-ca-cert.pem").write_text("fake CA")
             inherited = {"PATH": "/project/bin", "KEEP": "yes", **{name: "conflict" for name in runtime.PROXY_NAMES}}
-            with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute:
+            with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "invocation_summary"):
                 with self.assertRaisesRegex(ValueError, "inherited ALL_PROXY conflicts"):
                     runtime.launch_environment(state, 19001)
                 runtime.exec_command(state, 19001, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])
-                command, arguments, environment = execute.call_args.args
+                command, arguments, environment = wait.call_args.args
                 self.assertEqual(command, "kiro-cli")
-                self.assertEqual(arguments, ["kiro-cli", "--v3", "chat", "spaced argument", "--", "--agent-engine=v2"])
+                self.assertEqual(arguments, ["--v3", "chat", "spaced argument", "--", "--agent-engine=v2"])
                 self.assertEqual(environment["KEEP"], "yes")
                 self.assertEqual(environment["PATH"], "/project/bin")
                 for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
-                    self.assertEqual(environment[name], "http://127.0.0.1:19001")
+                    self.assertEqual(environment[name], f"http://kiro-usage-{environment['KIRO_USAGE_INVOCATION']}:@127.0.0.1:19001")
                 self.assertEqual(environment["NODE_EXTRA_CA_CERTS"], str(state / "ca/mitmproxy-ca-cert.pem"))
                 for name in ("ALL_PROXY", "NO_PROXY", "all_proxy", "no_proxy"):
                     self.assertNotIn(name, environment)
@@ -532,7 +549,7 @@ class RuntimeTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "v3"):
                         runtime.exec_command(state, 19001, arguments)
                 runtime.exec_command(state, 19001, ["kiro-cli", "--v3"])
-                self.assertEqual(execute.call_args.args[1], ["kiro-cli", "--v3"])
+                self.assertEqual(wait.call_args.args[1], ["--v3"])
                 execute.side_effect = FileNotFoundError()
                 with self.assertRaisesRegex(runtime.CommandError, "command not found: absent"):
                     runtime.exec_command(state, 19001, ["absent"])
