@@ -1,5 +1,5 @@
-# `ai.airlock.instances` on both backends: service contract, claims, proxy
-# registration, and what selecting an instance gives Claude
+# `ai.airlock.instances` on both backends: service contract, claims, rendered
+# settings, proxy registration, and what selecting an instance gives Claude
 # through the shared network surface.
 {
   harness,
@@ -85,7 +85,13 @@
     && entry.enable
     && entry.ports.main == 8318
     && entry.environment == {}
-    && entry.files == {}
+    && builtins.attrNames entry.files == ["config"]
+    && entry.files.config
+    == {
+      content = ''{"listen":"127.0.0.1:8318"}'';
+      secrets = {};
+      variable = "AIRLOCK_CONFIG";
+    }
     && builtins.length entry.command == 1
     && native
     && noAirlockActivation config;
@@ -93,9 +99,26 @@
     config = configured backend;
     entry = config.ai.services.airlock-main;
   in
-    entry.ports.main
-    == 8400
+    entry.files.config.content
+    == ''{"listen":"127.0.0.1:8400"}''
+    && entry.ports.main == 8400
     && config.ai.claims.port."8400" == ["airlock:airlock-main.ports.main"];
+  listenOverrideRefused = backend:
+    !(
+      builtins.tryEval (
+        builtins.deepSeq
+        (evaluate backend {
+          ai.airlock.instances.main.settings.listen = "0.0.0.0:8400";
+        })
+          .config
+          .ai
+          .services
+          .airlock-main
+          .files
+          .config
+        true
+      )
+    ).success;
   launcher = backend:
     if backend == "hm"
     then (runtime backend).systemd.user.services.airlock-main.Service.ExecStart
@@ -242,6 +265,7 @@
     {
       "${backend}: inference and network instance names coexist" = inferenceIndependent backend;
       "${backend}: instances are registered proxies" = registered backend;
+      "${backend}: listen cannot be overridden" = listenOverrideRefused backend;
       "${backend}: native HTTPS_PROXY and NO_PROXY win" = nativeProxyWins backend;
       "${backend}: no instance by default" =
         (empty backend).ai.airlock.instances
@@ -281,7 +305,7 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
 
         ${pkgs.python3}/bin/python3 ${./airlock-instance-runtime.py} \
-          127.0.0.1:18439 \
+          ${lib.escapeShellArg (runtime "hm").ai.services.airlock-main.files.config.content} \
           ${launcher "hm"} \
           ${launcher "devenv"}
         echo "ok — both generated Airlock launchers serve health at the configured nondefault port" >"$out"
