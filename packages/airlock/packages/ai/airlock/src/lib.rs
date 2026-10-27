@@ -1,3 +1,4 @@
+pub mod ca;
 pub mod server;
 
 mod authority;
@@ -6,6 +7,7 @@ mod first_request;
 mod http1;
 mod http2;
 mod local;
+mod private_file;
 mod resolver;
 mod tunnel;
 mod upstream;
