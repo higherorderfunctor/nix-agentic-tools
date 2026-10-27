@@ -19,7 +19,7 @@ pub async fn start() -> Server {
     let listener = server::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
     let address = listener.local_addr().unwrap();
     let (shutdown, stopped) = oneshot::channel();
-    let task = tokio::spawn(server::serve(listener, async {
+    let task = tokio::spawn(server::serve(listener, None, async {
         let _ = stopped.await;
     }));
     Server {

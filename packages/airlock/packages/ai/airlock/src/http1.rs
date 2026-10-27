@@ -21,7 +21,11 @@ use crate::{
     upstream::CONNECT_TIMEOUT,
 };
 
-pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
+pub(crate) async fn serve(
+    socket: Prefixed,
+    deadline: Instant,
+    interception: Option<Arc<crate::tls::Interception>>,
+) {
     let Prefixed { prefix, socket } = socket;
     let Ok(socket) = socket.into_std() else {
         return;
@@ -41,7 +45,12 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
     let observed = Arc::clone(&started);
     let service = service_fn(move |request| {
         observed.notify_one();
-        handle(request, sender.clone(), forwarder.clone())
+        handle(
+            request,
+            sender.clone(),
+            forwarder.clone(),
+            interception.clone(),
+        )
     });
     let result = {
         let driver = http1::Builder::new()
@@ -62,25 +71,29 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
         // transport errors independently; a plain FIN remains a half-close.
         tokio::select! {
             result = initial => result,
-            () = async {
-                loop {
-                    match monitor.ready(Interest::ERROR).await {
-                        Ok(ready) if !ready.is_error() => continue,
-                        _ => break,
-                    }
-                }
-            } => return,
+            () = transport_error(&monitor) => return,
         }
     };
-    // CONNECT relay owns the only remaining client socket descriptor.
-    drop(monitor);
+
     let Some(result) = result else {
         return;
     };
     if result.is_ok()
         && let Some(pending) = receiver.recv().await
     {
-        let _ = pending.relay().await;
+        tokio::select! {
+            _ = pending.relay() => {},
+            _ = transport_error(&monitor) => {},
+        }
+    }
+}
+
+async fn transport_error(monitor: &TcpStream) {
+    loop {
+        match monitor.ready(Interest::ERROR).await {
+            Ok(ready) if !ready.is_error() => continue,
+            _ => break,
+        }
     }
 }
 
@@ -88,12 +101,13 @@ async fn handle(
     request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
     forwarder: crate::forward::Forwarder,
+    interception: Option<Arc<crate::tls::Interception>>,
 ) -> Result<crate::forward::ProxyResponse, Infallible> {
     if request.method() == Method::CONNECT {
         let deadline = Instant::now() + CONNECT_TIMEOUT;
-        // The upstream is already connected when this returns, so the client
-        // gets `200` only for a tunnel that can carry bytes.
-        let pending = match tunnel::open_tunnel(request, deadline).await {
+        // An opaque tunnel's upstream is already connected when this returns,
+        // so the client gets `200` only for a tunnel that can carry bytes.
+        let pending = match tunnel::open_tunnel(request, deadline, interception).await {
             Ok(pending) => pending,
             Err((status, body)) => return Ok(response(status, body).map(Either::Left)),
         };

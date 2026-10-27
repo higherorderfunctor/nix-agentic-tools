@@ -3,6 +3,7 @@ use std::{
     io,
     net::SocketAddr,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };
@@ -23,7 +24,12 @@ const PROCESS_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
 /// Run the listener until SIGINT or SIGTERM, including bounded runtime teardown.
-pub fn run(listen: SocketAddr) -> io::Result<()> {
+pub fn run(config: crate::config::Config) -> io::Result<()> {
+    let interception = config
+        .interception
+        .map(crate::tls::Interception::open)
+        .transpose()?
+        .map(Arc::new);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -32,10 +38,10 @@ pub fn run(listen: SocketAddr) -> io::Result<()> {
         // takes the same draining path as one received later.
         let mut interrupt = signal(SignalKind::interrupt())?;
         let mut terminate = signal(SignalKind::terminate())?;
-        let listener = bind(listen).await?;
+        let listener = bind(config.listen).await?;
         println!("airlock listening on {}", listener.local_addr()?);
 
-        serve(listener, async {
+        serve_runtime(listener, interception, async {
             tokio::select! {
                 _ = interrupt.recv() => {}
                 _ = terminate.recv() => {}
@@ -60,7 +66,23 @@ pub async fn bind(listen: SocketAddr) -> io::Result<TcpListener> {
 }
 
 /// Own all accepted connections and drain them for at most three seconds.
-pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) -> io::Result<()> {
+pub async fn serve(
+    listener: TcpListener,
+    interception: Option<crate::config::Interception>,
+    shutdown: impl Future<Output = ()>,
+) -> io::Result<()> {
+    let interception = interception
+        .map(crate::tls::Interception::open)
+        .transpose()?
+        .map(Arc::new);
+    serve_runtime(listener, interception, shutdown).await
+}
+
+async fn serve_runtime(
+    listener: TcpListener,
+    interception: Option<Arc<crate::tls::Interception>>,
+    shutdown: impl Future<Output = ()>,
+) -> io::Result<()> {
     let mut connections = JoinSet::new();
     tokio::pin!(shutdown);
 
@@ -76,7 +98,7 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
             }
             accepted = listener.accept(), if connections.len() < MAX_CONNECTIONS => {
                 match accepted {
-                    Ok((socket, _)) => { connections.spawn(connection(socket)); }
+                    Ok((socket, _)) => { connections.spawn(connection(socket, interception.clone())); }
                     Err(error) => break Err(error),
                 }
             }
@@ -161,15 +183,15 @@ impl AsyncWrite for Prefixed {
     }
 }
 
-async fn connection(socket: TcpStream) {
+async fn connection(socket: TcpStream, interception: Option<Arc<crate::tls::Interception>>) {
     let deadline = Instant::now() + HEADER_TIMEOUT;
     let Ok(Ok((socket, http2))) = timeout_at(deadline, Prefixed::detect(socket)).await else {
         return;
     };
     if http2 {
-        crate::http2::serve(socket, deadline).await;
+        crate::http2::serve(socket, deadline, interception).await;
     } else {
-        crate::http1::serve(socket, deadline).await;
+        crate::http1::serve(socket, deadline, interception).await;
     }
 }
 
