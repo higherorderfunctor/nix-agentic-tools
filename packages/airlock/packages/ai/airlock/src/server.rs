@@ -1,19 +1,29 @@
-use std::{convert::Infallible, future::Future, io, net::SocketAddr, time::Duration};
+use std::{
+    convert::Infallible,
+    future::Future,
+    io,
+    net::SocketAddr,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use http_body_util::Full;
 use hyper::{
-    Method, Request, Response, StatusCode,
+    Method, Request, Response, StatusCode, Uri,
     body::{Bytes, Incoming},
     server::conn::http1,
     service::service_fn,
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf},
     net::{TcpListener, TcpStream},
     signal::unix::{SignalKind, signal},
-    sync::mpsc,
+    sync::{Notify, mpsc},
     task::JoinSet,
-    time::timeout,
+    time::{Instant, sleep_until, timeout, timeout_at},
 };
 
 use crate::tunnel::{self, PendingTunnel};
@@ -97,23 +107,107 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
     result
 }
 
+const H2_PREFACE: &[u8; 24] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+
+// Protocol detection consumes at most the h2 preface. Replay those bytes to
+// the selected driver; neither driver observes a truncated request.
+pub(crate) struct Prefixed {
+    prefix: Bytes,
+    socket: TcpStream,
+}
+
+impl Prefixed {
+    async fn detect(mut socket: TcpStream) -> io::Result<(Self, bool)> {
+        let mut bytes = [0; 24];
+        let mut filled = 0;
+        while filled < bytes.len() {
+            let count = socket.read(&mut bytes[filled..]).await?;
+            if count == 0 {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            }
+            filled += count;
+            if bytes[..filled] != H2_PREFACE[..filled] {
+                break;
+            }
+        }
+        let http2 = filled == bytes.len() && bytes == *H2_PREFACE;
+        Ok((
+            Self {
+                prefix: Bytes::copy_from_slice(&bytes[..filled]),
+                socket,
+            },
+            http2,
+        ))
+    }
+}
+
+impl AsyncRead for Prefixed {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        if !self.prefix.is_empty() {
+            let count = self.prefix.len().min(buffer.remaining());
+            buffer.put_slice(&self.prefix.split_to(count));
+            return Poll::Ready(Ok(()));
+        }
+        Pin::new(&mut self.socket).poll_read(cx, buffer)
+    }
+}
+
+impl AsyncWrite for Prefixed {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.socket).poll_write(cx, bytes)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.socket).poll_flush(cx)
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.socket).poll_shutdown(cx)
+    }
+}
+
 async fn connection(socket: TcpStream) {
+    let deadline = Instant::now() + HEADER_TIMEOUT;
+    let Ok(Ok((socket, http2))) = timeout_at(deadline, Prefixed::detect(socket)).await else {
+        return;
+    };
+    if http2 {
+        crate::http2::serve(socket, deadline).await;
+        return;
+    }
     // The service must return the `200` before the client socket is upgraded,
     // so it cannot run the relay itself. It sends the pending tunnel back here.
     let (sender, mut receiver) = mpsc::channel(1);
-    let service = service_fn(move |request| handle(request, sender.clone()));
-    // Hyper owns HTTP framing until CONNECT upgrades this socket. The same
-    // task then owns the relay; no tunnel escapes the server's JoinSet.
-    let result = http1::Builder::new()
-        .timer(TokioTimer::new())
-        .header_read_timeout(HEADER_TIMEOUT)
-        .serve_connection(TokioIo::new(socket), service)
-        .with_upgrades()
-        .await;
+    let started = Arc::new(Notify::new());
+    let observed = Arc::clone(&started);
+    let service = service_fn(move |request| {
+        observed.notify_one();
+        handle(request, sender.clone())
+    });
+    let result = {
+        let driver = http1::Builder::new()
+            .timer(TokioTimer::new())
+            .header_read_timeout(HEADER_TIMEOUT)
+            .serve_connection(TokioIo::new(socket), service)
+            .with_upgrades();
+        tokio::pin!(driver);
+        let result = tokio::select! {
+            biased;
+            _ = started.notified() => (&mut driver).await,
+            result = &mut driver => result,
+            _ = sleep_until(deadline) => return,
+        };
+        result
+    };
     if result.is_ok()
         && let Some(pending) = receiver.recv().await
     {
-        // Protocol and upstream errors affect only this client connection.
         let _ = pending.relay().await;
     }
 }
@@ -123,9 +217,10 @@ async fn handle(
     sender: mpsc::Sender<PendingTunnel>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
     if request.method() == Method::CONNECT {
+        let deadline = Instant::now() + tunnel::CONNECT_TIMEOUT;
         // The upstream is already connected when this returns, so the client
         // gets `200` only for a tunnel that can carry bytes.
-        let pending = match tunnel::open_tunnel(request).await {
+        let pending = match tunnel::open_tunnel(request, deadline).await {
             Ok(pending) => pending,
             Err((status, body)) => return Ok(response(status, body)),
         };
@@ -137,17 +232,21 @@ async fn handle(
         }
         return Ok(response(StatusCode::OK, ""));
     }
-    let (status, body) = if request.uri().path() != "/health" {
-        (StatusCode::NOT_FOUND, "not found\n")
-    } else if request.method() != Method::GET {
-        (StatusCode::METHOD_NOT_ALLOWED, "GET required\n")
-    } else {
-        (StatusCode::OK, "ok\n")
-    };
+    let (status, body) = route(request.method(), request.uri());
     Ok(response(status, body))
 }
 
-fn response(status: StatusCode, body: &'static str) -> Response<Full<Bytes>> {
+pub(crate) fn route(method: &Method, uri: &Uri) -> (StatusCode, &'static str) {
+    if uri.path() != "/health" {
+        (StatusCode::NOT_FOUND, "not found\n")
+    } else if method != Method::GET {
+        (StatusCode::METHOD_NOT_ALLOWED, "GET required\n")
+    } else {
+        (StatusCode::OK, "ok\n")
+    }
+}
+
+pub(crate) fn response(status: StatusCode, body: &'static str) -> Response<Full<Bytes>> {
     let mut response = Response::new(Full::new(Bytes::from_static(body.as_bytes())));
     *response.status_mut() = status;
     if !body.is_empty() {
