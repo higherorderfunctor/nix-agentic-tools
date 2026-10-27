@@ -1,56 +1,180 @@
-//! HTTP inside an intercepted TLS session: serve the client's requests, check
-//! that each one targets the CONNECT destination, and send it upstream.
-// cspell:words keepalive
-use std::{convert::Infallible, io, sync::Arc, time::Duration};
+//! HTTP inside an intercepted TLS session: serve the client's requests over the
+//! HTTP version its TLS leg negotiated, check that each one targets the CONNECT
+//! destination, and send it upstream over the version that leg negotiated.
+// cspell:words alpn keepalive
+use std::{convert::Infallible, future::Future, io, pin::Pin, sync::Arc, time::Duration};
 
 use http_body_util::Either;
 use hyper::{
-    Method, Request, StatusCode,
+    Method, Request, Response, StatusCode, Version,
     body::Incoming,
-    client::conn::http1::SendRequest,
     header::{HOST, HeaderValue, UPGRADE},
     service::service_fn,
 };
-use hyper_util::rt::{TokioIo, TokioTimer};
+use hyper_util::{
+    rt::{TokioIo, TokioTimer},
+    server::conn::auto,
+};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::Mutex,
+    net::TcpStream,
+    sync::{Mutex, Notify},
+    time::{Instant, timeout_at},
 };
+use tokio_rustls::{client, server};
 
 use crate::{
-    client::replies::proxy_response,
+    client::{replies::proxy_response, until_first_request},
     http::{
         authority,
         message::{ProxyResponse, prepare_request, prepare_response},
     },
+    tunnel::intercept::executor::{SessionExecutor, SessionTasks},
 };
 
-// Bounds the head of each request inside the TLS session.
-const INNER_HEADER_TIMEOUT: Duration = Duration::from_secs(10);
+/// Concurrent inner HTTP/2 streams one intercepted session accepts.
+pub(super) const INNER_MAX_STREAMS: usize = 32;
 
-/// Serve the client's decrypted requests until either side closes.
-pub(crate) async fn serve(
-    client: impl AsyncRead + AsyncWrite + Unpin + Send + 'static,
-    upstream: impl AsyncRead + AsyncWrite + Unpin + Send + 'static,
+// Bounds the head of each HTTP/1 request inside the TLS session.
+const INNER_HEADER_TIMEOUT: Duration = Duration::from_secs(10);
+// Closes a TLS session whose HTTP/2 client never sends its first request head.
+const FIRST_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+type Driver = Pin<Box<dyn Future<Output = Result<(), hyper::Error>> + Send>>;
+
+/// Serve the client's decrypted requests until either side closes. The
+/// upstream HTTP/2 preface must be written by `setup_deadline`.
+pub(crate) async fn serve<C: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+    client: server::TlsStream<C>,
+    upstream: client::TlsStream<TcpStream>,
+    setup_deadline: Instant,
     host: String,
     port: u16,
 ) -> io::Result<()> {
-    let (sender, driver) = hyper::client::conn::http1::handshake(TokioIo::new(upstream))
-        .await
-        .map_err(io::Error::other)?;
-    let sender = Arc::new(Mutex::new(sender));
+    let tasks = SessionTasks::new();
+    let (sender, driver) = upstream_sender(upstream, setup_deadline, tasks.executor()).await?;
+    let started = Arc::new(Notify::new());
+    let destination = Destination { host, port, sender };
+    let traffic = serve_inner(
+        client,
+        destination,
+        driver,
+        Arc::clone(&started),
+        tasks.executor(),
+    );
+    let first_request_deadline = Instant::now() + FIRST_REQUEST_TIMEOUT;
+    tokio::select! {
+        result = until_first_request(&started, first_request_deadline, traffic) => {
+            result.unwrap_or_else(|| Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "initial inner HTTP request timed out",
+            )))
+        }
+        // The executor reports a session over its task bound.
+        result = tasks.run() => result,
+    }
+}
+
+/// Where a session's requests go: the CONNECT destination and the connection
+/// to it.
+#[derive(Clone)]
+struct Destination {
+    host: String,
+    port: u16,
+    sender: Sender,
+}
+
+/// The sending half of the upstream connection, in its negotiated version.
+#[derive(Clone)]
+enum Sender {
+    // SendRequest requires mutable access; the session accepts one stream
+    // at a time when this is the upstream's protocol.
+    H1(Arc<Mutex<hyper::client::conn::http1::SendRequest<Incoming>>>),
+    H2(hyper::client::conn::http2::SendRequest<Incoming>),
+}
+
+impl Sender {
+    fn version(&self) -> Version {
+        match self {
+            Self::H1(_) => Version::HTTP_11,
+            Self::H2(_) => Version::HTTP_2,
+        }
+    }
+
+    async fn send(&self, request: Request<Incoming>) -> Result<Response<Incoming>, hyper::Error> {
+        match self {
+            Self::H1(sender) => {
+                let mut sender = sender.lock().await;
+                sender.ready().await?;
+                sender.send_request(request).await
+            }
+            Self::H2(sender) => sender.clone().send_request(request).await,
+        }
+    }
+}
+
+/// Start an HTTP client on the upstream TLS stream, in the version its ALPN
+/// chose. The returned driver runs the connection.
+async fn upstream_sender(
+    upstream: client::TlsStream<TcpStream>,
+    setup_deadline: Instant,
+    executor: SessionExecutor,
+) -> io::Result<(Sender, Driver)> {
+    if upstream.get_ref().1.alpn_protocol() == Some(b"h2") {
+        let handshake = hyper::client::conn::http2::handshake(executor, TokioIo::new(upstream));
+        // Bound writing the preface to an upstream that never reads.
+        let (sender, driver) = timeout_at(setup_deadline, handshake)
+            .await
+            .map_err(|_| {
+                io::Error::new(io::ErrorKind::TimedOut, "upstream HTTP/2 setup timed out")
+            })?
+            .map_err(io::Error::other)?;
+        Ok((Sender::H2(sender), Box::pin(driver)))
+    } else {
+        let (sender, driver) = hyper::client::conn::http1::handshake(TokioIo::new(upstream))
+            .await
+            .map_err(io::Error::other)?;
+        Ok((Sender::H1(Arc::new(Mutex::new(sender))), Box::pin(driver)))
+    }
+}
+
+/// Serve the client in the version its ALPN chose, until the client closes or
+/// the upstream connection ends.
+async fn serve_inner<C: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+    client: server::TlsStream<C>,
+    destination: Destination,
+    driver: Driver,
+    started: Arc<Notify>,
+    executor: SessionExecutor,
+) -> io::Result<()> {
+    let http2 = client.get_ref().1.alpn_protocol() == Some(b"h2");
+    // A waiting upload must not consume the connection window needed by the
+    // active request on a single HTTP/1.1 upstream connection.
+    let max_streams = if destination.sender.version() == Version::HTTP_11 {
+        1
+    } else {
+        INNER_MAX_STREAMS as u32
+    };
     let service = service_fn(move |request| {
-        let sender = Arc::clone(&sender);
-        let host = host.clone();
-        async move { Ok::<_, Infallible>(forward_inner_request(request, &host, port, &sender).await) }
+        started.notify_one();
+        let destination = destination.clone();
+        async move { Ok::<_, Infallible>(forward_inner_request(request, &destination).await) }
     });
-    let downstream = hyper::server::conn::http1::Builder::new()
+    let mut builder = auto::Builder::new(executor);
+    builder
+        .http1()
         .timer(TokioTimer::new())
         .header_read_timeout(INNER_HEADER_TIMEOUT)
-        .half_close(true)
-        .serve_connection(TokioIo::new(client), service);
-    // Driver completion closes keepalive but drains any active response.
-    // Both futures remain owned by the outer connection's cancellation.
+        .half_close(true);
+    builder.http2().max_concurrent_streams(max_streams);
+    let builder = if http2 {
+        builder.http2_only()
+    } else {
+        builder.http1_only()
+    };
+    let downstream = builder.serve_connection(TokioIo::new(client), service);
+    // Driver completion disables keepalive and drains active responses;
+    // session cancellation drops all internal H2 futures as well as drivers.
     tokio::pin!(downstream);
     tokio::select! {
         result = &mut downstream => result.map_err(io::Error::other),
@@ -63,35 +187,28 @@ pub(crate) async fn serve(
 
 async fn forward_inner_request(
     mut request: Request<Incoming>,
-    host: &str,
-    port: u16,
-    sender: &Mutex<SendRequest<Incoming>>,
+    destination: &Destination,
 ) -> ProxyResponse {
+    let Destination { host, port, sender } = destination;
     let refused = || {
         proxy_response(
             StatusCode::BAD_REQUEST,
             "inner request must match CONNECT destination\n",
         )
     };
-    if !targets_destination(&request, host, port) {
+    if !targets_destination(&request, host, *port) {
         return refused();
     }
-    let host_header = request.headers()[HOST].clone();
-    if let Err((status, message)) = prepare_request(&mut request) {
+    let host_header = request.headers().get(HOST).cloned();
+    if let Err((status, message)) = prepare_request(&mut request, sender.version()) {
         return proxy_response(status, message);
     }
     // After `prepare_request`, so a `Connection: host` token cannot strip it.
-    if !address_upstream(&mut request, host_header) {
+    if !address_upstream(&mut request, host_header, sender.version()) {
         return refused();
     }
     let method = request.method().clone();
-    let result = async {
-        let mut sender = sender.lock().await;
-        sender.ready().await?;
-        sender.send_request(request).await
-    }
-    .await;
-    let Ok(mut response) = result else {
+    let Ok(mut response) = sender.send(request).await else {
         return proxy_response(StatusCode::BAD_GATEWAY, "upstream request failed\n");
     };
     if let Err(message) = prepare_response(&mut response, &method) {
@@ -106,42 +223,65 @@ fn targets_destination<B>(request: &Request<B>, host: &str, port: u16) -> bool {
     let names_destination =
         |authority: &str| authority::parse(authority, Some(443)) == Some((host.to_owned(), port));
     let uri = request.uri();
+    let http2 = request.version() == Version::HTTP_2;
     // CONNECT and Upgrade would open another tunnel inside this one.
     let opens_tunnel =
         request.method() == Method::CONNECT || request.headers().contains_key(UPGRADE);
-    // Exactly one Host header, naming the destination.
+    // At most one Host header, naming the destination. HTTP/2 may omit it and
+    // name the destination in `:authority` instead.
     let mut hosts = request.headers().get_all(HOST).iter();
-    let host_matches = hosts
-        .next()
-        .is_some_and(|value| value.to_str().is_ok_and(names_destination))
-        && hosts.next().is_none();
+    let host_matches = match hosts.next() {
+        Some(value) => value.to_str().is_ok_and(names_destination),
+        None => http2,
+    } && hosts.next().is_none();
     // An absolute-form target must be `https` on the destination.
     let uri_matches = uri.scheme().is_none_or(|scheme| scheme.as_str() == "https")
         && uri
             .authority()
             .is_none_or(|authority| names_destination(authority.as_str()));
-    !opens_tunnel && host_matches && uri_matches && uri.path().starts_with('/')
+    // HTTP/2 requests always carry `:scheme` and `:authority`.
+    let complete = !http2 || (uri.scheme().is_some() && uri.authority().is_some());
+    !opens_tunnel && host_matches && uri_matches && complete && uri.path().starts_with('/')
 }
 
-/// Use origin-form upstream, taking Host from absolute-form authority when present.
-fn address_upstream<B>(request: &mut Request<B>, host: HeaderValue) -> bool {
-    let Some(target) = request
+/// Use the upstream's target form, preserving the validated Host and authority.
+fn address_upstream<B>(
+    request: &mut Request<B>,
+    host: Option<HeaderValue>,
+    version: Version,
+) -> bool {
+    let Some(path) = request.uri().path_and_query().map(|path| path.as_str()) else {
+        return false;
+    };
+    let Some(authority) = request
         .uri()
-        .path_and_query()
-        .and_then(|path| path.as_str().parse().ok())
+        .authority()
+        .map(|authority| authority.as_str())
+        .or_else(|| host.as_ref().and_then(|host| host.to_str().ok()))
     else {
         return false;
     };
-    // Absolute-form authority overrides Host (RFC 9112 section 3.2.2).
-    let host = match request.uri().authority() {
-        Some(authority) => match HeaderValue::from_str(authority.as_str()) {
-            Ok(host) => host,
-            Err(_) => return false,
-        },
-        None => host,
+    let target = if version == Version::HTTP_2 {
+        format!("https://{authority}{path}").parse()
+    } else {
+        path.parse()
+    };
+    let Ok(target) = target else {
+        return false;
+    };
+    // Authority overrides Host; HTTP/1 also needs Host when HTTP/2 omitted it.
+    let host = if version == Version::HTTP_11 || host.is_some() {
+        let Ok(host) = HeaderValue::from_str(authority) else {
+            return false;
+        };
+        Some(host)
+    } else {
+        host
     };
     *request.uri_mut() = target;
-    request.headers_mut().insert(HOST, host);
+    if let Some(host) = host {
+        request.headers_mut().insert(HOST, host);
+    }
     true
 }
 
@@ -166,10 +306,58 @@ mod tests {
                 .body(())
                 .unwrap();
             assert!(targets_destination(&request, "api.anthropic.com", 443));
-            let host = request.headers()[HOST].clone();
-            assert!(address_upstream(&mut request, host));
+            let host = request.headers().get(HOST).cloned();
+            assert!(address_upstream(&mut request, host, Version::HTTP_11));
             assert_eq!(request.headers()[HOST], expected_host);
             assert_eq!(request.uri(), "/messages?q=1");
+        }
+    }
+
+    #[test]
+    fn default_https_port_preserves_authority_across_inner_protocol_pairs() {
+        // Like the HTTP/1 case, this tests port 443's request shape without
+        // binding that privileged port; TLS transport uses ephemeral ports.
+        for down in [Version::HTTP_11, Version::HTTP_2] {
+            for up in [Version::HTTP_11, Version::HTTP_2] {
+                for with_host in [false, true] {
+                    if down == Version::HTTP_11 && !with_host {
+                        continue;
+                    }
+                    let mut builder =
+                        Request::builder()
+                            .version(down)
+                            .uri(if down == Version::HTTP_2 {
+                                "https://API.anthropic.com/messages?q=1"
+                            } else {
+                                "/messages?q=1"
+                            });
+                    if with_host {
+                        builder = builder.header(HOST, "api.anthropic.com");
+                    }
+                    let mut request = builder.body(()).unwrap();
+                    assert!(targets_destination(&request, "api.anthropic.com", 443));
+                    let host = request.headers().get(HOST).cloned();
+                    assert!(address_upstream(&mut request, host, up));
+                    let expected_host = if down == Version::HTTP_2 {
+                        "API.anthropic.com"
+                    } else {
+                        "api.anthropic.com"
+                    };
+                    if up == Version::HTTP_2 {
+                        assert_eq!(
+                            request.uri(),
+                            format!("https://{expected_host}/messages?q=1").as_str()
+                        );
+                    } else {
+                        assert_eq!(request.uri(), "/messages?q=1");
+                    }
+                    if with_host || up == Version::HTTP_11 {
+                        assert_eq!(request.headers()[HOST], expected_host);
+                    } else {
+                        assert!(!request.headers().contains_key(HOST));
+                    }
+                }
+            }
         }
     }
 }
