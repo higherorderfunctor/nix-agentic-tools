@@ -1,6 +1,7 @@
 """Check service wiring through each backend's generated outer launcher."""
 
 import http.client
+import json
 import os
 import subprocess
 import sys
@@ -9,10 +10,10 @@ import time
 from pathlib import Path
 
 
-def readiness(launcher, listen):
-    host, port = listen.rsplit(":", 1)
+def readiness(launcher, config):
+    host, port = config["listen"].rsplit(":", 1)
     port = int(port)
-    assert port != 8318, "a default port would not prove the listen argument was read"
+    assert port != 8318, "a default port would not prove the config was read"
     with tempfile.TemporaryDirectory(prefix="airlock-launcher-") as directory:
         environment = os.environ | {"XDG_RUNTIME_DIR": directory}
         with (Path(directory) / "output").open("w+") as output:
@@ -49,6 +50,6 @@ def readiness(launcher, listen):
 
 
 if __name__ == "__main__":
-    listen = sys.argv[1]
+    config = json.loads(sys.argv[1])
     for launcher in sys.argv[2:]:
-        readiness(launcher, listen)
+        readiness(launcher, config)
