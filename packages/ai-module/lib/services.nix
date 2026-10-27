@@ -63,7 +63,9 @@
   # build instead of a start: a placeholder with no secret would reach the
   # daemon as literal text, and a secret with no placeholder is never read.
   checkFile = option: file: let
-    used = lib.unique (placeholders (builtins.fromJSON file.content));
+    # Parse only to inspect placeholders; return the original context-bearing
+    # content so public store paths remain dependencies of the rendered file.
+    used = lib.unique (placeholders (builtins.fromJSON (builtins.unsafeDiscardStringContext file.content)));
     missing = lib.subtractLists (builtins.attrNames file.secrets) used;
     unused = lib.subtractLists used (builtins.attrNames file.secrets);
   in
