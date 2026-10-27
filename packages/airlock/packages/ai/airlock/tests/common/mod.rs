@@ -1,25 +1,46 @@
+pub mod h2_client;
+pub mod process;
+pub mod tls;
+
 use std::{io, net::SocketAddr, time::Duration};
 
-use airlock::server;
+use airlock::{
+    config::{Config, Interception},
+    server,
+    startup::State,
+};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     sync::oneshot,
     task::JoinHandle,
     time::timeout,
 };
 
+#[allow(dead_code)]
 pub struct Server {
     pub address: SocketAddr,
     pub shutdown: oneshot::Sender<()>,
     pub task: JoinHandle<io::Result<()>>,
 }
 
+#[allow(dead_code)]
 pub async fn start() -> Server {
+    start_with(None).await
+}
+
+/// Serve on a free loopback port with the given settings.
+#[allow(dead_code)]
+pub async fn start_with(interception: Option<Interception>) -> Server {
     let listener = server::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
     let address = listener.local_addr().unwrap();
+    let config = Config {
+        listen: address,
+        interception,
+    };
+    let state = State::load(&config).unwrap();
     let (shutdown, stopped) = oneshot::channel();
-    let task = tokio::spawn(server::serve(listener, async {
+    let task = tokio::spawn(server::serve(listener, state, async {
         let _ = stopped.await;
     }));
     Server {
@@ -30,10 +51,12 @@ pub async fn start() -> Server {
 }
 
 impl Server {
+    #[allow(dead_code)]
     pub async fn client(&self) -> TcpStream {
         TcpStream::connect(self.address).await.unwrap()
     }
 
+    #[allow(dead_code)]
     pub async fn stop(self) {
         self.shutdown.send(()).unwrap();
         timeout(Duration::from_secs(4), self.task)
@@ -44,30 +67,39 @@ impl Server {
     }
 }
 
-pub async fn message(socket: &mut TcpStream) -> String {
+/// Read an HTTP/1 head through its blank line.
+#[allow(dead_code)]
+pub async fn headers(socket: &mut (impl AsyncRead + Unpin)) -> String {
     timeout(Duration::from_secs(2), async {
-        let mut response = Vec::new();
-        while !response.ends_with(b"\r\n\r\n") {
-            response.push(socket.read_u8().await.expect("response header"));
+        let mut bytes = Vec::new();
+        while !bytes.ends_with(b"\r\n\r\n") {
+            bytes.push(socket.read_u8().await.expect("response header"));
         }
-        let headers = String::from_utf8(response.clone()).unwrap();
-        let length: usize = headers
-            .lines()
-            .find_map(|line| line.strip_prefix("content-length: "))
-            .map(|length| length.parse().unwrap())
-            .unwrap_or(0);
-        let header_length = response.len();
-        response.resize(header_length + length, 0);
-        socket
-            .read_exact(&mut response[header_length..])
-            .await
-            .unwrap();
-        String::from_utf8(response).unwrap()
+        String::from_utf8(bytes).unwrap()
     })
     .await
-    .expect("response deadline")
+    .expect("header deadline")
 }
 
+/// Read an HTTP/1 request or response head and its `content-length` body.
+#[allow(dead_code)]
+pub async fn message(socket: &mut TcpStream) -> String {
+    let mut response = headers(socket).await;
+    let length: usize = response
+        .lines()
+        .find_map(|line| line.strip_prefix("content-length: "))
+        .map(|length| length.parse().unwrap())
+        .unwrap_or(0);
+    let mut body = vec![0; length];
+    timeout(Duration::from_secs(2), socket.read_exact(&mut body))
+        .await
+        .expect("body deadline")
+        .unwrap();
+    response.push_str(&String::from_utf8(body).unwrap());
+    response
+}
+
+#[allow(dead_code)]
 pub async fn request(socket: &mut TcpStream, method: &str, target: &str) -> String {
     socket
         .write_all(format!("{method} {target} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())
