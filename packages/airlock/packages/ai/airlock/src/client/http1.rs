@@ -123,12 +123,21 @@ async fn open_tunnel(
 }
 
 async fn handle(
-    request: Request<Incoming>,
+    mut request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
     forwarder: Forwarder,
     state: Arc<State>,
 ) -> Result<ProxyResponse, Infallible> {
-    if request.method() == Method::CONNECT {
+    let connect = request.method() == Method::CONNECT;
+    // An absolute-form target names another server; origin-form is for Airlock.
+    let forwarded =
+        !connect && (request.uri().scheme().is_some() || request.uri().authority().is_some());
+    if (connect || forwarded)
+        && let Err((status, body)) = state.clients.admit(&mut request)
+    {
+        return Ok(proxy_response(status, body));
+    }
+    if connect {
         let deadline = Instant::now() + CONNECT_TIMEOUT;
         let pending = match open_tunnel(request, deadline, &state).await {
             Ok(pending) => pending,
@@ -142,8 +151,7 @@ async fn handle(
         }
         return Ok(proxy_response(StatusCode::OK, ""));
     }
-    // An absolute-form target names another server; origin-form is for Airlock.
-    if request.uri().scheme().is_some() || request.uri().authority().is_some() {
+    if forwarded {
         return Ok(forwarder.forward(request).await);
     }
     let (status, body) = route(request.method(), request.uri());

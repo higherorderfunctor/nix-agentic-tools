@@ -1,7 +1,8 @@
 //! The side a client connects to: protocol detection, the HTTP/1 and HTTP/2
-//! servers, and the replies Airlock writes itself.
+//! servers, proxy credentials, and the replies Airlock writes itself.
 //! Client-facing HTTP servers share the first-request deadline below, which
 //! closes a connection that opens and then sends nothing a server can act on.
+pub(crate) mod auth;
 pub(crate) mod http1;
 pub(crate) mod http2;
 pub(crate) mod protocol;
