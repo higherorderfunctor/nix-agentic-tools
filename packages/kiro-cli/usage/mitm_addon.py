@@ -1,0 +1,102 @@
+"""Load with mitmdump -s /absolute/path/mitm_addon.py; no mitmproxy import required."""
+
+import os
+import sqlite3
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from capture import CaptureCapacityError, Collector
+
+
+class UsageCapture:
+    def load(self, loader):
+        self.active, self.collector, self.failed = {}, None, True
+        try:
+            self.collector = Collector(os.environ["KIRO_USAGE_DB"], max_stored_bytes=int(os.environ.get("KIRO_USAGE_MAX_BYTES", "268435456")))
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError, sqlite3.Error):
+            print("Kiro usage capture startup failed: selected requests will be refused; fix capture configuration and restart", file=sys.stderr)
+        else:
+            self.failed = False
+
+    def request(self, flow):
+        host = flow.request.host.lower()
+        if not (host == "kiro.dev" or host.endswith(".kiro.dev")):
+            return
+        if flow.request.path.split("?", 1)[0] != "/v1/responses":
+            return
+        if self.failed:
+            self._reject(flow)
+            return
+        # Never copy URLs, query strings, cookies, or authentication headers.
+        metadata = {"host": host, "method": flow.request.method, "path": "/v1/responses"}
+        try:
+            body = flow.request.get_content(strict=True)
+        except ValueError:
+            self._reject(flow, status=400, message=b"Cannot decode selected Kiro request body")
+            return
+        metadata["request_content_encoding"] = flow.request.headers.get("content-encoding", "identity")
+        try:
+            if self.failed:
+                raise RuntimeError("capture failed")
+            self.active[flow.id] = self.collector.begin(metadata, body or b"")
+        except CaptureCapacityError:
+            self._reject(flow, message=b"Kiro usage capture at capacity; retry after active requests finish")
+        except RuntimeError:
+            self._failed()
+            self._reject(flow)
+
+    def _failed(self):
+        if not self.failed:
+            print("Kiro usage capture failed: existing responses pass through; new selected requests are refused until restart", file=sys.stderr)
+        self.failed = True
+
+    def _reject(self, flow, status=503, message=b"Kiro usage capture unavailable; restart the capture service"):
+        from mitmproxy import http
+        flow.response = http.Response.make(status, message, {"Content-Type": "text/plain"})
+
+    def responseheaders(self, flow):
+        ident = self.active.get(flow.id)
+        if not ident:
+            return
+        metadata = {"status": flow.response.status_code}
+        for header, key in (("content-encoding", "content_encoding"), ("content-type", "content_type"), ("x-amzn-requestid", "upstream_request_id"), ("x-request-id", "request_id")):
+            value = flow.response.headers.get(header)
+            if value is not None:
+                metadata[key] = value
+        try:
+            self.collector.headers(ident, metadata)
+        except RuntimeError:
+            self._failed()
+        def stream(data):
+            if not self.failed:
+                try:
+                    self.collector.check()
+                    if data:
+                        self.collector.chunk(ident, data)
+                except RuntimeError:
+                    self._failed()
+            return data  # Including b"": return the original object immediately.
+        flow.response.stream = stream
+
+    def response(self, flow):
+        ident = self.active.pop(flow.id, None)
+        self._finish(ident)
+
+    def error(self, flow):
+        ident = self.active.pop(flow.id, None)
+        self._finish(ident, transport_ended=False, error="transport_error")
+
+    def _finish(self, ident, **options):
+        if ident and not self.failed:
+            try:
+                self.collector.finish(ident, **options)
+            except RuntimeError:
+                self._failed()
+
+    def done(self):
+        if self.collector is not None:
+            self.collector.close()
+
+
+addons = [UsageCapture()]

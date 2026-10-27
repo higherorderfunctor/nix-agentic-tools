@@ -66,6 +66,8 @@
     optionValueBlock
     ;
 
+  usage = import ./usageTracking.nix {inherit lib pkgs;};
+
   # Value-taking options whose values must not be mistaken for a subcommand.
   # Only the chat binary's list survives: the launcher-side list existed for the
   # removed `--tui` gate, which was the sole caller that had to distinguish a
@@ -79,6 +81,7 @@
     extraPackages ? [],
     secretEnv ? {},
     trustedMcpTools ? [],
+    usageTracking ? {enable = false;},
     v3 ? false,
   }: {
     environmentVariables = {
@@ -97,6 +100,10 @@
       active = trustedMcpTools != [];
       name = "ai.kiro.cli.trustedMcpTools";
     };
+    usageTracking = {
+      active = usageTracking.enable;
+      name = "ai.kiro.cli.usageTracking";
+    };
     v3 = {
       active = v3;
       name = "ai.kiro.cli.v3";
@@ -110,19 +117,21 @@
     package,
     v3,
     trustedMcpTools,
+    usageTracking ? {enable = false;},
     environmentVariables ? {},
     extraPackages ? [],
     secretEnv ? {},
     secretOptionPaths ? {},
   }: let
     reasons = wrapperReasons {
-      inherit environmentVariables extraPackages secretEnv trustedMcpTools v3;
+      inherit environmentVariables extraPackages secretEnv trustedMcpTools usageTracking v3;
     };
     hasEnv = reasons.environmentVariables.active;
     hasExtraPackages = reasons.extraPackages.active;
     hasSecret = reasons.secrets.active;
     hasTrust = reasons.trustedMcpTools.active;
     hasV3 = reasons.v3.active;
+    hasUsage = reasons.usageTracking.active;
     needsWrapper = lib.any (reason: reason.active) (lib.attrValues reasons);
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
@@ -238,13 +247,38 @@
     # backend the withheld grant is not recovered declaratively. The interactive
     # half is an ACP `session/request_permission` round-trip the CLI flag could
     # never have participated in either way. `chat` stays unconditional.
+    engineScan = optionValueBlock {
+      flag = "--agent-engine";
+      var = "nat_engine";
+    };
+    # The configured v3 flag belongs only to the launcher. A direct chat
+    # invocation must establish v3 itself, including the --v3 form that the
+    # launcher forwards on its chat path. Never infer the chat binary's default.
+    usageEngineGuard = requireExplicitV3:
+      lib.optionalString hasUsage ''
+        ${engineScan}
+        if [ -n "$nat_engine" ] && [ "$nat_engine" != v3 ]; then
+          printf '%s\n' 'Kiro usage tracking requires the v3 engine; remove the non-v3 --agent-engine override or disable usageTracking.' >&2
+          exit 1
+        fi
+        ${lib.optionalString requireExplicitV3 ''
+          nat_usage_v3=0
+          for nat_arg in "$@"; do
+            case "$nat_arg" in
+              --) break ;;
+              --v3) nat_usage_v3=1 ;;
+            esac
+          done
+          if [ "$nat_engine" != v3 ] && [ "$nat_usage_v3" != 1 ]; then
+            printf '%s\n' 'Kiro usage tracking requires an explicit v3 engine for kiro-cli-chat; pass --agent-engine v3 or --v3, or use kiro-cli.' >&2
+            exit 1
+          fi
+        ''}
+      '';
     trustAppend = "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}";
     trustInjection = lib.optionalString hasTrust (
       lib.concatStringsSep "\n" [
-        (optionValueBlock {
-          flag = "--agent-engine";
-          var = "nat_engine";
-        })
+        (lib.optionalString (!hasUsage) engineScan)
         (gateOnSubcommand {
             subcommands = ["acp" "chat"];
             valueFlags = chatValueFlags;
@@ -263,6 +297,7 @@
     mkWrapper = name: {
       realBin,
       injection ? "",
+      requireExplicitV3 ? false,
     }:
       pkgs.writeShellScript name (
         lib.concatStringsSep "\n" (
@@ -273,34 +308,37 @@
             secretExports
           ]
           ++ lib.optional (pathExport != "") pathExport
+          ++ lib.optionals hasUsage [(usageEngineGuard requireExplicitV3) (usage.launcherBlock usageTracking)]
           ++ lib.optional (injection != "") injection
           ++ ["exec -a \"$0\" ${lib.escapeShellArg realBin} \"$@\""]
         )
       );
   in
-    if !needsWrapper
-    then package
-    else
-      pkgs.symlinkJoin {
-        name = "kiro-cli-wrapped";
-        paths = [package];
-        postBuild = ''
-          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasV3) ''
-            rm -f "$out/bin/kiro-cli"
-            ln -s ${mkWrapper "kiro-cli-launcher" {
-              realBin = "${package}/bin/kiro-cli";
-              injection = launcherInjection;
-            }} "$out/bin/kiro-cli"
-          ''}
-          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasTrust) ''
-            rm -f "$out/bin/kiro-cli-chat"
-            ln -s ${mkWrapper "kiro-cli-chat-wrapper" {
-              realBin = "${package}/bin/kiro-cli-chat";
-              injection = trustInjection;
-            }} "$out/bin/kiro-cli-chat"
-          ''}
-        '';
-      };
+    assert lib.assertMsg (!hasUsage || hasV3) "Kiro usage tracking requires v3 = true in the managed wrapper.";
+      if !needsWrapper
+      then package
+      else
+        pkgs.symlinkJoin {
+          name = "kiro-cli-wrapped";
+          paths = [package] ++ lib.optional hasUsage (usage.tool usageTracking);
+          postBuild = ''
+            ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasUsage || hasV3) ''
+              rm -f "$out/bin/kiro-cli"
+              ln -s ${mkWrapper "kiro-cli-launcher" {
+                realBin = "${package}/bin/kiro-cli";
+                injection = launcherInjection;
+              }} "$out/bin/kiro-cli"
+            ''}
+            ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasTrust || hasUsage) ''
+              rm -f "$out/bin/kiro-cli-chat"
+              ln -s ${mkWrapper "kiro-cli-chat-wrapper" {
+                realBin = "${package}/bin/kiro-cli-chat";
+                injection = trustInjection;
+                requireExplicitV3 = true;
+              }} "$out/bin/kiro-cli-chat"
+            ''}
+          '';
+        };
 in {
   inherit wrapperReasons;
 
@@ -308,6 +346,7 @@ in {
     package,
     v3,
     trustedMcpTools,
+    usageTracking ? {enable = false;},
     environmentVariables ? {},
     extraPackages ? [],
     secretEnv ? {},
@@ -346,7 +385,7 @@ in {
   in
     wrapDirect {
       package = selectedPackage;
-      inherit environmentVariables extraPackages secretEnv secretOptionPaths v3;
+      inherit environmentVariables extraPackages secretEnv secretOptionPaths usageTracking v3;
       trustedMcpTools =
         if placeTrustInsideFhs
         then []

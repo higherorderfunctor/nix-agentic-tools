@@ -16,6 +16,7 @@
   # See packages/kiro-cli/lib/wrapPackage.nix.
   kiroWrapper = import ./wrapPackage.nix {inherit lib pkgs;};
   inherit (kiroWrapper) wrapperReasons;
+  usageTracking = import ./usageTracking.nix {inherit lib pkgs;};
   wrapKiroPackage = kiroWrapper.wrapPackage;
 
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
@@ -1115,7 +1116,7 @@
     ...
   }:
     wrapKiroPackage {
-      inherit (cfg.cli) extraPackages trustedMcpTools useFhsSandbox v3;
+      inherit (cfg.cli) extraPackages trustedMcpTools usageTracking useFhsSandbox v3;
       package = resolvePackage cfg;
       environmentVariables = launcherEnvironment;
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
@@ -1433,6 +1434,7 @@ in
             '';
           };
         };
+        usageTracking = usageTracking.options;
         useFhsSandbox = lib.mkOption {
           type = lib.types.bool;
           default = true;
@@ -1638,6 +1640,7 @@ in
         extraPackages = [["ai" "kiro" "cli" "extraPackages"]];
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
         trustedMcpTools = [["ai" "kiro" "cli" "trustedMcpTools"]];
+        usageTracking = [["ai" "kiro" "cli" "usageTracking" "enable"]];
         v3 = [["ai" "kiro" "cli" "v3"]];
       };
       wrapperPackageReasons =
@@ -1645,7 +1648,7 @@ in
           reason // {explicit = explicitAt wrapperReasonPaths.${key};})
         (wrapperReasons {
           environmentVariables = mergedEnvironmentVariables;
-          inherit (cfg.cli) extraPackages trustedMcpTools v3;
+          inherit (cfg.cli) extraPackages trustedMcpTools usageTracking v3;
           inherit (kiroSecrets) secretEnv;
         });
       # Beside the wrapper's own reasons: package-dependent options the
@@ -1728,9 +1731,13 @@ in
               '')
             featureSettingImplications);
           })
+          (lib.mkIf cfg.cli.usageTracking.enable {
+            ai.kiro.services.kiro-usage = usageTracking.service cfg.cli.usageTracking;
+          })
           {
             assertions =
               mkAssertions cfg
+              ++ usageTracking.assertions cfg mergedEnvironmentVariables
               ++ mkAgentFormatAssertions nativeAgentPlans
               ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
           }
