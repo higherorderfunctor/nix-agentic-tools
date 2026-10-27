@@ -8,11 +8,15 @@ import re
 import sqlite3
 import sys
 
+import credit_discount
 from display import table, value
 
 
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
 COUNTERS = (*DIMENSIONS, "total_tokens")
+CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
+    WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
+    ELSE 'other_linked_conversations' END"""
 FOOTER_WARNINGS = (
     "Own-versus-delegate attribution within a session is unavailable; session scope can include delegate work.",
     "Disk turn credits and capture credits overlap and must never be added.",
@@ -189,9 +193,7 @@ def query(db, session, scope="session"):
                 "metrics": {name: metric(row[name], row[name + "_known"], row["n"]) for name in COUNTERS},
                 "cache_hit_rate": cache_hit_rate(row), "estimates": {}})
         for row in db.execute(chosen + f"""
-            SELECT CASE WHEN nullif(json_extract(metadata_json,'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
-                WHEN json_extract(metadata_json,'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
-                ELSE 'other_linked_conversations' END AS pool,
+            SELECT {CONVERSATION_POOL.format(metadata="metadata_json")} AS pool,
                 count(*) AS n,{sums}
             FROM chosen GROUP BY pool
         """, [*parameters, session, session.removeprefix("sess_")]):
@@ -223,7 +225,64 @@ def query(db, session, scope="session"):
     if scope == "tree":
         report["attribution"]["tree_identity"] = "Explicit parentSessionId/rootSessionId or captured root_conversation_id only"
     report["captures"] = captures
+    discount_reports(db, report, chosen if captures["available"] else None, parameters if captures["available"] else [])
     return report
+
+
+def discount_reports(db, report, chosen, parameters):
+    captures = report["captures"]
+    sources = [captures, *captures.get("models", []), *captures["pools"].values()]
+    for source in sources:
+        source["credit_discount"] = credit_discount.aggregate()
+    if chosen is None:
+        return
+    models = {source["requested_model"]: source for source in captures["models"]}
+    event_tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    proof = "0 AS retained,0 AS terminal,0 AS text_only,0 AS no_reasoning_tools"
+    if {"events", "chunks"} <= event_tables:
+        proof = """
+          c.request_gzip IS NOT NULL AND EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id)
+            AND EXISTS(SELECT 1 FROM chunks k WHERE k.capture_id=c.id)
+            AND NOT EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND e.frame_gzip IS NULL)
+            AND NOT EXISTS(SELECT 1 FROM chunks k WHERE k.capture_id=c.id AND k.application_gzip IS NULL) AS retained,
+          json_extract(c.summary_json,'$.terminal')='response.completed'
+            AND json_extract(c.summary_json,'$.output_count_source')='terminal_output'
+            AND (SELECT count(*) FROM events e WHERE e.capture_id=c.id AND json_extract(e.data_json,'$.type')='response.completed')=1 AS terminal,
+          EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND json_extract(e.data_json,'$.type')='response.completed'
+            AND json_type(e.data_json,'$.response.output')='array' AND json_array_length(e.data_json,'$.response.output')>0
+            AND NOT EXISTS(SELECT 1 FROM json_each(e.data_json,'$.response.output') item
+              WHERE coalesce(json_extract(item.value,'$.type'),'')!='message'
+              OR coalesce(json_type(item.value,'$.content'),'')!='array'
+              OR EXISTS(SELECT 1 FROM json_each(item.value,'$.content') part
+                WHERE coalesce(json_extract(part.value,'$.type'),'')!='output_text'
+                OR coalesce(json_type(part.value,'$.text'),'')!='text'))) AS text_only,
+          NOT EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND (
+            coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%reasoning%'
+            OR coalesce(e.event_name,'') LIKE '%reasoning%'
+            OR coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%function_call%'
+            OR coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%tool%'
+            OR coalesce(e.event_name,'') LIKE '%function_call%'
+            OR coalesce(e.event_name,'') LIKE '%tool%'
+            OR coalesce(json_extract(e.data_json,'$.item.type'),'message')!='message'
+            OR coalesce(json_extract(e.data_json,'$.part.type'),'output_text')!='output_text')) AS no_reasoning_tools
+        """
+    for row in db.execute(chosen + f"""SELECT c.id,c.metadata_json,c.credits,c.context_usage_percentage,
+        json_extract(c.summary_json,'$.output_text_chars') AS chars,
+        {CONVERSATION_POOL.format(metadata="c.metadata_json")} AS pool,
+        c.state='complete' AND c.completion_seen=1 AND c.transport_ended=1 AND c.issues_json='[]'
+          AND c.dropped_bytes=0 AND c.dropped_chunks=0 AS complete
+        FROM chosen JOIN captures c ON c.id=chosen.id""", [*parameters, report["session"], report["session"].removeprefix("sess_")]):
+        metadata = json.loads(row["metadata_json"] or "{}")
+        facts = {key: row[key] for key in ("credits", "chars")}
+        facts.update(context=row["context_usage_percentage"], model=metadata.get("model"), effort=metadata.get("effort"))
+        facts["complete"] = bool(row["complete"])
+        result = credit_discount.preflight(facts)
+        if result is None:
+            evidence = db.execute("SELECT " + proof + " FROM captures c WHERE c.id=?", (row["id"],)).fetchone()
+            facts.update({key: bool(evidence[key]) for key in ("retained", "terminal", "text_only", "no_reasoning_tools")})
+            result = credit_discount.classify(facts)
+        for source in (captures, models[metadata.get("model")], captures["pools"][row["pool"]]):
+            credit_discount.add(source["credit_discount"], result, row["id"])
 
 
 def capture_tables(captures):
@@ -241,21 +300,28 @@ def capture_tables(captures):
         if item["unknown"]:
             text += f" ({item['known']}/{item['known'] + item['unknown']})"
         return text
+    show_discount = any(source["credit_discount"]["eligible"] or source["credit_discount"]["anomaly"]
+                        for source in (captures, *captures.get("models", [])))
     def row(label, source):
         rate = source.get("cache_hit_rate", {})
         hit = rate.get("percentage")
         hit = f"~{hit:.1f}%" if hit is not None else None
         if hit is not None and rate["unknown"]:
             hit += f" ({rate['evaluable']}/{source['observations']})"
+        discount = source["credit_discount"]
+        percentage = discount["percentage"]
+        discount_cell = f"~{percentage:.1f}% ({discount['eligible']}/{discount['requests']})" if percentage is not None else None
         return [label, source["observations"] if captures["available"] else None,
                 *(counter(source, name) for name in ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")),
-                hit, counter(source, "credits")]
-    columns = ["Model", "Requests", "Total tokens", "Input", "Output", "Cached", "Hit %", "Credits"]
+                hit, counter(source, "credits"), *([discount_cell] if show_discount else [])]
+    columns = ["Model", "Requests", "Total tokens", "Input", "Output", "Cached", "Hit %", "Credits", *(["Discount %"] if show_discount else [])]
     model_rows = [row(model["requested_model"], model) for model in captures.get("models", [])]
     pool_rows = [row("Total", captures)]
     pool_rows += [row(label, captures["pools"][pool])
                   for pool, label in (("root_conversation", "Root conversation"), ("other_linked_conversations", "Other linked"), ("unknown", "Unknown"))]
-    return "\n".join([table(columns, model_rows), "", table(["Pool", *columns[1:]], pool_rows)])
+    notes = (["Discount % includes partial credit discounts, not observed cache hits; experimental (classified/all requests).",
+              f"Profile anomalies: {captures['credit_discount']['anomaly']}; excluded: {captures['credit_discount']['excluded']}."] if show_discount else [])
+    return "\n".join([table(columns, model_rows), "", table(["Pool", *columns[1:]], pool_rows), *notes])
 
 
 CAPTURE_NOTES = (

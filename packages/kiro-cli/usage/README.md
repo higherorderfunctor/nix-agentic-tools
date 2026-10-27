@@ -177,6 +177,31 @@ event/summary evidence is also signaled in `issues_json`. A full observed
 response hash can exist even when storage is incomplete; use `state` and the
 nullable BLOBs to determine replay completeness.
 
+## Experimental credit-discount diagnostic
+
+The initial ten-call calibration supports a narrow credit-price diagnostic, not
+token estimates or validated cache-hit detection. Profile
+`opus-5.5-low-text1to5-context-v1` requires model `claude-opus-5.5`, effort
+`low`, retained complete captures, a completed terminal event proving text-only
+output of 1–5 characters, no observed reasoning/tool output, and reported
+context between 0.87679994% and 3.6423001%. The curves consume context percent
+directly: baseline `(74*p + 0.5034)/603`, discounted `(20*p + 0.5970)/603`. The
+0.000001-credit tolerance is numerical, not a statistical confidence interval.
+Scores and residuals remain unclamped; values outside the curve envelope are
+anomalies.
+
+Five of eight eligible initial calls were discount-like (~62.5%), a band that
+includes partial discounts rather than only fully discounted requests; three
+were baseline and two longer-output cases were excluded. Cold/warm/delayed
+requests had matching delivered context, hooks, and tools after metadata
+removal. That comparison does not prove provider caching, establish percentile
+accuracy, or validate character-to-token conversion. Token and cached-token
+counters stay unknown unless reported. `Discount %` appears separately from the
+counter-derived `Hit %`, with classified/all-request coverage and
+exclusion/anomaly counts. Structured `credit_discount` objects retain the
+profile, assumptions, reasons, and numeric diagnostics per total, model, and
+conversation group. No context-window assumption or extrapolation is applied.
+
 ## Offline inspection and replay
 
 These commands use only Python's standard library and open the database

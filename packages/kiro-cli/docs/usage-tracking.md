@@ -83,19 +83,29 @@ include internal delegates, and other linked conversations can include helpers
 or forks. Disk turn credits never enter these captured-call totals. Requests,
 total/input/output/cached tokens, request hit rate, and credits are grouped by
 model and pool, with no per-delegate listing. Missing counters stay unavailable.
-A `~` marks an estimate; no token estimator is enabled. Hit percentage is the
-share of requests with cached tokens among requests that report a cache counter,
-with partial coverage shown. If no captured conversation identity is available,
-the tool reports that the summary is unavailable. Before the report, it
-automatically refreshes the local disk index from `~/.kiro/sessions` when that
-directory exists. The incremental scan updates session metadata and linkage
-across the tree, reads appended records, and skips writes for fully indexed
-unchanged sources. The first scan can take longer for a large history. Index
-failures warn and leave the child exit status intact; disk observations may then
-be stale. On exit the tool also waits up to two seconds for the asynchronous
-capture writer; unfinished calls remain flagged as incomplete coverage. Nested
-`kiro-usage exec` launches share the parent's marker and produce one summary
-when the outer launch exits.
+For `claude-opus-5.5` at low effort, retained complete text-only responses of
+1–5 characters within the calibrated context range can additionally show
+`Discount %`. This experimental credit-price signal classified 8 of the initial
+10 calls: 5 discount-like and 3 baseline (~62.5% discount-like, including
+partial discounts rather than only fully discounted requests); the two longer
+outputs were excluded. It is distinct from counter-derived `Hit %` and does not
+estimate input, output, or cached tokens. Coverage, anomalies, and exclusions
+remain visible; unsupported cases stay unavailable. The compared initial calls
+retained identical delivered hooks/context, but this small run establishes
+neither percentile accuracy nor a transferable cache-hit model. A `~` marks an
+estimate; no token estimator is enabled. Hit percentage is the share of requests
+with cached tokens among requests that report a cache counter, with partial
+coverage shown. If no captured conversation identity is available, the tool
+reports that the summary is unavailable. Before the report, it automatically
+refreshes the local disk index from `~/.kiro/sessions` when that directory
+exists. The incremental scan updates session metadata and linkage across the
+tree, reads appended records, and skips writes for fully indexed unchanged
+sources. The first scan can take longer for a large history. Index failures warn
+and leave the child exit status intact; disk observations may then be stale. On
+exit the tool also waits up to two seconds for the asynchronous capture writer;
+unfinished calls remain flagged as incomplete coverage. Nested `kiro-usage exec`
+launches share the parent's marker and produce one summary when the outer launch
+exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
