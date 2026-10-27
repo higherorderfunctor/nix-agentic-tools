@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -68,6 +69,11 @@ with tempfile.TemporaryDirectory() as directory:
         session.mkdir(parents=True)
         (session / "session.json").write_text(json.dumps({"modelId": "synthetic"}))
         (session / "messages.jsonl").write_text(json.dumps({"payload": {"type": "usage_summary", "promptTurnSummaries": [{"usage": 1.25, "unit": "credit"}]}}) + "\n")
+        # Indexing is capture-scoped: give each fixture session a captured call.
+        with sqlite3.connect(state / "usage.sqlite3") as db:
+            db.executemany("INSERT INTO captures(id,started_utc_ns,metadata_json) VALUES (?,0,?)",
+                           [(name, json.dumps({"kiro:conversation_id": name})) for name in ("sess_fixture", "sess_auto_index")])
+        db.close()
         tool = str(Path(package) / "bin/kiro-usage")
         result = subprocess.run([tool, "index", "--sessions", str(sessions)], env=environment, text=True, capture_output=True)
         assert result.returncode == 0, result.stderr
