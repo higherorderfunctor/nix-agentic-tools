@@ -11,9 +11,12 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio::{
     net::{TcpListener, TcpStream},
     signal::unix::{SignalKind, signal},
+    sync::mpsc,
     task::JoinSet,
     time::timeout,
 };
+
+use crate::tunnel::{self, PendingTunnel};
 
 const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_CONNECTIONS: usize = 128;
@@ -95,15 +98,45 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
 }
 
 async fn connection(socket: TcpStream) {
-    // Protocol errors close only the affected client connection.
-    let _ = http1::Builder::new()
+    // The service must return the `200` before the client socket is upgraded,
+    // so it cannot run the relay itself. It sends the pending tunnel back here.
+    let (sender, mut receiver) = mpsc::channel(1);
+    let service = service_fn(move |request| handle(request, sender.clone()));
+    // Hyper owns HTTP framing until CONNECT upgrades this socket. The same
+    // task then owns the relay; no tunnel escapes the server's JoinSet.
+    let result = http1::Builder::new()
         .timer(TokioTimer::new())
         .header_read_timeout(HEADER_TIMEOUT)
-        .serve_connection(TokioIo::new(socket), service_fn(handle))
+        .serve_connection(TokioIo::new(socket), service)
+        .with_upgrades()
         .await;
+    if result.is_ok()
+        && let Some(pending) = receiver.recv().await
+    {
+        // Protocol and upstream errors affect only this client connection.
+        let _ = pending.relay().await;
+    }
 }
 
-async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn handle(
+    request: Request<Incoming>,
+    sender: mpsc::Sender<PendingTunnel>,
+) -> Result<Response<Full<Bytes>>, Infallible> {
+    if request.method() == Method::CONNECT {
+        // The upstream is already connected when this returns, so the client
+        // gets `200` only for a tunnel that can carry bytes.
+        let pending = match tunnel::open_tunnel(request).await {
+            Ok(pending) => pending,
+            Err((status, body)) => return Ok(response(status, body)),
+        };
+        if sender.send(pending).await.is_err() {
+            return Ok(response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "tunnel connection closed\n",
+            ));
+        }
+        return Ok(response(StatusCode::OK, ""));
+    }
     let (status, body) = if request.uri().path() != "/health" {
         (StatusCode::NOT_FOUND, "not found\n")
     } else if request.method() != Method::GET {
@@ -111,17 +144,23 @@ async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Inf
     } else {
         (StatusCode::OK, "ok\n")
     };
+    Ok(response(status, body))
+}
+
+fn response(status: StatusCode, body: &'static str) -> Response<Full<Bytes>> {
     let mut response = Response::new(Full::new(Bytes::from_static(body.as_bytes())));
     *response.status_mut() = status;
-    response.headers_mut().insert(
-        hyper::header::CONTENT_TYPE,
-        hyper::header::HeaderValue::from_static("text/plain; charset=utf-8"),
-    );
+    if !body.is_empty() {
+        response.headers_mut().insert(
+            hyper::header::CONTENT_TYPE,
+            hyper::header::HeaderValue::from_static("text/plain; charset=utf-8"),
+        );
+    }
     if status == StatusCode::METHOD_NOT_ALLOWED {
         response.headers_mut().insert(
             hyper::header::ALLOW,
             hyper::header::HeaderValue::from_static("GET"),
         );
     }
-    Ok(response)
+    response
 }
