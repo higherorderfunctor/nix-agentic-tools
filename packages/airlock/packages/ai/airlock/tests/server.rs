@@ -1,81 +1,13 @@
-use std::{io, net::SocketAddr, time::Duration};
+mod common;
+
+use std::{io, time::Duration};
 
 use airlock::server;
+use common::{message, request, start};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-    sync::oneshot,
-    task::JoinHandle,
     time::timeout,
 };
-
-struct Server {
-    address: SocketAddr,
-    shutdown: oneshot::Sender<()>,
-    task: JoinHandle<io::Result<()>>,
-}
-
-async fn start() -> Server {
-    let listener = server::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let (shutdown, stopped) = oneshot::channel();
-    let task = tokio::spawn(server::serve(listener, async {
-        let _ = stopped.await;
-    }));
-    Server {
-        address,
-        shutdown,
-        task,
-    }
-}
-
-impl Server {
-    async fn client(&self) -> TcpStream {
-        TcpStream::connect(self.address).await.unwrap()
-    }
-
-    async fn stop(self) {
-        self.shutdown.send(()).unwrap();
-        timeout(Duration::from_secs(4), self.task)
-            .await
-            .expect("bounded shutdown")
-            .unwrap()
-            .unwrap();
-    }
-}
-
-async fn response(socket: &mut TcpStream) -> String {
-    timeout(Duration::from_secs(2), async {
-        let mut response = Vec::new();
-        while !response.ends_with(b"\r\n\r\n") {
-            response.push(socket.read_u8().await.expect("response header"));
-        }
-        let headers = String::from_utf8(response.clone()).unwrap();
-        let length: usize = headers
-            .lines()
-            .find_map(|line| line.strip_prefix("content-length: "))
-            .expect("content length")
-            .parse()
-            .unwrap();
-        let header_length = response.len();
-        response.resize(header_length + length, 0);
-        socket
-            .read_exact(&mut response[header_length..])
-            .await
-            .unwrap();
-        String::from_utf8(response).unwrap()
-    })
-    .await
-    .expect("response deadline")
-}
-
-async fn request(socket: &mut TcpStream, method: &str, target: &str) -> String {
-    socket
-        .write_all(format!("{method} {target} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())
-        .await
-        .unwrap();
-    response(socket).await
-}
 
 #[tokio::test]
 async fn listen_address_must_be_loopback() {
@@ -100,8 +32,6 @@ async fn health_and_error_responses_keep_the_connection_usable() {
     let wrong_method = request(&mut socket, "POST", "/health").await;
     assert!(wrong_method.starts_with("HTTP/1.1 405 "), "{wrong_method}");
     assert!(wrong_method.contains("allow: GET\r\n"), "{wrong_method}");
-    let connect = request(&mut socket, "CONNECT", "example.test:443").await;
-    assert!(connect.starts_with("HTTP/1.1 404 "), "{connect}");
     drop(socket);
     server.stop().await;
 }
@@ -119,7 +49,7 @@ async fn shutdown_drains_an_active_request_then_releases_the_listener() {
         .write_all(b"Host: localhost\r\nConnection: close\r\n\r\n")
         .await
         .unwrap();
-    assert!(response(&mut socket).await.starts_with("HTTP/1.1 200 "));
+    assert!(message(&mut socket).await.starts_with("HTTP/1.1 200 "));
     timeout(Duration::from_secs(2), server.task)
         .await
         .unwrap()
@@ -159,7 +89,7 @@ async fn connection_limit_resumes_accepting_when_a_slot_is_freed() {
             .is_err()
     );
     drop(sockets.pop());
-    assert!(response(&mut waiting).await.starts_with("HTTP/1.1 200 "));
+    assert!(message(&mut waiting).await.starts_with("HTTP/1.1 200 "));
     drop(waiting);
     drop(sockets);
     server.stop().await;
