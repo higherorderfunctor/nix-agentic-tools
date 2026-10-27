@@ -32,7 +32,8 @@ same runtime state directory.
 
 The service runs the flake's pinned nixpkgs `mitmproxy` package, binds only
 `127.0.0.1`, and claims its port through `ai.services`. It intercepts only
-`runtime.us-east-1.kiro.dev:443`; the addon records `/v1/responses`. Other
+`runtime.us-east-1.kiro.dev:443`; the addon records `/v1/responses` (root turns)
+and `/generateAssistantResponse` (workflow steps and subagents). Other
 destinations pass through without TLS interception. This initial host scope
 follows the observed runtime endpoint and does not claim complete coverage of
 every Kiro region or API. See [the collector notes](../usage/README.md) for
@@ -78,34 +79,42 @@ full root-linked session totals, including earlier work when you resume a
 session and captured calls linked by explicit root conversation identity. Root
 conversation contains calls whose conversation ID matches the selected root;
 Other linked conversations have a different ID; Unknown has no recorded
-conversation ID. These are conversation groups, not caller roles: the root can
-include internal delegates, and other linked conversations can include helpers
-or forks. Disk turn credits never enter these captured-call totals. Requests,
-total/input/output/cached tokens, request hit rate, and credits are grouped by
-model and pool, with no per-delegate listing. Missing counters stay unavailable.
-For `claude-opus-5.5` at low effort, retained complete text-only responses of
-1–5 characters within the calibrated context range can additionally show
-`Discount %`. This experimental credit-price signal classified 8 of the initial
-10 calls: 5 discount-like and 3 baseline (~62.5% discount-like, including
-partial discounts rather than only fully discounted requests); the two longer
-outputs were excluded. It is distinct from counter-derived `Hit %` and does not
-estimate input, output, or cached tokens. Coverage, anomalies, and exclusions
-remain visible; unsupported cases stay unavailable. The compared initial calls
-retained identical delivered hooks/context, but this small run establishes
-neither percentile accuracy nor a transferable cache-hit model. A `~` marks an
-estimate; no token estimator is enabled. Hit percentage is the share of requests
-with cached tokens among requests that report a cache counter, with partial
-coverage shown. If no captured conversation identity is available, the tool
-reports that the summary is unavailable. Before the report, it automatically
-refreshes the local disk index from `~/.kiro/sessions` when that directory
-exists. The incremental scan updates session metadata and linkage across the
-tree, reads appended records, and skips writes for fully indexed unchanged
-sources. The first scan can take longer for a large history. Index failures warn
-and leave the child exit status intact; disk observations may then be stale. On
-exit the tool also waits up to two seconds for the asynchronous capture writer;
-unfinished calls remain flagged as incomplete coverage. Nested `kiro-usage exec`
-launches share the parent's marker and produce one summary when the outer launch
-exits.
+conversation ID. These are conversation groups, not caller roles: workflow steps
+and subagents carry their own conversation IDs and land in other linked
+conversations, which can also include helpers or forks. Disk turn credits never
+enter these captured-call totals. Requests, total/input/output/cached tokens,
+request hit rate, and credits are grouped by model and pool, with no
+per-delegate listing. Missing counters stay unavailable. For `claude-opus-5.5`
+at low effort, retained complete text-only responses of 1–5 characters within
+the calibrated context range can additionally show `Discount %`. This
+experimental credit-price signal classified 8 of the initial 10 calls: 5
+discount-like and 3 baseline (~62.5% discount-like, including partial discounts
+rather than only fully discounted requests); the two longer outputs were
+excluded. It is distinct from counter-derived `Hit %` and does not estimate
+input, output, or cached tokens. Coverage, anomalies, and exclusions remain
+visible; unsupported cases stay unavailable. The compared initial calls retained
+identical delivered hooks/context, but this small run establishes neither
+percentile accuracy nor a transferable cache-hit model. Exact counters always
+win per call; a `~` cell adds estimates for calls that lack the exact counter,
+with (known/all) coverage. A call with a reported context percentage and a model
+with a known window (`claude-opus-5.5`: 1,000,000 tokens) estimates total tokens
+as that share of the window, output as one token per four output characters
+(text, tool-call arguments, and reasoning from retained events), and input as
+the difference. Only models with fitted credit rates (`claude-opus-5.5`) and
+reported credits also estimate cached tokens, from the full-miss and full-hit
+curves below, clamped to the estimated input. Other calls stay unavailable. Hit
+percentage is the share of requests with cached tokens among requests with a
+cached value; an estimated split counts as a hit only at 1% of input or more,
+with partial coverage shown. If no captured conversation identity is available,
+the tool reports that the summary is unavailable. Before the report, it
+automatically refreshes the local disk index from `~/.kiro/sessions` when that
+directory exists. This exit scan reads the `session.json` of sessions changed
+since the launch, indexes the messages only of those linked to captures, and
+never prunes. Index failures warn and leave the child exit status intact; disk
+observations may then be stale. On exit the tool also waits up to two seconds
+for the asynchronous capture writer; unfinished calls remain flagged as
+incomplete coverage. Nested `kiro-usage exec` launches share the parent's marker
+and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -181,13 +190,27 @@ to write original response bytes; it has no table or JSON mode.
 
 Tracked `exec` launches refresh the default local session tree automatically; no
 separate index command is needed for that workflow. Use the explicit
-`index --sessions DIR` command for another tree or to refresh without launching
-Kiro. Both paths update the same separate SQLite database. Session queries use
-the last completed index without refreshing it. A session query reports
-attributed requests and usage, with session-only or descendant-tree scope;
-incomplete joins remain visible. It does not guess an attribution where the
-captured protocol and local index do not establish one. Replay writes private
-payloads to standard output, so choose its destination deliberately.
+`index --sessions DIR` command for another tree, to refresh without launching
+Kiro, or to pick up sessions changed outside a tracked launch. Both paths update
+the same separate SQLite database. Session queries use the last completed index
+without refreshing it. A session query reports attributed requests and usage,
+with session-only or descendant-tree scope; incomplete joins remain visible. It
+does not guess an attribution where the captured protocol and local index do not
+establish one. Replay writes private payloads to standard output, so choose its
+destination deliberately.
+
+The index covers only sessions linked to captures: a session whose ID is a
+captured conversation or root conversation ID, or whose `session.json` names an
+indexed session through `rootConversationId`, `parentSessionId`,
+`rootSessionId`, or `_meta.kiro.serverSession.ownerSessionId`. Workflow steps
+reach their root this way, and tree queries follow the same links. Unlinked
+sessions whose files all predate the earliest capture are skipped without
+reading; Kiro rewrites `session.json` when a session resumes. Children written
+before tracking began are therefore not indexed. The explicit command prunes
+disk rows for sessions no longer in scope and then runs `VACUUM`, so the file
+shrinks. `VACUUM` holds the write lock while it rewrites the file, so a running
+collector waits on its busy timeout meanwhile; after pruning this takes well
+under a second, but run it between Kiro sessions on a large capture store.
 
 Malformed or unreadable session metadata does not stop other sessions from
 indexing. Its omission is recorded, stale metadata is retired, and a successful

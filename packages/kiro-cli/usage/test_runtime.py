@@ -90,10 +90,31 @@ class SummaryTests(unittest.TestCase):
                     self.assertIn("Scope: tree", output.getvalue())
                     self.assertIn("Unknown", output.getvalue())
 
+    def test_exec_refresh_reads_only_sessions_modified_during_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state"
+            collector = Collector(state / "usage.sqlite3")
+            for invocation, conversation in (("a" * 32, "sess_new"), ("b" * 32, "sess_old")):
+                ident = collector.begin({"invocation": invocation}, json.dumps({"metadata": {"kiro:conversation_id": conversation}}).encode())
+                collector.finish(ident)
+            collector.close()
+            for name in ("sess_new", "sess_old"):
+                session = root / ".kiro/sessions/workspace" / name
+                session.mkdir(parents=True)
+                (session / "session.json").write_text("{}")
+                (session / "messages.jsonl").write_text(json.dumps({"payload": {"type": "usage_summary"}}) + "\n")
+            for path in (session / "session.json", session / "messages.jsonl"):
+                os.utime(path, ns=(1, 1))
+            with patch.dict(os.environ, {"HOME": str(root)}, clear=True), patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=0), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="a" * 32)), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(runtime.exec_command(state, 19001, ["kiro-cli", "chat"]), 0)
+            with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
+                self.assertEqual([Path(row[0]).name for row in db.execute("SELECT path FROM disk_sessions")], ["sess_new"])
+
     def test_index_missing_tree_and_failure_are_nonfatal(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
             root = Path(directory)
-            self.assertFalse(runtime.refresh_disk_index(root / "missing"))
+            self.assertFalse(runtime.refresh_disk_index(root / "missing", 0))
             self.assertFalse((root / "missing").exists())
             sessions = root / ".kiro/sessions"
             sessions.parent.mkdir()

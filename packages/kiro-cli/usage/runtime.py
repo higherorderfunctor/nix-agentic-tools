@@ -108,8 +108,8 @@ def service(args, path):
     ])
 
 
-def refresh_disk_index(path):
-    """Reuse incremental indexing for the documented local session tree."""
+def refresh_disk_index(path, since):
+    """Read only sessions changed since the launch (UTC ns); others are only stat-checked."""
     from capture import open_database
     from disk_index import index_tree
     try:
@@ -117,7 +117,7 @@ def refresh_disk_index(path):
         if not sessions.exists():
             return False
         with closing(open_database(path / "usage.sqlite3")) as db:
-            index_tree(db, sessions)
+            index_tree(db, sessions, since)
         return True
     except (OSError, ValueError, sqlite3.Error) as error:
         print(f"Warning: automatic Kiro session indexing failed: {error}; disk observations may be stale.", file=sys.stderr)
@@ -253,12 +253,13 @@ def exec_command(path, port, arguments):
         if not tracked or nested:
             os.execvpe(command, [command, *tail], child_environment)
         else:
+            started = time.time_ns()
             result = wait_command(command, tail, child_environment)
             previous = {number: signal.signal(number, signal.SIG_IGN)
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
                 try:
-                    refreshed = refresh_disk_index(path)
+                    refreshed = refresh_disk_index(path, started)
                     invocation_summary(path, invocation, disk_refreshed=refreshed)
                     sys.stderr.flush()
                 except (OSError, ValueError):

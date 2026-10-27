@@ -170,6 +170,7 @@ epid
 esbuild
 etime
 evals
+eventstream
 execpolicy
 executemany
 executescript
@@ -192,6 +193,7 @@ fixpoint
 foldl
 foldr
 footgun
+freelist
 frepo
 fromdate
 frontloaded

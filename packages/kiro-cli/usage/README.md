@@ -36,13 +36,15 @@ accumulated records also consume disk. Temporary SQLite journal space is
 additional. Stopping capture and deleting an intentionally retired private
 database are operator decisions.
 
-Only hosts equal to `kiro.dev` or ending in `.kiro.dev` and the exact path
-`/v1/responses` are selected. Lookalikes such as `not-kiro.dev` are excluded.
-Query strings are discarded. The addon stores only the host, method, constant
-path, request content encoding, response status, response content type and
-encoding, and the upstream `x-amzn-requestid` / `x-request-id`. It never
-serializes arbitrary headers, cookies, authorization, or URLs. Full **bodies**
-are deliberately retained and may themselves contain secrets.
+Only hosts equal to `kiro.dev` or ending in `.kiro.dev` and the exact paths
+`/v1/responses` (CreateResponse, root turns) and `/generateAssistantResponse`
+(GenerateAssistantResponse, workflow steps and subagents) are selected.
+Lookalikes such as `not-kiro.dev` are excluded. Query strings are discarded. The
+addon stores only the host, method, constant path, request content encoding,
+response status, response content type and encoding, and the upstream
+`x-amzn-requestid` / `x-request-id`. It never serializes arbitrary headers,
+cookies, authorization, or URLs. Full **bodies** are deliberately retained and
+may themselves contain secrets.
 
 The response streaming callback returns the same bytes immediately, including
 the EOF sentinel. It does not wait for SQLite. One worker writes the database; a
@@ -111,9 +113,12 @@ still write its own tables.
 - `captures.request_gzip` preserves the complete decompressed application
   request bytes. Its full SHA-256 is over those exact bytes. Component hashes
   use sorted, compact UTF-8 JSON for `input`, individual input items,
-  `instructions`, `reasoning`, and `tools`; prefix hashes cover the first 4096,
-  16384, 32768, and 49152 application bytes when present. These hashes describe
-  content stability; they do not prove provider cache hits.
+  `instructions`, `reasoning`, and `tools`; GenerateAssistantResponse requests
+  instead hash `conversationState.currentMessage`, `history`, individual history
+  items, top-level `systemPrompt`, and the current message's
+  `userInputMessageContext.tools`. Prefix hashes cover the first 4096, 16384,
+  32768, and 49152 application bytes when present. These hashes describe content
+  stability; they do not prove provider cache hits.
 - `chunks` preserves ordered incoming response entity bytes in `entity_gzip`,
   and the decoded application bytes in `application_gzip`. Each gzip BLOB can be
   decompressed independently; concatenate in `seq` order. Entity bytes still
@@ -134,10 +139,24 @@ still write its own tables.
   the final partial frame and marks it unterminated. Events larger than 4 MiB
   stop extraction with an explicit issue; their raw response chunks remain
   available. Non-SSE JSON extraction has the same 4 MiB limit.
+- AWS event-stream responses (`application/vnd.amazon.eventstream`) are framed
+  incrementally across chunk boundaries. Each message keeps its exact bytes, its
+  `:event-type` (or `:exception-type`) as `event_name`, and its parsed JSON
+  payload. Prelude and message CRC32 mismatches mark `event_stream_crc`;
+  malformed lengths or headers mark `invalid_event_frame`. A valid prelude
+  supplies the next boundary; an invalid one stops extraction, keeping its 12
+  prelude bytes as the event and the rest in raw chunks. Messages larger than 4
+  MiB stop extraction with `event_parse_limit`, and an EOF tail is retained as
+  an `unterminated_event`.
 - Request model, reasoning effort, conversation ID, continuation ID, and an
   explicit allowlist of session/execution/agent lineage IDs are retained in
-  `metadata_json`. They are observations. No own-versus-delegate relationship is
-  inferred from similar IDs.
+  `metadata_json`. For GenerateAssistantResponse, model is
+  `conversationState.currentMessage.userInputMessage.modelId`, effort is
+  `additionalModelRequestFields.output_config.effort` or `.reasoning.effort`,
+  and `kiro:conversation_id` / `kiro:root_conversation_id` are
+  `conversationState.conversationId` / `rootConversationId`. They are
+  observations. No own-versus-delegate relationship is inferred from similar
+  IDs.
 - `summary_json` includes exact usage objects when observed, an explicit empty
   `estimates` object, terminal status, and output-text byte and character
   counts. Counts use terminal `output_text` parts when available and otherwise
@@ -155,40 +174,83 @@ or missing unit leaves `credits` as `NULL` and marks `invalid_credit_unit`.
 `context_usage_percentage` comes from the observed scalar
 `kiro:context_usage_percentage` field. Exact `input_tokens`, `output_tokens`,
 and `input_tokens_details.cached_tokens` are extracted only if explicitly
-supplied in a usage object; absent counters remain SQL `NULL`. Token counters
-must be integers from zero through `2**63 - 1`; observed credits and context
-percentages are normalized to finite floating-point values. Invalid numeric
-fields become `NULL` and mark `invalid_usage_number`; their original payload
-evidence is preserved. No token estimate, cache split, or context-window
-conversion is invented. `cache_write_tokens` remains unknown unless a supported,
-verified source is added. The original usage objects are available for later
-extraction improvements.
+supplied in a usage object; absent counters remain SQL `NULL`.
+GenerateAssistantResponse event streams map `meteringEvent.usage` (with
+`unit="credit"`, otherwise `invalid_credit_unit`) to `credits`,
+`contextUsageEvent.contextUsagePercentage` to `context_usage_percentage`, and
+`metadataEvent.tokenUsage` `outputTokens`, `cacheReadInputTokens`, and
+`cacheWriteInputTokens` to the matching columns. To keep cached reads a subset
+of input, as on `/v1/responses`, `input_tokens` is the sum of
+`uncachedInputTokens`, `cacheReadInputTokens`, and `cacheWriteInputTokens` only
+when all three are reported; otherwise it stays `NULL`. Output text counts come
+from `assistantResponseEvent.content`, and the last `metadataEvent.stopReason`
+is the summary `terminal`. Token counters must be integers from zero through
+`2**63 - 1`; observed credits and context percentages are normalized to finite
+floating-point values. Invalid numeric fields become `NULL` and mark
+`invalid_usage_number`; their original payload evidence is preserved. Capture
+stores no token estimate, cache split, or context-window conversion; reports
+derive `~` estimates at query time. `cache_write_tokens` is known only from a
+reported `cacheWriteInputTokens`; `/v1/responses` captures leave it unknown. The
+original usage objects are available for later extraction improvements.
 
 `state='complete'` requires transport completion, a `response.completed` event
-(or completed JSON response), and no recorded issue. `response.failed`,
-incomplete responses, transport errors/cancellation, missing completion,
-extraction limits, queue loss, and storage loss remain incomplete. A process
-interrupted before finalization leaves a `recording` row; the next collector
-startup marks it `incomplete` with `interrupted_capture`. Initial metadata is
-persisted before completion. Partial rows must not be treated as zero usage.
-`observed_chunks` / `observed_bytes` describe response callbacks; dropped
-counters include refused request and response payload items. Omitted
+(or completed JSON response), and no recorded issue. Event streams have no
+terminal event: completion is end of stream on a message boundary after at least
+one message, with no exception or error message and no framing, decoding, or
+byte-gap failure; an exception message sets `terminal` to `exception`.
+`response.failed`, incomplete responses, transport errors/cancellation, missing
+completion, extraction limits, queue loss, and storage loss remain incomplete. A
+process interrupted before finalization leaves a `recording` row; the next
+collector startup marks it `incomplete` with `interrupted_capture`. Initial
+metadata is persisted before completion. Partial rows must not be treated as
+zero usage. `observed_chunks` / `observed_bytes` describe response callbacks;
+dropped counters include refused request and response payload items. Omitted
 event/summary evidence is also signaled in `issues_json`. A full observed
 response hash can exist even when storage is incomplete; use `state` and the
 nullable BLOBs to determine replay completeness.
 
+## Token estimates
+
+Reports fill counters a call lacks with `~` estimates; reported counters always
+win per call, and a group mixing both sums exact and estimated values with
+(known/all) coverage. For a call with a reported context percentage `p` and a
+model with a known window `W` (`claude-opus-5.5`: 1,000,000 tokens):
+
+- total `I = p/100 * W`, which includes output tokens once;
+- output `O = chars/4`, where chars counts `output_text` plus retained
+  `response.function_call_arguments.delta` and `response.reasoning_text.delta`
+  deltas, or GenerateAssistantResponse `toolUseEvent.input` and
+  `reasoningContentEvent.text`, so tool-only calls are not `O=0`;
+- input `I - O`.
+
+When a call reports exact output or input but not every counter, those exact
+values replace `O` or `I - O` below, so an estimated cached split never exceeds
+the call's exact input.
+
+Cached tokens need reported credits and fitted rates (`claude-opus-5.5` only):
+`cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`. The
+full-miss rate `a = 74/603/(W/100)` (12.272e-6 credits per token), full-hit rate
+`b = 20/603/(W/100)` (3.317e-6), and fixed cost `c = 0.5034/603` (0.000835)
+reuse the discount curves below; `o = 270e-6` is the fitted output rate. The
+full-hit curve's own intercept (0.5970/603) is not used. Other models get no
+cache estimate, and calls without a context percentage or a known window stay
+unavailable. An estimated split counts as a hit only when cached reaches 1% of
+input, which keeps fit noise (tens of tokens on the 1–5 character calibration
+calls) out of the hit percentage. Tool and reasoning characters come from
+retained events, so once the payload budget is full their output share is
+missing and `O` comes out too low.
+
 ## Experimental credit-discount diagnostic
 
 The initial ten-call calibration supports a narrow credit-price diagnostic, not
-token estimates or validated cache-hit detection. Profile
-`opus-5.5-low-text1to5-context-v1` requires model `claude-opus-5.5`, effort
-`low`, retained complete captures, a completed terminal event proving text-only
-output of 1–5 characters, no observed reasoning/tool output, and reported
-context between 0.87679994% and 3.6423001%. The curves consume context percent
-directly: baseline `(74*p + 0.5034)/603`, discounted `(20*p + 0.5970)/603`. The
-0.000001-credit tolerance is numerical, not a statistical confidence interval.
-Scores and residuals remain unclamped; values outside the curve envelope are
-anomalies.
+validated cache-hit detection. Profile `opus-5.5-low-text1to5-context-v1`
+requires model `claude-opus-5.5`, effort `low`, retained complete captures, a
+completed terminal event proving text-only output of 1–5 characters, no observed
+reasoning/tool output, and reported context between 0.87679994% and 3.6423001%.
+The curves consume context percent directly: baseline `(74*p + 0.5034)/603`,
+discounted `(20*p + 0.5970)/603`. The 0.000001-credit tolerance is numerical,
+not a statistical confidence interval. Scores and residuals remain unclamped;
+values outside the curve envelope are anomalies.
 
 Five of eight eligible initial calls were discount-like (~62.5%), a band that
 includes partial discounts rather than only fully discounted requests; three
@@ -238,23 +300,32 @@ requiring an on-disk index. Root-linked lineage may include forks as well as
 subagents. Captured requests and credits are counted once; disk credits never
 enter the total. Root conversation matches the selected root ID; Other linked
 conversations have another ID; Unknown lacks a conversation ID. These groups do
-not identify caller roles: the root may include internal delegates, while other
-linked conversations may include helpers or forks. Tables group requests,
-credits, and tokens by model and pool rather than listing individual delegates.
-Exact counters are used when observed; explicit estimates carry `~` and missing
-values show an em dash. No token estimator is enabled. Hit percentage estimates
-cache-hit requests divided by requests with a reported cache counter; partial
-coverage remains visible. No captured conversation identity means an explicit
-unavailable summary. Before reporting, the outer launch incrementally indexes
-`~/.kiro/sessions` if present, using the existing database and checkpoints.
-Unchanged fully indexed sources require no writes; appended records and session
-metadata are refreshed across the tree, including lineage. The first scan may
-take longer for a large history. Index failures warn without replacing the child
-exit status, and disk observations may then be stale. Manual session queries use
-the last completed index. The exit summary also waits at most two seconds for
-the asynchronous capture writer and flags unfinished calls. Nested
-`kiro-usage exec` launches reuse the parent's marker; only the outer launch
-prints the summary.
+not identify caller roles: workflow steps and subagents carry their own
+conversation IDs and land in other linked conversations, which may also include
+helpers or forks. Tables group requests, credits, and tokens by model and pool
+rather than listing individual delegates. Exact counters are used when observed;
+cells that add estimates for calls lacking the exact counter carry `~`, and
+missing values show an em dash (see [Token estimates](#token-estimates)). Hit
+percentage is cache-hit requests divided by requests with a reported or
+estimated cached value, where an estimated split counts as a hit only at 1% of
+input or more; partial coverage remains visible. No captured conversation
+identity means an explicit unavailable summary. Before reporting, the outer
+launch incrementally indexes `~/.kiro/sessions` if present, using the existing
+database and checkpoints. It reads the `session.json` of sessions whose
+`session.json` or `messages.jsonl` changed since the launch, and messages only
+for those linked to captures (less one second for coarse file timestamps) and
+never prunes; already indexed sessions still link their new descendants. The
+explicit `index` command is the full capture-scoped pass: it prunes `disk_*`
+rows for sessions no longer linked to captures and runs `VACUUM` plus a WAL
+checkpoint when free pages remain. Lineage comes from `parentSessionId`,
+`rootSessionId`, `rootConversationId`, and
+`_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
+`workflowId` and `nodeId` are retained as identifiers. Index failures warn
+without replacing the child exit status, and disk observations may then be
+stale. Manual session queries use the last completed index. The exit summary
+also waits at most two seconds for the asynchronous capture writer and flags
+unfinished calls. Nested `kiro-usage exec` launches reuse the parent's marker;
+only the outer launch prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload exits with an error. Replay of

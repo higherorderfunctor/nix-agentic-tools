@@ -12,6 +12,7 @@ import queue
 import re
 import sqlite3
 import stat
+import struct
 import sys
 import threading
 import time
@@ -97,6 +98,12 @@ def digest(value):
     return hashlib.sha256(value).hexdigest()
 
 
+def child(value, *keys):
+    for key in keys:
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+
 def request_details(body, issues=None):
     hashes = {"prefixes": {str(n): digest(body[:n]) for n in (4096, 16384, 32768, 49152) if len(body) >= n}}
     metadata = {}
@@ -108,23 +115,28 @@ def request_details(body, issues=None):
         obj = decoded_json(body)
         if not isinstance(obj, dict):
             return metadata, hashes
-        for key in ("model",):
-            if isinstance(obj.get(key), str):
-                metadata[key] = obj[key]
-        reasoning = obj.get("reasoning")
-        if isinstance(reasoning, dict) and isinstance(reasoning.get("effort"), str):
-            metadata["effort"] = reasoning["effort"]
-        extra = obj.get("metadata")
-        if isinstance(extra, dict):
-            for key in ("kiro:agent_continuation_id", "kiro:agent_id", "kiro:conversation_id", "kiro:execution_id", "kiro:parent_agent_id", "kiro:parent_execution_id", "kiro:parent_session_id", "kiro:root_conversation_id", "kiro:root_execution_id", "kiro:session_id"):
-                if isinstance(extra.get(key), str):
-                    metadata[key] = extra[key]
-        for key in ("input", "instructions", "reasoning", "tools"):
-            if key in obj:
-                hashes[key] = digest(packed(obj[key]).encode())
-        items = obj.get("input")
+        conversation = obj.get("conversationState")
+        if isinstance(conversation, dict):
+            # GenerateAssistantResponse: agent mode travels as a header; tools ride on the current message.
+            message = child(conversation, "currentMessage")
+            fields = {"model": child(message, "userInputMessage", "modelId"),
+                      "effort": child(obj, "additionalModelRequestFields", "output_config", "effort") or child(obj, "additionalModelRequestFields", "reasoning", "effort"),
+                      "kiro:conversation_id": conversation.get("conversationId"),
+                      "kiro:root_conversation_id": conversation.get("rootConversationId")}
+            components = {key: value for key, value in (("currentMessage", message), ("history", conversation.get("history")), ("systemPrompt", obj.get("systemPrompt")),
+                                                        ("tools", child(message, "userInputMessage", "userInputMessageContext", "tools"))) if value is not None}
+            items, items_key = conversation.get("history"), "history_items"
+        else:
+            extra = obj.get("metadata") if isinstance(obj.get("metadata"), dict) else {}
+            fields = {"model": obj.get("model"), "effort": child(obj, "reasoning", "effort"),
+                      **{key: extra.get(key) for key in ("kiro:agent_continuation_id", "kiro:agent_id", "kiro:conversation_id", "kiro:execution_id", "kiro:parent_agent_id", "kiro:parent_execution_id", "kiro:parent_session_id", "kiro:root_conversation_id", "kiro:root_execution_id", "kiro:session_id")}}
+            components = {key: obj[key] for key in ("input", "instructions", "reasoning", "tools") if key in obj}
+            items, items_key = obj.get("input"), "input_items"
+        metadata.update((key, value) for key, value in fields.items() if isinstance(value, str))
+        for key, value in components.items():
+            hashes[key] = digest(packed(value).encode())
         if isinstance(items, list):
-            hashes["input_items"] = [digest(packed(item).encode()) for item in items[:4096]]
+            hashes[items_key] = [digest(packed(item).encode()) for item in items[:4096]]
             if len(items) > 4096 and issues is not None:
                 issues.append("fingerprint_item_limit")
     except (ValueError, UnicodeError, RecursionError):
@@ -175,6 +187,72 @@ class SSE:
             self.frame.clear()
 
 
+class EventStream:
+    """Incremental application/vnd.amazon.eventstream framing; exact message bytes and both CRC32s are checked."""
+
+    SIZES = {0: 0, 1: 0, 2: 1, 3: 2, 4: 4, 5: 8, 8: 8, 9: 16}  # fixed-width header value types
+
+    def __init__(self, emit, limit=4 * 1024 * 1024):
+        self.emit, self.limit = emit, limit
+        self.buffer = bytearray()
+        self.disabled = self.stopped = False
+
+    def feed(self, data, final=False):
+        if self.disabled or self.stopped:
+            return
+        buffer, offset = self.buffer, 0
+        buffer += data
+        while len(buffer) - offset >= 12:
+            total, length, prelude = struct.unpack_from(">III", buffer, offset)
+            crc = zlib.crc32(buffer[offset:offset + 8]) == prelude
+            if not crc or total < 16 or length > total - 16:
+                # An untrusted prelude leaves no next message boundary; raw chunks keep the rest.
+                self.stopped = True
+                self.emit(bytes(buffer[offset:offset + 12]), {}, None, "invalid_event_frame" if crc else "event_stream_crc")
+                buffer.clear()
+                return
+            if total > self.limit:
+                self.disabled = True
+                buffer.clear()
+                return
+            if len(buffer) - offset < total:
+                break
+            frame = bytes(buffer[offset:offset + total])
+            offset += total
+            if zlib.crc32(frame[:-4]) != struct.unpack(">I", frame[-4:])[0]:
+                self.emit(frame, {}, None, "event_stream_crc")
+                continue
+            try:
+                headers = self.headers(frame[12:12 + length])
+            except (IndexError, KeyError, ValueError, struct.error):
+                self.emit(frame, {}, None, "invalid_event_frame")
+                continue
+            self.emit(frame, headers, frame[12 + length:-4], None)
+        del buffer[:offset]
+        if final and buffer:
+            self.emit(bytes(buffer), {}, None, "unterminated_event")
+            buffer.clear()
+
+    @classmethod
+    def headers(cls, raw):
+        """String-typed headers only (:message-type, :event-type, ...); other types are skipped."""
+        values, offset = {}, 0
+        while offset < len(raw):
+            size = raw[offset]
+            name, kind = raw[offset + 1:offset + 1 + size].decode("utf-8"), raw[offset + 1 + size]
+            offset += 2 + size
+            if kind in (6, 7):
+                (count,) = struct.unpack_from(">H", raw, offset)
+                value, offset = raw[offset + 2:offset + 2 + count], offset + 2 + count
+                if kind == 7:
+                    values[name] = value.decode("utf-8")
+            else:
+                offset += cls.SIZES[kind]
+        if offset != len(raw):
+            raise ValueError("truncated event-stream header")
+        return values
+
+
 def output_text(value):
     """Only final output_text parts; tool arguments/reasoning are separate evidence."""
     if isinstance(value, dict):
@@ -204,6 +282,7 @@ class Analysis:
         self.delta_chars = self.delta_bytes = 0
         self.final_counts = None
         self.terminal = None
+        self.stream_failed = False
 
     def number(self, key, value, integer=False, nonnegative=False):
         try:
@@ -239,12 +318,8 @@ class Analysis:
                         elif "usage_summary_limit" not in self.issues:
                             self.issues.append("usage_summary_limit")
                     if key == "kiro:credits":
-                        if isinstance(child, dict) and child.get("unit") == "credit":
-                            self.number("credits", child.get("value"), nonnegative=True)
-                        else:
-                            self.metrics["credits"] = None
-                            if "invalid_credit_unit" not in self.issues:
-                                self.issues.append("invalid_credit_unit")
+                        child = child if isinstance(child, dict) else {}
+                        self.credit(child.get("unit"), child.get("value"))
                     elif key == "kiro:context_usage_percentage" and child is not None:
                         self.number("context_usage_percentage", child)
                     walk(child, location)
@@ -301,6 +376,60 @@ class Analysis:
             self.issues.append("unterminated_event")
         self.save(self.seq, name, frame, obj)
         self.seq += 1
+
+    def message(self, frame, headers, payload, problem):
+        """One event-stream message; the payload is parsed only after both CRCs pass."""
+        kind, obj = headers.get(":message-type"), None
+        name = headers.get(":event-type") or headers.get(":exception-type") or kind or "message"
+        if problem:
+            self.stream_failed = True
+            if problem not in self.issues:
+                self.issues.append(problem)
+        else:
+            if kind != "event":
+                self.stream_failed, self.terminal = True, kind  # exception or error message
+            try:
+                obj = decoded_json(payload) if payload else None
+                if kind == "event" and isinstance(obj, dict):
+                    self.stream_event(name, obj)
+            except (ValueError, UnicodeError, RecursionError):
+                obj = None
+                if "invalid_event_data" not in self.issues:
+                    self.issues.append("invalid_event_data")
+        self.save(self.seq, name, frame, obj)
+        self.seq += 1
+
+    def credit(self, unit, value):
+        """kiro:credits and meteringEvent share one rule: only unit "credit" is a credit count."""
+        if unit == "credit":
+            self.number("credits", value, nonnegative=True)
+        else:
+            self.metrics["credits"] = None
+            if "invalid_credit_unit" not in self.issues:
+                self.issues.append("invalid_credit_unit")
+
+    def stream_event(self, name, obj):
+        """GenerateAssistantResponse ChatResponseStream members, named by :event-type."""
+        self.inspect(obj)  # retains metadataEvent.tokenUsage among usage_objects
+        if name == "assistantResponseEvent" and isinstance(obj.get("content"), str):
+            self.delta_chars += len(obj["content"])
+            self.delta_bytes += len(obj["content"].encode())
+        elif name == "meteringEvent":
+            self.credit(obj.get("unit"), obj.get("usage"))
+        elif name == "contextUsageEvent" and obj.get("contextUsagePercentage") is not None:
+            self.number("context_usage_percentage", obj["contextUsagePercentage"])
+        elif name == "metadataEvent":
+            if isinstance(obj.get("stopReason"), str) and not self.stream_failed:
+                self.terminal = obj["stopReason"]
+            usage = obj.get("tokenUsage")
+            if isinstance(usage, dict):
+                for key, field in (("output_tokens", "outputTokens"), ("cache_read_tokens", "cacheReadInputTokens"), ("cache_write_tokens", "cacheWriteInputTokens")):
+                    if usage.get(field) is not None:
+                        self.number(key, usage[field], integer=True)
+                # input_tokens includes cached reads and writes, as on /v1/responses; any absent part leaves it unknown.
+                parts = [usage.get(field) for field in ("uncachedInputTokens", "cacheReadInputTokens", "cacheWriteInputTokens")]
+                if all(part is not None for part in parts):
+                    self.number("input_tokens", sum(parts) if all(type(part) is int and part >= 0 for part in parts) else None, integer=True)
 
     def summary(self):
         chars, size = self.final_counts or (self.delta_chars, self.delta_bytes)
@@ -505,7 +634,15 @@ class Collector:
             db.execute("INSERT INTO events VALUES (?,?,?,?,?,?,?,?)", (ident, seq, target["seq"], *target["stamp"], name, raw, parsed))
         target["analysis"] = Analysis(save)
         target["sse"] = SSE(target["analysis"].event)
+        target["eventstream"] = EventStream(target["analysis"].message)
         return target
+
+    @staticmethod
+    def framing(target, response):
+        content_type = response.get("content_type", "")
+        for media, key in (("text/event-stream", "sse"), ("application/vnd.amazon.eventstream", "eventstream")):
+            if media in content_type:
+                return target[key]
 
     def _store_chunk(self, db, state, target, data, seq, stamp):
         target.update(seq=seq, stamp=stamp)
@@ -524,8 +661,9 @@ class Collector:
                 if len(application) > 16 * 1024 * 1024 or (target["decoder"] and target["decoder"].unconsumed_tail):
                     raise zlib.error("decompressed chunk exceeds safety limit")
                 target["hash"].update(application)
-                if "text/event-stream" in response.get("content_type", ""):
-                    target["sse"].feed(application)
+                parser = self.framing(target, response)
+                if parser:
+                    parser.feed(application)
                 elif len(target["json"]) + len(application) <= 4 * 1024 * 1024:
                     target["json"].extend(application)
                 else:
@@ -549,10 +687,15 @@ class Collector:
             state["issues"].append("trailing_content_encoding")
         if target["decoder"] and not target["decoder"].eof:
             state["issues"].append("truncated_content_encoding")
-        if "text/event-stream" in response.get("content_type", ""):
-            target["sse"].feed(b"", final=True)
-            if target["sse"].disabled:
+        whole = not state["response_gap"] and not any(x in state["issues"] for x in ("decode_error", "unsupported_content_encoding", "truncated_content_encoding", "trailing_content_encoding"))
+        parser = self.framing(target, response)
+        if parser:
+            parser.feed(b"", final=True)
+            if parser.disabled:
                 state["issues"].append("event_parse_limit")
+            if parser is target["eventstream"]:
+                # Event streams have no terminal event: completion is EOF on a message boundary after at least one message, with no exception or framing failure.
+                analysis.complete = whole and analysis.seq > 0 and not (analysis.stream_failed or parser.disabled)
         elif target["json"] and "json_parse_limit" not in state["issues"]:
             try:
                 obj = decoded_json(target["json"])
@@ -571,7 +714,7 @@ class Collector:
             issues.append("missing_completion")
         complete = state["transport_ended"] and not issues
         values = ( *state["ended"], packed(state["metadata"]), packed(response),
-                  target["hash"].hexdigest() if not state["response_gap"] and not any(x in issues for x in ("decode_error", "unsupported_content_encoding", "truncated_content_encoding", "trailing_content_encoding")) else None,
+                  target["hash"].hexdigest() if whole else None,
                   packed(summary), state["observed_chunks"], state["observed_bytes"], state["dropped_chunks"], state["dropped_bytes"], int(state["transport_ended"]), int(analysis.complete), "complete" if complete else "incomplete", packed(issues),
                   *analysis.metrics.values(), state["id"])
         db.execute("UPDATE captures SET ended_utc_ns=?,ended_mono_ns=?,metadata_json=?,response_json=?,response_sha256=?,summary_json=?,observed_chunks=?,observed_bytes=?,dropped_chunks=?,dropped_bytes=?,transport_ended=?,completion_seen=?,state=?,issues_json=?,credits=?,context_usage_percentage=?,input_tokens=?,output_tokens=?,cache_read_tokens=?,cache_write_tokens=? WHERE id=?", values)
