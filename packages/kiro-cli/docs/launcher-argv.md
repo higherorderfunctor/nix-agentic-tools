@@ -610,3 +610,22 @@ and the check never reads that shim, so no carve-out is needed there. Do not
 An earlier revision credited "probe scripts under `docs/plans/`" with depending
 on this. Nothing there does — `grep -rl 'exec -a' docs/plans` is empty — so the
 check is the only thing pinning it.
+
+## Optional usage capture
+
+`cli.usageTracking.enable` is another managed-wrapper reason on both backends.
+Before either public Kiro launcher executes its real binary, it rejects a non-v3
+`--agent-engine` override and requires the private usage service's CA and
+loopback listener, rejects inherited proxy conflicts, and exports the local
+HTTP(S) proxy and Node extra CA only for Kiro's process tree. A direct
+`kiro-cli-chat` call must select v3 with `--agent-engine v3` or `--v3`; the
+configured `cli.v3` injection belongs only to `kiro-cli`. These exports remain
+outside the FHS package and are inherited across it, like the existing static
+environment. The disabled path keeps the existing wrapper behavior. The same
+wrapper package installs `kiro-usage` for explicit indexing, session queries,
+and replay. Its `exec` command reuses the same readiness and environment
+preparation for a PATH-selected command, explicitly replaces inherited
+conflicts, and composes with the managed wrapper. Named `kiro-cli` commands
+receive an idempotent `--v3`; generic commands keep their arguments. See
+[usage-tracking.md](usage-tracking.md) for options, service lifecycle, scope,
+and limitations.

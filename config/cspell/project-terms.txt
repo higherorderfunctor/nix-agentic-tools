@@ -123,6 +123,7 @@ collab
 combinators
 commentchar
 commondir
+confdir
 configdir
 convco
 coreutils
@@ -134,6 +135,7 @@ customisation
 datamodels
 dataurl
 deadnix
+decompressobj
 dedented
 dedents
 deepseek
@@ -169,6 +171,8 @@ esbuild
 etime
 evals
 execpolicy
+executemany
+executescript
 execv
 execve
 extensionless
@@ -246,6 +250,7 @@ installables
 ints
 ironsh
 isaacphi
+iterdump
 iterm
 jandedobbeleer
 journalctl
@@ -311,6 +316,7 @@ microvm
 microvms
 minishlab
 misordered
+mitmdump
 mkfifo
 mlen
 modelcontextprotocol
@@ -418,6 +424,7 @@ repoints
 repros
 rerere
 rescan
+responseheaders
 restager
 retarget
 retargets
@@ -472,6 +479,7 @@ stdenv
 steerchild
 stopword
 streamable
+strerror
 strflocaltime
 strictcount
 strs
@@ -491,6 +499,7 @@ sysfield
 sysprompt
 taplo
 tengu
+termlog
 testapp
 tidwall
 timespec
@@ -546,6 +555,7 @@ usebruno
 userns
 virtualisation
 vllm
+wbits
 wfagents
 wfcap
 wfctl
