@@ -101,8 +101,8 @@ const H2_PREFACE: &[u8; 24] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 // Protocol detection consumes at most the h2 preface. Replay those bytes to
 // the selected driver; neither driver observes a truncated request.
 pub(crate) struct Prefixed {
-    prefix: Bytes,
-    socket: TcpStream,
+    pub(crate) prefix: Bytes,
+    pub(crate) socket: TcpStream,
 }
 
 impl Prefixed {

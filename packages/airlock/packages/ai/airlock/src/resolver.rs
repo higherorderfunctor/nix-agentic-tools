@@ -2,17 +2,22 @@
 //! DNS lookups for upstream hosts. A lookup blocks a thread, so every lookup
 //! runs on the blocking pool and waits for one of a fixed number of slots.
 use std::{
+    future::Future,
     io,
     net::{SocketAddr, ToSocketAddrs},
+    pin::Pin,
     sync::{Arc, LazyLock},
+    task::{Context, Poll},
 };
 
+use hyper_util::client::legacy::connect::dns::Name;
 use tokio::sync::Semaphore;
+use tower_service::Service;
 
 const MAX_RESOLUTIONS: usize = 16;
 // A DNS lookup blocks a thread and cannot be cancelled. This caps how many
 // lookups run or queue on the runtime's shared blocking pool, so a burst of
-// CONNECTs to slow names cannot tie that pool up.
+// requests to slow names cannot tie that pool up.
 static RESOLVER_SLOTS: LazyLock<Arc<Semaphore>> =
     LazyLock::new(|| Arc::new(Semaphore::new(MAX_RESOLUTIONS)));
 
@@ -23,6 +28,27 @@ pub(crate) async fn lookup(host: String, port: u16) -> io::Result<Vec<SocketAddr
             .map(Iterator::collect)
     })
     .await
+}
+
+#[derive(Clone)]
+pub(crate) struct Resolver;
+
+impl Service<Name> for Resolver {
+    type Response = std::vec::IntoIter<SocketAddr>;
+    type Error = io::Error;
+    type Future = Pin<Box<dyn Future<Output = io::Result<Self::Response>> + Send>>;
+
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, name: Name) -> Self::Future {
+        Box::pin(async move {
+            lookup(name.as_str().to_owned(), 0)
+                .await
+                .map(Vec::into_iter)
+        })
+    }
 }
 
 async fn resolve<T: Send + 'static>(
@@ -41,7 +67,8 @@ async fn resolve<T: Send + 'static>(
     .map_err(io::Error::other)?
 }
 
-// `resolve` is private, so the integration tests in tests/ cannot reach it.
+// `resolve` and the shared slots are private, so the integration tests in
+// tests/ cannot reach them.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,5 +140,40 @@ mod tests {
         .unwrap();
         assert_eq!(recovered, "resolved");
         assert_eq!(executions.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn tunnel_lookup_and_http_resolver_share_the_same_capacity() {
+        let capacity = Arc::clone(&RESOLVER_SLOTS)
+            .acquire_many_owned(MAX_RESOLUTIONS as u32)
+            .await
+            .unwrap();
+        assert!(
+            timeout(
+                std::time::Duration::from_millis(20),
+                lookup("localhost".to_owned(), 0)
+            )
+            .await
+            .is_err()
+        );
+        let mut resolver = Resolver;
+        assert!(
+            timeout(
+                std::time::Duration::from_millis(20),
+                resolver.call("localhost".parse().unwrap())
+            )
+            .await
+            .is_err()
+        );
+        drop(capacity);
+        assert!(!lookup("localhost".to_owned(), 0).await.unwrap().is_empty());
+        assert!(
+            resolver
+                .call("localhost".parse().unwrap())
+                .await
+                .unwrap()
+                .next()
+                .is_some()
+        );
     }
 }
