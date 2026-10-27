@@ -12,6 +12,7 @@ in {
         ''serve --config "$AIRLOCK_CONFIG"''
         + lib.optionalString (instance.settings.interception != null) (" " + ''--ca-directory "''${AIRLOCK_CONFIG%/*}/ca"'');
       inherit backend;
+      claimProxyInstance = true;
       defaultPort = 8318;
       derived = {instance, ...}: {listen = "127.0.0.1:${toString instance.port}";};
       owner = "airlock";
