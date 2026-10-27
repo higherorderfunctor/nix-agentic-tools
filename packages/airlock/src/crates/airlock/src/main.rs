@@ -28,6 +28,7 @@ fn run() -> Result<(), String> {
             println!("  serve                 Listen on {DEFAULT_LISTEN}");
             println!("  serve --listen ADDR   Listen on an IP loopback address (port 0 allowed)");
             println!();
+            println!("HTTP/1.1 and cleartext HTTP/2 share this listener.");
             println!(
                 "GET /health reports readiness. CONNECT forwards opaque TCP without TLS interception."
             );
