@@ -1,0 +1,6 @@
+[package]
+name = "airlock"
+description = "Local egress proxy for coding harnesses"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
