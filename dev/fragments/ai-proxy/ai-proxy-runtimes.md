@@ -1,17 +1,28 @@
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-22 — Claude uses `redact.assign` and the shared
-> reader through `apiKeyHelper` for file, command and concat references, and
-> clears inherited API keys, bearer tokens, custom headers and
-> Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
-> API-key descriptor before Claude starts. Codex uses command-backed provider
-> auth. Named client routes supply Claude `/model` picker rows (listed and
-> selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
-> discovers CPA models without per-credential profiles. Both use the shared
-> client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
-> and warn through the generated warning cases.
+> **Last verified:** 2026-10-26 — Airlock preserves native auth with scoped
+> launch inputs; CPA Claude uses `redact.assign` and the shared reader through
+> `apiKeyHelper` for file, command and concat references, and clears inherited
+> API keys, bearer tokens, custom headers and Bedrock/Vertex/Foundry switches in
+> settings, and suppresses the inherited API-key descriptor before Claude
+> starts. Codex uses command-backed provider auth. Named client routes supply
+> Claude `/model` picker rows (listed and selectable for a non-Anthropic id in
+> 2.1.306, read from the bundle); Codex discovers CPA models without
+> per-credential profiles. Both use the shared client-key helper. Kimchi, Kiro
+> and Copilot omit `proxy` from `surfaceSupport` and warn through the generated
+> warning cases.
 
-### Claude (packages/claude-code/lib/proxy.nix)
+### Claude with Airlock
+
+The final managed launcher reads the running service's private config/token,
+sets authenticated `HTTPS_PROXY`, clears ambient proxy/bypass variables and, for
+interception, supplies `NODE_EXTRA_CA_CERTS` before exec. Inherited extra trust
+is preserved in a content-addressed runtime bundle. Native auth, config roots
+and API-key descriptors survive. See
+[`packages/airlock/docs/claude.md`](../../../packages/airlock/docs/claude.md)
+for startup, conflicts, lifecycle and the unperformed native trust gate.
+
+### Claude with CPA (packages/claude-code/lib/proxy.nix)
 
 A settings `env` beats the process env, so the endpoint travels through settings
 files. `render` writes `env.ANTHROPIC_BASE_URL` (the origin; Claude appends
@@ -39,7 +50,7 @@ descriptor before exec; without a selection the package stays unchanged. An
 explicit `ai.claude.package = null` keeps settings delivery and warns that the
 caller must unset the descriptor when launching an unmanaged Claude.
 
-Any selection also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
+A CPA selection also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
 `DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
 `settings.disableClaudeAiConnectors` to `true` to disable claude.ai connectors.
 
