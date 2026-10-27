@@ -4,7 +4,8 @@ An instance runs a loopback CONNECT proxy while Claude keeps its native
 authentication, base URL, and TLS configuration. The default instance forwards
 opaque TLS. Optional client tokens and selective interception use the same
 shared instance settings described below; they do not configure Claude’s proxy
-identity or trust automatically.
+identity or trust automatically in this manual opt-in. For authenticated managed
+Claude selection, use [the Claude guide](claude.md).
 
 The server handles HTTP/1.1 CONNECT, HTTP/1.1 absolute-form `http://`
 forwarding, and CONNECT over cleartext HTTP/2 prior-knowledge connections to the
@@ -49,8 +50,9 @@ resolve.
 The root `ai.proxy` forced-null block is not Claude-specific: every runtime
 inheriting that root selection stops using the preselected CPA proxy. Keep this
 opt-in in an isolated test configuration unless that global effect is what you
-mean. Airlock adds no proxy-selection abstraction; the forced leaves only clear
-a pre-existing selection.
+mean. This manual opt-in uses no proxy selection; the forced leaves only clear a
+pre-existing selection. To select Airlock through `ai.claude.proxy` instead, see
+[the Claude guide](claude.md).
 
 The instance defaults to port 8318 and claims that port exclusively. Its service
 is named `airlock-main`, and the launcher renders `{"listen":"127.0.0.1:8318"}`

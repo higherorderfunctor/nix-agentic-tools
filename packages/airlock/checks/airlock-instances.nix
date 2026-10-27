@@ -6,16 +6,9 @@
   pkgs,
   ...
 }: let
-  inherit (harness) claudeSettings evalDevenv evalDevenvModules evalHm evalHmModules mkTest;
+  inherit (harness) claudeSettings;
+  inherit (import ./helpers.nix {inherit harness lib pkgs;}) evaluate evaluateModules failures namedTest pythonPath serviceLauncher tokenReader;
   redact = import ../../../lib/redact {inherit lib;};
-  evaluate = backend:
-    if backend == "hm"
-    then evalHm
-    else evalDevenv;
-  evaluateModules = backend:
-    if backend == "hm"
-    then evalHmModules
-    else evalDevenvModules;
   empty = backend: (evaluate backend {}).config;
   enabled = backend:
     (
@@ -32,11 +25,6 @@
     )
     .config;
   services = import ../../ai-module/lib/services.nix {inherit lib;};
-  strictShellApplication = import ../../../lib/strict-shell-application.nix;
-  tokenReader = strictShellApplication pkgs {
-    name = "airlock-test-token-reader";
-    text = ''exec ${pkgs.coreutils}/bin/cat "$AIRLOCK_TEST_TOKEN"'';
-  };
   interceptionSettings = {
     destinations = ["localhost:443"];
     upstream_roots = "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt";
@@ -126,9 +114,6 @@
     evaluateModules backend [baseClaudeModule runtimeSelectedModule];
   unselectedRuntime = backend:
     evaluateModules backend [baseClaudeModule runtimeSelectedModule unselectModule];
-  failedAssertions = result:
-    map (item: item.message)
-    (builtins.filter (item: !item.assertion) result.config.assertions);
   noAirlockActivation = config:
     config.ai.airlock.activation
     == {}
@@ -201,7 +186,7 @@
   in
     builtins.elem
     "ai.claims.port.8400: claimed by airlock:airlock-first.ports.main and airlock:airlock-second.ports.main"
-    (failedAssertions result);
+    (failures result);
   disabledClaims = backend: let
     inherit (evaluate backend {ai.airlock.instances.main.enable = false;}) config;
   in
@@ -253,9 +238,7 @@
       }
     ];
   launcher = backend: authenticated:
-    if backend == "hm"
-    then (runtime backend authenticated).systemd.user.services.airlock-main.Service.ExecStart
-    else (runtime backend authenticated).processes.airlock-main.exec;
+    serviceLauncher backend (runtime backend authenticated) "airlock-main";
   selectionIsClear = selection:
     lib.all (field: selection.${field} == null) selectionLeaves;
   nativeClaudeUntouched = evaluated: let
@@ -264,7 +247,7 @@
     selectionIsClear evaluated.config.ai.proxy
     && selectionIsClear evaluated.config.ai.claude.proxy
     && evaluated.config.ai.claude.normalized.proxy == null
-    && failedAssertions evaluated == []
+    && failures evaluated == []
     && !(settings ? apiKeyHelper)
     && settings.env.ANTHROPIC_API_KEY == "existing-api-key"
     && settings.env.ANTHROPIC_AUTH_TOKEN == "existing-auth-token"
@@ -303,22 +286,17 @@
     "${backend}: selection opt-out works" = selectionOptOutWorks backend;
     "${backend}: service contract" = serviceContract backend;
   };
-  failing = lib.concatMap (backend:
-    builtins.attrNames (lib.filterAttrs (_: passed: !passed) (conditions backend)))
-  ["devenv" "hm"];
 in {
   checks =
     {
-      airlock-instances = mkTest "airlock-instances" (
-        lib.assertMsg (failing == []) "failing: ${lib.concatStringsSep ", " failing}"
-      );
+      airlock-instances = namedTest "airlock-instances" (lib.mergeAttrsList (map conditions ["devenv" "hm"]));
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       airlock-instance-runtime = pkgs.runCommandLocal "airlock-instance-runtime" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
 
-        ${pkgs.python3}/bin/python3 ${./airlock-instance-runtime.py} \
+        PYTHONPATH=${pythonPath} ${pkgs.python3}/bin/python3 ${./airlock-instance-runtime.py} \
           ${pkgs.writeText "airlock-runtime-cases.json" (builtins.toJSON (lib.concatMap (backend:
           map (authenticated: {
             inherit authenticated backend;
