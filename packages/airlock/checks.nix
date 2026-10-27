@@ -5,7 +5,7 @@
 }: let
   package = pkgs.ai.generic.airlock;
 in {
-  imports = [./checks/airlock-instances.nix];
+  imports = [./checks/airlock-claude.nix ./checks/airlock-instances.nix];
 
   checks.airlock-package = pkgs.runCommandLocal "airlock-package" {} ''
     set -euETo pipefail
