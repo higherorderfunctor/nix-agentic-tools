@@ -4,7 +4,7 @@ mod common;
 use std::{sync::Arc, time::Duration};
 
 use common::{
-    headers,
+    FIXTURE_AUTHORIZATION, headers,
     tls::{BoxIo, Guards, LIMIT, client_config, fixture_certificate, outer, proxy, tls_client},
 };
 use rustls::pki_types::ServerName;
@@ -385,14 +385,11 @@ async fn pipelined_h1_rst_and_h2_reset_after_end_stream_cancel_owned_tls_upstrea
             outer(proxy.address, &format!("localhost:{}", target.port()), true).await
         } else {
             let mut socket = proxy.client().await;
+            let target = format!("localhost:{}", target.port());
             assert!(
-                common::request(
-                    &mut socket,
-                    "CONNECT",
-                    &format!("localhost:{}", target.port())
-                )
-                .await
-                .starts_with("HTTP/1.1 200")
+                common::connect(&mut socket, &target, FIXTURE_AUTHORIZATION)
+                    .await
+                    .starts_with("HTTP/1.1 200")
             );
             socket.set_zero_linger().unwrap();
             (Box::new(socket) as BoxIo, Guards::default())
