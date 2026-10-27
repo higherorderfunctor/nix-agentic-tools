@@ -119,6 +119,10 @@ in {
     })
   ];
 
+  # Airlock instance names share this group, so `ai.proxy.instance` names
+  # exactly one owner's instance.
+  config.ai.cliproxyapi.claims.proxy-instance = builtins.attrNames config.ai.cliproxyapi.instances;
+
   # Plugin executors choose credentials outside access.key-allowlist, and the
   # plugin host hands any plugin every auth file through host.auth.get, so
   # enabling plugins voids the allowlist (docs/cliproxyapi-key-allowlist.md).
