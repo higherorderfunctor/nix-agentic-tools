@@ -1,9 +1,11 @@
 # Airlock HTTPS passthrough
 
 An instance runs a loopback CONNECT proxy while Claude keeps its native
-authentication, base URL, and TLS configuration. Airlock does not configure
-provider credentials, CA certificates, TLS interception, Cedar policy, storage,
-routing, or a user interface.
+authentication, base URL, and TLS configuration. This default opt-in does not
+configure provider credentials, CA certificates, TLS interception, Cedar policy,
+storage, routing, or a user interface. Selective interception is available
+separately through the
+[JSON configuration](../README.md#selective-tls-interception).
 
 The server handles HTTP/1.1 CONNECT, HTTP/1.1 absolute-form `http://`
 forwarding, and CONNECT over cleartext HTTP/2 prior-knowledge connections to the
@@ -12,8 +14,8 @@ provides CONNECT and the local health route. HTTP/2 inside an HTTPS tunnel is
 negotiated directly between the client and destination through TLS ALPN; Airlock
 forwards those opaque TLS bytes. This is distinct from HTTP/2 on the
 client-to-proxy connection. Native Claude HTTP/2 behavior through this opt-in
-has not been verified. Airlock does not intercept TLS or negotiate ALPN on the
-client's behalf.
+has not been verified. This opt-in does not select interception, so Airlock does
+not negotiate ALPN on the client's behalf.
 
 ## Shared opt-in
 
