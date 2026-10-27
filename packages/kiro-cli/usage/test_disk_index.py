@@ -1,8 +1,10 @@
 """Offline fixtures only: no Kiro, credentials, home paths or network."""
 
+import io
 import json
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -105,16 +107,61 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(values, [5, 5, 5])
         self.assertEqual(self.db.execute("SELECT count(*) FROM disk_request_ids").fetchone()[0], 6)
 
-    def test_malformed_complete_line_is_visible_and_atomic(self):
+    def test_malformed_complete_lines_are_visible_omissions(self):
+        invalid = b'{"SECRET":broken}\n'
+        invalid_usage = encoded({"type": "usage_summary", "requestIds": "SECRET"})
+        self.messages.write_bytes(usage() + invalid + invalid_usage + usage(2))
+        self.scan()
+        self.assertEqual(self.count(), 2)
+        omissions = self.db.execute("SELECT * FROM disk_omissions ORDER BY byte_offset").fetchall()
+        self.assertEqual([(row["byte_offset"], row["byte_count"], row["reason"]) for row in omissions],
+                         [(len(usage()), len(invalid), "invalid_json_or_usage_record"),
+                          (len(usage()) + len(invalid), len(invalid_usage), "invalid_json_or_usage_record")])
+        self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], self.messages.stat().st_size)
+        self.assertNotIn("SECRET", "\n".join(self.db.iterdump()))
+
+    def test_database_failure_rolls_back_facts_omissions_and_checkpoint(self):
         self.messages.write_bytes(usage())
         self.scan()
+        self.db.execute("""CREATE TRIGGER fail_insert BEFORE INSERT ON disk_records
+                        BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END""")
         with self.messages.open("ab") as stream:
-            stream.write(usage(2) + b'{"SECRET":broken}\n')
-        with self.assertRaisesRegex(ValueError, "invalid JSON object") as error:
+            stream.write(b'broken\n' + usage(2))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "synthetic failure"):
             self.scan()
-        self.assertNotIn("SECRET", str(error.exception))
         self.assertEqual(self.count(), 1)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
         self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], len(usage()))
+
+    def test_parse_memory_failure_is_omitted_and_following_usage_is_indexed(self):
+        exhausted = encoded({"type": "tool_result", "text": "SECRET"})
+        healthy = usage(2)
+        self.messages.write_bytes(exhausted + healthy)
+        original = disk_index.decode
+        def decode(data, *args):
+            if data == exhausted:
+                raise MemoryError("SECRET")
+            return original(data, *args)
+        with patch.object(disk_index, "decode", side_effect=decode):
+            self.scan()
+        self.assertEqual(self.count(), 1)
+        self.assertEqual(dict(self.db.execute("SELECT * FROM disk_omissions").fetchone()),
+                         {"source_path": str(self.messages), "byte_offset": 0,
+                          "byte_count": len(exhausted), "reason": "parse_memory_exhausted"})
+        self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0],
+                         len(exhausted) + len(healthy))
+        with patch.object(disk_index, "decode", side_effect=AssertionError("parsed again")):
+            self.scan()
+        self.assertNotIn("SECRET", "\n".join(self.db.iterdump()))
+
+    def test_blank_complete_lines_advance_checkpoint_without_omissions(self):
+        self.messages.write_bytes(b'\n \t\r\n' + usage() + b'  \n')
+        self.scan()
+        self.assertEqual(self.count(), 1)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
+        self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], self.messages.stat().st_size)
+        with patch.object(disk_index, "decode", side_effect=AssertionError("parsed again")):
+            self.scan()
 
     def test_missing_facts_are_null_and_no_cross_source_join(self):
         self.messages.write_bytes(encoded({"type": "usage_summary"}) + encoded({
@@ -127,16 +174,79 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIsNone(row["timestamp"])
         self.assertEqual(self.db.execute("SELECT count(*) FROM disk_request_ids").fetchone()[0], 0)
 
-    def test_oversized_record_refused_and_symlinks_ignored(self):
-        self.messages.write_bytes(b"x" * (disk_index.MAX_RECORD + 1))
-        with self.assertRaisesRegex(ValueError, "record exceeds"):
+    def test_large_tool_record_is_parsed_and_discarded_between_usage(self):
+        tool = encoded({"type": "tool_result", "image": "SECRET_IMAGE" * 100})
+        self.messages.write_bytes(usage() + tool + usage(2))
+        with patch.object(disk_index, "MAX_RECORD", 2048):
             self.scan()
-        self.messages.unlink()
+        self.assertEqual(self.count(), 2)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
+        self.assertNotIn("SECRET", "\n".join(self.db.iterdump()))
+
+    def test_oversized_tail_is_retried_then_omitted_atomically_on_restart(self):
+        first = usage()
+        oversized = b'{"SECRET_UNKNOWN": "' + b'x' * 3000 + b'"}'
+        self.messages.write_bytes(first + oversized)
+        with patch.object(disk_index, "MAX_RECORD", 1024):
+            self.scan()
+            self.scan()
+            self.assertEqual(self.count(), 1)
+            self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], len(first))
+            self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
+            self.db.close()
+            self.db = disk_index.open_database(self.path)
+            with self.messages.open("ab") as stream:
+                stream.write(b'\n' + usage(2))
+            self.scan()
+            self.scan()
+        omission = dict(self.db.execute("SELECT * FROM disk_omissions").fetchone())
+        self.assertEqual(omission, {"source_path": str(self.messages), "byte_offset": len(first),
+                         "byte_count": len(oversized) + 1, "reason": "record_exceeds_parse_budget"})
+        self.assertEqual(self.count(), 2)
+        self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], self.messages.stat().st_size)
+        self.assertNotIn("SECRET", "\n".join(self.db.iterdump()))
+        # Replacement removes omission metadata through the same cascade as usage facts.
+        replacement = self.session / "replacement"
+        replacement.write_bytes(usage(3))
+        replacement.replace(self.messages)
+        self.scan()
+        self.assertEqual(self.count(), 1)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
+        self.messages.write_bytes(b'broken\n' + usage(4))
+        self.scan()
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 1)
+        self.messages.write_bytes(usage(5))  # Truncation also cascades omissions.
+        self.scan()
+        self.assertEqual(self.count(), 1)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
+
+    def test_oversized_record_drains_with_bounded_reads(self):
+        class TrackedStream(io.BytesIO):
+            def readline(self, size=-1):
+                calls.append(size)
+                return super().readline(size)
+        calls = []
+        with patch.object(disk_index, "MAX_RECORD", 100), patch.object(disk_index, "DRAIN_CHUNK", 64):
+            stream = TrackedStream(b'x' * 400 + b'\nnext\n')
+            self.assertEqual(disk_index.read_record(stream), (None, 401, True))
+        self.assertEqual(calls[0], 101)
+        self.assertEqual(set(calls[1:]), {64})
+        self.assertEqual(stream.read(), b'next\n')
+
+    def test_symlinks_are_ignored(self):
         outside = self.root / "outside"
         outside.write_bytes(usage())
         self.messages.symlink_to(outside)
         self.scan()
         self.assertEqual(self.count(), 0)
+
+    def test_cli_summary_warns_about_omitted_usage_coverage(self):
+        self.messages.write_bytes(usage() + b'broken\n')
+        result = subprocess.run([sys.executable, disk_index.__file__, "--db", str(self.path),
+                                 "--sessions", str(self.sessions)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("1 sources, 1 usage/context records, 1 omitted records", result.stdout)
+        self.assertIn("unknown usage coverage", result.stdout)
 
     def test_cli_requires_explicit_inputs(self):
         result = subprocess.run([sys.executable, str(Path(disk_index.__file__))],
@@ -193,10 +303,19 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.count(), 130)
         with self.messages.open("ab") as stream:
             stream.write(b'{"SECRET_DEEP":' + b'[' * 1200 + b'0' + b']' * 1200 + b'}\n')
-        with self.assertRaisesRegex(ValueError, "invalid JSON object") as error:
-            self.scan()
-        self.assertNotIn("SECRET_DEEP", str(error.exception))
+        self.scan()
         self.assertEqual(self.count(), 130)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 1)
+        self.assertNotIn("SECRET_DEEP", "\n".join(self.db.iterdump()))
+
+    def test_existing_disk_index_adds_omission_table_without_replaying_facts(self):
+        self.messages.write_bytes(usage())
+        self.scan()
+        self.db.execute("DROP TABLE disk_omissions")
+        with patch.object(disk_index, "decode", side_effect=AssertionError("parsed again")):
+            self.scan()
+        self.assertEqual(self.count(), 1)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
 
     def test_capture_and_disk_schema_both_initialization_orders(self):
         self.messages.write_bytes(usage())

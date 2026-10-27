@@ -59,6 +59,17 @@ def query(db, session, scope="session"):
     if not disk_available:
         disk["unavailable_reason"] = "Index session files into this calibration database first."
     if disk_available:
+        disk["omitted_records"] = None
+        disk["omission_tracking"] = "disk_omissions" in tables
+        if disk["omission_tracking"]:
+            disk["omitted_records"] = db.execute(f"""
+                SELECT count(*) FROM disk_omissions o JOIN disk_sources s ON s.path=o.source_path
+                WHERE s.session_path IN ({path_marks})
+            """, paths).fetchone()[0]
+            if disk["omitted_records"]:
+                warnings.append("Some selected disk records were omitted; their usage coverage is unknown and disk totals may be incomplete.")
+        else:
+            warnings.append("This disk index has no omission tracking; omitted-record coverage is unavailable.")
         totals = db.execute(f"""
             SELECT count(*) AS n,
               (SELECT sum(j.value ->> '$.usage') FROM disk_records r

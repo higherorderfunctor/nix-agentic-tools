@@ -92,6 +92,26 @@ class QueryTests(unittest.TestCase):
             self.assertFalse(result["captures"]["available"])
             self.assertFalse(result["disk"]["available"])
 
+    def test_omissions_are_scoped_and_legacy_indexes_remain_queryable(self):
+        self.session("sess_root")
+        self.session("sess_child", {"parentSessionId": "root"})
+        self.session("sess_unrelated")
+        for name in ("child", "unrelated"):
+            self.db.execute("INSERT INTO disk_omissions VALUES (?,?,?,?)",
+                            ("/synthetic/workspace/sess_" + name + "/messages.jsonl", 100,
+                             999, "record_exceeds_parse_budget"))
+        exact = query.query(self.db, "sess_root")
+        self.assertEqual(exact["disk"]["omitted_records"], 0)
+        self.assertFalse(any("records were omitted" in warning for warning in exact["warnings"]))
+        tree = query.query(self.db, "sess_root", "tree")
+        self.assertEqual(tree["disk"]["omitted_records"], 1)
+        self.assertTrue(any("usage coverage is unknown" in warning for warning in tree["warnings"]))
+        self.db.execute("DROP TABLE disk_omissions")
+        legacy = query.query(self.db, "sess_root")
+        self.assertIsNone(legacy["disk"]["omitted_records"])
+        self.assertFalse(legacy["disk"]["omission_tracking"])
+        self.assertEqual(legacy["disk"]["turns"], 1)
+
     def test_models_are_scoped_to_their_source(self):
         self.session("sess_root")
         self.captured("call", conversation="root")

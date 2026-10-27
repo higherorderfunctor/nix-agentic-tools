@@ -16,9 +16,11 @@ from pathlib import Path
 from capture import decoded_json, open_database
 
 
-MAX_RECORD = 4 * 1024 * 1024
+DRAIN_CHUNK = 64 * 1024
 IDENTIFIERS = ("executionId", "parentExecutionId", "parentSessionId", "rootExecutionId",
                "rootSessionId", "sessionId", "subExecutionId", "turnId")
+MAX_RECORD = 64 * 1024 * 1024
+MAX_SESSION_METADATA = 4 * 1024 * 1024
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS disk_sessions (
     path TEXT PRIMARY KEY, model_id TEXT, model_scope TEXT NOT NULL,
@@ -29,6 +31,11 @@ CREATE TABLE IF NOT EXISTS disk_sources (
     path TEXT PRIMARY KEY, session_path TEXT NOT NULL, device INTEGER,
     inode INTEGER, size INTEGER, mtime_ns INTEGER, offset INTEGER,
     head_hash TEXT, checkpoint_hash TEXT
+);
+CREATE TABLE IF NOT EXISTS disk_omissions (
+    source_path TEXT NOT NULL REFERENCES disk_sources(path) ON DELETE CASCADE,
+    byte_offset INTEGER NOT NULL, byte_count INTEGER NOT NULL, reason TEXT NOT NULL,
+    PRIMARY KEY(source_path, byte_offset)
 );
 CREATE TABLE IF NOT EXISTS disk_records (
     source_path TEXT NOT NULL REFERENCES disk_sources(path) ON DELETE CASCADE,
@@ -80,7 +87,7 @@ def fingerprints(stream, offset):
     return head, checkpoint
 
 
-def import_record(db, source, offset, record):
+def record_facts(source, offset, record):
     payload = record.get("payload")
     if not isinstance(payload, dict):
         return
@@ -112,17 +119,28 @@ def import_record(db, source, offset, record):
         kind = "contextUsage"
     else:
         return
-    db.execute(
-        "INSERT INTO disk_records VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (source, offset, kind, string(record.get("timestamp")),
-         string(payload.get("executionId", record.get("executionId"))),
-         string(payload.get("turnId", record.get("turnId"))), context,
-         elapsed, status, usage, identifiers(record, payload)),
-    )
-    db.executemany(
-        "INSERT INTO disk_request_ids VALUES (?,?,?,?)",
-        ((source, offset, index, request_id) for index, request_id in enumerate(request_ids)),
-    )
+    return ((source, offset, kind, string(record.get("timestamp")),
+             string(payload.get("executionId", record.get("executionId"))),
+             string(payload.get("turnId", record.get("turnId"))), context,
+             elapsed, status, usage, identifiers(record, payload)),
+            [(source, offset, index, request_id) for index, request_id in enumerate(request_ids)])
+
+
+def read_record(stream):
+    """Bound allocation, draining oversized lines without retaining their contents."""
+    line = stream.readline(MAX_RECORD + 1)
+    size = len(line)
+    if size <= MAX_RECORD:
+        return line, size, line.endswith(b"\n")
+    complete = line.endswith(b"\n")
+    del line
+    while not complete:
+        chunk = stream.readline(DRAIN_CHUNK)
+        size += len(chunk)
+        if not chunk:
+            break
+        complete = chunk.endswith(b"\n")
+    return None, size, complete
 
 
 def index_messages(db, path, session_path):
@@ -151,19 +169,32 @@ def index_messages(db, path, session_path):
             batch, size = [], 0
             # Parse outside the write transaction; neither scan time nor file size holds the writer lock.
             while len(batch) < 128 and size < 256 * 1024:
-                line = stream.readline(MAX_RECORD + 1)
-                if len(line) > MAX_RECORD:
-                    raise ValueError(f"record exceeds {MAX_RECORD} bytes: {source} at byte {offset}")
-                if not line or not line.endswith(b"\n"):
-                    break
-                batch.append((offset, decode(line, path, offset)))
+                line, length, complete = read_record(stream)
+                if not complete:
+                    break  # An unfinished tail is retried, even when already oversized.
+                facts, reason = None, None
+                if line is None:
+                    reason = "record_exceeds_parse_budget"
+                elif not line.isspace():
+                    try:
+                        facts = record_facts(source, offset, decode(line, path, offset))
+                    except MemoryError:
+                        reason = "parse_memory_exhausted"
+                    except (ValueError, UnicodeError, RecursionError, OverflowError):
+                        reason = "invalid_json_or_usage_record"
+                batch.append((offset, length, facts, reason))
                 offset = stream.tell()
-                size += len(line)
+                size += length
             head, checkpoint = fingerprints(stream, offset)
             with db:
                 db.execute("BEGIN IMMEDIATE")
-                for position, record in batch:
-                    import_record(db, source, position, record)
+                for position, length, facts, reason in batch:
+                    if reason:
+                        db.execute("INSERT INTO disk_omissions VALUES (?,?,?,?)",
+                                   (source, position, length, reason))
+                    elif facts:
+                        db.execute("INSERT INTO disk_records VALUES (?,?,?,?,?,?,?,?,?,?,?)", facts[0])
+                        db.executemany("INSERT INTO disk_request_ids VALUES (?,?,?,?)", facts[1])
                 db.execute(
                     "UPDATE disk_sources SET device=?,inode=?,size=?,mtime_ns=?,offset=?,"
                     "head_hash=?,checkpoint_hash=? WHERE path=?",
@@ -181,9 +212,9 @@ def index_session(db, path):
         prior = db.execute("SELECT file_identity FROM disk_sessions WHERE path=?", (str(path.parent),)).fetchone()
         if prior and prior[0] == identity:
             return
-        data = stream.read(MAX_RECORD + 1)
-    if len(data) > MAX_RECORD:
-        raise ValueError(f"session metadata exceeds {MAX_RECORD} bytes: {path}")
+        data = stream.read(MAX_SESSION_METADATA + 1)
+    if len(data) > MAX_SESSION_METADATA:
+        raise ValueError(f"session metadata exceeds {MAX_SESSION_METADATA} bytes: {path}")
     session = decode(data, path, 0)
     numeric = {key: value for key, value in session.items() if number(value) is not None}
     with db:
@@ -225,6 +256,12 @@ def main():
     try:
         with open_database(args.db) as db:
             index_tree(db, args.sessions)
+            sources = db.execute("SELECT count(*) FROM disk_sources").fetchone()[0]
+            records = db.execute("SELECT count(*) FROM disk_records").fetchone()[0]
+            omitted = db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0]
+            print(f"Index contains {sources} sources, {records} usage/context records, {omitted} omitted records.")
+            if omitted:
+                print("Warning: omitted records have unknown usage coverage; totals may be incomplete.")
         db.close()
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")

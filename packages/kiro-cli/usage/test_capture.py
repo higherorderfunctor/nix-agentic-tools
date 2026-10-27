@@ -26,7 +26,7 @@ def event(obj, newline=b"\n"):
 
 
 def completed(text="é🙂"):
-    return {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}, {"type": "reasoning", "summary": [{"text": "private reasoning"}]}, {"type": "function_call", "arguments": "{}"}], "usage": {"kiro:credits": 0.25, "kiro:context_usage_percentage": 12.3, "unknown": {"future": True}}}}
+    return {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}, {"type": "reasoning", "summary": [{"text": "private reasoning"}]}, {"type": "function_call", "arguments": "{}"}], "usage": {"kiro:credits": {"unit": "credit", "unit_plural": "credits", "value": 0.25}, "kiro:context_usage_percentage": 12.3, "unknown": {"future": True}}}}
 
 
 class CaptureTests(unittest.TestCase):
@@ -77,6 +77,26 @@ class CaptureTests(unittest.TestCase):
         chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
         self.assertEqual(b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks), encoded)
         self.assertEqual(b"".join(gzip.decompress(c["application_gzip"]) for c in chunks), body)
+
+    def test_credit_envelope_in_sse_and_json_response(self):
+        writer = Collector(self.path)
+        ids = []
+        obj = completed()
+        response = dict(obj["response"], object="response", status="completed")
+        for content_type, payload in (("text/event-stream", event(obj)),
+                                      ("application/json", json.dumps(response).encode())):
+            ident = writer.begin({}, b"{}")
+            ids.append(ident)
+            writer.headers(ident, {"content_type": content_type})
+            writer.chunk(ident, payload)
+            writer.finish(ident)
+        writer.close()
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            for ident in ids:
+                state, issues, credits, context, summary = db.execute("SELECT state,issues_json,credits,context_usage_percentage,summary_json FROM captures WHERE id=?", (ident,)).fetchone()
+                self.assertEqual((state, json.loads(issues), credits, context), ("complete", [], .25, 12.3))
+                usage = json.loads(summary)["usage_objects"][0]["value"]
+                self.assertEqual(usage, obj["response"]["usage"])
 
     def test_multiline_sse_mixed_line_endings(self):
         frames = []
@@ -331,11 +351,17 @@ class CaptureTests(unittest.TestCase):
         writer = Collector(self.path)
         cases = [("input_tokens", 2**70), ("output_tokens", -1), ("input_tokens", True),
                  ("kiro:credits", 2**1024), ("kiro:context_usage_percentage", float("inf")),
-                 ("kiro:credits", "invalid"), ("kiro:credits", 2**70)]
+                 ("kiro:credits", "invalid"), ("kiro:credits", None),
+                 ("kiro:credits", True), ("kiro:credits", -1),
+                 ("kiro:credits", float("nan")), ("kiro:credits", float("-inf")),
+                 ("kiro:credits", 2**70)]
         ids = []
         for key, value in cases:
             obj = completed()
-            obj["response"]["usage"][key] = value
+            if key == "kiro:credits":
+                obj["response"]["usage"][key]["value"] = value
+            else:
+                obj["response"]["usage"][key] = value
             ident = writer.begin({}, b"{}")
             ids.append(ident)
             writer.headers(ident, {"content_type": "text/event-stream"})
@@ -345,8 +371,36 @@ class CaptureTests(unittest.TestCase):
         with contextlib.closing(sqlite3.connect(self.path)) as db:
             states = [db.execute("SELECT state,issues_json,credits FROM captures WHERE id=?", (ident,)).fetchone() for ident in ids]
             self.assertTrue(all(row[0] == "incomplete" and "invalid_usage_number" in row[1] for row in states[:-1]))
+            for (key, _), row in zip(cases[:-1], states[:-1]):
+                if key == "kiro:credits":
+                    self.assertIsNone(row[2])
             self.assertEqual(states[-1][0], "complete")
             self.assertEqual(states[-1][2], float(2**70))
+
+    def test_invalid_credit_envelopes_preserve_evidence_and_worker_recovers(self):
+        cases = [(value, "invalid_credit_unit") for value in
+                 (None, .25, [], {}, {"value": .25}, {"unit": "token", "value": .25})]
+        cases += [({"unit": "credit"}, "invalid_usage_number"),
+                  ({"unit": "credit", "value": float("inf")}, "invalid_usage_number"),
+                  (completed()["response"]["usage"]["kiro:credits"], None)]
+        writer = Collector(self.path)
+        ids = []
+        for envelope, _ in cases:
+            obj = completed()
+            obj["response"]["usage"]["kiro:credits"] = envelope
+            ident = writer.begin({}, b"{}")
+            ids.append(ident)
+            writer.headers(ident, {"content_type": "text/event-stream"})
+            writer.chunk(ident, event(obj))
+            writer.finish(ident)
+        writer.close()
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            for ident, (envelope, issue) in zip(ids, cases):
+                state, issues, credits, summary = db.execute("SELECT state,issues_json,credits,summary_json FROM captures WHERE id=?", (ident,)).fetchone()
+                self.assertEqual(state, "incomplete" if issue else "complete")
+                self.assertEqual(json.loads(issues), [issue] if issue else [])
+                self.assertEqual(credits, None if issue else .25)
+                self.assertEqual(json.loads(summary)["usage_objects"][0]["value"]["kiro:credits"], envelope)
 
     def test_lost_request_does_not_disable_complete_response_analysis(self):
         writer = Collector(self.path, max_bytes=512)
