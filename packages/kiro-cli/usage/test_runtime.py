@@ -1,5 +1,6 @@
 """Offline launch summaries use exact identity and preserve command behavior."""
 # cspell:words preexec TIOCSCTTY
+import base64
 import contextlib
 import fcntl
 import io
@@ -15,9 +16,11 @@ import tempfile
 import termios
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from capture import Collector
+from mitm_addon import UsageCapture
 import runtime
 
 
@@ -73,16 +76,23 @@ class SummaryTests(unittest.TestCase):
                     self.assertEqual(result.stdout, "machine stdout\n")
 
     def test_terminal_descriptors_and_interrupt(self):
+        self._check_terminal(False)
+
+    def test_piped_stdin_terminal_interrupt(self):
+        self._check_terminal(True)
+
+    def _check_terminal(self, piped):
         master, slave = pty.openpty()
         script = "import runtime,sys; code=\"import os,signal,time; print('TTY', *(os.isatty(n) for n in (0,1,2)), flush=True); signal.signal(signal.SIGINT, lambda *a: (print('INT',flush=True), time.sleep(.1), sys.exit(0))); time.sleep(20)\"; code='import sys; '+code; result=runtime.wait_command(sys.executable, ['-c',code], dict(runtime.os.environ)); print('EXIT',result,flush=True)"
         process = subprocess.Popen([sys.executable, "-c", script], cwd=Path(__file__).parent,
-                                   stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
+                                   stdin=subprocess.PIPE if piped else slave, stdout=slave, stderr=slave, start_new_session=True,
                                    preexec_fn=lambda: fcntl.ioctl(slave, termios.TIOCSCTTY, 0))
         os.close(slave)
         output = b""
         try:
             deadline = time.monotonic() + 5
-            while b"TTY True True True" not in output:
+            expected = b"TTY False True True" if piped else b"TTY True True True"
+            while expected not in output:
                 self.assertLess(time.monotonic(), deadline, output)
                 if select.select([master], [], [], .1)[0]:
                     output += os.read(master, 4096)
@@ -101,7 +111,46 @@ class SummaryTests(unittest.TestCase):
             if process.poll() is None:
                 process.kill()
                 process.wait()
+            if process.stdin:
+                process.stdin.close()
             os.close(master)
+
+    def test_non_chat_commands_skip_summary(self):
+        with patch.dict(os.environ, {}, clear=True), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "invocation_summary") as summary:
+            for arguments in (["--version"], ["--help"], ["login"], ["--help-all"], ["chat", "--help"]):
+                runtime.exec_command(Path("/unused"), 19001, ["kiro-cli", *arguments])
+            self.assertEqual(execute.call_count, 5)
+            summary.assert_not_called()
+            wait.assert_not_called()
+            for arguments in (["chat", "please explain login and --version"], ["chat", "--", "--help"], ["--resume-id", "sess_resume"], ["--agent", "doctor"], ["--model", "login"], []):
+                runtime.exec_command(Path("/unused"), 19001, ["kiro-cli", *arguments])
+            self.assertEqual(summary.call_count, 6)
+
+    def test_interrupt_during_summary_keeps_child_status(self):
+        def interrupt(*arguments):
+            os.kill(os.getpid(), signal.SIGINT)
+        with patch.dict(os.environ, {}, clear=True), patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=23), patch.object(runtime, "invocation_summary", side_effect=interrupt):
+            self.assertEqual(runtime.exec_command(Path("/unused"), 19001, ["kiro-cli", "chat"]), 23)
+
+    def test_marker_parser_strips_headers_and_cleans_connections(self):
+        addon = UsageCapture()
+        addon.invocations = {}
+        connection = SimpleNamespace(id="local-one")
+        def flow(header, client=connection):
+            return SimpleNamespace(client_conn=client, request=SimpleNamespace(headers={"proxy-authorization": header}))
+        marker = "a" * 32
+        valid = "Basic " + base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
+        request = flow(valid)
+        addon.http_connect(request)
+        self.assertEqual(addon.invocations, {"local-one": marker})
+        self.assertNotIn("proxy-authorization", request.request.headers)
+        for header in ("", "Basic !!!", "Bearer ignored", "Basic " + base64.b64encode(b"kiro-usage-bad:").decode(), "Basic " + base64.b64encode(f"kiro-usage-{marker}:password".encode()).decode()):
+            request = flow(header, SimpleNamespace(id="other"))
+            addon.http_connect(request)
+            self.assertNotIn("other", addon.invocations)
+            self.assertNotIn("proxy-authorization", request.request.headers)
+        addon.client_disconnected(connection)
+        self.assertEqual(addon.invocations, {})
 
     def test_main_returns_child_status(self):
         with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--", "exec", "kiro-cli"]), patch.object(runtime, "cli", return_value=23):

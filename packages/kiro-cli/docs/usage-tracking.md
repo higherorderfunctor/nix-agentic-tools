@@ -73,7 +73,10 @@ not parse Kiro's screen or guess a session from its process ID. Reports contain
 full-session totals, including earlier work when you resume a session. If no
 captured conversation identity is available, the tool reports that the summary
 is unavailable. It does not index session files automatically: disk observations
-reflect the last explicit `index` and may be stale.
+reflect the last explicit `index` and may be stale. On exit the tool waits up to
+two seconds for the asynchronous capture writer; unfinished calls remain flagged
+as incomplete coverage. Nested `kiro-usage exec` launches share the parent's
+marker and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing

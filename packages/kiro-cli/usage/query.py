@@ -12,6 +12,10 @@ from display import table, value
 
 
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
+FOOTER_WARNINGS = (
+    "Own-versus-delegate attribution within a session is unavailable; session scope can include delegate work.",
+    "Disk turn credits and capture credits overlap and must never be added.",
+)
 
 
 def metric(total=None, known=0, observations=0):
@@ -51,9 +55,7 @@ def query(db, session, scope="session"):
     aliases = sorted(selected | {value.removeprefix("sess_") for value in selected})
     placeholders = ",".join("?" for _ in aliases)
     path_marks = ",".join("?" for _ in paths) or "NULL"
-    warnings = ["Own-versus-delegate attribution within a session is unavailable; session scope can include delegate work.",
-                "Disk turn credits and capture credits overlap and must never be added.",
-                "Context percentages are observations, not token counts."]
+    warnings = [*FOOTER_WARNINGS, "Context percentages are observations, not token counts."]
     report = {"session": session, "scope": scope, "sessions": sorted(selected),
               "attribution": {"own_vs_delegate": "unavailable", "tree_identity": "explicit parentSessionId/rootSessionId only"},
               "warnings": warnings}
@@ -185,7 +187,8 @@ def observed_value(metric):
 
 def render(report):
     captures, disk = report["captures"], report["disk"]
-    lines = [f"Session: {report['session']}  Scope: {report['scope']} ({len(report['sessions'])} sessions)",
+    sessions = len(report["sessions"])
+    lines = [f"Session: {report['session']}  Scope: {report['scope']} ({sessions} session{'s' if sessions != 1 else ''})",
              "", "Captured calls (requested model; observed sums):"]
     rows = [[model["requested_model"], model["observations"],
              *(observed_value(model["metrics"][name]) for name in DIMENSIONS)]
@@ -195,7 +198,7 @@ def render(report):
     lines.append(table(["Model", "Calls", "Credits", "Input", "Output", "Cache read", "Cache write"], rows))
     if captures["available"]:
         count = captures["observations"]
-        lines += ["", f"Capture coverage: {count} attributed calls; {captures['incomplete']} incomplete.",
+        lines += ["", f"Capture coverage: {count} attributed call{'s' if count != 1 else ''}; {captures['incomplete']} incomplete.",
                   "Counters present (known/attributed; missing counters stay unknown):",
                   "; ".join(f"{label} {captures['metrics'][name]['known']}/{count}"
                             for label, name in zip(("credits", "input", "output", "cache read", "cache write"), DIMENSIONS)),
@@ -205,7 +208,8 @@ def render(report):
     lines += ["", "Disk observations (separate from captures):"]
     if disk["available"]:
         credits = disk["metrics"]["credits"]
-        lines += [f"Turns: {disk['turns']}; observed credits: {value(credits['observed_sum'])}; fully known turns: {credits['known']}/{disk['turns']}.",
+        lines += ["Disk observations are from the last explicit index and may be stale.",
+                  f"Turns: {disk['turns']}; observed credits: {value(credits['observed_sum'])}; fully known turns: {credits['known']}/{disk['turns']}.",
                   f"Omitted records: {value(disk['omitted_records'])}; turns without request IDs: {disk['turns_without_request_ids']}.",
                   "Disk model is session-current metadata, not a per-call model:",
                   table(["Model", "Sessions"], [[model["model_id"], model["sessions"]] for model in disk["models"]]),
@@ -214,8 +218,7 @@ def render(report):
         lines.append("Disk coverage unavailable: " + disk["unavailable_reason"])
     lines += ["— = unknown or unobserved; sums include only observed values.",
               "Partial cells show sum (known calls/all calls).",
-              "Disk turn credits and capture credits overlap and must never be added.",
-              "Own-versus-delegate attribution is unavailable; session scope can include delegate work."]
+              *FOOTER_WARNINGS]
     return "\n".join(lines)
 
 
@@ -235,7 +238,8 @@ def main():
             else:
                 print(render(report))
                 for warning in report["warnings"]:
-                    print("Warning: " + warning, file=sys.stderr)
+                    if warning not in FOOTER_WARNINGS:
+                        print("Warning: " + warning, file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:
         parser.exit(1, f"cannot query calibration database: {error}\n")
 

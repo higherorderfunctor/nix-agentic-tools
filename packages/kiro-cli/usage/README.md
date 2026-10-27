@@ -198,7 +198,10 @@ and signals are preserved. Other commands have no automatic Kiro summary.
 These are full-session totals and can include earlier work from a resumed
 session. No captured conversation identity means an explicit unavailable
 summary. No automatic disk indexing runs; disk observations come from the last
-explicit index and may be stale.
+explicit index and may be stale. The exit summary waits at most two seconds for
+the asynchronous capture writer and flags unfinished calls. Nested
+`kiro-usage exec` launches reuse the parent's marker; only the outer launch
+prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload exits with an error. Replay of

@@ -110,7 +110,7 @@ def service(args, path):
 
 def invocation_summary(path, invocation, timeout=2.0):
     """Read only exact marker matches; wait briefly for the async writer."""
-    from query import query, render
+    from query import FOOTER_WARNINGS, query, render
     deadline = time.monotonic() + timeout
     rows = []
     uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
@@ -145,6 +145,8 @@ def invocation_summary(path, invocation, timeout=2.0):
                     print("Disk observations are from the last explicit index and may be stale; this launch did not refresh them.", file=sys.stderr)
                 print(render(report), file=sys.stderr)
                 for warning in report["warnings"]:
+                    if warning in FOOTER_WARNINGS:
+                        continue
                     print("Warning: " + warning, file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:
         print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
@@ -155,10 +157,14 @@ def wait_command(command, arguments, environment):
     # Kiro retains its terminal. Forward signals sent to the supervisor alone.
     child = subprocess.Popen([command, *arguments], env=environment)
     previous = {}
-    try:
-        shared_foreground = os.tcgetpgrp(0) == os.getpgrp()
-    except OSError:
-        shared_foreground = False
+    shared_foreground = False
+    for descriptor in (0, 1, 2):
+        try:
+            if os.tcgetpgrp(descriptor) == os.getpgrp():
+                shared_foreground = True
+                break
+        except OSError:
+            continue
     def forward(number, frame):
         # The terminal already delivers these to the whole foreground group.
         # Forwarding again turns one Ctrl+C into Kiro's second interrupt.
@@ -201,24 +207,46 @@ def exec_command(path, port, arguments):
         elif not has_v3:
             raise ValueError("kiro-cli-chat requires explicit --v3 or --agent-engine v3")
     tracked = Path(command).name in ("kiro-cli", "kiro-cli-chat")
+    if tracked:
+        options = tail[:tail.index("--")] if "--" in tail else tail
+        if any(option in ("--help", "--help-all", "--version", "-h", "-V") for option in options):
+            tracked = False
+        elif Path(command).name == "kiro-cli":
+            # Match only a leading administrative subcommand. An option's value
+            # (agent name, model, resume ID) must never be mistaken for a command.
+            leading = options[1:] if options[:1] == ["--v3"] else options
+            administrative = (
+                "agent", "dashboard", "debug", "diagnostic", "doctor", "help", "init",
+                "integrations", "issue", "launch", "login", "logout", "mcp", "powers",
+                "profile", "quit", "restart", "settings", "setup", "theme", "update",
+                "user", "whoami",
+            )
+            if leading and leading[0] in administrative:
+                tracked = False
     nested = bool(os.environ.get("KIRO_USAGE_INVOCATION"))
     invocation = (os.environ.get("KIRO_USAGE_INVOCATION") or uuid.uuid4().hex) if tracked else None
     child_environment = launch_environment(path, port, refuse_conflicts=False, invocation=invocation)
     try:
         if not tracked or nested:
             os.execvpe(command, [command, *tail], child_environment)
-            return
-        result = wait_command(command, tail, child_environment)
+        else:
+            result = wait_command(command, tail, child_environment)
+            previous = {number: signal.signal(number, signal.SIG_IGN)
+                        for number in (signal.SIGINT, signal.SIGQUIT)}
+            try:
+                invocation_summary(path, invocation)
+            finally:
+                for number, handler in previous.items():
+                    signal.signal(number, handler)
+            if result < 0:
+                if -result not in (signal.SIGKILL, signal.SIGSTOP):
+                    signal.signal(-result, signal.SIG_DFL)
+                os.kill(os.getpid(), -result)
+            return result
     except FileNotFoundError as error:
         raise CommandError(f"command not found: {command}; check PATH or pass an executable path") from error
     except OSError as error:
         raise CommandError(f"cannot execute {command}: {error.strerror}; check the executable path and permissions") from error
-    invocation_summary(path, invocation)
-    if result < 0:
-        if -result not in (signal.SIGKILL, signal.SIGSTOP):
-            signal.signal(-result, signal.SIG_DFL)
-        os.kill(os.getpid(), -result)
-    return result
 
 
 def cli(path, arguments, port):

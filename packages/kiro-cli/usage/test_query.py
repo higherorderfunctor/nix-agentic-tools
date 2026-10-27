@@ -129,13 +129,13 @@ class QueryTests(unittest.TestCase):
         self.captured("missing", conversation="root", credits=None, tokens=None, state="incomplete")
         report = query.query(self.db, "sess_root")
         output = query.render(report)
-        self.assertIn("Session: sess_root  Scope: session (1 sessions)", output)
+        self.assertIn("Session: sess_root  Scope: session (1 session)", output)
         self.assertIn("requested-model", output)
         self.assertRegex(output, r"TOTAL\s+2\s+0 \(1/2\)\s+0 \(1/2\)\s+—\s+—\s+—")
         self.assertRegex(output, r"requested-model\s+2\s+0 \(1/2\)\s+0 \(1/2\)")
         self.assertIn("Partial cells show sum (known calls/all calls).", output)
         self.assertIn("must never be added", output)
-        self.assertIn("Own-versus-delegate attribution is unavailable", output)
+        self.assertIn("Own-versus-delegate attribution within a session is unavailable", output)
         self.assertIn("credits 1/2; input 1/2; output 0/2", output)
         self.assertIn("2 attributed calls; 1 incomplete", output)
         self.assertIn("Turns: 1; observed credits: 8", output)
@@ -179,7 +179,11 @@ class QueryTests(unittest.TestCase):
             self.assertEqual(human.returncode, 0, human.stderr)
             self.assertIn("Captured calls", human.stdout)
             self.assertNotIn("Warning:", human.stdout)
-            self.assertIn("must never be added", human.stderr)
+            self.assertNotIn("must never be added", human.stderr)
+            self.assertIn("must never be added", human.stdout)
+            self.assertIn("Context percentages", human.stderr)
+            self.assertIn("1 attributed call;", human.stdout)
+            self.assertIn("last explicit index and may be stale", human.stdout)
 
     def test_cli_missing_database_is_not_created(self):
         with tempfile.TemporaryDirectory() as temporary:
