@@ -7,3 +7,10 @@ license.workspace = true
 
 [dependencies]
 clap.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+libc = "0.2"
