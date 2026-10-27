@@ -3,12 +3,8 @@
 //! task after hyper hands over the raw socket.
 use std::{convert::Infallible, io, os::fd::AsFd, sync::Arc, time::Duration};
 
-use http_body_util::Full;
 use hyper::{
-    Method, Request, Response, StatusCode,
-    body::{Bytes, Incoming},
-    server::conn::http1,
-    service::service_fn,
+    Method, Request, StatusCode, body::Incoming, server::conn::http1, service::service_fn,
     upgrade::OnUpgrade,
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
@@ -22,7 +18,9 @@ use tokio::{
 use crate::{
     detect::Prefixed,
     first_request::until_first_request,
-    local::{response, route},
+    forward::Forwarder,
+    local::{proxy_response, route},
+    relayed::ProxyResponse,
     tunnel,
     upstream::CONNECT_TIMEOUT,
 };
@@ -34,18 +32,25 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant, header_timeout: D
     // The service must return the `200` before the client socket is upgraded,
     // so it cannot run the relay itself. It sends the pending tunnel back here.
     let (sender, mut receiver) = mpsc::channel(1);
+    let forwarder = Forwarder::new();
     let started = Arc::new(Notify::new());
     let observed = Arc::clone(&started);
     let service = service_fn(move |request| {
         observed.notify_one();
-        handle(request, sender.clone())
+        handle(request, sender.clone(), forwarder.clone())
     });
     let connection = http1::Builder::new()
         .timer(TokioTimer::new())
         .header_read_timeout(header_timeout)
         .serve_connection(TokioIo::new(socket), service)
         .with_upgrades();
-    let Some(result) = until_first_request(&started, deadline, connection).await else {
+    // Hyper can stop reading while a pipelined request is buffered, so it would
+    // not see a reset.
+    let result = tokio::select! {
+        result = until_first_request(&started, deadline, connection) => result,
+        () = transport_error(&monitor) => return,
+    };
+    let Some(result) = result else {
         return;
     };
     if result.is_ok()
@@ -106,21 +111,26 @@ async fn open_tunnel(
 async fn handle(
     request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+    forwarder: Forwarder,
+) -> Result<ProxyResponse, Infallible> {
     if request.method() == Method::CONNECT {
         let deadline = Instant::now() + CONNECT_TIMEOUT;
         let pending = match open_tunnel(request, deadline).await {
             Ok(pending) => pending,
-            Err((status, body)) => return Ok(response(status, body)),
+            Err((status, body)) => return Ok(proxy_response(status, body)),
         };
         if sender.send(pending).await.is_err() {
-            return Ok(response(
+            return Ok(proxy_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "tunnel connection closed\n",
             ));
         }
-        return Ok(response(StatusCode::OK, ""));
+        return Ok(proxy_response(StatusCode::OK, ""));
+    }
+    // An absolute-form target names another server; origin-form is for Airlock.
+    if request.uri().scheme().is_some() || request.uri().authority().is_some() {
+        return Ok(forwarder.forward(request).await);
     }
     let (status, body) = route(request.method(), request.uri());
-    Ok(response(status, body))
+    Ok(proxy_response(status, body))
 }
