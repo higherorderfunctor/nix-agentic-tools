@@ -99,6 +99,7 @@ fn parse_config(arguments: &mut impl Iterator<Item = OsString>) -> Result<Config
     reject_serve_extra(arguments)?;
     Ok(Config {
         listen,
+        clients: None,
         interception: None,
     })
 }

@@ -223,7 +223,7 @@ fn serve_config_requires_a_strict_valid_loopback_listen_object() {
     );
     assert_config_failure(
         r#"{"hostname":"127.0.0.1","listen":"127.0.0.1:0"}"#,
-        "unknown field `hostname`, expected `listen`",
+        "unknown field `hostname`",
     );
     assert_config_failure(
         r#"{"listen":"127.0.0.1:0","listen":"127.0.0.1:0"}"#,
@@ -307,4 +307,26 @@ fn interception_config_rejects_invalid_destinations_and_initializes_ca_before_bi
         "CA must be created before bind is attempted"
     );
     assert!(ca_directory.join("ca.key").exists());
+}
+
+#[test]
+fn clients_config_is_strict_and_empty_enforcement_fails_startup() {
+    for (clients, error) in [
+        (r#"{}"#, "clients must not be empty"),
+        (r#"[]"#, "invalid type"),
+        (r#"{"fixture":{}}"#, "missing field `token_file`"),
+        (
+            r#"{"fixture":{"token_file":"/unused","token":"unused"}}"#,
+            "unknown field `token`",
+        ),
+        (
+            r#"{"fixture":{"token_file":"/unused","token_file":"/unused"}}"#,
+            "duplicate field `token_file`",
+        ),
+    ] {
+        assert_config_failure(
+            &format!("{{\"listen\":\"127.0.0.1:0\",\"clients\":{clients}}}"),
+            error,
+        );
+    }
 }
