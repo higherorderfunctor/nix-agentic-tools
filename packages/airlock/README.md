@@ -16,20 +16,38 @@ offer TLS or ALPN negotiation. TLS inside a CONNECT tunnel remains opaque.
 Native Claude traffic through `HTTPS_PROXY` has not been validated to use
 HTTP/2; the HTTP/2 tests here select it with a prior-knowledge client.
 
-`GET /health` returns `200 OK` with an `ok` body once the listener is ready.
-Other paths return `404`; other methods on `/health` return `405` with
-`Allow: GET`. Absolute-form HTTP proxy requests are not supported. Malformed
-CONNECT targets return `400`, failed upstream connections return `502`, and a
-connection attempt exceeding 10 seconds returns `504`. At most 16 blocking DNS
-lookups run or wait in the runtime's blocking queue. A timed-out lookup retains
-its slot until the resolver finishes; waiting for a slot shares the connection
-deadline. IP literals bypass DNS.
+HTTP/1.1 clients can also send absolute-form `http://` proxy requests. Airlock
+streams request and response bodies without buffering a complete body, following
+redirects, or imposing a response duration limit. It regenerates HTTP framing
+and removes hop headers and proxy credentials while preserving destination
+authorization. Transfer codings other than a single `chunked` coding are
+rejected: requests receive `400` before connecting upstream, and upstream
+responses receive `502` before their headers are forwarded. Upstream responses
+containing both Transfer-Encoding and Content-Length also receive `502`.
+
+HTTP/2 on the proxy connection supports CONNECT tunnels and the local health
+route; it does not support ordinary HTTP forwarding. HTTP/1.1 forwarding keeps
+one upstream authority pool per downstream connection, with at most one idle
+socket and a 30-second idle expiry. Changing authorities releases the old pool,
+and downstream termination releases its current pool. Requests are not retried.
+
+Origin-form `GET /health` returns `200 OK` with an `ok` body once the listener
+is ready. Other origin-form paths return `404`; other methods on `/health`
+return `405` with `Allow: GET`. Malformed CONNECT targets return `400`, failed
+upstream connections return `502`, and a CONNECT connection attempt exceeding 10
+seconds returns `504`. HTTP forwarding rejects malformed proxy targets with
+`400`, HTTP/1.0 proxy requests with `505`, and upstream request failures with
+`502`. Both paths limit an upstream connection attempt to 10 seconds, including
+DNS capacity waits and lookup. At most 16 blocking DNS lookups run or wait in
+the runtime's blocking queue across CONNECT and HTTP forwarding. A timed-out
+lookup retains its slot until the resolver finishes. IP literals bypass DNS.
 
 ```bash
 airlock serve                         # 127.0.0.1:8318
 airlock serve --listen 127.0.0.1:9000
 curl http://127.0.0.1:9000/health
 curl --proxy http://127.0.0.1:9000 https://example.com/
+curl --proxy http://127.0.0.1:9000 http://example.com/
 curl --http2-prior-knowledge http://127.0.0.1:9000/health
 ```
 
@@ -113,12 +131,13 @@ cargo test --locked
 ```
 
 The overlay exposes Airlock as `pkgs.ai.airlock`. The Nix package uses the
-repository's locked Rust toolchain. Rust tests cover HTTP responses, authority
-validation, byte streaming and half-close in both directions, client
-cancellation, HTTP/2 multiplexing and flow control, stream reset isolation,
-loopback binding, listener limits, header deadlines, owned tunnel shutdown,
-local CA validation and CLI signals. `checks.airlock-package` checks the
-packaged `--help` and `--version` entry points.
+repository's locked Rust toolchain. Rust tests cover HTTP forwarding and framing
+rejection, bounded shared DNS, authority validation, byte streaming and
+half-close in both directions, client cancellation, HTTP/2 multiplexing and flow
+control, stream reset isolation, loopback binding, listener limits, header
+deadlines, owned tunnel shutdown, local CA validation and CLI signals.
+`checks.airlock-package` checks the packaged `--help` and `--version` entry
+points.
 
 `checks.airlock-instances` covers module wiring, port and name claims, proxy
 registration and what a selection gives Claude and Codex.
