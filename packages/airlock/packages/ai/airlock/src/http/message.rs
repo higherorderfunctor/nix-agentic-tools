@@ -21,7 +21,7 @@ pub(crate) fn prepare_request(
     if request.version() != Version::HTTP_11 {
         return Err((
             StatusCode::HTTP_VERSION_NOT_SUPPORTED,
-            "HTTP/1.1 absolute-form requests are required\n",
+            "HTTP/1.1 requests are required\n",
         ));
     }
     if !supported_transfer_encoding(request.headers()) {
