@@ -164,15 +164,26 @@
   # The proxy selection is one unit: a runtime selection replaces the root one
   # whole (`proxyLib.resolve`). Null when nothing is selected or the runtime
   # does not consume the pool.
-  resolvedProxy =
+  proxyInstances = proxyLib.instancesFor config;
+  proxyCandidate =
     if supportsPool "proxy"
     then
       proxyLib.resolve {
-        instances = config.ai.cliproxyapi.instances or {};
+        instances = proxyInstances;
         root = config.ai.proxy;
         runtime = poolCfg.proxy;
       }
-    else null;
+    else
+      proxyLib.resolve {
+        instances = proxyInstances;
+        root = config.ai.proxy;
+        runtime = config.ai.proxy;
+      };
+  unsupportedAirlock = appRecord.name != "claude" && (proxyCandidate.owner or null) == "airlock";
+  resolvedProxy =
+    if !supportsPool "proxy" || unsupportedAirlock
+    then null
+    else proxyCandidate;
 
   # The jail folds field by field (`jailLib.resolve`). Null unless the result
   # enables it, or when the runtime does not consume the pool.
@@ -828,7 +839,15 @@ in {
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
+      assertions = proxyLib.assertionsFor proxyInstances (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
+    })
+    (lib.optionalAttrs (options ? assertions) {
+      assertions = [
+        {
+          assertion = !cfg.enable || !unsupportedAirlock;
+          message = "ai.${appRecord.name}.proxy: Airlock selections currently support Claude Code only.";
+        }
+      ];
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let
