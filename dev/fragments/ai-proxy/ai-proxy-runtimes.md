@@ -1,17 +1,17 @@
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
 > **Last verified:** 2026-10-28 — each runtime's proxy library holds one
-> lowering per backend (only `cliproxyapi`, which also lowers external
-> selections) and derives native values at `mkDefault`. Claude uses
-> `redact.assign` and the shared reader through `apiKeyHelper` for file, command
-> and concat references, and clears inherited API keys, bearer tokens, custom
-> headers and Bedrock/Vertex/Foundry switches in settings, and suppresses the
-> inherited API-key descriptor before Claude starts. Codex uses command-backed
-> provider auth. Named client routes supply Claude `/model` picker rows (listed
-> and selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
-> discovers CPA models without per-credential profiles. Both use the shared
-> client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
-> and warn through the generated warning cases.
+> lowering per backend (`cliproxyapi`, which also lowers external selections,
+> and for Claude `airlock`) and derives native values at `mkDefault`. Claude
+> uses `redact.assign` and the shared reader through `apiKeyHelper` for file,
+> command and concat references, and clears inherited API keys, bearer tokens,
+> custom headers and Bedrock/Vertex/Foundry switches in settings, and suppresses
+> the inherited API-key descriptor before Claude starts. Codex uses
+> command-backed provider auth. Named client routes supply Claude `/model`
+> picker rows (listed and selectable for a non-Anthropic id in 2.1.306, read
+> from the bundle); Codex discovers CPA models without per-credential profiles.
+> Both use the shared client-key helper. Kimchi, Kiro and Copilot omit `proxy`
+> from `surfaceSupport` and warn through the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -50,6 +50,10 @@ and `DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
 A lowering returns `settings` and optional `launcherFlags`; nothing outside it
 adds Claude settings for a selection.
 
+The `airlock` lowering sets only `env.HTTPS_PROXY` to the instance origin.
+Airlock tunnels HTTPS with CONNECT, so Claude keeps its credentials, base URL
+and TLS configuration, and no launcher is needed.
+
 The endpoint lands in `native.settings`, so the settings.json the backend
 already writes (user on Home Manager, project on devenv). Every derived leaf is
 a `mkDefault`, so a consumer's own value for one, such as
@@ -82,6 +86,9 @@ once selected (context window, effort defaults) is not covered; `behavesAs` is
 the lever and the rows leave it unset.
 
 ### Codex (`packages/chatgpt-codex/lib/proxy.nix`)
+
+Codex has only the `cliproxyapi` lowering, so selecting an Airlock instance
+fails evaluation.
 
 One provider table per endpoint: `base_url` is the origin plus `/v1`, `name` is
 the provider id (Codex refuses to load a provider without one),

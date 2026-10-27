@@ -18,7 +18,9 @@
   keyHelper = import ../../../lib/ai/proxy/key-helper.nix {inherit lib pkgs;};
   proxyLib = import ../../../lib/ai/proxy {inherit lib;};
   # Each lowering takes the module backend (`hm` or `devenv`), then the
-  # resolved proxy.
+  # resolved proxy. Airlock tunnels HTTPS with CONNECT, so Claude keeps its
+  # own credentials, base URL and TLS configuration.
+  lowerings.airlock = _backend: {url, ...}: {settings.env.HTTPS_PROXY = url;};
   lowerings.cliproxyapi = backend: {
     credentials,
     key,
