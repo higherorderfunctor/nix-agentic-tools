@@ -67,7 +67,9 @@ a separate 10-second bound.
 
 `--config FILE` instead of `--listen` reads a strict JSON object such as
 `{"listen":"127.0.0.1:9000"}`. It requires `listen` and rejects unknown or
-duplicate fields, non-loopback addresses, and additional arguments.
+duplicate fields, non-loopback addresses, and other arguments except
+`--ca-directory DIRECTORY`, which replaces the configured interception
+`ca_directory` and requires an `interception` object.
 
 The same `ai.airlock.instances.<name>` declaration starts an instance through
 `ai.services` on Home Manager and devenv. For the explicit Claude opt-in and
@@ -99,8 +101,7 @@ are refused. Airlock neither creates nor changes token files. Token values are
 never printed. Proxy clients send Basic credentials with the configured name as
 username and token as password. If delivering credentials in a proxy URL,
 percent-encode token bytes, including punctuation such as `@`, `%`, `#`, `/`,
-`?` and `:`. The Nix instance opt-in does not yet configure clients or token URL
-delivery.
+`?` and `:`.
 
 Every outer HTTP/1 proxy request and HTTP/2 CONNECT stream authenticates before
 Airlock connects upstream. Missing, duplicate, malformed or wrong credentials
