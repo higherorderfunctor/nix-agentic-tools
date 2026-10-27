@@ -23,13 +23,15 @@ impl Drop for Process {
 #[test]
 fn generated_help_and_version_describe_each_command() {
     for (arguments, expected) in [
-        (vec!["--help"], vec!["Usage:", "--version", "serve"]),
+        (vec!["--help"], vec!["Usage:", "--version", "serve", "ca"]),
         (vec!["--version"], vec![env!("CARGO_PKG_VERSION")]),
         (
             vec!["serve", "--help"],
             vec!["--listen", "127.0.0.1:8318", "--config"],
         ),
         (vec!["help", "serve"], vec!["--listen", "--config"]),
+        (vec!["ca", "--help"], vec!["init"]),
+        (vec!["ca", "init", "--help"], vec!["<DIRECTORY>"]),
     ] {
         let output = command().args(&arguments).output().unwrap();
         assert!(output.status.success(), "{arguments:?}: {output:?}");
