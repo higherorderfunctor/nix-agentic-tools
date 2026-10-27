@@ -108,7 +108,13 @@ visible in coverage.
 are independent of any other application database. Additional tables, including
 the offline indexer's `disk_*` tables, are preserved. One advisory lock prevents
 concurrent collector writers to the same database; an independent indexer can
-still write its own tables.
+still write its own tables. Indexers serialize on a second owner-only lock file,
+`<db>.index.lock`: the explicit full pass takes it exclusively and waits, and a
+tracked launch's exit refresh takes it shared without waiting, skipping with a
+warning only during a full pass. Exit refreshes then queue on a third,
+`<db>.refresh.lock`, taken exclusively and waiting: `index_messages` reads a
+source's offset before its write transaction, so two concurrent refreshes of one
+session would insert the same records.
 
 - `captures.request_gzip` preserves the complete decompressed application
   request bytes. Its full SHA-256 is over those exact bytes. Component hashes
@@ -182,16 +188,22 @@ GenerateAssistantResponse event streams map `meteringEvent.usage` (with
 `cacheWriteInputTokens` to the matching columns. To keep cached reads a subset
 of input, as on `/v1/responses`, `input_tokens` is the sum of
 `uncachedInputTokens`, `cacheReadInputTokens`, and `cacheWriteInputTokens` only
-when all three are reported; otherwise it stays `NULL`. Output text counts come
-from `assistantResponseEvent.content`, and the last `metadataEvent.stopReason`
-is the summary `terminal`. Token counters must be integers from zero through
-`2**63 - 1`; observed credits and context percentages are normalized to finite
-floating-point values. Invalid numeric fields become `NULL` and mark
-`invalid_usage_number`; their original payload evidence is preserved. Capture
-stores no token estimate, cache split, or context-window conversion; reports
-derive `~` estimates at query time. `cache_write_tokens` is known only from a
-reported `cacheWriteInputTokens`; `/v1/responses` captures leave it unknown. The
-original usage objects are available for later extraction improvements.
+when all three are reported; otherwise it stays `NULL`. A stream carrying more
+than one `meteringEvent` keeps the last value in `credits` and records the count
+as `summary_json.metering_events`. The count is an observation, not an issue, so
+it neither makes the capture incomplete nor removes it from estimates or the
+discount diagnostic. Session reports warn when a selected call carried more than
+one, because the last value may not be the call's total charge. Output text
+counts come from `assistantResponseEvent.content`, and the last
+`metadataEvent.stopReason` is the summary `terminal`. Token counters must be
+integers from zero through `2**63 - 1`; observed credits and context percentages
+are normalized to finite floating-point values. Invalid numeric fields become
+`NULL` and mark `invalid_usage_number`; their original payload evidence is
+preserved. Capture stores no token estimate, cache split, or context-window
+conversion; reports derive `~` estimates at query time. `cache_write_tokens` is
+known only from a reported `cacheWriteInputTokens`; `/v1/responses` captures
+leave it unknown. The original usage objects are available for later extraction
+improvements.
 
 `state='complete'` requires transport completion, a `response.completed` event
 (or completed JSON response), and no recorded issue. Event streams have no
@@ -322,10 +334,11 @@ checkpoint when free pages remain. Lineage comes from `parentSessionId`,
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
 `workflowId` and `nodeId` are retained as identifiers. Index failures warn
 without replacing the child exit status, and disk observations may then be
-stale. Manual session queries use the last completed index. The exit summary
-also waits at most two seconds for the asynchronous capture writer and flags
-unfinished calls. Nested `kiro-usage exec` launches reuse the parent's marker;
-only the outer launch prints the summary.
+stale; so does a running explicit `index` pass, which the exit refresh skips
+rather than interleaving with. Manual session queries use the last completed
+index. The exit summary also waits at most two seconds for the asynchronous
+capture writer and flags unfinished calls. Nested `kiro-usage exec` launches
+reuse the parent's marker; only the outer launch prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload exits with an error. Replay of
@@ -353,4 +366,7 @@ read real transcripts, databases, logs, captured payloads, or credentials.
 Fake-flow contracts validate the addon boundary and streaming behavior. The
 `kiro-usage-mitm-transport` Nix check also runs the pinned mitmproxy against a
 loopback fake upstream, checking immediate first-byte delivery, exact compressed
-payloads and SQLite replay. Live Kiro and TLS interception remain untested.
+payloads and SQLite replay for an SSE `/v1/responses` call and an AWS
+event-stream `/generateAssistantResponse` call, including the latter's credits,
+context, token columns and stored events. Live Kiro and TLS interception remain
+untested.

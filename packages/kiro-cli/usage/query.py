@@ -177,7 +177,8 @@ def query(db, session, scope="session"):
                   json_extract(c.response_json,'$.upstream_request_id'),json_extract(c.response_json,'$.request_id')))"""
             parameters += paths
         columns = ",".join("c." + name for name in ("id", "metadata_json", "response_json", "state", "completion_seen", *DIMENSIONS))
-        chosen = f"""WITH chosen AS (SELECT {columns},json_extract(c.summary_json,'$.terminal') AS terminal FROM captures c WHERE
+        chosen = f"""WITH chosen AS (SELECT {columns},json_extract(c.summary_json,'$.terminal') AS terminal,
+            json_extract(c.summary_json,'$.metering_events') AS metering_events FROM captures c WHERE
             json_extract(c.metadata_json,'$.\"kiro:conversation_id\"') IN ({placeholders}) {joins}) """
         sums = ",".join(f"sum({name}) AS {name},count({name}) AS {name}_known" for name in DIMENSIONS)
         sums += """,sum(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN input_tokens+output_tokens END) AS total_tokens,
@@ -228,6 +229,9 @@ def query(db, session, scope="session"):
         """, parameters)]
         if captures["duplicate_upstream_request_ids"]:
             warnings.append("Duplicate upstream request IDs make capture totals ambiguous; every capture remains counted.")
+        captures["multiple_metering_events"] = db.execute(chosen + "SELECT count(*) FROM chosen WHERE metering_events>1", parameters).fetchone()[0]
+        if captures["multiple_metering_events"]:
+            warnings.append(f"{captures['multiple_metering_events']} selected call(s) carried more than one meteringEvent; their credits keep the last value, which may not be the call's total charge.")
     captures["estimates"] = {}
     if scope == "tree":
         warnings.append("Root-linked lineage may include forks as well as subagents; it is not proof of caller role.")

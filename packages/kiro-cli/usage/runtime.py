@@ -110,15 +110,26 @@ def service(args, path):
 
 def refresh_disk_index(path, since):
     """Read only sessions changed since the launch (UTC ns); others are only stat-checked."""
-    from capture import open_database
-    from disk_index import index_tree
+    from capture import lock_beside, open_database
+    from disk_index import INDEX_LOCK, REFRESH_LOCK, index_tree
     try:
         sessions = Path.home() / ".kiro/sessions"
         if not sessions.exists():
             return False
         with closing(open_database(path / "usage.sqlite3")) as db:
-            index_tree(db, sessions, since)
+            lock = lock_beside(path / "usage.sqlite3", INDEX_LOCK, shared=True)
+            try:
+                queue = lock_beside(path / "usage.sqlite3", REFRESH_LOCK, blocking=True)
+                try:
+                    index_tree(db, sessions, since)
+                finally:
+                    os.close(queue)
+            finally:
+                os.close(lock)
         return True
+    except BlockingIOError:
+        print("Warning: a full Kiro session index is running; disk observations were not refreshed (rerun kiro-usage index if it began before Kiro exited).", file=sys.stderr)
+        return False
     except (OSError, ValueError, sqlite3.Error) as error:
         print(f"Warning: automatic Kiro session indexing failed: {error}; disk observations may be stale.", file=sys.stderr)
         return False

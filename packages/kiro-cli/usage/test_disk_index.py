@@ -277,6 +277,23 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIn("--db", result.stderr)
         self.assertIn("--sessions", result.stderr)
 
+    def test_cli_full_pass_waits_for_index_lock(self):
+        self.messages.write_bytes(usage())
+        held = capture.lock_beside(self.path, disk_index.INDEX_LOCK, shared=True)  # a post-exit refresh mid-scan
+        try:
+            process = subprocess.Popen([sys.executable, disk_index.__file__, "--db", str(self.path),
+                                        "--sessions", str(self.sessions)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            with self.assertRaises(subprocess.TimeoutExpired):
+                process.wait(timeout=1)
+            tables = {row[0] for row in self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            self.assertNotIn("disk_sources", tables)  # it waits before touching the index
+        finally:
+            os.close(held)
+        stdout, stderr = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assertIn("1 sources, 1 usage/context records", stdout)
+        self.assertEqual(os.stat(str(self.path) + disk_index.INDEX_LOCK).st_mode & 0o777, 0o600)
+
     def test_invalid_session_metadata_does_not_block_later_sessions(self):
         self.messages.write_bytes(usage())
         self.scan()  # Seed metadata that must be retired when it becomes invalid.

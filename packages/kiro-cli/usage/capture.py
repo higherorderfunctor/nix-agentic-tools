@@ -70,6 +70,19 @@ def open_database(path):
     return db
 
 
+def lock_beside(path, suffix, blocking=False, shared=False):
+    """Owner-only flock on <db><suffix>, held until the returned fd closes; BlockingIOError when held and not blocking.
+
+    shared: exit refreshes probe the index lock shared, so only an exclusive full index pass makes them skip."""
+    fd = os.open(str(Path(path).expanduser().absolute()) + suffix, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | (0 if blocking else fcntl.LOCK_NB))
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
 def decoded_json(data):
     """Bound nesting consistently across Python JSON implementations."""
     value = json.loads(data)
@@ -283,6 +296,7 @@ class Analysis:
         self.final_counts = None
         self.terminal = None
         self.stream_failed = False
+        self.metering_events = 0
 
     def number(self, key, value, integer=False, nonnegative=False):
         try:
@@ -415,6 +429,7 @@ class Analysis:
             self.delta_chars += len(obj["content"])
             self.delta_bytes += len(obj["content"].encode())
         elif name == "meteringEvent":
+            self.metering_events += 1  # More than one keeps the last value; summary_json reports the count.
             self.credit(obj.get("unit"), obj.get("usage"))
         elif name == "contextUsageEvent" and obj.get("contextUsagePercentage") is not None:
             self.number("context_usage_percentage", obj["contextUsagePercentage"])
@@ -436,7 +451,7 @@ class Analysis:
         return {"output_text_chars": chars, "output_text_bytes": size,
                 "output_count_source": "terminal_output" if self.final_counts is not None else "deltas",
                 "terminal": self.terminal, "usage_objects": self.usage,
-                "estimates": {}}
+                "metering_events": self.metering_events, "estimates": {}}
 
 
 class Collector:
@@ -448,9 +463,12 @@ class Collector:
         self.path = path
         self.max_stored_bytes = max_stored_bytes
         db = open_database(path)
-        self.writer_lock = os.open(str(Path(path).expanduser().absolute()) + ".capture.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
-            fcntl.flock(self.writer_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.writer_lock = lock_beside(path, ".capture.lock")
+        except BaseException:
+            db.close()
+            raise
+        try:
             db.executescript(SCHEMA)
         except BaseException:
             os.close(self.writer_lock)
