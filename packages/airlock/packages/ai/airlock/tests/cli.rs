@@ -25,8 +25,11 @@ fn generated_help_and_version_describe_each_command() {
     for (arguments, expected) in [
         (vec!["--help"], vec!["Usage:", "--version", "serve"]),
         (vec!["--version"], vec![env!("CARGO_PKG_VERSION")]),
-        (vec!["serve", "--help"], vec!["--listen", "127.0.0.1:8318"]),
-        (vec!["help", "serve"], vec!["--listen"]),
+        (
+            vec!["serve", "--help"],
+            vec!["--listen", "127.0.0.1:8318", "--config"],
+        ),
+        (vec!["help", "serve"], vec!["--listen", "--config"]),
     ] {
         let output = command().args(&arguments).output().unwrap();
         assert!(output.status.success(), "{arguments:?}: {output:?}");
