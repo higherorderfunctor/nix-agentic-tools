@@ -11,7 +11,7 @@ use std::{
 use http_body_util::{Either, Full};
 use hyper::{
     HeaderMap, Request, Response, StatusCode, Uri, Version,
-    body::{Bytes, Incoming},
+    body::{Body, Bytes, Incoming},
     header::{
         CONNECTION, CONTENT_LENGTH, HeaderName, HeaderValue, PROXY_AUTHENTICATE,
         PROXY_AUTHORIZATION, TE, TRAILER, TRANSFER_ENCODING, UPGRADE,
@@ -48,7 +48,7 @@ impl Forwarder {
             return response(StatusCode::BAD_REQUEST, "malformed HTTP proxy target");
         };
 
-        if let Err((status, message)) = prepare_request(&mut request) {
+        if let Err((status, message)) = prepare_request(&mut request, Version::HTTP_11) {
             return response(status, message);
         }
         request
@@ -163,11 +163,12 @@ impl ForwardTarget {
 
 pub(crate) fn prepare_request(
     request: &mut Request<Incoming>,
+    output: Version,
 ) -> Result<(), (StatusCode, &'static str)> {
-    if request.version() != Version::HTTP_11 {
+    if !matches!(request.version(), Version::HTTP_11 | Version::HTTP_2) {
         return Err((
             StatusCode::HTTP_VERSION_NOT_SUPPORTED,
-            "HTTP/1.1 requests are required",
+            "HTTP/1.1 or HTTP/2 requests are required",
         ));
     }
     if !supported_transfer_encoding(request.headers()) {
@@ -176,16 +177,20 @@ pub(crate) fn prepare_request(
             "unsupported request transfer coding",
         ));
     }
-    let chunked = request.headers().contains_key(TRANSFER_ENCODING);
+    let chunked = request.headers().contains_key(TRANSFER_ENCODING)
+        || (request.version() == Version::HTTP_2
+            && !request.body().is_end_stream()
+            && request.body().size_hint().exact().is_none());
     if !strip_hop_by_hop(request.headers_mut()) {
         return Err((StatusCode::BAD_REQUEST, "malformed Connection header"));
     }
     // Incoming has decoded chunks; unknown-length GET/HEAD need explicit framing.
-    if chunked {
+    if chunked && output == Version::HTTP_11 {
         request
             .headers_mut()
             .insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
     }
+    *request.version_mut() = output;
     Ok(())
 }
 

@@ -11,12 +11,17 @@ license = "Unlicense"
 
 [workspace.dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
+futures-util = { version = "0.3.32", default-features = false, features = [
+  "std",
+] }
 h2 = "0.4.20"
 http-body-util = "0.1.5"
-hyper = { version = "1.12.0", features = ["http1", "server"] }
+hyper = { version = "1.12.0", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1.21", features = [
   "client-legacy",
   "http1",
+  "http2",
+  "server-auto",
   "tokio",
 ] }
 pem = "4.0.0"
