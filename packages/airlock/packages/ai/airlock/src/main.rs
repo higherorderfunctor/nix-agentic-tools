@@ -23,6 +23,7 @@ fn run(cli: Cli) -> Result<(), String> {
                 Some(path) => Config::read(path)?,
                 None => Config {
                     listen,
+                    clients: None,
                     interception: None,
                 },
             };

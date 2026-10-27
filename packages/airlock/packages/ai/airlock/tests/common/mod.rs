@@ -1,3 +1,4 @@
+// cspell:ignore Zml4dHVyZTp0b2tlbg
 // Each test binary compiles this module but uses only the helpers it needs.
 #![allow(dead_code)]
 
@@ -5,10 +6,13 @@ pub mod h2_client;
 pub mod process;
 pub mod tls;
 
-use std::{io, net::SocketAddr, time::Duration};
+use std::{
+    collections::BTreeMap, fs, io, net::SocketAddr, os::unix::fs::PermissionsExt, path::Path,
+    time::Duration,
+};
 
 use airlock::{
-    config::{Config, Interception},
+    config::{Client, Config, Interception},
     proxy::Proxy,
     server,
 };
@@ -26,16 +30,24 @@ pub struct Server {
     pub task: JoinHandle<io::Result<()>>,
 }
 
+// The `Proxy-Authorization` value for `fixture_clients`: base64 of
+// `fixture:token`.
+pub const FIXTURE_AUTHORIZATION: &str = "Basic Zml4dHVyZTp0b2tlbg==";
+
 pub async fn start() -> Server {
-    start_with(None).await
+    start_with(None, None).await
 }
 
 /// Serve on a free loopback port with the given settings.
-pub async fn start_with(interception: Option<Interception>) -> Server {
+pub async fn start_with(
+    interception: Option<Interception>,
+    clients: Option<BTreeMap<String, Client>>,
+) -> Server {
     let listener = server::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
     let address = listener.local_addr().unwrap();
     let config = Config {
         listen: address,
+        clients,
         interception,
     };
     let proxy = Proxy::load(&config).unwrap();
@@ -48,6 +60,15 @@ pub async fn start_with(interception: Option<Interception>) -> Server {
         shutdown,
         task,
     }
+}
+
+/// One client, `fixture`, whose private token file in `directory` holds
+/// `token`; it authenticates with `FIXTURE_AUTHORIZATION`.
+pub fn fixture_clients(directory: &Path) -> BTreeMap<String, Client> {
+    let token_file = directory.join("token");
+    fs::write(&token_file, b"token\n").unwrap();
+    fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+    BTreeMap::from([("fixture".into(), Client { token_file })])
 }
 
 impl Server {
@@ -93,6 +114,20 @@ pub async fn message(socket: &mut TcpStream) -> String {
         .unwrap();
     response.push_str(&String::from_utf8(body).unwrap());
     response
+}
+
+/// Send an authenticated CONNECT and read Airlock's reply.
+pub async fn connect(socket: &mut TcpStream, target: &str, authorization: &str) -> String {
+    socket
+        .write_all(
+            format!(
+                "CONNECT {target} HTTP/1.1\r\nHost: {target}\r\nProxy-Authorization: {authorization}\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    message(socket).await
 }
 
 pub async fn request(socket: &mut TcpStream, method: &str, target: &str) -> String {

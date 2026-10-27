@@ -3,6 +3,7 @@ pub mod config;
 pub mod proxy;
 pub mod server;
 
+mod auth;
 mod authority;
 mod detect;
 mod first_request;
