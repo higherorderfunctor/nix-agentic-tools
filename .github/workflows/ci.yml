@@ -943,7 +943,10 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           read -r -a installables <<< "$INSTALLABLES"
-          "$HESTIA_BIN" prefetch "${installables[@]}"
+          if ! "$HESTIA_BIN" prefetch "${installables[@]}"; then
+            echo "::error::hestia prefetch failed. If the hestia daemon log in the post-job step says a pack is not in the cache (evicted?), use 'Re-run all jobs' so checks-eval registers the drv closures again; 'Re-run failed jobs' cannot recover."
+            false
+          fi
           nix build --no-link -L "${installables[@]}"
 
   # Fails unless evaluation succeeded and every planned leg succeeded: the

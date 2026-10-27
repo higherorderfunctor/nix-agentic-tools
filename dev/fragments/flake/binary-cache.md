@@ -1,9 +1,10 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-21 — overlay parity uses the ordinary
-> `nixpkgs-stable` input; no patched evaluation source needs retention; every
-> credentialed push also filters the CodeQL engines, which the private check
-> cache deliberately holds.
+> **Last verified:** 2026-10-27 — a worker whose prefetch hits an evicted pack
+> needs every job re-run, since only `checks-eval` registers the drv closures;
+> overlay parity uses the ordinary `nixpkgs-stable` input; every credentialed
+> push also filters the CodeQL engines, which the private check cache
+> deliberately holds.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -135,5 +136,11 @@ The `checks-eval` job registers every evaluated `.drv` closure in the same
 cache. Its workers pass the eval job's `manifest-version` through the helper's
 `wait-manifest-version` input and run `hestia prefetch` before building: with
 `filter-drv-closures`, the public references are omitted from the closure and
-prefetch prepares them. Fork PRs skip that matrix, since a read-only cache
-cannot register the closures the workers need.
+prefetch prepares them. Only `checks-eval` registers those closures. When GitHub
+evicts a pack holding one, the worker's prefetch fails with
+`error decoding response body`, the hestia daemon log in the job's post step
+shows `pack … is not in the cache (evicted?)`, and re-running the failed worker
+hits the same stale manifest every time. Re-run all jobs so `checks-eval`
+registers the closures again; the worker's error annotation says so. Fork PRs
+skip that matrix, since a read-only cache cannot register the closures the
+workers need.
