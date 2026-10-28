@@ -95,7 +95,7 @@ def service(args, path):
     for name in PROXY_NAMES:
         os.environ.pop(name, None)
     os.environ["KIRO_USAGE_DB"] = str(path / "usage.sqlite3")
-    os.environ["KIRO_USAGE_MAX_BYTES"] = str(args.max_bytes)
+    os.environ["KIRO_USAGE_WARN_BYTES"] = str(args.warn_bytes)
     os.execv(args.mitmdump, [
         args.mitmdump,
         "--listen-host", "127.0.0.1", "--listen-port", str(args.port),
@@ -135,28 +135,55 @@ def refresh_disk_index(path, since):
         return False
 
 
-def invocation_summary(path, invocation, timeout=2.0, disk_refreshed=False):
-    """Read only exact marker matches; wait briefly for the async writer."""
-    from query import FOOTER_WARNINGS, query, render_summary
+SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to persist this invocation.
+
+
+def invocation_captures(db, invocation, timeout):
+    """(rows, settled): this invocation's marker rows, and whether they went quiet and finished before the deadline."""
     deadline = time.monotonic() + timeout
-    rows = []
+    previous_rows, settled = None, time.monotonic()
+    while True:
+        rows = db.execute("""
+            SELECT json_extract(metadata_json,'$."kiro:root_conversation_id"'),
+              json_extract(metadata_json,'$."kiro:conversation_id"'), state
+            FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
+        """, (invocation,)).fetchall()
+        if rows != previous_rows:
+            previous_rows, settled = rows, time.monotonic()
+        if rows and all(state != "recording" for _, _, state in rows) and time.monotonic() - settled >= .1:
+            return rows, True
+        if time.monotonic() >= deadline:
+            return rows, False
+        time.sleep(.05)
+
+
+def read_only(path):
+    """settle_captures and invocation_summary never create or write the store."""
     uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
+    return closing(sqlite3.connect(uri, uri=True, timeout=.1))
+
+
+def settle_captures(path, invocation):
+    """True once this invocation's captures are persisted and finished; disk indexing scopes from them."""
     try:
-        with closing(sqlite3.connect(uri, uri=True, timeout=.1)) as db:
-            previous_rows, settled = None, time.monotonic()
-            while True:
-                rows = db.execute("""
-                    SELECT json_extract(metadata_json,'$."kiro:root_conversation_id"'),
-                      json_extract(metadata_json,'$."kiro:conversation_id"'), state
-                    FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
-                """, (invocation,)).fetchall()
-                if rows != previous_rows:
-                    previous_rows, settled = rows, time.monotonic()
-                if rows and all(state != "recording" for _, _, state in rows) and time.monotonic() - settled >= .1:
-                    break
-                if time.monotonic() >= deadline:
-                    break
-                time.sleep(.05)
+        with read_only(path) as db:
+            return invocation_captures(db, invocation, SETTLE_TIMEOUT)[1]
+    except (OSError, ValueError, sqlite3.Error):
+        return False  # invocation_summary reports the same failure.
+
+
+def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settled=True):
+    """Read only exact marker matches; the exit path settles them first."""
+    from capture import retained_bytes
+    from query import FOOTER_WARNINGS, query, render_summary
+    try:
+        with read_only(path) as db:
+            retained = retained_bytes(db)
+            if retained > warn_bytes:
+                # Capture never stops for size; this is the operator's only prompt to retire the store.
+                print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "
+                      f"stop the kiro-usage service, then archive or delete {path / 'usage.sqlite3'} and its -wal/-shm files to start a new store.", file=sys.stderr)
+            rows = invocation_captures(db, invocation, 0)[0]
             identities = [root or conversation for root, conversation, _ in rows]
             sessions = sorted({name if name.startswith("sess_") else "sess_" + name
                                for name in identities if isinstance(name, str) and name})
@@ -164,7 +191,8 @@ def invocation_summary(path, invocation, timeout=2.0, disk_refreshed=False):
                 print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
                 return
             print("\nKiro usage summary (full root-lineage totals observed in this invocation; includes resumed work and forks):", file=sys.stderr)
-            if any(state == "recording" for _, _, state in rows):
+            # The exit path's wait outcome counts even if a call finished after it timed out.
+            if not settled or any(state == "recording" for _, _, state in rows):
                 print("Warning: capture writer still has unfinished calls; totals may be incomplete.", file=sys.stderr)
             if any(not name for name in identities):
                 print("Warning: some invocation calls have no conversation identity and are excluded.", file=sys.stderr)
@@ -207,7 +235,7 @@ def wait_command(command, arguments, environment):
             signal.signal(number, handler)
 
 
-def exec_command(path, port, arguments):
+def exec_command(path, port, warn_bytes, arguments):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -270,8 +298,11 @@ def exec_command(path, port, arguments):
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
                 try:
-                    refreshed = refresh_disk_index(path, started)
-                    invocation_summary(path, invocation, disk_refreshed=refreshed)
+                    # Refresh scopes from persisted captures, so settle them first; an
+                    # unsettled wait never reports a clean refresh.
+                    settled = settle_captures(path, invocation)
+                    refreshed = refresh_disk_index(path, started) and settled
+                    invocation_summary(path, invocation, warn_bytes, disk_refreshed=refreshed, settled=settled)
                     sys.stderr.flush()
                 except (OSError, ValueError):
                     # Only a failed summary sink is silenced. Redirect its fd so
@@ -296,7 +327,7 @@ def exec_command(path, port, arguments):
         raise CommandError(f"cannot execute {command}: {error.strerror}; check the executable path and permissions") from error
 
 
-def cli(path, arguments, port):
+def cli(path, arguments, port, warn_bytes):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -305,7 +336,7 @@ def cli(path, arguments, port):
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
     if command == "exec":
-        return exec_command(path, port, tail)
+        return exec_command(path, port, warn_bytes, tail)
     if command == "session" and tail:
         invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
     elif command == "index":
@@ -326,17 +357,18 @@ def main():
         child = sub.add_parser(mode)
         child.add_argument("--state-dir")
         child.add_argument("--port", type=int, required=True)
+        if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
+            child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":
-            child.add_argument("--max-bytes", type=int, required=True)
             child.add_argument("--mitmdump", required=True)
             child.add_argument("--addon", required=True)
     args = parser.parse_args()
     try:
         path = state_directory(args.state_dir)
         if args.mode == "cli":
-            return cli(path, args.arguments, args.port)
+            return cli(path, args.arguments, args.port, args.warn_bytes)
         elif args.mode == "service":
             service(args, path)
         else:

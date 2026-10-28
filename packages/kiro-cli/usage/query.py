@@ -17,13 +17,29 @@ DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "
 COUNTERS = (*DIMENSIONS, "total_tokens")
 ESTIMATED = ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")
 HIT_SHARE = .01  # Estimated cached tokens must reach this share of input to count as a hit.
-# Output characters beyond output_text that still bill as output tokens, from retained events.
-EXTRA_OUTPUT_CHARS = """(SELECT sum(CASE
+# Output characters beyond output_text that still bill as output tokens. The collector counts them live into
+# summary_json tool_chars/reasoning_chars; this fallback re-derives them from retained events for rows without
+# those keys: captures finalized before the live counts, and interrupted captures, which have no summary.
+# Terminal response.completed items count only for a kind with no deltas, so neither is counted twice;
+# only the first completed event counts when a stream repeats it.
+EXTRA_OUTPUT_CHARS = """(SELECT sum(chars) FROM (
+    SELECT CASE
       WHEN json_extract(e.data_json,'$.type') IN ('response.function_call_arguments.delta','response.reasoning_text.delta')
         THEN length(json_extract(e.data_json,'$.delta'))
       WHEN e.event_name='toolUseEvent' THEN length(json_extract(e.data_json,'$.input'))
-      WHEN e.event_name='reasoningContentEvent' THEN length(json_extract(e.data_json,'$.text')) END)
-    FROM events e WHERE e.capture_id=c.id)"""
+      WHEN e.event_name='reasoningContentEvent' THEN length(json_extract(e.data_json,'$.text')) END AS chars
+    FROM events e WHERE e.capture_id=c.id
+    UNION ALL SELECT CASE
+      WHEN json_extract(item.value,'$.type')='function_call' AND NOT EXISTS(SELECT 1 FROM events d WHERE d.capture_id=c.id
+          AND json_extract(d.data_json,'$.type')='response.function_call_arguments.delta')
+        THEN length(json_extract(item.value,'$.arguments'))
+      WHEN json_extract(item.value,'$.type')='reasoning' AND NOT EXISTS(SELECT 1 FROM events d WHERE d.capture_id=c.id
+          AND json_extract(d.data_json,'$.type')='response.reasoning_text.delta')
+        THEN (SELECT sum(length(json_extract(part.value,'$.text'))) FROM json_each(item.value,'$.content') part
+              WHERE json_extract(part.value,'$.type')='reasoning_text') END
+    FROM events e, json_each(e.data_json,'$.response.output') item
+    WHERE e.capture_id=c.id AND e.seq=(SELECT min(f.seq) FROM events f WHERE f.capture_id=c.id
+      AND json_extract(f.data_json,'$.type')='response.completed')))"""
 CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
     WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
@@ -257,7 +273,8 @@ def call_reports(db, report, chosen, parameters):
     models = {source["requested_model"]: source for source in captures["models"]}
     event_tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     proof = "0 AS retained,0 AS terminal,0 AS text_only,0 AS no_reasoning_tools"
-    extra_chars = EXTRA_OUTPUT_CHARS if "events" in event_tables else "NULL"
+    extra_chars = f"""coalesce(json_extract(c.summary_json,'$.tool_chars')+json_extract(c.summary_json,'$.reasoning_chars'),
+        {EXTRA_OUTPUT_CHARS if "events" in event_tables else "NULL"})"""
     if {"events", "chunks"} <= event_tables:
         proof = """
           c.request_gzip IS NOT NULL AND EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id)

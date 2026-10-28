@@ -20,42 +20,64 @@ or configure Kiro itself:
 
 ```bash
 export KIRO_USAGE_DB="$HOME/.local/state/kiro-usage/capture.sqlite3"
-export KIRO_USAGE_MAX_BYTES=268435456
+export KIRO_USAGE_WARN_BYTES=1073741824
 mitmdump -s /absolute/path/to/usage/mitm_addon.py --listen-host 127.0.0.1 --listen-port 8080 --set flow_detail=0
 ```
 
-`KIRO_USAGE_DB` is required. `KIRO_USAGE_MAX_BYTES` defaults to 256 MiB of
+`KIRO_USAGE_DB` is required. `KIRO_USAGE_WARN_BYTES` defaults to 1 GiB of
 retained payload evidence, counting request BLOBs, entity and application
-chunks, event frames and parsed event JSON, and retained usage summaries. At the
-first budget refusal the running collector stops retaining new payloads. It
-continues observations, fingerprints, scalar usage, and loss metadata. Existing
-evidence is never rolled over or deleted. On restart the retained bytes are
-counted again; an increased budget can resume capture. This is a payload budget,
-not a maximum SQLite file size: indexes, metadata, page overhead, and
-accumulated records also consume disk. Temporary SQLite journal space is
-additional. Stopping capture and deleting an intentionally retired private
-database are operator decisions.
+chunks, event frames and parsed event JSON, and retained usage summaries.
+Payloads are always retained: past the threshold the running collector logs one
+warning line to standard error and keeps capturing, and captures are not marked
+incomplete for it. Each tracked `kiro-usage exec` summary repeats the warning
+with the store's size while it stays above the threshold. Existing evidence is
+never rolled over or deleted. On restart the retained bytes are counted again.
+This counts payloads, not the SQLite file size: indexes, metadata, page
+overhead, and accumulated records also consume disk. Temporary SQLite journal
+space is additional. Stopping capture and deleting an intentionally retired
+private database are operator decisions: stop the service, then archive or
+delete `usage.sqlite3` with its `-wal` and `-shm` files; the next start creates
+a new store.
 
-Only hosts equal to `kiro.dev` or ending in `.kiro.dev` and the exact paths
-`/v1/responses` (CreateResponse, root turns) and `/generateAssistantResponse`
-(GenerateAssistantResponse, workflow steps and subagents) are selected.
-Lookalikes such as `not-kiro.dev` are excluded. Query strings are discarded. The
-addon stores only the host, method, constant path, request content encoding,
-response status, response content type and encoding, and the upstream
-`x-amzn-requestid` / `x-request-id`. It never serializes arbitrary headers,
-cookies, authorization, or URLs. Full **bodies** are deliberately retained and
-may themselves contain secrets.
+Only hosts equal to `kiro.dev` or ending in `.kiro.dev` are considered.
+Lookalikes such as `not-kiro.dev` are excluded. Two calls are selected: the
+exact path `/v1/responses` (CreateResponse REST, root turns), and
+GenerateAssistantResponse (workflow steps, subagents, session titles). The
+latter is AWS JSON 1.0 RPC: Kiro sends it as path `/` with the header
+`x-amz-target: KiroRuntimeService.GenerateAssistantResponse`. The schema's REST
+path `/generateAssistantResponse` is never sent. A request to `/` is selected
+only for POST with that header equal to this value exactly, so other
+KiroRuntimeService operations on `/` pass through uncaptured. Its response is
+always decoded as an AWS event stream, as Kiro's client does, whatever content
+type the server labels it with. Query strings are discarded. The addon stores
+only the host, method, constant path, the `x-amz-target` value for selected RPC
+calls (as `target`), request content encoding, response status, response content
+type and encoding, and the upstream `x-amzn-requestid` / `x-request-id`. It
+never serializes arbitrary headers, cookies, authorization, or URLs. Full
+**bodies** are deliberately retained and may themselves contain secrets.
 
-The response streaming callback returns the same bytes immediately, including
-the EOF sentinel. It does not wait for SQLite. One worker writes the database; a
-bounded queue holds at most 256 pending payload items and 8 MiB. Queue overflow
-logs a warning and records `queue_overflow`, dropped byte/item counters, and an
-incomplete capture. Lost request payloads do not disable response decoding; a
-response-byte gap does. At most 256 captures can be active; exceeding that limit
-rejects only the new request with HTTP 503. An invalid selected request content
-encoding receives HTTP 400. Both refusals leave the collector available for
-subsequent healthy requests. A fatal writer failure logs an explicit warning and
-marks existing recording rows incomplete when the database remains writable.
+The response streaming callback returns the same bytes, including the EOF
+sentinel, once it has decoded and framed that chunk; it never waits for SQLite.
+That synchronous work grows with the chunk: one structurally dense 4 MB event
+took about 0.9 s. Usage, completion, and output counts see every response byte;
+only the payload copy is queued, and a chunk's event copies stop being staged
+the moment they would overflow the queue, so a chunk of many tiny frames holds
+no more than the queue budget in copies. One worker writes the database. Its
+queue holds at most 40 MiB, charging each item and event 512 bytes of object
+overhead beyond its payload: one 32 MiB request (the API limit) plus 8 MiB of
+streaming headroom. The worker takes up to 512 queued items or 4 MiB per write
+transaction, adding an item only if the batch stays within 4 MiB; an item larger
+than that, such as a 32 MiB request, is a batch of its own. It compresses a
+batch before taking the write lock; that batch stays charged until it commits,
+plus one compressed copy of it in flight. A full queue logs a warning, omits
+that payload copy, and records `request_payload_omitted` or
+`response_payload_omitted` with the dropped byte/item counters. Omissions leave
+usage complete; replay of the omitted bytes fails. Per-capture parser state
+keeps its own limits below. At most 256 captures can be active; exceeding that
+limit rejects only the new request with HTTP 503. An invalid selected request
+content encoding receives HTTP 400. Both refusals leave the collector available
+for subsequent healthy requests. A fatal writer failure logs an explicit warning
+and marks existing recording rows incomplete when the database remains writable.
 Otherwise they remain recording, never complete. Existing response streams
 continue returning unchanged bytes; further selected requests receive a local
 HTTP 503 until the collector restarts. If the database cannot be opened or
@@ -63,44 +85,51 @@ initialization fails, the addon stays installed, logs a startup failure, and
 refuses selected requests with HTTP 503 until configuration is fixed and the
 collector restarts. Other traffic remains outside capture.
 
-Connections use SQLite WAL and a 30-second busy timeout. The worker obtains the
-write lock before changing parser state, so transient contention waits without
-replaying stream events. Offline indexing parses outside write transactions and
-commits batches of at most 128 records, ending once 256 KiB of source lines is
-reached (the final complete record may cross that threshold), with each batch's
-checkpoint offset committed atomically. JSONL records up to 64 MiB are parsed
-transiently, so image-bearing tool results can be ignored without retaining
-their contents in the index. Larger complete records are drained in 64 KiB
-chunks. Oversized or invalid complete records, including parse memory failures,
-do not stop indexing: `disk_omissions` retains only their source path, byte
-offset, byte count, and reason. Blank complete lines are ignored. Their usage
-coverage remains unknown; index summaries and selected-session queries warn that
-totals may be incomplete. Incomplete EOF tails, including oversized tails, are
-retried after an append without advancing the checkpoint. Source replacement or
-truncation retires both facts and omission metadata. A database write failure
-rolls back the batch and its checkpoint; previously committed batches remain
-available. Session metadata retains a separate 4 MiB parsing limit. Malformed,
-oversized, or unreadable `session.json` files are isolated per session: indexing
-continues through messages and later sessions, while `disk_session_omissions`
-records the omitted metadata and stale metadata is retired. Successfully
-re-indexing repaired metadata clears its omission. Queries report the global
-metadata omission count because unknown ancestry can hide descendants; older
-indexes without tracking show an unknown count. The index CLI's
-`omitted_records` count includes both JSONL record and session metadata
-omissions.
+Connections use SQLite WAL with `synchronous=NORMAL` and a 30-second busy
+timeout. An ordinary commit does not fsync; the commit that triggers an
+automatic WAL checkpoint (every 1,000 WAL pages by default) does, so an
+occasional commit still waits for the disk. A power loss or OS crash can drop
+the most recent commits but cannot corrupt the database: a recent capture can
+revert to `recording`, which restart marks `interrupted_capture`, or disappear.
+Payload BLOBs use gzip level 6: level 9 cost 1.8 times the CPU for 0.3% smaller
+synthetic requests, and level 1 grew them 16%. Decompression is the same for
+every level, so older BLOBs replay unchanged. Stream parsing happens in the
+callback; the worker changes parser state only at finalization, after taking the
+write lock, so transient contention waits without replaying stream events.
+Offline indexing parses outside write transactions and commits batches of at
+most 128 records, ending once 256 KiB of source lines is reached (the final
+complete record may cross that threshold), with each batch's checkpoint offset
+committed atomically. JSONL records up to 64 MiB are parsed transiently, so
+image-bearing tool results can be ignored without retaining their contents in
+the index. Larger complete records are drained in 64 KiB chunks. Oversized or
+invalid complete records, including parse memory failures, do not stop indexing:
+`disk_omissions` retains only their source path, byte offset, byte count, and
+reason. Blank complete lines are ignored. Their usage coverage remains unknown;
+index summaries and selected-session queries warn that totals may be incomplete.
+Incomplete EOF tails, including oversized tails, are retried after an append
+without advancing the checkpoint. Source replacement or truncation retires both
+facts and omission metadata. A database write failure rolls back the batch and
+its checkpoint; previously committed batches remain available. Session metadata
+retains a separate 4 MiB parsing limit. Malformed, oversized, or unreadable
+`session.json` files are isolated per session: indexing continues through
+messages and later sessions, while `disk_session_omissions` records the omitted
+metadata and stale metadata is retired. Successfully re-indexing repaired
+metadata clears its omission. Queries report the global metadata omission count
+because unknown ancestry can hide descendants; older indexes without tracking
+show an unknown count. The index CLI's `omitted_records` count includes both
+JSONL record and session metadata omissions.
 
 Request metadata and fingerprints are extracted once, on the request hook,
 before payload queue admission. This adds bounded request-side parsing and
-hashing work; response-stream callbacks still enqueue without parsing. The
-request extraction limit is 32 MiB. Above that limit `request_metadata_limit`
-marks the capture incomplete and session attribution remains unknown. Per-item
-fingerprints retain at most 4096 input items, with `fingerprint_item_limit`
-signaling any omitted item hashes; the whole input component hash is retained.
-Malformed JSON, strings that cannot encode as UTF-8, and JSON nesting beyond 128
-levels produce fixed extraction issue categories, preserve available raw
-payloads, and allow later captures to proceed. Session queries report
-`global_unattributed_observations` so captures lacking a conversation ID remain
-visible in coverage.
+hashing work. The request extraction limit is 32 MiB. Above that limit
+`request_metadata_limit` marks the capture incomplete and session attribution
+remains unknown. Per-item fingerprints retain at most 4096 input items, with
+`fingerprint_item_limit` signaling any omitted item hashes; the whole input
+component hash is retained. Malformed JSON, strings that cannot encode as UTF-8,
+and JSON nesting beyond 128 levels produce fixed extraction issue categories,
+preserve available raw payloads, and allow later captures to proceed. Session
+queries report `global_unattributed_observations` so captures lacking a
+conversation ID remain visible in coverage.
 
 ## Evidence and extraction
 
@@ -120,8 +149,9 @@ session would insert the same records.
   request bytes. Its full SHA-256 is over those exact bytes. Component hashes
   use sorted, compact UTF-8 JSON for `input`, individual input items,
   `instructions`, `reasoning`, and `tools`; GenerateAssistantResponse requests
-  instead hash `conversationState.currentMessage`, `history`, individual history
-  items, top-level `systemPrompt`, and the current message's
+  (chosen by the selected target, not by body shape) instead hash
+  `conversationState.currentMessage`, `history`, individual history items,
+  top-level `systemPrompt`, and the current message's
   `userInputMessageContext.tools`. Prefix hashes cover the first 4096, 16384,
   32768, and 49152 application bytes when present. These hashes describe content
   stability; they do not prove provider cache hits.
@@ -137,7 +167,7 @@ session would insert the same records.
   Unsupported encodings retain entity bytes and mark extraction incomplete.
   Truncated or invalid compressed streams, trailing compressed members, and
   decoded chunks larger than 16 MiB are flagged. The original encoded bytes
-  remain available within the retention budget.
+  remain available unless the queue omitted their copy.
 - `events` keeps ordered SSE frames, exact frame bytes, parsed JSON including
   unknown fields, the associated chunk sequence, and the chunk's observation
   timestamps. SSE comments, CR/LF/CRLF, multiline data, split frames, and split
@@ -167,10 +197,10 @@ session would insert the same records.
   `estimates` object, terminal status, and output-text byte and character
   counts. Counts use terminal `output_text` parts when available and otherwise
   observed text deltas, avoiding double counting. Reasoning and tool payloads
-  remain available as evidence and are excluded from the text count. Usage
-  summary memory is limited to 1 MiB per capture; an omission is flagged, while
-  events and chunks retain their independent evidence subject to the storage
-  budget.
+  are excluded from the text count; `tool_chars` and `reasoning_chars` count
+  them live (see [Token estimates](#token-estimates)). Usage summary memory is
+  limited to 1 MiB per capture; an omission is flagged, while events and chunks
+  retain their independent evidence unless the queue omitted their copy.
 
 `credits` comes from the `value` in the observed `kiro:credits` envelope, for
 example `{"unit":"credit","unit_plural":"credits","value":0.25}`. Extraction
@@ -206,20 +236,22 @@ leave it unknown. The original usage objects are available for later extraction
 improvements.
 
 `state='complete'` requires transport completion, a `response.completed` event
-(or completed JSON response), and no recorded issue. Event streams have no
+(or completed JSON response), and no recorded issue besides
+`request_payload_omitted` and `response_payload_omitted`. Event streams have no
 terminal event: completion is end of stream on a message boundary after at least
 one message, with no exception or error message and no framing, decoding, or
 byte-gap failure; an exception message sets `terminal` to `exception`.
 `response.failed`, incomplete responses, transport errors/cancellation, missing
-completion, extraction limits, queue loss, and storage loss remain incomplete. A
-process interrupted before finalization leaves a `recording` row; the next
-collector startup marks it `incomplete` with `interrupted_capture`. Initial
-metadata is persisted before completion. Partial rows must not be treated as
-zero usage. `observed_chunks` / `observed_bytes` describe response callbacks;
-dropped counters include refused request and response payload items. Omitted
-event/summary evidence is also signaled in `issues_json`. A full observed
-response hash can exist even when storage is incomplete; use `state` and the
-nullable BLOBs to determine replay completeness.
+completion, and extraction limits remain incomplete; queue omissions of payload
+copies alone do not. A process interrupted before finalization leaves a
+`recording` row; the next collector startup marks it `incomplete` with
+`interrupted_capture`. Initial metadata is persisted before completion. Partial
+rows must not be treated as zero usage. `observed_chunks` / `observed_bytes`
+describe response callbacks; dropped counters include refused request and
+response payload items. Omitted event/summary evidence is also signaled in
+`issues_json`. A full observed response hash can exist even when storage is
+incomplete. `state` describes usage; payload omission flags, nullable BLOBs, and
+chunk rows short of `observed_chunks` describe replay completeness.
 
 ## Token estimates
 
@@ -229,17 +261,21 @@ win per call, and a group mixing both sums exact and estimated values with
 model with a known window `W` (`claude-opus-5.5`: 1,000,000 tokens):
 
 - total `I = p/100 * W`, which includes output tokens once;
-- output `O = chars/4`, where chars counts `output_text` plus retained
+- output `O = chars/4`, where chars counts `output_text` plus streamed
   `response.function_call_arguments.delta` and `response.reasoning_text.delta`
   deltas, or GenerateAssistantResponse `toolUseEvent.input` and
-  `reasoningContentEvent.text`, so tool-only calls are not `O=0`;
+  `reasoningContentEvent.text`, so tool-only calls are not `O=0`; a capture with
+  no function-call (or reasoning-text) deltas instead counts its terminal
+  `response.completed` `function_call.arguments` (or `reasoning` item
+  `reasoning_text` content), so neither source is counted twice;
 - input `I - O`.
 
 When a call reports exact output or input but not every counter, those exact
 values replace `O` or `I - O` below, so an estimated cached split never exceeds
 the call's exact input.
 
-Cached tokens need reported credits and fitted rates (`claude-opus-5.5` only):
+Cached tokens need reported credits, a known or estimated `O`, and fitted rates
+(`claude-opus-5.5` only):
 `cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`. The
 full-miss rate `a = 74/603/(W/100)` (12.272e-6 credits per token), full-hit rate
 `b = 20/603/(W/100)` (3.317e-6), and fixed cost `c = 0.5034/603` (0.000835)
@@ -248,9 +284,12 @@ full-hit curve's own intercept (0.5970/603) is not used. Other models get no
 cache estimate, and calls without a context percentage or a known window stay
 unavailable. An estimated split counts as a hit only when cached reaches 1% of
 input, which keeps fit noise (tens of tokens on the 1–5 character calibration
-calls) out of the hit percentage. Tool and reasoning characters come from
-retained events, so once the payload budget is full their output share is
-missing and `O` comes out too low.
+calls) out of the hit percentage. The collector counts tool and reasoning
+characters live, by the same rule, into `summary_json` `tool_chars` and
+`reasoning_chars`, so omitted payload copies do not lower `O`. Captures
+finalized before those counts existed, and interrupted captures, which have no
+summary, fall back to counting retained events; an omitted copy there still
+lowers `O`.
 
 ## Experimental credit-discount diagnostic
 
@@ -336,15 +375,22 @@ checkpoint when free pages remain. Lineage comes from `parentSessionId`,
 without replacing the child exit status, and disk observations may then be
 stale; so does a running explicit `index` pass, which the exit refresh skips
 rather than interleaving with. Manual session queries use the last completed
-index. The exit summary also waits at most two seconds for the asynchronous
-capture writer and flags unfinished calls. Nested `kiro-usage exec` launches
-reuse the parent's marker; only the outer launch prints the summary.
+index. Before that refresh, which is scoped by persisted captures, the exit path
+waits at most two seconds for this launch's captured calls to finish and stay
+unchanged for 0.1 s. That quiet period is a heuristic, not a writer
+acknowledgement: a call started within a moment of Kiro exiting can persist
+after it. A timed-out wait flags unfinished calls in the summary, even if they
+finish during the refresh, and reports disk observations as not refreshed.
+Nested `kiro-usage exec` launches reuse the parent's marker; only the outer
+launch prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
-produce a warning; a missing requested payload exits with an error. Replay of
-available partial bytes can precede that error, so callers must check the exit
-status. Request evidence can be read with `gzip.decompress` on
-`captures.request_gzip` through a read-only SQLite connection.
+produce a warning; a missing requested payload, including a chunk omitted from
+the queue or a capture interrupted before its chunk count was recorded, exits
+with an error. Replay of available partial bytes can precede that error, so
+callers must check the exit status. Request evidence can be read with
+`gzip.decompress` on `captures.request_gzip` through a read-only SQLite
+connection.
 
 Persisted session `usage_summary.requestIds` can join the captured upstream
 request IDs to turns; `metadata_json["kiro:conversation_id"]` can join the
@@ -367,6 +413,7 @@ Fake-flow contracts validate the addon boundary and streaming behavior. The
 `kiro-usage-mitm-transport` Nix check also runs the pinned mitmproxy against a
 loopback fake upstream, checking immediate first-byte delivery, exact compressed
 payloads and SQLite replay for an SSE `/v1/responses` call and an AWS
-event-stream `/generateAssistantResponse` call, including the latter's credits,
-context, token columns and stored events. Live Kiro and TLS interception remain
-untested.
+event-stream GenerateAssistantResponse RPC call (`POST /` with its
+`x-amz-target`), including the latter's credits, context, token columns and
+stored events, and that a `POST /` with another target is not captured. Live
+Kiro and TLS interception remain untested.

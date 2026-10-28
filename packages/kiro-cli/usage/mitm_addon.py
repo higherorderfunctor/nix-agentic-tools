@@ -9,10 +9,11 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from capture import CaptureCapacityError, Collector
+from capture import WARN_BYTES, CaptureCapacityError, Collector
 
-# Workflow steps and subagents call GenerateAssistantResponse; root turns call CreateResponse.
-APIS = {"/generateAssistantResponse", "/v1/responses"}
+# Root turns call CreateResponse (REST). Workflow steps, subagents and titles call GenerateAssistantResponse over AWS
+# JSON 1.0 RPC: POST / naming the operation in x-amz-target, beside other KiroRuntimeService operations on the same path.
+RESPONSES, RPC, GENERATE = "/v1/responses", "/", "KiroRuntimeService.GenerateAssistantResponse"
 
 
 class UsageCapture:
@@ -20,7 +21,7 @@ class UsageCapture:
         self.active, self.collector, self.failed = {}, None, True
         self.invocations = {}
         try:
-            self.collector = Collector(os.environ["KIRO_USAGE_DB"], max_stored_bytes=int(os.environ.get("KIRO_USAGE_MAX_BYTES", "268435456")))
+            self.collector = Collector(os.environ["KIRO_USAGE_DB"], warn_bytes=int(os.environ.get("KIRO_USAGE_WARN_BYTES", WARN_BYTES)))
         except (KeyError, OSError, RuntimeError, TypeError, ValueError, sqlite3.Error):
             print("Kiro usage capture startup failed: selected requests will be refused; fix capture configuration and restart", file=sys.stderr)
         else:
@@ -50,13 +51,16 @@ class UsageCapture:
         if not (host == "kiro.dev" or host.endswith(".kiro.dev")):
             return
         path = flow.request.path.split("?", 1)[0]
-        if path not in APIS:
+        target = flow.request.headers.get("x-amz-target") if path == RPC and flow.request.method == "POST" else None
+        if not (path == RESPONSES or target == GENERATE):
             return
         if self.failed:
             self._reject(flow)
             return
         # Never copy URLs, query strings, cookies, or authentication headers.
         metadata = {"host": host, "method": flow.request.method, "path": path}
+        if target:
+            metadata["target"] = target
         client = getattr(flow, "client_conn", None)
         invocation = self.invocations.get(client.id) if client else None
         if invocation:

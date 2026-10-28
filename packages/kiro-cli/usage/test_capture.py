@@ -1,6 +1,7 @@
 """Synthetic offline contracts; no mitmproxy dependency, CLI launches or real data."""
 
 import contextlib
+import functools
 import gzip
 import io
 import json
@@ -46,6 +47,21 @@ def aws_event(name, obj, **options):
 EVENTSTREAM = "application/vnd.amazon.eventstream"
 
 
+def chatty(count=500):
+    """A long stream of small delta chunks; usage arrives only in the final event."""
+    return [event({"type": "response.output_text.delta", "delta": "word "}) for _ in range(count)] + [event(completed())]
+
+
+class SlowCommits(sqlite3.Connection):
+    """Every commit pays a synthetic 20 ms device flush."""
+    commits = 0
+
+    def commit(self):
+        type(self).commits += 1
+        time.sleep(.02)
+        super().commit()
+
+
 class CaptureTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -70,7 +86,7 @@ class CaptureTests(unittest.TestCase):
     def test_unicode_all_split_boundaries_and_final_counts(self):
         body = event({"type": "response.output_text.delta", "delta": "é🙂"}) + event(completed())
         # Every byte boundary, including inside Unicode and CRLF, is exercised by one-byte chunks.
-        db, row = self.run_capture([body[i:i+1] for i in range(len(body))], max_items=4096)
+        db, row = self.run_capture([body[i:i+1] for i in range(len(body))])
         self.assertEqual(row["state"], "complete")
         self.assertEqual(row["response_sha256"], digest(body))
         self.assertEqual(row["credits"], .25)
@@ -115,6 +131,18 @@ class CaptureTests(unittest.TestCase):
                 usage = json.loads(summary)["usage_objects"][0]["value"]
                 self.assertEqual(usage, obj["response"]["usage"])
 
+    def test_rpc_generate_assistant_response_decodes_event_stream_whatever_its_content_type(self):
+        writer = Collector(self.path)
+        ident = writer.begin({"host": "runtime.kiro.dev", "path": "/", "target": "KiroRuntimeService.GenerateAssistantResponse"},
+                             b'{"conversationState":{"conversationId":"sess_rpc","currentMessage":{}}}')
+        writer.headers(ident, {"content_type": "application/json", "content_encoding": "identity"})
+        writer.chunk(ident, aws_event("meteringEvent", {"usage": .5, "unit": "credit"}))
+        writer.finish(ident)
+        writer.close()
+        db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
+        self.assertEqual(db.execute("SELECT state,credits FROM captures WHERE id=?", (ident,)).fetchone(), ("complete", .5))
+
     def test_event_stream_split_messages_usage_and_completion(self):
         # Bool (type 0) and UUID (type 9) headers are skipped without losing the string headers.
         skipped = b"\x04flag\x00" + b"\x02id\x09" + bytes(16)
@@ -124,7 +152,7 @@ class CaptureTests(unittest.TestCase):
                     aws_event("metadataEvent", {"tokenUsage": {"uncachedInputTokens": 10, "cacheReadInputTokens": 80, "cacheWriteInputTokens": 5, "outputTokens": 4, "totalTokens": 99}, "stopReason": "END_TURN"}),
                     aws_event("meteringEvent", {"usage": .25, "unit": "credit", "unitPlural": "credits"})]
         body = b"".join(messages)
-        db, row = self.run_capture([body[i:i+1] for i in range(len(body))], content_type=EVENTSTREAM, max_items=4096)
+        db, row = self.run_capture([body[i:i+1] for i in range(len(body))], content_type=EVENTSTREAM)
         self.assertEqual((row["state"], row["completion_seen"], json.loads(row["issues_json"])), ("complete", 1, []))
         self.assertEqual(row["response_sha256"], digest(body))
         self.assertEqual((row["credits"], row["context_usage_percentage"]), (.25, 12.3))
@@ -232,23 +260,142 @@ class CaptureTests(unittest.TestCase):
         self.assertIn("unterminated_event", json.loads(row["issues_json"]))
         self.assertIsNone(db.execute("SELECT data_json FROM events").fetchone()[0])
 
-    def test_queue_overflow_is_explicit(self):
-        with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            _, row = self.run_capture([b"x" * 1024], max_bytes=128)
-        self.assertIn("queue overflow", stderr.getvalue())
-        self.assertGreater(row["dropped_bytes"], 0)
-        self.assertIn("queue_overflow", json.loads(row["issues_json"]))
-        self.assertEqual(row["state"], "incomplete")
+    def test_slow_commits_batch_a_long_stream_without_loss(self):
+        parts = chatty()
+        SlowCommits.commits = 0
+        with patch("capture.sqlite3.connect", functools.partial(sqlite3.connect, factory=SlowCommits)):
+            db, row = self.run_capture(parts)
+        self.assertEqual((row["state"], json.loads(row["issues_json"]), row["dropped_chunks"]), ("complete", [], 0))
+        self.assertEqual((row["credits"], row["context_usage_percentage"]), (.25, 12.3))
+        self.assertEqual(db.execute("SELECT count(*) FROM chunks").fetchone()[0], len(parts))
+        self.assertLess(SlowCommits.commits, len(parts) // 10)  # one request and 501 chunk items
 
-    def test_storage_budget_stops_payload_retention(self):
+    def test_refused_payloads_keep_usage_complete(self):
+        parts = chatty()
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            db, row = self.run_capture([event(completed())], max_stored_bytes=1)
-        self.assertIn("storage budget", stderr.getvalue())
+            db, row = self.run_capture(parts, max_bytes=1)
+        self.assertIn("response payload omitted, usage still parsed", stderr.getvalue())
+        self.assertEqual((row["state"], json.loads(row["issues_json"])), ("complete", ["request_payload_omitted", "response_payload_omitted"]))
+        self.assertEqual((row["credits"], row["context_usage_percentage"], row["completion_seen"]), (.25, 12.3, 1))
+        self.assertEqual(json.loads(row["summary_json"])["output_text_chars"], 2)
+        self.assertEqual(row["response_sha256"], digest(b"".join(parts)))
+        self.assertEqual((row["dropped_chunks"], row["observed_chunks"]), (len(parts) + 1, len(parts)))
+        self.assertEqual(json.loads(row["metadata_json"])["kiro:conversation_id"], "sess_fake")
         self.assertIsNone(row["request_gzip"])
-        self.assertIsNone(db.execute("SELECT entity_gzip FROM chunks").fetchone()[0])
-        self.assertGreater(row["dropped_bytes"], 0)
-        self.assertEqual(row["credits"], .25)  # observations remain useful
-        self.assertEqual(row["state"], "incomplete")
+        self.assertEqual(db.execute("SELECT count(*) FROM chunks").fetchone()[0], 0)
+        replay = subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "replay", row["id"]], capture_output=True)
+        self.assertEqual((replay.returncode, replay.stdout), (1, b""))
+
+    def test_refused_payloads_keep_delta_counts(self):
+        # No terminal output list: every count comes from deltas the queue never stored.
+        deltas = [event({"type": kind, "delta": "x" * size}) for kind, size in (
+            ("response.output_text.delta", 5), ("response.function_call_arguments.delta", 7), ("response.reasoning_text.delta", 3))] * 50
+        terminal = {"type": "response.completed", "response": {"usage": {"kiro:credits": {"unit": "credit", "value": .25}}}}
+        with contextlib.redirect_stderr(io.StringIO()):
+            db, row = self.run_capture([*deltas, event(terminal)], max_bytes=1)
+        self.assertEqual(row["state"], "complete")
+        self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 0)
+        summary = json.loads(row["summary_json"])
+        self.assertEqual((summary["output_count_source"], summary["output_text_chars"]), ("deltas", 250))
+        self.assertEqual((summary["tool_chars"], summary["reasoning_chars"]), (350, 150))
+
+    def test_live_tool_and_reasoning_counts_take_deltas_over_terminal_once(self):
+        output = [{"type": "function_call", "arguments": "x" * 40}, {"type": "reasoning", "content": [{"type": "reasoning_text", "text": "y" * 20}]}]
+        final = {"type": "response.completed", "response": {"output": output}}
+        delta = event({"type": "response.function_call_arguments.delta", "delta": "x" * 40})
+        _, row = self.run_capture([delta, event(final), event(final)])  # a repeated terminal event is the same output
+        summary = json.loads(row["summary_json"])
+        self.assertEqual((summary["tool_chars"], summary["reasoning_chars"]), (40, 20))
+        self.path = self.path.with_name("generate.sqlite3")
+        parts = [aws_event("toolUseEvent", {"input": "z" * 16, "name": "shell"}), aws_event("reasoningContentEvent", {"text": "w" * 4})]
+        _, row = self.run_capture(parts, content_type=EVENTSTREAM)
+        summary = json.loads(row["summary_json"])
+        self.assertEqual((summary["tool_chars"], summary["reasoning_chars"]), (16, 4))
+
+    def test_event_copies_are_staged_only_within_the_queue_budget(self):
+        writer = Collector(self.path, max_bytes=64 * 1024)
+        staged, original = [], writer._stage
+        def stage(target, *saved):
+            original(target, *saved)
+            staged.append(len(target["events"]))
+        with patch.object(writer, "_stage", side_effect=stage), contextlib.redirect_stderr(io.StringIO()):
+            ident = writer.begin({}, b"{}")
+            writer.headers(ident, {"content_type": "text/event-stream"})
+            writer.chunk(ident, b"\n\n" * 20000 + event(completed()))
+            writer.finish(ident)
+            writer.close()
+        self.assertEqual(len(staged), 40001)  # analysis saw every frame
+        self.assertLessEqual(max(staged), 64 * 1024 // Collector.OVERHEAD)
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            row = db.execute("SELECT state,credits,issues_json FROM captures").fetchone()
+        self.assertEqual(row, ("complete", .25, '["response_payload_omitted"]'))
+
+    def test_batches_respect_the_byte_bound_and_carry_the_overflow(self):
+        writer = Collector(self.path)
+        writer.close()  # its worker is done; drive _batch by hand
+        sizes = [3 << 20, 3 << 20, 32 << 20, 1, 1]
+        for size in sizes:
+            writer.queue.put((size, size))
+        batches = [[item[-1] for item in batch] for batch in iter(writer._batch, [])]
+        self.assertEqual(batches, [[3 << 20], [3 << 20], [32 << 20], [1, 1]])
+
+    def test_replay_refuses_a_chunk_gap(self):
+        parts = [event({"type": "response.output_text.delta", "delta": "a"}), event({"type": "response.output_text.delta", "delta": "b"}), event(completed())]
+        db, row = self.run_capture(parts)
+        db.execute("DELETE FROM chunks WHERE seq=1")
+        db.commit()
+        replay = subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "replay", row["id"]], capture_output=True)
+        self.assertEqual((replay.returncode, replay.stdout), (1, parts[0]))
+
+    def test_request_at_the_api_limit_is_retained(self):
+        body = b'{"input":"' + b"x" * (32 * 1024 * 1024 - 12) + b'"}'
+        writer = Collector(self.path)
+        ident = writer.begin({}, body)
+        writer.headers(ident, {"content_type": "text/event-stream"})
+        writer.chunk(ident, event(completed()))
+        writer.finish(ident)
+        writer.close()
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            state, issues, request = db.execute("SELECT state,issues_json,request_gzip FROM captures").fetchone()
+        self.assertEqual((len(body), state, issues), (32 * 1024 * 1024, "complete", "[]"))
+        self.assertEqual(gzip.decompress(request), body)
+
+    def test_tiny_chunks_are_charged_their_object_overhead(self):
+        writer = Collector(self.path, max_bytes=64 * 1024)
+        release = threading.Event()
+        original = writer._prepare
+        def blocked(*args):
+            self.assertTrue(release.wait(2))
+            return original(*args)
+        with patch.object(writer, "_prepare", side_effect=blocked), contextlib.redirect_stderr(io.StringIO()):
+            ident = writer.begin({}, b"{}")
+            writer.headers(ident, {"content_type": "application/json"})
+            for _ in range(1024):
+                writer.chunk(ident, b" ")
+            release.set()
+            writer.finish(ident)
+            writer.close()
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            self.assertLessEqual(db.execute("SELECT count(*) FROM chunks").fetchone()[0], 64 * 1024 // 512)
+
+    def test_commits_skip_fsync_under_wal(self):
+        with contextlib.closing(open_database(self.path)) as db:
+            self.assertEqual(db.execute("PRAGMA synchronous").fetchone()[0], 1)  # NORMAL
+
+    def test_payload_warning_threshold_keeps_retaining(self):
+        writer = Collector(self.path, warn_bytes=1)
+        with contextlib.redirect_stderr(io.StringIO()) as stderr:
+            for _ in range(2):
+                ident = writer.begin({}, b"{}")
+                writer.headers(ident, {"content_type": "text/event-stream"})
+                writer.chunk(ident, event(completed()))
+                writer.finish(ident)
+            writer.close()
+        self.assertEqual(stderr.getvalue().count("past the 1-byte warning"), 1)  # once per collector run
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            rows = db.execute("SELECT state,issues_json,dropped_bytes,credits,request_gzip IS NOT NULL FROM captures").fetchall()
+            self.assertEqual(rows, [("complete", "[]", 0, .25, 1)] * 2)
+            self.assertEqual(db.execute("SELECT count(*) FROM chunks WHERE entity_gzip IS NOT NULL").fetchone()[0], 2)
 
     def test_exact_counts_only_when_present(self):
         obj = completed()
@@ -270,11 +417,14 @@ class CaptureTests(unittest.TestCase):
         body = json.dumps({"conversationState": {"conversationId": "sess_step", "rootConversationId": "sess_root", "chatTriggerType": "MANUAL", "history": history,
                                                  "currentMessage": {"userInputMessage": {"content": "c", "modelId": "claude-opus-5.5", "userInputMessageContext": {"tools": [{"toolSpecification": {"name": "t"}}]}}}},
                            "additionalModelRequestFields": {"output_config": {"effort": "low"}}, "profileArn": "never"}).encode()
-        meta, hashes = request_details(body)
+        meta, hashes = request_details(body, rpc=True)
         self.assertEqual(meta, {"model": "claude-opus-5.5", "effort": "low", "kiro:conversation_id": "sess_step", "kiro:root_conversation_id": "sess_root"})
         self.assertEqual(set(hashes), {"currentMessage", "history", "history_items", "prefixes", "tools"})
         self.assertEqual(hashes["history_items"], [digest(json.dumps(item, separators=(",", ":")).encode()) for item in history])
-        self.assertEqual(request_details(b'{"conversationState":{},"additionalModelRequestFields":{"reasoning":{"effort":"high"}}}')[0], {"effort": "high"})
+        self.assertEqual(request_details(b'{"conversationState":{},"additionalModelRequestFields":{"reasoning":{"effort":"high"}}}', rpc=True)[0], {"effort": "high"})
+        # The selection, not the body shape, picks the parser: a conversationState body on CreateResponse stays CreateResponse.
+        self.assertEqual(request_details(body)[0], {})
+        self.assertEqual(request_details(b'{"model":"m"}', rpc=True)[0], {})
 
     def test_private_database_and_additional_tables(self):
         db = open_database(self.path)
@@ -309,7 +459,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_writer_failure_surfaces(self):
         writer = Collector(self.path)
-        with patch.object(writer, "_store_chunk", side_effect=sqlite3.OperationalError("synthetic disk error")):
+        with patch.object(writer, "_prepare", side_effect=sqlite3.OperationalError("synthetic disk error")):
             ident = writer.begin({}, b"{}")
             writer.chunk(ident, b"x")
             with contextlib.redirect_stderr(io.StringIO()):
@@ -321,12 +471,12 @@ class CaptureTests(unittest.TestCase):
     def test_callback_does_not_wait_for_database(self):
         entered, release = threading.Event(), threading.Event()
         writer = Collector(self.path)
-        original = writer._store_chunk
+        original = writer._prepare
         def blocked(*args):
             entered.set()
             self.assertTrue(release.wait(2))
             return original(*args)
-        with patch.object(writer, "_store_chunk", side_effect=blocked):
+        with patch.object(writer, "_prepare", side_effect=blocked):
             ident = writer.begin({}, b"{}")
             writer.headers(ident, {"content_type": "text/event-stream"})
             writer.chunk(ident, b"x")
@@ -380,12 +530,6 @@ class CaptureTests(unittest.TestCase):
             self.assertIn("invalid_event_data", rows[1][1])
             self.assertIn("invalid_json", rows[2][1])
             self.assertEqual(gzip.decompress(rows[0][2]), nested)
-
-    def test_request_metadata_survives_payload_queue_refusal(self):
-        with contextlib.redirect_stderr(io.StringIO()):
-            _, row = self.run_capture([event(completed())], max_bytes=1)
-        self.assertEqual(json.loads(row["metadata_json"])["kiro:conversation_id"], "sess_fake")
-        self.assertIsNone(row["request_gzip"])
 
     def test_lone_surrogates_preserve_evidence_and_worker_recovers(self):
         request = json.dumps({"model": chr(0xD800)}).encode("ascii")
@@ -510,19 +654,21 @@ class CaptureTests(unittest.TestCase):
                 self.assertEqual(credits, None if issue else .25)
                 self.assertEqual(json.loads(summary)["usage_objects"][0]["value"]["kiro:credits"], envelope)
 
-    def test_lost_request_does_not_disable_complete_response_analysis(self):
-        writer = Collector(self.path, max_bytes=512)
+    def test_omitted_request_payload_alone_keeps_usage_complete(self):
+        writer = Collector(self.path, max_bytes=4096)
         with contextlib.redirect_stderr(io.StringIO()):
-            ident = writer.begin({}, b'{"metadata":{"kiro:conversation_id":"session"},"padding":"' + b"x" * 1024 + b'"}')
+            ident = writer.begin({}, b'{"metadata":{"kiro:conversation_id":"session"},"padding":"' + b"x" * 8192 + b'"}')
         writer.headers(ident, {"content_type": "text/event-stream"})
         payload = event(completed())
         writer.chunk(ident, payload)
         writer.finish(ident)
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
-            row = db.execute("SELECT state,credits,response_sha256,request_gzip,fingerprints_json FROM captures").fetchone()
-            self.assertEqual(row[:4], ("incomplete", .25, digest(payload), None))
+            row = db.execute("SELECT state,credits,response_sha256,request_gzip,fingerprints_json,issues_json,dropped_chunks FROM captures").fetchone()
+            self.assertEqual(row[:4], ("complete", .25, digest(payload), None))
             self.assertIsNotNone(row[4])
+            self.assertEqual(row[5:], ('["request_payload_omitted"]', 1))
+            self.assertIsNotNone(db.execute("SELECT entity_gzip FROM chunks").fetchone()[0])
 
     def test_recoverable_request_refusals_leave_addon_healthy(self):
         addon = UsageCapture()
@@ -606,10 +752,18 @@ class CaptureTests(unittest.TestCase):
         with patch.dict(os.environ, {"KIRO_USAGE_DB": str(self.path)}):
             addon.load(None)
         self.addCleanup(addon.done)
-        def flow(host="runtime.kiro.dev", path="/v1/responses?secret=never", ident="selected"):
-            return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method="POST", headers={"authorization": "never", "cookie": "never"}, get_content=lambda strict: b'{"model":"fake"}'), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
-        for host, path in (("not-kiro.dev", "/v1/responses"), ("kiro.dev.evil", "/v1/responses"), ("kiro.dev", "/other"), ("kiro.dev", "/generateAssistantResponse/x")):
-            rejected = flow(host, path, host + path)
+        def flow(host="runtime.kiro.dev", path="/v1/responses?secret=never", ident="selected", target=None, body=b'{"model":"fake"}', method="POST"):
+            headers = {"authorization": "never", "cookie": "never", **({"x-amz-target": target} if target else {})}
+            return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method=method, headers=headers, get_content=lambda strict: body), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
+        generate = "KiroRuntimeService.GenerateAssistantResponse"
+        # The schema's REST path is never sent; RPC selection is the exact target on POST / only.
+        for host, path, target in (("not-kiro.dev", "/v1/responses", None), ("kiro.dev.evil", "/v1/responses", None), ("kiro.dev", "/other", None), ("kiro.dev", "/generateAssistantResponse", None),
+                                   ("kiro.dev", "/", None), ("kiro.dev", "/", "KiroRuntimeService.GetUsageLimits"), ("kiro.dev", "/", generate + "X"), ("kiro.dev", "/v1/responses/", generate), ("not-kiro.dev", "/", generate)):
+            rejected = flow(host, path, f"{host}{path}{target}", target)
+            addon.request(rejected)
+            self.assertNotIn(rejected.id, addon.active)
+        for method in ("GET", "OPTIONS"):  # RPC calls are POST; the target alone does not select
+            rejected = flow("kiro.dev", "/", f"rpc-{method}", generate, method=method)
             addon.request(rejected)
             self.assertNotIn(rejected.id, addon.active)
         selected = flow()
@@ -619,7 +773,8 @@ class CaptureTests(unittest.TestCase):
         self.assertIs(selected.response.stream(data), data)
         self.assertEqual(selected.response.stream(b""), b"")
         addon.response(selected)
-        step = flow(path="/generateAssistantResponse?secret=never", ident="step")
+        request = json.dumps({"conversationState": {"conversationId": "sess_step", "currentMessage": {"userInputMessage": {"modelId": "m"}}}}).encode()
+        step = flow(path="/?secret=never", ident="step", target=generate, body=request)
         step.response.headers["content-type"] = EVENTSTREAM
         addon.request(step)
         addon.responseheaders(step)
@@ -633,7 +788,8 @@ class CaptureTests(unittest.TestCase):
             for metadata, response, _, _ in rows:
                 self.assertNotIn("never", metadata + response)
                 self.assertIn("upstream-fake", response)
-            self.assertEqual([json.loads(row[0])["path"] for row in rows], ["/v1/responses", "/generateAssistantResponse"])
+            self.assertEqual([json.loads(row[0]) for row in rows], [{"host": "runtime.kiro.dev", "method": "POST", "path": "/v1/responses", "model": "fake", "request_content_encoding": "identity"},
+                                                                    {"host": "runtime.kiro.dev", "method": "POST", "path": "/", "target": generate, "model": "m", "kiro:conversation_id": "sess_step", "request_content_encoding": "identity"}])
             self.assertEqual(rows[1][2:], ("complete", .5))
         finally:
             db.close()
@@ -650,7 +806,7 @@ class RuntimeTests(unittest.TestCase):
             with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "refresh_disk_index", return_value=False), patch.object(runtime, "invocation_summary"):
                 with self.assertRaisesRegex(ValueError, "inherited ALL_PROXY conflicts"):
                     runtime.launch_environment(state, 19001)
-                runtime.exec_command(state, 19001, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])
+                runtime.exec_command(state, 19001, 1 << 30, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])
                 command, arguments, environment = wait.call_args.args
                 self.assertEqual(command, "kiro-cli")
                 self.assertEqual(arguments, ["--v3", "chat", "spaced argument", "--", "--agent-engine=v2"])
@@ -665,27 +821,27 @@ class RuntimeTests(unittest.TestCase):
                 connect.assert_called_with(("127.0.0.1", 19001), timeout=0.5)
                 for arguments in (["kiro-cli", "--agent-engine=v2"], ["kiro-cli-chat"]):
                     with self.assertRaisesRegex(ValueError, "v3"):
-                        runtime.exec_command(state, 19001, arguments)
-                runtime.exec_command(state, 19001, ["kiro-cli", "--v3"])
+                        runtime.exec_command(state, 19001, 1 << 30, arguments)
+                runtime.exec_command(state, 19001, 1 << 30, ["kiro-cli", "--v3"])
                 self.assertEqual(wait.call_args.args[1], ["--v3"])
                 execute.side_effect = FileNotFoundError()
                 with self.assertRaisesRegex(runtime.CommandError, "command not found: absent"):
-                    runtime.exec_command(state, 19001, ["absent"])
+                    runtime.exec_command(state, 19001, 1 << 30, ["absent"])
                 for error in (FileNotFoundError(), PermissionError(13, "Permission denied")):
                     execute.side_effect = error
                     output = io.StringIO()
-                    with patch.object(sys, "argv", ["runtime.py", "cli", "--state-dir", str(state), "--port", "19001", "--", "exec", "absent"]), contextlib.redirect_stderr(output):
+                    with patch.object(sys, "argv", ["runtime.py", "cli", "--state-dir", str(state), "--port", "19001", "--warn-bytes", "1", "--", "exec", "absent"]), contextlib.redirect_stderr(output):
                         self.assertEqual(runtime.main(), 1)
                     self.assertIn("absent", output.getvalue())
                     self.assertNotIn("Start the kiro-usage service", output.getvalue())
         with self.assertRaisesRegex(ValueError, "COMMAND"):
-            runtime.exec_command(Path("/unused"), 19001, [])
+            runtime.exec_command(Path("/unused"), 19001, 1 << 30, [])
 
     def test_exec_exit_and_signal(self):
         # Replacement must preserve child exit codes and signals without a
         # supervising process translating them. Only this synthetic child runs.
         for code, expected in (("raise SystemExit(23)", 23), ("import os, signal; os.kill(os.getpid(), signal.SIGTERM)", -15)):
-            script = f"import runtime; from pathlib import Path; runtime.launch_environment = lambda *a, **kw: dict(runtime.os.environ); runtime.exec_command(Path('/unused'), 19001, [{sys.executable!r}, '-c', {code!r}])"
+            script = f"import runtime; from pathlib import Path; runtime.launch_environment = lambda *a, **kw: dict(runtime.os.environ); runtime.exec_command(Path('/unused'), 19001, 1 << 30, [{sys.executable!r}, '-c', {code!r}])"
             result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent)
             self.assertEqual(result.returncode, expected)
 

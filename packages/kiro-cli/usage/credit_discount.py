@@ -95,7 +95,7 @@ def estimate(model, context, credits, chars, output=None, input=None):
 
     Per-token rates are the miss/hit slopes over the window; the miss intercept is the fixed cost.
     Exact output/input of the same call replace their guesses, so cached never exceeds exact input.
-    Unknown parts are None: no window means nothing, no fitted rates or credits means no cache split.
+    Unknown parts are None: no window means nothing; no fitted rates, credits or output means no cache split.
     """
     window = WINDOWS.get(model)
     if window is None or not finite(context) or context < 0:
@@ -106,7 +106,7 @@ def estimate(model, context, credits, chars, output=None, input=None):
     if not count(input):
         input = max(total - output, 0) if output is not None else None
     result = {"total_tokens": total, "input_tokens": input, "output_tokens": output, "cache_read_tokens": None}
-    if input is not None and model in FITTED and finite(credits):
+    if input is not None and output is not None and model in FITTED and finite(credits):
         miss, hit = (slope / SCALE / (window / 100) for slope in (MISS[0], HIT[0]))
         cached = (miss * input + OUTPUT_RATE * output + MISS[1] / SCALE - credits) / (miss - hit)
         result["cache_read_tokens"] = round(min(max(cached, 0), input))

@@ -6,6 +6,8 @@
   runtime = "${../usage}/runtime.py";
   proxyNames = ["ALL_PROXY" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" "NODE_EXTRA_CA_CERTS" "all_proxy" "http_proxy" "https_proxy" "no_proxy"];
   stateArgs = cfg: lib.optionals (cfg.dataDirectory != null) ["--state-dir" cfg.dataDirectory];
+  # The collector warns once past it; the tool's exec summary repeats the warning.
+  warnArgs = cfg: ["--warn-bytes" (toString cfg.payloadWarnBytes)];
 in {
   options = {
     enable = lib.mkEnableOption "private local Kiro usage capture through a loopback TLS proxy";
@@ -14,10 +16,10 @@ in {
       default = null;
       description = "Private runtime state directory for usage.sqlite3 and the proxy CA. Null resolves XDG_STATE_HOME/kiro-cli/usage, falling back to HOME/.local/state/kiro-cli/usage, when each process starts. Existing directories must be owned by the user with mode 0700.";
     };
-    maxPayloadBytes = lib.mkOption {
+    payloadWarnBytes = lib.mkOption {
       type = lib.types.ints.positive;
-      default = 268435456;
-      description = "Maximum compressed payload bytes retained by the collector. At the limit it continues accounting and records omitted payloads; SQLite metadata and WAL can grow beyond this payload budget.";
+      default = 1073741824;
+      description = "Compressed payload bytes past which usage capture warns. Payloads are always retained; once the retained compressed payload bytes exceed this, the collector logs one warning per run and each tracked exec summary repeats it with retirement guidance. SQLite metadata and WAL are not counted.";
     };
     port = lib.mkOption {
       type = lib.types.port;
@@ -48,13 +50,12 @@ in {
         "service"
         "--port"
         (toString cfg.port)
-        "--max-bytes"
-        (toString cfg.maxPayloadBytes)
         "--mitmdump"
         "${pkgs.mitmproxy}/bin/mitmdump"
         "--addon"
         "${../usage}/mitm_addon.py"
       ]
+      ++ warnArgs cfg
       ++ stateArgs cfg;
     ports.proxy = cfg.port;
   };
@@ -62,7 +63,7 @@ in {
     import ../../../lib/strict-shell-application.nix pkgs {
       name = "kiro-usage";
       text = ''
-        exec ${pkgs.python3}/bin/python3 ${runtime} cli ${lib.escapeShellArgs (["--port" (toString cfg.port)] ++ stateArgs cfg)} -- "$@"
+        exec ${pkgs.python3}/bin/python3 ${runtime} cli ${lib.escapeShellArgs (["--port" (toString cfg.port)] ++ warnArgs cfg ++ stateArgs cfg)} -- "$@"
       '';
     };
   launcherBlock = cfg:

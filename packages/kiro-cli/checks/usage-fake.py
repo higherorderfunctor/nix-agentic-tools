@@ -14,7 +14,7 @@ if "--listen-host" in sys.argv:
     sys.path.insert(0, sys.argv[sys.argv.index("--scripts") + 1].rsplit("/", 1)[0])
     from capture import Collector
     Collector(os.environ["KIRO_USAGE_DB"]).close()
-    (state / "service.json").write_text(json.dumps({"argv": args, "budget": os.environ["KIRO_USAGE_MAX_BYTES"]}))
+    (state / "service.json").write_text(json.dumps({"argv": args, "warn_bytes": os.environ["KIRO_USAGE_WARN_BYTES"]}))
     (state / "ca/mitmproxy-ca-cert.pem").write_text("synthetic test CA\n")
     with socket.socket() as server:
         server.bind(("127.0.0.1", int(args[args.index("--listen-port") + 1])))
