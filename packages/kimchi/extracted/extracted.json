@@ -1266,6 +1266,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_BRIDGE_BIN_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_BRIDGE_PREFIX": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
