@@ -825,6 +825,19 @@ index 1810c78..3204c2a 100644
  		if pinnedAuthID != "" && auth.ID != pinnedAuthID {
  			continue
  		}
+diff --git a/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go b/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go
+index 4704918..b6476ab 100644
+--- a/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go
++++ b/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go
+@@ -25,7 +25,7 @@ func issue7017WaitSetup(t *testing.T, auth *Auth, model string) (*Manager, authS
+ 	if _, errRegister := manager.Register(WithSkipPersist(context.Background()), auth); errRegister != nil {
+ 		t.Fatalf("Register returned error: %v", errRegister)
+ 	}
+-	return manager, authSelectionEligibilityForRequest(context.Background(), cliproxyexecutor.Options{})
++	return manager, authSelectionEligibilityForRequest(context.Background(), cliproxyexecutor.Options{}, nil)
+ }
+ 
+ func TestIssue7017SiblingQuotaDoesNotBlockTransientZeroWait(t *testing.T) {
 diff --git a/sdk/cliproxy/auth/conductor_selection.go b/sdk/cliproxy/auth/conductor_selection.go
 index 7cdacb7..a68a87c 100644
 --- a/sdk/cliproxy/auth/conductor_selection.go
