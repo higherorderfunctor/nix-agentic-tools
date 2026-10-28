@@ -1171,6 +1171,7 @@
       "maturity": "under development",
       "name": "guardian_node_repl_transcript_images"
     },
+    { "maturity": "under development", "name": "guardian_recorded_items" },
     { "maturity": "stable", "name": "guardian_reuse_parent_compaction" },
     {
       "maturity": "under development",
@@ -1186,6 +1187,7 @@
       "maturity": "under development",
       "name": "guardianv2_decisions_comparison"
     },
+    { "maturity": "under development", "name": "guardianv3" },
     { "maturity": "stable", "name": "hooks" },
     { "maturity": "removed", "name": "image_detail_original" },
     { "maturity": "stable", "name": "image_generation" },
@@ -1231,11 +1233,12 @@
     { "maturity": "stable", "name": "plugin_sharing" },
     { "maturity": "stable", "name": "plugins" },
     { "maturity": "under development", "name": "powershell_shell_version" },
+    { "maturity": "stable", "name": "prediction_preserve_parent_tools" },
     { "maturity": "under development", "name": "prefer_mxc" },
     { "maturity": "experimental", "name": "prevent_idle_sleep" },
     { "maturity": "under development", "name": "psp" },
     { "maturity": "removed", "name": "realtime_conversation" },
-    { "maturity": "under development", "name": "reasoning_effort_override" },
+    { "maturity": "stable", "name": "reasoning_effort_override" },
     { "maturity": "stable", "name": "recommended_plugins" },
     { "maturity": "removed", "name": "remote_compaction_v2" },
     { "maturity": "removed", "name": "remote_control" },
@@ -1291,6 +1294,7 @@
     { "maturity": "stable", "name": "tool_suggest" },
     { "maturity": "removed", "name": "transcript_v2" },
     { "maturity": "removed", "name": "tui_app_server" },
+    { "maturity": "under development", "name": "tui_multi_backend" },
     { "maturity": "stable", "name": "ultrafast_mode" },
     { "maturity": "removed", "name": "unavailable_dummy_tools" },
     { "maturity": "stable", "name": "unbounded_connection_retries" },
@@ -1349,6 +1353,10 @@
     {
       "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
       "slug": "gpt-6.1-sol"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6.1-terra"
     },
     {
       "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
