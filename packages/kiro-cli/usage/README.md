@@ -232,14 +232,18 @@ model with a known window `W` (`claude-opus-5.5`: 1,000,000 tokens):
 - output `O = chars/4`, where chars counts `output_text` plus retained
   `response.function_call_arguments.delta` and `response.reasoning_text.delta`
   deltas, or GenerateAssistantResponse `toolUseEvent.input` and
-  `reasoningContentEvent.text`, so tool-only calls are not `O=0`;
+  `reasoningContentEvent.text`, so tool-only calls are not `O=0`; a capture with
+  no function-call (or reasoning-text) deltas instead counts its terminal
+  `response.completed` `function_call.arguments` (or `reasoning` item
+  `reasoning_text` content), so neither source is counted twice;
 - input `I - O`.
 
 When a call reports exact output or input but not every counter, those exact
 values replace `O` or `I - O` below, so an estimated cached split never exceeds
 the call's exact input.
 
-Cached tokens need reported credits and fitted rates (`claude-opus-5.5` only):
+Cached tokens need reported credits, a known or estimated `O`, and fitted rates
+(`claude-opus-5.5` only):
 `cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`. The
 full-miss rate `a = 74/603/(W/100)` (12.272e-6 credits per token), full-hit rate
 `b = 20/603/(W/100)` (3.317e-6), and fixed cost `c = 0.5034/603` (0.000835)
@@ -336,9 +340,11 @@ checkpoint when free pages remain. Lineage comes from `parentSessionId`,
 without replacing the child exit status, and disk observations may then be
 stale; so does a running explicit `index` pass, which the exit refresh skips
 rather than interleaving with. Manual session queries use the last completed
-index. The exit summary also waits at most two seconds for the asynchronous
-capture writer and flags unfinished calls. Nested `kiro-usage exec` launches
-reuse the parent's marker; only the outer launch prints the summary.
+index. Before that refresh, which is scoped by persisted captures, the exit path
+waits at most two seconds for the asynchronous capture writer to finish this
+launch's calls; the summary flags unfinished calls, and a timed-out wait reports
+disk observations as not refreshed. Nested `kiro-usage exec` launches reuse the
+parent's marker; only the outer launch prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload exits with an error. Replay of

@@ -337,6 +337,24 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(metrics["output_tokens"], query.metric(20, 1, 1))  # 80 chars / 4; .done is not recounted
         self.assertEqual(metrics["input_tokens"], query.metric(29980, 1, 1))
 
+    def completed(self, ident, output, deltas=()):
+        events = [*deltas, ("response.completed", {"type": "response.completed", "response": {"output": output}})]
+        self.db.executemany("INSERT INTO events(capture_id,seq,event_name,data_json) VALUES (?,?,?,?)",
+                            [(ident, seq, name, json.dumps(data)) for seq, (name, data) in enumerate(events)])
+
+    def test_terminal_only_tool_and_reasoning_output_counts_once(self):
+        self.estimable("terminal", (74 * 3.0 + .5034) / 603)
+        self.completed("terminal", [{"type": "function_call", "name": "shell", "arguments": "x" * 400}])
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(100, 1, 1))
+        # Deltas present: their terminal copies are not recounted; terminal-only reasoning still counts.
+        self.db.execute("DELETE FROM captures")
+        self.db.execute("DELETE FROM events")
+        self.estimable("mixed", (74 * 3.0 + .5034) / 603)
+        self.completed("mixed", [{"type": "function_call", "arguments": "x" * 40},
+                                 {"type": "reasoning", "content": [{"type": "reasoning_text", "text": "y" * 20}]}],
+                       [("response.function_call_arguments.delta", {"type": "response.function_call_arguments.delta", "delta": "x" * 40})])
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(15, 1, 1))
+
     def test_estimator_refuses_unknown_inputs(self):
         estimate = query.credit_discount.estimate
         self.assertIsNone(estimate("other-model", 3.0, 1, 0))
@@ -344,6 +362,9 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(estimate("claude-opus-5.5", 3.0, None, 8),
                          {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None})
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 1, None)["output_tokens"], None)
+        # Interrupted capture: exact input, no output count or characters; no cache split.
+        self.assertEqual(estimate("claude-opus-5.5", 3.0, 1, None, input=1200),
+                         {"total_tokens": 30000, "input_tokens": 1200, "output_tokens": None, "cache_read_tokens": None})
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 100, 0)["cache_read_tokens"], 0)  # clamped, not negative
         self.assertEqual(estimate("claude-opus-5.5", .001, 1, 1000)["input_tokens"], 0)  # output capped at total
 

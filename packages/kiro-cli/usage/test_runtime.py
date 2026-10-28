@@ -38,13 +38,13 @@ class SummaryTests(unittest.TestCase):
                 collector.finish(ident)
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
-                runtime.invocation_summary(root, "a" * 32, timeout=0)
+                runtime.invocation_summary(root, "a" * 32)
             self.assertIn("Session: sess_selected", output.getvalue())
             self.assertNotIn("sess_other", output.getvalue())
             self.assertIn("full root-lineage totals", output.getvalue())
             self.assertIn("no conversation identity", output.getvalue())
             with contextlib.redirect_stderr(io.StringIO()) as output:
-                runtime.invocation_summary(root, "c" * 32, timeout=0)
+                runtime.invocation_summary(root, "c" * 32)
             self.assertIn("unavailable", output.getvalue())
             self.assertNotIn("Session:", output.getvalue())
 
@@ -58,7 +58,7 @@ class SummaryTests(unittest.TestCase):
                 collector.finish(ident)
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
-                runtime.invocation_summary(root, "a" * 32, timeout=0)
+                runtime.invocation_summary(root, "a" * 32)
             self.assertEqual(output.getvalue().count("Session: sess_root  Scope: tree"), 1)
             self.assertNotIn("sess_other", output.getvalue())
             self.assertNotIn("Session: sess_child", output.getvalue())
@@ -101,6 +101,39 @@ class SummaryTests(unittest.TestCase):
                         self.assertEqual(db.execute("SELECT json_extract(identifiers_json,'$.parentSessionId') FROM disk_sessions").fetchone()[0], "sess_parent")
                     self.assertIn("Scope: tree", output.getvalue())
                     self.assertIn("Unknown", output.getvalue())
+
+    def test_exec_settles_queued_captures_before_refresh(self):
+        # Empty store at exit: the first capture commits 150 ms later, while the settle waits.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state"
+            collector = Collector(state / "usage.sqlite3")
+            self.addCleanup(collector.close)
+            def late_capture():
+                time.sleep(.15)
+                collector.finish(collector.begin({"invocation": "a" * 32}, json.dumps({"metadata": {"kiro:conversation_id": "sess_late"}}).encode()))
+            def write():
+                session = root / ".kiro/sessions/workspace/sess_late"
+                session.mkdir(parents=True)
+                (session / "session.json").write_text("{}")
+                (session / "messages.jsonl").write_text(json.dumps({"payload": {"type": "usage_summary"}}) + "\n")
+                threading.Thread(target=late_capture).start()
+            with patch.dict(os.environ, {"HOME": str(root)}, clear=True), patch.object(runtime, "launch_environment", return_value={}), patch.object(disk_index, "MTIME_SLACK_NS", 0), patch.object(runtime, "wait_command", side_effect=self.writing_child(0, write)), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="a" * 32)), patch.object(runtime, "invocation_summary", wraps=runtime.invocation_summary) as summary, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(runtime.exec_command(state, 19001, ["kiro-cli", "chat"]), 0)
+            with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
+                self.assertEqual(db.execute("SELECT count(*) FROM disk_records").fetchone()[0], 1)
+            self.assertTrue(summary.call_args.kwargs["disk_refreshed"])
+
+    def test_unsettled_wait_is_not_a_clean_refresh(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+            root = Path(directory)
+            collector = Collector(root / "usage.sqlite3")
+            self.addCleanup(collector.close)
+            collector.begin({"invocation": "a" * 32}, json.dumps({"metadata": {"kiro:conversation_id": "sess_open"}}).encode())
+            with patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=0), patch.object(runtime, "refresh_disk_index", return_value=True), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="a" * 32)), patch.object(runtime, "SETTLE_TIMEOUT", .3), patch.object(runtime, "invocation_summary", wraps=runtime.invocation_summary) as summary, contextlib.redirect_stderr(io.StringIO()) as output:
+                self.assertEqual(runtime.exec_command(root, 19001, ["kiro-cli", "chat"]), 0)
+            self.assertIn("capture writer still has unfinished calls", output.getvalue())
+            self.assertFalse(summary.call_args.kwargs["disk_refreshed"])
 
     def test_exec_refresh_reads_only_sessions_modified_during_launch(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -211,7 +244,7 @@ class SummaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with contextlib.redirect_stderr(io.StringIO()) as output:
-                runtime.invocation_summary(root, "a" * 32, timeout=0)
+                runtime.invocation_summary(root, "a" * 32)
             self.assertIn("unavailable", output.getvalue())
             self.assertFalse((root / "usage.sqlite3").exists())
 

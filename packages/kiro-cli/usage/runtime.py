@@ -135,28 +135,50 @@ def refresh_disk_index(path, since):
         return False
 
 
-def invocation_summary(path, invocation, timeout=2.0, disk_refreshed=False):
-    """Read only exact marker matches; wait briefly for the async writer."""
-    from query import FOOTER_WARNINGS, query, render_summary
+SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to persist this invocation.
+
+
+def invocation_captures(db, invocation, timeout):
+    """This invocation's exact marker rows once the async writer settles or the wait times out."""
     deadline = time.monotonic() + timeout
-    rows = []
+    previous_rows, settled = None, time.monotonic()
+    while True:
+        rows = db.execute("""
+            SELECT json_extract(metadata_json,'$."kiro:root_conversation_id"'),
+              json_extract(metadata_json,'$."kiro:conversation_id"'), state
+            FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
+        """, (invocation,)).fetchall()
+        if rows != previous_rows:
+            previous_rows, settled = rows, time.monotonic()
+        if rows and all(state != "recording" for _, _, state in rows) and time.monotonic() - settled >= .1:
+            return rows
+        if time.monotonic() >= deadline:
+            return rows
+        time.sleep(.05)
+
+
+def read_only(path):
+    """settle_captures and invocation_summary never create or write the store."""
     uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
+    return closing(sqlite3.connect(uri, uri=True, timeout=.1))
+
+
+def settle_captures(path, invocation):
+    """True once this invocation's captures are persisted and finished; disk indexing scopes from them."""
     try:
-        with closing(sqlite3.connect(uri, uri=True, timeout=.1)) as db:
-            previous_rows, settled = None, time.monotonic()
-            while True:
-                rows = db.execute("""
-                    SELECT json_extract(metadata_json,'$."kiro:root_conversation_id"'),
-                      json_extract(metadata_json,'$."kiro:conversation_id"'), state
-                    FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
-                """, (invocation,)).fetchall()
-                if rows != previous_rows:
-                    previous_rows, settled = rows, time.monotonic()
-                if rows and all(state != "recording" for _, _, state in rows) and time.monotonic() - settled >= .1:
-                    break
-                if time.monotonic() >= deadline:
-                    break
-                time.sleep(.05)
+        with read_only(path) as db:
+            rows = invocation_captures(db, invocation, SETTLE_TIMEOUT)
+    except (OSError, ValueError, sqlite3.Error):
+        return False  # invocation_summary reports the same failure.
+    return bool(rows) and all(state != "recording" for _, _, state in rows)
+
+
+def invocation_summary(path, invocation, disk_refreshed=False):
+    """Read only exact marker matches; the exit path settles them first."""
+    from query import FOOTER_WARNINGS, query, render_summary
+    try:
+        with read_only(path) as db:
+            rows = invocation_captures(db, invocation, 0)
             identities = [root or conversation for root, conversation, _ in rows]
             sessions = sorted({name if name.startswith("sess_") else "sess_" + name
                                for name in identities if isinstance(name, str) and name})
@@ -270,7 +292,10 @@ def exec_command(path, port, arguments):
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
                 try:
-                    refreshed = refresh_disk_index(path, started)
+                    # Refresh scopes from persisted captures, so settle them first; an
+                    # unsettled wait never reports a clean refresh.
+                    settled = settle_captures(path, invocation)
+                    refreshed = refresh_disk_index(path, started) and settled
                     invocation_summary(path, invocation, disk_refreshed=refreshed)
                     sys.stderr.flush()
                 except (OSError, ValueError):
