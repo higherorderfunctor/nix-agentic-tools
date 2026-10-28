@@ -1518,9 +1518,11 @@ workspace. Require workspace-relative fileCheck paths in the `workflowPrompt`
 brief, or opt into `ai.kiro.cli.tweaks.relativeFileCheckPaths = true` on Home
 Manager or devenv (default false). In the pinned bundle the conflicting
 paragraph is rule 5, "Every path is absolute, in prompts and in
-`fileCheck.path`". The creator prompt's worked example also writes its
-stop-condition file at an absolute path under the workspace root, which the
-containment check accepts; the tweak leaves that example unchanged. This
+`fileCheck.path`"; rule 2 also has every loop step name the gate file's absolute
+path, and the worked example writes, declares and checks its gate file at
+`/repo/.agents/tasks/fix-throttle/review.json`. The tweak rewrites all three so
+the gate file is workspace-relative everywhere; the engine joins a relative
+`artifacts` path onto the workspace root, as it does `fileCheck.path`. This
 exact-match tweak keeps absolute interpolation for every other file a step
 prompt names. It tells the workflow creator that the step writes the
 stop-condition file, and `fileCheck.path` checks it, at the same plain

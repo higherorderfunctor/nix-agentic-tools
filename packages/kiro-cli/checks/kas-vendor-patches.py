@@ -20,7 +20,8 @@ with tempfile.TemporaryDirectory() as tmp:
         assert not errors, errors
         expected = stock
         for name in names:
-            expected = expected.replace(*patcher.FIXED[name])
+            for source, replacement in patcher.FIXED[name]:
+                expected = expected.replace(source, replacement)
         assert result == expected
         path.write_bytes(result)
         subprocess.run(["node", "--check", str(path)], check=True)

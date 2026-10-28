@@ -14,7 +14,14 @@ patcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(patcher)
 BUNDLE = (b"var steering='Before\\n\\n"
           + patcher.WORKTREE_PARAGRAPH + b"After';\nvar workflow='"
-          + patcher.FILE_CHECK_PARAGRAPH + b"';\n")
+          + b" ".join(source for source, _ in patcher.FIXED["relativeFileCheckPaths"]) + b"';\n")
+
+
+def apply(data, names):
+    for name in names:
+        for source, replacement in patcher.FIXED[name]:
+            data = data.replace(source, replacement)
+    return data
 
 
 class PatchTests(unittest.TestCase):
@@ -26,10 +33,7 @@ class PatchTests(unittest.TestCase):
             with self.subTest(names=names):
                 result, errors = patcher.patch(BUNDLE, patcher.replacements(names))
                 self.assertEqual(errors, [])
-                expected = BUNDLE
-                for name in names:
-                    expected = expected.replace(*patcher.FIXED[name])
-                self.assertEqual(result, expected)
+                self.assertEqual(result, apply(BUNDLE, names))
                 output = subprocess.check_output([
                     "node", "-e", result.decode() + "console.log(steering);console.log(workflow);"
                 ])
@@ -38,6 +42,7 @@ class PatchTests(unittest.TestCase):
                 # The stop-condition file is written and checked at one path.
                 self.assertEqual(b"at the same relative path" in output, relative)
                 self.assertEqual(b"Every path is absolute**" in output, not relative)
+                self.assertEqual(patcher.GATE_FILE in output, not relative)
 
     def test_drift_refuses_the_entire_selected_patch(self):
         selected = patcher.replacements(patcher.FIXED)
@@ -45,7 +50,7 @@ class PatchTests(unittest.TestCase):
             for data, count in ((BUNDLE.replace(source, b"changed"), 0), (BUNDLE + source, 2)):
                 with self.subTest(name=name, count=count):
                     result, errors = patcher.patch(data, selected)
-                    self.assertEqual(errors, [f"{name}: expected exact source text once, found {count}; bundle drift"])
+                    self.assertEqual(errors, [f"{name}: expected exact source text once, found {count}; bundle drift: {source[:80]!r}"])
                     self.assertIsNone(result)
         result, errors = patcher.patch(b"all changed", selected)
         self.assertIsNone(result)

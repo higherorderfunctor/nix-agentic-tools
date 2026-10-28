@@ -21,15 +21,33 @@ RELATIVE_FILE_CHECK_PARAGRAPH = (
     rb"""Step agents\' cwd is that root, so the writing step and the check agree. """
     rb"""A `fileCheck.path` that never resolves spins the loop to `maxIterations`."""
 )
-# Fixed-text tweaks, keyed by their `ai.kiro.cli.tweaks` option name.
+# The creator prompt's worked example names its gate file at each of these
+# sites; the tweak rewrites all four so the example obeys the rules above it.
+GATE_FILE = b"/repo/.agents/tasks/fix-throttle/review.json"
+RELATIVE_GATE_FILE = b".agents/tasks/fix-throttle/review.json"
+EXAMPLE_GATE_FILE_SITES = (
+    rb'"stopCondition": { "fileCheck": { "path": "%s"',
+    rb"If %s exists",
+    rb"then %s as",
+    rb'"artifacts": { "review": "%s" }',
+)
+# Fixed-text tweaks, keyed by their `ai.kiro.cli.tweaks` option name. Each
+# tweak is a tuple of (source, replacement) pairs; every source must match.
 FIXED = {
-    "relativeFileCheckPaths": (FILE_CHECK_PARAGRAPH, RELATIVE_FILE_CHECK_PARAGRAPH),
-    "stripVendorWorktreeSteering": (WORKTREE_PARAGRAPH, b""),
+    "relativeFileCheckPaths": (
+        (FILE_CHECK_PARAGRAPH, RELATIVE_FILE_CHECK_PARAGRAPH),
+        (
+            rb"names the gate file\'s absolute path in its prompt",
+            rb"names the gate file\'s workspace-relative path, the one `fileCheck.path` checks, in its prompt",
+        ),
+        *((site % GATE_FILE, site % RELATIVE_GATE_FILE) for site in EXAMPLE_GATE_FILE_SITES),
+    ),
+    "stripVendorWorktreeSteering": ((WORKTREE_PARAGRAPH, b""),),
 }
 
 
 def replacements(names):
-    return [(name, *FIXED[name]) for name in names]
+    return [(name, source, replacement) for name in names for source, replacement in FIXED[name]]
 
 
 def patch(data, items):
@@ -39,7 +57,7 @@ def patch(data, items):
     for name, source, replacement in items:
         count = data.count(source)
         if count != 1:
-            errors.append(f"{name}: expected exact source text once, found {count}; bundle drift")
+            errors.append(f"{name}: expected exact source text once, found {count}; bundle drift: {source[:80]!r}")
         else:
             result = result.replace(source, replacement, 1)
     return (None if errors else result), errors
@@ -62,7 +80,7 @@ def main():
         if errors:
             return 1
         if args.check:
-            print("PASS: " + ", ".join(name for name, _, _ in items) + " exact sources each occur once")
+            print("PASS: " + ", ".join(dict.fromkeys(name for name, _, _ in items)) + " exact sources each occur once")
         else:
             args.destination.write_bytes(result)
     except OSError as exc:
