@@ -1041,6 +1041,10 @@ in {
           export XDG_CONFIG_HOME="$TMPDIR/config"
           export XDG_DATA_HOME="$TMPDIR/data"
           export XDG_STATE_HOME="$TMPDIR/state"
+          # Since 2.35.1 `agent validate` and `acp` refuse to start without a
+          # login. Any API key passes that local gate; the driver sends no model
+          # request and the build sandbox has no network.
+          export KIRO_API_KEY=placeholder
           mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
           cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
           cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
@@ -1050,8 +1054,7 @@ in {
           # Drive the unwrapped chat binary that implements `kiro-cli agent
           # validate` directly. The exported Linux package is a buildFHSEnv
           # bubblewrap launcher, and nested user namespaces are not portable across
-          # Nix build sandboxes; validation itself needs neither the FHS root nor a
-          # login.
+          # Nix build sandboxes; validation itself does not need the FHS root.
           ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
             --path "$HOME/.kiro/agents/semble-search.json" \
             >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
