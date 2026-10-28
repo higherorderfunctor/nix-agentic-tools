@@ -1,15 +1,9 @@
-use std::{convert::Infallible, future::Future, io, net::SocketAddr, time::Duration};
+//! The listener: bind a loopback address, accept connections up to a limit,
+//! hand each to the HTTP/1 driver, and drain them on shutdown.
+use std::{future::Future, io, net::SocketAddr, time::Duration};
 
-use http_body_util::Full;
-use hyper::{
-    Method, Request, Response, StatusCode,
-    body::{Bytes, Incoming},
-    server::conn::http1,
-    service::service_fn,
-};
-use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio::{
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     signal::unix::{SignalKind, signal},
     task::JoinSet,
     time::timeout,
@@ -74,7 +68,7 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
             }
             accepted = listener.accept(), if connections.len() < MAX_CONNECTIONS => {
                 match accepted {
-                    Ok((socket, _)) => { connections.spawn(connection(socket)); }
+                    Ok((socket, _)) => { connections.spawn(crate::http1::serve(socket, HEADER_TIMEOUT)); }
                     Err(error) => break Err(error),
                 }
             }
@@ -92,36 +86,4 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
         while connections.join_next().await.is_some() {}
     }
     result
-}
-
-async fn connection(socket: TcpStream) {
-    // Protocol errors close only the affected client connection.
-    let _ = http1::Builder::new()
-        .timer(TokioTimer::new())
-        .header_read_timeout(HEADER_TIMEOUT)
-        .serve_connection(TokioIo::new(socket), service_fn(handle))
-        .await;
-}
-
-async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    let (status, body) = if request.uri().path() != "/health" {
-        (StatusCode::NOT_FOUND, "not found\n")
-    } else if request.method() != Method::GET {
-        (StatusCode::METHOD_NOT_ALLOWED, "GET required\n")
-    } else {
-        (StatusCode::OK, "ok\n")
-    };
-    let mut response = Response::new(Full::new(Bytes::from_static(body.as_bytes())));
-    *response.status_mut() = status;
-    response.headers_mut().insert(
-        hyper::header::CONTENT_TYPE,
-        hyper::header::HeaderValue::from_static("text/plain; charset=utf-8"),
-    );
-    if status == StatusCode::METHOD_NOT_ALLOWED {
-        response.headers_mut().insert(
-            hyper::header::ALLOW,
-            hyper::header::HeaderValue::from_static("GET"),
-        );
-    }
-    Ok(response)
 }
