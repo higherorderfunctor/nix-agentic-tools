@@ -17,10 +17,11 @@
       (builtins.attrNames stable);
     declared = channel != null && channel != "";
     # 1.86.0-x86_64-unknown-linux-gnu selects 1.86.0 and 1.86-<host> the newest
-    # 1.86.x; drift keeps the source spelling.
+    # 1.86.x; drift keeps the source spelling. A host triple starts with its
+    # architecture, so a dated suffix such as 1.86-2026-10-27 is not a host.
     hosted =
       if declared
-      then builtins.match "([0-9]+\\.[0-9]+(\\.[0-9]+)?)-[^-]+-[^-]+-[^-]+(-[^-]+)?" channel
+      then builtins.match "([0-9]+\\.[0-9]+(\\.[0-9]+)?)-[a-z][^-]*-[^-]+-[^-]+(-[^-]+)?" channel
       else null;
     version =
       if hosted == null

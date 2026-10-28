@@ -110,10 +110,11 @@ own runner (`dev/scripts/update-matrix.py`).
   `passthru`, and supply `override` only when needed. The channel comes from
   `rustToolchainChannel`, extracted at update time from `rust-toolchain.toml` or
   `rust-toolchain` at the recipe's crate/workspace root (`codex-rs` for
-  `chatgpt-codex`) into a sidecar key or recipe literal of that name. A file
-  without `channel`, or no toolchain file, records `""`; malformed TOML and
-  duplicate channels fail. `Cargo.toml`'s `rust-version` is an MSRV and cannot
-  supply this channel. An exact channel selects that release from
+  `chatgpt-codex`) into a sidecar key or recipe literal of that name. A
+  `[toolchain]` table without `channel`, or no toolchain file, records `""`; an
+  empty or comment-only file, malformed TOML and duplicate channels fail.
+  `Cargo.toml`'s `rust-version` is an MSRV and cannot supply this channel. An
+  exact channel selects that release from
   `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable`; a bare minor selects the
   newest patch of that minor. The selector alone strips host suffixes such as
   `1.86.0-x86_64-unknown-linux-gnu` to select `1.86.0` (and `1.86-<host>` the
