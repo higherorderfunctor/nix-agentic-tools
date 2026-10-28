@@ -1,1 +1,6 @@
-{imports = [./pr-watch-at-stop.nix];}
+{
+  imports = [
+    ./pr-watch-at-stop.nix
+    ./pr-watch.nix
+  ];
+}
