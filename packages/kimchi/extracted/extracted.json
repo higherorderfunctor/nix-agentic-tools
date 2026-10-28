@@ -1266,6 +1266,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_BRIDGE_PREFIX": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_BROWSER": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -3692,14 +3697,56 @@
         "bundledModule": null,
         "file": "src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 192,
+        "line": 241,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/pr-cost-reporting/worker.ts:192",
+            "origin": "src/extensions/pr-cost-reporting/worker.ts:241",
             "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/pr-cost-reporting/worker.ts",
+        "library": "fetch",
+        "line": 375,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/pr-cost-reporting/worker.ts:375",
+            "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/pr-cost-reporting/worker.ts",
+        "library": "fetch",
+        "line": 442,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:918",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": "app.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:34",
+            "value": "https://app.eu.kimchi.dev"
+          },
+          {
+            "host": "app.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:27",
+            "value": "https://app.kimchi.dev"
           }
         ]
       },
@@ -3722,13 +3769,13 @@
         "bundledModule": null,
         "file": "src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 183,
+        "line": 189,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/session-name.ts:183",
+            "origin": "src/extensions/session-name.ts:189",
             "value": "url"
           }
         ]
@@ -3767,7 +3814,7 @@
         "bundledModule": null,
         "file": "src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 339,
+        "line": 331,
         "readBy": "kimchi",
         "targets": [
           {
