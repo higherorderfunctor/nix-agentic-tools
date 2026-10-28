@@ -1,7 +1,8 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-24 — local review mechanics are owned by the
-> delegate-routing Work and review workflow.
+> **Last verified:** 2026-10-27 — automatic PR CI runs only for PRs targeting
+> `main`; stacked PRs dispatch CI by hand after a substantive change; PR waits
+> use the review-loop skill's pr-watch.sh.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -37,6 +38,10 @@
 > - **Do not restore `devenv-test` as a required context.** It was promoted
 >   2026-08-03 and demoted two days later as a merge-blocking liability, risk
 >   accepted; it left automatic PR/push execution entirely on 2026-08-29.
+> - **Do not run automatic CI on stacked PRs.** Operator, 2026-10-27. Each
+>   restack discarded those runs, and they starved the four shared Darwin
+>   runners. Rejected: CI on every stacked push. Accepted: a stacked PR's bug
+>   can surface later, when it targets `main`, before merge.
 > - **Do not re-derive a Copilot auto-trigger rate from push observations.** The
 >   "1 review in 5 pushes" datum was a ready-transition coinciding with a push,
 >   not a flaky trigger. Sampling this way produces a confident wrong model and
@@ -100,15 +105,16 @@ is worse than saying nothing: it looks like ownership and behaves like a block.
 Arm something that re-invokes you — a backgrounded watcher whose exit wakes the
 session — and only then report. Kill it once the signal arrives.
 
-On every push, including the first:
+On every push to a PR against `main`, including the first:
 
-1. **Watch CI until the first failure or until every check finishes.** Use the
-   `pr-review-loop` skill's watcher, in the background: it waits for checks on
-   the commit you pushed and exits on the first red (`--fail-fast`). A watcher
-   that waits for every check reports a failure only after the slowest job. Read
-   the exit status of the tool, not a notification's summary — a pipeline's
-   status is the last command's, so `nix flake check | tail` reports the tail's
-   success. Capture the real code.
+1. **Watch the PR until its first change.** Run the `pr-review-loop` skill's
+   `pr-watch.sh` in the background for every PR you own or wait on: it exits on
+   the first red check, green, review, thread, conflict, ready-for-review, merge
+   or moved head. A watcher that waits for every check reports a failure only
+   after the slowest job. Re-arm it after each wake. Read the exit status of the
+   tool, not a notification's summary — a pipeline's status is the last
+   command's, so `nix flake check | tail` reports the tail's success. Capture
+   the real code.
 2. **A conflicted PR gets ZERO check runs and reads exactly like slow CI.**
    `mergeStateStatus: DIRTY` with an empty check list means rebase, not wait.
    The same shape appears when the base moves under a long-running branch.
@@ -118,6 +124,16 @@ On every push, including the first:
 
 Only report back when the PR is green and reviewed, or when something needs a
 decision that is genuinely the operator's.
+
+**A stacked PR gets no automatic CI.** `ci.yml` runs on pull requests whose base
+is `main` only, so an empty check list on a stacked PR is expected. After a
+substantive change to it (new or changed content, not a pure rebase or restack),
+run `gh workflow run ci.yml --ref <branch>` and watch that run (the
+`pr-review-loop` skill has the dispatched-run watcher). Its checks attach to the
+head commit, so the PR shows them. Required checks gate merges into `main` only.
+Moving a PR to `main` does not start CI by itself: the rebase push that follows
+a squash merge does. If a PR reaches `main` with nothing to push, dispatch CI
+once so its required checks exist.
 
 ### Copilot reviews once, automatically. Do not trigger the first one
 
@@ -300,7 +316,7 @@ silently resolves one level too deep, into
    automatically requests a Copilot review, so a draft that is actually ready
    silently skips review and a later flip is what fires it. Reserve **draft**
    for genuine WIP, or when you explicitly want to preview the branch in GitHub
-   without review. Draft and ready PRs both get full CI here.
+   without review. Draft and ready PRs against `main` both get full CI here.
 
    Corollary worth internalizing: that one automatic review is the only free
    one, so **flip to ready when the branch is worth reviewing** — not
@@ -345,10 +361,11 @@ A fix for a PR's own review, a follow-up its author already intended, a defect
 found while reviewing it — all of these amend that PR. Do not open a second PR
 to avoid disturbing a green one.
 
-A stacked follow-up costs the same CI and the same review round as an amendment.
-It just spreads them across more PRs and hands the reviewer a worse shape. "It
-is already green and reviewed" is not a reason: CI is free on this repository,
-and the review being protected examined a shape that has since been superseded.
+A stacked follow-up costs the same review round as an amendment, and its CI
+still runs once it targets `main`. It just spreads them across more PRs and
+hands the reviewer a worse shape. "It is already green and reviewed" is not a
+reason: the review being protected examined a shape that has since been
+superseded.
 
 The instinct this replaces is a sound one in a project with several reviewers,
 where unasked additions tax people who did not ask for them. Here there is one

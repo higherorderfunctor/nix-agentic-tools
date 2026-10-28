@@ -3,7 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+  # Stacked PRs (base = another PR's branch) get no automatic run: a restack
+  # discards it and it holds the shared Darwin runners. Dispatch this workflow
+  # on their branch after a substantive change. Moving a PR to main starts
+  # nothing; its rebase push (`synchronize`) runs it here, or dispatch it once.
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
