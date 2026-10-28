@@ -17,5 +17,6 @@
     }
   },
   "srcHash": "sha256-b9PpwNQeZsJIN4wbGA3FLfWAKd2EDMN5E/zj/Y62/vk=",
+  "rustToolchainChannel": "1.99.1",
   "cargoHash": "sha256-KKC/uHE2RWq0U7FmXA+TKTlFf/d8vYe6/G8gl78bW+g="
 }

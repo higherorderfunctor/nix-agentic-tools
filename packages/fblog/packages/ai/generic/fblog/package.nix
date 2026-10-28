@@ -5,7 +5,13 @@
   packageLib,
   ...
 }: let
-  rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
+  rustToolchainChannel = "";
+  rustPlatform = packageLib.mkRustPlatform {
+    channel = rustToolchainChannel;
+    inherit pkgs;
+    override = "latest";
+    pname = "fblog";
+  };
   version = "4.17.0";
   src = pkgs.fetchFromGitHub {
     owner = "brocode";
@@ -16,6 +22,7 @@
 in
   (pkgs.fblog.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: _: {
     inherit src version;
+    inherit (rustPlatform) passthru;
     cargoDeps = rustPlatform.fetchCargoVendor {
       # pname and version name the output, so a stale hash cannot reuse the
       # previous release's cached vendor set after a bump.

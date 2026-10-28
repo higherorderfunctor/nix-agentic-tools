@@ -15,7 +15,11 @@
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   sourcesFile = repoPath ../../../sources.json;
-  rustPlatform = vu.mkRustPlatform {inherit pkgs;};
+  rustPlatform = vu.mkRustPlatform {
+    inherit pkgs sources;
+    pname = "chatgpt-codex";
+    sourceRoot = "codex-rs";
+  };
   packageRoot = (import ../../../lib/packageLayout.nix).root;
 
   # rusty_v8 release assets: the static V8 library and its prebuilt binding,
@@ -114,6 +118,7 @@ in
 
     passthru =
       (prev.passthru or {})
+      // rustPlatform.passthru
       // {
         # Read by checks/chatgpt-codex-package-layout.nix, so the check asserts
         # the layout this recipe says it produces rather than a copy of it.

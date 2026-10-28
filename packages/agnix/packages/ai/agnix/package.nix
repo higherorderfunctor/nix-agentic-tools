@@ -18,7 +18,13 @@
   vu = packageLib;
 
   # agnix requires Rust edition 2024 (>= 1.91)
-  rustPlatform = vu.mkRustPlatform {inherit pkgs;};
+  rustToolchainChannel = "";
+  rustPlatform = vu.mkRustPlatform {
+    channel = rustToolchainChannel;
+    inherit pkgs;
+    override = "latest";
+    pname = "agnix";
+  };
 
   rev = "0501b3d5896b68cc3dfcd0eeb06b2ca5e78b0453";
   src = fetchFromGitHub {
@@ -60,6 +66,8 @@ in
       echo "smoke-test: all binaries start"
       runHook postInstallCheck
     '';
+
+    inherit (rustPlatform) passthru;
 
     meta = {
       description = "Linter, LSP, and MCP server for AI coding assistant config files";

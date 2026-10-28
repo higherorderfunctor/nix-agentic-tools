@@ -12,7 +12,12 @@
   repoPath,
   ...
 }: let
-  rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
+  rustToolchainChannel = "1.99.1";
+  rustPlatform = packageLib.mkRustPlatform {
+    channel = rustToolchainChannel;
+    inherit pkgs;
+    pname = "oxlint";
+  };
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
@@ -61,6 +66,7 @@ in
     inherit (rustPlatform.rust) cargo rustc;
   }).overrideAttrs (finalAttrs: prev: {
     inherit version src;
+    passthru = (prev.passthru or {}) // rustPlatform.passthru;
     cargoDeps = rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
       hash = "sha256-MACrb5UkJTzA8btBrmNBc0k9WTdzir9ckDkHJmi1klY=";
