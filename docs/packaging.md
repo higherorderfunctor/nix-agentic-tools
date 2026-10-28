@@ -23,12 +23,15 @@ own runner (`dev/scripts/update-matrix.py`).
   `sourcesFile = repoPath ./relative/sources.json` explicitly. A `versionCheck`
   override can use `pythonDependencyVersionCmd` to select the newest stable
   release allowed by pinned parent runtime or build requirements.
-- **Rust release packages** (`fblog`, `rumdl`): inline release tags and source
-  hashes with
+- **Rust release packages** (`fblog`, `rumdl`): release sidecars record the
+  version, source and Cargo dependency hashes, and `rustToolchainChannel`. Their
+  owner update targets pass `--use-update-script`: `mkUpdateScript` runs
+  `mkRustPlatform`'s `passthru.rustUpdateExtract`, which restores the source
+  hash, records the channel with `fixRustToolchain`, then repairs the Cargo
+  dependency hash. Their
   `cargoDeps = rustPlatform.fetchCargoVendor { inherit (finalAttrs) pname version src; hash = …; }`
-  (as oxlint does — `pname` and `version` name the output, so a stale hash
-  cannot reuse the previous release's vendor set). Owner `update.targets` use
-  nix-update to refresh both hashes. `agnix` and `git-absorb` use
+  follows oxlint's naming: `pname` and `version` prevent a stale hash from
+  reusing the previous release's vendor set. `agnix` and `git-absorb` use
   `buildRustPackage`'s equivalent `cargoHash` shorthand; git-branchless instead
   imports the lock from its flake input.
 - **Go packages with a sidecar `vendorHash`** (`beads`, `cliproxyapi`,
@@ -141,9 +144,10 @@ own runner (`dev/scripts/update-matrix.py`).
   `preBuild` generates the embedded loader with upstream's bundler using pnpm_11
   as the bootstrap. Both dependency installs pass `--no-runtime` to use Nix's
   build Node instead of downloading upstream's managed runtime. Its sidecar's
-  source, Cargo and pnpm hashes are restored by `passthru.fixVendorHash`. It
-  carries its own major guard. Until 2026-10-03 it unpacked upstream's prebuilt
-  `@pnpm/exe.<platform>` binaries; measurements at
+  source, Cargo and pnpm hashes are restored by `passthru.rustUpdateExtract`,
+  with `fixRustToolchain` recording `rustToolchainChannel` after the source hash
+  and before the Cargo hash. It carries its own major guard. Until 2026-10-03 it
+  unpacked upstream's prebuilt `@pnpm/exe.<platform>` binaries; measurements at
   `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 - **Hand-bumped, with currency annotated instead of swept** (`aihubmix-mcp`): a
   package carrying a local patch against upstream's published BUILD OUTPUT

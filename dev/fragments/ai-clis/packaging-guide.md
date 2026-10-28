@@ -89,20 +89,22 @@ These packages pin versions in their recipe or release `sources.json` sidecar.
 Each uses an update strategy managed by `config.update.targets` (see owner
 `registry.nix`):
 
-- `chatgpt-codex` — `sources.json` {buildCommit, cargoHash, librustyV8, srcHash,
-  version} + `mkUpdateScript`; version via `ghLatestVersionCmd` with
-  `tagPrefix = "rust-v"` (openai/codex cuts several tag series, so the prefix is
-  load-bearing). The script resolves `buildCommit` from the `rust-v<version>`
-  tag (dereferencing annotated tags), reads the `v8` crate version from
-  `codex-rs/Cargo.lock` at that commit and prefetches the matching rusty_v8
-  archive and prebuilt binding per system into `librustyV8`, then
-  `passthru.fixVendorHash` restores the source and cargo vendor hashes the
-  rewrite dropped. The recipe overrides nixpkgs' `librusty_v8` and
-  `librusty_v8_src_binding` from `librustyV8`, falling back to them only while
-  the key is absent. The pin is written even when nixpkgs' pin matches: nixpkgs
-  bumps codex and its V8 together, so following its pin would break our
-  unchanged codex on the next nixpkgs input bump (the binding's symbol names
-  change with the crate, failing rustc with E0425 in crate `v8`)
+- `chatgpt-codex` — `sources.json` {buildCommit, cargoHash, librustyV8,
+  rustToolchainChannel, srcHash, version} + `mkUpdateScript`; version via
+  `ghLatestVersionCmd` with `tagPrefix = "rust-v"` (openai/codex cuts several
+  tag series, so the prefix is load-bearing). The script resolves `buildCommit`
+  from the `rust-v<version>` tag (dereferencing annotated tags), reads the `v8`
+  crate version from `codex-rs/Cargo.lock` at that commit and prefetches the
+  matching rusty_v8 archive and prebuilt binding per system into `librustyV8`,
+  then runs `rustPlatform.passthru.rustUpdateExtract`. That script restores the
+  source hash, extracts the Rust channel from `codex-rs/rust-toolchain.toml`
+  into `rustToolchainChannel`, then restores the Cargo vendor hash. The recipe
+  overrides nixpkgs' `librusty_v8` and `librusty_v8_src_binding` from
+  `librustyV8`, falling back to them only while the key is absent. The pin is
+  written even when nixpkgs' pin matches: nixpkgs bumps codex and its V8
+  together, so following its pin would break our unchanged codex on the next
+  nixpkgs input bump (the binding's symbol names change with the crate, failing
+  rustc with E0425 in crate `v8`)
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release

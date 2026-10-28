@@ -56,7 +56,15 @@ def main():
     updated = updated_files(files, tag[1:], revision, source_hash)
     for path, content in updated.items():
         (ROOT / path).write_text(content)
-    print(f"Hestia {tag} {revision}: recipe and both action refs updated")
+    fixer = run(
+        nix,
+        "build",
+        "--no-link",
+        "--print-out-paths",
+        ".#ciPackages.x86_64-linux.ci-hestia.fixRustToolchain",
+    )
+    subprocess.run([fixer], check=True)
+    print(f"Hestia {tag} {revision}: recipe, Rust channel and both action refs updated")
 
 
 if __name__ == "__main__":

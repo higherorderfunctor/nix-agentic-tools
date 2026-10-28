@@ -2,11 +2,14 @@
 
 > **Last verified:** 2026-10-27 — each Go package's compiler is the go-overlay
 > release matching its recorded source floor, and a missing floor fails unless
-> the recipe declares an override; an owner overlay returns only the leaves it
-> claims and the composer deep-merges each one into `prev`, stopping at
-> derivations; nat-overlay-parity compares package leaves and checks owner
-> overlay leaves for presence; Go check names come from one declared table; the
-> flake has no `apps` output; Bruno past 4.2.x uses `npmDepsFetcherVersion = 2`.
+> the recipe declares an override; Rust recipes select the channel extracted
+> from their source toolchain file and reject a missing channel without an
+> explicit override; `rust-toolchain-{selection,drift,fixer,parser}` verify that
+> contract; an owner overlay returns only the leaves it claims and the composer
+> deep-merges each one into `prev`, stopping at derivations; nat-overlay-parity
+> compares package leaves and checks owner overlay leaves for presence; Go check
+> names come from one declared table; the flake has no `apps` output; Bruno past
+> 4.2.x uses `npmDepsFetcherVersion = 2`.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -611,10 +614,11 @@ choice usually gets read as a question about the source shape. It mostly is not.
   build against the recorded hash, so they re-derive it only when the old output
   cannot be substituted; a cached path reports `ok`. An out-of-band same-version
   change still needs the standalone fixer (`passthru.fixNpmDepsHash`,
-  `passthru.fixPnpmDepsHash`, `passthru.fixVendorHash`) as an explicit escape
-  hatch. Hashes are derived by those fixers, never edited by hand. Inline
-  re-derives every sweep and therefore self-heals without that repair path.
-  **Neither shape fails silently**; do not write that one does.
+  `passthru.fixPnpmDepsHash`, `passthru.fixVendorHash`,
+  `passthru.rustUpdateExtract`) as an explicit escape hatch. Hashes are derived
+  by those fixers, never edited by hand. Inline re-derives every sweep and
+  therefore self-heals without that repair path. **Neither shape fails
+  silently**; do not write that one does.
 - **Record the inversion.** It corrects a belief this repo held: the rows still
   on plain `nix-update` are paying that uncacheable per-sweep cost TODAY, so
   "sidecars are legacy overhead from an older design" is close to backwards.
@@ -684,21 +688,31 @@ to any versioned attribute family:
   bundler uses Nix's build Node. Without it, a dependency store fetched on Linux
   contains only Linux's managed Node and offline Darwin configuration tries to
   download its own runtime.
-- pnpm_12 keeps a version/source/cargo/pnpm sidecar and `mkUpdateScript`'s cheap
-  no-op exit. A `mkHashFix` restores source, cargo and pnpm hashes after a bump
-  and is exposed as `fixVendorHash` for input-update repair. npm's `latest-12`
-  dist-tag picks the release and the source fixer fetches the matching GitHub
-  tag. Earlier binary and JavaScript-placeholder measurements are historical:
+- pnpm_12 keeps version/source/cargo/pnpm pins and `rustToolchainChannel` in its
+  sidecar, with `mkUpdateScript`'s cheap no-op exit. Its `rustUpdateExtract`
+  restores the source hash, records the source's channel through
+  `fixRustToolchain`, then restores Cargo and pnpm hashes after a bump or input
+  update. npm's `latest-12` dist-tag picks the release and the source fixer
+  fetches the matching GitHub tag. Earlier binary and JavaScript-placeholder
+  measurements are historical:
   `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 
-Rust packages take `rustPlatform` from `vu.mkRustPlatform`; the recipe passes it
-through `.override` so the locked compiler builds them. Rust releases (`fblog`,
-`rumdl`) instead pin a `fetchFromGitHub` tag and source hash inline, with
-`cargoDeps = rustPlatform.fetchCargoVendor { inherit (finalAttrs) pname version src; hash = …; }`,
-as oxlint does; `pname` and `version` name the output so a stale hash cannot
-reuse the previous release's vendor set. Their owner update targets use
-nix-update for both hashes. `buildRustPackage`'s inline `cargoHash` is the
-equivalent shorthand used by agnix and git-absorb. Git-branchless retains
+Rust packages take `rustPlatform` from `vu.mkRustPlatform`. Literal recipes pass
+their recorded `rustToolchainChannel` as `channel` and give `recipeFile` for its
+writer; sidecar recipes pass `sources` and `sourcesFile`. Both pass `pname` and
+`pkgs`, merge `rustPlatform.passthru` into the package's passthru, and pass the
+platform through `.override` so the source-declared compiler builds it. `fblog`,
+which has no upstream toolchain file, explicitly passes `override = "latest"`.
+Rust releases (`fblog`, `rumdl`) keep their version, source and Cargo dependency
+hashes, and `rustToolchainChannel` in sidecars. Their owner update targets pass
+`--use-update-script`: `mkUpdateScript` runs
+`rustPlatform.passthru.rustUpdateExtract`, which restores the source hash,
+records the channel with `fixRustToolchain`, then repairs the Cargo dependency
+hash. Their
+`cargoDeps = rustPlatform.fetchCargoVendor { inherit (finalAttrs) pname version src; hash = …; }`
+follows oxlint's naming: `pname` and `version` prevent a stale hash from reusing
+the previous release's vendor set. `buildRustPackage`'s inline `cargoHash` is
+the equivalent shorthand used by agnix and git-absorb. Git-branchless retains
 `importCargoLock` against its flake input, which is readable without realizing a
 derivation.
 
@@ -780,15 +794,15 @@ BUILDS `src` and `goModules`, so running it before the fixer would hit
 `lib.fakeHash` instead of producing a schema. `chatgpt-codex` is the same shape
 on a Rust build: it compiles from source, adding only its optional resources
 from per-platform release archives that `mkUpdateScript` prefetches, so its
-`extraExtract` runs `fixVendorHash` (`srcHash`, then `cargoHash`) and then
-`regenCommand`. `claude-code` fetches a prebuilt binary and passes
-`regenCommand` alone. Kiro also fetches a prebuilt binary, but its update
-wrapper refreshes the public model snapshot before regeneration on EVERY sweep:
-model changes do not wait for a binary version bump. Kimchi pins its release
-source ONCE, and both its source build and its extractor read that pin. Beside
-it sit its exact pi npm dependency and the three declaration packages that
-dependency's settings type imports. A version bump refreshes all five inputs and
-runs `regenCommand` against them before the Go and pnpm fixers.
+`extraExtract` runs `rustUpdateExtract` (`srcHash`, `rustToolchainChannel`, then
+`cargoHash`) and then `regenCommand`. `claude-code` fetches a prebuilt binary
+and passes `regenCommand` alone. Kiro also fetches a prebuilt binary, but its
+update wrapper refreshes the public model snapshot before regeneration on EVERY
+sweep: model changes do not wait for a binary version bump. Kimchi pins its
+release source ONCE, and both its source build and its extractor read that pin.
+Beside it sit its exact pi npm dependency and the three declaration packages
+that dependency's settings type imports. A version bump refreshes all five
+inputs and runs `regenCommand` against them before the Go and pnpm fixers.
 
 Wiring that regeneration is not optional for an extracted package, and glab
 demonstrates the cost of missing it: it was the one such package that never had
@@ -883,6 +897,7 @@ override is stale and fails; remove it from the recipe. A required release
 absent from the locked overlay fails with `nix flake update go-overlay`
 guidance. `mkGoToolchain` never selects nixpkgs' `go`; prereleases are excluded
 because Nix sorts `1.27rc1` ABOVE `1.27.0`.
+
 `vu.mkRustToolchain {channel ? null, extensions ? [], override ? null, pkgs, pname}`
 selects the recipe's recorded `rustToolchainChannel` from
 `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable` and adds the requested
@@ -895,7 +910,7 @@ sidecar recipe passes `sources` and `sourcesFile`. Both also pass `pkgs` and
 owns its `passthru`: `rustToolchainChannel`, `fixRustToolchain`, an optional
 `rustToolchainOverride` and `rustToolchainRoot`, and, for sidecars,
 `rustUpdateExtract`. Recipes merge that passthru rather than restating its
-metadata or constructing a second writer. To wire a sidecar update script, pass
+metadata or constructing a second writer. Sidecar update scripts pass
 `extraExtract = "${rustPlatform.passthru.rustUpdateExtract}"`; extra hash
 repairs such as pnpm_12's pnpm dependencies use the platform's `targets`
 parameter, whose default is the Cargo vendor target.
@@ -903,25 +918,27 @@ parameter, whose default is the Cargo vendor target.
 Rust updaters extract `channel` from `rust-toolchain.toml` or `rust-toolchain`
 at the recipe's crate/workspace root, using `codex-rs` for `chatgpt-codex`.
 `mkRustToolchainFix` reads that root through `sourceRoot` (default `"."`), using
-the shared `rustToolchainFn` parser. `chatgpt-codex` and `pnpm_12` store
-`rustToolchainChannel` in their sidecars; `agnix`, `airlock`, `ci-hestia`,
-`fblog`, `git-absorb`, `git-branchless`, `oxlint` and `rumdl` store
-updater-owned literals of that name. `airlock` has no update target, so its
-drift check is the only signal and its fixer runs by hand. For sidecars,
-`mkRustPlatform` composes `mkRustReleaseUpdate` internally and exposes the flat
-`rustUpdateExtract` script: source hash repair, `fixRustToolchain`, then Cargo
-hash repair. Source extraction reads `.src` without selecting a compiler, so a
-missing channel can be repaired. The extractor records an empty string when
-neither toolchain file exists. `Cargo.toml`'s `rust-version` is the MSRV, so the
-extractor never treats it as a toolchain pin. A missing channel fails selection
-with the caller's `pname` and `fixRustToolchain` guidance unless that recipe
-explicitly passes `override = "latest"` or an exact version. A numeric channel
-makes any override stale and fails until the caller removes it. Nonnumeric
-channels such as `stable`, `beta` or nightly require an explicit latest or exact
-override; the recorded channel remains unchanged for drift checks. An
-unavailable numeric channel or exact override fails with
-`nix flake update rust-overlay` guidance; neither helper selects nixpkgs'
-`rustc` or `cargo`.
+the shared `rustToolchainFn` parser. `chatgpt-codex`, `fblog`, `pnpm_12` and
+`rumdl` store `rustToolchainChannel` in their sidecars; `agnix`, `airlock`,
+`ci-hestia`, `git-absorb`, `git-branchless` and `oxlint` store updater-owned
+literals of that name. The rev/input update workers refresh the rev-tracked
+literals before dependency hashes or generated facts;
+`dev/scripts/update-ci-hestia.py` refreshes `ci-hestia`'s. `airlock` has no
+update target, so its drift check is the only signal and its fixer runs by hand.
+For sidecars, `mkRustPlatform` composes `mkRustReleaseUpdate` internally and
+exposes the flat `rustUpdateExtract` script: source hash repair,
+`fixRustToolchain`, then Cargo hash repair. Source extraction reads `.src`
+without selecting a compiler, so a missing channel can be repaired. The
+extractor records an empty string when neither toolchain file exists.
+`Cargo.toml`'s `rust-version` is the MSRV, so the extractor never treats it as a
+toolchain pin. A missing channel fails selection with the caller's `pname` and
+`fixRustToolchain` guidance unless that recipe explicitly passes
+`override = "latest"` or an exact version. A numeric channel makes any override
+stale and fails until the caller removes it. Nonnumeric channels such as
+`stable`, `beta` or nightly require an explicit latest or exact override; the
+recorded channel remains unchanged for drift checks. An unavailable numeric
+channel or exact override fails with `nix flake update rust-overlay` guidance;
+neither helper selects nixpkgs' `rustc` or `cargo`.
 
 The approved no-pin callers (`agnix`, `airlock`, `fblog`, `git-absorb`, Hestia
 and the development shell) explicitly pass `override = "latest"`. The shell
@@ -939,7 +956,9 @@ The Rust checks cover separate boundaries:
 - `checks/packaging/rust-toolchain-drift.nix` compares every recorded channel
   with the toolchain file at its source root. Its declared-list check requires
   every Rust package with `cargoDeps` to carry channel metadata and the writer
-  for its declared destination.
+  for its declared destination. Sidecar checks require source/channel/Cargo
+  repair order and prove the update script reaches that chain through its
+  closure; their positive control rejects missing or misordered stages.
 - `checks/packaging/rust-toolchain-fixer.nix` exercises recipe and sidecar
   writes from a nested crate root, preserving unrelated fields and the other
   destination. It rejects callers that omit both destinations or pass both

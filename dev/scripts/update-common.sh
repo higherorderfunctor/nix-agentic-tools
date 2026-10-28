@@ -512,8 +512,9 @@ verify_all_packages() {
 # BACK, parking every later nixpkgs update behind a hash a human has to
 # fix by hand.
 #
-# Dependency fixers (`fixNpmDepsHash`, `fixPnpmDepsHash`, `fixVendorHash`)
-# expose this repair independently of version updates.
+# Rust sidecars expose `rustUpdateExtract`, which refreshes their toolchain
+# before deriving Cargo hashes. Other packages expose dependency fixers
+# (`fixNpmDepsHash`, `fixPnpmDepsHash`, `fixVendorHash`).
 #
 # The roster is DISCOVERED from the flake, never listed here: a hardcoded
 # list would silently stop covering the next absorbed Go package, and a
@@ -542,9 +543,9 @@ fix_sidecar_hashes() {
   #
   # Two separate shortfalls, and only the first is about missing fixers:
   #
-  #   1. Cargo dependencies and pnpm packages without a declared fixer
-  #      still lack automatic repair. Kimchi declares fixPnpmDepsHash;
-  #      other pnpm owners must opt into the same seam. The build then
+  #   1. Cargo packages without rustUpdateExtract and pnpm packages without
+  #      a declared fixer still lack automatic repair. Kimchi declares
+  #      fixPnpmDepsHash; other pnpm owners must opt into the same seam. The build then
   #      fails with every available hash-derivation step reporting success;
   #      the retry's fixed-output mismatch classification holds it back.
   #
@@ -571,7 +572,8 @@ fix_sidecar_hashes() {
       ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
       fixersOf = n:
         let p = builtins.getAttr n ps;
-        in builtins.filter (x: x != null) [
+        in if p ? rustUpdateExtract then [p.rustUpdateExtract]
+        else builtins.filter (x: x != null) [
           (p.fixNpmDepsHash or null)
           (p.fixPnpmDepsHash or null)
           (p.fixVendorHash or null)
@@ -611,23 +613,59 @@ fix_sidecar_hashes() {
   return "$rc"
 }
 
-# Refresh a rev-tracked package's recipe-owned Go floor before nix-update
-# evaluates dependency derivations. Release packages use --use-update-script,
-# whose mkGoUpdateExtract chain owns the corresponding sidecar write and order.
-# A package opts in by exposing passthru.fixGoFloor, so the worker carries no
-# package-name registry.
-refresh_package_go_floor() {
-  local name="$1" has_fixer fixer
-  if ! has_fixer=$(nix eval --raw ".#$(nat_attr "$name")" --apply 'p: builtins.toJSON (p ? fixGoFloor)'); then
-    log_failure "could not evaluate $name for a Go-floor fixer (nix error above)"
+# Refresh source-derived toolchain metadata before dependency derivations are
+# evaluated. Go release packages own their order in mkGoUpdateExtract; Rust
+# release packages own theirs in mkRustReleaseUpdate.
+refresh_package_source_version() {
+  local name="$1" fixer_attr="$2" label="$3" has_fixer fixer
+  if ! has_fixer=$(nix eval --raw ".#$(nat_attr "$name")" --apply "p: builtins.toJSON (p ? $fixer_attr)"); then
+    log_failure "could not evaluate $name for a $label fixer (nix error above)"
     return 1
   fi
   [ "$has_fixer" = true ] || return 0
-  if ! fixer=$(nix build --no-link --print-out-paths ".#$(nat_attr "$name").fixGoFloor"); then
-    log_failure "could not build $name Go-floor fixer (nix error above)"
+  if ! fixer=$(nix build --no-link --print-out-paths ".#$(nat_attr "$name").$fixer_attr"); then
+    log_failure "could not build $name $label fixer (nix error above)"
     return 1
   fi
   "$fixer"
+}
+
+# refresh_input_rust_toolchains needs package names; regenerate_sidecars needs
+# fixer derivations. Both select an input's packages by their passthru capability.
+package_update_roster_expr() {
+  local capability="$1" result="$2"
+  cat <<EOF
+let
+  flake = builtins.getFlake (toString ./.);
+  by = builtins.getEnv "NAT_UPDATE_BY";
+  name = builtins.getEnv "NAT_UPDATE_NAME";
+  ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
+  selected = n:
+    let
+      p = builtins.getAttr n ps;
+      r = builtins.tryEval ((p.passthru or {}) ? $capability
+        && (if by == "input" then (p.passthru.updateFlakeInput or null) == name else n == name));
+    in r.success && r.value;
+  names = builtins.filter selected (builtins.attrNames ps);
+in $result
+EOF
+}
+
+# git-branchless moves with its flake input; refresh its recipe literal before
+# regenerate_sidecars compiles any extractor with the newly pinned source.
+refresh_input_rust_toolchains() {
+  local name="$1" packages package roster
+  roster=$(package_update_roster_expr fixRustToolchain 'builtins.concatStringsSep "\n" names')
+  if ! packages=$(NAT_UPDATE_BY=input NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr "$roster"); then
+    log_failure "could not discover Rust toolchain refreshers for input $name"
+    return 1
+  fi
+  while IFS= read -r package; do
+    [ -n "$package" ] || continue
+    if ! refresh_package_source_version "$package" fixRustToolchain Rust-toolchain; then
+      return 1
+    fi
+  done <<<"$packages"
 }
 
 # ── Sidecar regeneration ─────────────────────────────────────────────────────
@@ -664,26 +702,15 @@ regenerate_sidecars() {
     return 1
     ;;
   esac
-  roster='let
-      flake = builtins.getFlake (toString ./.);
-      by = builtins.getEnv "NAT_REGEN_BY";
-      name = builtins.getEnv "NAT_REGEN_NAME";
-      ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
-      selected = n:
-        let
-          p = builtins.getAttr n ps;
-          r = builtins.tryEval (p.passthru ? regenerateExtracted
-            && (if by == "input" then (p.passthru.updateFlakeInput or null) == name else n == name));
-        in r.success && r.value;
-    in map (n: (builtins.getAttr n ps).passthru.regenerateExtracted)
-      (builtins.filter selected (builtins.attrNames ps))'
+  roster=$(package_update_roster_expr regenerateExtracted \
+    'map (n: (builtins.getAttr n ps).passthru.regenerateExtracted) names')
 
   # stderr stays out of both captures; see fix_sidecar_hashes.
-  if ! scripts=$(NAT_REGEN_BY="$by" NAT_REGEN_NAME="$name" nix build --impure --no-link --print-out-paths --expr "$roster"); then
+  if ! scripts=$(NAT_UPDATE_BY="$by" NAT_UPDATE_NAME="$name" nix build --impure --no-link --print-out-paths --expr "$roster"); then
     log_failure "could not resolve the sidecar regenerators for $by $name (nix error above)"
     return 1
   fi
-  if ! sidecars=$(NAT_REGEN_BY="$by" NAT_REGEN_NAME="$name" nix eval --impure --raw --expr \
+  if ! sidecars=$(NAT_UPDATE_BY="$by" NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr \
     "builtins.concatStringsSep \"\\n\" (builtins.concatMap (s: s.sidecars) ($roster))"); then
     log_failure "could not resolve the sidecars regenerated for $by $name (nix error above)"
     return 1

@@ -1242,14 +1242,15 @@ class PreparationTest(unittest.TestCase):
             stderr=subprocess.DEVNULL,
         ).strip()
 
-    def write_recipe(self, marker, floor=False):
+    def write_recipe(self, marker, floor=False, rust=False):
         marker_lines = ""
         if marker:
             marker_lines = '  # upstream: readPackageJsonVersion @ package.json\n  upstream = "1.0.0";\n'
         floor_line = '  goFloor = "1.25.12";\n' if floor else ""
+        rust_line = '  rustToolchainChannel = "1.90.0";\n' if rust else ""
         (self.repo / "packages" / "demo" / "package.nix").write_text(
             '{fetchFromGitHub}:\nfetchFromGitHub {\n'
-            f'{marker_lines}{floor_line}  rev = "{"0" * 40}";\n'
+            f'{marker_lines}{floor_line}{rust_line}  rev = "{"0" * 40}";\n'
             f'  hash = "sha256-{"A" * 43}=";\n'
             '}\n'
         )
@@ -1304,12 +1305,22 @@ from pathlib import Path
 args = sys.argv[1:]
 with open(os.environ['NIX_CALLS'], 'a') as f: f.write(json.dumps(args) + '\\n')
 mode = os.environ.get('NIX_MODE', '')
+rust_mode = mode.startswith(('rust', 'input-rust'))
 # regenerate_sidecars' roster: the fixture packages expose no
 # passthru.regenerateExtracted, so both its build and its eval list nothing.
 if args[:1] in (['build'], ['eval']) and 'regenerateExtracted' in ' '.join(args):
+    if rust_mode and args[:1] == ['build']:
+        with open(os.environ['CALL_ORDER'], 'a') as f: f.write('sidecar-regeneration\\n')
     raise SystemExit(0)
 if args[:1] == ['eval']:
     joined = ' '.join(args)
+    if args == ['eval', '--impure', '--raw', '--expr', 'builtins.currentSystem']:
+        print('x86_64-linux')
+        raise SystemExit(0)
+    if 'fixRustToolchain' in joined and os.environ.get('NAT_UPDATE_BY') == 'input':
+        if mode == 'input-rust-discovery-fail': raise SystemExit(17)
+        if mode.startswith('input-rust') and mode != 'input-rust-none': print('demo')
+        raise SystemExit(0)
     if 'vu.readPackageJsonVersion' in joined and mode == 'upstream-eval-failed':
         print('partial version', end='')
         print('error:', file=sys.stderr)
@@ -1319,6 +1330,8 @@ if args[:1] == ['eval']:
         raise SystemExit(17)
     if 'fixGoFloor' in joined:
         print('true' if mode.startswith('floor') else 'false', end='')
+    elif 'fixRustToolchain' in joined:
+        print('true' if rust_mode and mode != 'input-rust-none' else 'false', end='')
     elif 'drvAttrs' in joined:
         git_spec = {'mode': 'git', 'url': 'https://example.test/demo.git', 'name': 'source', 'args': ['--fetch-submodules'], 'unsupported': []}
         specs = {
@@ -1328,14 +1341,15 @@ if args[:1] == ['eval']:
             'git-unsupported': dict(git_spec, unsupported=['postFetch']),
         }
         print(json.dumps(specs.get(mode, {'mode': 'archive'})))
-    elif 'builtins.currentSystem' in joined: print('x86_64-linux')
     elif 'builtins.attrNames' in joined:
-        print(json.dumps(['alpha', 'beta'] if mode == 'input-partial' else ['oxlint'] if mode.startswith('input-') else ['codeql-javascript', 'demo'] if mode == 'nfb-success' else ['demo']))
+        print(json.dumps(['alpha', 'beta'] if mode == 'input-partial' else ['oxlint'] if mode.startswith('input-') and not rust_mode else ['codeql-javascript', 'demo'] if mode == 'nfb-success' else ['demo']))
     elif 'updateTargets.demo.file' in joined: print('packages/demo/package.nix')
     elif 'formatter.x86_64-linux.outPath' in joined: print('/fixture/formatter')
     elif 'generate-devenv-yaml.nix' in joined: print('inputs: {}')
     raise SystemExit(0)
 if args[:2] == ['flake', 'update']:
+    if rust_mode:
+        with open(os.environ['CALL_ORDER'], 'a') as f: f.write('input-update\\n')
     Path('flake.lock').write_text('{"updated": true}\\n')
     print("Updated input 'demo': (2026-09-12) -> (2026-09-13)")
     raise SystemExit(0)
@@ -1347,7 +1361,7 @@ if args[:2] == ['flake', 'prefetch']:
         'malformed': '{',
         'no-store': json.dumps({'hash': 'sha256-' + 'B' * 43 + '='}),
     }
-    if mode.startswith('floor') or mode == 'upstream-eval-failed':
+    if mode.startswith(('floor', 'rust')) or mode == 'upstream-eval-failed':
         print(json.dumps({'hash': 'sha256-' + 'B' * 43 + '=', 'storePath': os.environ['UPSTREAM_SOURCE']}), end='')
     else:
         print(values.get(mode, ''), end='')
@@ -1357,10 +1371,12 @@ if args[:1] == ['run'] and 'nixpkgs#nix-prefetch-git' in args:
     print(json.dumps({'hash': 'sha256-' + 'C' * 43 + '=', 'path': os.environ['UPSTREAM_SOURCE']}))
     raise SystemExit(0)
 if args[:1] == ['run']:
-    if mode.startswith('floor'):
+    if mode.startswith(('floor', 'rust')):
         with open(os.environ['CALL_ORDER'], 'a') as f: f.write('nix-update\\n')
         raise SystemExit(0)
     result = args[args.index('--result-file') + 1]
+    if rust_mode:
+        with open(os.environ['CALL_ORDER'], 'a') as f: f.write('verification\\n')
     if mode == 'input-hash':
         mismatch = "error: hash mismatch in fixed-output derivation '/nix/store/fixture-oxlint-pnpm-deps.drv':\\n         specified: sha256-OLD=\\n            got: sha256-NEW="
         Path(result).write_text(json.dumps({'results': [
@@ -1390,19 +1406,25 @@ if args[:1] == ['run']:
     raise SystemExit(0)
 if args[:1] == ['fmt']: raise SystemExit(0)
 if args[:1] == ['build']:
-    if args[-1:] == ['.#ciPackages.x86_64-linux.demo.fixGoFloor'] and mode.startswith('floor'):
+    capability = 'fixRustToolchain' if rust_mode else 'fixGoFloor'
+    if args[-1:] == ['.#ciPackages.x86_64-linux.demo.' + capability] and (rust_mode or mode.startswith('floor')):
         # Model the refresh capability at the mocked Nix boundary: the build
-        # prints an executable standing in for the fixer. The native
-        # go-floor-fixer check owns generated-script execution; this fixture
+        # prints an executable standing in for the fixer. Native fixer
+        # checks own generated-script execution; this fixture
         # verifies worker ordering and rollback without requiring /nix/store.
-        fixer = Path(os.environ['CALL_ORDER']).with_name('fix-go-floor')
+        if mode.endswith('build-fail'): raise SystemExit(17)
+        fixer = Path(os.environ['CALL_ORDER']).with_name(capability)
         fixer.write_text('''#!/usr/bin/env python3
 import os
 from pathlib import Path
-with open(os.environ['CALL_ORDER'], 'a') as f: f.write('floor-fixer\\\\n')
-if os.environ['NIX_MODE'] == 'floor-fail': raise SystemExit(17)
+mode = os.environ['NIX_MODE']
+rust = mode.startswith(('rust', 'input-rust'))
+with open(os.environ['CALL_ORDER'], 'a') as f: f.write(('rust-fixer' if rust else 'floor-fixer') + '\\\\n')
+if mode.endswith('-fail'): raise SystemExit(17)
+if mode.endswith('-noop'): raise SystemExit(0)
 recipe = Path('packages/demo/package.nix')
-recipe.write_text(recipe.read_text().replace('goFloor = "1.25.12";', 'goFloor = "1.26.8";'))
+key, old, new = ('rustToolchainChannel', '1.90.0', '1.91.0') if rust else ('goFloor', '1.25.12', '1.26.8')
+recipe.write_text(recipe.read_text().replace(f'{key} = "{old}";', f'{key} = "{new}";'))
 ''')
         fixer.chmod(0o755)
         print(fixer)
@@ -1412,12 +1434,15 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
 """,
         )
 
-    def run_package(self, mode, marker=False, floor=False, new_rev=None):
-        if marker or floor:
-            self.write_recipe(marker, floor)
-            self.git("add", "packages/demo/package.nix")
-            self.git("commit", "-m", "specialized recipe")
-            self.base = self.git("rev-parse", "HEAD")
+    def commit_recipe(self, marker=False, floor=False, rust=False):
+        self.write_recipe(marker, floor, rust)
+        self.git("add", "packages/demo/package.nix")
+        self.git("commit", "-m", "specialized recipe")
+        self.base = self.git("rev-parse", "HEAD")
+
+    def run_package(self, mode, marker=False, floor=False, rust=False, new_rev=None, flags=None):
+        if marker or floor or rust:
+            self.commit_recipe(marker, floor, rust)
         env = dict(
             self.env,
             CALL_ORDER=str(self.root / "call-order"),
@@ -1427,7 +1452,7 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         if new_rev is not None:
             env["NEW_REV"] = new_rev
         return subprocess.run(
-            ["bash", str(SCRIPTS / "update-pkg.sh"), "demo", "--version", "skip", "https://github.com/example/demo.git"],
+            ["bash", str(SCRIPTS / "update-pkg.sh"), "demo", *(flags or ["--version", "skip"]), "https://github.com/example/demo.git"],
             cwd=self.repo,
             env=env,
             capture_output=True,
@@ -1496,6 +1521,118 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         self.assertEqual((self.root / "call-order").read_text().splitlines(), ["floor-fixer", "nix-update"])
         updated = self.git("show", "update/demo:packages/demo/package.nix")
         self.assertIn('goFloor = "1.26.8";', updated)
+
+    def test_rust_toolchain_fixer_runs_before_nix_update_and_amends_rev_bump(self):
+        result = self.run_package("rust", rust=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update", "sidecar-regeneration"])
+        updated = self.git("show", "update/demo:packages/demo/package.nix")
+        self.assertIn('rustToolchainChannel = "1.91.0";', updated)
+        self.assertEqual(self.git("rev-list", "--count", f"{self.base}..update/demo"), "1")
+
+    def test_rust_toolchain_fixer_failure_holds_back_and_resets_rev_bump(self):
+        result = self.run_package("rust-fail", rust=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git("rev-parse", "update/demo"), self.base)
+        self.assertIn("HELD BACK: demo", (self.repo / ".update-report.txt").read_text())
+        self.assertIn("Rust-toolchain refresh failed", result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer"])
+
+    def test_rust_toolchain_fixer_repairs_unchanged_rev(self):
+        result = self.run_package("rust-unchanged", rust=True, new_rev="0" * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update", "sidecar-regeneration"])
+        self.assertIn('rustToolchainChannel = "1.91.0";', self.git("show", "update/demo:packages/demo/package.nix"))
+
+    def test_rust_toolchain_fixer_noop_leaves_unchanged_rev_uncommitted(self):
+        result = self.run_package("rust-noop", rust=True, new_rev="0" * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update", "sidecar-regeneration"])
+        self.assertEqual(self.git("rev-parse", "update/demo"), self.base)
+        self.assertIn("NO UPDATES: demo", (self.repo / ".update-report.txt").read_text())
+
+    def test_release_script_owns_rust_toolchain_refresh(self):
+        result = self.run_package("rust", rust=True, flags=["--use-update-script"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["nix-update", "sidecar-regeneration"])
+        calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
+        self.assertFalse(any("fixRustToolchain" in " ".join(call) for call in calls))
+
+    def run_rust_input(self, mode):
+        return subprocess.run(
+            ["bash", str(SCRIPTS / "update-input.sh"), "demo"],
+            cwd=self.repo,
+            env=dict(self.env, CALL_ORDER=str(self.root / "call-order"), NIX_MODE=mode),
+            capture_output=True,
+            text=True,
+        )
+
+    def test_input_rust_toolchain_refresh_precedes_sidecars_and_verification(self):
+        self.commit_recipe(rust=True)
+        result = self.run_rust_input("input-rust")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "rust-fixer", "sidecar-regeneration", "verification"])
+        self.assertIn('rustToolchainChannel = "1.91.0";', self.git("show", "update/demo:packages/demo/package.nix"))
+        self.assertIn("UPDATED: demo", (self.repo / ".update-report.txt").read_text())
+
+    def test_input_rust_toolchain_failures_hold_back_before_sidecars(self):
+        self.commit_recipe(rust=True)
+        for mode, order, diagnostic in (
+            ("input-rust-discovery-fail", ["input-update"], "could not discover Rust toolchain refreshers"),
+            ("input-rust-build-fail", ["input-update"], "could not build demo Rust-toolchain fixer"),
+            ("input-rust-fail", ["input-update", "rust-fixer"], "Rust-toolchain refresh failed"),
+        ):
+            with self.subTest(mode=mode):
+                result = self.run_rust_input(mode)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((self.root / "call-order").read_text().splitlines(), order)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertEqual(self.git("rev-parse", "update/demo"), self.base)
+                self.assertIn("HELD BACK: demo", (self.repo / ".update-report.txt").read_text())
+                (self.repo / ".update-report.txt").unlink()
+                for path in ("call-order", "nix-calls"):
+                    (self.root / path).unlink()
+
+    def test_input_rust_toolchain_noop_preserves_recipe_and_finishes_input(self):
+        self.commit_recipe(rust=True)
+        result = self.run_rust_input("input-rust-noop")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "rust-fixer", "sidecar-regeneration", "verification"])
+        self.assertEqual(self.git("show", "update/demo:packages/demo/package.nix"), (self.repo / "packages/demo/package.nix").read_text().strip())
+        self.assertIn("UPDATED: demo", (self.repo / ".update-report.txt").read_text())
+
+    def test_input_without_rust_refreshers_skips_fixer(self):
+        result = self.run_rust_input("input-rust-none")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "sidecar-regeneration", "verification"])
+        self.assertIn("UPDATED: demo", (self.repo / ".update-report.txt").read_text())
+
+    @unittest.skipUnless(shutil.which("nix"), "Nix is needed to evaluate the sidecar repair roster")
+    def test_sidecar_hash_roster_prefers_rust_extraction_to_dependency_fixers(self):
+        real_nix = shutil.which("nix")
+        self.write_executable(
+            "nix",
+            f'''#!/usr/bin/env python3
+import os, subprocess, sys
+from pathlib import Path
+args = sys.argv[1:]
+assert args[:4] == ['build', '--impure', '--no-link', '--print-out-paths'], args
+expression = args[args.index('--expr') + 1]
+package_set = 'ps = {{ plain = {{ fixNpmDepsHash = "npm"; fixPnpmDepsHash = "pnpm"; fixVendorHash = "vendor"; }}; rust = {{ rustUpdateExtract = "rust-extract"; fixVendorHash = "wrong-vendor-alias"; }}; }};'
+expression = expression.replace('ps = builtins.getAttr builtins.currentSystem flake.ciPackages;', package_set)
+result = subprocess.check_output([{real_nix!r}, 'eval', '--offline', '--json', '--expr', expression], text=True)
+Path(os.environ['NIX_CALLS']).write_text(result)
+''',
+        )
+        result = subprocess.run(
+            ["bash", "-c", 'source "$1"; fix_sidecar_hashes', "test", str(SCRIPTS / "update-common.sh")],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads((self.root / "nix-calls").read_text()), ["npm", "pnpm", "vendor", "rust-extract"])
 
     def test_main_tracking_prefetch_failures_hold_the_target_back(self):
         for mode in ("empty", "failed", "missing_hash", "malformed"):

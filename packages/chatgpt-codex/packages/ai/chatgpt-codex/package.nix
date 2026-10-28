@@ -56,23 +56,6 @@
       rustyV8=$(${pkgs.jq}/bin/jq --arg h "$hash" '.${key}."${system}" = $h' <<<"$rustyV8")
     '') (builtins.attrNames rustyV8.assets))
   rustyV8.systems;
-
-  # The updater resolves the release commit, then fixes source and vendor hashes.
-  # Fake hashes let the fixer evaluate each candidate before those downloads.
-  fixVendorHash = vu.mkHashFix {
-    inherit pkgs sourcesFile;
-    attr = "chatgpt-codex";
-    name = "vendor-hash";
-    pname = "chatgpt-codex";
-    targets = [
-      vu.hashFixTargets.src
-      {
-        attrPath = "cargoDeps";
-        drvPattern = "-vendor";
-        key = "cargoHash";
-      }
-    ];
-  };
 in
   (pkgs.codex.override ({inherit rustPlatform;}
     // lib.optionalAttrs (rustyV8.pin != null) {
@@ -128,8 +111,6 @@ in
           target = stdenv.hostPlatform.rust.rustcTarget;
         };
         extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
-        # Also discovered by fix_sidecar_hashes after nixpkgs input changes.
-        inherit fixVendorHash;
         updateScript = vu.mkUpdateScript {
           inherit pkgs sourcesFile;
           pname = "chatgpt-codex";
@@ -166,7 +147,7 @@ in
             ${pkgs.jq}/bin/jq --arg commit "$buildCommit" --argjson v8 "$rustyV8" \
               '. + {buildCommit: $commit, librustyV8: $v8}' "${sourcesFile}" > "$tmp"
             ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
-            ${fixVendorHash}
+            ${rustPlatform.passthru.rustUpdateExtract}
             ${(extractedLib {inherit pkgs;}).regenCommand {name = "chatgpt-codex";}}
           '';
         };
