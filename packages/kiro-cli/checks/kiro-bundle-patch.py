@@ -34,10 +34,10 @@ class PatchTests(unittest.TestCase):
                     "node", "-e", result.decode() + "console.log(steering);console.log(workflow);"
                 ])
                 self.assertIn(b"After", output)
-                self.assertEqual(b"workflow owns the worktree setup" in output, not strip)
+                self.assertEqual(b"Do not create the worktree yourself" in output, not strip)
                 # The stop-condition file is written and checked at one path.
                 self.assertEqual(b"at the same relative path" in output, relative)
-                self.assertEqual(b"stop condition is absolute" in output, not relative)
+                self.assertEqual(b"Every path is absolute**" in output, not relative)
 
     def test_drift_refuses_the_entire_selected_patch(self):
         selected = patcher.replacements(patcher.FIXED)

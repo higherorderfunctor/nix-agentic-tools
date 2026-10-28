@@ -1517,16 +1517,18 @@ prescribes absolute paths, written literally, for every file a step names,
 workspace. Require workspace-relative fileCheck paths in the `workflowPrompt`
 brief, or opt into `ai.kiro.cli.tweaks.relativeFileCheckPaths = true` on Home
 Manager or devenv (default false). In the pinned bundle the conflicting
-paragraph begins "Every path in a prompt or stop condition is absolute" and
-explicitly extends that rule to `fileCheck.path`. This exact-match tweak keeps
-absolute interpolation for every other file a step prompt names. It tells the
-workflow creator that the step writes the stop-condition file, and
-`fileCheck.path` checks it, at the same plain workspace-relative path, without
-templates or an absolute worktree prefix. It keeps the vendor's warning that a
-path that never resolves spins the loop to `maxIterations`. It corrects prompt
-guidance; it does not change the engine's path validation or template
-resolution. Creator behavior with the tweak enabled is unmeasured until an
-opted-in sibling-worktree run. And `stopWhen`'s
+paragraph is rule 5, "Every path is absolute, in prompts and in
+`fileCheck.path`". The creator prompt's worked example also writes its
+stop-condition file at an absolute path under the workspace root, which the
+containment check accepts; the tweak leaves that example unchanged. This
+exact-match tweak keeps absolute interpolation for every other file a step
+prompt names. It tells the workflow creator that the step writes the
+stop-condition file, and `fileCheck.path` checks it, at the same plain
+workspace-relative path, without templates or an absolute worktree prefix. It
+keeps the vendor's warning that a path that never resolves spins the loop to
+`maxIterations`. It corrects prompt guidance; it does not change the engine's
+path validation or template resolution. Creator behavior with the tweak enabled
+is unmeasured until an opted-in sibling-worktree run. And `stopWhen`'s
 `"{{id.output}} contains <text>"` form matches against _captured output_, so it
 inherits the empty-capture hazard wholesale — under a cheap model the condition
 can never match and the loop silently runs to `maxIterations` (ledger §7.6).
