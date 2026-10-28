@@ -11,6 +11,7 @@
 {
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   inherit (pkgs) fetchFromGitHub;
@@ -24,6 +25,7 @@
     inherit pkgs;
     override = "latest";
     pname = "agnix";
+    recipeFile = repoPath ./package.nix;
   };
 
   rev = "0501b3d5896b68cc3dfcd0eeb06b2ca5e78b0453";

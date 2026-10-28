@@ -74,71 +74,18 @@
       lib.mapAttrs (name: _: lib.getAttrFromPath (lib.splitString "." name) pkgSet)
       (lib.filterAttrs (_: destination: destination == "sidecar") declared);
 
-    # The ONE definition of the ordering rule. Emitted as a shell function
-    # so the real check and the positive control run the SAME comparison —
-    # see the header for why a re-implemented control is not a control.
-    #
-    # `assert_chain_order <chain-file> <label>`: exits 0 if the chain is
-    # ordered [src] -> floor -> vendor, non-zero (with a diagnosis on
-    # stderr) otherwise.
-    orderAssertFn = ''
-      # Line number of a stage inside the chain. Matched on the store-path
-      # BASENAME PREFIX rather than a pname, so it keeps working for
-      # packages whose attr and pname differ (`beads.dolt` -> `beads-dolt`).
-      #
-      # `grep -F`, not a basic regex: every pattern carries a `-`, and a
-      # regex `.` would match any character. A check that matches more than
-      # it names proves less than it appears to.
-      line_of() {
-        ${pkgs.gnugrep}/bin/grep -n -F -- "$1" "$2" \
-          | ${pkgs.coreutils}/bin/head -n1 \
-          | ${pkgs.coreutils}/bin/cut -d: -f1
-      }
-
-      assert_chain_order() {
-        local chain="$1" label="$2" floor vendor src
-
-        floor=$(line_of "-fix-go-floor-" "$chain" || :)
-        vendor=$(line_of "-fix-vendor-" "$chain" || :)
-        src=$(line_of "-fix-src-" "$chain" || :)
-
-        if [ -z "$floor" ]; then
-          echo "FAIL: $label: no floor fixer in its extract chain" >&2
-          cat "$chain" >&2
-          return 1
-        fi
-        if [ -z "$vendor" ]; then
-          echo "FAIL: $label: no vendor fixer in its extract chain" >&2
-          cat "$chain" >&2
-          return 1
-        fi
-
-        # THE INVARIANT. The vendor fixer compiles Go under the toolchain
-        # the floor selects, so the floor must already be written.
-        if [ "$floor" -ge "$vendor" ]; then
-          echo "FAIL: $label: floor fixer (line $floor) does not precede the vendor fixer (line $vendor)." >&2
-          echo "" >&2
-          echo "The vendor fixer builds .goModules, which compiles Go. With the floor" >&2
-          echo "still unwritten the sidecar reads goFloorUnknown, which cannot select" >&2
-          echo "a compiler without an explicit recipe override. Restore the source" >&2
-          echo "floor before building .goModules." >&2
-          cat "$chain" >&2
-          return 1
-        fi
-
-        # The other edge, only for packages whose src hash comes from a
-        # fixer rather than from mkUpdateScript's prefetch: the floor fixer
-        # builds `.src`, which holds lib.fakeHash until then.
-        if [ -n "$src" ] && [ "$src" -ge "$floor" ]; then
-          echo "FAIL: $label: src fixer (line $src) does not precede the floor fixer (line $floor)." >&2
-          echo "The floor fixer builds .src, so a sidecar-held srcHash must be restored first." >&2
-          cat "$chain" >&2
-          return 1
-        fi
-
-        echo "ok — $label: src=''${src:-prefetched} floor=$floor vendor=$vendor"
-      }
-    '';
+    orderAssertFn = import ./source-version-order.nix {
+      inherit pkgs;
+      dependencyFixer = "vendor";
+      orderExplanation = ''
+        The vendor fixer builds .goModules, which compiles Go. With the floor
+        still unwritten the sidecar reads goFloorUnknown, which cannot select
+        a compiler without an explicit recipe override. Restore the source
+        floor before building .goModules.
+      '';
+      versionFixer = "go-floor";
+      versionLabel = "floor";
+    };
 
     drvName = name: "go-floor-extract-order-${lib.replaceStrings ["."] ["-"] name}";
 
@@ -211,7 +158,7 @@
     # Without this, "every subject passed" is equally consistent with the
     # assertion never having run. It calls `assert_chain_order` — the SAME
     # function the real checks call — on a deliberately mis-ordered chain
-    # and requires it to FAIL. Flip the `-ge` above to `-lt` and this goes
+    # and requires it to FAIL. Flip the shared `-ge` to `-lt` and this goes
     # red, which is the property a re-implemented control did not have.
     misordered = pkgs.writeText "go-update-extract-MISORDERED" ''
       /nix/store/0000000000000000000000000000000-fix-vendor-fixture

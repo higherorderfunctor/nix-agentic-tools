@@ -101,13 +101,14 @@ own runner (`dev/scripts/update-matrix.py`).
   is detected, any override is stale and fails until removed from the recipe. An
   unavailable required release fails with `nix flake update go-overlay`
   guidance. Rust recipes use `vu.mkRustToolchain` or `vu.mkRustPlatform`.
-  Sidecar recipes pass `sources`; literal recipes pass `channel`. Both pass
-  `pkgs` and `pname`, merge the platform's `passthru`, and supply `override`
-  only when needed. The recorded `rustToolchainChannel` comes from the source's
-  `rust-toolchain.toml` or `rust-toolchain` at its crate/workspace root
-  (`codex-rs` for `chatgpt-codex`). `Cargo.toml`'s `rust-version` is an MSRV and
-  cannot supply this channel. Values are recorded as declared by the source. An
-  exact channel selects that release from
+  Sidecar recipes pass `sources` and `sourcesFile` to `mkRustPlatform`; literal
+  recipes pass `channel` and `recipeFile`. Both pass `pkgs` and `pname`, merge
+  the platform's `passthru`, and supply `override` only when needed. The channel
+  comes from `rustToolchainChannel`, extracted at update time from
+  `rust-toolchain.toml` or `rust-toolchain` at the recipe's crate/workspace root
+  (`codex-rs` for `chatgpt-codex`) into a sidecar key or recipe literal of that
+  name. `Cargo.toml`'s `rust-version` is an MSRV and cannot supply this channel.
+  An exact channel selects that release from
   `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable`; a bare minor selects the
   newest patch of that minor. Missing channels fail with the package name and
   `fixRustToolchain` guidance unless the recipe explicitly passes
@@ -119,8 +120,8 @@ own runner (`dev/scripts/update-matrix.py`).
   request `latest`. Go and Rust recipes never select nixpkgs' own `go`, `rustc`
   or `cargo`. `checks/packaging/go-toolchain-floor.nix` covers Go selection and
   builder contracts; `checks/packaging/rust-toolchain-selection.nix` covers Rust
-  selection. `checks/packaging/rust-toolchain-parser.nix` verifies the channel
-  parser for TOML and legacy files, absence and ambiguous declarations.
+  selection. Rust drift, writer and parser checks live in
+  `checks/packaging/rust-toolchain-{drift,fixer,parser}.nix`.
   `checks/packaging/toolchain-provenance.nix` checks the compilers the built
   packages actually use.
 - **Version-independent URLs** (`dns-root-hints`): the version-equality early

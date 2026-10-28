@@ -338,69 +338,129 @@ rec {
   #   attr:       flake package attribute (built through `ciAttr`'s `.src`)
   #   goModPath:  go.mod location inside src — NOT always the root;
   #               oh-my-posh keeps its module under `src/`.
-  mkGoFloorFix = {
+  mkGoFloorFix = {goModPath ? "go.mod", ...} @ args:
+    mkSourceVersionFix ((builtins.removeAttrs args ["goModPath"])
+      // {
+        destinationAttr = "goFloorDestination";
+        extract = "go_floor_of";
+        key = "goFloor";
+        name = "go-floor";
+        parser = goModFloorFn {inherit (args) pkgs;};
+        sourcePath = goModPath;
+      });
+
+  # Go floors and Rust channels share source fetching and atomic storage.
+  # Recipe literals are used when nix-update/rev workers preserve the recipe;
+  # release updaters that recreate sources.json use its sidecar key instead.
+  mkSourceVersionFix = {
     attr,
-    goModPath ? "go.mod",
+    destinationAttr,
+    extract,
+    key,
+    name,
+    parser,
     pkgs,
     pname,
     recipeFile ? null,
+    sourcePath,
     sourcesFile ? null,
   }:
     assert pkgs.lib.assertMsg ((recipeFile == null) != (sourcesFile == null))
-    "mkGoFloorFix requires exactly one of recipeFile or sourcesFile";
-      (pkgs.writeShellScript "fix-go-floor-${pname}" ''
+    "${pname}: fix-${name} requires exactly one of recipeFile or sourcesFile";
+      (pkgs.writeShellScript "fix-${name}-${pname}" ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
 
-        ${goModFloorFn {inherit pkgs;}}
+        ${parser}
 
         src=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths ".#${ciAttr {inherit attr pkgs;}}.src")
-        floor=$(go_floor_of "$src/${goModPath}")
+        value=$(${extract} "$src/${sourcePath}")
 
         ${
           if sourcesFile != null
           then ''
-            ${pkgs.jq}/bin/jq --arg f "$floor" '. + {goFloor: $f}' "${sourcesFile}" \
+            ${pkgs.jq}/bin/jq --arg k "${key}" --arg v "$value" '.[$k] = $v' "${sourcesFile}" \
               > "${sourcesFile}.new"
             ${pkgs.coreutils}/bin/mv "${sourcesFile}.new" "${sourcesFile}"
           ''
           else ''
-            ${pkgs.python3}/bin/python3 - "$floor" "${recipeFile}" <<'PY'
+            ${pkgs.python3}/bin/python3 - "$value" "${recipeFile}" "${key}" <<'PYTHON'
             import os
             import re
             import sys
             from pathlib import Path
 
-            floor, raw_path = sys.argv[1:]
+            value, raw_path, key = sys.argv[1:]
             path = Path(raw_path)
             text = path.read_text()
-            pattern = re.compile(r'^(\s*goFloor\s*=\s*)"[^"]*"(\s*;\s*)$', re.MULTILINE)
+            pattern = re.compile(r'^(\s*' + re.escape(key) + r'\s*=\s*)"[^"]*"(\s*;\s*)$', re.MULTILINE)
             matches = list(pattern.finditer(text))
             if len(matches) != 1:
                 print(
-                    f"{path}: expected exactly one goFloor literal, found {len(matches)}",
+                    f"{path}: expected exactly one {key} literal, found {len(matches)}",
                     file=sys.stderr,
                 )
                 raise SystemExit(1)
-            updated = pattern.sub(rf'\g<1>"{floor}"\g<2>', text, count=1)
+            updated = pattern.sub(lambda match: f'{match[1]}"{value}"{match[2]}', text, count=1)
             temporary = path.with_name(f"{path.name}.new")
             temporary.write_text(updated)
             os.replace(temporary, path)
-            PY
+            PYTHON
           ''
         }
-        echo "${pname}: goFloor = $floor"
+        echo "${pname}: ${key} = $value"
       '')
     .overrideAttrs (prev: {
         passthru =
           (prev.passthru or {})
           // {
-            goFloorDestination =
+            ${destinationAttr} =
               if sourcesFile != null
               then "sidecar"
               else "recipe";
           };
       });
+
+  # Read only the crate/workspace root selected by the Rust recipe.
+  rustToolchainFn = {pkgs}: ''
+    rust_channel_of() {
+      ${pkgs.python3}/bin/python3 ${./packaging/rust-toolchain.py} "$1"
+    }
+  '';
+
+  mkRustToolchainFix = {sourceRoot ? ".", ...} @ args:
+    mkSourceVersionFix ((builtins.removeAttrs args ["sourceRoot"])
+      // {
+        destinationAttr = "rustToolchainDestination";
+        extract = "rust_channel_of";
+        key = "rustToolchainChannel";
+        name = "rust-toolchain";
+        parser = rustToolchainFn {inherit (args) pkgs;};
+        sourcePath = sourceRoot;
+      });
+
+  # Codex, fblog, pnpm and rumdl recreate sidecars before cargo hash repair.
+  # pnpm also repairs pnpmDeps from that same source after recording Rust.
+  mkRustReleaseUpdate = {
+    attr,
+    pkgs,
+    pname,
+    sourceRoot ? ".",
+    sourcesFile,
+    targets ? [hashFixTargets.cargoVendor],
+  }: let
+    fixRustToolchain = mkRustToolchainFix {inherit attr pkgs pname sourceRoot sourcesFile;};
+    update = mkSourceVersionUpdateExtract {
+      inherit attr pkgs pname sourcesFile targets;
+      dependencyName = "cargo";
+      language = "rust";
+      sourceVersionFix = fixRustToolchain;
+      srcFromSidecar = true;
+    };
+  in {
+    inherit fixRustToolchain;
+    rustUpdateExtract = update.extract;
+  };
 
   # The (attrPath, drvPattern, key) triples that the sidecar hash fixers
   # below compose. Declared once and named, so the derivation-name
@@ -409,6 +469,11 @@ rec {
   # them: `mkGoUpdateExtract`, `mkNpmDepsFix`, and an
   # owner-declared `mkHashFix` such as kimchi's pnpm repair.
   hashFixTargets = {
+    cargoVendor = {
+      attrPath = "cargoDeps";
+      drvPattern = "-vendor";
+      key = "cargoHash";
+    };
     goVendor = {
       attrPath = "goModules";
       drvPattern = "-go-modules";
@@ -452,26 +517,46 @@ rec {
     sourcesFile,
     srcFromSidecar ? false,
   }: let
+    fixGoFloor = mkGoFloorFix {inherit attr goModPath pkgs pname sourcesFile;};
+    update = mkSourceVersionUpdateExtract {
+      inherit attr extraAfter pkgs pname sourcesFile srcFromSidecar;
+      dependencyName = "vendor";
+      language = "go";
+      sourceVersionFix = fixGoFloor;
+      targets = [hashFixTargets.goVendor];
+    };
+  in {
+    inherit fixGoFloor;
+    inherit (update) extract fixSrcHash;
+    fixVendorHash = update.fixDependencyHash;
+  };
+
+  # Go release floors and Rust release channels must be recorded before
+  # dependency hashing forces their compiler. Both checks read this flat chain.
+  mkSourceVersionUpdateExtract = {
+    attr,
+    dependencyName,
+    extraAfter ? "",
+    language,
+    pkgs,
+    pname,
+    sourcesFile,
+    sourceVersionFix,
+    srcFromSidecar,
+    targets,
+  }: let
     fixSrcHash = mkHashFix {
       inherit attr pkgs pname sourcesFile;
       name = "src";
       targets = [hashFixTargets.src];
     };
-    fixGoFloor = mkGoFloorFix {inherit attr goModPath pkgs pname sourcesFile;};
-    fixVendorHash = mkHashFix {
-      inherit attr pkgs pname sourcesFile;
-      name = "vendor";
-      targets = [hashFixTargets.goVendor];
+    fixDependencyHash = mkHashFix {
+      inherit attr pkgs pname sourcesFile targets;
+      name = dependencyName;
     };
   in {
-    inherit fixGoFloor fixSrcHash fixVendorHash;
-
-    # A single writeShellScript rather than a concatenated snippet, so
-    # `checks/packaging/go-floor-extract-order.nix` has ONE flat file to read the
-    # order out of. A package that composes its updateScript from
-    # sub-scripts (beads runs two) would otherwise hide the ordering
-    # behind a wrapper the check cannot see through.
-    extract = pkgs.writeShellScript "go-update-extract-${pname}" ''
+    inherit fixDependencyHash fixSrcHash;
+    extract = pkgs.writeShellScript "${language}-update-extract-${pname}" ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
@@ -480,8 +565,8 @@ rec {
         then "${fixSrcHash}"
         else "# src hash came from mkUpdateScript's prefetch"
       }
-      ${fixGoFloor}
-      ${fixVendorHash}
+      ${sourceVersionFix}
+      ${fixDependencyHash}
       ${extraAfter}
     '';
   };

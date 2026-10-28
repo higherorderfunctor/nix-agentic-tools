@@ -29,6 +29,7 @@
   inputs,
   packageLib,
   pkgs,
+  repoPath,
   ...
 }: let
   rustToolchainChannel = "1.86";
@@ -36,6 +37,7 @@
     channel = rustToolchainChannel;
     inherit pkgs;
     pname = "git-branchless";
+    recipeFile = repoPath ./package.nix;
   };
   gbSrc = inputs.git-branchless;
   extraction = gitToolExtraction {inherit pkgs;};
