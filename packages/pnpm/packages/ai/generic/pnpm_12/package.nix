@@ -31,23 +31,6 @@
   ];
   pnpmWorkspaces = ["@pnpm/esm-loader"];
 
-  # mkUpdateScript writes a version-only candidate; fake hashes let the fixers
-  # evaluate it, then restore source before deriving its dependency trees.
-  fixVendorHash = packageLib.mkHashFix {
-    inherit pkgs sourcesFile;
-    attr = "pnpm_12";
-    name = "vendor-hash";
-    pname = "pnpm_12";
-    targets = [
-      packageLib.hashFixTargets.src
-      {
-        attrPath = "cargoDeps";
-        drvPattern = "-vendor";
-        key = "cargoHash";
-      }
-      packageLib.hashFixTargets.pnpmDeps
-    ];
-  };
   rustPlatform = packageLib.mkRustPlatform {
     inherit pkgs sources sourcesFile;
     pname = "pnpm_12";
@@ -117,13 +100,11 @@ in
         (prev.passthru or {})
         // rustPlatform.passthru
         // {
-          # Also discovered by fix_sidecar_hashes after nixpkgs input changes.
-          inherit fixVendorHash;
           updateScript = packageLib.mkUpdateScript {
             inherit pkgs sourcesFile;
             pname = "pnpm_12";
             platforms = {};
-            extraExtract = "${fixVendorHash}";
+            extraExtract = "${rustPlatform.passthru.rustUpdateExtract}";
             # npm's per-major dist-tag picks the release; the source fixer then
             # fetches the matching GitHub tag and fails loudly if it is missing.
             versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-12\"] // empty'";

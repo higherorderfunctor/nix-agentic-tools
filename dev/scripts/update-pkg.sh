@@ -361,16 +361,17 @@ set +e
 
   cd "$wt"
 
-  # A rev-tracked Go package can carry its floor as a recipe literal. Refresh
-  # that opt-in value from the newly pinned source before nix-update evaluates
-  # goModules. Run even when Phase 0 found no new rev so a previously stale
-  # literal self-heals on the next sweep. Release packages own this ordering in
-  # their --use-update-script extraExtract chain and are excluded here.
+  # Rev-tracked packages can carry source-derived toolchain literals. Refresh
+  # those opt-in values before nix-update evaluates dependencies, even when
+  # Phase 0 found no new rev. Release scripts own this ordering themselves.
   if [ -n "$git_url" ] && [[ " $extra_flags " != *" --use-update-script "* ]]; then
-    if ! refresh_package_go_floor "$name"; then
-      log_failure "Go-floor refresh failed"
-      exit 1
-    fi
+    for refresh in 'fixGoFloor Go-floor' 'fixRustToolchain Rust-toolchain'; do
+      read -r fixer_attr label <<<"$refresh"
+      if ! refresh_package_source_version "$name" "$fixer_attr" "$label"; then
+        log_failure "$label refresh failed"
+        exit 1
+      fi
+    done
     if ! commit_pending_update; then
       exit 1
     fi
@@ -474,7 +475,7 @@ if [ "$target_rc" -ne 0 ]; then
   # resetting here is what makes held-back packages skip their PR.
   # Successful targets keep their commit and open their PR as before.
   git -C "$wt" reset --hard "$base_head"
-  report_held_back "$name" "Go-floor refresh, nix-update, sidecar regeneration, formatter or commit failed" "$version_detail"
+  report_held_back "$name" "toolchain refresh, nix-update, sidecar regeneration, formatter or commit failed" "$version_detail"
   exit 0
 fi
 

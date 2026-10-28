@@ -312,9 +312,10 @@ VERSION-BUMP path only. Consequences:
   `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) re-derives a
   `vendorHash`, `npmDepsHash` or `pnpmDepsHash` invalidated by a nixpkgs or
   toolchain bump at an unchanged version, through `passthru.fixVendorHash`,
-  `passthru.fixNpmDepsHash` and `passthru.fixPnpmDepsHash` — but only when the
-  old output cannot be substituted. An unchanged version leaves the FOD's name
-  and hash unchanged, so a cached path satisfies the fixer's build and it
+  `passthru.fixNpmDepsHash` and `passthru.fixPnpmDepsHash`, or for Rust sidecars
+  `passthru.rustUpdateExtract`, which also repairs `cargoHash` — but only when
+  the old output cannot be substituted. An unchanged version leaves the FOD's
+  name and hash unchanged, so a cached path satisfies the fixer's build and it
   reports `ok` (see the stale-`pnpmDeps` bullet below). Hashes have that
   standalone escape hatch; extracts deliberately do not, because a changed
   extract means someone edited the extractor and should look at the diff.

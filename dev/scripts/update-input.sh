@@ -93,6 +93,11 @@ set +e
     exit 1
   fi
 
+  if ! refresh_input_rust_toolchains "$name"; then
+    log_failure "Rust-toolchain refresh failed"
+    exit 1
+  fi
+
   # Regenerate the committed sidecars of every package this input owns —
   # discovered from `passthru.updateFlakeInput` and
   # `passthru.regenerateExtracted`, see regenerate_sidecars in

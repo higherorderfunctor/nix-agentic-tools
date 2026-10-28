@@ -1,5 +1,5 @@
 # rumdl: nixpkgs build recipe with release source and Cargo vendor pins.
-# nix-update refreshes both hashes through the owner's update target.
+# The release updater records the source channel before Cargo vendor hashes.
 #
 # WHAT IT IS FOR HERE — read this before "simplifying" the pair. rumdl is
 # the PRIMARY half of the markdown table-cell-count gate defined in
@@ -23,28 +23,41 @@
   repoPath,
   ...
 }: let
-  rustToolchainChannel = "1.96.0";
+  inherit (pkgs) lib;
+  sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
+  sourcesFile = repoPath ../../../../sources.json;
+  inherit (sources) version;
   rustPlatform = packageLib.mkRustPlatform {
-    channel = rustToolchainChannel;
-    inherit pkgs;
+    inherit pkgs sources sourcesFile;
     pname = "rumdl";
-    recipeFile = repoPath ./package.nix;
   };
-  version = "0.3.1";
   src = pkgs.fetchFromGitHub {
     owner = "rvben";
     repo = "rumdl";
     tag = "v${version}";
-    hash = "sha256-y9DIwvWDQ7L6n9oNvKp0yOnqOugzGVYVqoQ6dA5/dHI=";
+    hash = sources.srcHash or lib.fakeHash;
   };
 in
   (pkgs.rumdl.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: _: {
     inherit src version;
-    inherit (rustPlatform) passthru;
+    passthru =
+      rustPlatform.passthru
+      // {
+        updateScript = packageLib.mkUpdateScript {
+          extraExtract = "${rustPlatform.passthru.rustUpdateExtract}";
+          inherit pkgs sourcesFile;
+          platforms = {};
+          pname = "rumdl";
+          versionCheck.cmd = packageLib.ghLatestVersionCmd {
+            inherit pkgs;
+            repo = "rvben/rumdl";
+          };
+        };
+      };
     cargoDeps = rustPlatform.fetchCargoVendor {
       # pname and version name the output, so a stale hash cannot reuse the
       # previous release's cached vendor set after a bump.
       inherit (finalAttrs) pname version src;
-      hash = "sha256-kqtboPl0Y9gZWZGwM6mffQL5/Fjg6OXdgbE53J2hTbE=";
+      hash = sources.cargoHash or lib.fakeHash;
     };
   })

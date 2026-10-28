@@ -16,15 +16,15 @@
       agnix-mcp = "recipe";
       airlock = "recipe";
       ci-hestia = "recipe";
-      fblog = "recipe";
       git-absorb = "recipe";
       git-branchless = "recipe";
       oxlint = "recipe";
-      rumdl = "recipe";
 
       # Release sidecars need ordered source/channel/dependency repair.
       chatgpt-codex = "sidecar";
+      fblog = "sidecar";
       pnpm_12 = "sidecar";
+      rumdl = "sidecar";
     };
     present = lib.filterAttrs (name: _: builtins.hasAttr name pkgSet) destinations;
     declared = lib.mapAttrs (name: _: pkgSet.${name}) present;
@@ -50,6 +50,47 @@
         fi
         echo "${name}: source channel '$actual' matches recorded channel" > "$out"
       '';
+    sidecars = lib.mapAttrs (name: _: declared.${name}) (lib.filterAttrs (_: destination: destination == "sidecar") present);
+    orderAssertFn = import ./source-version-order.nix {
+      inherit pkgs;
+      dependencyFixer = "cargo";
+      requireSrc = true;
+      versionFixer = "rust-toolchain";
+    };
+    mkOrderCheck = name: p:
+      pkgs.runCommand "rust-toolchain-extract-order-${name}" {
+        extract = p.rustUpdateExtract;
+        exportReferencesGraph = ["updateClosure" p.updateScript];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${orderAssertFn}
+        assert_chain_order "$extract" "${name}"
+        if ! grep -qF -- "$extract" updateClosure; then
+          echo 'FAIL: ${name}: rustUpdateExtract is absent from updateScript closure' >&2
+          exit 1
+        fi
+        echo '${name}: release updater reaches source/channel/dependency order' > "$out"
+      '';
+    orderControl = pkgs.runCommand "rust-toolchain-extract-order-positive-control" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${orderAssertFn}
+      printf '%s\n' /fixture-fix-src-test /fixture-fix-rust-toolchain-test /fixture-fix-cargo-test >ordered
+      assert_chain_order ordered control-ordered
+      for stages in 'src cargo rust-toolchain' 'rust-toolchain src cargo' 'src rust-toolchain' 'rust-toolchain cargo'; do
+        : >broken
+        for stage in $stages; do
+          printf '/fixture-fix-%s-test\n' "$stage" >>broken
+        done
+        if assert_chain_order broken "$stages" >diagnostic 2>&1; then
+          echo "FAIL: accepted broken Rust chain: $stages" >&2
+          exit 1
+        fi
+        grep -qF 'FAIL:' diagnostic
+      done
+      echo 'ordered Rust chain passes; dependency-first, source-last and missing stages fail with diagnostics' > "$out"
+    '';
   in
     {
       rust-toolchain-declared-list = assert lib.assertMsg (lib.all (passed: passed) (builtins.attrValues roster)) "rust-toolchain-declared-list: update the drift roster and rustToolchainChannel metadata";
@@ -58,6 +99,8 @@
           shopt -s inherit_errexit 2>/dev/null || :
           touch "$out"
         '';
+      rust-toolchain-extract-order-positive-control = orderControl;
     }
-    // lib.mapAttrs' (name: p: lib.nameValuePair "rust-toolchain-drift-${name}" (mkCheck name p)) declared;
+    // lib.mapAttrs' (name: p: lib.nameValuePair "rust-toolchain-drift-${name}" (mkCheck name p)) declared
+    // lib.mapAttrs' (name: p: lib.nameValuePair "rust-toolchain-extract-order-${name}" (mkOrderCheck name p)) sidecars;
 }

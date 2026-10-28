@@ -1,34 +1,47 @@
 # fblog: nixpkgs build recipe with release source and Cargo vendor pins.
-# nix-update refreshes both hashes through the owner's update target.
+# The release updater records the source channel before Cargo vendor hashes.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  rustToolchainChannel = "";
+  inherit (pkgs) lib;
+  sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
+  sourcesFile = repoPath ../../../../sources.json;
+  inherit (sources) version;
   rustPlatform = packageLib.mkRustPlatform {
-    channel = rustToolchainChannel;
-    inherit pkgs;
+    inherit pkgs sources sourcesFile;
     override = "latest";
     pname = "fblog";
-    recipeFile = repoPath ./package.nix;
   };
-  version = "4.17.0";
   src = pkgs.fetchFromGitHub {
     owner = "brocode";
     repo = "fblog";
     tag = "v${version}";
-    hash = "sha256-SDOYW9CpC7E62nVnZL04Kx9ckVEZyvcMolJCfKDqdMk=";
+    hash = sources.srcHash or lib.fakeHash;
   };
 in
   (pkgs.fblog.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: _: {
     inherit src version;
-    inherit (rustPlatform) passthru;
+    passthru =
+      rustPlatform.passthru
+      // {
+        updateScript = packageLib.mkUpdateScript {
+          extraExtract = "${rustPlatform.passthru.rustUpdateExtract}";
+          inherit pkgs sourcesFile;
+          platforms = {};
+          pname = "fblog";
+          versionCheck.cmd = packageLib.ghLatestVersionCmd {
+            inherit pkgs;
+            repo = "brocode/fblog";
+          };
+        };
+      };
     cargoDeps = rustPlatform.fetchCargoVendor {
       # pname and version name the output, so a stale hash cannot reuse the
       # previous release's cached vendor set after a bump.
       inherit (finalAttrs) pname version src;
-      hash = "sha256-Pn8HsBz+5OHz4jF6xmORLQSLYClTHpaJXWiS5sPyV2w=";
+      hash = sources.cargoHash or lib.fakeHash;
     };
   })
