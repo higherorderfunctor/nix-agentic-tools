@@ -9,28 +9,45 @@ import argparse
 from pathlib import Path
 import sys
 
-WORKTREE_PARAGRAPH = b"When a task should run in a worktree, the **workflow owns the worktree setup** \\u2014 do NOT create the worktree yourself. Say in the `workflowPrompt` brief that a worktree is needed and let the generated workflow\\'s first step create it (`git worktree add .worktrees/<name> -b <branch> <base>`, where `<base>` is the branch checked out in the user\\'s repo, which is not necessarily the default branch; name it in the brief) and run all later steps targeting that worktree. Derive a descriptive `<name>`/`<branch>` from the task. The workflow\\'s final step rebases the branch onto `<base>` and fast-forwards `<base>` from the user\\'s checkout (`git -C <repo> merge --ff-only <branch>`), because git will not move a branch that is checked out in another worktree; you remove the worktree and branch after the run completes (an in-worktree step can\\'t safely delete the directory it is running in).\\n\\n"
-FILE_CHECK_PARAGRAPH = rb'''13. **Every path in a prompt or stop condition is absolute.** Step agents\' cwd is the parent session\'s workspace, not a worktree or subdirectory, so a relative path in a prompt silently resolves to the wrong place. Write the absolute path literally (e.g. `/repo/.worktrees/fix/src/file.ts`) for every file a step reads, writes, or commits, and tell worktree steps to use `git -C <absolute worktree>` rather than describing the worktree as their "working directory". The same applies to `fileCheck.path` in a `stopCondition` or `completion`: relative paths resolve against the workflow\'s workspace root, and a path that never resolves evaluates false forever \u2014 the loop then spins to `maxIterations` instead of stopping.'''
+WORKTREE_PARAGRAPH = rb"""When a task should run in a worktree, say so in the brief and name the base branch (the branch checked out in the user\'s repo, not necessarily the default). The workflow\'s first step creates `.worktrees/<name>` on a branch named from the task, its last step rebases onto the base and fast-forwards it from the user\'s checkout (`git -C <repo> merge --ff-only <branch>`, since git will not move a branch checked out in another worktree), and you remove the worktree and branch after the run. Do not create the worktree yourself.\n\n"""
+FILE_CHECK_PARAGRAPH = rb"""5. **Every path is absolute**, in prompts and in `fileCheck.path`: step agents run in the parent session\'s workspace, not in a worktree, and a `fileCheck.path` that never resolves spins the loop to `maxIterations`. Tell worktree steps to use `git -C <absolute worktree>`."""
 # Our authored replacement, spelled out so the text Kiro receives is readable
 # here. The stop-condition file is the exception to absolute paths: the
 # step writes it and `fileCheck.path` checks it at one workspace-relative path.
 RELATIVE_FILE_CHECK_PARAGRAPH = (
-    rb"""13. **Every path in a step prompt is absolute, except the stop-condition file.** """
-    rb"""Step agents\' cwd is the parent session\'s workspace, not a worktree or subdirectory, so a relative path in a prompt silently resolves to the wrong place. """
-    rb"""Write the absolute path literally (e.g. `/repo/.worktrees/fix/src/file.ts`) for every other file a step reads, writes, or commits, and tell worktree steps to use `git -C <absolute worktree>` rather than describing the worktree as their "working directory". """
+    rb"""5. **Every path in a step prompt is absolute, except the stop-condition file.** """
+    rb"""Step agents run in the parent session\'s workspace, not in a worktree, so write every other file a step reads, writes, or commits as a literal absolute path, and tell worktree steps to use `git -C <absolute worktree>`. """
     rb"""The file a `stopCondition` or `completion` checks is written by the step and checked by `fileCheck.path` at the same relative path: a plain path relative to the workflow workspace root (e.g. `.agents/tasks/review.json`), without templates or an absolute worktree prefix. """
     rb"""Step agents\' cwd is that root, so the writing step and the check agree. """
-    rb"""A path that never resolves evaluates false forever \u2014 the loop then spins to `maxIterations` instead of stopping."""
+    rb"""A `fileCheck.path` that never resolves spins the loop to `maxIterations`."""
 )
-# Fixed-text tweaks, keyed by their `ai.kiro.cli.tweaks` option name.
+# The creator prompt's worked example names its gate file at each of these
+# sites; the tweak rewrites all four so the example obeys the rules above it.
+GATE_FILE = b"/repo/.agents/tasks/fix-throttle/review.json"
+RELATIVE_GATE_FILE = b".agents/tasks/fix-throttle/review.json"
+EXAMPLE_GATE_FILE_SITES = (
+    rb'"stopCondition": { "fileCheck": { "path": "%s"',
+    rb"If %s exists",
+    rb"then %s as",
+    rb'"artifacts": { "review": "%s" }',
+)
+# Fixed-text tweaks, keyed by their `ai.kiro.cli.tweaks` option name. Each
+# tweak is a tuple of (source, replacement) pairs; every source must match.
 FIXED = {
-    "relativeFileCheckPaths": (FILE_CHECK_PARAGRAPH, RELATIVE_FILE_CHECK_PARAGRAPH),
-    "stripVendorWorktreeSteering": (WORKTREE_PARAGRAPH, b""),
+    "relativeFileCheckPaths": (
+        (FILE_CHECK_PARAGRAPH, RELATIVE_FILE_CHECK_PARAGRAPH),
+        (
+            rb"names the gate file\'s absolute path in its prompt",
+            rb"names the gate file\'s workspace-relative path, the one `fileCheck.path` checks, in its prompt",
+        ),
+        *((site % GATE_FILE, site % RELATIVE_GATE_FILE) for site in EXAMPLE_GATE_FILE_SITES),
+    ),
+    "stripVendorWorktreeSteering": ((WORKTREE_PARAGRAPH, b""),),
 }
 
 
 def replacements(names):
-    return [(name, *FIXED[name]) for name in names]
+    return [(name, source, replacement) for name in names for source, replacement in FIXED[name]]
 
 
 def patch(data, items):
@@ -40,7 +57,7 @@ def patch(data, items):
     for name, source, replacement in items:
         count = data.count(source)
         if count != 1:
-            errors.append(f"{name}: expected exact source text once, found {count}; bundle drift")
+            errors.append(f"{name}: expected exact source text once, found {count}; bundle drift: {source[:80]!r}")
         else:
             result = result.replace(source, replacement, 1)
     return (None if errors else result), errors
@@ -63,7 +80,7 @@ def main():
         if errors:
             return 1
         if args.check:
-            print("PASS: " + ", ".join(name for name, _, _ in items) + " exact sources each occur once")
+            print("PASS: " + ", ".join(dict.fromkeys(name for name, _, _ in items)) + " exact sources each occur once")
         else:
             args.destination.write_bytes(result)
     except OSError as exc:

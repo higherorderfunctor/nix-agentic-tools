@@ -1041,6 +1041,11 @@ in {
           export XDG_CONFIG_HOME="$TMPDIR/config"
           export XDG_DATA_HOME="$TMPDIR/data"
           export XDG_STATE_HOME="$TMPDIR/state"
+          # Since 2.35.1 `agent validate` and `acp` refuse to start without a
+          # login; test mode passes that gate. A placeholder KIRO_API_KEY passes it
+          # too, but then session/new asks the remote MCP governance API, which
+          # fails without network, and Kiro disables every MCP server.
+          export KIRO_TEST_MODE=1
           mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
           cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
           cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
@@ -1050,8 +1055,7 @@ in {
           # Drive the unwrapped chat binary that implements `kiro-cli agent
           # validate` directly. The exported Linux package is a buildFHSEnv
           # bubblewrap launcher, and nested user namespaces are not portable across
-          # Nix build sandboxes; validation itself needs neither the FHS root nor a
-          # login.
+          # Nix build sandboxes; validation itself does not need the FHS root.
           ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
             --path "$HOME/.kiro/agents/semble-search.json" \
             >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \

@@ -1416,8 +1416,8 @@ in
             type = lib.types.bool;
             default = false;
             description = ''
-              Replace the vendor workflow instruction to use absolute stop-condition
-              paths: the step writes the stop-condition file, and `fileCheck.path`
+              Replace the vendor workflow instructions and worked example that use
+              absolute stop-condition paths: the step writes the stop-condition file, and `fileCheck.path`
               checks it, at the same plain workspace-relative path, without
               templates. Absolute worktree paths can be rejected for sibling worktrees.
               ${tweakPatchNote}

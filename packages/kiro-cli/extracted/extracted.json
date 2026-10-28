@@ -125,14 +125,14 @@
     "memory": { "segment": "all", "treatment_percent": 100 },
     "memory_controls": { "segment": "all", "treatment_percent": 100 },
     "model_fallback_auto_refusal": {
-      "segment": "internal",
+      "segment": "all",
       "treatment_percent": 100
     },
     "remote_changelog": { "channel": "stable", "treatment_percent": 100 },
     "remote_sandbox": { "segment": "all", "treatment_percent": 100 },
     "session_dashboard": { "segment": "all", "treatment_percent": 100 },
-    "standalone_public": { "treatment_percent": 0 },
-    "standalone_toolbox": { "segment": "all", "treatment_percent": 20 },
+    "standalone_public": { "treatment_percent": 10 },
+    "standalone_toolbox": { "segment": "all", "treatment_percent": 50 },
     "tangent": { "segment": "all", "treatment_percent": 100 },
     "test": { "treatment_percent": 100 },
     "test_internal_only": { "segment": "internal", "treatment_percent": 100 },
@@ -160,6 +160,7 @@
     "workflows": { "segment": "all", "treatment_percent": 100 }
   },
   "settingKeys": [
+    "app.warnOnElevatedPrivileges",
     "chat.allowAnimations",
     "chat.allowAsciiArt",
     "chat.allowIcons",
