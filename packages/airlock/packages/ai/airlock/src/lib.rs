@@ -1,8 +1,6 @@
 pub mod server;
 
-mod authority;
-mod http1;
-mod local;
-mod resolver;
+mod client;
+mod http;
 mod tunnel;
 mod upstream;

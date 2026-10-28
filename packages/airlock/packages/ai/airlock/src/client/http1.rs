@@ -15,7 +15,7 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio::{io::Interest, net::TcpStream, sync::mpsc, time::Instant};
 
 use crate::{
-    local::{response, route},
+    client::replies::{response, route},
     tunnel,
     upstream::CONNECT_TIMEOUT,
 };
