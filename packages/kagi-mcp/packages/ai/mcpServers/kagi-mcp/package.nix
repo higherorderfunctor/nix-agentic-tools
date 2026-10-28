@@ -13,12 +13,12 @@
   });
   vu = packageLib;
 
-  rev = "59bbb8a545831afb4f4cd347c418af3d4bae6666";
+  rev = "4dc1dc97ca8dead8458c7025e4fcc36d2e3d6ec4";
   src = fetchFromGitHub {
     owner = "kagisearch";
     repo = "kagimcp";
     inherit rev;
-    hash = "sha256-gfI0862pRbb31sLVMjeoFHmIjGA9kvfjVtUOe3WoH/c=";
+    hash = "sha256-SuyKFYQECdH9zfYdLBKlTdomrkxSpxOj7hFdQftHiOo=";
   };
 in
   python313Packages.buildPythonApplication {
