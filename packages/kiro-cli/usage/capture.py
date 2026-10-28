@@ -63,6 +63,8 @@ def open_database(path):
     db = sqlite3.connect(path, timeout=30)
     try:
         db.execute("PRAGMA journal_mode=WAL")
+        # WAL commits skip fsync; checkpoints still sync. A power loss can drop recent commits, never corrupt.
+        db.execute("PRAGMA synchronous=NORMAL")
     except sqlite3.Error:
         db.close()
         raise
@@ -283,6 +285,13 @@ class CaptureCapacityError(RuntimeError):
     pass
 
 
+# Synthetic 1 and 32 MiB requests: level 9 costs 1.8x level 6's CPU for 0.3% smaller BLOBs; level 1 is 3x
+# faster but 16% larger, filling the payload budget sooner. Small chunks compress alike at every level.
+GZIP_LEVEL = 6
+# Payload copies the queue may refuse while parsing still sees every byte; usage stays complete without them.
+OMISSIONS = {"request_payload_omitted", "response_payload_omitted"}
+
+
 class Analysis:
     def __init__(self, save):
         self.save = save
@@ -455,10 +464,14 @@ class Analysis:
 
 
 class Collector:
-    """Callbacks enqueue without waiting for SQLite; one worker owns all writes."""
+    """Callbacks parse each chunk and enqueue its payload copy without waiting for SQLite; one worker owns all writes."""
 
-    def __init__(self, path, max_bytes=8 * 1024 * 1024, max_items=256, max_stored_bytes=256 * 1024 * 1024):
-        if min(max_bytes, max_items, max_stored_bytes) <= 0:
+    OVERHEAD = 512  # tracemalloc: a queued item holds ~434 bytes and each event entry ~172 beyond payload bytes
+    BATCH_ITEMS, BATCH_BYTES = 512, 4 * 1024 * 1024  # per write transaction: bounds lock hold and in-flight copies
+
+    # Queue budget: one request at the 32 MiB API limit plus 8 MiB of streaming headroom.
+    def __init__(self, path, max_bytes=40 * 1024 * 1024, max_stored_bytes=256 * 1024 * 1024):
+        if min(max_bytes, max_stored_bytes) <= 0:
             raise ValueError("capture budgets must be positive")
         self.path = path
         self.max_stored_bytes = max_stored_bytes
@@ -492,7 +505,7 @@ class Collector:
                                  for row in db.execute("SELECT summary_json FROM captures WHERE summary_json IS NOT NULL")
                                  if (usage := json.loads(row[0]).get("usage_objects")))
         db.close()
-        self.queue = queue.Queue(max_items)
+        self.queue = queue.Queue()  # bounded by max_bytes in _put
         self.lock = threading.Lock()
         self.states = {}
         self.queued_bytes, self.max_bytes = 0, max_bytes
@@ -521,16 +534,21 @@ class Collector:
     def begin(self, metadata, body):
         self.check()
         ident = uuid.uuid4().hex
-        state = dict(id=ident, metadata=metadata, start=(time.time_ns(), time.monotonic_ns()),
+        stamp = (time.time_ns(), time.monotonic_ns())
+        state = dict(id=ident, metadata=metadata, start=stamp,
                      pending=0, dropped_chunks=0, dropped_bytes=0, observed_chunks=0,
-                     observed_bytes=0, done=False, response={}, issues=[], response_gap=False)
+                     observed_bytes=0, done=False, response={}, issues=[])
         details, state["hashes"] = request_details(body, state["issues"])
         state["metadata"].update(details)
+        target = state["parse"] = dict(hash=hashlib.sha256(), decoder=None, encoding=None, json=bytearray(), stamp=(0, 0), seq=-1, events=[])
+        target["analysis"] = Analysis(lambda *saved: target["events"].append(saved))
+        target["sse"] = SSE(target["analysis"].event)
+        target["eventstream"] = EventStream(target["analysis"].message)
         with self.lock:
             if len(self.states) >= 256:
                 raise CaptureCapacityError("Kiro capture active-flow limit reached; selected request was not captured")
             self.states[ident] = state
-        self._put(state, "request", body, -1)
+        self._put(state, "request", body, -1, stamp)
         return ident
 
     def headers(self, ident, metadata):
@@ -538,30 +556,37 @@ class Collector:
         with self.lock:
             self.states[ident]["response"] = metadata
 
-    def _put(self, state, kind, data, seq):
+    def _put(self, state, kind, data, seq, stamp, application=None, events=()):
         self.check()
-        stamp = (time.time_ns(), time.monotonic_ns())
+        size = self.OVERHEAD + len(data) + sum(len(frame) + len(text or "") + self.OVERHEAD for _, _, frame, text in events)
+        if application is not None and application is not data:
+            size += len(application)
         with self.lock:
-            if self.queued_bytes + len(data) > self.max_bytes or self.queue.full():
+            if self.queued_bytes + size > self.max_bytes:
                 state["dropped_chunks"] += 1
                 state["dropped_bytes"] += len(data)
-                state["response_gap"] |= kind == "response"
-                if "queue_overflow" not in state["issues"]:
-                    state["issues"].append("queue_overflow")
-                    print(f"Kiro capture {state['id']}: queue overflow; evidence incomplete", file=sys.stderr)
+                if kind + "_payload_omitted" not in state["issues"]:
+                    state["issues"].append(kind + "_payload_omitted")
+                    print(f"Kiro capture {state['id']}: payload queue full; {kind} payload omitted, usage still parsed", file=sys.stderr)
                 return
             state["pending"] += 1
-            self.queued_bytes += len(data)
-            self.queue.put_nowait((state, kind, bytes(data), seq, stamp))
+            self.queued_bytes += size
+            self.queue.put_nowait((state, kind, bytes(data), seq, stamp, application, events, size))
 
     def chunk(self, ident, data):
         self.check()
+        stamp = (time.time_ns(), time.monotonic_ns())
         with self.lock:
             state = self.states[ident]
             seq = state["observed_chunks"]
             state["observed_chunks"] += 1
             state["observed_bytes"] += len(data)
-        self._put(state, "response", data, seq)
+        try:
+            application, events = self._parse(state, data, seq, stamp)
+        except Exception as error:  # A parser defect stops capture like a writer failure, never the passing stream.
+            self.failure = error
+            raise RuntimeError("Kiro capture parser failed; capture stopped") from error
+        self._put(state, "response", data, seq, stamp, application, events)
         return data
 
     def finish(self, ident, transport_ended=True, error=None):
@@ -586,42 +611,50 @@ class Collector:
         if self.failure:
             raise RuntimeError("Kiro capture database worker failed") from self.failure
 
+    def _batch(self):
+        """Block for one item, then take what is already queued, up to BATCH_ITEMS or BATCH_BYTES."""
+        try:
+            batch = [self.queue.get(timeout=0.02)]
+        except queue.Empty:
+            return []
+        size = batch[0][-1]
+        while len(batch) < self.BATCH_ITEMS and size < self.BATCH_BYTES:
+            try:
+                batch.append(self.queue.get_nowait())
+            except queue.Empty:
+                break
+            size += batch[-1][-1]
+        return batch
+
     def _worker(self):
         try:
             db = open_database(self.path)
-            live = {}
+            live = set()
             while True:
-                try:
-                    item = self.queue.get(timeout=0.02)
-                except queue.Empty:
-                    item = None
-                if item:
-                    state, kind, data, seq, stamp = item
-                    ident = state["id"]
+                batch = self._batch()
+                if batch:
+                    writes = [self._prepare(*item[:-1]) for item in batch]  # compression runs before the write lock
                     db.execute("BEGIN IMMEDIATE")
-                    if ident not in live:
-                        live[ident] = self._initialize(db, state)
-                    target = live[ident]
-                    if kind == "request":
-                        payload = gzip.compress(data)
-                        if not self._retain(state, payload):
-                            state["dropped_chunks"] += 1
-                            state["dropped_bytes"] += len(data)
-                            payload = None
-                        db.execute("UPDATE captures SET request_gzip=?,request_sha256=?,fingerprints_json=?,metadata_json=? WHERE id=?", (payload, digest(data), packed(state["hashes"]), packed(state["metadata"]), ident))
-                    else:
-                        self._store_chunk(db, state, target, data, seq, stamp)
+                    for (state, *_), statements in zip(batch, writes):
+                        if state["id"] not in live:
+                            self._initialize(db, state)
+                            live.add(state["id"])
+                        for statement in statements:
+                            db.execute(*statement)
                     db.commit()
                     with self.lock:
-                        state["pending"] -= 1
-                        self.queued_bytes -= len(data)
+                        for state, *_, size in batch:
+                            state["pending"] -= 1
+                            self.queued_bytes -= size
                 with self.lock:
                     finished = [s for s in self.states.values() if s["done"] and not s["pending"]]
                 for state in finished:
                     ident = state["id"]
                     db.execute("BEGIN IMMEDIATE")
-                    target = live.pop(ident) if ident in live else self._initialize(db, state)
-                    self._finalize(db, state, target)
+                    if ident not in live:
+                        self._initialize(db, state)
+                    live.discard(ident)
+                    self._finalize(db, state)
                     with self.lock:
                         del self.states[ident]
                 with self.lock:
@@ -642,18 +675,34 @@ class Collector:
                 db.close()
 
     def _initialize(self, db, state):
-        ident = state["id"]
-        db.execute("INSERT INTO captures (id,started_utc_ns,started_mono_ns,metadata_json,response_json,fingerprints_json,state) VALUES (?,?,?,?,?,?,'recording')", (ident, *state["start"], packed(state["metadata"]), packed(state["response"]), packed(state["hashes"])))
-        target = dict(hash=hashlib.sha256(), decoder=None, encoding=None, json=bytearray(), stamp=(0, 0), seq=-1)
-        def save(seq, name, frame, obj):
-            raw, parsed = gzip.compress(frame), packed(obj) if obj is not None else None
-            if not self._retain(state, raw, parsed):
-                raw = parsed = None
-            db.execute("INSERT INTO events VALUES (?,?,?,?,?,?,?,?)", (ident, seq, target["seq"], *target["stamp"], name, raw, parsed))
-        target["analysis"] = Analysis(save)
-        target["sse"] = SSE(target["analysis"].event)
-        target["eventstream"] = EventStream(target["analysis"].message)
-        return target
+        db.execute("INSERT INTO captures (id,started_utc_ns,started_mono_ns,metadata_json,response_json,fingerprints_json,state) VALUES (?,?,?,?,?,?,'recording')", (state["id"], *state["start"], packed(state["metadata"]), packed(state["response"]), packed(state["hashes"])))
+
+    def _event_rows(self, state, events, seq, stamp):
+        rows = []
+        for event_seq, name, frame, text in events:
+            raw = gzip.compress(frame, GZIP_LEVEL)
+            if not self._retain(state, raw, text):
+                raw = text = None
+            rows.append(("INSERT INTO events VALUES (?,?,?,?,?,?,?,?)", (state["id"], event_seq, seq, *stamp, name, raw, text)))
+        return rows
+
+    def _prepare(self, state, kind, data, seq, stamp, application, events):
+        """Compress and charge the payload budget; returns the statements for the write transaction."""
+        if kind == "request":
+            payload = gzip.compress(data, GZIP_LEVEL)
+            if not self._retain(state, payload):
+                state["dropped_chunks"] += 1
+                state["dropped_bytes"] += len(data)
+                state["issues"].append("request_payload_omitted")
+                payload = None
+            return [("UPDATE captures SET request_gzip=?,request_sha256=?,fingerprints_json=?,metadata_json=? WHERE id=?", (payload, digest(data), packed(state["hashes"]), packed(state["metadata"]), state["id"]))]
+        entity = gzip.compress(data, GZIP_LEVEL)
+        app = entity if application is data else gzip.compress(application, GZIP_LEVEL) if application is not None else None  # identity: one compression
+        if not self._retain(state, entity, app):
+            state["dropped_chunks"] += 1
+            state["dropped_bytes"] += len(data)
+            entity = app = None
+        return [("INSERT INTO chunks VALUES (?,?,?,?,?,?)", (state["id"], seq, *stamp, entity, app)), *self._event_rows(state, events, seq, stamp)]
 
     @staticmethod
     def framing(target, response):
@@ -662,7 +711,9 @@ class Collector:
             if media in content_type:
                 return target[key]
 
-    def _store_chunk(self, db, state, target, data, seq, stamp):
+    def _parse(self, state, data, seq, stamp):
+        """Decode and frame every observed byte in arrival order; returns application bytes and completed events."""
+        target = state["parse"]
         target.update(seq=seq, stamp=stamp)
         response = state["response"]
         encoding = response.get("content_encoding", "identity").lower().strip() or "identity"
@@ -674,7 +725,7 @@ class Collector:
                 state["issues"].append("unsupported_content_encoding")
         application = None
         try:
-            if not state["response_gap"] and "decode_error" not in state["issues"] and encoding in ("identity", "gzip", "deflate"):
+            if "decode_error" not in state["issues"] and encoding in ("identity", "gzip", "deflate"):
                 application = target["decoder"].decompress(data, 16 * 1024 * 1024 + 1) if target["decoder"] else data
                 if len(application) > 16 * 1024 * 1024 or (target["decoder"] and target["decoder"].unconsumed_tail):
                     raise zlib.error("decompressed chunk exceeds safety limit")
@@ -690,25 +741,27 @@ class Collector:
         except zlib.error:
             state["issues"].append("decode_error")
             target["encoding"] = "invalid"
-        entity = gzip.compress(data)
-        app = gzip.compress(application) if application is not None else None
-        if not self._retain(state, entity, app):
-            state["dropped_chunks"] += 1
-            state["dropped_bytes"] += len(data)
-            entity = app = None
-        db.execute("INSERT INTO chunks VALUES (?,?,?,?,?,?)", (state["id"], seq, *stamp, entity, app))
+        return application, self._drain(target)
 
-    def _finalize(self, db, state, target):
+    @staticmethod
+    def _drain(target):
+        events, target["events"] = target["events"], []
+        return [(seq, name, frame, packed(obj) if obj is not None else None) for seq, name, frame, obj in events]
+
+    def _finalize(self, db, state):
+        target = state["parse"]
         analysis = target["analysis"]
         response = state["response"]
         if target["decoder"] and target["decoder"].unused_data:
             state["issues"].append("trailing_content_encoding")
         if target["decoder"] and not target["decoder"].eof:
             state["issues"].append("truncated_content_encoding")
-        whole = not state["response_gap"] and not any(x in state["issues"] for x in ("decode_error", "unsupported_content_encoding", "truncated_content_encoding", "trailing_content_encoding"))
+        whole = not any(x in state["issues"] for x in ("decode_error", "unsupported_content_encoding", "truncated_content_encoding", "trailing_content_encoding"))
         parser = self.framing(target, response)
         if parser:
             parser.feed(b"", final=True)
+            for statement in self._event_rows(state, self._drain(target), target["seq"], target["stamp"]):
+                db.execute(*statement)
             if parser.disabled:
                 state["issues"].append("event_parse_limit")
             if parser is target["eventstream"]:
@@ -730,7 +783,7 @@ class Collector:
         issues = sorted(set(state["issues"] + analysis.issues))
         if not analysis.complete:
             issues.append("missing_completion")
-        complete = state["transport_ended"] and not issues
+        complete = state["transport_ended"] and not set(issues) - OMISSIONS
         values = ( *state["ended"], packed(state["metadata"]), packed(response),
                   target["hash"].hexdigest() if whole else None,
                   packed(summary), state["observed_chunks"], state["observed_bytes"], state["dropped_chunks"], state["dropped_bytes"], int(state["transport_ended"]), int(analysis.complete), "complete" if complete else "incomplete", packed(issues),
@@ -763,16 +816,21 @@ def main():
                         [[row["id"], row["state"], row["observed_bytes"], row["dropped_bytes"],
                           row["credits"], row["context_usage_percentage"], row["issues_json"]] for row in rows]))
     else:
-        capture = db.execute("SELECT state FROM captures WHERE id=?", (args.id,)).fetchone()
+        capture = db.execute("SELECT state,observed_chunks FROM captures WHERE id=?", (args.id,)).fetchone()
         if capture is None:
             parser.error("unknown capture id")
         if capture[0] != "complete":
             print("warning: replaying incomplete evidence", file=sys.stderr)
         column = "entity_gzip" if args.entity else "application_gzip"
-        for row in db.execute(f"SELECT {column} FROM chunks WHERE capture_id=? ORDER BY seq", (args.id,)):
-            if row[0] is None:
-                parser.exit(1, "requested payload bytes unavailable (capture is incomplete)\n")
-            sys.stdout.buffer.write(gzip.decompress(row[0]))
+        expected = 0
+        # A queue-omitted chunk leaves no row, even in a complete capture; a gap or short tail is missing bytes.
+        for row in db.execute(f"SELECT seq,{column} FROM chunks WHERE capture_id=? ORDER BY seq", (args.id,)):
+            if row[0] != expected or row[1] is None:
+                break
+            sys.stdout.buffer.write(gzip.decompress(row[1]))
+            expected += 1
+        if expected != capture[1]:
+            parser.exit(1, "requested payload bytes unavailable (capture is incomplete)\n")
     db.close()
 
 

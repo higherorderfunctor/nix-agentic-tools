@@ -237,6 +237,14 @@ budget, not a whole-directory quota: metadata, session indexes, SQLite pages,
 and WAL files need additional space. Inspect storage and omission status before
 relying on a capture as complete evidence.
 
+The collector parses every response byte as it arrives, so credits, context,
+token counters, and completion survive when it has to skip storing a payload
+copy; such calls carry `request_payload_omitted` or `response_payload_omitted`
+and cannot be replayed in full. Its write queue holds up to 40 MiB: one request
+at the 32 MiB API limit plus 8 MiB of streaming headroom. Database commits do
+not wait for the disk: a power loss or OS crash can drop the most recent
+captures, but it cannot corrupt the database.
+
 ## Run the calibration experiment
 
 From a checkout, preview the paid experiment without calling Kiro:

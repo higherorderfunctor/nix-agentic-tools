@@ -47,15 +47,22 @@ cookies, authorization, or URLs. Full **bodies** are deliberately retained and
 may themselves contain secrets.
 
 The response streaming callback returns the same bytes immediately, including
-the EOF sentinel. It does not wait for SQLite. One worker writes the database; a
-bounded queue holds at most 256 pending payload items and 8 MiB. Queue overflow
-logs a warning and records `queue_overflow`, dropped byte/item counters, and an
-incomplete capture. Lost request payloads do not disable response decoding; a
-response-byte gap does. At most 256 captures can be active; exceeding that limit
-rejects only the new request with HTTP 503. An invalid selected request content
-encoding receives HTTP 400. Both refusals leave the collector available for
-subsequent healthy requests. A fatal writer failure logs an explicit warning and
-marks existing recording rows incomplete when the database remains writable.
+the EOF sentinel. It does not wait for SQLite. It decodes and frames every chunk
+on arrival, so usage, completion, and output counts see every response byte;
+only the payload copy is queued. One worker writes the database. Its queue holds
+at most 40 MiB, charging each item and event 512 bytes of object overhead beyond
+its payload: one 32 MiB request (the API limit) plus 8 MiB of streaming
+headroom. The worker takes up to 512 queued items or 4 MiB per write transaction
+and compresses them before taking the write lock; that batch stays charged until
+it commits, plus one compressed copy of it in flight. A full queue logs a
+warning, omits that payload copy, and records `request_payload_omitted` or
+`response_payload_omitted` with the dropped byte/item counters. Omissions leave
+usage complete; replay of the omitted bytes fails. Per-capture parser state
+keeps its own limits below. At most 256 captures can be active; exceeding that
+limit rejects only the new request with HTTP 503. An invalid selected request
+content encoding receives HTTP 400. Both refusals leave the collector available
+for subsequent healthy requests. A fatal writer failure logs an explicit warning
+and marks existing recording rows incomplete when the database remains writable.
 Otherwise they remain recording, never complete. Existing response streams
 continue returning unchanged bytes; further selected requests receive a local
 HTTP 503 until the collector restarts. If the database cannot be opened or
@@ -63,44 +70,50 @@ initialization fails, the addon stays installed, logs a startup failure, and
 refuses selected requests with HTTP 503 until configuration is fixed and the
 collector restarts. Other traffic remains outside capture.
 
-Connections use SQLite WAL and a 30-second busy timeout. The worker obtains the
-write lock before changing parser state, so transient contention waits without
-replaying stream events. Offline indexing parses outside write transactions and
-commits batches of at most 128 records, ending once 256 KiB of source lines is
-reached (the final complete record may cross that threshold), with each batch's
-checkpoint offset committed atomically. JSONL records up to 64 MiB are parsed
-transiently, so image-bearing tool results can be ignored without retaining
-their contents in the index. Larger complete records are drained in 64 KiB
-chunks. Oversized or invalid complete records, including parse memory failures,
-do not stop indexing: `disk_omissions` retains only their source path, byte
-offset, byte count, and reason. Blank complete lines are ignored. Their usage
-coverage remains unknown; index summaries and selected-session queries warn that
-totals may be incomplete. Incomplete EOF tails, including oversized tails, are
-retried after an append without advancing the checkpoint. Source replacement or
-truncation retires both facts and omission metadata. A database write failure
-rolls back the batch and its checkpoint; previously committed batches remain
-available. Session metadata retains a separate 4 MiB parsing limit. Malformed,
-oversized, or unreadable `session.json` files are isolated per session: indexing
-continues through messages and later sessions, while `disk_session_omissions`
-records the omitted metadata and stale metadata is retired. Successfully
-re-indexing repaired metadata clears its omission. Queries report the global
-metadata omission count because unknown ancestry can hide descendants; older
-indexes without tracking show an unknown count. The index CLI's
-`omitted_records` count includes both JSONL record and session metadata
+Connections use SQLite WAL with `synchronous=NORMAL` and a 30-second busy
+timeout. Commits do not wait for the disk; checkpoints still do. A power loss or
+OS crash can drop the most recent commits but cannot corrupt the database: a
+recent capture can revert to `recording`, which restart marks
+`interrupted_capture`, or disappear. Payload BLOBs use gzip level 6: level 9
+cost 1.8 times the CPU for 0.3% smaller synthetic requests, and level 1 grew
+them 16%. Decompression is the same for every level, so older BLOBs replay
+unchanged. Stream parsing happens in the callback; the worker changes parser
+state only at finalization, after taking the write lock, so transient contention
+waits without replaying stream events. Offline indexing parses outside write
+transactions and commits batches of at most 128 records, ending once 256 KiB of
+source lines is reached (the final complete record may cross that threshold),
+with each batch's checkpoint offset committed atomically. JSONL records up to 64
+MiB are parsed transiently, so image-bearing tool results can be ignored without
+retaining their contents in the index. Larger complete records are drained in 64
+KiB chunks. Oversized or invalid complete records, including parse memory
+failures, do not stop indexing: `disk_omissions` retains only their source path,
+byte offset, byte count, and reason. Blank complete lines are ignored. Their
+usage coverage remains unknown; index summaries and selected-session queries
+warn that totals may be incomplete. Incomplete EOF tails, including oversized
+tails, are retried after an append without advancing the checkpoint. Source
+replacement or truncation retires both facts and omission metadata. A database
+write failure rolls back the batch and its checkpoint; previously committed
+batches remain available. Session metadata retains a separate 4 MiB parsing
+limit. Malformed, oversized, or unreadable `session.json` files are isolated per
+session: indexing continues through messages and later sessions, while
+`disk_session_omissions` records the omitted metadata and stale metadata is
+retired. Successfully re-indexing repaired metadata clears its omission. Queries
+report the global metadata omission count because unknown ancestry can hide
+descendants; older indexes without tracking show an unknown count. The index
+CLI's `omitted_records` count includes both JSONL record and session metadata
 omissions.
 
 Request metadata and fingerprints are extracted once, on the request hook,
 before payload queue admission. This adds bounded request-side parsing and
-hashing work; response-stream callbacks still enqueue without parsing. The
-request extraction limit is 32 MiB. Above that limit `request_metadata_limit`
-marks the capture incomplete and session attribution remains unknown. Per-item
-fingerprints retain at most 4096 input items, with `fingerprint_item_limit`
-signaling any omitted item hashes; the whole input component hash is retained.
-Malformed JSON, strings that cannot encode as UTF-8, and JSON nesting beyond 128
-levels produce fixed extraction issue categories, preserve available raw
-payloads, and allow later captures to proceed. Session queries report
-`global_unattributed_observations` so captures lacking a conversation ID remain
-visible in coverage.
+hashing work. The request extraction limit is 32 MiB. Above that limit
+`request_metadata_limit` marks the capture incomplete and session attribution
+remains unknown. Per-item fingerprints retain at most 4096 input items, with
+`fingerprint_item_limit` signaling any omitted item hashes; the whole input
+component hash is retained. Malformed JSON, strings that cannot encode as UTF-8,
+and JSON nesting beyond 128 levels produce fixed extraction issue categories,
+preserve available raw payloads, and allow later captures to proceed. Session
+queries report `global_unattributed_observations` so captures lacking a
+conversation ID remain visible in coverage.
 
 ## Evidence and extraction
 
@@ -206,20 +219,22 @@ leave it unknown. The original usage objects are available for later extraction
 improvements.
 
 `state='complete'` requires transport completion, a `response.completed` event
-(or completed JSON response), and no recorded issue. Event streams have no
+(or completed JSON response), and no recorded issue besides
+`request_payload_omitted` and `response_payload_omitted`. Event streams have no
 terminal event: completion is end of stream on a message boundary after at least
 one message, with no exception or error message and no framing, decoding, or
 byte-gap failure; an exception message sets `terminal` to `exception`.
 `response.failed`, incomplete responses, transport errors/cancellation, missing
-completion, extraction limits, queue loss, and storage loss remain incomplete. A
-process interrupted before finalization leaves a `recording` row; the next
-collector startup marks it `incomplete` with `interrupted_capture`. Initial
-metadata is persisted before completion. Partial rows must not be treated as
-zero usage. `observed_chunks` / `observed_bytes` describe response callbacks;
-dropped counters include refused request and response payload items. Omitted
-event/summary evidence is also signaled in `issues_json`. A full observed
-response hash can exist even when storage is incomplete; use `state` and the
-nullable BLOBs to determine replay completeness.
+completion, extraction limits, and storage loss remain incomplete; queue
+omissions of payload copies alone do not. A process interrupted before
+finalization leaves a `recording` row; the next collector startup marks it
+`incomplete` with `interrupted_capture`. Initial metadata is persisted before
+completion. Partial rows must not be treated as zero usage. `observed_chunks` /
+`observed_bytes` describe response callbacks; dropped counters include refused
+request and response payload items. Omitted event/summary evidence is also
+signaled in `issues_json`. A full observed response hash can exist even when
+storage is incomplete. `state` describes usage; payload omission flags, nullable
+BLOBs, and chunk rows short of `observed_chunks` describe replay completeness.
 
 ## Token estimates
 
@@ -253,8 +268,8 @@ cache estimate, and calls without a context percentage or a known window stay
 unavailable. An estimated split counts as a hit only when cached reaches 1% of
 input, which keeps fit noise (tens of tokens on the 1–5 character calibration
 calls) out of the hit percentage. Tool and reasoning characters come from
-retained events, so once the payload budget is full their output share is
-missing and `O` comes out too low.
+retained events, so once the payload budget is full, or a payload copy is
+omitted, their output share is missing and `O` comes out too low.
 
 ## Experimental credit-discount diagnostic
 
@@ -350,10 +365,12 @@ Nested `kiro-usage exec` launches reuse the parent's marker; only the outer
 launch prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
-produce a warning; a missing requested payload exits with an error. Replay of
-available partial bytes can precede that error, so callers must check the exit
-status. Request evidence can be read with `gzip.decompress` on
-`captures.request_gzip` through a read-only SQLite connection.
+produce a warning; a missing requested payload, including a chunk omitted from
+the queue or a capture interrupted before its chunk count was recorded, exits
+with an error. Replay of available partial bytes can precede that error, so
+callers must check the exit status. Request evidence can be read with
+`gzip.decompress` on `captures.request_gzip` through a read-only SQLite
+connection.
 
 Persisted session `usage_summary.requestIds` can join the captured upstream
 request IDs to turns; `metadata_json["kiro:conversation_id"]` can join the
