@@ -243,6 +243,7 @@ in
         vendorHash = sources.vendorHash or lib.fakeHash;
         env.CGO_ENABLED = "0";
         ldflags = ["-s" "-w"];
+        passthru = {inherit goFloor;};
         meta.mainProgram = "proxy-helper";
       };
   in {

@@ -44,8 +44,8 @@
 #
 # `packages/gh/packages/ai/devTools/gh/package.nix` carries the identical pair.
 #
-# The toolchain comes from the locked go-overlay (`vu.mkGoToolchain`), never
-# from nixpkgs, and the go.mod floor is validated against it. gitlab-org/cli
+# The toolchain matches the source-derived go.mod floor through the locked
+# go-overlay (`vu.mkGoToolchain`), never from nixpkgs. gitlab-org/cli
 # has required Go >= 1.26.5 since v1.109.0; a consumer following a nixpkgs
 # shipping 1.26.2 used to get `go.mod requires go >= 1.26.5 (running go
 # 1.26.2)` with nothing in this repo red. Because the compiler no longer

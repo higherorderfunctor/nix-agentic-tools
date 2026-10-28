@@ -270,24 +270,10 @@ rec {
     tagPrefix ? "v",
   }: "${pkgs.curl}/bin/curl -fsSL https://gitlab.com/api/v4/projects/${project}/releases/permalink/latest | ${pkgs.jq}/bin/jq -r '.tag_name' | ${pkgs.gnused}/bin/sed -n 's|^${tagPrefix}\\([0-9].*\\)$|\\1|p'";
 
-  # The placeholder a Go overlay reads when its recorded floor is absent.
-  # Every version satisfies it, so `mkGoToolchain` accepts it and the
-  # floor validation passes vacuously. The toolchain itself never depends
-  # on the floor: it is always the newest stable locked go-overlay release.
-  #
-  # This is the `lib.fakeHash` of floors, and it exists for the same
-  # reason: `mkUpdateScript` rebuilds the sidecar FROM SCRATCH
-  # (`jq -n '{version: $v}'`), so `goFloor` is destroyed on every write
-  # and restored by `mkGoFloorFix` as `extraExtract`. Between those two
-  # moments the key does not exist, and `mkGoFloorFix` itself has to
-  # evaluate the package to build its `.src` — so a `throw` here would
-  # deadlock the very fixer that repairs it.
-  #
-  # Reading it is therefore SILENT by construction. That is deliberate,
-  # and `checks/packaging/go-floor-drift.nix` is the loud half: it compares every
-  # recorded floor against the package's real go.mod and fails naming the
-  # package and the expected value. Same division of labour as the
-  # extracted sidecars — permissive at eval, gated by a check.
+  # Missing-floor sentinel read by sidecar recipes while mkUpdateScript has
+  # written only {version}. mkGoToolchain refuses it when Go is forced.
+  # mkGoFloorFix evaluates .src without forcing Go, then writes the floor
+  # before mkGoUpdateExtract invokes the vendor fixer.
   goFloorUnknown = "0";
 
   # Shell function printing the EFFECTIVE Go floor of a go.mod: the
@@ -302,13 +288,11 @@ rec {
   # `toolchain` is spelled `go1.26.5` and `go` is spelled `1.26.5`; both
   # normalize to the bare version. `sort -V` orders them — a plain string
   # compare gets "1.9" vs "1.26" backwards, the same trap
-  # `mkGoToolchain` avoids with `lib.versionAtLeast`.
+  # `mkGoToolchain` avoids with `lib.versionOlder`.
   #
   # Fails loud on a go.mod carrying no `go` directive rather than
-  # printing empty. An empty floor is the worst possible outcome here: it
-  # makes `mkGoToolchain`'s validation pass vacuously, so a source that
-  # outran the locked Go would fail inside the Go build instead of at the
-  # named throw — the exact failure this mechanism exists to remove.
+  # printing empty: mkGoToolchain refuses missing floors, so the vendor
+  # fixer cannot compile until this extractor records the source's version.
   goModFloorFn = {pkgs}: ''
     go_floor_of() {
       gm="$1"
@@ -331,7 +315,7 @@ rec {
   # a release package's JSON sidecar or a trunk package's recipe literal.
   #
   # WHY DERIVED AND NOT DECLARED. A hand-maintained floor literal is a pin,
-  # and a stale-LOW floor makes `mkGoToolchain`'s validation pass vacuously.
+  # and a stale floor makes `mkGoToolchain` select the wrong compiler.
   # Both destination modes therefore derive their value from pinned source;
   # recipe literals are updater-owned storage, not maintainer-owned data.
   #
@@ -347,11 +331,9 @@ rec {
   #
   #   BEFORE the vendor fixer, because `mkUpdateScript` rebuilds the sidecar
   #   from scratch, so `goFloor` is ABSENT (`goFloorUnknown`) until this
-  #   runs. `mkGoToolchain` always selects the newest stable locked Go, so
-  #   the order no longer picks a compiler; it makes a source that outran
-  #   the locked go-overlay fail at `mkGoToolchain`'s named throw instead of
-  #   inside the vendor build. `mkGoUpdateExtract` owns the sequence and
-  #   `checks/packaging/go-floor-extract-order.nix` gates it.
+  #   runs. `mkGoToolchain` refuses that missing floor and selects the
+  #   source-matched compiler once this fixer writes it. `mkGoUpdateExtract`
+  #   owns the sequence; `checks/packaging/go-floor-extract-order.nix` gates it.
   #
   #   attr:       flake package attribute (built through `ciAttr`'s `.src`)
   #   goModPath:  go.mod location inside src — NOT always the root;

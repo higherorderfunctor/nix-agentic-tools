@@ -1,5 +1,6 @@
 # Inspect compiler inputs and JS build/runtime references, including helpers.
-# Every Go/Rust package must carry the locked overlay compiler, and no package
+# Every Go package must carry the overlay compiler mkGoToolchain selects for
+# its own floor or override, every Rust package the locked Rust compiler, and no package
 # or derivation-valued passthru helper (vendor, extractor) may carry nixpkgs'
 # own go, rustc or cargo (no silent nixpkgs fallback).
 {
@@ -13,14 +14,6 @@
   checks.toolchain-provenance = let
     vu = import ../../lib/toolchains.nix {inherit inputs;};
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit
-      (vu.mkGoToolchain {
-        floor = "0";
-        inherit pkgs;
-        pname = "provenance";
-      })
-      go
-      ;
     rust = (vu.mkRustPlatform {inherit pkgs;}).rust.rustc;
     # nixpkgs' default `go`, `rustc` and `cargo`, plus every versioned
     # `go_1_<N>`: a nixpkgs recipe builds with `buildGo<N>Module`, so its Go
@@ -112,7 +105,15 @@
         ++ lib.optional (p ? pnpmDeps) p.pnpmDeps))
     jsPackages;
     failures =
-      audit "Go" goPackages go
+      lib.concatMap (p:
+        audit "Go" [p]
+        (vu.mkGoToolchain {
+          floor = p.goFloor or null;
+          override = p.goToolchainOverride or null;
+          inherit pkgs;
+          pname = p.pname or p.name;
+        }).go)
+      goPackages
       ++ audit "Rust" rustPackages rust
       ++ lib.concatMap (h: carriesBanned "helper" h (h.nativeBuildInputs or [])) helpers
       ++ jsFailures;

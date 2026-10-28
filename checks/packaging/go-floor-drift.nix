@@ -1,17 +1,12 @@
 # go-floor-drift — assert every Go package's RECORDED floor still matches
 # the go.mod of the source it is pinned to.
 #
-# This is the loud half of the floor mechanism. Reading the floor is
-# silent by construction: a Go overlay reads `sources.goFloor or
-# vu.goFloorUnknown`, and `goFloorUnknown` ("0") is satisfied by every
-# toolchain, so a missing or stale-LOW floor makes `mkGoToolchain`'s
-# validation pass vacuously. That is the exact failure this whole
-# mechanism exists to remove, and it cannot be caught at eval
-# — `mkGoFloorFix` has to evaluate the package to build its `.src`, so a
-# `throw` on the missing key would deadlock the fixer that repairs it.
-#
-# So eval stays permissive and THIS gates. Same division of labour as the
-# extracted sidecars (`checks/<pkg>-extracted.nix`).
+# Go overlays read `sources.goFloor or vu.goFloorUnknown`. `mkGoToolchain`
+# refuses the missing/"0" floor when selecting a compiler unless the recipe
+# supplies an explicit override. `mkGoFloorFix` can still reach `.src` without
+# forcing that compiler, so it can repair the key before vendor extraction.
+# This check also catches stale-LOW floors: selecting their recorded compiler
+# cannot prove that the recorded requirement still matches the pinned source.
 #
 # Names come from go-floor-packages.nix so listing checks does not evaluate
 # packages. go-floor-declared-list checks both original discovery predicates,
@@ -90,8 +85,8 @@
           echo "FAIL: ${name} has no recorded Go floor." >&2
           echo "  its go.mod requires: $actual" >&2
           echo "  the placeholder '${vu.goFloorUnknown}' means the recorded floor" >&2
-          echo "  was lost or never refreshed — the toolchain" >&2
-          echo "  seam is silently doing nothing for this package." >&2
+          echo "  was lost or never refreshed. Restore it before selecting" >&2
+          echo "  the compiler or remove a stale recipe override once detected." >&2
           printf '  fix: %s\n' ${lib.escapeShellArg remedy} >&2
           exit 1
         fi
@@ -146,10 +141,9 @@
       '';
 
     # NEGATIVE control: a go.mod with no `go` directive must FAIL, not
-    # return empty. An empty floor is satisfied by every toolchain, so it
-    # would make the seam silently do nothing — the precise failure this
-    # mechanism exists to remove, and the one a "did it produce output?"
-    # test would wave through.
+    # return empty. `mkGoFloorFix` must refuse that source instead of recording
+    # an empty floor that cannot select a compiler. A "did it produce output?"
+    # test would wave through an empty result.
     parserRejectsMissing =
       pkgs.runCommand "go-floor-parse-rejects-missing" {
         goModFile = pkgs.writeText "go.mod-without-go-directive" ''

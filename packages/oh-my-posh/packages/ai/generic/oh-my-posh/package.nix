@@ -67,11 +67,10 @@
 # Note that `overrideAttrs` REPLACES `postPatch` rather than appending, so
 # this restates the whole list rather than adding to nixpkgs'.
 #
-# THE GO TOOLCHAIN IS NEVER PINNED HERE, and the floor is derived — do not
-# "clean up" either. The compiler is the newest stable locked go-overlay
-# release. A hand-written FLOOR is a slower-rotting pin, so `goFloor` is
+# The oh-my-posh compiler matches the derived floor through the locked
+# go-overlay. A hand-written FLOOR is a slower-rotting pin, so `goFloor` is
 # EXTRACTED from the pinned source's `src/go.mod` into the sidecar by
-# `vu.mkGoFloorFix`, and `vu.mkGoToolchain` validates it.
+# `vu.mkGoFloorFix`, and `vu.mkGoToolchain` selects its matching locked release.
 #
 # This project keeps its module under `src/`, so it is the one package
 # passing a non-default `goModPath`. No version literals here on purpose —
@@ -135,7 +134,7 @@
 
   # DERIVED from the pinned source's src/go.mod by `fixGoFloor` above,
   # never hand-written — see gluetun.nix for the rationale, and
-  # `vu.goFloorUnknown` for why the missing-key fallback is silent.
+  # `vu.goFloorUnknown` for the sentinel repaired before compiler selection.
   goFloor = sources.goFloor or vu.goFloorUnknown;
 in
   ((vu.mkGoToolchain {

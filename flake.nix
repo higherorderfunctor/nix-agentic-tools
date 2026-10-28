@@ -23,8 +23,10 @@
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Locked binary toolchains are constructed over each recipe's package set
-    # through the input libraries; nixpkgs' own Go and Rust are never selected.
+    # Recipe Go compilers match the recorded source floor through this locked
+    # overlay; missing releases require `nix flake update go-overlay`.
+    # The input libraries use each recipe's package set, never nixpkgs' own
+    # Go or Rust compilers.
     go-overlay = {
       url = "github:purpleclay/go-overlay";
       inputs = {
