@@ -105,20 +105,25 @@ own runner (`dev/scripts/update-matrix.py`).
   unavailable required release fails with `nix flake update go-overlay`
   guidance. Rust recipes use `vu.mkRustToolchain` or `vu.mkRustPlatform`.
   Sidecar recipes pass `sources` and `sourcesFile` to `mkRustPlatform`; literal
-  recipes pass `channel` and `recipeFile`. Both pass `pkgs` and `pname`, merge
-  the platform's `passthru`, and supply `override` only when needed. The channel
-  comes from `rustToolchainChannel`, extracted at update time from
-  `rust-toolchain.toml` or `rust-toolchain` at the recipe's crate/workspace root
-  (`codex-rs` for `chatgpt-codex`) into a sidecar key or recipe literal of that
-  name. `Cargo.toml`'s `rust-version` is an MSRV and cannot supply this channel.
-  An exact channel selects that release from
+  recipes pass `channel` and `recipeFile`. Passing both or neither destination
+  fails with a named error. Both pass `pkgs` and `pname`, merge the platform's
+  `passthru`, and supply `override` only when needed. The channel comes from
+  `rustToolchainChannel`, extracted at update time from `rust-toolchain.toml` or
+  `rust-toolchain` at the recipe's crate/workspace root (`codex-rs` for
+  `chatgpt-codex`) into a sidecar key or recipe literal of that name. A file
+  without `channel`, or no toolchain file, records `""`; malformed TOML and
+  duplicate channels fail. `Cargo.toml`'s `rust-version` is an MSRV and cannot
+  supply this channel. An exact channel selects that release from
   `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable`; a bare minor selects the
-  newest patch of that minor. Missing channels fail with the package name and
-  `fixRustToolchain` guidance unless the recipe explicitly passes
-  `override = "latest"` or an exact version. A numeric channel rejects any
-  override as stale; an unavailable release requires
-  `nix flake update rust-overlay`. Named channels such as `stable` also require
-  an explicit latest or exact override. The approved no-pin callers (`agnix`,
+  newest patch of that minor. The selector alone strips host suffixes such as
+  `1.86.0-x86_64-unknown-linux-gnu` to select `1.86.0`; extraction preserves the
+  source spelling for drift checks. Missing channels fail with the package name
+  and `fixRustToolchain` guidance unless the recipe explicitly passes
+  `override = "latest"` or an exact version. A numeric channel, including a
+  host-suffixed exact version, rejects any override as stale; an unavailable
+  release requires `nix flake update rust-overlay`. Named channels (`beta`,
+  `beta-YYYY-MM-DD`, `nightly`, `nightly-YYYY-MM-DD`, `stable`) require an
+  explicit latest or exact override. The approved no-pin callers (`agnix`,
   `airlock`, `fblog`, `git-absorb`, Hestia and the development shell) explicitly
   request `latest`. Go and Rust recipes never select nixpkgs' own `go`, `rustc`
   or `cargo`. `checks/packaging/go-toolchain-floor.nix` covers Go selection and

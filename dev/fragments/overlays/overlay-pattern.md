@@ -3,13 +3,14 @@
 > **Last verified:** 2026-10-27 — each Go package's compiler is the go-overlay
 > release matching its recorded source floor, and a missing floor fails unless
 > the recipe declares an override; Rust recipes select the channel extracted
-> from their source toolchain file and reject a missing channel without an
-> explicit override; `rust-toolchain-{selection,drift,fixer,parser}` verify that
-> contract; an owner overlay returns only the leaves it claims and the composer
-> deep-merges each one into `prev`, stopping at derivations; nat-overlay-parity
-> compares package leaves and checks owner overlay leaves for presence; Go check
-> names come from one declared table; the flake has no `apps` output; Bruno past
-> 4.2.x uses `npmDepsFetcherVersion = 2`.
+> from their source toolchain file, strip exact-channel host suffixes only at
+> selection, and require an explicit override for absent or named channels;
+> `rust-toolchain-{selection,drift,fixer,parser}` verify that contract; an owner
+> overlay returns only the leaves it claims and the composer deep-merges each
+> one into `prev`, stopping at derivations; nat-overlay-parity compares package
+> leaves and checks owner overlay leaves for presence; Go check names come from
+> one declared table; the flake has no `apps` output; Bruno past 4.2.x uses
+> `npmDepsFetcherVersion = 2`.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -903,12 +904,16 @@ selects the recipe's recorded `rustToolchainChannel` from
 `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable` and adds the requested
 extensions. An exact channel such as `1.96.0` selects that release; a bare minor
 such as git-branchless's `1.86` selects the newest patch of that minor.
+`mkRustToolchain` strips a host suffix such as `1.86.0-x86_64-unknown-linux-gnu`
+only for selection, choosing `1.86.0` while preserving the source spelling for
+drift checks. Extraction therefore records the declared channel unchanged.
 `vu.mkRustPlatform` feeds the same selected compiler to `makeRustPlatform` for
 both Cargo and rustc. A literal recipe passes `channel` and `recipeFile`; a
-sidecar recipe passes `sources` and `sourcesFile`. Both also pass `pkgs` and
-`pname`, with optional `override` and `sourceRoot` (default `"."`). The platform
-owns its `passthru`: `rustToolchainChannel`, `fixRustToolchain`, an optional
-`rustToolchainOverride` and `rustToolchainRoot`, and, for sidecars,
+sidecar recipe passes `sources` and `sourcesFile`. Callers passing both or
+neither `recipeFile` nor `sourcesFile` fail with a named error. Both also pass
+`pkgs` and `pname`, with optional `override` and `sourceRoot` (default `"."`).
+The platform owns its `passthru`: `rustToolchainChannel`, `fixRustToolchain`, an
+optional `rustToolchainOverride` and `rustToolchainRoot`, and, for sidecars,
 `rustUpdateExtract`. Recipes merge that passthru rather than restating its
 metadata or constructing a second writer. Sidecar update scripts pass
 `extraExtract = "${rustPlatform.passthru.rustUpdateExtract}"`; extra hash
@@ -923,20 +928,23 @@ the shared `rustToolchainFn` parser. `chatgpt-codex`, `fblog`, `pnpm_12` and
 `ci-hestia`, `git-absorb`, `git-branchless` and `oxlint` store updater-owned
 literals of that name. The rev/input update workers refresh the rev-tracked
 literals before dependency hashes or generated facts;
-`dev/scripts/update-ci-hestia.py` refreshes `ci-hestia`'s. `airlock` has no
-update target, so its drift check is the only signal and its fixer runs by hand.
-For sidecars, `mkRustPlatform` composes `mkRustReleaseUpdate` internally and
-exposes the flat `rustUpdateExtract` script: source hash repair,
-`fixRustToolchain`, then Cargo hash repair. Source extraction reads `.src`
-without selecting a compiler, so a missing channel can be repaired. The
-extractor records an empty string when neither toolchain file exists.
-`Cargo.toml`'s `rust-version` is the MSRV, so the extractor never treats it as a
-toolchain pin. A missing channel fails selection with the caller's `pname` and
-`fixRustToolchain` guidance unless that recipe explicitly passes
-`override = "latest"` or an exact version. A numeric channel makes any override
-stale and fails until the caller removes it. Nonnumeric channels such as
-`stable`, `beta` or nightly require an explicit latest or exact override; the
-recorded channel remains unchanged for drift checks. An unavailable numeric
+`dev/scripts/update-ci-hestia.py` refreshes `ci-hestia`'s after rewriting the
+recipe. `airlock` has no update target, so its drift check is the only signal
+and its fixer runs by hand. For sidecars, `mkRustPlatform` composes
+`mkRustReleaseUpdate` internally and exposes the flat `rustUpdateExtract`
+script: source hash repair, `fixRustToolchain`, then Cargo hash repair. Source
+extraction reads `.src` without selecting a compiler, so a missing channel can
+be repaired. The extractor records an empty string when neither toolchain file
+exists or its `[toolchain]` table omits `channel`, so drift checks and the
+recipe override path remain reachable. Malformed TOML and duplicate channels
+still fail. `Cargo.toml`'s `rust-version` is the MSRV, so the extractor never
+treats it as a toolchain pin. A missing channel fails selection with the
+caller's `pname` and `fixRustToolchain` guidance unless that recipe explicitly
+passes `override = "latest"` or an exact version. A numeric channel, including a
+host-suffixed exact channel, makes any override stale and fails until the caller
+removes it. Named channels (`beta`, `beta-YYYY-MM-DD`, `nightly`,
+`nightly-YYYY-MM-DD`, `stable`) require an explicit latest or exact override;
+the recorded channel remains unchanged for drift checks. An unavailable numeric
 channel or exact override fails with `nix flake update rust-overlay` guidance;
 neither helper selects nixpkgs' `rustc` or `cargo`.
 
@@ -964,13 +972,14 @@ The Rust checks cover separate boundaries:
   destination. It rejects callers that omit both destinations or pass both
   `recipeFile` and `sourcesFile`.
 - `checks/packaging/rust-toolchain-parser.nix` runs the shared parser against
-  TOML and legacy files, records absence when neither exists, and rejects
-  simultaneous files or a toolchain table without a channel.
-- `checks/packaging/rust-toolchain-selection.nix` verifies exact and bare-minor
-  selection, extensions and explicit overrides against fixture releases and a
-  locked-overlay release. It rejects missing channels, overrides of numeric
-  channels, nonnumeric channels without an explicit override, unavailable
-  releases and bare-minor overrides.
+  TOML and legacy files, records absence when neither exists or the toolchain
+  table omits its channel, and rejects simultaneous files, malformed TOML and
+  duplicate channels.
+- `checks/packaging/rust-toolchain-selection.nix` verifies exact, bare-minor and
+  host-suffixed selection, extensions and explicit overrides against fixture
+  releases and a locked-overlay release. It rejects missing channels, overrides
+  of detected versions, named channels without an explicit override, unavailable
+  releases, bare-minor overrides and ambiguous platform destinations.
 
 Recipe callers retain the source-derived floor even when its release is already
 locked: a stale-LOW floor selects the wrong compiler. A recipe needing an

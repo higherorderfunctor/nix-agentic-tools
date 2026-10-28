@@ -16,12 +16,21 @@
       (version: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+" version != null)
       (builtins.attrNames stable);
     declared = channel != null && channel != "";
-    detected = declared && builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" channel != null;
+    # 1.86.0-x86_64-unknown-linux-gnu selects 1.86.0; drift keeps the source spelling.
+    hosted =
+      if declared
+      then builtins.match "([0-9]+\\.[0-9]+\\.[0-9]+)-[^-]+-[^-]+-[^-]+(-[^-]+)?" channel
+      else null;
+    version =
+      if hosted == null
+      then channel
+      else builtins.head hosted;
+    detected = declared && builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" version != null;
     requested =
       if detected && override != null
       then throw "${pname}: Rust channel ${channel} is detected; remove the stale mkRustToolchain/mkRustPlatform override from the recipe"
       else if detected
-      then channel
+      then version
       else if override != null && override != "latest" && builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+" override == null
       then throw "${pname}: invalid Rust override ${override}; the recipe override must be \"latest\" or an exact version (major.minor.patch)"
       else if override != null
@@ -141,21 +150,23 @@ in {
       rustc = rust;
     };
   in
-    platform
-    // {
-      passthru =
-        {rustToolchainChannel = channel;}
-        // lib.optionalAttrs (override != null) {rustToolchainOverride = override;}
-        // lib.optionalAttrs (sourceRoot != ".") {rustToolchainRoot = sourceRoot;}
-        // lib.optionalAttrs (recipeFile != null) {
-          fixRustToolchain = mkRustToolchainFix {
-            inherit pkgs pname recipeFile sourceRoot;
+    assert lib.assertMsg ((recipeFile == null) != (sourcesFile == null))
+    "${pname}: mkRustPlatform requires exactly one of recipeFile or sourcesFile";
+      platform
+      // {
+        passthru =
+          {rustToolchainChannel = channel;}
+          // lib.optionalAttrs (override != null) {rustToolchainOverride = override;}
+          // lib.optionalAttrs (sourceRoot != ".") {rustToolchainRoot = sourceRoot;}
+          // lib.optionalAttrs (recipeFile != null) {
+            fixRustToolchain = mkRustToolchainFix {
+              inherit pkgs pname recipeFile sourceRoot;
+              attr = pname;
+            };
+          }
+          // lib.optionalAttrs (sourcesFile != null) (mkRustReleaseUpdate {
+            inherit pkgs pname sourceRoot sourcesFile targets;
             attr = pname;
-          };
-        }
-        // lib.optionalAttrs (sourcesFile != null) (mkRustReleaseUpdate {
-          inherit pkgs pname sourceRoot sourcesFile targets;
-          attr = pname;
-        });
-    };
+          });
+      };
 }
