@@ -929,8 +929,9 @@ the shared `rustToolchainFn` parser. `chatgpt-codex`, `fblog`, `pnpm_12` and
 literals of that name. The rev/input update workers refresh the rev-tracked
 literals before dependency hashes or generated facts;
 `dev/scripts/update-ci-hestia.py` refreshes `ci-hestia`'s after rewriting the
-recipe. `airlock` has no update target, so its drift check is the only signal
-and its fixer runs by hand. For sidecars, `mkRustPlatform` composes
+recipe; `dev/scripts/test-ci-cache.py` verifies that order at the Nix boundary.
+`airlock` has no update target, so its drift check is the only signal and its
+fixer runs by hand. For sidecars, `mkRustPlatform` composes
 `mkRustReleaseUpdate` internally and exposes the flat `rustUpdateExtract`
 script: source hash repair, `fixRustToolchain`, then Cargo hash repair. Source
 extraction reads `.src` without selecting a compiler, so a missing channel can
