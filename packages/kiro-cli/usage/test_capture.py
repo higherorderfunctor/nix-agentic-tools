@@ -752,14 +752,18 @@ class CaptureTests(unittest.TestCase):
         with patch.dict(os.environ, {"KIRO_USAGE_DB": str(self.path)}):
             addon.load(None)
         self.addCleanup(addon.done)
-        def flow(host="runtime.kiro.dev", path="/v1/responses?secret=never", ident="selected", target=None, body=b'{"model":"fake"}'):
+        def flow(host="runtime.kiro.dev", path="/v1/responses?secret=never", ident="selected", target=None, body=b'{"model":"fake"}', method="POST"):
             headers = {"authorization": "never", "cookie": "never", **({"x-amz-target": target} if target else {})}
-            return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method="POST", headers=headers, get_content=lambda strict: body), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
+            return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method=method, headers=headers, get_content=lambda strict: body), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
         generate = "KiroRuntimeService.GenerateAssistantResponse"
         # The schema's REST path is never sent; RPC selection is the exact target on POST / only.
         for host, path, target in (("not-kiro.dev", "/v1/responses", None), ("kiro.dev.evil", "/v1/responses", None), ("kiro.dev", "/other", None), ("kiro.dev", "/generateAssistantResponse", None),
                                    ("kiro.dev", "/", None), ("kiro.dev", "/", "KiroRuntimeService.GetUsageLimits"), ("kiro.dev", "/", generate + "X"), ("kiro.dev", "/v1/responses/", generate), ("not-kiro.dev", "/", generate)):
             rejected = flow(host, path, f"{host}{path}{target}", target)
+            addon.request(rejected)
+            self.assertNotIn(rejected.id, addon.active)
+        for method in ("GET", "OPTIONS"):  # RPC calls are POST; the target alone does not select
+            rejected = flow("kiro.dev", "/", f"rpc-{method}", generate, method=method)
             addon.request(rejected)
             self.assertNotIn(rejected.id, addon.active)
         selected = flow()

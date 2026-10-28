@@ -46,15 +46,15 @@ GenerateAssistantResponse (workflow steps, subagents, session titles). The
 latter is AWS JSON 1.0 RPC: Kiro sends it as path `/` with the header
 `x-amz-target: KiroRuntimeService.GenerateAssistantResponse`. The schema's REST
 path `/generateAssistantResponse` is never sent. A request to `/` is selected
-only when that header equals this value exactly, so other KiroRuntimeService
-operations on `/` pass through uncaptured. Its response is always decoded as an
-AWS event stream, as Kiro's client does, whatever content type the server labels
-it with. Query strings are discarded. The addon stores only the host, method,
-constant path, the `x-amz-target` value for selected RPC calls (as `target`),
-request content encoding, response status, response content type and encoding,
-and the upstream `x-amzn-requestid` / `x-request-id`. It never serializes
-arbitrary headers, cookies, authorization, or URLs. Full **bodies** are
-deliberately retained and may themselves contain secrets.
+only for POST with that header equal to this value exactly, so other
+KiroRuntimeService operations on `/` pass through uncaptured. Its response is
+always decoded as an AWS event stream, as Kiro's client does, whatever content
+type the server labels it with. Query strings are discarded. The addon stores
+only the host, method, constant path, the `x-amz-target` value for selected RPC
+calls (as `target`), request content encoding, response status, response content
+type and encoding, and the upstream `x-amzn-requestid` / `x-request-id`. It
+never serializes arbitrary headers, cookies, authorization, or URLs. Full
+**bodies** are deliberately retained and may themselves contain secrets.
 
 The response streaming callback returns the same bytes, including the EOF
 sentinel, once it has decoded and framed that chunk; it never waits for SQLite.

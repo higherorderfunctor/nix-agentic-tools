@@ -51,7 +51,7 @@ class UsageCapture:
         if not (host == "kiro.dev" or host.endswith(".kiro.dev")):
             return
         path = flow.request.path.split("?", 1)[0]
-        target = flow.request.headers.get("x-amz-target") if path == RPC else None
+        target = flow.request.headers.get("x-amz-target") if path == RPC and flow.request.method == "POST" else None
         if not (path == RESPONSES or target == GENERATE):
             return
         if self.failed:
