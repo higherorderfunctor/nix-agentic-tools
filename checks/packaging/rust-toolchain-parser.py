@@ -33,12 +33,24 @@ class RustToolchainParser(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn(diagnostic, result.stderr)
 
+    def test_host_suffix_preserved_for_drift(self):
+        channel = "1.86.0-x86_64-unknown-linux-gnu"
+        self.assert_channel(
+            {"rust-toolchain.toml": f'[toolchain]\nchannel = "{channel}"\n'}, channel
+        )
+
     def test_legacy_bare_channel(self):
         self.assert_channel({"rust-toolchain": "1.86.0\n"}, "1.86.0")
 
     def test_legacy_toml_channel(self):
         self.assert_channel(
             {"rust-toolchain": '[toolchain]\nchannel = "1.87.0"\n'}, "1.87.0"
+        )
+
+    def test_legacy_toml_without_channel_records_absence(self):
+        self.assert_channel(
+            {"rust-toolchain": '[toolchain]\nprofile = "minimal"\n'},
+            "",
         )
 
     def test_missing_files_record_absence(self):
@@ -53,21 +65,36 @@ class RustToolchainParser(unittest.TestCase):
             "both rust-toolchain and rust-toolchain.toml exist",
         )
 
-    def test_rejects_legacy_toml_without_channel(self):
+    def test_rejects_duplicate_channels(self):
         self.assert_rejected(
-            {"rust-toolchain": '[toolchain]\nprofile = "minimal"\n'},
-            "expected one nonempty toolchain channel",
+            {"rust-toolchain.toml": '[toolchain]\nchannel = "1.86.0"\nchannel = "1.88.0"\n'},
+            "Cannot overwrite a value",
         )
 
-    def test_rejects_toml_without_channel(self):
+    def test_rejects_comment_only_legacy_file(self):
         self.assert_rejected(
-            {"rust-toolchain.toml": '[toolchain]\nprofile = "minimal"\n'},
-            "expected one nonempty toolchain channel",
+            {"rust-toolchain": "# pinned elsewhere\n"},
+            "expected a [toolchain] table",
+        )
+
+    def test_rejects_empty_legacy_file(self):
+        self.assert_rejected({"rust-toolchain": ""}, "expected a [toolchain] table")
+
+    def test_rejects_malformed_toml(self):
+        self.assert_rejected(
+            {"rust-toolchain.toml": "[toolchain\n"},
+            "Expected ']'",
         )
 
     def test_toml_channel(self):
         self.assert_channel(
             {"rust-toolchain.toml": '[toolchain]\nchannel = "1.88.0"\n'}, "1.88.0"
+        )
+
+    def test_toml_without_channel_records_absence(self):
+        self.assert_channel(
+            {"rust-toolchain.toml": '[toolchain]\ncomponents = ["rustfmt"]\nprofile = "minimal"\n'},
+            "",
         )
 
 

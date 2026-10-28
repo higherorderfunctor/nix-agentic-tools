@@ -1,4 +1,4 @@
-# Pin the Rust parser's legacy formats, absence, and ambiguous/missing channels.
+# Pin rustup file formats, absent channels, and rejected ambiguous/malformed files.
 {pkgs, ...}: {
   checks.rust-toolchain-parser = pkgs.runCommand "rust-toolchain-parser" {} ''
     set -euETo pipefail

@@ -35,12 +35,7 @@
           extensions = ["rust-src"];
         }).extensions
         == ["rust-src"];
-      "host-suffixed channel permits an exact recipe override" =
-        (resolve {
-          channel = "1.86.0-x86_64-unknown-linux-gnu";
-          override = "1.86.0";
-        }).version
-        == "1.86.0";
+      "host-suffixed exact channel selects its release" = (resolve {channel = "1.86.0-x86_64-unknown-linux-gnu";}).version == "1.86.0";
       "latest override skips prereleases" = (resolve {override = "latest";}).version == "1.99.1";
       "locked exact release matches overlay derivation" =
         (vu.mkRustToolchain {
@@ -56,34 +51,40 @@
           override = "latest";
         }).version
         == "1.99.1";
-      "nonnumeric beta permits an exact recipe override" =
-        (resolve {
-          channel = "beta";
-          override = "1.86.0";
-        }).version
-        == "1.86.0";
-      "nonnumeric nightly permits a latest recipe override" =
-        (resolve {
-          channel = "nightly-2026-10-27";
-          override = "latest";
-        }).version
-        == "1.99.1";
-      "nonnumeric stable permits a latest recipe override" =
-        (resolve {
-          channel = "stable";
-          override = "latest";
-        }).version
-        == "1.99.1";
+      "mkRustPlatform preserves host-suffixed channel for drift" =
+        (fixture.mkRustPlatform {
+          inherit pkgs;
+          channel = "1.86.0-x86_64-unknown-linux-gnu";
+          pname = "recipe-fixture";
+          recipeFile = "./package.nix";
+        }).passthru.rustToolchainChannel
+        == "1.86.0-x86_64-unknown-linux-gnu";
       "rejects a bare minor override" = rejects {override = "1.86";};
       "rejects a declared beta alias" = rejects {channel = "beta";};
+      "rejects a declared dated beta" = rejects {channel = "beta-2026-10-27";};
       "rejects a declared dated nightly" = rejects {channel = "nightly-2026-10-27";};
+      "rejects a declared nightly alias" = rejects {channel = "nightly";};
       "rejects a declared stable alias" = rejects {channel = "stable";};
-      "rejects a host-suffixed channel without a recipe override" = rejects {channel = "1.86.0-x86_64-unknown-linux-gnu";};
       "rejects a nonnumeric override" = rejects {override = "stable";};
       "rejects a prerelease" = rejects {channel = "1.86.11rc1";};
       "rejects a stale exact override" = rejects {
         channel = "1.86.0";
         override = "1.86.0";
+      };
+      "rejects a stale host-suffixed exact override" = rejects {
+        channel = "1.86.0-x86_64-unknown-linux-gnu";
+        override = "1.86.0";
+      };
+      "rejects a dated numeric channel as no host" = rejects {
+        channel = "1.86-2026-10-27";
+      };
+      "rejects a stale host-suffixed minor override" = rejects {
+        channel = "1.86-x86_64-unknown-linux-gnu";
+        override = "1.86.0";
+      };
+      "rejects a stale host-suffixed latest override" = rejects {
+        channel = "1.86.0-x86_64-unknown-linux-gnu";
+        override = "latest";
       };
       "rejects a stale latest override" = rejects {
         channel = "1.86.0";
@@ -94,6 +95,18 @@
       "rejects an unavailable patch of a known minor" = rejects {channel = "1.86.1";};
       "rejects an unknown channel" = rejects {channel = "99.0.0";};
       "rejects an unknown override" = rejects {override = "99.0.0";};
+      "rejects mkRustPlatform with both recipeFile and sourcesFile" =
+        !(builtins.tryEval (fixture.mkRustPlatform {
+          inherit pkgs;
+          pname = "duplicate-destination";
+          recipeFile = "./package.nix";
+          sourcesFile = "./sources.json";
+        })).success;
+      "rejects mkRustPlatform without recipeFile or sourcesFile" =
+        !(builtins.tryEval (fixture.mkRustPlatform {
+          inherit pkgs;
+          pname = "missing-destination";
+        })).success;
       "tryEval positive control forces a resolvable compiler" = (probe {channel = "1.86.0";}).success && (probe {channel = "1.86.0";}).value == stable."1.86.0".default.outPath;
     };
     failing = builtins.attrNames (lib.filterAttrs (_: passed: !passed) cases);
