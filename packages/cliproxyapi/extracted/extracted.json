@@ -2912,7 +2912,7 @@
     },
     "server.response-compression": {
       "description": "ResponseCompression controls negotiated compression of downstream HTTP responses.\nIt is configured under server.response-compression. Config.ServerResponseCompression\nmirrors it for JSON and programmatic access; read the effective value via\nConfig.EffectiveResponseCompression.",
-      "template": "Negotiated compression of downstream HTTP responses (including SSE streams).\nResponses are compressed only when the client advertises zstd or gzip in\nAccept-Encoding; WebSocket upgrades are never wrapped.",
+      "template": "Negotiated compression of downstream HTTP responses (including SSE streams).\nResponses are compressed only when the client advertises zstd or gzip in\nAccept-Encoding; WebSocket upgrades are never wrapped. Encoder memory is\nretained for the lifetime of an open stream and depends on prior pool usage.",
       "type": "object"
     },
     "server.response-compression.enabled": {
