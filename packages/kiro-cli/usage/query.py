@@ -357,12 +357,25 @@ def call_counters(row, model):
     return values, {name for name in ESTIMATED if exact[name] is None and values[name] is not None}
 
 
+def counter_item(source, name):
+    """A group's estimate-filled metric when any call lacked the exact counter, else its observed one; (metric, estimated)."""
+    estimated = name in source.get("estimates", {})
+    return (source["estimates"] if estimated else source["metrics"])[name], estimated
+
+
+def hit_rate(source):
+    return source.get("estimates", {}).get("cache_hit_rate") or source.get("cache_hit_rate", {})
+
+
+def shows_discount(captures):
+    return any(source["credit_discount"]["eligible"] or source["credit_discount"]["anomaly"]
+               for source in (captures, *captures.get("models", [])))
+
+
 def capture_tables(captures):
-    """Shared model totals and conversation groups for both human reports."""
+    """Full report model totals and conversation groups."""
     def counter(source, name):
-        observed = source["metrics"][name]
-        estimated = name in source.get("estimates", {})
-        item = source["estimates"][name] if estimated else observed
+        item, estimated = counter_item(source, name)
         total = item["observed_sum"]
         if total is None:
             return None
@@ -372,10 +385,9 @@ def capture_tables(captures):
         if item["unknown"]:
             text += f" ({item['known']}/{item['known'] + item['unknown']})"
         return text
-    show_discount = any(source["credit_discount"]["eligible"] or source["credit_discount"]["anomaly"]
-                        for source in (captures, *captures.get("models", [])))
+    show_discount = shows_discount(captures)
     def row(label, source):
-        rate = source.get("estimates", {}).get("cache_hit_rate") or source.get("cache_hit_rate", {})
+        rate = hit_rate(source)
         hit = rate.get("percentage")
         hit = f"~{hit:.1f}%" if hit is not None else None
         if hit is not None and rate["unknown"]:
@@ -435,15 +447,57 @@ def render(report):
     return "\n".join(lines)
 
 
-def render_summary(report):
-    """Compact model totals and conversation groups; no transcript or disk costs."""
+def credits_text(total):
+    """Two decimals; a positive total that would round to zero shows <0.01."""
+    return None if total is None else "<0.01" if 0 < total < .005 else f"{total:,.2f}"
+
+
+def tokens_text(total):
+    """950, 12.3K, 318K, 1.2M: three significant figures at most, never 1000K."""
+    if total < 999.5:
+        return f"{total:.0f}"
+    for unit in "KMB":
+        total /= 1000
+        if total < 999.5 or unit == "B":
+            return f"{total:.1f}{unit}" if total < 99.95 else f"{total:.0f}{unit}"
+
+
+def plural(count, noun):
+    return f"{count:,} {noun}{'s' if count != 1 else ''}"
+
+
+def render_summary(report, caveats=()):
+    """The exit summary: headline, model table and pool line; one caveat line only when totals are suspect."""
     captures = report["captures"]
-    credits = captures["metrics"]["credits"]
-    coverage = (f"Captured calls only; credits known {credits['known']}/{captures['observations']}; incomplete {captures.get('incomplete', 0)}."
-                if captures["available"] else "Capture source unavailable; totals unknown.")
-    return "\n".join([
-        capture_tables(captures), coverage, *CAPTURE_NOTES,
-    ])
+    n, credits = captures["observations"], captures["metrics"]["credits"]
+    lines = [f"Kiro usage · {report['session'][:len('sess_') + 8]} · {report['scope']} · {plural(n, 'request')}"
+             f" · {value(credits_text(credits['observed_sum']))} credits"]
+    show_discount = shows_discount(captures)
+    def row(model):
+        item, estimated = counter_item(model, "total_tokens")
+        hit, discount = hit_rate(model).get("percentage"), model["credit_discount"]["percentage"]
+        return [model["requested_model"], model["observations"], credits_text(model["metrics"]["credits"]["observed_sum"]),
+                None if item["observed_sum"] is None else "~" * estimated + tokens_text(item["observed_sum"]),
+                None if hit is None else f"~{hit:.0f}%",
+                *([None if discount is None else f"~{discount:.0f}%"] if show_discount else [])]
+    def order(model):
+        total = model["metrics"]["credits"]["observed_sum"]
+        return total is None, -(total or 0), model["requested_model"] is None, model["requested_model"] or ""
+    pools = captures["pools"]
+    if captures["available"]:
+        columns = ["Model", "Requests", "Credits", "Tokens", "Cache hit", *(["Discount"] if show_discount else [])]
+        lines += ["", table(columns, [row(model) for model in sorted(captures["models"], key=order)], range(1, len(columns))), "",
+                  "    ".join(f"{label}  {pool['observations']:,} req · {value(credits_text(pool['metrics']['credits']['observed_sum']))} cr"
+                             for label, pool in (("Main conversation", pools["root_conversation"]), ("Subagents/workflows", pools["other_linked_conversations"]),
+                                                 ("Unknown", pools["unknown"])) if label != "Unknown" or pool["observations"])]
+    unknown, metered = credits["unknown"], captures.get("multiple_metering_events")
+    duplicates = len(captures.get("duplicate_upstream_request_ids", []))
+    caveats = [*([] if captures["available"] else ["capture unavailable"]),
+               *([f"credits unknown for {unknown:,}/{plural(n, 'request')}"] if unknown else []),
+               *([f"{captures['incomplete']:,} incomplete"] if captures.get("incomplete") else []),
+               *([plural(duplicates, "duplicate request ID")] if duplicates else []),
+               *([plural(metered, "multi-metered call")] if metered else []), *caveats]
+    return "\n".join(lines + (["⚠ " + "; ".join(caveats)] if caveats else []))
 
 
 def main():

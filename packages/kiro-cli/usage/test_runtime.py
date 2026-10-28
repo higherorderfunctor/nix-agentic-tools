@@ -39,14 +39,27 @@ class SummaryTests(unittest.TestCase):
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
                 runtime.invocation_summary(root, "a" * 32, 1 << 30)
-            self.assertIn("Session: sess_selected", output.getvalue())
+            self.assertIn("Kiro usage · sess_selected · tree · 1 request", output.getvalue())
             self.assertNotIn("sess_other", output.getvalue())
-            self.assertIn("full root-lineage totals", output.getvalue())
-            self.assertIn("no conversation identity", output.getvalue())
+            self.assertIn("\n⚠ credits unknown for 1/1 request; 1 incomplete; calls with no conversation identity excluded\n", output.getvalue())
             with contextlib.redirect_stderr(io.StringIO()) as output:
                 runtime.invocation_summary(root, "c" * 32, 1 << 30)
             self.assertIn("unavailable", output.getvalue())
-            self.assertNotIn("Session:", output.getvalue())
+            self.assertNotIn("Kiro usage ·", output.getvalue())
+
+    def test_invocation_caveats_print_once_across_sessions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            collector = Collector(root / "usage.sqlite3")
+            for session in ("sess_first", "sess_second", None):
+                collector.finish(collector.begin({"invocation": "a" * 32}, json.dumps({"metadata": {"kiro:conversation_id": session}}).encode()))
+            collector.close()
+            with contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.invocation_summary(root, "a" * 32, 1 << 30)
+            text = output.getvalue()
+            self.assertEqual((text.count("Kiro usage · sess_first"), text.count("Kiro usage · sess_second")), (1, 1))
+            self.assertEqual(text.count("calls with no conversation identity excluded"), 1)
+            self.assertLess(text.index("Kiro usage · sess_second"), text.index("calls with no conversation identity excluded"))
 
     def test_summary_warns_past_the_payload_threshold(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -58,7 +71,7 @@ class SummaryTests(unittest.TestCase):
                 with contextlib.redirect_stderr(io.StringIO()) as output:
                     runtime.invocation_summary(root, "a" * 32, threshold)
                 self.assertEqual("archive or delete " + str(root / "usage.sqlite3") in output.getvalue(), warned)
-                self.assertIn("Session: sess_selected", output.getvalue())
+                self.assertIn("Kiro usage · sess_selected", output.getvalue())
 
     def test_root_lineage_is_selected_once_without_disk(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -71,11 +84,11 @@ class SummaryTests(unittest.TestCase):
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
                 runtime.invocation_summary(root, "a" * 32, 1 << 30)
-            self.assertEqual(output.getvalue().count("Session: sess_root  Scope: tree"), 1)
+            self.assertEqual(output.getvalue().count("Kiro usage · sess_root · tree · 2 requests"), 1)
             self.assertNotIn("sess_other", output.getvalue())
-            self.assertNotIn("Session: sess_child", output.getvalue())
-            self.assertIn("forks", output.getvalue())
-            self.assertIn("Unknown", output.getvalue())
+            self.assertNotIn("Kiro usage · sess_child", output.getvalue())
+            self.assertIn("Subagents/workflows  2 req", output.getvalue())
+            self.assertNotIn("Unknown", output.getvalue())
 
     @staticmethod
     def writing_child(status, write):
@@ -111,8 +124,7 @@ class SummaryTests(unittest.TestCase):
                     with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
                         self.assertEqual(db.execute("SELECT count(*) FROM disk_records WHERE kind='usage_summary'").fetchone()[0], turns)
                         self.assertEqual(db.execute("SELECT json_extract(identifiers_json,'$.parentSessionId') FROM disk_sessions").fetchone()[0], "sess_parent")
-                    self.assertIn("Scope: tree", output.getvalue())
-                    self.assertIn("Unknown", output.getvalue())
+                    self.assertIn("Kiro usage · sess_auto · tree · 1 request · — credits", output.getvalue())  # disk credits stay out
 
     def test_exec_settles_queued_captures_before_refresh(self):
         # Empty store at exit: the first capture commits 150 ms later, while the settle waits.

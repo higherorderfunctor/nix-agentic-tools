@@ -113,10 +113,13 @@ class DiscountQueryTests(unittest.TestCase):
         for name in ("input_tokens", "output_tokens", "cache_read_tokens", "total_tokens"):
             self.assertIsNone(captures["metrics"][name]["observed_sum"])
         self.assertIsNone(captures["cache_hit_rate"]["percentage"])
-        output = query.render_summary(report)
+        output = query.render(report)
         self.assertIn("Discount %", output)
         self.assertIn("~62.5% (8/10)", output)
         self.assertIn("not observed cache hits", output)
+        output = query.render_summary(report)
+        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~70%\s+~62%\n")
+        self.assertNotIn("not observed cache hits", output)
         self.db.execute("UPDATE captures SET cache_read_tokens=0,input_tokens=100,output_tokens=2")
         updated = query.query(self.db, "sess_root", "tree")["captures"]
         self.assertEqual(updated["cache_hit_rate"]["percentage"], 0)
@@ -139,7 +142,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.db.executescript("DROP TABLE events; DROP TABLE chunks;")
         report = query.query(self.db, "sess_root")
         self.assertEqual(report["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
-        self.assertNotIn("Discount %", query.render_summary(report))
+        self.assertNotIn("Discount", query.render_summary(report))
 
     def test_anomaly_is_visible_without_fabricating_a_rate(self):
         self.add({**FIXTURE[0], "label": "anomaly", "credits": 1})
@@ -149,10 +152,11 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertIsNone(diagnostic["percentage"])
         self.assertLess(diagnostic["diagnostics"][0]["raw_discount_score"], 0)
         self.assertEqual(diagnostic["diagnostics"][0]["capture_id"], "anomaly")
-        output = query.render_summary(report)
+        output = query.render(report)
         self.assertIn("Discount %", output)
         self.assertIn("Profile anomalies: 1", output)
         self.assertRegex(output, r"claude-opus-5.5\s+1\s.*\s1.000000\s+—\n")  # Discount % stays unavailable
+        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+1\s+1.00\s+~18.0K\s+~0%\s+—\n")
 
     def test_retained_terminal_and_reasoning_proof_are_required(self):
         ident = self.add(FIXTURE[0], extra_output={"type": "reasoning", "summary": []})
@@ -165,7 +169,7 @@ class DiscountQueryTests(unittest.TestCase):
                         (ident, b"retained", '{"type":"response.reasoning.delta"}'))
         report = query.query(self.db, "sess_root")
         self.assertEqual(report["captures"]["credit_discount"]["eligible"], 0)
-        self.assertNotIn("Discount %", query.render_summary(report))
+        self.assertNotIn("Discount", query.render_summary(report))
         self.db.execute("UPDATE events SET event_name=?,data_json=? WHERE seq=1", ("response.function_call_arguments.delta", json.dumps({"type": "response.function_call_arguments.delta"})))
         self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["eligible"], 0)
         self.db.execute("DELETE FROM events WHERE seq=1")

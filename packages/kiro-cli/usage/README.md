@@ -335,31 +335,40 @@ sums separate and show coverage; warnings use standard error. The indexer also
 accepts `--json` for its source, record, and omission counts.
 
 The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
-commands also print model totals and a pooled credit/token summary to standard
-error after Kiro exits. A local proxy marker links the invocation's captures to
-their recorded session identities. Kiro uses inherited terminal input and output
-directly; no screen parsing or process-ID guess selects the session. Standard
-output, exit status, and signals are preserved. Tracked chat runs as a child of
-the summary supervisor, retaining the terminal descriptors with its own process
-ID. Explicit help, version, login, and administrative commands skip the summary,
-including after recognized global options. Other commands have no automatic Kiro
-summary.
+commands also print a short summary to standard error after Kiro exits: per root
+session, a headline with its request count and credits, a model table of
+requests, credits to two decimals, rounded token counts and cache-hit share
+sorted by credits, and one line splitting the main conversation from subagents
+and workflows. One `⚠` line appears only when totals are suspect: capture
+unavailable, unknown credits, incomplete or unfinished calls, calls without a
+conversation identity, duplicate request IDs, or calls with several metering
+events. `kiro-usage session` keeps the full report. A local proxy marker links
+the invocation's captures to their recorded session identities. Kiro uses
+inherited terminal input and output directly; no screen parsing or process-ID
+guess selects the session. Standard output, exit status, and signals are
+preserved. Tracked chat runs as a child of the summary supervisor, retaining the
+terminal descriptors with its own process ID. Explicit help, version, login, and
+administrative commands skip the summary, including after recognized global
+options. Other commands have no automatic Kiro summary.
 
 These are full root-linked session totals and can include earlier work from a
 resumed session. Explicit root conversation IDs include related captures without
 requiring an on-disk index. Root-linked lineage may include forks as well as
 subagents. Captured requests and credits are counted once; disk credits never
-enter the total. Root conversation matches the selected root ID; Other linked
-conversations have another ID; Unknown lacks a conversation ID. These groups do
-not identify caller roles: workflow steps and subagents carry their own
-conversation IDs and land in other linked conversations, which may also include
-helpers or forks. Tables group requests, credits, and tokens by model and pool
-rather than listing individual delegates. Exact counters are used when observed;
-cells that add estimates for calls lacking the exact counter carry `~`, and
-missing values show an em dash (see [Token estimates](#token-estimates)). Hit
-percentage is cache-hit requests divided by requests with a reported or
-estimated cached value, where an estimated split counts as a hit only at 1% of
-input or more; partial coverage remains visible. No captured conversation
+enter the total. The exit summary's Main conversation line is the pool whose
+conversation ID matches the selected root ID; Subagents/workflows is every other
+linked conversation; an Unknown entry, for calls lacking a conversation ID,
+appears only when nonzero. The partition does not prove caller roles: workflow
+steps and subagents carry their own conversation IDs and land in other linked
+conversations, which may also include helpers or forks. Requests, credits, and
+tokens are grouped by model and pool rather than listing individual delegates.
+Exact counters are used when observed; cells that add estimates for calls
+lacking the exact counter carry `~`, and missing values show an em dash (see
+[Token estimates](#token-estimates)). Hit percentage is cache-hit requests
+divided by requests with a reported or estimated cached value, where an
+estimated split counts as a hit only at 1% of input or more. The full report
+(`kiro-usage session` or `query`) keeps the Root conversation, Other linked, and
+Unknown pool tables and the partial-coverage markers. No captured conversation
 identity means an explicit unavailable summary. Before reporting, the outer
 launch incrementally indexes `~/.kiro/sessions` if present, using the existing
 database and checkpoints. It reads the `session.json` of sessions whose
