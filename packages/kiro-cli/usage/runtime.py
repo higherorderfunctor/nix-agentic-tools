@@ -139,7 +139,7 @@ SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to pers
 
 
 def invocation_captures(db, invocation, timeout):
-    """This invocation's exact marker rows once the async writer settles or the wait times out."""
+    """(rows, settled): this invocation's marker rows, and whether they went quiet and finished before the deadline."""
     deadline = time.monotonic() + timeout
     previous_rows, settled = None, time.monotonic()
     while True:
@@ -151,9 +151,9 @@ def invocation_captures(db, invocation, timeout):
         if rows != previous_rows:
             previous_rows, settled = rows, time.monotonic()
         if rows and all(state != "recording" for _, _, state in rows) and time.monotonic() - settled >= .1:
-            return rows
+            return rows, True
         if time.monotonic() >= deadline:
-            return rows
+            return rows, False
         time.sleep(.05)
 
 
@@ -167,18 +167,17 @@ def settle_captures(path, invocation):
     """True once this invocation's captures are persisted and finished; disk indexing scopes from them."""
     try:
         with read_only(path) as db:
-            rows = invocation_captures(db, invocation, SETTLE_TIMEOUT)
+            return invocation_captures(db, invocation, SETTLE_TIMEOUT)[1]
     except (OSError, ValueError, sqlite3.Error):
         return False  # invocation_summary reports the same failure.
-    return bool(rows) and all(state != "recording" for _, _, state in rows)
 
 
-def invocation_summary(path, invocation, disk_refreshed=False):
+def invocation_summary(path, invocation, disk_refreshed=False, settled=True):
     """Read only exact marker matches; the exit path settles them first."""
     from query import FOOTER_WARNINGS, query, render_summary
     try:
         with read_only(path) as db:
-            rows = invocation_captures(db, invocation, 0)
+            rows = invocation_captures(db, invocation, 0)[0]
             identities = [root or conversation for root, conversation, _ in rows]
             sessions = sorted({name if name.startswith("sess_") else "sess_" + name
                                for name in identities if isinstance(name, str) and name})
@@ -186,7 +185,8 @@ def invocation_summary(path, invocation, disk_refreshed=False):
                 print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
                 return
             print("\nKiro usage summary (full root-lineage totals observed in this invocation; includes resumed work and forks):", file=sys.stderr)
-            if any(state == "recording" for _, _, state in rows):
+            # The exit path's wait outcome counts even if a call finished after it timed out.
+            if not settled or any(state == "recording" for _, _, state in rows):
                 print("Warning: capture writer still has unfinished calls; totals may be incomplete.", file=sys.stderr)
             if any(not name for name in identities):
                 print("Warning: some invocation calls have no conversation identity and are excluded.", file=sys.stderr)
@@ -296,7 +296,7 @@ def exec_command(path, port, arguments):
                     # unsettled wait never reports a clean refresh.
                     settled = settle_captures(path, invocation)
                     refreshed = refresh_disk_index(path, started) and settled
-                    invocation_summary(path, invocation, disk_refreshed=refreshed)
+                    invocation_summary(path, invocation, disk_refreshed=refreshed, settled=settled)
                     sys.stderr.flush()
                 except (OSError, ValueError):
                     # Only a failed summary sink is silenced. Redirect its fd so

@@ -341,10 +341,13 @@ without replacing the child exit status, and disk observations may then be
 stale; so does a running explicit `index` pass, which the exit refresh skips
 rather than interleaving with. Manual session queries use the last completed
 index. Before that refresh, which is scoped by persisted captures, the exit path
-waits at most two seconds for the asynchronous capture writer to finish this
-launch's calls; the summary flags unfinished calls, and a timed-out wait reports
-disk observations as not refreshed. Nested `kiro-usage exec` launches reuse the
-parent's marker; only the outer launch prints the summary.
+waits at most two seconds for this launch's captured calls to finish and stay
+unchanged for 0.1 s. That quiet period is a heuristic, not a writer
+acknowledgement: a call started within a moment of Kiro exiting can persist
+after it. A timed-out wait flags unfinished calls in the summary, even if they
+finish during the refresh, and reports disk observations as not refreshed.
+Nested `kiro-usage exec` launches reuse the parent's marker; only the outer
+launch prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload exits with an error. Replay of

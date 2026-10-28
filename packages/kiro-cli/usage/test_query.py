@@ -346,6 +346,9 @@ class QueryTests(unittest.TestCase):
         self.estimable("terminal", (74 * 3.0 + .5034) / 603)
         self.completed("terminal", [{"type": "function_call", "name": "shell", "arguments": "x" * 400}])
         self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(100, 1, 1))
+        # A repeated completed event is the same output, not twice as much.
+        self.db.execute("INSERT INTO events(capture_id,seq,event_name,data_json) SELECT capture_id,seq+100,event_name,data_json FROM events WHERE capture_id='terminal'")
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(100, 1, 1))
         # Deltas present: their terminal copies are not recounted; terminal-only reasoning still counts.
         self.db.execute("DELETE FROM captures")
         self.db.execute("DELETE FROM events")

@@ -108,21 +108,23 @@ unavailable. Hit percentage is the share of requests with cached tokens among
 requests with a cached value; an estimated split counts as a hit only at 1% of
 input or more, with partial coverage shown. If no captured conversation identity
 is available, the tool reports that the summary is unavailable. On exit the tool
-first waits up to two seconds for the asynchronous capture writer to persist and
-finish this launch's calls, since the disk scan below is scoped by them;
-unfinished calls remain flagged as incomplete coverage and the disk observations
-as not refreshed. It then automatically refreshes the local disk index from
-`~/.kiro/sessions` when that directory exists. This exit scan reads the
-`session.json` of sessions changed since the launch, indexes the messages only
-of those linked to captures, and never prunes. Index failures warn and leave the
-child exit status intact; disk observations may then be stale. An explicit
-`kiro-usage index` holds a lock beside the database for its whole pass; the exit
-scan then skips with a one-line warning instead of interleaving, and reports
-disk observations as not refreshed. Exit scans of concurrent launches do not
-skip each other; they queue on a second lock and run one at a time, since two
-scans of one session would index the same records. Rerun the index if that pass
-began before Kiro exited. Nested `kiro-usage exec` launches share the parent's
-marker and produce one summary when the outer launch exits.
+first waits up to two seconds for this launch's captured calls to finish and
+stay unchanged for 0.1 s, since the disk scan below is scoped by them. The quiet
+period is a heuristic: a call started just before Kiro exits can still land
+later. After a timed-out wait, unfinished calls stay flagged as incomplete
+coverage and the disk observations as not refreshed. It then automatically
+refreshes the local disk index from `~/.kiro/sessions` when that directory
+exists. This exit scan reads the `session.json` of sessions changed since the
+launch, indexes the messages only of those linked to captures, and never prunes.
+Index failures warn and leave the child exit status intact; disk observations
+may then be stale. An explicit `kiro-usage index` holds a lock beside the
+database for its whole pass; the exit scan then skips with a one-line warning
+instead of interleaving, and reports disk observations as not refreshed. Exit
+scans of concurrent launches do not skip each other; they queue on a second lock
+and run one at a time, since two scans of one session would index the same
+records. Rerun the index if that pass began before Kiro exited. Nested
+`kiro-usage exec` launches share the parent's marker and produce one summary
+when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing

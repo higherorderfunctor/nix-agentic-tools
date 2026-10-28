@@ -18,7 +18,8 @@ COUNTERS = (*DIMENSIONS, "total_tokens")
 ESTIMATED = ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")
 HIT_SHARE = .01  # Estimated cached tokens must reach this share of input to count as a hit.
 # Output characters beyond output_text that still bill as output tokens, from retained events.
-# Terminal response.completed items count only for a kind with no deltas, so neither is counted twice.
+# Terminal response.completed items count only for a kind with no deltas, so neither is counted twice;
+# only the first completed event counts when a stream repeats it.
 EXTRA_OUTPUT_CHARS = """(SELECT sum(chars) FROM (
     SELECT CASE
       WHEN json_extract(e.data_json,'$.type') IN ('response.function_call_arguments.delta','response.reasoning_text.delta')
@@ -35,7 +36,8 @@ EXTRA_OUTPUT_CHARS = """(SELECT sum(chars) FROM (
         THEN (SELECT sum(length(json_extract(part.value,'$.text'))) FROM json_each(item.value,'$.content') part
               WHERE json_extract(part.value,'$.type')='reasoning_text') END
     FROM events e, json_each(e.data_json,'$.response.output') item
-    WHERE e.capture_id=c.id AND json_extract(e.data_json,'$.type')='response.completed'))"""
+    WHERE e.capture_id=c.id AND e.seq=(SELECT min(f.seq) FROM events f WHERE f.capture_id=c.id
+      AND json_extract(f.data_json,'$.type')='response.completed')))"""
 CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
     WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""

@@ -135,6 +135,23 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("capture writer still has unfinished calls", output.getvalue())
             self.assertFalse(summary.call_args.kwargs["disk_refreshed"])
 
+    def test_call_finishing_after_wait_timeout_keeps_unfinished_warning(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+            root = Path(directory)
+            collector = Collector(root / "usage.sqlite3")
+            self.addCleanup(collector.close)
+            ident = collector.begin({"invocation": "a" * 32}, json.dumps({"metadata": {"kiro:conversation_id": "sess_late"}}).encode())
+            def refresh(*_):
+                collector.finish(ident)  # finishes after the wait timed out, before the summary reads
+                with sqlite3.connect(root / "usage.sqlite3") as db:
+                    while db.execute("SELECT state FROM captures WHERE id=?", (ident,)).fetchone()[0] == "recording":
+                        time.sleep(.01)
+                db.close()
+                return True
+            with patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=0), patch.object(runtime, "refresh_disk_index", side_effect=refresh), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="a" * 32)), patch.object(runtime, "SETTLE_TIMEOUT", .2), contextlib.redirect_stderr(io.StringIO()) as output:
+                self.assertEqual(runtime.exec_command(root, 19001, ["kiro-cli", "chat"]), 0)
+            self.assertIn("capture writer still has unfinished calls", output.getvalue())
+
     def test_exec_refresh_reads_only_sessions_modified_during_launch(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
