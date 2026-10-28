@@ -98,7 +98,7 @@ def run(mitmdump, addon):
                    "--set", "confdir=" + str(root / "ca"), "--set", "connection_strategy=lazy",
                    "--set", "flow_detail=0", "-s", str(addon), "-s", str(router)]
         environment = {"HOME": str(root), "PATH": os.defpath, "TMPDIR": str(root),
-                       "KIRO_USAGE_DB": str(database), "KIRO_USAGE_MAX_BYTES": "1048576"}
+                       "KIRO_USAGE_DB": str(database), "KIRO_USAGE_WARN_BYTES": "1048576"}
         log_path = root / "mitmdump.log"
         with log_path.open("wb") as log:
             process = subprocess.Popen(command, env=environment, stdout=log, stderr=subprocess.STDOUT)

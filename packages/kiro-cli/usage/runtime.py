@@ -95,7 +95,7 @@ def service(args, path):
     for name in PROXY_NAMES:
         os.environ.pop(name, None)
     os.environ["KIRO_USAGE_DB"] = str(path / "usage.sqlite3")
-    os.environ["KIRO_USAGE_MAX_BYTES"] = str(args.max_bytes)
+    os.environ["KIRO_USAGE_WARN_BYTES"] = str(args.warn_bytes)
     os.execv(args.mitmdump, [
         args.mitmdump,
         "--listen-host", "127.0.0.1", "--listen-port", str(args.port),
@@ -172,11 +172,17 @@ def settle_captures(path, invocation):
         return False  # invocation_summary reports the same failure.
 
 
-def invocation_summary(path, invocation, disk_refreshed=False, settled=True):
+def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settled=True):
     """Read only exact marker matches; the exit path settles them first."""
+    from capture import retained_bytes
     from query import FOOTER_WARNINGS, query, render_summary
     try:
         with read_only(path) as db:
+            retained = retained_bytes(db)
+            if retained > warn_bytes:
+                # Capture never stops for size; this is the operator's only prompt to retire the store.
+                print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "
+                      f"stop the kiro-usage service, then archive or delete {path / 'usage.sqlite3'} and its -wal/-shm files to start a new store.", file=sys.stderr)
             rows = invocation_captures(db, invocation, 0)[0]
             identities = [root or conversation for root, conversation, _ in rows]
             sessions = sorted({name if name.startswith("sess_") else "sess_" + name
@@ -229,7 +235,7 @@ def wait_command(command, arguments, environment):
             signal.signal(number, handler)
 
 
-def exec_command(path, port, arguments):
+def exec_command(path, port, warn_bytes, arguments):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -296,7 +302,7 @@ def exec_command(path, port, arguments):
                     # unsettled wait never reports a clean refresh.
                     settled = settle_captures(path, invocation)
                     refreshed = refresh_disk_index(path, started) and settled
-                    invocation_summary(path, invocation, disk_refreshed=refreshed, settled=settled)
+                    invocation_summary(path, invocation, warn_bytes, disk_refreshed=refreshed, settled=settled)
                     sys.stderr.flush()
                 except (OSError, ValueError):
                     # Only a failed summary sink is silenced. Redirect its fd so
@@ -321,7 +327,7 @@ def exec_command(path, port, arguments):
         raise CommandError(f"cannot execute {command}: {error.strerror}; check the executable path and permissions") from error
 
 
-def cli(path, arguments, port):
+def cli(path, arguments, port, warn_bytes):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -330,7 +336,7 @@ def cli(path, arguments, port):
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
     if command == "exec":
-        return exec_command(path, port, tail)
+        return exec_command(path, port, warn_bytes, tail)
     if command == "session" and tail:
         invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
     elif command == "index":
@@ -351,17 +357,18 @@ def main():
         child = sub.add_parser(mode)
         child.add_argument("--state-dir")
         child.add_argument("--port", type=int, required=True)
+        if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
+            child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":
-            child.add_argument("--max-bytes", type=int, required=True)
             child.add_argument("--mitmdump", required=True)
             child.add_argument("--addon", required=True)
     args = parser.parse_args()
     try:
         path = state_directory(args.state_dir)
         if args.mode == "cli":
-            return cli(path, args.arguments, args.port)
+            return cli(path, args.arguments, args.port, args.warn_bytes)
         elif args.mode == "service":
             service(args, path)
         else:

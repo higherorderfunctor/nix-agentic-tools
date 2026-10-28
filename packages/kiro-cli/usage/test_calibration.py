@@ -55,7 +55,7 @@ else:
 if mode != "no-captures":
     with sqlite3.connect(os.environ["CALIBRATION_DB"]) as db:
         db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,request_gzip,dropped_bytes,credits,context_usage_percentage) VALUES (?,?,?,?,?,?,?,?,?)",
-                   (str(time.time_ns()),time.time_ns(),json.dumps({"kiro:conversation_id":session.removeprefix("sess_")}),"incomplete" if mode == "budget" else "complete","[\\"payload_budget_exhausted\\"]" if mode == "budget" else "[]",None if mode == "budget" else b"retained",0,0.01,2.0))
+                   (str(time.time_ns()),time.time_ns(),json.dumps({"kiro:conversation_id":session.removeprefix("sess_")}),"incomplete" if mode == "incomplete" else "complete","[\\"transport_error\\"]" if mode == "incomplete" else "[]",None if mode == "incomplete" else b"retained",0,0.01,2.0))
 if mode == "descendant":
     subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
 '''
@@ -131,8 +131,8 @@ class CalibrationTests(unittest.TestCase):
     def test_run_seed_changes_prefix(self):
         self.assertNotEqual(calibration.prompts("one")[0][1], calibration.prompts("two")[0][1])
 
-    def test_missing_or_budget_exhausted_capture_stops_after_first_call(self):
-        for mode in ("no-captures", "budget"):
+    def test_missing_or_incomplete_capture_stops_after_first_call(self):
+        for mode in ("no-captures", "incomplete"):
             with self.subTest(mode=mode):
                 calls_file = self.root / "sessions.json.calls"
                 calls_file.unlink(missing_ok=True)

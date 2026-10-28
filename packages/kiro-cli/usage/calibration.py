@@ -88,7 +88,7 @@ def capture_evidence(db, session, started, finished):
             stable_since = None
         previous = rows
         if any(row[1] == "incomplete" for row in rows):
-            raise RuntimeError("collector marked capture incomplete; check payload budget and omission counters")
+            raise RuntimeError("collector marked capture incomplete; check its issues_json and omission counters")
         if time.monotonic() >= deadline:
             raise RuntimeError("no complete capture evidence for this invocation within five seconds")
         time.sleep(0.05)
@@ -152,7 +152,6 @@ def main():
     manifest = {"model": MODEL, "effort": EFFORT, "workspace": str(workspace), "seed": seed,
                 "calls": [], "workspace_initial": baseline,
                 "notes": ["Global context remains uncontrolled; compare captured request hashes offline.",
-                          "Payload budget exhaustion omits NEW payloads; it does not evict old captures.",
                           "Agent settings do not prove global MCP or steering is disabled."]}
     manifest_path = results / "manifest.json"
 

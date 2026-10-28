@@ -163,6 +163,8 @@ def request_details(body, issues=None):
 class SSE:
     """Incremental SSE framing, preserving exact frame bytes and UTF-8 boundaries."""
 
+    LINE = re.compile(b"\r\n|\r|\n")
+
     def __init__(self, emit, limit=4 * 1024 * 1024):
         self.emit, self.limit = emit, limit
         self.buffer = b""
@@ -173,24 +175,24 @@ class SSE:
     def feed(self, data, final=False):
         if self.disabled:
             return
-        self.buffer += data
-        while self.buffer:
-            match = re.search(b"\r\n|\r|\n", self.buffer)
-            if not match or (match.group() == b"\r" and match.end() == len(self.buffer) and not final):
+        # Scan by offset and slice once: re-slicing per line made a chunk of blank lines quadratic.
+        buffer, offset = self.buffer + data, 0
+        while match := self.LINE.search(buffer, offset):
+            if match.group() == b"\r" and match.end() == len(buffer) and not final:
                 break
-            raw, self.buffer = self.buffer[:match.end()], self.buffer[match.end():]
-            self.frame.extend(raw)
-            line = raw[:match.start()]
-            if line:
-                self.lines.append(line)
+            self.frame += buffer[offset:match.end()]
+            if match.start() > offset:
+                self.lines.append(buffer[offset:match.start()])
             else:
                 self.emit(bytes(self.frame), self.lines, False)
                 self.frame.clear()
                 self.lines = []
+            offset = match.end()
             if len(self.frame) > self.limit:
                 self.disabled = True
                 self.buffer = b""
                 return
+        self.buffer = buffer[offset:]
         if len(self.frame) + len(self.buffer) > self.limit:
             self.disabled = True
             self.buffer = b""
@@ -268,6 +270,20 @@ class EventStream:
         return values
 
 
+def terminal_extra(output):
+    """Tool-argument and reasoning characters in one terminal response.output list, by kind."""
+    counts = {"tool": 0, "reasoning": 0}
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "function_call" and isinstance(item.get("arguments"), str):
+            counts["tool"] += len(item["arguments"])
+        elif item.get("type") == "reasoning" and isinstance(item.get("content"), list):
+            counts["reasoning"] += sum(len(part["text"]) for part in item["content"]
+                                       if isinstance(part, dict) and part.get("type") == "reasoning_text" and isinstance(part.get("text"), str))
+    return counts
+
+
 def output_text(value):
     """Only final output_text parts; tool arguments/reasoning are separate evidence."""
     if isinstance(value, dict):
@@ -286,10 +302,13 @@ class CaptureCapacityError(RuntimeError):
 
 
 # Synthetic 1 and 32 MiB requests: level 9 costs 1.8x level 6's CPU for 0.3% smaller BLOBs; level 1 is 3x
-# faster but 16% larger, filling the payload budget sooner. Small chunks compress alike at every level.
+# faster but 16% larger, reaching the payload warning sooner. Small chunks compress alike at every level.
 GZIP_LEVEL = 6
+WARN_BYTES = 1024 * 1024 * 1024  # Retained payload bytes past which the collector and exit summary warn.
 # Payload copies the queue may refuse while parsing still sees every byte; usage stays complete without them.
 OMISSIONS = {"request_payload_omitted", "response_payload_omitted"}
+# Streamed /v1/responses tool-argument and reasoning parts; a kind with any of these ignores its terminal copy.
+EXTRA_DELTAS = {"response.function_call_arguments.delta": "tool", "response.reasoning_text.delta": "reasoning"}
 
 
 class Analysis:
@@ -302,6 +321,8 @@ class Analysis:
         self.usage_bytes = 0
         self.metrics = dict.fromkeys(("credits", "context_usage_percentage", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"))
         self.delta_chars = self.delta_bytes = 0
+        self.extra_deltas = {}  # kind -> characters, present once a delta of that kind is seen
+        self.extra_terminal = None  # from the first response.completed only; a repeat is the same output
         self.final_counts = None
         self.terminal = None
         self.stream_failed = False
@@ -356,6 +377,8 @@ class Analysis:
         if kind == "response.output_text.delta" and isinstance(obj.get("delta"), str):
             self.delta_chars += len(obj["delta"])
             self.delta_bytes += len(obj["delta"].encode())
+        if kind in EXTRA_DELTAS:
+            self.extra(EXTRA_DELTAS[kind], obj.get("delta"))
         response = obj.get("response")
         if kind in ("response.completed", "response.failed", "response.incomplete"):
             self.terminal = kind
@@ -365,6 +388,8 @@ class Analysis:
         if isinstance(response, dict) and isinstance(response.get("output"), list) and kind in ("response.completed", "response.failed", "response.incomplete"):
             texts = list(output_text(response["output"]))
             self.final_counts = (sum(len(t) for t in texts), sum(len(t.encode()) for t in texts))
+            if kind == "response.completed" and self.extra_terminal is None:
+                self.extra_terminal = terminal_extra(response["output"])
         # These fields are exact observations only when present in an explicit usage object.
         usage = (response or {}).get("usage") if isinstance(response, dict) else obj.get("usage")
         if isinstance(usage, dict):
@@ -422,6 +447,9 @@ class Analysis:
         self.save(self.seq, name, frame, obj)
         self.seq += 1
 
+    def extra(self, name, text):
+        self.extra_deltas[name] = self.extra_deltas.get(name, 0) + (len(text) if isinstance(text, str) else 0)
+
     def credit(self, unit, value):
         """kiro:credits and meteringEvent share one rule: only unit "credit" is a credit count."""
         if unit == "credit":
@@ -437,6 +465,10 @@ class Analysis:
         if name == "assistantResponseEvent" and isinstance(obj.get("content"), str):
             self.delta_chars += len(obj["content"])
             self.delta_bytes += len(obj["content"].encode())
+        elif name == "toolUseEvent":
+            self.extra("tool", obj.get("input"))
+        elif name == "reasoningContentEvent":
+            self.extra("reasoning", obj.get("text"))
         elif name == "meteringEvent":
             self.metering_events += 1  # More than one keeps the last value; summary_json reports the count.
             self.credit(obj.get("unit"), obj.get("usage"))
@@ -457,10 +489,24 @@ class Analysis:
 
     def summary(self):
         chars, size = self.final_counts or (self.delta_chars, self.delta_bytes)
+        # query.py adds these to output_text_chars for ~output; counted live so omitted payload copies cannot hide them.
+        extra = {name: self.extra_deltas.get(name, (self.extra_terminal or {}).get(name, 0)) for name in ("tool", "reasoning")}
         return {"output_text_chars": chars, "output_text_bytes": size,
+                "tool_chars": extra["tool"], "reasoning_chars": extra["reasoning"],
                 "output_count_source": "terminal_output" if self.final_counts is not None else "deltas",
                 "terminal": self.terminal, "usage_objects": self.usage,
                 "metering_events": self.metering_events, "estimates": {}}
+
+
+def retained_bytes(db):
+    """Compressed payload bytes a store retains; the collector's startup count and the exit summary's warning."""
+    total = sum(db.execute(query).fetchone()[0] or 0 for query in (
+        "SELECT SUM(length(request_gzip)) FROM captures",
+        "SELECT SUM(COALESCE(length(entity_gzip),0)+COALESCE(length(application_gzip),0)) FROM chunks",
+        "SELECT SUM(COALESCE(length(frame_gzip),0)+COALESCE(length(CAST(data_json AS BLOB)),0)) FROM events"))
+    return total + sum(len(packed(usage).encode())
+                       for row in db.execute("SELECT summary_json FROM captures WHERE summary_json IS NOT NULL")
+                       if (usage := json.loads(row[0]).get("usage_objects")))
 
 
 class Collector:
@@ -470,11 +516,11 @@ class Collector:
     BATCH_ITEMS, BATCH_BYTES = 512, 4 * 1024 * 1024  # per write transaction: bounds lock hold and in-flight copies
 
     # Queue budget: one request at the 32 MiB API limit plus 8 MiB of streaming headroom.
-    def __init__(self, path, max_bytes=40 * 1024 * 1024, max_stored_bytes=256 * 1024 * 1024):
-        if min(max_bytes, max_stored_bytes) <= 0:
-            raise ValueError("capture budgets must be positive")
+    def __init__(self, path, max_bytes=40 * 1024 * 1024, warn_bytes=WARN_BYTES):
+        if min(max_bytes, warn_bytes) <= 0:
+            raise ValueError("capture queue budget and payload warning must be positive")
         self.path = path
-        self.max_stored_bytes = max_stored_bytes
+        self.warn_bytes, self.warned = warn_bytes, False
         db = open_database(path)
         try:
             self.writer_lock = lock_beside(path, ".capture.lock")
@@ -496,34 +542,25 @@ class Collector:
             db.execute("INSERT INTO capture_meta VALUES (1)")
         db.execute("UPDATE captures SET state='incomplete',transport_ended=0,issues_json='[\"interrupted_capture\"]' WHERE state='recording'")
         db.commit()
-        self.retention_stopped = False
-        self.stored_bytes = sum(db.execute(query).fetchone()[0] or 0 for query in (
-            "SELECT SUM(length(request_gzip)) FROM captures",
-            "SELECT SUM(COALESCE(length(entity_gzip),0)+COALESCE(length(application_gzip),0)) FROM chunks",
-            "SELECT SUM(COALESCE(length(frame_gzip),0)+COALESCE(length(CAST(data_json AS BLOB)),0)) FROM events"))
-        self.stored_bytes += sum(len(packed(usage).encode())
-                                 for row in db.execute("SELECT summary_json FROM captures WHERE summary_json IS NOT NULL")
-                                 if (usage := json.loads(row[0]).get("usage_objects")))
+        self.stored_bytes = retained_bytes(db)
         db.close()
         self.queue = queue.Queue()  # bounded by max_bytes in _put
         self.lock = threading.Lock()
         self.states = {}
         self.queued_bytes, self.max_bytes = 0, max_bytes
+        self.carry = None  # an item _batch took that starts the next batch
         self.failure = None
         self.stopping = False
         self.thread = threading.Thread(target=self._worker, name="kiro-capture", daemon=True)
         self.thread.start()
 
-    def _retain(self, state, *payloads):
-        size = sum(len(p) if isinstance(p, bytes) else len(p.encode()) for p in payloads if p is not None)
-        if self.retention_stopped or self.stored_bytes + size > self.max_stored_bytes:
-            self.retention_stopped = True
-            if "storage_budget" not in state["issues"]:
-                state["issues"].append("storage_budget")
-                print(f"Kiro capture {state['id']}: storage budget exhausted; evidence incomplete", file=sys.stderr)
-            return False
-        self.stored_bytes += size
-        return True
+    def _retain(self, *payloads):
+        """Payloads are always retained; one stderr line per collector run marks the warning threshold."""
+        self.stored_bytes += sum(len(p) if isinstance(p, bytes) else len(p.encode()) for p in payloads if p is not None)
+        if self.stored_bytes > self.warn_bytes and not self.warned:
+            self.warned = True
+            print(f"Kiro capture: retained payloads reached {self.stored_bytes} bytes, past the {self.warn_bytes}-byte warning; "
+                  "capture continues, see docs/usage-tracking.md to retire the store", file=sys.stderr)
 
     def check(self):
         if self.failure:
@@ -540,15 +577,15 @@ class Collector:
                      observed_bytes=0, done=False, response={}, issues=[])
         details, state["hashes"] = request_details(body, state["issues"])
         state["metadata"].update(details)
-        target = state["parse"] = dict(hash=hashlib.sha256(), decoder=None, encoding=None, json=bytearray(), stamp=(0, 0), seq=-1, events=[])
-        target["analysis"] = Analysis(lambda *saved: target["events"].append(saved))
+        target = state["parse"] = dict(hash=hashlib.sha256(), decoder=None, encoding=None, json=bytearray(), stamp=(0, 0), seq=-1)  # _parse sets events/size/budget
+        target["analysis"] = Analysis(lambda *saved: self._stage(target, *saved))
         target["sse"] = SSE(target["analysis"].event)
         target["eventstream"] = EventStream(target["analysis"].message)
         with self.lock:
             if len(self.states) >= 256:
                 raise CaptureCapacityError("Kiro capture active-flow limit reached; selected request was not captured")
             self.states[ident] = state
-        self._put(state, "request", body, -1, stamp)
+        self._put(state, "request", body, -1, stamp, self.OVERHEAD + len(body))
         return ident
 
     def headers(self, ident, metadata):
@@ -556,11 +593,21 @@ class Collector:
         with self.lock:
             self.states[ident]["response"] = metadata
 
-    def _put(self, state, kind, data, seq, stamp, application=None, events=()):
+    def _stage(self, target, seq, name, frame, obj):
+        """Copy one already-analyzed event into the chunk's queue item while the item fits the queue budget.
+
+        Past it the item can no longer be queued (size inf) and later events are never copied: a chunk of 360,000 blank SSE
+        frames otherwise staged ~87 MB of copies before _put refused them all."""
+        if target["size"] <= target["budget"]:
+            text = packed(obj) if obj is not None else None
+            target["size"] += len(frame) + len(text or "") + self.OVERHEAD
+            target["events"].append((seq, name, frame, text))
+        if target["size"] > target["budget"]:
+            target["size"], target["events"] = math.inf, []
+
+    def _put(self, state, kind, data, seq, stamp, size, application=None, events=()):
+        """size: the item's queue charge, inf when _stage already overflowed the budget."""
         self.check()
-        size = self.OVERHEAD + len(data) + sum(len(frame) + len(text or "") + self.OVERHEAD for _, _, frame, text in events)
-        if application is not None and application is not data:
-            size += len(application)
         with self.lock:
             if self.queued_bytes + size > self.max_bytes:
                 state["dropped_chunks"] += 1
@@ -582,11 +629,11 @@ class Collector:
             state["observed_chunks"] += 1
             state["observed_bytes"] += len(data)
         try:
-            application, events = self._parse(state, data, seq, stamp)
+            application, events, size = self._parse(state, data, seq, stamp)
         except Exception as error:  # A parser defect stops capture like a writer failure, never the passing stream.
             self.failure = error
             raise RuntimeError("Kiro capture parser failed; capture stopped") from error
-        self._put(state, "response", data, seq, stamp, application, events)
+        self._put(state, "response", data, seq, stamp, size, application, events)
         return data
 
     def finish(self, ident, transport_ended=True, error=None):
@@ -612,18 +659,22 @@ class Collector:
             raise RuntimeError("Kiro capture database worker failed") from self.failure
 
     def _batch(self):
-        """Block for one item, then take what is already queued, up to BATCH_ITEMS or BATCH_BYTES."""
-        try:
-            batch = [self.queue.get(timeout=0.02)]
-        except queue.Empty:
-            return []
-        size = batch[0][-1]
-        while len(batch) < self.BATCH_ITEMS and size < self.BATCH_BYTES:
+        """Block for one item, then take what is already queued while it fits BATCH_ITEMS and BATCH_BYTES.
+
+        An item that would overflow the batch is carried into the next one, so an item larger than BATCH_BYTES
+        (a request up to 32 MiB) is always a batch of its own."""
+        batch, size = [], 0
+        while len(batch) < self.BATCH_ITEMS:
             try:
-                batch.append(self.queue.get_nowait())
+                item = self.carry or (self.queue.get_nowait() if batch else self.queue.get(timeout=0.02))
             except queue.Empty:
                 break
-            size += batch[-1][-1]
+            self.carry = None
+            if batch and size + item[-1] > self.BATCH_BYTES:
+                self.carry = item
+                break
+            batch.append(item)
+            size += item[-1]
         return batch
 
     def _worker(self):
@@ -681,27 +732,19 @@ class Collector:
         rows = []
         for event_seq, name, frame, text in events:
             raw = gzip.compress(frame, GZIP_LEVEL)
-            if not self._retain(state, raw, text):
-                raw = text = None
+            self._retain(raw, text)
             rows.append(("INSERT INTO events VALUES (?,?,?,?,?,?,?,?)", (state["id"], event_seq, seq, *stamp, name, raw, text)))
         return rows
 
     def _prepare(self, state, kind, data, seq, stamp, application, events):
-        """Compress and charge the payload budget; returns the statements for the write transaction."""
+        """Compress and count retained payload bytes; returns the statements for the write transaction."""
         if kind == "request":
             payload = gzip.compress(data, GZIP_LEVEL)
-            if not self._retain(state, payload):
-                state["dropped_chunks"] += 1
-                state["dropped_bytes"] += len(data)
-                state["issues"].append("request_payload_omitted")
-                payload = None
+            self._retain(payload)
             return [("UPDATE captures SET request_gzip=?,request_sha256=?,fingerprints_json=?,metadata_json=? WHERE id=?", (payload, digest(data), packed(state["hashes"]), packed(state["metadata"]), state["id"]))]
         entity = gzip.compress(data, GZIP_LEVEL)
         app = entity if application is data else gzip.compress(application, GZIP_LEVEL) if application is not None else None  # identity: one compression
-        if not self._retain(state, entity, app):
-            state["dropped_chunks"] += 1
-            state["dropped_bytes"] += len(data)
-            entity = app = None
+        self._retain(entity, app)
         return [("INSERT INTO chunks VALUES (?,?,?,?,?,?)", (state["id"], seq, *stamp, entity, app)), *self._event_rows(state, events, seq, stamp)]
 
     @staticmethod
@@ -712,9 +755,9 @@ class Collector:
                 return target[key]
 
     def _parse(self, state, data, seq, stamp):
-        """Decode and frame every observed byte in arrival order; returns application bytes and completed events."""
+        """Decode and frame every observed byte in arrival order; returns application bytes, staged events and the queue charge."""
         target = state["parse"]
-        target.update(seq=seq, stamp=stamp)
+        target.update(seq=seq, stamp=stamp, events=[], size=self.OVERHEAD + len(data), budget=self.max_bytes - self.queued_bytes)
         response = state["response"]
         encoding = response.get("content_encoding", "identity").lower().strip() or "identity"
         if target["encoding"] is None:
@@ -730,6 +773,7 @@ class Collector:
                 if len(application) > 16 * 1024 * 1024 or (target["decoder"] and target["decoder"].unconsumed_tail):
                     raise zlib.error("decompressed chunk exceeds safety limit")
                 target["hash"].update(application)
+                target["size"] += len(application) if application is not data else 0
                 parser = self.framing(target, response)
                 if parser:
                     parser.feed(application)
@@ -741,12 +785,7 @@ class Collector:
         except zlib.error:
             state["issues"].append("decode_error")
             target["encoding"] = "invalid"
-        return application, self._drain(target)
-
-    @staticmethod
-    def _drain(target):
-        events, target["events"] = target["events"], []
-        return [(seq, name, frame, packed(obj) if obj is not None else None) for seq, name, frame, obj in events]
+        return application, target["events"], target["size"]
 
     def _finalize(self, db, state):
         target = state["parse"]
@@ -759,8 +798,9 @@ class Collector:
         whole = not any(x in state["issues"] for x in ("decode_error", "unsupported_content_encoding", "truncated_content_encoding", "trailing_content_encoding"))
         parser = self.framing(target, response)
         if parser:
+            target.update(events=[], size=0, budget=math.inf)  # The EOF tail is written here, never queued.
             parser.feed(b"", final=True)
-            for statement in self._event_rows(state, self._drain(target), target["seq"], target["stamp"]):
+            for statement in self._event_rows(state, target["events"], target["seq"], target["stamp"]):
                 db.execute(*statement)
             if parser.disabled:
                 state["issues"].append("event_parse_limit")
@@ -772,14 +812,13 @@ class Collector:
                 obj = decoded_json(target["json"])
                 analysis.inspect(obj)
                 parsed = packed(obj)
-                if not self._retain(state, parsed):
-                    parsed = None
+                self._retain(parsed)
                 db.execute("INSERT INTO events VALUES (?,?,?,?,?,?,?,?)", (state["id"], 0, target["seq"], *target["stamp"], "json", None, parsed))
             except (ValueError, UnicodeError, RecursionError):
                 state["issues"].append("invalid_json")
         summary = analysis.summary()
-        if summary["usage_objects"] and not self._retain(state, packed(summary["usage_objects"])):
-            summary["usage_objects"] = []
+        if summary["usage_objects"]:
+            self._retain(packed(summary["usage_objects"]))
         issues = sorted(set(state["issues"] + analysis.issues))
         if not analysis.complete:
             issues.append("missing_completion")

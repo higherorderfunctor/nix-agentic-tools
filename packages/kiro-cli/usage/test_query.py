@@ -337,6 +337,13 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(metrics["output_tokens"], query.metric(20, 1, 1))  # 80 chars / 4; .done is not recounted
         self.assertEqual(metrics["input_tokens"], query.metric(29980, 1, 1))
 
+    def test_live_tool_and_reasoning_counts_win_over_retained_events(self):
+        # The collector counted 60 chars live although the queue omitted most event copies; one stray copy survived.
+        self.estimable("live", (74 * 3.0 + .5034) / 603)
+        self.db.execute("UPDATE captures SET summary_json=? WHERE id='live'", (json.dumps({"output_text_chars": 0, "tool_chars": 40, "reasoning_chars": 20}),))
+        self.db.execute("INSERT INTO events(capture_id,seq,event_name,data_json) VALUES ('live',0,'toolUseEvent',?)", (json.dumps({"input": "z" * 400}),))
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(15, 1, 1))
+
     def completed(self, ident, output, deltas=()):
         events = [*deltas, ("response.completed", {"type": "response.completed", "response": {"output": output}})]
         self.db.executemany("INSERT INTO events(capture_id,seq,event_name,data_json) VALUES (?,?,?,?)",

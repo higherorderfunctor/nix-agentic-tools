@@ -274,6 +274,59 @@ class CaptureTests(unittest.TestCase):
         replay = subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "replay", row["id"]], capture_output=True)
         self.assertEqual((replay.returncode, replay.stdout), (1, b""))
 
+    def test_refused_payloads_keep_delta_counts(self):
+        # No terminal output list: every count comes from deltas the queue never stored.
+        deltas = [event({"type": kind, "delta": "x" * size}) for kind, size in (
+            ("response.output_text.delta", 5), ("response.function_call_arguments.delta", 7), ("response.reasoning_text.delta", 3))] * 50
+        terminal = {"type": "response.completed", "response": {"usage": {"kiro:credits": {"unit": "credit", "value": .25}}}}
+        with contextlib.redirect_stderr(io.StringIO()):
+            db, row = self.run_capture([*deltas, event(terminal)], max_bytes=1)
+        self.assertEqual(row["state"], "complete")
+        self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 0)
+        summary = json.loads(row["summary_json"])
+        self.assertEqual((summary["output_count_source"], summary["output_text_chars"]), ("deltas", 250))
+        self.assertEqual((summary["tool_chars"], summary["reasoning_chars"]), (350, 150))
+
+    def test_live_tool_and_reasoning_counts_take_deltas_over_terminal_once(self):
+        output = [{"type": "function_call", "arguments": "x" * 40}, {"type": "reasoning", "content": [{"type": "reasoning_text", "text": "y" * 20}]}]
+        final = {"type": "response.completed", "response": {"output": output}}
+        delta = event({"type": "response.function_call_arguments.delta", "delta": "x" * 40})
+        _, row = self.run_capture([delta, event(final), event(final)])  # a repeated terminal event is the same output
+        summary = json.loads(row["summary_json"])
+        self.assertEqual((summary["tool_chars"], summary["reasoning_chars"]), (40, 20))
+        self.path = self.path.with_name("generate.sqlite3")
+        parts = [aws_event("toolUseEvent", {"input": "z" * 16, "name": "shell"}), aws_event("reasoningContentEvent", {"text": "w" * 4})]
+        _, row = self.run_capture(parts, content_type=EVENTSTREAM)
+        summary = json.loads(row["summary_json"])
+        self.assertEqual((summary["tool_chars"], summary["reasoning_chars"]), (16, 4))
+
+    def test_event_copies_are_staged_only_within_the_queue_budget(self):
+        writer = Collector(self.path, max_bytes=64 * 1024)
+        staged, original = [], writer._stage
+        def stage(target, *saved):
+            original(target, *saved)
+            staged.append(len(target["events"]))
+        with patch.object(writer, "_stage", side_effect=stage), contextlib.redirect_stderr(io.StringIO()):
+            ident = writer.begin({}, b"{}")
+            writer.headers(ident, {"content_type": "text/event-stream"})
+            writer.chunk(ident, b"\n\n" * 20000 + event(completed()))
+            writer.finish(ident)
+            writer.close()
+        self.assertEqual(len(staged), 40001)  # analysis saw every frame
+        self.assertLessEqual(max(staged), 64 * 1024 // Collector.OVERHEAD)
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            row = db.execute("SELECT state,credits,issues_json FROM captures").fetchone()
+        self.assertEqual(row, ("complete", .25, '["response_payload_omitted"]'))
+
+    def test_batches_respect_the_byte_bound_and_carry_the_overflow(self):
+        writer = Collector(self.path)
+        writer.close()  # its worker is done; drive _batch by hand
+        sizes = [3 << 20, 3 << 20, 32 << 20, 1, 1]
+        for size in sizes:
+            writer.queue.put((size, size))
+        batches = [[item[-1] for item in batch] for batch in iter(writer._batch, [])]
+        self.assertEqual(batches, [[3 << 20], [3 << 20], [32 << 20], [1, 1]])
+
     def test_replay_refuses_a_chunk_gap(self):
         parts = [event({"type": "response.output_text.delta", "delta": "a"}), event({"type": "response.output_text.delta", "delta": "b"}), event(completed())]
         db, row = self.run_capture(parts)
@@ -317,15 +370,20 @@ class CaptureTests(unittest.TestCase):
         with contextlib.closing(open_database(self.path)) as db:
             self.assertEqual(db.execute("PRAGMA synchronous").fetchone()[0], 1)  # NORMAL
 
-    def test_storage_budget_stops_payload_retention(self):
+    def test_payload_warning_threshold_keeps_retaining(self):
+        writer = Collector(self.path, warn_bytes=1)
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            db, row = self.run_capture([event(completed())], max_stored_bytes=1)
-        self.assertIn("storage budget", stderr.getvalue())
-        self.assertIsNone(row["request_gzip"])
-        self.assertIsNone(db.execute("SELECT entity_gzip FROM chunks").fetchone()[0])
-        self.assertGreater(row["dropped_bytes"], 0)
-        self.assertEqual(row["credits"], .25)  # observations remain useful
-        self.assertEqual(row["state"], "incomplete")
+            for _ in range(2):
+                ident = writer.begin({}, b"{}")
+                writer.headers(ident, {"content_type": "text/event-stream"})
+                writer.chunk(ident, event(completed()))
+                writer.finish(ident)
+            writer.close()
+        self.assertEqual(stderr.getvalue().count("past the 1-byte warning"), 1)  # once per collector run
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            rows = db.execute("SELECT state,issues_json,dropped_bytes,credits,request_gzip IS NOT NULL FROM captures").fetchall()
+            self.assertEqual(rows, [("complete", "[]", 0, .25, 1)] * 2)
+            self.assertEqual(db.execute("SELECT count(*) FROM chunks WHERE entity_gzip IS NOT NULL").fetchone()[0], 2)
 
     def test_exact_counts_only_when_present(self):
         obj = completed()
@@ -723,7 +781,7 @@ class RuntimeTests(unittest.TestCase):
             with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "refresh_disk_index", return_value=False), patch.object(runtime, "invocation_summary"):
                 with self.assertRaisesRegex(ValueError, "inherited ALL_PROXY conflicts"):
                     runtime.launch_environment(state, 19001)
-                runtime.exec_command(state, 19001, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])
+                runtime.exec_command(state, 19001, 1 << 30, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])
                 command, arguments, environment = wait.call_args.args
                 self.assertEqual(command, "kiro-cli")
                 self.assertEqual(arguments, ["--v3", "chat", "spaced argument", "--", "--agent-engine=v2"])
@@ -738,27 +796,27 @@ class RuntimeTests(unittest.TestCase):
                 connect.assert_called_with(("127.0.0.1", 19001), timeout=0.5)
                 for arguments in (["kiro-cli", "--agent-engine=v2"], ["kiro-cli-chat"]):
                     with self.assertRaisesRegex(ValueError, "v3"):
-                        runtime.exec_command(state, 19001, arguments)
-                runtime.exec_command(state, 19001, ["kiro-cli", "--v3"])
+                        runtime.exec_command(state, 19001, 1 << 30, arguments)
+                runtime.exec_command(state, 19001, 1 << 30, ["kiro-cli", "--v3"])
                 self.assertEqual(wait.call_args.args[1], ["--v3"])
                 execute.side_effect = FileNotFoundError()
                 with self.assertRaisesRegex(runtime.CommandError, "command not found: absent"):
-                    runtime.exec_command(state, 19001, ["absent"])
+                    runtime.exec_command(state, 19001, 1 << 30, ["absent"])
                 for error in (FileNotFoundError(), PermissionError(13, "Permission denied")):
                     execute.side_effect = error
                     output = io.StringIO()
-                    with patch.object(sys, "argv", ["runtime.py", "cli", "--state-dir", str(state), "--port", "19001", "--", "exec", "absent"]), contextlib.redirect_stderr(output):
+                    with patch.object(sys, "argv", ["runtime.py", "cli", "--state-dir", str(state), "--port", "19001", "--warn-bytes", "1", "--", "exec", "absent"]), contextlib.redirect_stderr(output):
                         self.assertEqual(runtime.main(), 1)
                     self.assertIn("absent", output.getvalue())
                     self.assertNotIn("Start the kiro-usage service", output.getvalue())
         with self.assertRaisesRegex(ValueError, "COMMAND"):
-            runtime.exec_command(Path("/unused"), 19001, [])
+            runtime.exec_command(Path("/unused"), 19001, 1 << 30, [])
 
     def test_exec_exit_and_signal(self):
         # Replacement must preserve child exit codes and signals without a
         # supervising process translating them. Only this synthetic child runs.
         for code, expected in (("raise SystemExit(23)", 23), ("import os, signal; os.kill(os.getpid(), signal.SIGTERM)", -15)):
-            script = f"import runtime; from pathlib import Path; runtime.launch_environment = lambda *a, **kw: dict(runtime.os.environ); runtime.exec_command(Path('/unused'), 19001, [{sys.executable!r}, '-c', {code!r}])"
+            script = f"import runtime; from pathlib import Path; runtime.launch_environment = lambda *a, **kw: dict(runtime.os.environ); runtime.exec_command(Path('/unused'), 19001, 1 << 30, [{sys.executable!r}, '-c', {code!r}])"
             result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent)
             self.assertEqual(result.returncode, expected)
 

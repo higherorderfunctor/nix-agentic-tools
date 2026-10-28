@@ -17,7 +17,9 @@ DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "
 COUNTERS = (*DIMENSIONS, "total_tokens")
 ESTIMATED = ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")
 HIT_SHARE = .01  # Estimated cached tokens must reach this share of input to count as a hit.
-# Output characters beyond output_text that still bill as output tokens, from retained events.
+# Output characters beyond output_text that still bill as output tokens. The collector counts them live into
+# summary_json tool_chars/reasoning_chars; this fallback re-derives them from retained events for rows without
+# those keys: captures finalized before the live counts, and interrupted captures, which have no summary.
 # Terminal response.completed items count only for a kind with no deltas, so neither is counted twice;
 # only the first completed event counts when a stream repeats it.
 EXTRA_OUTPUT_CHARS = """(SELECT sum(chars) FROM (
@@ -271,7 +273,8 @@ def call_reports(db, report, chosen, parameters):
     models = {source["requested_model"]: source for source in captures["models"]}
     event_tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     proof = "0 AS retained,0 AS terminal,0 AS text_only,0 AS no_reasoning_tools"
-    extra_chars = EXTRA_OUTPUT_CHARS if "events" in event_tables else "NULL"
+    extra_chars = f"""coalesce(json_extract(c.summary_json,'$.tool_chars')+json_extract(c.summary_json,'$.reasoning_chars'),
+        {EXTRA_OUTPUT_CHARS if "events" in event_tables else "NULL"})"""
     if {"events", "chunks"} <= event_tables:
         proof = """
           c.request_gzip IS NOT NULL AND EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id)

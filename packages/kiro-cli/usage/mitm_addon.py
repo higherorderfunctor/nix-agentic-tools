@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from capture import CaptureCapacityError, Collector
+from capture import WARN_BYTES, CaptureCapacityError, Collector
 
 # Workflow steps and subagents call GenerateAssistantResponse; root turns call CreateResponse.
 APIS = {"/generateAssistantResponse", "/v1/responses"}
@@ -20,7 +20,7 @@ class UsageCapture:
         self.active, self.collector, self.failed = {}, None, True
         self.invocations = {}
         try:
-            self.collector = Collector(os.environ["KIRO_USAGE_DB"], max_stored_bytes=int(os.environ.get("KIRO_USAGE_MAX_BYTES", "268435456")))
+            self.collector = Collector(os.environ["KIRO_USAGE_DB"], warn_bytes=int(os.environ.get("KIRO_USAGE_WARN_BYTES", WARN_BYTES)))
         except (KeyError, OSError, RuntimeError, TypeError, ValueError, sqlite3.Error):
             print("Kiro usage capture startup failed: selected requests will be refused; fix capture configuration and restart", file=sys.stderr)
         else:
