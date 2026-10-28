@@ -51,8 +51,8 @@
       recipeFile = "./package.nix";
     };
     goBin = inputs.go-overlay.lib.mkGoBin pkgs;
-    releases = builtins.filter (v: builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" v != null) (builtins.attrNames goBin.versions);
-    latest = lib.last (builtins.sort lib.versionOlder releases);
+    # Any exact key the locked overlay ships; go-overlay keeps past releases.
+    lockedExact = "1.26.10";
     cases = {
       "bare minor selects newest stable patch of its minor" = (resolve {floor = "1.25";}).go.version == "1.25.10";
       "exact minor key precedes patch fallback" = (resolve {floor = "1.24";}).go.version == "1.24";
@@ -65,11 +65,11 @@
       "latest override skips prereleases" = (resolve {override = "latest";}).go.version == "1.26.0";
       "locked exact release matches overlay derivation" =
         (vu.mkGoToolchain {
-          floor = latest;
+          floor = lockedExact;
           inherit pkgs;
           pname = "locked-fixture";
         }).go.outPath
-        == goBin.versions.${latest}.outPath;
+        == goBin.versions.${lockedExact}.outPath;
       "missing floor allows exact override" = (resolve {override = "1.25.0";}).go.version == "1.25.0";
       "missing floor allows latest override" =
         (resolve {

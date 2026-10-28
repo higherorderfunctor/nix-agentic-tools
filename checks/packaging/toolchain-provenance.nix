@@ -1,5 +1,6 @@
 # Inspect compiler inputs and JS build/runtime references, including helpers.
-# Every Go/Rust package must carry the locked overlay compiler, and no package
+# Every Go package must carry the overlay compiler mkGoToolchain selects for
+# its own floor or override, every Rust package the locked Rust compiler, and no package
 # or derivation-valued passthru helper (vendor, extractor) may carry nixpkgs'
 # own go, rustc or cargo (no silent nixpkgs fallback).
 {

@@ -1,6 +1,6 @@
 # Compiler helpers apply the locked toolchain functions to the supplied package set.
 {inputs}: let
-  inherit (import ./packaging.nix) mkGoFloorFix;
+  inherit (import ./packaging.nix) goFloorUnknown mkGoFloorFix;
   mkRustToolchain = {
     extensions ? [],
     pkgs,
@@ -34,7 +34,7 @@ in {
       builtins.filter
       (version: builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" version != null)
       (builtins.attrNames goBin.versions);
-    detected = floor != null && floor != "" && floor != "0";
+    detected = floor != null && floor != goFloorUnknown;
     requested =
       if detected && override != null
       then throw "${pname}: Go floor ${floor} is detected; remove the stale mkGoToolchain override from the recipe"

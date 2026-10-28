@@ -1,6 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-27 — an owner overlay returns only the leaves it
+> **Last verified:** 2026-10-27 — each Go package's compiler is the go-overlay
+> release matching its recorded source floor, and a missing floor fails unless
+> the recipe declares an override; an owner overlay returns only the leaves it
 > claims and the composer deep-merges each one into `prev`, stopping at
 > derivations; nat-overlay-parity compares package leaves and checks owner
 > overlay leaves for presence; Go check names come from one declared table; the
@@ -869,7 +871,7 @@ the check.
 `inputs.rust-overlay.lib.mkRustBin {} pkgs` to each recipe's supplied package
 set. Recipes never instantiate nixpkgs themselves.
 
-`vu.mkGoToolchain {floor ? null, pkgs, pname, override ? null, recipeFile ? null}`
+`vu.mkGoToolchain {floor ? null, override ? null, pkgs, pname, recipeFile ? null}`
 returns `{go, buildGoModule, overridePackage, passthru}`. For recipe callers,
 `go` matches the recorded floor: the higher upstream `go` or `toolchain`
 directive. An exact stable floor such as `1.26.7` selects that release from
@@ -890,8 +892,9 @@ under `config.devenv.state` so host-installed Cargo subcommands cannot shadow
 the shell's toolchain. The Rust language module and Cargo state are disabled by
 the existing `isCI` gate for the manual diagnostic. These helpers are a recipe's
 only compiler source: never nixpkgs' own `go`, `rustc` or `cargo`.
-`checks/packaging/toolchain-provenance.nix` fails when a Go or Rust package
-lacks the locked compiler or carries a nixpkgs one.
+`checks/packaging/toolchain-provenance.nix` fails when a Go package lacks the
+compiler selected for its own floor or override, a Rust package lacks the locked
+Rust compiler, or either carries a nixpkgs one.
 
 Recipe callers retain the source-derived floor even when its release is already
 locked: a stale-LOW floor selects the wrong compiler. A recipe needing an
@@ -927,9 +930,9 @@ called. Packages needing both apply `overridePackage` first, then
 `checks/packaging/go-toolchain-floor.nix` covers the selection, the throws and
 the builder contracts. `checks/packaging/toolchain-provenance.nix` walks every
 Go and Rust package (including nested Go helpers) and fails when its
-`nativeBuildInputs` do not hold the locked compiler. It also scans every
-derivation-valued `passthru` attr of every package, such as glab's `extracted`
-schema extractor, and fails when one carries a nixpkgs compiler.
+`nativeBuildInputs` do not hold the compiler selected for that package. It also
+scans every derivation-valued `passthru` attr of every package, such as glab's
+`extracted` schema extractor, and fails when one carries a nixpkgs compiler.
 
 #### The floor itself is DERIVED, never hand-written
 
