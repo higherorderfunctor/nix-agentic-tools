@@ -93,14 +93,19 @@ own runner (`dev/scripts/update-matrix.py`).
   carry the version in their names, so a bump that forgets a hash fails the
   fetch instead of substituting the previous release's cached output.
 - **Go and Rust toolchains** (every owned Go and Rust package): compilers come
-  only from the locked overlays. `vu.mkGoToolchain` returns the newest stable
-  release from `(inputs.go-overlay.lib.mkGoBin pkgs).versions` and throws if the
-  package's recorded go.mod floor outruns it; `vu.mkRustPlatform` uses
+  only from the locked overlays. `vu.mkGoToolchain` matches the recorded floor
+  (the higher upstream `go` or `toolchain` directive) to an exact stable release
+  from `(inputs.go-overlay.lib.mkGoBin pkgs).versions`; a bare minor without an
+  exact key selects its newest stable patch. Missing or `"0"` floors require a
+  recipe's explicit `override = "latest"` or exact stable version; once a floor
+  is detected, any override is stale and fails until removed from the recipe. An
+  unavailable required release fails with `nix flake update go-overlay`
+  guidance. `vu.mkRustPlatform` uses
   `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default`. nixpkgs'
-  own `go` / `rustc` is never selected, and a toolchain version is never pinned
-  per package. `checks/packaging/go-toolchain-floor.nix` covers the selection
-  and builder contracts; `checks/packaging/toolchain-provenance.nix` checks the
-  compilers the built packages actually use.
+  own `go` / `rustc` is never selected.
+  `checks/packaging/go-toolchain-floor.nix` covers the selection and builder
+  contracts; `checks/packaging/toolchain-provenance.nix` checks the compilers
+  the built packages actually use.
 - **Version-independent URLs** (`dns-root-hints`): the version-equality early
   exit is not a valid change signal, so pass `alwaysPrefetch = true` to
   `mkUpdateScript`. It prefetches every run and decides whether to write by

@@ -31,8 +31,8 @@
 # `sources.vendorHash or fakeHash`: the `or` covers exactly the window
 # between the two.
 #
-# The Go TOOLCHAIN comes from the locked go-overlay via `vu.mkGoToolchain`,
-# which validates `goFloor` against it. The upstream recipe chooses a
+# The Go TOOLCHAIN matches `goFloor` through the locked go-overlay via
+# `vu.mkGoToolchain`. The upstream recipe chooses a
 # versioned Go builder on some nixpkgs pins; `overridePackage` replaces that
 # builder's compiler whichever argument name it uses.
 #

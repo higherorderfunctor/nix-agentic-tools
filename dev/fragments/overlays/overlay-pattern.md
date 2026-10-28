@@ -1,6 +1,6 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-22 — an owner overlay returns only the leaves it
+> **Last verified:** 2026-10-27 — an owner overlay returns only the leaves it
 > claims and the composer deep-merges each one into `prev`, stopping at
 > derivations; nat-overlay-parity compares package leaves and checks owner
 > overlay leaves for presence; Go check names come from one declared table; the
@@ -753,16 +753,15 @@ order, and every Go overlay calls it instead of composing fixers by hand:
 The floor fixer precedes the vendor fixer because `mkUpdateScript`'s
 `buildCandidate` rebuilds the sidecar from scratch (`jq -n '{version: $v}'`), so
 during `extraExtract` the floor is not stale, it is **absent**; it reads as
-`goFloorUnknown` ("0"), which `mkGoToolchain` accepts vacuously. The compiler no
-longer depends on the floor, so the order does not pick a toolchain; it makes a
-release whose go.mod outruns the locked Go stop at `mkGoToolchain`'s named throw
-instead of inside the vendor build with `go.mod requires go >= X`. Until
-2026-09-01 the hand-written vendor-before-floor order held glab and oh-my-posh
-back on every sweep, because the toolchain was then selected from the floor. It
-stayed floor-selected until `mkGoToolchain` switched to the newest locked
-release. `checks/packaging/go-floor-extract-order.nix` gates the order, with a
-positive control, and fails a package that carries `fixGoFloor` but no
-`goUpdateExtract` — i.e. one that went back to hand-rolling the chain.
+`goFloorUnknown` ("0"). `mkGoToolchain` refuses that input when selecting the
+compiler, so the floor fixer must restore the source requirement before the
+vendor fixer builds `.goModules`. The floor selects the compiler; a release
+missing from the locked overlay fails with `nix flake update go-overlay`
+guidance. Until 2026-09-01 the hand-written vendor-before-floor order held glab
+and oh-my-posh back on every sweep.
+`checks/packaging/go-floor-extract-order.nix` gates the order, with a positive
+control, and fails a package that carries `fixGoFloor` but no `goUpdateExtract`
+— i.e. one that went back to hand-rolling the chain.
 
 `glab` is the one Go package where the SRC hash goes in the sidecar too, so it
 is the only `srcFromSidecar = true` caller. The reason is the one that also
@@ -870,14 +869,18 @@ the check.
 `inputs.rust-overlay.lib.mkRustBin {} pkgs` to each recipe's supplied package
 set. Recipes never instantiate nixpkgs themselves.
 
-`vu.mkGoToolchain {floor, pkgs, pname, recipeFile ? null}` returns
-`{go, buildGoModule, overridePackage, passthru}`. `go` is the newest STABLE
-release in `(inputs.go-overlay.lib.mkGoBin pkgs).versions`; the floor only
-VALIDATES it (a throw names package, floor and the locked version when the
-locked overlay is too old, and another when it holds no stable release). It
-never falls back to nixpkgs' `go`, and no per-package version is chosen. Fix a
-throw with `nix flake update go-overlay`, not by pinning. Prereleases are
-filtered out on purpose: Nix sorts `1.27rc1` ABOVE `1.27.0`.
+`vu.mkGoToolchain {floor ? null, pkgs, pname, override ? null, recipeFile ? null}`
+returns `{go, buildGoModule, overridePackage, passthru}`. For recipe callers,
+`go` matches the recorded floor: the higher upstream `go` or `toolchain`
+directive. An exact stable floor such as `1.26.7` selects that release from
+`(inputs.go-overlay.lib.mkGoBin pkgs).versions`; a bare minor such as `1.26`
+selects the newest stable patch of that minor when no exact key exists. Missing
+or `"0"` floors fail compiler selection unless the recipe explicitly passes
+`override = "latest"` or an exact stable version. Once a floor is detected, any
+override is stale and fails; remove it from the recipe. A required release
+absent from the locked overlay fails with `nix flake update go-overlay`
+guidance. `mkGoToolchain` never selects nixpkgs' `go`; prereleases are excluded
+because Nix sorts `1.27rc1` ABOVE `1.27.0`.
 `vu.mkRustToolchain {pkgs, extensions ? []}` selects
 `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default` with the
 requested extensions. `vu.mkRustPlatform {pkgs}` feeds that helper's default
@@ -890,10 +893,10 @@ only compiler source: never nixpkgs' own `go`, `rustc` or `cargo`.
 `checks/packaging/toolchain-provenance.nix` fails when a Go or Rust package
 lacks the locked compiler or carries a nixpkgs one.
 
-Do not "clean up" a recorded floor that the locked Go already satisfies: it is
-the validation input, and a stale-LOW floor weakens the check silently. Do not
-replace the helper with a pinned toolchain version either; a pin cannot tell
-"still filling a real gap" from "this is now a downgrade".
+Recipe callers retain the source-derived floor even when its release is already
+locked: a stale-LOW floor selects the wrong compiler. A recipe needing an
+explicit compiler choice when no floor is available passes `override` to
+`mkGoToolchain`, which rejects that override once a source floor is detected.
 
 **EVERY owned Go package carries the seam** — `beads`, `gh`, `github-mcp`,
 `glab`, `gluetun`, `iron-proxy`, `mcp-language-server`, `oh-my-posh`,
@@ -930,10 +933,9 @@ schema extractor, and fails when one carries a nixpkgs compiler.
 
 #### The floor itself is DERIVED, never hand-written
 
-A hand-maintained floor literal is still a pin. A stale-LOW floor is the
-dangerous direction: validation passes vacuously and a source that outran the
-locked Go fails inside the Go build instead of at the named throw. Both storage
-modes below are therefore written by automation from the pinned source.
+A hand-maintained floor literal is still a pin. A stale-LOW floor selects a
+compiler below the source requirement and can fail inside the Go build. Both
+storage modes below are therefore written by automation from the pinned source.
 
 So the floor is extracted from the pinned source's go.mod, by mechanism:
 
@@ -957,14 +959,13 @@ package whose `srcHash` also lives in the sidecar (`glab`) must have that
 restored first. For `glab` the vendor fixer then precedes `regenCommand`,
 because the schema dump compiles the module against `.goModules`.
 
-Reading the floor is **silent by construction** — overlays read
-`sources.goFloor or vu.goFloorUnknown`, and `goFloorUnknown` (`"0"`) passes
-`mkGoToolchain`'s validation vacuously. That is deliberate and not a hole:
-`mkGoFloorFix` must evaluate the package to build its `.src`, so a `throw` on
-the missing key would deadlock the fixer that repairs it.
-`checks/packaging/go-floor-drift.nix` is the loud half — it compares every
-recorded floor against the real go.mod and names the package, actual requirement
-and automated fixer when it fails.
+Overlays read `sources.goFloor or vu.goFloorUnknown`, but `goFloorUnknown`
+(`"0"`) cannot select a compiler without an explicit recipe override.
+`mkGoFloorFix` must still reach the package's `.src` to repair the missing key;
+source extraction therefore remains independent of compiler selection.
+`checks/packaging/go-floor-drift.nix` compares every recorded floor against the
+real go.mod and names the package, actual requirement and automated fixer when
+it fails.
 
 The drift and extract-order check names come from one declared table,
 `checks/packaging/go-floor-packages.nix`, so listing names never forces package

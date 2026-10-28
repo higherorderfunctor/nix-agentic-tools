@@ -7,17 +7,14 @@
 #
 # THE ORDER. `mkUpdateScript`'s `buildCandidate` rebuilds the sidecar from
 # scratch (`jq -n '{version: $v}'`), so at the moment `extraExtract` starts,
-# `goFloor` is ABSENT and reads as `vu.goFloorUnknown` ("0"), which
-# `mkGoToolchain` accepts vacuously. The compiler no longer depends on the
-# floor (it is always the newest stable locked go-overlay release), but the
-# floor fixer must still run before the Go-compiling vendor fixer: a release
-# whose go.mod outruns the locked Go then stops at `mkGoToolchain`'s named
-# throw instead of dying inside the vendor build with `go.mod requires go >=
-# X`. Until 2026-09-01 the wrong vendor-before-floor order held glab and
-# oh-my-posh back on every sweep, because the toolchain was then selected from
-# the floor (it stayed floor-selected until mkGoToolchain picked the newest
-# locked release); the order stays gated because the chain is still generated
-# by `mkGoUpdateExtract`.
+# `goFloor` is ABSENT and reads as `vu.goFloorUnknown` ("0"). Without an
+# explicit recipe override, `mkGoToolchain` refuses that floor when selecting
+# the compiler. The floor fixer can reach `.src` without forcing the compiler
+# and must restore the floor before the vendor fixer builds `.goModules`.
+# The compiler then matches the source requirement; an unavailable release
+# fails with `nix flake update go-overlay` guidance. Until 2026-09-01 the wrong
+# vendor-before-floor order held glab and oh-my-posh back on every sweep.
+# `mkGoUpdateExtract` generates the chain whose order this check gates.
 #
 # WHY A STRUCTURAL CHECK AND NOT AN EXISTING ONE. Neither sibling can
 # catch this, and neither can be extended to:
@@ -122,9 +119,9 @@
           echo "FAIL: $label: floor fixer (line $floor) does not precede the vendor fixer (line $vendor)." >&2
           echo "" >&2
           echo "The vendor fixer builds .goModules, which compiles Go. With the floor" >&2
-          echo "still unwritten the sidecar reads goFloorUnknown, so a release whose" >&2
-          echo "go.mod floor exceeds the locked Go fails with 'go.mod requires go >= X'" >&2
-          echo "instead of mkGoToolchain's named throw." >&2
+          echo "still unwritten the sidecar reads goFloorUnknown, which cannot select" >&2
+          echo "a compiler without an explicit recipe override. Restore the source" >&2
+          echo "floor before building .goModules." >&2
           cat "$chain" >&2
           return 1
         fi

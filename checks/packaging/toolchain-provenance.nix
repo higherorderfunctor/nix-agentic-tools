@@ -13,14 +13,6 @@
   checks.toolchain-provenance = let
     vu = import ../../lib/toolchains.nix {inherit inputs;};
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit
-      (vu.mkGoToolchain {
-        floor = "0";
-        inherit pkgs;
-        pname = "provenance";
-      })
-      go
-      ;
     rust = (vu.mkRustPlatform {inherit pkgs;}).rust.rustc;
     # nixpkgs' default `go`, `rustc` and `cargo`, plus every versioned
     # `go_1_<N>`: a nixpkgs recipe builds with `buildGo<N>Module`, so its Go
@@ -112,7 +104,15 @@
         ++ lib.optional (p ? pnpmDeps) p.pnpmDeps))
     jsPackages;
     failures =
-      audit "Go" goPackages go
+      lib.concatMap (p:
+        audit "Go" [p]
+        (vu.mkGoToolchain {
+          floor = p.goFloor or null;
+          override = p.goToolchainOverride or null;
+          inherit pkgs;
+          pname = p.pname or p.name;
+        }).go)
+      goPackages
       ++ audit "Rust" rustPackages rust
       ++ lib.concatMap (h: carriesBanned "helper" h (h.nativeBuildInputs or [])) helpers
       ++ jsFailures;

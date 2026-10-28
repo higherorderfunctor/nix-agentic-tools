@@ -34,14 +34,13 @@
 # test sweep, and the tun-device removal it used to need, are gone with
 # it.
 #
-# THE GO TOOLCHAIN IS NEVER PINNED HERE, and the floor is derived — do not
-# "clean up" either. The compiler is the newest stable locked go-overlay
-# release, and a hand-written floor is a slower-rotting pin: the 4x/day
-# sweep bumps this package and would never touch it.
+# The gluetun compiler matches the derived floor through the locked go-overlay.
+# A hand-written floor is a slower-rotting pin: the 4x/day sweep bumps this
+# package and would never touch it.
 #
 # So `goFloor` is EXTRACTED from the pinned source's go.mod into the
-# sidecar by `vu.mkGoFloorFix`, and `vu.mkGoToolchain` validates it against the locked
-# go-overlay. No version literals here on purpose — the sidecar holds the
+# sidecar by `vu.mkGoFloorFix`, and `vu.mkGoToolchain` selects its matching locked
+# release. No version literals here on purpose — the sidecar holds the
 # current value and `checks/packaging/go-floor-drift.nix` asserts it still matches
 # source. See lib/packaging.nix (`mkGoFloorFix`) and lib/toolchains.nix
 # (`mkGoToolchain`); checks/packaging/go-toolchain-floor.nix covers the selector's
@@ -81,8 +80,8 @@
   # hand-written. This used to be the literal `"1.25.0"`, which was
   # correct only for as long as someone kept re-checking it — the update
   # pipeline bumps this package 4x/day and never touched it. See
-  # `vu.goFloorUnknown` for why the missing-key fallback is silent and
-  # `checks/packaging/go-floor-drift.nix` for the loud half.
+  # `vu.goFloorUnknown` for the sentinel repaired before compiler selection and
+  # `checks/packaging/go-floor-drift.nix` for comparison with the pinned source.
   goFloor = sources.goFloor or vu.goFloorUnknown;
 
   inherit
