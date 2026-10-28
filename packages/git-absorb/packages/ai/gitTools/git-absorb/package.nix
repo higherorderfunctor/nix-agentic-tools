@@ -7,6 +7,7 @@
   gitToolExtraction,
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   inherit (pkgs) fetchFromGitHub;
@@ -19,6 +20,7 @@
     inherit pkgs;
     override = "latest";
     pname = "git-absorb";
+    recipeFile = repoPath ./package.nix;
   };
 
   rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";

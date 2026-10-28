@@ -20,6 +20,7 @@
 {
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   rustToolchainChannel = "1.96.0";
@@ -27,6 +28,7 @@
     channel = rustToolchainChannel;
     inherit pkgs;
     pname = "rumdl";
+    recipeFile = repoPath ./package.nix;
   };
   version = "0.3.1";
   src = pkgs.fetchFromGitHub {

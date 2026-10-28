@@ -16,7 +16,7 @@
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   sourcesFile = repoPath ../../../sources.json;
   rustPlatform = vu.mkRustPlatform {
-    inherit pkgs sources;
+    inherit pkgs sources sourcesFile;
     pname = "chatgpt-codex";
     sourceRoot = "codex-rs";
   };

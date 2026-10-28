@@ -49,8 +49,9 @@
     ];
   };
   rustPlatform = packageLib.mkRustPlatform {
-    inherit pkgs sources;
+    inherit pkgs sources sourcesFile;
     pname = "pnpm_12";
+    targets = with packageLib.hashFixTargets; [cargoVendor pnpmDeps];
   };
   package = pkgs.pnpm_12.override {
     inherit (sources) version;

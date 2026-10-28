@@ -3,6 +3,7 @@
 {
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   inherit (pkgs) lib;
@@ -12,6 +13,7 @@
     inherit pkgs;
     override = "latest";
     pname = "airlock";
+    recipeFile = repoPath ./package.nix;
   };
   cargoRoot = ../../..;
   version = (lib.importTOML (cargoRoot + "/Cargo.toml")).workspace.package.version;

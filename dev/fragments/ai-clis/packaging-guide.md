@@ -42,7 +42,7 @@ derivation to pin the version and `src` from a per-platform `sources.json`, then
 re-composes the public package through upstream's wrapper.
 
 **Source override** (chatgpt-codex): `pkgs.codex.override` swaps in
-`mkRustPlatform {inherit pkgs sources; pname = "chatgpt-codex"; sourceRoot = "codex-rs";}`,
+`mkRustPlatform {inherit pkgs sources sourcesFile; pname = "chatgpt-codex"; sourceRoot = "codex-rs";}`,
 selecting the sidecar's source-declared channel from the locked rust-overlay.
 `overrideAttrs` pins `buildCommit`, `version`, `src` and `cargoHash` from
 `sources.json`. nixpkgs' vendor derivation reads those final attributes and

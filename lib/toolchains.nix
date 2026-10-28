@@ -1,6 +1,6 @@
 # Compiler helpers apply the locked toolchain functions to the supplied package set.
 {inputs}: let
-  inherit (import ./packaging.nix) goFloorUnknown mkGoFloorFix;
+  inherit (import ./packaging.nix) goFloorUnknown hashFixTargets mkGoFloorFix mkRustReleaseUpdate mkRustToolchainFix;
   # rust-toolchain channel is update-time data; Cargo rust-version is an MSRV.
   mkRustToolchain = {
     channel ? null,
@@ -121,14 +121,18 @@ in {
   };
 
   # Recipe literals and release sidecars share compiler selection and metadata.
+  # The same passthru feeds drift checks and revision/input update workers.
   mkRustPlatform = {
     channel ? sources.rustToolchainChannel or null,
     extensions ? [],
     override ? null,
     pkgs,
     pname,
+    recipeFile ? null,
     sourceRoot ? ".",
     sources ? {},
+    sourcesFile ? null,
+    targets ? [hashFixTargets.cargoVendor],
   }: let
     inherit (pkgs) lib;
     rust = mkRustToolchain {inherit channel extensions override pkgs pname;};
@@ -142,6 +146,16 @@ in {
       passthru =
         {rustToolchainChannel = channel;}
         // lib.optionalAttrs (override != null) {rustToolchainOverride = override;}
-        // lib.optionalAttrs (sourceRoot != ".") {rustToolchainRoot = sourceRoot;};
+        // lib.optionalAttrs (sourceRoot != ".") {rustToolchainRoot = sourceRoot;}
+        // lib.optionalAttrs (recipeFile != null) {
+          fixRustToolchain = mkRustToolchainFix {
+            inherit pkgs pname recipeFile sourceRoot;
+            attr = pname;
+          };
+        }
+        // lib.optionalAttrs (sourcesFile != null) (mkRustReleaseUpdate {
+          inherit pkgs pname sourceRoot sourcesFile targets;
+          attr = pname;
+        });
     };
 }

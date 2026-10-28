@@ -20,6 +20,7 @@
     inherit pkgs;
     override = "latest";
     pname = "ci-hestia";
+    recipeFile = "dev/ci-hestia.nix";
   };
   gitPackages =
     builtins.filter

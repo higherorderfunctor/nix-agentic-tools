@@ -17,6 +17,7 @@
     channel = rustToolchainChannel;
     inherit pkgs;
     pname = "oxlint";
+    recipeFile = repoPath ./package.nix;
   };
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};

@@ -3,6 +3,7 @@
 {
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   rustToolchainChannel = "";
@@ -11,6 +12,7 @@
     inherit pkgs;
     override = "latest";
     pname = "fblog";
+    recipeFile = repoPath ./package.nix;
   };
   version = "4.17.0";
   src = pkgs.fetchFromGitHub {
