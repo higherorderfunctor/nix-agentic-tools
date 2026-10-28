@@ -1042,9 +1042,10 @@ in {
           export XDG_DATA_HOME="$TMPDIR/data"
           export XDG_STATE_HOME="$TMPDIR/state"
           # Since 2.35.1 `agent validate` and `acp` refuse to start without a
-          # login. Any API key passes that local gate; the driver sends no model
-          # request and the build sandbox has no network.
-          export KIRO_API_KEY=placeholder
+          # login; test mode passes that gate. A placeholder KIRO_API_KEY passes it
+          # too, but then session/new asks the remote MCP governance API, which
+          # fails without network, and Kiro disables every MCP server.
+          export KIRO_TEST_MODE=1
           mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
           cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
           cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
