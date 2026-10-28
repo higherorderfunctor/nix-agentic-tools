@@ -937,13 +937,14 @@ script: source hash repair, `fixRustToolchain`, then Cargo hash repair. Source
 extraction reads `.src` without selecting a compiler, so a missing channel can
 be repaired. The extractor records an empty string when neither toolchain file
 exists or its `[toolchain]` table omits `channel`, so drift checks and the
-recipe override path remain reachable. Malformed TOML and duplicate channels
-still fail. `Cargo.toml`'s `rust-version` is the MSRV, so the extractor never
-treats it as a toolchain pin. A missing channel fails selection with the
-caller's `pname` and `fixRustToolchain` guidance unless that recipe explicitly
-passes `override = "latest"` or an exact version. A numeric channel, including a
-host-suffixed exact channel, makes any override stale and fails until the caller
-removes it. Named channels (`beta`, `beta-YYYY-MM-DD`, `nightly`,
+recipe override path remain reachable. An empty or comment-only file, which
+rustup rejects, malformed TOML and duplicate channels still fail. `Cargo.toml`'s
+`rust-version` is the MSRV, so the extractor never treats it as a toolchain pin.
+A missing channel fails selection with the caller's `pname` and
+`fixRustToolchain` guidance unless that recipe explicitly passes
+`override = "latest"` or an exact version. A numeric channel, including a
+host-suffixed exact or minor channel, makes any override stale and fails until
+the caller removes it. Named channels (`beta`, `beta-YYYY-MM-DD`, `nightly`,
 `nightly-YYYY-MM-DD`, `stable`) require an explicit latest or exact override;
 the recorded channel remains unchanged for drift checks. An unavailable numeric
 channel or exact override fails with `nix flake update rust-overlay` guidance;

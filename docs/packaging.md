@@ -116,19 +116,20 @@ own runner (`dev/scripts/update-matrix.py`).
   supply this channel. An exact channel selects that release from
   `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable`; a bare minor selects the
   newest patch of that minor. The selector alone strips host suffixes such as
-  `1.86.0-x86_64-unknown-linux-gnu` to select `1.86.0`; extraction preserves the
-  source spelling for drift checks. Missing channels fail with the package name
-  and `fixRustToolchain` guidance unless the recipe explicitly passes
-  `override = "latest"` or an exact version. A numeric channel, including a
-  host-suffixed exact version, rejects any override as stale; an unavailable
-  release requires `nix flake update rust-overlay`. Named channels (`beta`,
-  `beta-YYYY-MM-DD`, `nightly`, `nightly-YYYY-MM-DD`, `stable`) require an
-  explicit latest or exact override. The approved no-pin callers (`agnix`,
-  `airlock`, `fblog`, `git-absorb`, Hestia and the development shell) explicitly
-  request `latest`. Go and Rust recipes never select nixpkgs' own `go`, `rustc`
-  or `cargo`. `checks/packaging/go-toolchain-floor.nix` covers Go selection and
-  builder contracts; `checks/packaging/rust-toolchain-selection.nix` covers Rust
-  selection. Rust drift, writer and parser checks live in
+  `1.86.0-x86_64-unknown-linux-gnu` to select `1.86.0` (and `1.86-<host>` the
+  newest `1.86.x`); extraction preserves the source spelling for drift checks.
+  Missing channels fail with the package name and `fixRustToolchain` guidance
+  unless the recipe explicitly passes `override = "latest"` or an exact version.
+  A numeric channel, including a host-suffixed version, rejects any override as
+  stale; an unavailable release requires `nix flake update rust-overlay`. Named
+  channels (`beta`, `beta-YYYY-MM-DD`, `nightly`, `nightly-YYYY-MM-DD`,
+  `stable`) require an explicit latest or exact override. The approved no-pin
+  callers (`agnix`, `airlock`, `fblog`, `git-absorb`, Hestia and the development
+  shell) explicitly request `latest`. Go and Rust recipes never select nixpkgs'
+  own `go`, `rustc` or `cargo`. `checks/packaging/go-toolchain-floor.nix` covers
+  Go selection and builder contracts;
+  `checks/packaging/rust-toolchain-selection.nix` covers Rust selection. Rust
+  drift, writer and parser checks live in
   `checks/packaging/rust-toolchain-{drift,fixer,parser}.nix`.
   `checks/packaging/toolchain-provenance.nix` checks the compilers the built
   packages actually use.

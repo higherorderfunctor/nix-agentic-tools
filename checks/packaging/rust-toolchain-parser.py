@@ -71,6 +71,15 @@ class RustToolchainParser(unittest.TestCase):
             "Cannot overwrite a value",
         )
 
+    def test_rejects_comment_only_legacy_file(self):
+        self.assert_rejected(
+            {"rust-toolchain": "# pinned elsewhere\n"},
+            "expected a [toolchain] table",
+        )
+
+    def test_rejects_empty_legacy_file(self):
+        self.assert_rejected({"rust-toolchain": ""}, "expected a [toolchain] table")
+
     def test_rejects_malformed_toml(self):
         self.assert_rejected(
             {"rust-toolchain.toml": "[toolchain\n"},

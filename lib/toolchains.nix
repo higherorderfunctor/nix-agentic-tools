@@ -16,10 +16,11 @@
       (version: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+" version != null)
       (builtins.attrNames stable);
     declared = channel != null && channel != "";
-    # 1.86.0-x86_64-unknown-linux-gnu selects 1.86.0; drift keeps the source spelling.
+    # 1.86.0-x86_64-unknown-linux-gnu selects 1.86.0 and 1.86-<host> the newest
+    # 1.86.x; drift keeps the source spelling.
     hosted =
       if declared
-      then builtins.match "([0-9]+\\.[0-9]+\\.[0-9]+)-[^-]+-[^-]+-[^-]+(-[^-]+)?" channel
+      then builtins.match "([0-9]+\\.[0-9]+(\\.[0-9]+)?)-[^-]+-[^-]+-[^-]+(-[^-]+)?" channel
       else null;
     version =
       if hosted == null

@@ -75,6 +75,10 @@
         channel = "1.86.0-x86_64-unknown-linux-gnu";
         override = "1.86.0";
       };
+      "rejects a stale host-suffixed minor override" = rejects {
+        channel = "1.86-x86_64-unknown-linux-gnu";
+        override = "1.86.0";
+      };
       "rejects a stale host-suffixed latest override" = rejects {
         channel = "1.86.0-x86_64-unknown-linux-gnu";
         override = "latest";

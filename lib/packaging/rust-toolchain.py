@@ -18,7 +18,12 @@ def channel_of(root: Path) -> str:
     text = path.read_text().strip()
     # rustup accepts the legacy file as a bare channel or as TOML.
     if path.suffix == ".toml" or len(text.splitlines()) != 1 or text.startswith(("[", "#")):
-        channel = tomllib.loads(text).get("toolchain", {}).get("channel")
+        document = tomllib.loads(text)
+        # rustup rejects an empty or comment-only file; only a [toolchain]
+        # table without a channel records absence.
+        if "toolchain" not in document:
+            raise ValueError(f"{path}: expected a [toolchain] table")
+        channel = document["toolchain"].get("channel")
         if channel is None:
             return ""
     else:
