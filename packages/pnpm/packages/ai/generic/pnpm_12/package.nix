@@ -48,6 +48,10 @@
       packageLib.hashFixTargets.pnpmDeps
     ];
   };
+  rustPlatform = packageLib.mkRustPlatform {
+    inherit pkgs sources;
+    pname = "pnpm_12";
+  };
   package = pkgs.pnpm_12.override {
     inherit (sources) version;
     inherit srcHash;
@@ -56,7 +60,7 @@
     # backport, which conflicts with our lock. Override the
     # builder input so source patching and cargo vendoring use the same lock.
     cargoPatches = [];
-    rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
+    inherit rustPlatform;
   };
 in
   assert lib.assertMsg (sidecarMajor == "12") ''
@@ -110,6 +114,7 @@ in
         '';
       passthru =
         (prev.passthru or {})
+        // rustPlatform.passthru
         // {
           # Also discovered by fix_sidecar_hashes after nixpkgs input changes.
           inherit fixVendorHash;

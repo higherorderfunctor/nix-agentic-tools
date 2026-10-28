@@ -131,12 +131,15 @@ in {
     ];
 
   # ── Rust ──────────────────────────────────────────────────────────────
+  # The shell has no source toolchain pin; explicitly use locked newest stable.
   languages.rust = {
     enable = !isCI;
     lsp.package = config.languages.rust.toolchainPackage;
     toolchainPackage = (import ./lib/toolchains.nix {inherit inputs;}).mkRustToolchain {
       extensions = ["rust-analyzer" "rust-src"];
       inherit pkgs;
+      override = "latest";
+      pname = "devenv-rust";
     };
   };
   # Cargo searches CARGO_HOME/bin for subcommands; the host's stale cargo-clippy

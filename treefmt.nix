@@ -15,11 +15,16 @@
   projectRootFile = "flake.nix";
 
   # Rust lives only in this repository, so its formatter stays out of the
-  # exported consumer module and its large closure. Use the same locked Rust
-  # toolchain used for repository Rust builds.
+  # exported consumer module and its large closure. Format the in-repo airlock
+  # workspace with the toolchain selected by its recipe.
   programs.rustfmt = {
     enable = true;
-    package = ((import ./lib/toolchains.nix {inherit inputs;}).mkRustPlatform {inherit pkgs;}).rust.rustc;
+    package = (import ./lib/toolchains.nix {inherit inputs;}).mkRustToolchain {
+      inherit pkgs;
+      channel = pkgs.ai.airlock.rustToolchainChannel;
+      override = pkgs.ai.airlock.rustToolchainOverride;
+      pname = pkgs.ai.airlock.pname;
+    };
   };
 
   settings.global.excludes = [

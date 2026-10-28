@@ -31,7 +31,12 @@
   pkgs,
   ...
 }: let
-  rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
+  rustToolchainChannel = "1.86";
+  rustPlatform = packageLib.mkRustPlatform {
+    channel = rustToolchainChannel;
+    inherit pkgs;
+    pname = "git-branchless";
+  };
   gbSrc = inputs.git-branchless;
   extraction = gitToolExtraction {inherit pkgs;};
 
@@ -72,6 +77,7 @@
       (prev.nativeInstallCheckInputs or []);
     passthru =
       (prev.passthru or {})
+      // rustPlatform.passthru
       // {
         inherit extracted patchedSource;
         # Source and Cargo.lock move with the normal flake-input sweep,

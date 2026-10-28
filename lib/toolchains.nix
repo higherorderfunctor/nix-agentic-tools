@@ -1,13 +1,48 @@
 # Compiler helpers apply the locked toolchain functions to the supplied package set.
 {inputs}: let
   inherit (import ./packaging.nix) goFloorUnknown mkGoFloorFix;
+  # rust-toolchain channel is update-time data; Cargo rust-version is an MSRV.
   mkRustToolchain = {
+    channel ? null,
     extensions ? [],
+    override ? null,
     pkgs,
-  }:
-    (inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default.override {
-      inherit extensions;
-    };
+    pname,
+  }: let
+    inherit (pkgs) lib;
+    inherit (inputs.rust-overlay.lib.mkRustBin {} pkgs) stable;
+    releases =
+      builtins.filter
+      (version: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+" version != null)
+      (builtins.attrNames stable);
+    declared = channel != null && channel != "";
+    detected = declared && builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" channel != null;
+    requested =
+      if detected && override != null
+      then throw "${pname}: Rust channel ${channel} is detected; remove the stale mkRustToolchain/mkRustPlatform override from the recipe"
+      else if detected
+      then channel
+      else if override != null && override != "latest" && builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+" override == null
+      then throw "${pname}: invalid Rust override ${override}; the recipe override must be \"latest\" or an exact version (major.minor.patch)"
+      else if override != null
+      then override
+      else if declared
+      then throw "${pname}: Rust channel ${channel} is not a numeric stable version; declare mkRustToolchain/mkRustPlatform override = \"latest\" or an exact version in the recipe"
+      else throw "${pname}: no Rust toolchain channel detected; run fixRustToolchain or declare mkRustToolchain/mkRustPlatform override = \"latest\" or an exact version in the recipe";
+    candidates =
+      if !detected && requested == "latest"
+      then releases
+      else if builtins.elem requested releases
+      then [requested]
+      else if override == null && builtins.match "[0-9]+\\.[0-9]+" requested != null
+      then builtins.filter (version: lib.hasPrefix "${requested}." version) releases
+      else [];
+    selected =
+      if candidates != []
+      then stable.${lib.last (builtins.sort lib.versionOlder candidates)}.default
+      else throw "${pname}: Rust channel/override ${requested} matches no stable release in the lock; run nix flake update rust-overlay";
+  in
+    selected.override {inherit extensions;};
 in {
   inherit mkRustToolchain;
 
@@ -85,11 +120,28 @@ in {
       };
   };
 
-  mkRustPlatform = {pkgs}: let
-    rust = mkRustToolchain {inherit pkgs;};
-  in
-    pkgs.makeRustPlatform {
+  # Recipe literals and release sidecars share compiler selection and metadata.
+  mkRustPlatform = {
+    channel ? sources.rustToolchainChannel or null,
+    extensions ? [],
+    override ? null,
+    pkgs,
+    pname,
+    sourceRoot ? ".",
+    sources ? {},
+  }: let
+    inherit (pkgs) lib;
+    rust = mkRustToolchain {inherit channel extensions override pkgs pname;};
+    platform = pkgs.makeRustPlatform {
       cargo = rust;
       rustc = rust;
+    };
+  in
+    platform
+    // {
+      passthru =
+        {rustToolchainChannel = channel;}
+        // lib.optionalAttrs (override != null) {rustToolchainOverride = override;}
+        // lib.optionalAttrs (sourceRoot != ".") {rustToolchainRoot = sourceRoot;};
     };
 }

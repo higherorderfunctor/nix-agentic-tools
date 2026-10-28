@@ -1,13 +1,14 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-24 — updates are dispatched as the CI `Update`
-> workflow. Codex adopts nixpkgs' output-root layout, source-built voice and
-> store-linked runtime, and its updater pins rusty_v8 to the vendored `v8`
-> crate; Kiro parses embedded rollout JSON, preserving state fields; copies must
-> agree. The byte-preserving patcher remains strict. The devenv update lane
-> realizes the patched Kiro through the repo shell, so it does not push. The
-> same pushFilter also excludes the CodeQL engines, which the input lanes do not
-> build.
+> **Last verified:** 2026-10-27 — Codex selects Rust from the channel in
+> `codex-rs/rust-toolchain.toml`, recorded as `rustToolchainChannel`; updates
+> are dispatched as the CI `Update` workflow. Codex adopts nixpkgs' output-root
+> layout, source-built voice and store-linked runtime, and its updater pins
+> rusty_v8 to the vendored `v8` crate; Kiro parses embedded rollout JSON,
+> preserving state fields; copies must agree. The byte-preserving patcher
+> remains strict. The devenv update lane realizes the patched Kiro through the
+> repo shell, so it does not push. The same pushFilter also excludes the CodeQL
+> engines, which the input lanes do not build.
 
 ### Overview
 
@@ -40,15 +41,16 @@ opt-in. Repository code reads them from `ciPackages.<system>`.
 derivation to pin the version and `src` from a per-platform `sources.json`, then
 re-composes the public package through upstream's wrapper.
 
-**Source override** (chatgpt-codex): `pkgs.codex.override` swaps in the locked
-`mkRustPlatform`, and `overrideAttrs` pins `buildCommit`, `version`, `src` and
-`cargoHash` from `sources.json`. nixpkgs' vendor derivation reads those final
-attributes and disables bundled Opus so voice links against its `libopus`. The
-recipe retains nixpkgs' `nix-package-layout.patch` and
-`nix-voice-runtime.patch`: daemon validation and the voice loader accept the
-declared store-linked rg, bwrap and GStreamer files. It filters only
-`no-daemon_auto_start.patch`, since modules declare that setting explicitly
-while the binary retains upstream's default.
+**Source override** (chatgpt-codex): `pkgs.codex.override` swaps in
+`mkRustPlatform {inherit pkgs sources; pname = "chatgpt-codex"; sourceRoot = "codex-rs";}`,
+selecting the sidecar's source-declared channel from the locked rust-overlay.
+`overrideAttrs` pins `buildCommit`, `version`, `src` and `cargoHash` from
+`sources.json`. nixpkgs' vendor derivation reads those final attributes and
+disables bundled Opus so voice links against its `libopus`. The recipe retains
+nixpkgs' `nix-package-layout.patch` and `nix-voice-runtime.patch`: daemon
+validation and the voice loader accept the declared store-linked rg, bwrap and
+GStreamer files. It filters only `no-daemon_auto_start.patch`, since modules
+declare that setting explicitly while the binary retains upstream's default.
 
 - nixpkgs installs the complete package at `$out`: `codex-package.json`,
   `bin/codex`, `bin/codex-code-mode-host`, `codex-path/rg`, Linux

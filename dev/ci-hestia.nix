@@ -14,7 +14,13 @@
     inherit rev;
     hash = "sha256-R7SCvfTAtoRR6PuwUQlthLIypzmo6QHCKx/fFdPHKUU=";
   };
-  rustPlatform = (import ../lib/toolchains.nix {inherit inputs;}).mkRustPlatform {inherit pkgs;};
+  rustToolchainChannel = "";
+  rustPlatform = (import ../lib/toolchains.nix {inherit inputs;}).mkRustPlatform {
+    channel = rustToolchainChannel;
+    inherit pkgs;
+    override = "latest";
+    pname = "ci-hestia";
+  };
   gitPackages =
     builtins.filter
     (package: lib.hasPrefix "git+" (package.source or ""))
@@ -57,13 +63,17 @@ in
       runHook postCheck
       )
     '';
-    passthru.updateScript = pkgs.writeShellScript "update-ci-hestia" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      exec ${pkgs.python3}/bin/python3 ${./scripts/update-ci-hestia.py} \
-        ${pkgs.gh}/bin/gh ${pkgs.git}/bin/git \
-        ${pkgs.nix}/bin/nix-prefetch-url ${pkgs.nix}/bin/nix
-    '';
+    passthru =
+      rustPlatform.passthru
+      // {
+        updateScript = pkgs.writeShellScript "update-ci-hestia" ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exec ${pkgs.python3}/bin/python3 ${./scripts/update-ci-hestia.py} \
+            ${pkgs.gh}/bin/gh ${pkgs.git}/bin/git \
+            ${pkgs.nix}/bin/nix-prefetch-url ${pkgs.nix}/bin/nix
+        '';
+      };
     meta = {
       description = "Patched Hestia binary for CI check caching";
       homepage = "https://github.com/Mic92/hestia";

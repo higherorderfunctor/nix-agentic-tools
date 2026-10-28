@@ -6,7 +6,13 @@
   ...
 }: let
   inherit (pkgs) lib;
-  rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
+  rustToolchainChannel = "";
+  rustPlatform = packageLib.mkRustPlatform {
+    channel = rustToolchainChannel;
+    inherit pkgs;
+    override = "latest";
+    pname = "airlock";
+  };
   cargoRoot = ../../..;
   version = (lib.importTOML (cargoRoot + "/Cargo.toml")).workspace.package.version;
   src = lib.fileset.toSource {
@@ -14,6 +20,8 @@
     fileset = lib.fileset.unions [
       (cargoRoot + "/Cargo.lock")
       (cargoRoot + "/Cargo.toml")
+      (lib.fileset.maybeMissing (cargoRoot + "/rust-toolchain"))
+      (lib.fileset.maybeMissing (cargoRoot + "/rust-toolchain.toml"))
       ./Cargo.toml
       ./src
       ./tests
@@ -30,5 +38,9 @@ in
       license = lib.licenses.unlicense;
       mainProgram = "airlock";
     };
-    passthru.updateTargetExempt = "built from the in-repo workspace; no upstream release";
+    passthru =
+      rustPlatform.passthru
+      // {
+        updateTargetExempt = "built from the in-repo workspace; no upstream release";
+      };
   }

@@ -100,12 +100,29 @@ own runner (`dev/scripts/update-matrix.py`).
   recipe's explicit `override = "latest"` or exact stable version; once a floor
   is detected, any override is stale and fails until removed from the recipe. An
   unavailable required release fails with `nix flake update go-overlay`
-  guidance. `vu.mkRustPlatform` uses
-  `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default`. nixpkgs'
-  own `go` / `rustc` is never selected.
-  `checks/packaging/go-toolchain-floor.nix` covers the selection and builder
-  contracts; `checks/packaging/toolchain-provenance.nix` checks the compilers
-  the built packages actually use.
+  guidance. Rust recipes use `vu.mkRustToolchain` or `vu.mkRustPlatform`.
+  Sidecar recipes pass `sources`; literal recipes pass `channel`. Both pass
+  `pkgs` and `pname`, merge the platform's `passthru`, and supply `override`
+  only when needed. The recorded `rustToolchainChannel` comes from the source's
+  `rust-toolchain.toml` or `rust-toolchain` at its crate/workspace root
+  (`codex-rs` for `chatgpt-codex`). `Cargo.toml`'s `rust-version` is an MSRV and
+  cannot supply this channel. Values are recorded as declared by the source. An
+  exact channel selects that release from
+  `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable`; a bare minor selects the
+  newest patch of that minor. Missing channels fail with the package name and
+  `fixRustToolchain` guidance unless the recipe explicitly passes
+  `override = "latest"` or an exact version. A numeric channel rejects any
+  override as stale; an unavailable release requires
+  `nix flake update rust-overlay`. Named channels such as `stable` also require
+  an explicit latest or exact override. The approved no-pin callers (`agnix`,
+  `airlock`, `fblog`, `git-absorb`, Hestia and the development shell) explicitly
+  request `latest`. Go and Rust recipes never select nixpkgs' own `go`, `rustc`
+  or `cargo`. `checks/packaging/go-toolchain-floor.nix` covers Go selection and
+  builder contracts; `checks/packaging/rust-toolchain-selection.nix` covers Rust
+  selection. `checks/packaging/rust-toolchain-parser.nix` verifies the channel
+  parser for TOML and legacy files, absence and ambiguous declarations.
+  `checks/packaging/toolchain-provenance.nix` checks the compilers the built
+  packages actually use.
 - **Version-independent URLs** (`dns-root-hints`): the version-equality early
   exit is not a valid change signal, so pass `alwaysPrefetch = true` to
   `mkUpdateScript`. It prefetches every run and decides whether to write by

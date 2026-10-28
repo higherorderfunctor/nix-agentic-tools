@@ -883,18 +883,44 @@ override is stale and fails; remove it from the recipe. A required release
 absent from the locked overlay fails with `nix flake update go-overlay`
 guidance. `mkGoToolchain` never selects nixpkgs' `go`; prereleases are excluded
 because Nix sorts `1.27rc1` ABOVE `1.27.0`.
-`vu.mkRustToolchain {pkgs, extensions ? []}` selects
-`(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default` with the
-requested extensions. `vu.mkRustPlatform {pkgs}` feeds that helper's default
-toolchain to `makeRustPlatform`. The repository's interactive devenv shell uses
-the same helper with `rust-analyzer` and `rust-src`, and isolates `CARGO_HOME`
-under `config.devenv.state` so host-installed Cargo subcommands cannot shadow
-the shell's toolchain. The Rust language module and Cargo state are disabled by
-the existing `isCI` gate for the manual diagnostic. These helpers are a recipe's
-only compiler source: never nixpkgs' own `go`, `rustc` or `cargo`.
+`vu.mkRustToolchain {channel ? null, extensions ? [], override ? null, pkgs, pname}`
+selects the recipe's recorded `rustToolchainChannel` from
+`(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable` and adds the requested
+extensions. An exact channel such as `1.96.0` selects that release; a bare minor
+such as git-branchless's `1.86` selects the newest patch of that minor.
+`vu.mkRustPlatform` feeds the same selected compiler to `makeRustPlatform` for
+both Cargo and rustc. Literal recipes pass `channel`; sidecar recipes pass
+`sources`. Both pass `pkgs` and `pname`, with optional `override` and
+`sourceRoot` (default `"."`). Recipes merge the platform's `passthru`, which
+records `rustToolchainChannel`, optional `rustToolchainOverride` and
+`rustToolchainRoot`.
+
+The channel is the source's declaration in `rust-toolchain.toml` or
+`rust-toolchain` at the recipe's crate/workspace root, using `codex-rs` for
+`chatgpt-codex`. `Cargo.toml`'s `rust-version` is an MSRV, not a toolchain pin.
+The recorded value is kept as-is, including absence as an empty string. A
+missing channel fails selection with the caller's `pname` and `fixRustToolchain`
+guidance unless that recipe explicitly passes `override = "latest"` or an exact
+version. A numeric channel makes any override stale and fails until the caller
+removes it. Nonnumeric channels such as `stable`, `beta` or nightly require an
+explicit latest or exact override. An unavailable numeric channel or exact
+override fails with `nix flake update rust-overlay` guidance; neither helper
+selects nixpkgs' `rustc` or `cargo`.
+
+The approved no-pin callers (`agnix`, `airlock`, `fblog`, `git-absorb`, Hestia
+and the development shell) explicitly pass `override = "latest"`. The shell
+requests `rust-analyzer` and `rust-src`, and isolates `CARGO_HOME` under
+`config.devenv.state` so host-installed Cargo subcommands cannot shadow the
+shell's toolchain. The Rust language module and Cargo state are disabled by the
+existing `isCI` gate for the manual diagnostic.
 `checks/packaging/toolchain-provenance.nix` fails when a Go package lacks the
-compiler selected for its own floor or override, a Rust package lacks the locked
-Rust compiler, or either carries a nixpkgs one.
+compiler selected for its own floor or override, a Rust package lacks the
+compiler selected for its recorded channel or override, or either carries a
+nixpkgs compiler. `checks/packaging/rust-toolchain-selection.nix` verifies exact
+and bare-minor selection, extensions and explicit overrides against fixture
+releases and a locked-overlay release. It rejects missing channels, overrides of
+numeric channels, nonnumeric channels without an explicit override, unavailable
+releases and bare-minor overrides.
 
 Recipe callers retain the source-derived floor even when its release is already
 locked: a stale-LOW floor selects the wrong compiler. A recipe needing an

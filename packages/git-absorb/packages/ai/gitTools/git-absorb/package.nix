@@ -13,7 +13,13 @@
 
   vu = packageLib;
 
-  rustPlatform = vu.mkRustPlatform {inherit pkgs;};
+  rustToolchainChannel = "";
+  rustPlatform = vu.mkRustPlatform {
+    channel = rustToolchainChannel;
+    inherit pkgs;
+    override = "latest";
+    pname = "git-absorb";
+  };
 
   rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
   src = fetchFromGitHub {
@@ -55,6 +61,7 @@ in
   package.overrideAttrs (prev: {
     passthru =
       (prev.passthru or {})
+      // rustPlatform.passthru
       // {
         inherit patchedSource;
         # asciidoc parses Documentation/git-absorb.adoc, the source of the
