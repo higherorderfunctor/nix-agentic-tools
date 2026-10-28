@@ -68,7 +68,7 @@ pub async fn serve(listener: TcpListener, shutdown: impl Future<Output = ()>) ->
             }
             accepted = listener.accept(), if connections.len() < MAX_CONNECTIONS => {
                 match accepted {
-                    Ok((socket, _)) => { connections.spawn(crate::http1::serve(socket, HEADER_TIMEOUT)); }
+                    Ok((socket, _)) => { connections.spawn(crate::client::http1::serve(socket, HEADER_TIMEOUT)); }
                     Err(error) => break Err(error),
                 }
             }

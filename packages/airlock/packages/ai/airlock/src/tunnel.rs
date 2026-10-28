@@ -10,7 +10,7 @@ use tokio::{
     time::{Instant, timeout_at},
 };
 
-use crate::{authority, upstream::connect_upstream};
+use crate::{http::authority, upstream::connect_upstream};
 
 /// Connect to the CONNECT target, so an unreachable or slow upstream becomes a
 /// `502` or `504` rather than a `200` followed by a closed stream.
