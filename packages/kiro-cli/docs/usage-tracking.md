@@ -33,11 +33,14 @@ same runtime state directory.
 The service runs the flake's pinned nixpkgs `mitmproxy` package, binds only
 `127.0.0.1`, and claims its port through `ai.services`. It intercepts only
 `runtime.us-east-1.kiro.dev:443`; the addon records `/v1/responses` (root turns)
-and `/generateAssistantResponse` (workflow steps and subagents). Other
-destinations pass through without TLS interception. This initial host scope
-follows the observed runtime endpoint and does not claim complete coverage of
-every Kiro region or API. See [the collector notes](../usage/README.md) for
-storage, decoding, omission counters, and offline replay details.
+and the GenerateAssistantResponse AWS JSON RPC call (workflow steps, subagents
+and titles): path `/` whose `x-amz-target` is exactly
+`KiroRuntimeService.GenerateAssistantResponse`. Other operations on `/` pass
+through uncaptured; other destinations pass through without TLS interception.
+This initial host scope follows the observed runtime endpoint and does not claim
+complete coverage of every Kiro region or API. See
+[the collector notes](../usage/README.md) for storage, decoding, omission
+counters, and offline replay details.
 
 ## Start and stop
 

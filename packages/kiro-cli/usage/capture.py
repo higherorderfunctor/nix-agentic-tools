@@ -119,7 +119,8 @@ def child(value, *keys):
     return value
 
 
-def request_details(body, issues=None):
+def request_details(body, issues=None, rpc=False):
+    """rpc: the addon selected the GenerateAssistantResponse x-amz-target; otherwise the body is CreateResponse."""
     hashes = {"prefixes": {str(n): digest(body[:n]) for n in (4096, 16384, 32768, 49152) if len(body) >= n}}
     metadata = {}
     if len(body) > 32 * 1024 * 1024:
@@ -130,17 +131,16 @@ def request_details(body, issues=None):
         obj = decoded_json(body)
         if not isinstance(obj, dict):
             return metadata, hashes
-        conversation = obj.get("conversationState")
-        if isinstance(conversation, dict):
-            # GenerateAssistantResponse: agent mode travels as a header; tools ride on the current message.
-            message = child(conversation, "currentMessage")
+        if rpc:
+            # AWS JSON 1.0 writes the whole input as the body; tools ride on the current message.
+            message = child(obj, "conversationState", "currentMessage")
             fields = {"model": child(message, "userInputMessage", "modelId"),
                       "effort": child(obj, "additionalModelRequestFields", "output_config", "effort") or child(obj, "additionalModelRequestFields", "reasoning", "effort"),
-                      "kiro:conversation_id": conversation.get("conversationId"),
-                      "kiro:root_conversation_id": conversation.get("rootConversationId")}
-            components = {key: value for key, value in (("currentMessage", message), ("history", conversation.get("history")), ("systemPrompt", obj.get("systemPrompt")),
+                      "kiro:conversation_id": child(obj, "conversationState", "conversationId"),
+                      "kiro:root_conversation_id": child(obj, "conversationState", "rootConversationId")}
+            components = {key: value for key, value in (("currentMessage", message), ("history", child(obj, "conversationState", "history")), ("systemPrompt", obj.get("systemPrompt")),
                                                         ("tools", child(message, "userInputMessage", "userInputMessageContext", "tools"))) if value is not None}
-            items, items_key = conversation.get("history"), "history_items"
+            items, items_key = child(obj, "conversationState", "history"), "history_items"
         else:
             extra = obj.get("metadata") if isinstance(obj.get("metadata"), dict) else {}
             fields = {"model": obj.get("model"), "effort": child(obj, "reasoning", "effort"),
@@ -575,7 +575,7 @@ class Collector:
         state = dict(id=ident, metadata=metadata, start=stamp,
                      pending=0, dropped_chunks=0, dropped_bytes=0, observed_chunks=0,
                      observed_bytes=0, done=False, response={}, issues=[])
-        details, state["hashes"] = request_details(body, state["issues"])
+        details, state["hashes"] = request_details(body, state["issues"], "target" in metadata)
         state["metadata"].update(details)
         target = state["parse"] = dict(hash=hashlib.sha256(), decoder=None, encoding=None, json=bytearray(), stamp=(0, 0), seq=-1)  # _parse sets events/size/budget
         target["analysis"] = Analysis(lambda *saved: self._stage(target, *saved))
@@ -748,7 +748,9 @@ class Collector:
         return [("INSERT INTO chunks VALUES (?,?,?,?,?,?)", (state["id"], seq, *stamp, entity, app)), *self._event_rows(state, events, seq, stamp)]
 
     @staticmethod
-    def framing(target, response):
+    def framing(target, response, rpc):
+        if rpc:  # Kiro's client parses GenerateAssistantResponse as a binary event stream whatever its content type.
+            return target["eventstream"]
         content_type = response.get("content_type", "")
         for media, key in (("text/event-stream", "sse"), ("application/vnd.amazon.eventstream", "eventstream")):
             if media in content_type:
@@ -774,7 +776,7 @@ class Collector:
                     raise zlib.error("decompressed chunk exceeds safety limit")
                 target["hash"].update(application)
                 target["size"] += len(application) if application is not data else 0
-                parser = self.framing(target, response)
+                parser = self.framing(target, response, "target" in state["metadata"])
                 if parser:
                     parser.feed(application)
                 elif len(target["json"]) + len(application) <= 4 * 1024 * 1024:
@@ -796,7 +798,7 @@ class Collector:
         if target["decoder"] and not target["decoder"].eof:
             state["issues"].append("truncated_content_encoding")
         whole = not any(x in state["issues"] for x in ("decode_error", "unsupported_content_encoding", "truncated_content_encoding", "trailing_content_encoding"))
-        parser = self.framing(target, response)
+        parser = self.framing(target, response, "target" in state["metadata"])
         if parser:
             target.update(events=[], size=0, budget=math.inf)  # The EOF tail is written here, never queued.
             parser.feed(b"", final=True)

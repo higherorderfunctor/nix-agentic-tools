@@ -131,6 +131,18 @@ class CaptureTests(unittest.TestCase):
                 usage = json.loads(summary)["usage_objects"][0]["value"]
                 self.assertEqual(usage, obj["response"]["usage"])
 
+    def test_rpc_generate_assistant_response_decodes_event_stream_whatever_its_content_type(self):
+        writer = Collector(self.path)
+        ident = writer.begin({"host": "runtime.kiro.dev", "path": "/", "target": "KiroRuntimeService.GenerateAssistantResponse"},
+                             b'{"conversationState":{"conversationId":"sess_rpc","currentMessage":{}}}')
+        writer.headers(ident, {"content_type": "application/json", "content_encoding": "identity"})
+        writer.chunk(ident, aws_event("meteringEvent", {"usage": .5, "unit": "credit"}))
+        writer.finish(ident)
+        writer.close()
+        db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
+        self.assertEqual(db.execute("SELECT state,credits FROM captures WHERE id=?", (ident,)).fetchone(), ("complete", .5))
+
     def test_event_stream_split_messages_usage_and_completion(self):
         # Bool (type 0) and UUID (type 9) headers are skipped without losing the string headers.
         skipped = b"\x04flag\x00" + b"\x02id\x09" + bytes(16)
@@ -405,11 +417,14 @@ class CaptureTests(unittest.TestCase):
         body = json.dumps({"conversationState": {"conversationId": "sess_step", "rootConversationId": "sess_root", "chatTriggerType": "MANUAL", "history": history,
                                                  "currentMessage": {"userInputMessage": {"content": "c", "modelId": "claude-opus-5.5", "userInputMessageContext": {"tools": [{"toolSpecification": {"name": "t"}}]}}}},
                            "additionalModelRequestFields": {"output_config": {"effort": "low"}}, "profileArn": "never"}).encode()
-        meta, hashes = request_details(body)
+        meta, hashes = request_details(body, rpc=True)
         self.assertEqual(meta, {"model": "claude-opus-5.5", "effort": "low", "kiro:conversation_id": "sess_step", "kiro:root_conversation_id": "sess_root"})
         self.assertEqual(set(hashes), {"currentMessage", "history", "history_items", "prefixes", "tools"})
         self.assertEqual(hashes["history_items"], [digest(json.dumps(item, separators=(",", ":")).encode()) for item in history])
-        self.assertEqual(request_details(b'{"conversationState":{},"additionalModelRequestFields":{"reasoning":{"effort":"high"}}}')[0], {"effort": "high"})
+        self.assertEqual(request_details(b'{"conversationState":{},"additionalModelRequestFields":{"reasoning":{"effort":"high"}}}', rpc=True)[0], {"effort": "high"})
+        # The selection, not the body shape, picks the parser: a conversationState body on CreateResponse stays CreateResponse.
+        self.assertEqual(request_details(body)[0], {})
+        self.assertEqual(request_details(b'{"model":"m"}', rpc=True)[0], {})
 
     def test_private_database_and_additional_tables(self):
         db = open_database(self.path)
@@ -737,10 +752,14 @@ class CaptureTests(unittest.TestCase):
         with patch.dict(os.environ, {"KIRO_USAGE_DB": str(self.path)}):
             addon.load(None)
         self.addCleanup(addon.done)
-        def flow(host="runtime.kiro.dev", path="/v1/responses?secret=never", ident="selected"):
-            return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method="POST", headers={"authorization": "never", "cookie": "never"}, get_content=lambda strict: b'{"model":"fake"}'), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
-        for host, path in (("not-kiro.dev", "/v1/responses"), ("kiro.dev.evil", "/v1/responses"), ("kiro.dev", "/other"), ("kiro.dev", "/generateAssistantResponse/x")):
-            rejected = flow(host, path, host + path)
+        def flow(host="runtime.kiro.dev", path="/v1/responses?secret=never", ident="selected", target=None, body=b'{"model":"fake"}'):
+            headers = {"authorization": "never", "cookie": "never", **({"x-amz-target": target} if target else {})}
+            return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method="POST", headers=headers, get_content=lambda strict: body), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
+        generate = "KiroRuntimeService.GenerateAssistantResponse"
+        # The schema's REST path is never sent; RPC selection is the exact target on POST / only.
+        for host, path, target in (("not-kiro.dev", "/v1/responses", None), ("kiro.dev.evil", "/v1/responses", None), ("kiro.dev", "/other", None), ("kiro.dev", "/generateAssistantResponse", None),
+                                   ("kiro.dev", "/", None), ("kiro.dev", "/", "KiroRuntimeService.GetUsageLimits"), ("kiro.dev", "/", generate + "X"), ("kiro.dev", "/v1/responses/", generate), ("not-kiro.dev", "/", generate)):
+            rejected = flow(host, path, f"{host}{path}{target}", target)
             addon.request(rejected)
             self.assertNotIn(rejected.id, addon.active)
         selected = flow()
@@ -750,7 +769,8 @@ class CaptureTests(unittest.TestCase):
         self.assertIs(selected.response.stream(data), data)
         self.assertEqual(selected.response.stream(b""), b"")
         addon.response(selected)
-        step = flow(path="/generateAssistantResponse?secret=never", ident="step")
+        request = json.dumps({"conversationState": {"conversationId": "sess_step", "currentMessage": {"userInputMessage": {"modelId": "m"}}}}).encode()
+        step = flow(path="/?secret=never", ident="step", target=generate, body=request)
         step.response.headers["content-type"] = EVENTSTREAM
         addon.request(step)
         addon.responseheaders(step)
@@ -764,7 +784,8 @@ class CaptureTests(unittest.TestCase):
             for metadata, response, _, _ in rows:
                 self.assertNotIn("never", metadata + response)
                 self.assertIn("upstream-fake", response)
-            self.assertEqual([json.loads(row[0])["path"] for row in rows], ["/v1/responses", "/generateAssistantResponse"])
+            self.assertEqual([json.loads(row[0]) for row in rows], [{"host": "runtime.kiro.dev", "method": "POST", "path": "/v1/responses", "model": "fake", "request_content_encoding": "identity"},
+                                                                    {"host": "runtime.kiro.dev", "method": "POST", "path": "/", "target": generate, "model": "m", "kiro:conversation_id": "sess_step", "request_content_encoding": "identity"}])
             self.assertEqual(rows[1][2:], ("complete", .5))
         finally:
             db.close()

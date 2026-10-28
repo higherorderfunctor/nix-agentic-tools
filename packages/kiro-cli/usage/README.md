@@ -39,15 +39,22 @@ private database are operator decisions: stop the service, then archive or
 delete `usage.sqlite3` with its `-wal` and `-shm` files; the next start creates
 a new store.
 
-Only hosts equal to `kiro.dev` or ending in `.kiro.dev` and the exact paths
-`/v1/responses` (CreateResponse, root turns) and `/generateAssistantResponse`
-(GenerateAssistantResponse, workflow steps and subagents) are selected.
-Lookalikes such as `not-kiro.dev` are excluded. Query strings are discarded. The
-addon stores only the host, method, constant path, request content encoding,
-response status, response content type and encoding, and the upstream
-`x-amzn-requestid` / `x-request-id`. It never serializes arbitrary headers,
-cookies, authorization, or URLs. Full **bodies** are deliberately retained and
-may themselves contain secrets.
+Only hosts equal to `kiro.dev` or ending in `.kiro.dev` are considered.
+Lookalikes such as `not-kiro.dev` are excluded. Two calls are selected: the
+exact path `/v1/responses` (CreateResponse REST, root turns), and
+GenerateAssistantResponse (workflow steps, subagents, session titles). The
+latter is AWS JSON 1.0 RPC: Kiro sends it as path `/` with the header
+`x-amz-target: KiroRuntimeService.GenerateAssistantResponse`. The schema's REST
+path `/generateAssistantResponse` is never sent. A request to `/` is selected
+only when that header equals this value exactly, so other KiroRuntimeService
+operations on `/` pass through uncaptured. Its response is always decoded as an
+AWS event stream, as Kiro's client does, whatever content type the server labels
+it with. Query strings are discarded. The addon stores only the host, method,
+constant path, the `x-amz-target` value for selected RPC calls (as `target`),
+request content encoding, response status, response content type and encoding,
+and the upstream `x-amzn-requestid` / `x-request-id`. It never serializes
+arbitrary headers, cookies, authorization, or URLs. Full **bodies** are
+deliberately retained and may themselves contain secrets.
 
 The response streaming callback returns the same bytes, including the EOF
 sentinel, once it has decoded and framed that chunk; it never waits for SQLite.
@@ -142,8 +149,9 @@ session would insert the same records.
   request bytes. Its full SHA-256 is over those exact bytes. Component hashes
   use sorted, compact UTF-8 JSON for `input`, individual input items,
   `instructions`, `reasoning`, and `tools`; GenerateAssistantResponse requests
-  instead hash `conversationState.currentMessage`, `history`, individual history
-  items, top-level `systemPrompt`, and the current message's
+  (chosen by the selected target, not by body shape) instead hash
+  `conversationState.currentMessage`, `history`, individual history items,
+  top-level `systemPrompt`, and the current message's
   `userInputMessageContext.tools`. Prefix hashes cover the first 4096, 16384,
   32768, and 49152 application bytes when present. These hashes describe content
   stability; they do not prove provider cache hits.
@@ -405,6 +413,7 @@ Fake-flow contracts validate the addon boundary and streaming behavior. The
 `kiro-usage-mitm-transport` Nix check also runs the pinned mitmproxy against a
 loopback fake upstream, checking immediate first-byte delivery, exact compressed
 payloads and SQLite replay for an SSE `/v1/responses` call and an AWS
-event-stream `/generateAssistantResponse` call, including the latter's credits,
-context, token columns and stored events. Live Kiro and TLS interception remain
-untested.
+event-stream GenerateAssistantResponse RPC call (`POST /` with its
+`x-amz-target`), including the latter's credits, context, token columns and
+stored events, and that a `POST /` with another target is not captured. Live
+Kiro and TLS interception remain untested.
