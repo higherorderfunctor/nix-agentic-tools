@@ -603,7 +603,7 @@ in
             nativeFileWarnings cfg
             # package = null is the config-only opt-out: no launcher can clear
             # the descriptor Claude caches before loading these settings.
-            ++ lib.optional (resolvedProxy != null && cfg.package == null)
+            ++ lib.optional (cfg.package == null && claudeProxy.launcherFlags {inherit backend resolvedProxy;} != [])
             "ai.claude.proxy is selected but ai.claude.package is null; launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup."
             ++ lib.optional (!isHm && cfg.plugins != {})
             "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";

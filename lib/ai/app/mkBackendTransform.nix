@@ -161,17 +161,13 @@
     }
     else {};
 
-  # The proxy selection is one unit: a runtime selection replaces the root one
-  # whole (`proxyLib.resolve`). Null when nothing is selected or the runtime
-  # does not consume the pool.
+  proxyPath = ["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"];
+  # The runtime's selection already holds the root fields it did not set
+  # (copied down in `config` below). Null when nothing is selected or the
+  # runtime does not consume the pool.
   resolvedProxy =
     if supportsPool "proxy"
-    then
-      proxyLib.resolve {
-        instances = config.ai.cliproxyapi.instances or {};
-        root = config.ai.proxy;
-        runtime = poolCfg.proxy;
-      }
+    then proxyLib.resolve config.ai.internal.proxyInstances poolCfg.proxy
     else null;
 
   # The jail folds field by field (`jailLib.resolve`). Null unless the result
@@ -469,12 +465,13 @@
         };
         default = {};
         description = ''
-          ${appRecord.name}'s proxy selection. When it selects anything
-          (a `url` or an `instance`), it replaces `ai.proxy`'s selection as a whole for this
-          runtime; otherwise the root selection applies. The resolved
-          endpoint is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "proxy")}`.
-          Through an instance, `allow` and `providers` limit what the key
-          may reach.
+          ${appRecord.name}'s proxy selection. Each `ai.proxy` field copies
+          down at default priority, so a value set here wins field by field;
+          selecting the other form (`instance` under a root `url`, or the
+          reverse) drops the root's fields of that form. `instance = null`
+          (or `url = null` for an external origin) opts this runtime out of
+          an inherited selection. The resolved endpoint
+          is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "proxy")}`.
         '';
       };
     }
@@ -825,10 +822,14 @@ in {
     (lib.optionalAttrs hasNativeAgents {
       ai.${appRecord.name}.native.agents = nativeAgentDefaults;
     })
+    # Root fields at default priority, so a runtime value wins field by field;
+    # copyDown clears the root's other form once the runtime switches forms,
+    # and its clientKey once the runtime selects a clientless instance.
+    (lib.optionalAttrs (supportsPool "proxy") (lib.setAttrByPath proxyPath (proxyLib.copyDown config.ai.internal.proxyInstances config.ai.proxy poolCfg.proxy)))
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
+      assertions = proxyLib.runtimeAssertionsFor config.ai.internal.proxyInstances proxyPath config.ai.proxy poolCfg.proxy;
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let

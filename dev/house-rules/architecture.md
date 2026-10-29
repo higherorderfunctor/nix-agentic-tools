@@ -65,6 +65,23 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
+- **Proxy selection is runtime library code.** Proxy owners add their instances
+  to one registry, `ai.internal.proxyInstances`, by ordinary module merge and
+  claim each name in `ai.claims.proxy-instance`; `lib/ai/proxy` names no owner.
+  An instance's `clients` are optional, so an owner whose instances take no
+  client key registers none. Root `ai.proxy` copies down to `ai.<runtime>.proxy`
+  at default priority, so a runtime value wins field by field; a runtime
+  selecting the other form (`instance` vs `url`) inherits none of the root's
+  fields of that form; `instance = null` opts a runtime out. The selected
+  instance's backend picks the one lowering a runtime runs, and a runtime
+  without that lowering fails evaluation. Everything a backend sets, launcher
+  flags included, lives in its lowering. Lowerings set native values at default
+  priority, so a consumer's own native value wins. Vetted 2026-10-28. This keeps
+  a second proxy owner a module merge rather than an edit to a shared owner
+  table, and keeps a consumer's override a plain definition. See
+  `lib/ai/proxy/default.nix`, `lib/ai/app/mkBackendTransform.nix`,
+  `packages/claude-code/lib/proxy.nix` and
+  `packages/chatgpt-codex/lib/proxy.nix`.
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;

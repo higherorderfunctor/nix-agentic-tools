@@ -321,8 +321,8 @@ execs the package with the owner's per-instance arguments. The owner fixes the
 settings an instance derives (the listen port, state paths) as ordinary
 definitions, so a consumer value that disagrees fails evaluation. `select`
 resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
-cannot: the name is missing or the instance is disabled. CLIProxyAPI and CPA
-Manager Plus use it.
+cannot: the name is missing or the instance is disabled; `origin` is that URL
+alone. CLIProxyAPI and CPA Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                                                                                                                                         |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -427,10 +427,12 @@ directories.
 Exclusive resources share `ai.claims.<group>.<key>`, a hidden registry of owner
 lists validated once in `modules/common.nix`. Runtime helpers register
 non-shared paths in `path`, service names in `service` and decimal ports in
-`port`. Other resources use `ai.<owner>.claims.<group> = [keys]`. CPA client
-keys belong to named instance entries, so Harness selection adds no runtime
-client-key claim. Port owners are `<owner>:<service>.ports.<name>`. A list with
-more than one owner fails with
+`port`. Other resources use `ai.<owner>.claims.<group> = [keys]`; a proxy owner
+claims each instance name it registers in `ai.internal.proxyInstances` in
+`proxy-instance`, so a Harness's `instance` names exactly one owner's instance.
+CPA client keys belong to named instance entries, so Harness selection adds no
+runtime client-key claim. Port owners are `<owner>:<service>.ports.<name>`. A
+list with more than one owner fails with
 `ai.claims.<group>.<key>: claimed by <a> and <b>`, sorted by owner. Adding a
 resource group needs no new validation code; owners register resources and never
 assert uniqueness. The internal shared owner accepts scoped service claims for

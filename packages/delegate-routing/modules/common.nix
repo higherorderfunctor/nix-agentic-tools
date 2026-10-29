@@ -55,14 +55,10 @@
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
   requiredTargets = runtime:
     lib.unique ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates);
-  proxyLib = import ../../../lib/ai/proxy {inherit lib;};
   redact = import ../../../lib/redact {inherit lib;};
   usageFor = runtime: let
-    unselected = {
-      instance = null;
-      url = null;
-    };
-    selection = proxyLib.selectionFor (config.ai.proxy or unselected) (config.ai.${runtime}.proxy or unselected);
+    # The runtime's selection already carries the root fields it inherits.
+    selection = config.ai.${runtime}.proxy or {instance = null;};
     instances = lib.attrByPath ["ai" "cliproxyapi" "instances"] {} config;
     selected =
       if selection.instance == null

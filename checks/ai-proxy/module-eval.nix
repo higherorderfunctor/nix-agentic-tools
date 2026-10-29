@@ -1,5 +1,5 @@
 # `ai.proxy` core contracts (lib/ai/proxy): selection validation and
-# resolution, and the per-runtime override.
+# resolution, the field-wise copy-down, and the instance registry.
 {
   lib,
   pkgs,
@@ -13,18 +13,20 @@
   # The key a selected CLIProxyAPI instance accepts: one reference on both
   # sides, in the instance's access list and in the selection.
   instanceKey = redact.file "/run/secrets/ai-proxy-key";
-  instances.cliproxyapi.instances = {
-    main = {
-      port = 8400;
-      clientKeys.main = {
-        key = instanceKey;
-        routes = [{credential = "login";}];
-      };
-      credentials.login.oauth = {
-        account = redact.file "/run/secrets/cpa-login-email";
-        vendor = "claude";
-      };
+  instance = port: {
+    inherit port;
+    clientKeys.main = {
+      key = instanceKey;
+      routes = [{credential = "login";}];
     };
+    credentials.login.oauth = {
+      account = redact.file "/run/secrets/cpa-login-email";
+      vendor = "claude";
+    };
+  };
+  instances.cliproxyapi.instances = {
+    alt = instance 8403;
+    main = instance 8400;
     off = {
       enable = false;
       port = 8401;
@@ -42,15 +44,34 @@
     name = "testapp";
     surfaceSupport.proxy = {};
   };
-  evalApp = backend: config:
+  evalAppWith = modules: backend: config:
     (
       if backend == "hm"
       then evalHmModules
       else evalDevenvModules
-    ) [
-      (aiBase.app.${backend + "Transform"} record)
-      {inherit config;}
+    ) ([
+        (aiBase.app.${backend + "Transform"} record)
+        {inherit config;}
+      ]
+      ++ modules);
+  evalApp = evalAppWith [];
+  # A second proxy owner with a backend no runtime lowers and a clientless
+  # instance.
+  secondOwner = {
+    imports = [
+      (import ../../packages/ai-module/lib/runtime.nix {
+        enabled = true;
+        name = "relay";
+      })
     ];
+    ai = {
+      internal.proxyInstances.second = {
+        backend = "relay";
+        url = "http://127.0.0.1:8500";
+      };
+      relay.claims.proxy-instance = ["second"];
+    };
+  };
 
   clientKey = name: redact.file "/run/secrets/cpa-${name}-key";
   apiKey = {
@@ -517,7 +538,7 @@ in {
           clientKey = "main";
           url = "http://127.0.0.1:8317";
         })
-        && failsWith ["ai.proxy.instance names `missing`, which is not an `ai.cliproxyapi.instances` entry."] (select {
+        && failsWith ["ai.proxy.instance names `missing`, which no proxy owner registers; registered instances: alt, main, off."] (select {
           instance = "missing";
           clientKey = "main";
         })
@@ -527,11 +548,13 @@ in {
         })) [evalDevenv evalHm]
     );
 
-    # The root selection reaches a consuming runtime as the resolved endpoint;
-    # a runtime selection replaces it whole, on both backends, so a runtime
-    # key never pairs with a root url; a runtime's own invalid selection fails
-    # with its own option path, even while the runtime is disabled. A url
-    # with a path set on the normalized option directly is refused too.
+    # Root fields copy down at default priority: a runtime value wins field by
+    # field, on both backends; a runtime selecting the other form drops the
+    # root's fields of that form, in both directions; `instance = null` opts
+    # a runtime out of an inherited selection without tripping on the client
+    # key it leaves behind; a runtime's own invalid selection fails with its own option
+    # path, even while the runtime is disabled. A url with a path set on the
+    # normalized option directly is refused too.
     module-ai-proxy-runtime-override = mkTest "ai-proxy-runtime-override" (
       lib.all (backend: let
         # The endpoint alone; module-ai-proxy-instance-clients covers named credentials.
@@ -540,7 +563,7 @@ in {
         in
           if proxy == null
           then null
-          else removeAttrs proxy ["credentials"];
+          else removeAttrs proxy ["backend" "credentials"];
         root = {
           key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://127.0.0.1:8317";
@@ -549,16 +572,34 @@ in {
           key = redact.concat ["Bearer " (redact.command "${pkgs.hello}/bin/hello")];
           url = "http://127.0.0.1:8318";
         };
+        mainSelection = {
+          instance = "main";
+          clientKey = "main";
+        };
+        withInstances = ai: {ai = instances // ai;};
         keyOnly = {
           ai = {
             proxy = root;
-            testapp.proxy.key = redact.file "/run/secrets/work-proxy-key";
+            testapp.proxy.key = work.key;
           };
+        };
+        switchedToInstance = withInstances {
+          proxy = root;
+          testapp.proxy = mainSelection;
+        };
+        switchedToUrl = withInstances {
+          proxy = mainSelection;
+          testapp.proxy = work;
+        };
+        optedOut = withInstances {
+          proxy = mainSelection;
+          testapp.proxy.instance = null;
         };
       in
         resolved {}
         == null
         && resolved {ai.proxy = root;} == root
+        && (evalApp backend {ai.proxy = root;}).config.ai.testapp.normalized.proxy.backend == "cliproxyapi"
         && resolved {
           ai = {
             proxy = root;
@@ -567,46 +608,120 @@ in {
         }
         == work
         && resolved {ai.testapp.proxy = work;} == work
-        # An instance resolves to its loopback origin at either scope, and a
-        # runtime instance replaces a root url whole.
-        && resolved {
-          ai =
-            instances
-            // {
-              proxy = {
-                instance = "main";
-                clientKey = "main";
-              };
-            };
-        }
+        && resolved keyOnly == root // {inherit (work) key;}
+        && failedMessages (evalApp backend keyOnly) == []
+        # An instance resolves to its loopback origin at either scope; a
+        # runtime instance replaces the root one.
+        && resolved (withInstances {proxy = mainSelection;})
         == {
           key = instanceKey;
           url = "http://127.0.0.1:8400";
         }
-        && resolved {
-          ai =
-            instances
-            // {
-              proxy = root;
-              testapp.proxy = {
-                instance = "main";
-                clientKey = "main";
-              };
-            };
+        && resolved (withInstances {
+          proxy = mainSelection;
+          testapp.proxy.instance = "alt";
+        })
+        == {
+          key = instanceKey;
+          url = "http://127.0.0.1:8403";
         }
+        # Switching forms clears nothing by hand: the root's url and key
+        # drop for a runtime instance, its instance and clientKey for a
+        # runtime url; a runtime setting both forms itself is still refused.
+        && resolved switchedToInstance
         == {
           key = instanceKey;
           url = "http://127.0.0.1:8400";
         }
-        && resolved keyOnly == root
-        && failsWith ["ai.testapp.proxy.key is set without `url`"] (evalApp backend keyOnly)
+        && failedMessages (evalApp backend switchedToInstance) == []
+        && resolved switchedToUrl == work
+        && failedMessages (evalApp backend switchedToUrl) == []
+        && failsWith ["ai.testapp.proxy.url and ai.testapp.proxy.instance both select a proxy"] (evalApp backend (withInstances {
+          proxy = root;
+          testapp.proxy = mainSelection // root;
+        }))
+        && resolved optedOut == null
+        && failedMessages (evalApp backend optedOut) == []
+        && failsWith ["ai.testapp.proxy.instance names `missing`, which no proxy owner registers"] (evalApp backend (withInstances {
+          proxy = mainSelection;
+          testapp.proxy.instance = "missing";
+        }))
+        && failsWith ["ai.testapp.proxy.key is set without `url`"] (evalApp backend {ai.testapp.proxy.key = work.key;})
         && failsWith ["ai.testapp.proxy.url needs `key`"] (evalApp backend {
           ai.testapp.proxy.url = "http://127.0.0.1:8318";
         })
         && !(builtins.tryEval (builtins.deepSeq (resolved {
-            ai.testapp.normalized.proxy = lib.mkForce (root // {url = "http://127.0.0.1:8317/v1";});
+            ai.testapp.normalized.proxy = lib.mkForce (root
+              // {
+                backend = "cliproxyapi";
+                url = "http://127.0.0.1:8317/v1";
+              });
           })
           true)).success)
+      ["devenv" "hm"]
+    );
+
+    # Owners merge instances into one registry: a second owner's clientless
+    # instance resolves with its own backend from `instance` alone and refuses
+    # a clientKey, a runtime switching to it from a CLIProxyAPI root drops the
+    # root's clientKey, a name two owners register fails through `ai.claims`, and
+    # a runtime without a lowering for the selected backend fails evaluation.
+    # Given a test-only Claude lowering, that backend gets only what its
+    # lowering sets: no CLIProxyAPI settings and no launcher flags.
+    module-ai-proxy-registry = mkTest "ai-proxy-registry" (
+      lib.all (backend: let
+        evaluate = evalAppWith [secondOwner] backend;
+        second.instance = "second";
+        withClientKey = evaluate {ai.proxy = second // {clientKey = "main";};};
+        switched = evaluate {
+          ai =
+            instances
+            // {
+              proxy = {
+                clientKey = "main";
+                instance = "main";
+              };
+              testapp.proxy = second;
+            };
+        };
+        resolvedProxy = (evaluate {ai.proxy = second;}).config.ai.testapp.normalized.proxy;
+        claudeProxy = (import ../../packages/claude-code/lib/proxy.nix {inherit lib pkgs;}).withLowerings {
+          relay = _backend: {url, ...}: {settings.env.HTTPS_PROXY = url;};
+        };
+        relaySettings =
+          (lib.evalModules {
+            modules = [
+              {
+                options.ai.claude.native.settings = lib.mkOption {
+                  type = lib.types.anything;
+                  default = {};
+                };
+              }
+              {config = claudeProxy.config {inherit backend resolvedProxy;};}
+            ];
+          }).config.ai.claude.native.settings;
+        claude =
+          (evalAppWith [secondOwner] backend {
+            ai = {
+              claude.enable = true;
+              proxy = second;
+            };
+          }).config;
+      in
+        resolvedProxy
+        == {
+          backend = "relay";
+          url = "http://127.0.0.1:8500";
+        }
+        && failedMessages (evaluate {ai.proxy = second;}) == []
+        && failsWith ["ai.proxy.clientKey is set, but `ai.relay.instances.second` declares no clients."] withClientKey
+        && withClientKey.config.ai.testapp.normalized.proxy == null
+        && switched.config.ai.testapp.normalized.proxy == resolvedProxy
+        && failedMessages switched == []
+        && relaySettings == {env.HTTPS_PROXY = "http://127.0.0.1:8500";}
+        && claudeProxy.launcherFlags {inherit backend resolvedProxy;} == []
+        && failsWith ["ai.claims.proxy-instance.main: claimed by cliproxyapi and relay"] (evaluate {ai = instances // {relay.claims.proxy-instance = ["main"];};})
+        && !(builtins.tryEval (builtins.deepSeq claude.ai.claude.native.settings true)).success)
       ["devenv" "hm"]
     );
   };

@@ -1,12 +1,14 @@
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-22 — Claude uses `redact.assign` and the shared
-> reader through `apiKeyHelper` for file, command and concat references, and
-> clears inherited API keys, bearer tokens, custom headers and
-> Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
-> API-key descriptor before Claude starts. Codex uses command-backed provider
-> auth. Named client routes supply Claude `/model` picker rows (listed and
-> selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
+> **Last verified:** 2026-10-28 — each runtime's proxy library holds one
+> lowering per backend (only `cliproxyapi`, which also lowers external
+> selections) and derives native values at `mkDefault`. Claude uses
+> `redact.assign` and the shared reader through `apiKeyHelper` for file, command
+> and concat references, and clears inherited API keys, bearer tokens, custom
+> headers and Bedrock/Vertex/Foundry switches in settings, and suppresses the
+> inherited API-key descriptor before Claude starts. Codex uses command-backed
+> provider auth. Named client routes supply Claude `/model` picker rows (listed
+> and selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
 > discovers CPA models without per-credential profiles. Both use the shared
 > client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
 > and warn through the generated warning cases.
@@ -14,13 +16,14 @@
 ### Claude (packages/claude-code/lib/proxy.nix)
 
 A settings `env` beats the process env, so the endpoint travels through settings
-files. `render` writes `env.ANTHROPIC_BASE_URL` (the origin; Claude appends
-`/v1/messages`) and one strict `apiKeyHelper`. `lib/ai/proxy/key-helper.nix`,
-shared with Codex, calls `redact.assign` with the selected file, command or
-concat reference, then prints the resolved key with a constant `printf` format.
-Its shell source carries only reference paths and concat's literal parts; the
-secret stays in the shared reader's stdout and the helper's shell variable.
-Resolution failures abort the helper before it returns a key.
+files. The `cliproxyapi` lowering writes `env.ANTHROPIC_BASE_URL` (the origin;
+Claude appends `/v1/messages`) and one strict `apiKeyHelper`.
+`lib/ai/proxy/key-helper.nix`, shared with Codex, calls `redact.assign` with the
+selected file, command or concat reference, then prints the resolved key with a
+constant `printf` format. Its shell source carries only reference paths and
+concat's literal parts; the secret stays in the shared reader's stdout and the
+helper's shell variable. Resolution failures abort the helper before it returns
+a key.
 
 Both `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are written blank.
 Settings merge per key across scopes, so an inherited token or a lower-scope key
@@ -35,18 +38,22 @@ traffic past the proxy; the live check measures both on the pinned CLI. Claude
 Code 2.1.302 reads and caches `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before
 applying settings env. A blank in settings cannot suppress it. A selected proxy
 therefore installs a launcher through `lib.ai.mkLauncher` that unsets the
-descriptor before exec; without a selection the package stays unchanged. An
-explicit `ai.claude.package = null` keeps settings delivery and warns that the
-caller must unset the descriptor when launching an unmanaged Claude.
+descriptor before exec; the flag is the `cliproxyapi` lowering's
+`launcherFlags`, so another backend's lowering adds none unless it asks, and
+without a selection the package stays unchanged. An explicit
+`ai.claude.package = null` keeps settings delivery and warns that the caller
+must unset the descriptor when launching an unmanaged Claude.
 
-Any selection also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
-`DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
+The `cliproxyapi` lowering also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
+and `DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
 `settings.disableClaudeAiConnectors` to `true` to disable claude.ai connectors.
+A lowering returns `settings` and optional `launcherFlags`; nothing outside it
+adds Claude settings for a selection.
 
 The endpoint lands in `native.settings`, so the settings.json the backend
-already writes (user on Home Manager, project on devenv). The proxy leaves are
-at ordinary priority, so a consumer's own value for one is a definition
-conflict.
+already writes (user on Home Manager, project on devenv). Every derived leaf is
+a `mkDefault`, so a consumer's own value for one, such as
+`env.ANTHROPIC_BASE_URL`, wins without `mkForce`.
 
 Each declared API-key model of each routed upstream credential
 (`normalized.proxy.credentials`) becomes one `modelPicker.options` row,
@@ -56,10 +63,10 @@ returns the built-in lineup plus each new row unless that flag is `=== true`,
 and its schema says unset adds the rows after the built-ins. The same schema
 says `modelPicker` is honored only from managed, `--settings`/SDK and user
 settings, never a project checkout. So Home Manager writes the rows to user
-settings, where a consumer's own rows concatenate, and devenv's launcher adds
-`--settings <store file>` holding only `modelPicker`. Since the highest scope
-that defines `modelPicker` wins outright, that devenv session shows the
-credential rows instead of any user picker rows.
+settings, where a consumer's own `modelPicker.options` list replaces the derived
+rows, and devenv's launcher adds `--settings <store file>` holding only
+`modelPicker`. Since the highest scope that defines `modelPicker` wins outright,
+that devenv session shows the credential rows instead of any user picker rows.
 
 A row for a non-Anthropic id such as `glm-5.3` is listed and selectable in
 2.1.306 (read from the bundle; the live TUI render was not observed). The row
@@ -87,7 +94,8 @@ Never `env_key`: tool subprocesses inherit it, and Home Manager's launcher
 environment does not reach devenv's.
 
 - **Home Manager** writes `model_provider = "ai-proxy"` and
-  `[model_providers.ai-proxy]` into user config.toml. A devenv shell inherits
+  `[model_providers.ai-proxy]` into user config.toml, each leaf a `mkDefault`
+  that a consumer's `native.settings` value overrides. A devenv shell inherits
   the user file with no devenv configuration.
 - **devenv** cannot use project config for providers: Codex strips
   `model_provider` and `model_providers` from project layers. Its launcher
@@ -101,7 +109,7 @@ environment does not reach devenv's.
   bundled list. Client routes still constrain requests. No per-credential
   profiles are written. `model_catalog_url` stays unset: it would replace the
   bundled list and empty the picker whenever CPA is down.
-- **Availability tooltip.** Any proxy selection defaults
+- **Availability tooltip.** The `cliproxyapi` lowering defaults
   `tui.model_availability_nux."gpt-6.1-sol" = 4` on both backends. Codex
   0.163.0's pinned source (`83086188`, `tui/src/app/startup_prompts.rs`)
   suppresses the startup availability tooltip once that model's shown count
@@ -131,11 +139,12 @@ records on both backends.
 ### Checks
 
 `packages/claude-code/checks/claude-proxy.nix` covers Claude on both backends:
-key forms, precedence (quiet defaults yield, a consumer's proxy leaf conflicts,
-nothing selected writes nothing, a selection does not warn), and the per-runtime
-override. Its runtime check executes each generated helper with shell
-metacharacters and multiline key contents, checks failure output for leaks, and
-asserts inherited API-key and bearer variables are cleared. It also runs the
-pinned CLI through both backends' installed launchers against a loopback capture
-server with an inherited readable API-key descriptor, and checks that both
-`x-api-key` and `Authorization` contain only the selected proxy key.
+key forms, precedence (quiet defaults and proxy leaves yield to a consumer's
+value, nothing selected writes nothing, a selection does not warn), and the
+per-runtime override. Its runtime check executes each generated helper with
+shell metacharacters and multiline key contents, checks failure output for
+leaks, and asserts inherited API-key and bearer variables are cleared. It also
+runs the pinned CLI through both backends' installed launchers against a
+loopback capture server with an inherited readable API-key descriptor, and
+checks that both `x-api-key` and `Authorization` contain only the selected proxy
+key.

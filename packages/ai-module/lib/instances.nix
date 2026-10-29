@@ -18,9 +18,12 @@
       value = config: config.xdg.stateHome;
     };
   };
+  # Selection uses loopback, matching owner bind defaults.
+  origin = instance: "http://127.0.0.1:${toString instance.port}";
 in {
-  # `http://127.0.0.1:<port>` of the enabled instance `name`, or why `option`
-  # cannot select it. Selection uses loopback, matching owner bind defaults.
+  inherit origin;
+  # The `origin` of the enabled instance `name`, or why `option` cannot
+  # select it.
   select = {
     instances,
     name,
@@ -33,7 +36,7 @@ in {
     then {problem = "${option} names `${name}`, which is not an `ai.${owner}.instances` entry.";}
     else if !instance.enable
     then {problem = "${option} names `ai.${owner}.instances.${name}`, which is disabled.";}
-    else {url = "http://127.0.0.1:${toString instance.port}";};
+    else {url = origin instance;};
 
   # The owner module for one backend (`hm` or `devenv`). `derived` gives the
   # settings an instance fixes (its port, its state paths), which merge with

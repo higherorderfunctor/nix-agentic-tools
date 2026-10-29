@@ -129,6 +129,18 @@ in {
               };
             };
           };
+          userBase = evalHm {
+            ai = {
+              codex = {
+                enable = true;
+                native.settings.model_providers.ai-proxy.base_url = "http://127.0.0.1:9999/v1";
+              };
+              proxy = {
+                url = hmOrigin;
+                key = keys.file;
+              };
+            };
+          };
         in
           failedMessages file
           == []
@@ -149,6 +161,9 @@ in {
             builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/cpa-client-key" auth.command) (builtins.attrValues keys)
           && (hmSettings overridden).model_providers.ai-proxy.base_url == "${devenvOrigin}/v1"
           && (hmSettings overridden).model_providers.ai-proxy.auth == (hmSettings (hmEndpoint keys.command)).model_providers.ai-proxy.auth
+          # A consumer's own provider leaf wins over the derived one.
+          && (hmSettings userBase).model_providers.ai-proxy.base_url == "http://127.0.0.1:9999/v1"
+          && (hmSettings userBase).model_providers.ai-proxy.wire_api == "responses"
           && !(builtins.any (unsupportedWarning "hm") file.config.warnings)
           && !((hmSettings (hmWith {})) ? model_provider)
       );

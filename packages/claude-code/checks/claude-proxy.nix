@@ -60,10 +60,9 @@ in {
         && settings.env.ANTHROPIC_AUTH_TOKEN == "")
       (map (settingsFor eval) (builtins.attrValues keys))))
 
-    # The quiet defaults yield to a consumer's value; a consumer's value for a
-    # proxy leaf conflicts instead of silently winning or losing; nothing
-    # selected writes nothing, and a selection no longer warns that Claude
-    # ignores ai.proxy.
+    # The quiet defaults and the proxy-derived leaves yield to a consumer's
+    # value; nothing selected writes nothing, and a selection no longer warns
+    # that Claude ignores ai.proxy.
     (perBackend "precedence" (eval: let
       overridden = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
         ai.claude.native.settings = {
@@ -71,9 +70,9 @@ in {
           env.DISABLE_AUTOUPDATER = "0";
         };
       })));
-      conflicting = eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
+      userBase = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
         ai.claude.native.settings.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:9999";
-      }));
+      })));
       unselected = eval (withClaude {});
       selected = eval (withClaude (urlForm (redact.file "/run/secrets/ai-proxy-key")));
       withoutPackage = eval (withClaude (lib.recursiveUpdate (urlForm keys.file) {ai.claude.package = null;}));
@@ -81,7 +80,8 @@ in {
       overridden.env.DISABLE_AUTOUPDATER
       == "0"
       && !overridden.disableClaudeAiConnectors
-      && !(builtins.tryEval (builtins.deepSeq (claudeSettings conflicting) true)).success
+      && userBase.env.ANTHROPIC_BASE_URL == "http://127.0.0.1:9999"
+      && userBase.env.ANTHROPIC_AUTH_TOKEN == ""
       && installed unselected == unselected.config.ai.claude.package
       && (withoutPackage.config.home.packages or withoutPackage.config.packages) == []
       && builtins.any (lib.hasInfix "only the managed launcher suppresses") withoutPackage.config.warnings
@@ -90,7 +90,7 @@ in {
       && !((claudeSettings unselected) ? disableClaudeAiConnectors)
       && !(builtins.any (lib.hasInfix "does not deliver it to claude") selected.config.warnings)))
 
-    # `ai.claude.proxy` replaces the root selection whole.
+    # `ai.claude.proxy` fields win over the root's.
     (perBackend "runtime-override" (eval: let
       result = eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/root-key")) {
         ai.claude.proxy = {
