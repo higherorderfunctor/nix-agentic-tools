@@ -64,10 +64,7 @@
     '';
     rustPlatform = packageLib.mkRustPlatform {
       inherit pkgs pname sources sourcesFile;
-      targets =
-        if bootstrap
-        then []
-        else with packageLib.hashFixTargets; [cargoVendor pnpmDeps];
+      targets = with packageLib.hashFixTargets; [cargoVendor pnpmDeps];
     };
     package = pkgs.pnpm_12.override {
       inherit (sources) version;
@@ -138,7 +135,7 @@
               updateScript = packageLib.mkUpdateScript {
                 inherit pkgs pname sourcesFile;
                 platforms = {};
-                extraExtract = rustPlatform.passthru.rustUpdateExtract;
+                extraExtract = "${rustPlatform.passthru.rustUpdateExtract}";
                 # npm's per-major dist-tag picks the release; the source fixer then
                 # fetches the matching GitHub tag and fails loudly if it is missing.
                 versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-12\"] // empty'";

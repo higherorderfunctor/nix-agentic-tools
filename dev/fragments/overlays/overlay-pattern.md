@@ -654,14 +654,18 @@ to any versioned attribute family:
   overrides nixpkgs' separate source-built `generic-rust.nix`; the operator
   prefers compiling. `.override` moves the argument version, source/cargo hashes
   and locked Rust platform; `overrideAttrs` merges our loader preparation,
-  install checks and update passthru. Nixpkgs' `postPatch` deletes
-  `.cargo/config.toml`'s `pnpm-managed cargo sources` block, whose
-  node-semver-rs redirect conflicts with cargoSetupHook's source configuration.
-  The shared `prePnpmInstall` deletes the workspace `cargo` block for both
-  `fetchPnpmDeps` and `pnpmConfigHook`, then rejects any remaining top-level
-  `cargo` key: Nix supplies Rust. The argument version controls the GitHub tag
-  and major selector, so an attrs-only bump would retain the old source tag. The
-  vendor FOD name includes the version.
+  install checks and update passthru. It adds no `postPatch`: nixpkgs' own
+  `postPatch` (nixpkgs `214068de1f`, pnpm_12 12.3.4 -> 12.9.0, 2026-10-03)
+  deletes upstream's `pnpm-managed cargo sources` block from
+  `.cargo/config.toml`, which redirects the node-semver-rs git source to
+  `.pnpm/crates` and which cargo rejects as a duplicate of the same source in
+  cargoSetupHook's config. Do not re-add our own deletion that asserts the
+  markers: it runs after nixpkgs' and fails patchPhase with no output, because
+  the block is already gone. The shared `prePnpmInstall` deletes the workspace
+  `cargo` block for both `fetchPnpmDeps` and `pnpmConfigHook`, then rejects any
+  remaining top-level `cargo` key: Nix supplies Rust. The argument version
+  controls the GitHub tag and major selector, so an attrs-only bump would retain
+  the old source tag. The vendor FOD name includes the version.
 - pnpm_12 generates `cas-loader.mjs.inc` with upstream's
   `pnpm/esm-loader/scripts/bundle-runtime.mjs` in `preBuild`, preserving the
   inherited Cargo phase. Its `fetchPnpmDeps` and `pnpmConfigHook` use the same
@@ -697,13 +701,13 @@ to any versioned attribute family:
   measurements are historical:
   `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 
-With `vu.mkRustPlatform`, literal recipes pass their recorded
-`rustToolchainChannel` as `channel` and give `recipeFile` for its writer;
-sidecar recipes pass `sources` and `sourcesFile`. Both pass `pname` and `pkgs`,
-merge `rustPlatform.passthru` into the package's passthru, and pass the platform
-through `.override` so the source-declared compiler builds it. `fblog`, which
-has no upstream toolchain file, explicitly passes `override = "latest"`. Rust
-releases (`fblog`, `rumdl`) keep their version, source and Cargo dependency
+Rust packages take `rustPlatform` from `vu.mkRustPlatform`. Literal recipes pass
+their recorded `rustToolchainChannel` as `channel` and give `recipeFile` for its
+writer; sidecar recipes pass `sources` and `sourcesFile`. Both pass `pname` and
+`pkgs`, merge `rustPlatform.passthru` into the package's passthru, and pass the
+platform through `.override` so the source-declared compiler builds it. `fblog`,
+which has no upstream toolchain file, explicitly passes `override = "latest"`.
+Rust releases (`fblog`, `rumdl`) keep their version, source and Cargo dependency
 hashes, and `rustToolchainChannel` in sidecars. Their owner update targets pass
 `--use-update-script`: `mkUpdateScript` runs
 `rustPlatform.passthru.rustUpdateExtract`, which restores the source hash,
