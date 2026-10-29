@@ -93,10 +93,17 @@
       {
         argv = [];
         content = ["code" "config"];
+        port = null;
       }
       {
         argv = ["--content" "docs"];
         content = ["docs"];
+        port = null;
+      }
+      {
+        argv = ["--http" "--port" "9001"];
+        content = ["code" "config"];
+        port = 9001;
       }
     ];
     defaultContent = ["code" "config"];

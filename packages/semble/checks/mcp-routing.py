@@ -16,12 +16,12 @@ from semble.types import ContentType
 expected = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 repo = str(Path(sys.argv[2]).resolve())
 
-# `semble-mcp` argv -> the server's default content.
+# `semble-mcp` argv -> the server's default content and upstream's --http port.
 captured = []
 
 
-async def fake_serve(content):
-    captured.append([item.value for item in content])
+async def fake_serve(content, port):
+    captured.append(([item.value for item in content], port))
 
 
 # 0.6.2's semble-mcp ends in os._exit(0) after serve(), which would end this
@@ -47,7 +47,7 @@ try:
             cli.main()
         except _Exited:
             pass
-        assert captured == [case["content"]], (case, captured)
+        assert captured == [(case["content"], case["port"])], (case, captured)
         print("ok argv", case["argv"])
 finally:
     semble.mcp.serve = real_serve
