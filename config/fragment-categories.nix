@@ -183,8 +183,7 @@
         }
       ];
     };
-    # ai-proxy: the local CLIProxyAPI surface — selection and the resolved
-    # endpoint.
+    # ai-proxy: selection and the resolved endpoint for runtimes.
     ai-proxy = {
       scopes = [
         "checks/ai-proxy/**"

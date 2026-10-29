@@ -31,15 +31,16 @@
     };
   };
   isSelected = selection: selection.url != null || selection.instance != null;
-  # Each field's selector, and the selector of the other form.
-  selectorOf = {
-    clientKey = "instance";
-    instance = "instance";
-    key = "url";
-    url = "url";
-  };
-  otherSelector = {
+  # An external `url` is a CLIProxyAPI configured by hand: with no registry
+  # entry to name its backend, it is the one selection this library assigns
+  # an owner, and it lowers as `cliproxyapi`.
+  externalBackend = "cliproxyapi";
+  # Each field's selector of the other form: a runtime selecting it drops the
+  # root's copy of the field.
+  otherSelectorOf = {
+    clientKey = "url";
     instance = "url";
+    key = "instance";
     url = "instance";
   };
   # `{entry}` for the enabled instance `name`, or `{problem}` saying why
@@ -80,75 +81,42 @@
     }) (problems registry path selection);
 in {
   inherit assertionsFor;
-  # `ai.<runtime>.proxy` definitions copying each root field at default
-  # priority, so a runtime value wins field by field. A root field is copied
-  # as null once the runtime selects the other form (an instance under a root
-  # `url`, or the reverse), and the root `clientKey` once the runtime selects
-  # another instance that declares no clients; switching clears nothing by
-  # hand. Each condition sits inside the value: the definitions themselves
-  # never read the runtime selection they define. A copy reads the runtime's
-  # other selector only while the root's is null, whose own copy then returns
-  # without reading back; `instance` never reads `clientKey`.
-  copyDown = registry: root: runtime:
-    lib.mapAttrs (field: value:
-      lib.mkDefault (
-        let
-          other = otherSelector.${selectorOf.${field}};
-        in
-          if value != null && root.${other} == null && runtime.${other} != null
-          then null
-          else if value != null && field == "clientKey" && runtime.instance != root.instance && runtime.instance != null && (registry.${runtime.instance} or {}).clients or {} == null
-          then null
-          else value
-      ))
-    root;
-  # A runtime selection with the root fields copied in: checked whole when it
-  # selects, otherwise only the fields the runtime changed, so an opt-out
-  # ignores what it inherits. An unchanged copy is asserted at `ai.proxy`.
-  runtimeAssertionsFor = registry: path: root: selection: let
-    own = lib.mapAttrs (field: value:
-      if value == root.${field}
-      then null
-      else value)
-    selection;
+  # `ai.<runtime>.proxy` definitions copying each set root field at default
+  # priority, so a runtime value wins field by field. An unset root field adds
+  # no definition, so a runtime's own default-priority value meets no
+  # conflict. A copy is withdrawn once the runtime selects the other form (an
+  # instance under a root `url`, or the reverse), and the root `clientKey`
+  # once the runtime selects another instance that declares no clients;
+  # switching clears nothing by hand. Each condition sits inside an `mkIf`:
+  # the definitions themselves never read the runtime selection they define.
+  # A copy reads the runtime's other selector only while the root's is null,
+  # so that selector has no copy to read back; `instance` never reads
+  # `clientKey`.
+  copyDown = registry: root: runtime: let
+    declaresNoClients = name: (registry.${name} or {}).clients or {} == null;
   in
-    lib.optionals (selection != root) (assertionsFor registry path (
-      if isSelected selection
-      then selection
-      else own
-    ));
-  # The instance's `backend` and `url`, plus the selected client's attributes
-  # when the instance declares clients; null for a selection `problems`
-  # refuses. An external `url` is CPA-shaped, so it lowers as `cliproxyapi`.
-  resolve = registry: selection: let
-    found = lookup registry "" selection.instance;
-    endpoint = {inherit (found.entry) backend url;};
-    clients = found.entry.clients;
-  in
-    if !isSelected selection
-    then null
-    else if selection.instance == null
-    then {
-      inherit (selection) key url;
-      backend = "cliproxyapi";
-      credentials = [];
-    }
-    else if !(found ? entry)
-    then null
-    else if clients == null
-    then
-      if selection.clientKey == null
-      then endpoint
-      else null
-    else if selection.clientKey != null && clients ? ${selection.clientKey}
-    then clients.${selection.clientKey} // endpoint
-    else null;
-  # Runs the runtime's lowering for the resolved backend; a runtime without
-  # one refuses the selection.
-  lower = runtime: lowerings: resolved:
-    (lowerings.${resolved.backend}
-      or (throw "ai.${runtime}.proxy selects a `${resolved.backend}` proxy instance, which ${runtime} cannot use; it supports ${lib.concatStringsSep ", " (builtins.attrNames lowerings)}."))
-    resolved;
+    lib.mapAttrs (field: value: let
+      other = otherSelectorOf.${field};
+      switchedForm = root.${other} == null && runtime.${other} != null;
+      clientless = field == "clientKey" && runtime.instance != null && runtime.instance != root.instance && declaresNoClients runtime.instance;
+    in
+      lib.mkIf (!switchedForm && !clientless) (lib.mkDefault value))
+    (lib.filterAttrs (_: value: value != null) root);
+  # One call binds a runtime's lowering table to both its lowering and its
+  # unsupported-backend assertion, so the `{}` fallback and its refusal always
+  # read the same table; callers add `assertions` beside `lower`. Nothing
+  # selected lowers to nothing.
+  forRuntime = runtime: lowerings: {
+    assertions = resolved:
+      lib.optional (resolved != null && !(lowerings ? ${resolved.backend})) {
+        assertion = false;
+        message = "ai.${runtime}.proxy selects a `${resolved.backend}` proxy instance, which ${runtime} cannot use; it supports ${lib.concatStringsSep ", " (builtins.attrNames lowerings)}.";
+      };
+    lower = {resolvedProxy, ...} @ request:
+      if resolvedProxy == null
+      then {}
+      else (lowerings.${resolvedProxy.backend} or (_: {})) request;
+  };
   registryOption = mkOption {
     type = types.attrsOf (types.submodule {
       options = {
@@ -177,12 +145,32 @@ in {
     visible = false;
     description = "Proxy instances by name, added by their owners, who claim each name in `ai.claims.proxy-instance`.";
   };
-  rootOption = mkOption {
-    type = types.submodule {options = selectionOptions;};
-    default = {};
-    description = "Point a Harness (Claude Code or Codex CLI) at a proxy instance with `instance` (+ `clientKey` when it declares clients), or at external CPA with `url` + `key`. Each field copies down to `ai.<runtime>.proxy` at default priority, so a runtime value wins field by field; a runtime selecting the other form drops the root's fields of that form. Instance routes select named upstream credentials; no Harness publishes keys or rules.";
-  };
-  runtimeOptions = selectionOptions;
+  # The instance's `backend` and `url`, plus the selected client's attributes
+  # when the instance declares clients; null for a selection `problems`
+  # refuses. An external `url` resolves with `externalBackend`.
+  resolve = registry: selection: let
+    found = lookup registry "" selection.instance;
+    endpoint = {inherit (found.entry) backend url;};
+    clients = found.entry.clients;
+  in
+    if !isSelected selection
+    then null
+    else if selection.instance == null
+    then {
+      inherit (selection) key url;
+      backend = externalBackend;
+      credentials = [];
+    }
+    else if !(found ? entry)
+    then null
+    else if clients == null
+    then
+      if selection.clientKey == null
+      then endpoint
+      else null
+    else if selection.clientKey != null && clients ? ${selection.clientKey}
+    then clients.${selection.clientKey} // endpoint
+    else null;
   resolvedType = types.nullOr (types.submodule {
     freeformType = types.attrsOf types.raw;
     options = {
@@ -196,4 +184,25 @@ in {
       };
     };
   });
+  rootOption = mkOption {
+    type = types.submodule {options = selectionOptions;};
+    default = {};
+    description = "Point a Harness (Claude Code or Codex CLI) at a proxy instance with `instance` (+ `clientKey` when it declares clients), or at external CPA with `url` + `key`. Each set field copies down to `ai.<runtime>.proxy` at default priority, so a runtime value wins field by field; a runtime selecting the other form drops the root's fields of that form. Instance routes select named upstream credentials; no Harness publishes keys or rules.";
+  };
+  # A runtime selection with the root fields copied in: checked whole when it
+  # selects, otherwise only the fields the runtime changed, so an opt-out
+  # ignores what it inherits. An unchanged copy is asserted at `ai.proxy`.
+  runtimeAssertionsFor = registry: path: root: selection: let
+    own = lib.mapAttrs (field: value:
+      if value == root.${field}
+      then null
+      else value)
+    selection;
+  in
+    lib.optionals (selection != root) (assertionsFor registry path (
+      if isSelected selection
+      then selection
+      else own
+    ));
+  runtimeOptions = selectionOptions;
 }

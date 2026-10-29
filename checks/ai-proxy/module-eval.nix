@@ -552,7 +552,9 @@ in {
     # field, on both backends; a runtime selecting the other form drops the
     # root's fields of that form, in both directions; `instance = null` opts
     # a runtime out of an inherited selection without tripping on the client
-    # key it leaves behind; a runtime's own invalid selection fails with its own option
+    # key it leaves behind; an unset root field adds no definition, so a
+    # profile's default-priority runtime selection meets no conflict; a
+    # runtime's own invalid selection fails with its own option
     # path, even while the runtime is disabled. A url with a path set on the
     # normalized option directly is refused too.
     module-ai-proxy-runtime-override = mkTest "ai-proxy-runtime-override" (
@@ -595,6 +597,14 @@ in {
           proxy = mainSelection;
           testapp.proxy.instance = null;
         };
+        # A profile module's default-priority runtime selection, with no root
+        # selection whose unset fields could conflict with it.
+        profileDefault =
+          evalAppWith [
+            {ai.testapp.proxy = lib.mapAttrs (_: lib.mkDefault) mainSelection;}
+          ]
+          backend
+          {ai = instances;};
       in
         resolved {}
         == null
@@ -641,6 +651,12 @@ in {
           testapp.proxy = mainSelection // root;
         }))
         && resolved optedOut == null
+        && removeAttrs profileDefault.config.ai.testapp.normalized.proxy ["backend" "credentials"]
+        == {
+          key = instanceKey;
+          url = "http://127.0.0.1:8400";
+        }
+        && failedMessages profileDefault == []
         && failedMessages (evalApp backend optedOut) == []
         && failsWith ["ai.testapp.proxy.instance names `missing`, which no proxy owner registers"] (evalApp backend (withInstances {
           proxy = mainSelection;
@@ -664,10 +680,11 @@ in {
     # Owners merge instances into one registry: a second owner's clientless
     # instance resolves with its own backend from `instance` alone and refuses
     # a clientKey, a runtime switching to it from a CLIProxyAPI root drops the
-    # root's clientKey, a name two owners register fails through `ai.claims`, and
-    # a runtime without a lowering for the selected backend fails evaluation.
-    # Given a test-only Claude lowering, that backend gets only what its
-    # lowering sets: no CLIProxyAPI settings and no launcher flags.
+    # root's clientKey, and a name two owners register fails through
+    # `ai.claims`. Claude and Codex, which have no lowering for that backend,
+    # refuse it by name and run no CLIProxyAPI lowering. Given a test-only
+    # Claude lowering, that backend gets only what its lowering sets: no
+    # CLIProxyAPI settings and no launcher flags.
     module-ai-proxy-registry = mkTest "ai-proxy-registry" (
       lib.all (backend: let
         evaluate = evalAppWith [secondOwner] backend;
@@ -686,7 +703,11 @@ in {
         };
         resolvedProxy = (evaluate {ai.proxy = second;}).config.ai.testapp.normalized.proxy;
         claudeProxy = (import ../../packages/claude-code/lib/proxy.nix {inherit lib pkgs;}).withLowerings {
-          relay = _backend: {url, ...}: {settings.env.HTTPS_PROXY = url;};
+          relay = {resolvedProxy, ...}: {settings.env.HTTPS_PROXY = resolvedProxy.url;};
+        };
+        codexProxy = import ../../packages/chatgpt-codex/lib/proxy.nix {
+          inherit lib pkgs;
+          inlineToml = import ../../packages/chatgpt-codex/lib/inlineToml.nix {inherit lib;};
         };
         relaySettings =
           (lib.evalModules {
@@ -700,13 +721,15 @@ in {
               {config = claudeProxy.config {inherit backend resolvedProxy;};}
             ];
           }).config.ai.claude.native.settings;
-        claude =
-          (evalAppWith [secondOwner] backend {
-            ai = {
-              claude.enable = true;
-              proxy = second;
-            };
-          }).config;
+        # Real Claude and Codex modules selecting the second owner's instance.
+        runtimes = evalAppWith [secondOwner] backend {
+          ai = {
+            claude.enable = true;
+            codex.enable = true;
+            proxy = second;
+          };
+        };
+        unsupported = runtime: "ai.${runtime}.proxy selects a `relay` proxy instance, which ${runtime} cannot use; it supports cliproxyapi.";
       in
         resolvedProxy
         == {
@@ -720,8 +743,13 @@ in {
         && failedMessages switched == []
         && relaySettings == {env.HTTPS_PROXY = "http://127.0.0.1:8500";}
         && claudeProxy.launcherFlags {inherit backend resolvedProxy;} == []
+        && codexProxy.launcherFlags resolvedProxy == []
         && failsWith ["ai.claims.proxy-instance.main: claimed by cliproxyapi and relay"] (evaluate {ai = instances // {relay.claims.proxy-instance = ["main"];};})
-        && !(builtins.tryEval (builtins.deepSeq claude.ai.claude.native.settings true)).success)
+        && failsWith [(unsupported "claude")] runtimes
+        && failsWith [(unsupported "codex")] runtimes
+        && runtimes.config.ai.claude.native.settings.apiKeyHelper == null
+        && !(runtimes.config.ai.claude.native.settings.env ? ANTHROPIC_BASE_URL)
+        && !(runtimes.config.ai.codex.native.settings.tui or {} ? model_availability_nux))
       ["devenv" "hm"]
     );
   };

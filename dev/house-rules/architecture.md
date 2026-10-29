@@ -51,9 +51,11 @@ hoc machinery beside an existing abstraction.
   runs as a daemon declares `ai.<owner>.instances.<name>` through
   `packages/ai-module/lib/instances.nix`: one service and port claim per
   instance, its settings rendered through `serviceEntry.files`, the same owner
-  module on Home Manager and devenv. Selecting an instance by name goes through
-  its `select`. This keeps every instance-shaped tool on one option shape and
-  one lowering. See `packages/ai-module/docs/DESIGN.md`, Services.
+  module on Home Manager and devenv. Selecting an owner's instance by name goes
+  through its `select`; a proxy selection names an instance across owners, so it
+  looks the name up in the proxy registry instead. This keeps every
+  instance-shaped tool on one option shape and one lowering. See
+  `packages/ai-module/docs/DESIGN.md`, Services.
 - **Typed settings come from the extracted generator.** An owner with extracted
   settings facts gets its option type from `lib/extracted/options.nix` and its
   config file from `lib/extracted/render.nix`, which lifts secrets into
@@ -67,20 +69,22 @@ hoc machinery beside an existing abstraction.
   `packages/ai-module/modules/common.nix`.
 - **Proxy selection is runtime library code.** Proxy owners add their instances
   to one registry, `ai.internal.proxyInstances`, by ordinary module merge and
-  claim each name in `ai.claims.proxy-instance`; `lib/ai/proxy` names no owner.
-  An instance's `clients` are optional, so an owner whose instances take no
-  client key registers none. Root `ai.proxy` copies down to `ai.<runtime>.proxy`
-  at default priority, so a runtime value wins field by field; a runtime
-  selecting the other form (`instance` vs `url`) inherits none of the root's
-  fields of that form; `instance = null` opts a runtime out. The selected
-  instance's backend picks the one lowering a runtime runs, and a runtime
-  without that lowering fails evaluation. Everything a backend sets, launcher
-  flags included, lives in its lowering. Lowerings set native values at default
-  priority, so a consumer's own native value wins. Vetted 2026-10-28. This keeps
-  a second proxy owner a module merge rather than an edit to a shared owner
-  table, and keeps a consumer's override a plain definition. See
-  `lib/ai/proxy/default.nix`, `lib/ai/app/mkBackendTransform.nix`,
-  `packages/claude-code/lib/proxy.nix` and
+  claim each name in `ai.claims.proxy-instance`; `lib/ai/proxy` names no owner
+  except one: an external `url` + `key` selection has no registry entry, so it
+  lowers as `cliproxyapi`, named once in `externalBackend`. An instance's
+  `clients` are optional, so an owner whose instances take no client key
+  registers none. Root `ai.proxy` copies its set fields down to
+  `ai.<runtime>.proxy` at default priority, so a runtime value wins field by
+  field; a runtime selecting the other form (`instance` vs `url`) inherits none
+  of the root's fields of that form; `instance = null` opts a runtime out. The
+  selected instance's backend picks the one lowering a runtime runs, and a
+  runtime without that lowering fails an assertion naming the backend.
+  Everything a backend sets, launcher flags included, lives in its lowering.
+  Lowerings set native values at default priority, so a consumer's own native
+  value wins. Vetted 2026-10-28. This keeps a second proxy owner a module merge
+  rather than an edit to a shared owner table, and keeps a consumer's override a
+  plain definition. See `lib/ai/proxy/default.nix`,
+  `lib/ai/app/mkBackendTransform.nix`, `packages/claude-code/lib/proxy.nix` and
   `packages/chatgpt-codex/lib/proxy.nix`.
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and

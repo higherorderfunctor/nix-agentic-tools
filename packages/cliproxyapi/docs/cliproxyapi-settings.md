@@ -39,9 +39,9 @@ once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, required OAuth vendor/account selection and devenv secret
 references and the overlapping subscription/API-key recipe using
-`apiKey.priority = -1` are in `dev/fragments/ai-proxy/ai-proxy.md`. Priority
-applies to every API served by the credential; OAuth priority belongs to CPA's
-login file metadata and cannot be set through `oauth`.
+`apiKey.priority = -1` are in `cliproxyapi-providers.md`. Priority applies to
+every API served by the credential; OAuth priority belongs to CPA's login file
+metadata and cannot be set through `oauth`.
 
 For the built-in z.ai vendor, the upstream credential needs only its secret:
 

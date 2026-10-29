@@ -58,35 +58,35 @@
 
   # A lowering returns `settings` for both backends and, optionally,
   # `hmSettings` for user config.toml and `sessionFlags` for devenv's launcher.
-  lowerings.cliproxyapi = endpoint: {
+  lowerings.cliproxyapi = {resolvedProxy}: {
+    hmSettings = {
+      model_provider = ids.hm;
+      model_providers.${ids.hm} = providerFor ids.hm resolvedProxy;
+    };
     # devenv's renderer: the session flags for one endpoint.
     sessionFlags = [
       "-c"
-      "model_providers.${ids.devenv}=${inlineToml (providerFor ids.devenv endpoint)}"
+      "model_providers.${ids.devenv}=${inlineToml (providerFor ids.devenv resolvedProxy)}"
       "-c"
       "model_provider=${ids.devenv}"
     ];
-    hmSettings = {
-      model_provider = ids.hm;
-      model_providers.${ids.hm} = providerFor ids.hm endpoint;
-    };
     # Codex 0.163.0: startup_prompts.rs stops at four impressions. Its bundled
     # models.json announces only gpt-6.1-sol; extracted models omit
     # availability_nux.
     settings.tui.model_availability_nux."gpt-6.1-sol" = 4;
   };
-  lower = proxyLib.lower "codex" lowerings;
+  proxyLowering = proxyLib.forRuntime "codex" lowerings;
 in {
-  # Native settings for a selected proxy, at default priority.
-  settings = isHm: resolvedProxy: let
-    lowered = lower resolvedProxy;
-  in
-    lib.mapAttrsRecursive (_: lib.mkDefault) (lib.recursiveUpdate (lowered.settings or {})
-      (lib.optionalAttrs isHm (lowered.hmSettings or {})));
+  inherit (proxyLowering) assertions;
 
   # makeWrapper arguments for devenv's launcher.
   launcherFlags = resolvedProxy:
-    if resolvedProxy == null
-    then []
-    else lib.concatMap (flag: ["--add-flag" (lib.escapeShellArg flag)]) ((lower resolvedProxy).sessionFlags or []);
+    lib.concatMap (flag: ["--add-flag" (lib.escapeShellArg flag)]) ((proxyLowering.lower {inherit resolvedProxy;}).sessionFlags or []);
+
+  # Native settings for a selected proxy, at default priority.
+  settings = isHm: resolvedProxy: let
+    lowered = proxyLowering.lower {inherit resolvedProxy;};
+  in
+    lib.mapAttrsRecursive (_: lib.mkDefault) (lib.recursiveUpdate (lowered.settings or {})
+      (lib.optionalAttrs isHm (lowered.hmSettings or {})));
 }

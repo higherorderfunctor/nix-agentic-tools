@@ -1406,7 +1406,7 @@ in
             })
             # ai.proxy (./proxy.nix): Home Manager selects the provider in
             # user config.toml; devenv's launcher selects its own.
-            (lib.mkIf (resolvedProxy != null) (codexProxy.settings isHm resolvedProxy))
+            (codexProxy.settings isHm resolvedProxy)
           ];
           # `pinDaemonToPackage` is Home Manager-only (see its option), so this
           # must not force `options.ai.codex.pinDaemonToPackage` under devenv,
@@ -1420,13 +1420,14 @@ in
               "ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."
             )
             # devenv carries the provider only as launcher flags.
-            ++ lib.optional (!isHm && resolvedProxy != null && cfg.package == null)
+            ++ lib.optional (!isHm && cfg.package == null && codexProxy.launcherFlags resolvedProxy != [])
             "ai.codex.proxy is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it.");
           assertions =
             mkAgentAssertions {inherit nativeAgents rawAgents;}
             ++ mkExecpolicyAssertions cfg.execpolicyRules
             ++ mkOAuthClientSecretAssertions (oauthSecretTables {inherit cfg mergedServers;})
             ++ mkSkillNameAssertions mergedSkills
+            ++ codexProxy.assertions resolvedProxy
             ++ [
               {
                 assertion = mergedServers == {} || !hasNativeMcpServers;
