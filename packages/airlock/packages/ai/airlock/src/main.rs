@@ -18,9 +18,13 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
-        Command::Serve { listen, config } => {
+        Command::Serve {
+            listen,
+            config,
+            ca_directory,
+        } => {
             let config = match config {
-                Some(path) => Config::read(path)?,
+                Some(path) => Config::read(path, ca_directory)?,
                 None => Config {
                     listen,
                     interception: None,
