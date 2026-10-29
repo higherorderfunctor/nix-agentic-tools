@@ -1,8 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-18 — CI package and check paths are absolute,
-> including IFD warming, so Nix skips package namespace lookup; extracted
-> reconciliation takes single-key pattern rows.
+> **Last verified:** 2026-10-28 — Kiro warming uses the kiro-scope job output;
+> irrelevant required legs report on Ubuntu without reserving a macOS runner.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -111,12 +110,13 @@ before it builds:
   is not a required context and runs after the package shards so it never delays
   a required Darwin leg.
 - `ci.yml` kiro-patched job — `systems: ${{ matrix.system }}` (defaults), gated
-  on `steps.scope.outputs.needed`. It warms only what its own eval needs; it
-  holds no Cachix credentials and its build deliberately drops the project cache
-  from its substituters. BOTH of its matrix legs are required status checks, so
-  a change to the composite's defaults lands on the merge gate here as well as
-  on `build`. This bullet was missing while the list claimed to cover "every
-  workflow that evaluates before it builds" — added 2026-08-14.
+  on `needs.kiro-scope.outputs.needed`. The Ubuntu `kiro-scope` job selects
+  whether native validation is needed before runner allocation; irrelevant legs
+  report on Ubuntu under their unchanged matrix context names. It warms only
+  what its own eval needs; it holds no Cachix credentials and its build
+  deliberately drops the project cache from its substituters. BOTH of its matrix
+  legs are required status checks, so a change to the composite's defaults lands
+  on the merge gate here as well as on `build`.
 - `update.yml` — `systems: x86_64-linux`, `retries: "1"`,
   `best-effort: "false"`. CI matrix workers use the separate `source/` checkout
   through the action's `path` input. The update worker cannot proceed without
