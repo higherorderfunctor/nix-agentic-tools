@@ -111,12 +111,14 @@ class DocumentationSnapshot(unittest.TestCase):
         root_url = "https://docs.kimchi.dev/llms.txt"
         index_url = "https://docs.kimchi.dev/docs/llms.txt"
         responses = {
-            root_url: b"[Docs](/docs/llms.txt) [Cycle](/llms.txt)",
+            root_url: b"[Docs](/docs/llms.txt) [Reference](/reference/llms.txt) [Cycle](/llms.txt)",
             index_url: b"[Root](/docs/root.md) [Relative](relative.md) [Absolute](https://docs.kimchi.dev/docs/absolute.md) [External](https://example.com/docs/external.md) [Native](/docs/native)",
             "https://docs.kimchi.dev/docs/root.md": b"root",
             "https://docs.kimchi.dev/docs/relative.md": b"relative",
             "https://docs.kimchi.dev/docs/absolute.md": b"absolute",
             "https://docs.kimchi.dev/docs/native.md": b"native",
+            "https://docs.kimchi.dev/reference/llms.txt": b"[Endpoint](endpoint.md)",
+            "https://docs.kimchi.dev/reference/endpoint.md": b"endpoint",
         }
         fetched = []
         def fetch(url):
@@ -125,6 +127,7 @@ class DocumentationSnapshot(unittest.TestCase):
         snapshot.snapshot(kimchi, self.root / "walk", "2099-01-01", fetch)
         self.assertEqual(sorted(fetched), sorted(responses))
         self.assertEqual((self.root / "walk/docs/relative.md").read_bytes(), b"relative")
+        self.assertEqual((self.root / "walk/reference/endpoint.md").read_bytes(), b"endpoint")
 
     def test_required_index_cannot_silently_disappear(self):
         config = {**kimchi, "index": {**kimchi["index"], "requiredIndexes": ["https://docs.kimchi.dev/docs/missing/llms.txt"]}}
