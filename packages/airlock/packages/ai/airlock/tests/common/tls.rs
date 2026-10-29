@@ -143,7 +143,7 @@ pub async fn proxy(directory: &TempDir, target: SocketAddr, root: Option<&str>) 
     let path = directory.path().join("upstream.pem");
     fs::write(&path, root.unwrap_or(&fallback)).unwrap();
     super::start_with(Some(Interception {
-        ca_directory,
+        ca_directory: Some(ca_directory),
         destinations: vec![format!("localhost:{}", target.port())],
         upstream_roots: Some(path),
     }))
