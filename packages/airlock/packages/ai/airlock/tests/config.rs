@@ -182,3 +182,84 @@ fn interception_config_rejects_invalid_destinations_and_initializes_ca_before_bi
     );
     assert!(ca_directory.join("ca.key").exists());
 }
+
+#[test]
+fn ca_directory_override_replaces_the_configured_directory_before_readiness() {
+    let root = tempfile::TempDir::new().unwrap();
+    let directory = root.path().join("runtime-ca");
+    let configured_directory = root.path().join("unused-ca");
+    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
+    let upstream_roots = root.path().join("roots.pem");
+    fs::write(&upstream_roots, certificate.cert.pem()).unwrap();
+    // The first start creates the CA; the second validates and reuses it.
+    let mut created = None;
+    for ca_directory in [None, Some(&configured_directory)] {
+        let mut content = serde_json::json!({
+            "listen": "127.0.0.1:0",
+            "interception": {"destinations": ["localhost:443"], "upstream_roots": upstream_roots}
+        });
+        if let Some(path) = ca_directory {
+            content["interception"]["ca_directory"] = serde_json::json!(path);
+        } else {
+            assert_config_failure(&content.to_string(), "interception requires ca_directory");
+            let mut empty = content.clone();
+            empty["interception"]["ca_directory"] = serde_json::json!("");
+            assert_config_failure(&empty.to_string(), "interception requires ca_directory");
+        }
+        let config = TemporaryConfig::new(&content.to_string());
+        let airlock = Airlock::spawn(&[
+            "serve".as_ref(),
+            "--ca-directory".as_ref(),
+            directory.as_os_str(),
+            "--config".as_ref(),
+            config.path.as_os_str(),
+        ]);
+        airlock.listen_address();
+        let pem = fs::read(directory.join("ca.pem")).unwrap();
+        assert!(directory.join("ca.key").exists());
+        assert!(!configured_directory.exists());
+        assert!(airlock.stop(libc::SIGTERM).success());
+        let created = created.get_or_insert_with(|| pem.clone());
+        assert_eq!(*created, pem, "restart replaced the CA");
+    }
+}
+
+#[test]
+fn ca_directory_override_requires_config_with_interception() {
+    let config = TemporaryConfig::new(r#"{"listen":"127.0.0.1:0"}"#);
+    for arguments in [
+        vec!["serve", "--ca-directory", "/unused"],
+        vec![
+            "serve",
+            "--listen",
+            "127.0.0.1:0",
+            "--ca-directory",
+            "/unused",
+        ],
+    ] {
+        let arguments: Vec<&OsStr> = arguments.into_iter().map(OsStr::new).collect();
+        assert_failure(&arguments, "--ca-directory");
+    }
+    assert_failure(
+        &["serve".as_ref(), "--ca-directory".as_ref()],
+        "--ca-directory <DIRECTORY>",
+    );
+    let path = config.path.to_str().unwrap();
+    for (extra, expected_error) in [
+        (
+            vec!["--ca-directory", "/unused"],
+            "--ca-directory requires interception configuration",
+        ),
+        (
+            vec!["--ca-directory", "/unused", "--ca-directory", "/other"],
+            "cannot be used multiple times",
+        ),
+    ] {
+        let arguments: Vec<&OsStr> = ["serve", "--config", path]
+            .into_iter()
+            .chain(extra)
+            .map(OsStr::new)
+            .collect();
+        assert_failure(&arguments, expected_error);
+    }
+}
