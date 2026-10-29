@@ -188,13 +188,44 @@ export -f curl nix nix-store
                         # engine the check needs again is asked once.
                         self.assertEqual(len(queries.read_text().splitlines()), 8)
 
+class CheckBundlesTest(unittest.TestCase):
+    def bundle(self, rows):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "matrix.json").write_text(json.dumps({"include": rows}))
+            result = subprocess.run(
+                ["bash", "-c", ci_step_script("Bundle uncached checks into at most four workers")],
+                env=dict(os.environ, GITHUB_OUTPUT=f"{directory}/output", RUNNER_TEMP=directory),
+                capture_output=True, text=True,
+            )
+            if result.returncode:
+                return result.stderr
+            return json.loads((Path(directory) / "bundled-matrix.json").read_text())["include"]
+
+    def test_hestia_rows_bundle_into_at_most_four_workers(self):
+        # Hestia's row shape: `os` is a runs-on label list.
+        rows = [{"installables": f"/nix/store/{i}-check.drv^*", "name": f"group-{i}", "os": ["ubuntu-latest"]}
+                for i in range(9)]
+        bundles = self.bundle(rows)
+        self.assertEqual(len(bundles), 4)
+        self.assertTrue(all(b["os"] == ["ubuntu-latest"] for b in bundles))
+        self.assertCountEqual(" ".join(b["installables"] for b in bundles).split(),
+                              [row["installables"] for row in rows])
+        self.assertEqual(self.bundle([]), [])
+
+    def test_multiple_runner_os_labels_are_rejected(self):
+        self.assertIn("multiple runner OS labels", self.bundle([
+            {"installables": "/nix/store/first.drv^*", "os": ["ubuntu-latest"]},
+            {"installables": "/nix/store/second.drv^*", "os": ["macos-latest"]},
+        ]))
+
+
 class CoverageTest(unittest.TestCase):
     def setUp(self):
         self.names = ["alpha", "beta", "codeql-javascript", "codeql-new-engine", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
-        self.plans = [ci.partition(self.names, i, 5) for i in range(5)]
+        self.plans = [ci.partition(self.names, i, 2) for i in range(2)]
 
     def test_added_package_is_covered_and_unpublishable_excluded(self):
-        ci.validate_coverage(self.plans, 5)
+        ci.validate_coverage(self.plans, 2)
         names = [n for p in self.plans for n in p["packages"]]
         self.assertEqual(names.count("new-package"), 1)
         self.assertNotIn("kiro-cli-rollout-canary", names)
@@ -211,9 +242,9 @@ class CoverageTest(unittest.TestCase):
     def test_missing_duplicate_or_different_source_shards_fail(self):
         changed = copy.deepcopy(self.plans)
         changed[0]["universe"].append("unexpected")
-        for plans in (self.plans[:-1], [self.plans[0]] * 5, changed):
+        for plans in (self.plans[:-1], [self.plans[0]] * 2, changed):
             with self.subTest(plans=plans), self.assertRaises(ValueError):
-                ci.validate_coverage(plans, 5)
+                ci.validate_coverage(plans, 2)
 
     def test_coverage_reads_both_download_artifact_layouts(self):
         # download-artifact v5+ extracts a lone pattern match straight into
@@ -231,7 +262,7 @@ class CoverageTest(unittest.TestCase):
     def test_empty_enumeration_and_empty_shard_fail(self):
         for names in ([], ["alpha"]):
             with self.assertRaises(ValueError):
-                ci.partition(names, 4, 5)
+                ci.partition(names, 1, 2)
 
     def test_aliases_share_a_successfully_built_derivation(self):
         plan = {"packages": ["alpha", "alias"]}

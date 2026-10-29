@@ -15,6 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  SHARD_COUNT: 2
+
 permissions:
   contents: read
 
@@ -47,9 +50,8 @@ jobs:
     name: packages (${{ matrix.system }}, shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 10
       matrix:
-        shard: [0, 1, 2, 3, 4]
+        shard: [0, 1]
         system: [x86_64-linux, aarch64-darwin]
         include:
           - system: x86_64-linux
@@ -65,7 +67,6 @@ jobs:
       NIX_CONFIG: |
         max-jobs = 1
         cores = 0
-      SHARD_COUNT: 5
       SHARD_INDEX: ${{ matrix.shard }}
       SYSTEM: ${{ matrix.system }}
     steps:
@@ -372,39 +373,14 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          python3 dev/scripts/ci-packages.py coverage receipts 5
+          python3 dev/scripts/ci-packages.py coverage receipts "$SHARD_COUNT"
 
-  # The workflows unlock patches Kiro's proprietary binary. Validate that
-  # patch on both supported systems without distributing the result through
-  # our public Cachix cache. This job intentionally does not install
-  # cachix-action, and the command overrides the flake's substituters so a
-  # previously uploaded patched output cannot turn this into a cache-hit-only
-  # test. Consumers who opt into the unlock apply the patch locally too.
-  #
-  # Named for what it ASSERTS, not where it runs. It was `kiro-workflows-local`
-  # and that read as "runs on your machine" — it never did; "local" meant the
-  # artifact stays local. Renaming it changes the status-check CONTEXT, so the
-  # branch ruleset's required-checks list has to move with it.
-  #
-  # ALWAYS-REPORTING, deliberately: the JOB always runs and the expensive steps
-  # are gated on `steps.scope.outputs.needed`. A required
-  # check that is genuinely SKIPPED never reports a conclusion, and GitHub
-  # blocks the PR forever waiting for it — so "make it required" and "skip it
-  # when irrelevant" can only coexist in this shape.
-  kiro-patched:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - system: x86_64-linux
-            runner: ubuntu-latest
-          - system: aarch64-darwin
-            runner: macos-latest
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+  kiro-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      needed: ${{ steps.scope.outputs.needed }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
       # Only inputs that can move `kiro-cli-rollout-canary`'s store path. A
       # context7-mcp bump touches another owner's recipe tree and cannot, so it
       # should not pay for a 621 MiB build on two runners.
@@ -442,6 +418,7 @@ jobs:
                   lib/extracted/* | \
                   lib/facets.nix | \
                   lib/facets/* | \
+                  lib/packaging.nix | \
                   packages/kiro-cli/checks.nix | \
                   packages/kiro-cli/checks/* | \
                   packages/kiro-cli/extract/* | \
@@ -449,8 +426,7 @@ jobs:
                   packages/kiro-cli/lib/packaging.nix | \
                   packages/kiro-cli/packages/* | \
                   packages/kiro-cli/rollout-canary.nix | \
-                  packages/kiro-cli/sources.json | \
-                  lib/packaging.nix)
+                  packages/kiro-cli/sources.json)
                   needed=true
                   break
                   ;;
@@ -460,6 +436,50 @@ jobs:
 
           echo "needed=${needed}" >> "$GITHUB_OUTPUT"
           echo "patched Kiro validation needed: ${needed}"
+
+  # The workflows unlock patches Kiro's proprietary binary. Validate that
+  # patch on both supported systems without distributing the result through
+  # our public Cachix cache. This job intentionally does not install
+  # cachix-action, and the command overrides the flake's substituters so a
+  # previously uploaded patched output cannot turn this into a cache-hit-only
+  # test. Consumers who opt into the unlock apply the patch locally too.
+  #
+  # Named for what it ASSERTS, not where it runs. It was `kiro-workflows-local`
+  # and that read as "runs on your machine" — it never did; "local" meant the
+  # artifact stays local. Renaming it changes the status-check CONTEXT, so the
+  # branch ruleset's required-checks list has to move with it.
+  #
+  # Unless cancelled, the job reports even when scope fails; expensive steps
+  # are gated on `needs.kiro-scope.outputs.needed`. Irrelevant legs report on
+  # Ubuntu, preserving their matrix names without holding a macOS runner.
+  # A required check that is genuinely SKIPPED never reports a conclusion,
+  # and GitHub blocks the PR forever waiting for it — so "make it required"
+  # and "skip it when irrelevant" can only coexist in this shape.
+  kiro-patched:
+    needs: kiro-scope
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on:
+      ${{ needs.kiro-scope.outputs.needed == 'true' && matrix.runner ||
+      'ubuntu-latest' }}
+    timeout-minutes: 60
+    steps:
+      - name: Require successful Kiro scope
+        env:
+          RESULT: ${{ needs.kiro-scope.result }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          test "$RESULT" = success
+      - if: needs.kiro-scope.outputs.needed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Use the same multi-user installer as package shards. The old
       # single-user nix-quick-install setup deadlocked when clients of
@@ -475,14 +495,14 @@ jobs:
       # codesign-then-exec assertion in lib/packaging.nix at risk on a required
       # check. That is now measured, not inferred: run 31837837510 built
       # the earlier workflows-patched Kiro locally under `_nixbld*` and passed.
-      - if: steps.scope.outputs.needed == 'true'
+      - if: needs.kiro-scope.outputs.needed == 'true'
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
         with:
           extra_nix_config: |
             accept-flake-config = true
             sandbox = true
 
-      - if: steps.scope.outputs.needed == 'true'
+      - if: needs.kiro-scope.outputs.needed == 'true'
         uses: ./.github/actions/assert-nix-config
         with:
           require: |
@@ -493,7 +513,7 @@ jobs:
       # Cachix credentials and does not build the patched Kiro output; the
       # build below still removes the project cache from its substituters.
       - name: Warm IFD sources (retry, best-effort)
-        if: steps.scope.outputs.needed == 'true'
+        if: needs.kiro-scope.outputs.needed == 'true'
         uses: ./.github/actions/warm-ifd
         with:
           systems: ${{ matrix.system }}
@@ -502,7 +522,7 @@ jobs:
       # packaged KAS patching, native resources, ACP and dispatch on both
       # Kiro-supported platforms here.
       - name: Check extracted metadata and packaged KAS
-        if: steps.scope.outputs.needed == 'true'
+        if: needs.kiro-scope.outputs.needed == 'true'
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -515,7 +535,7 @@ jobs:
 
       - name: Build patched Kiro without the project cache
         id: build-patched
-        if: steps.scope.outputs.needed == 'true'
+        if: needs.kiro-scope.outputs.needed == 'true'
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -538,7 +558,7 @@ jobs:
       # credentials (a narinfo GET is public), and because a `nix flake check`
       # derivation is sandboxed and cannot reach the network at all.
       - name: Assert the patched output is not published
-        if: steps.scope.outputs.needed == 'true'
+        if: needs.kiro-scope.outputs.needed == 'true'
         env:
           OUT: ${{ steps.build-patched.outputs.out }}
           CACHE: https://nix-agentic-tools.cachix.org
@@ -727,7 +747,7 @@ jobs:
       # by the authenticated package matrix above.
       # Same-repository runs do not evaluate here. The required `checks-matrix`
       # gate below instantiates every check once, with import-from-derivation,
-      # and builds each ownership group on its own runner; the package shards
+      # and builds balanced bundles of ownership groups; the package shards
       # evaluate and build every package; the module checks import every
       # module. The only output no gate evaluates is `devShells.ci`, a four
       # package mkShell for the update pipeline. Neither no-build form works
@@ -792,9 +812,9 @@ jobs:
 
   # The check gate. `checks-matrix` is a required context; `test` above only
   # evaluates. These three jobs evaluate the Linux checks ONCE with Hestia's
-  # matrix subaction, then build each uncached ownership group
-  # (`meta.hestia.group` in `ciChecks`) by drv path, with no flake evaluation
-  # in the workers.
+  # matrix subaction, then bundle uncached ownership groups into at most four
+  # workers balanced by installable count. Workers build by drv path without
+  # flake evaluation.
   #
   # The evaluator is nix-eval-jobs with its worker garbage collector
   # re-enabled (dev/ci-check-evaluator.nix). Stock nix-eval-jobs sets
@@ -811,7 +831,7 @@ jobs:
     outputs:
       any-jobs: ${{ steps.matrix.outputs.any-jobs }}
       manifest-version: ${{ steps.matrix.outputs.manifest-version }}
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      matrix: ${{ steps.bundles.outputs.matrix }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -903,6 +923,36 @@ jobs:
             exit 1
           fi
 
+      - name: Bundle uncached checks into at most four workers
+        id: bundles
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          python3 - <<'PYTHON'
+          import json
+          import os
+
+          root = os.environ["RUNNER_TEMP"]
+          with open(os.path.join(root, "matrix.json")) as plan:
+              rows = json.load(plan)["include"]
+          # Hestia's `os` is a runs-on label list, so compare its JSON form.
+          runners = sorted({json.dumps(row["os"]) for row in rows})
+          if len(runners) > 1:
+              raise SystemExit(f"check plan has multiple runner OS labels: {', '.join(runners)}")
+          buckets = [[] for _ in range(min(4, len(rows)))]
+          groups = [row["installables"].split() for row in rows]
+          for installables in sorted(groups, key=lambda items: (-len(items), items)):
+              min(buckets, key=len).extend(installables)
+          matrix = json.dumps({"include": [
+              {"installables": " ".join(bucket), "name": f"bundle {i}/{len(buckets)}", "os": rows[0]["os"]}
+              for i, bucket in enumerate(buckets, 1)
+          ]}, separators=(",", ":"))
+          with open(os.path.join(root, "bundled-matrix.json"), "w") as bundled:
+              bundled.write(matrix + "\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"matrix={matrix}\n")
+          PYTHON
+
       # Function-call count of the names evaluation above, against a fixed
       # ceiling; the action's description carries the measurements.
       - name: Check the Linux name evaluation stays within budget
@@ -916,6 +966,7 @@ jobs:
         with:
           name: checks-plan
           path: |
+            ${{ runner.temp }}/bundled-matrix.json
             ${{ runner.temp }}/checks-eval-stats.json
             ${{ runner.temp }}/checks.json
             ${{ runner.temp }}/matrix.json
@@ -929,10 +980,10 @@ jobs:
     if: needs.checks-eval.outputs.any-jobs == 'true'
     strategy:
       fail-fast: false
-      max-parallel: 4
       matrix: ${{ fromJSON(needs.checks-eval.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    # Cold run 40689968544: 10,929 s across 65 groups, ~45 min per bundle.
+    timeout-minutes: 120
     env:
       INSTALLABLES: ${{ matrix.installables }}
     steps:
@@ -952,7 +1003,7 @@ jobs:
             echo "::error::hestia prefetch failed. If the hestia daemon log in the post-job step says a pack is not in the cache (evicted?), use 'Re-run all jobs' so checks-eval registers the drv closures again; 'Re-run failed jobs' cannot recover."
             false
           fi
-          nix build --no-link -L "${installables[@]}"
+          nix build --keep-going --no-link -L "${installables[@]}"
 
   # Fails unless evaluation succeeded and every planned leg succeeded: the
   # matrix is fixed by checks-eval and does not fail fast. An all-cached plan
@@ -998,7 +1049,7 @@ jobs:
   # Linux-only module-glab-keyring-sync-hm-wiring. A second run reached 3064 MiB.
   # Linux names were 1011 at 35 s / 3.7 GB on a Linux host the same day.
   # Waiting for package shards keeps this job from taking a macOS runner slot
-  # ahead of the package shards (5 concurrent on this plan).
+  # ahead of the two Darwin package shards.
   checks-eval-darwin:
     needs: build-packages
     if: ${{ !cancelled() }}
