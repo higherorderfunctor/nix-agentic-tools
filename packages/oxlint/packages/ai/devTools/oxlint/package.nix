@@ -22,12 +22,12 @@
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
-  rev = "404f092c2aaf6981593d4160786d6f98a246d233";
+  rev = "224f4ddd08774169623eb4cdb4d54f2fa1bbe41a";
   unpatchedSrc = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-sjtnlBeQgHK1fWaCA6NKMU6xWpQYNzPiuUamlrCkoHY=";
+    hash = "sha256-1wEKVJlAXhn/4IkLAT4hgkPBiNq0pMU96Ri2DXreAHg=";
   };
   # Keep pnpm responsible for patching every peer variant. A name-only key
   # follows upstream versions; context application and the behavioral probe
@@ -82,17 +82,13 @@ in
     # Validate cached dependency materialization too, before compiling Rust.
     preBuild = verifyNapiPatch + (prev.preBuild or "");
     # Oxc declares pnpm@12.3.2 in `packageManager`, and we DELIBERATELY stay on
-    # pnpm 11. nixpkgs' fetcher interpolates `--registry="$NIX_NPM_REGISTRY"`
-    # unconditionally (fetch-pnpm-deps/default.nix:149) and that variable has no
-    # default anywhere in nixpkgs, so the fetcher hands pnpm an EMPTY registry
-    # base. pnpm 11 falls back to the default registry; pnpm 12's Rust rewrite
-    # does not, and every request becomes a relative URL — measured, the install
-    # dies with metadata fetches against bare paths like `/@andrewbranch%2Funtar.js`.
-    # Disabling pnpm's supply-chain check does NOT work around it: the same
-    # empty-base failure just resurfaces one stage later at the tarball endpoint.
-    #
-    # Revisit when the nixpkgs pin carries a registry-guard fix; the swap then
-    # needs a `NIX_NPM_REGISTRY` default supplied here in the same change.
+    # pnpm 11 until a swap is validated against this consumer. pnpm 12 needs a
+    # non-empty registry base: given an empty one, every request becomes a
+    # relative URL (measured: metadata fetches against bare paths like
+    # `/@andrewbranch%2Funtar.js`), and disabling pnpm's supply-chain check only
+    # moves the failure to the tarball endpoint. The pinned fetcher passes
+    # `--registry` only when NIX_NPM_REGISTRY is set
+    # (fetch-pnpm-deps/default.nix:167).
     # Replace nixpkgs Oxlint's own pnpm in BOTH places — the dependency fetcher
     # above and the build input here — so both phases use the same major.
     # checks/packaging/pnpm-fetcher-parity.nix asserts those two are the same store path,

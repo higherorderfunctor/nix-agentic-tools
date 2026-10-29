@@ -1,16 +1,6 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-27 — each Go package's compiler is the go-overlay
-> release matching its recorded source floor, and a missing floor fails unless
-> the recipe declares an override; Rust recipes select the channel extracted
-> from their source toolchain file, strip exact-channel host suffixes only at
-> selection, and require an explicit override for absent or named channels;
-> `rust-toolchain-{selection,drift,fixer,parser}` verify that contract; an owner
-> overlay returns only the leaves it claims and the composer deep-merges each
-> one into `prev`, stopping at derivations; nat-overlay-parity compares package
-> leaves and checks owner overlay leaves for presence; Go check names come from
-> one declared table; the flake has no `apps` output; Bruno past 4.2.x uses
-> `npmDepsFetcherVersion = 2`.
+> **Last verified:** 2026-10-28 — pnpm_12 bootstrap has no hash fixers.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -661,36 +651,49 @@ to any versioned attribute family:
   carry a delta; which one is which rotates as channels move. Parity is not
   evidence that a major should be dropped.
 - **Share a builder only across matching upstream expressions.** pnpm_12
-  overrides nixpkgs' separate `generic-rust.nix` now that nixpkgs supplies a
-  source-built pnpm_12 and the operator prefers compiling. `.override` moves the
-  argument version, source/cargo hashes and locked Rust platform;
-  `overrideAttrs` merges our loader preparation, install checks and update
-  passthru. It adds no `postPatch`: nixpkgs' own `postPatch` (nixpkgs
-  `214068de1f`, pnpm_12 12.3.4 -> 12.9.0, 2026-10-03) deletes upstream's
-  `pnpm-managed cargo sources` block from `.cargo/config.toml`, which redirects
-  the node-semver-rs git source to `.pnpm/crates` and which cargo rejects as a
-  duplicate of the same source in cargoSetupHook's config. Do not re-add our own
-  deletion that asserts the markers: it runs after nixpkgs' and fails patchPhase
-  with no output, because the block is already gone. The argument version
+  overrides nixpkgs' separate source-built `generic-rust.nix`; the operator
+  prefers compiling. `.override` moves the argument version, source/cargo hashes
+  and locked Rust platform; `overrideAttrs` merges our loader preparation,
+  install checks and update passthru. It adds no `postPatch`: nixpkgs' own
+  `postPatch` (nixpkgs `214068de1f`, pnpm_12 12.3.4 -> 12.9.0, 2026-10-03)
+  deletes upstream's `pnpm-managed cargo sources` block from
+  `.cargo/config.toml`, which redirects the node-semver-rs git source to
+  `.pnpm/crates` and which cargo rejects as a duplicate of the same source in
+  cargoSetupHook's config. Do not re-add our own deletion that asserts the
+  markers: it runs after nixpkgs' and fails patchPhase with no output, because
+  the block is already gone. The shared `prePnpmInstall` deletes the workspace
+  `cargo` block for both `fetchPnpmDeps` and `pnpmConfigHook`, then rejects any
+  remaining top-level `cargo` key: Nix supplies Rust. The argument version
   controls the GitHub tag and major selector, so an attrs-only bump would retain
   the old source tag. The vendor FOD name includes the version.
 - pnpm_12 generates `cas-loader.mjs.inc` with upstream's
   `pnpm/esm-loader/scripts/bundle-runtime.mjs` in `preBuild`, preserving the
   inherited Cargo phase. Its `fetchPnpmDeps` and `pnpmConfigHook` use the same
-  pinned JavaScript pnpm_11 bootstrap and `@pnpm/esm-loader` workspace
-  selection, so there is no dependency on the Rust pnpm being built. Both
-  installs disable the global virtual store: otherwise upstream's
-  `virtualStoreType: global` puts package files under the dependency fetcher's
-  store, and nixpkgs' JSON normalization tries to parse non-JSON fixtures. The
-  configure hook installs dependencies offline with lifecycle scripts disabled;
-  the explicit bundle step performs the required preparation afterward. Both
-  installs pass `--no-runtime` so upstream's platform-specific Node runtime
-  entries stay in the frozen lockfile but are not downloaded or linked; the
-  bundler uses Nix's build Node. Without it, a dependency store fetched on Linux
-  contains only Linux's managed Node and offline Darwin configuration tries to
-  download its own runtime.
+  frozen Rust pnpm 12.15.0 bootstrap and `@pnpm/esm-loader` workspace selection.
+  The bootstrap uses the same recipe with
+  `packages/pnpm/sources-12-bootstrap.json` and JavaScript pnpm_11; the main
+  release uses `packages/pnpm/sources-12.json`. pnpm 12.16+ includes catalogs
+  and policies from `.config/pnpm/*.yaml`, which requires pnpm >= 12.15.0;
+  nixpkgs' pnpm_12 is older. The private bootstrap is reachable through the main
+  `pnpmDeps.nativeBuildInputs`; its dependency FOD has a distinct name from the
+  main release's FOD. The bootstrap exposes no hash fixers, update script or
+  registry entry. The bootstrap is bumped deliberately. Both stages check their
+  installed version against their own sidecar. Both installs disable the global
+  virtual store: otherwise upstream's `virtualStoreType: global` puts package
+  files under the dependency fetcher's store, and nixpkgs' JSON normalization
+  tries to parse non-JSON fixtures. The configure hook installs dependencies
+  offline with lifecycle scripts disabled; the explicit bundle step performs the
+  required preparation afterward. Both installs pass `--no-runtime` so
+  upstream's platform-specific Node runtime entries stay in the frozen lockfile
+  but are not downloaded or linked; the bundler uses Nix's build Node. Without
+  it, a dependency store fetched on Linux contains only Linux's managed Node and
+  offline Darwin configuration tries to download its own runtime.
 - pnpm_12 keeps version/source/cargo/pnpm pins and `rustToolchainChannel` in its
-  sidecar, with `mkUpdateScript`'s cheap no-op exit. Its `rustUpdateExtract`
+  sidecar, with `mkUpdateScript`'s cheap no-op exit. The main `pnpmDeps` keeps
+  its name and pinned hash, so at the current pin its output path equals the one
+  fetched by pnpm_11 and is substituted. Rust pnpm first fetches the main
+  dependencies when the Update sweep moves the version, giving the FOD a new
+  name; the hash fixer then derives `pnpmDepsHash`. Its `rustUpdateExtract`
   restores the source hash, records the source's channel through
   `fixRustToolchain`, then restores Cargo and pnpm hashes after a bump or input
   update. npm's `latest-12` dist-tag picks the release and the source fixer
@@ -918,7 +921,8 @@ optional `rustToolchainOverride` and `rustToolchainRoot`, and, for sidecars,
 metadata or constructing a second writer. Sidecar update scripts pass
 `extraExtract = "${rustPlatform.passthru.rustUpdateExtract}"`; extra hash
 repairs such as pnpm_12's pnpm dependencies use the platform's `targets`
-parameter, whose default is the Cargo vendor target.
+parameter, whose default is the Cargo vendor target. The pnpm_12 bootstrap
+passes no fixer targets and does not merge the platform's passthru.
 
 Rust updaters extract `channel` from `rust-toolchain.toml` or `rust-toolchain`
 at the recipe's crate/workspace root, using `codex-rs` for `chatgpt-codex`.

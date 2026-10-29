@@ -5,9 +5,9 @@
   ...
 }: let
   inherit (pkgs) lib;
-  snapshotDate = "2026-10-27";
-  contentHash = "sha256-IhEKCRBUUUbMQINmJe07ZC+2lHqo1kIfr1wnG4Ue5AA=";
-  hash = "sha256-jEbizR3HwsgCBaj9plrezitwHaMlgBIdOBSycWv+zNA=";
+  snapshotDate = "2026-10-29";
+  contentHash = "sha256-JWiVDa/Ba7+H6iBAskXJbch19pUARjp/OwQ2VJ0ykTc=";
+  hash = "sha256-PprRMa/ItNsS7OscYLOk2WzPSrCrzMR/2VedzFE1nNw=";
 in
   (webDocsLib {inherit pkgs;}).mkSnapshot {
     name = "kimchi-docs";
@@ -16,10 +16,13 @@ in
     index = {
       url = "https://docs.kimchi.dev/llms.txt";
       allowedPaths = ["/llms.txt"];
-      allowedPrefixes = ["/docs/"];
+      allowedPrefixes = ["/docs/" "/reference/"];
       deniedPaths = ["/login" "/logout"];
       deniedSegments = ["api-next" "cdn-cgi" "edit" "suggested-edits"];
-      requiredIndexes = ["https://docs.kimchi.dev/docs/llms.txt"];
+      requiredIndexes = [
+        "https://docs.kimchi.dev/docs/llms.txt"
+        "https://docs.kimchi.dev/reference/llms.txt"
+      ];
     };
     generated.ATTRIBUTION = ''
       Kimchi documentation snapshot

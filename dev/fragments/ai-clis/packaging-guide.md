@@ -1,14 +1,8 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-27 — Codex selects Rust from the channel in
-> `codex-rs/rust-toolchain.toml`, recorded as `rustToolchainChannel`; updates
-> are dispatched as the CI `Update` workflow. Codex adopts nixpkgs' output-root
-> layout, source-built voice and store-linked runtime, and its updater pins
-> rusty_v8 to the vendored `v8` crate; Kiro parses embedded rollout JSON,
-> preserving state fields; copies must agree. The byte-preserving patcher
-> remains strict. The devenv update lane realizes the patched Kiro through the
-> repo shell, so it does not push. The same pushFilter also excludes the CodeQL
-> engines, which the input lanes do not build.
+> **Last verified:** 2026-10-28 — two native package shards per system exclude
+> patched Kiro; its required validation legs use Ubuntu when kiro-scope finds no
+> relevant changes.
 
 ### Overview
 
@@ -161,15 +155,19 @@ days later, so `ci.yml` provably was not the source. Two workflow paths hold
 | `ci.yml` build-packages | no — `ci-packages.py` exclusions | token → **`pushFilter`** |
 | `ci.yml` publish-hestia | no — builds `ciHestia` only      | token → **`pushFilter`** |
 | `ci.yml` test           | no                               | no token                 |
-| `kiro-patched`          | yes                              | no token                 |
+| `kiro-patched`          | when scoped                      | no token                 |
 | `update.yml` inputs     | **yes — `verify_all_packages`**  | token → **`pushFilter`** |
 | `update.yml` devenv     | **yes — the repo devenv shell**  | token → **`skipPush`**   |
 
 `ci-packages.py` removes its `EXCLUDED` names before partitioning the native
-package set and emits a positive `--select` expression for each shard. Keep the
-patched variant in that exclusion set; the dedicated native jobs validate it
-without cache credentials. The unpatched `kiro-cli` stays in the shards: they
-build it as a check, and the `pushFilter` is what keeps it out of the cache.
+package set into two shards per system and emits a positive `--select`
+expression for each shard. Keep the patched variant in that exclusion set; the
+dedicated native jobs validate it without cache credentials when the Ubuntu
+`kiro-scope` job outputs `needed=true`. Push and dispatch events always need
+validation. Irrelevant PRs report both required matrix contexts on Ubuntu
+without reserving a macOS runner. The unpatched `kiro-cli` stays in the shards:
+they build it as a check, and the `pushFilter` is what keeps it out of the
+cache.
 
 `verify_all_packages` (`dev/scripts/update-common.sh`) builds
 `.#ciPackages.<sys>`, Kiro's patched canary included, on every input bump; only

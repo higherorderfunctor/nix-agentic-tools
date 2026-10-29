@@ -5,7 +5,7 @@
 # ── Symlink, not copy ──
 #
 # `snapshot` is a single store symlink to the pinned `docs.kimchi-docs`
-# derivation, never a copy of its 52 files. Three reasons, in order:
+# derivation, never a copy of its files. Three reasons, in order:
 #
 #   1. Store-backed skill directories are a supported shape (#1755), so nothing
 #      downstream needs the files to live inside this derivation.
@@ -18,7 +18,7 @@
 #
 # The link target is an ABSOLUTE store path, so it survives every materialization
 # route: the files engine's recursive walk (`builtins.readDir` reports
-# `symlink`, so it emits ONE link leaf rather than 52) on both backends, and
+# `symlink`, so it emits ONE link leaf rather than one per page) on both backends, and
 # Codex's whole-directory link.
 #
 # `search` selects the search directions spliced into SKILL.md. It is resolved by
@@ -62,7 +62,7 @@
       Search the snapshot with an ordinary text search:
 
       ```bash
-      rg -n --glob '*.md' 'mcp' ./snapshot/docs
+      rg -n --glob '*.md' 'mcp' ./snapshot
       ```
     '';
   };
@@ -85,11 +85,12 @@
     "which page" in a single read:
 
     - `snapshot/llms.txt` — the section index.
-    - `snapshot/docs/llms.txt` — every page, grouped by section.
-    - `snapshot/docs/<section>/llms.txt` — one section.
+    - `snapshot/docs/llms.txt` — every guide page, grouped by section.
+    - `snapshot/docs/<section>/llms.txt` — one guide section.
+    - `snapshot/reference/llms.txt` — every API reference endpoint.
 
-    An index entry's URL maps to a file: `https://docs.kimchi.dev/docs/<page>.md`
-    is `snapshot/docs/<page>.md`. Read only the pages the index named.
+    An index entry's URL maps to a file: `https://docs.kimchi.dev/<path>.md` is
+    `snapshot/<path>.md`. Read only the pages the index named.
 
     ## Search
 

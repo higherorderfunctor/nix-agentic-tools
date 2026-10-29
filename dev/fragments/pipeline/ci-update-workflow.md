@@ -1,15 +1,8 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-25 — the verification verdict requires successful
-> preparation and still runs after publication failures unless cancelled; Darwin
-> extraction waits for package shards to publish their builds through Cachix;
-> the sweep is the only update entrypoint; package workers never build;
-> `checks/<concern>/flake.lock` files are lock-kind matrix rows; the
-> `mirror-health` job reports the jail-nix mirror; ci.yml runs the required KVM
-> job `service-secret-ordering`, which builds a dev-only fixture flake;
-> `jail-smoke` and `checks-eval-darwin` are required contexts; both systems'
-> name evaluations are budgeted by function count; the pushFilter also excludes
-> the CodeQL engines.
+> **Last verified:** 2026-10-28 — native packages use two shards per system;
+> uncached checks use at most four balanced bundles; Kiro scope is evaluated on
+> Ubuntu before runner selection.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -242,12 +235,10 @@ are exempt is unverified.
 
 ### Native package build shards
 
-`ci.yml` distributes every eligible package across five shards per native
-platform. New exports enter the sorted partition automatically. Each runner
-builds one derivation at a time using all cores. The macOS nixpkgs failure in
-run `34732693179` did not start oxlint until minute 44 because other package
-builds occupied its slots. Sharding removes most of that queue, and a 120-minute
-worker ceiling accommodates a cold shard without changing optimization flags.
+`ci.yml` distributes every eligible package across two shards per native
+platform. New exports enter the sorted round-robin partition automatically. Each
+runner builds one derivation at a time using all cores, with a 120-minute
+ceiling for a cold shard.
 
 `ci-packages.py` checks every selected evaluation and requires a successful
 build or cache hit. Empty, failed, skipped, or incomplete results fail. Coverage
@@ -263,17 +254,22 @@ flake check and `test` only runs the workflow gate scripts. `jail-smoke` builds
 cannot run inside the Nix build sandbox there. The full Devenv Diagnostic
 remains manual-only.
 
-Generated documents stay in the flake checks. Kiro's scoped native jobs build
-the extracted-metadata drift check and packaged KAS checks on both Linux and
-Darwin. They cover strict vendor patch selection, native resources, ACP
-initialization and fresh/stale-cache dispatch on macOS where the Linux-only
-flake check cannot; the drift check reads both platforms' releases on Linux and
-compares nothing on Darwin. These jobs explicitly enable and assert the Nix
-sandbox; Darwin's Nix default does not provide that guarantee. Patched
-proprietary Kiro stays in those jobs without cache publication; every Cachix
-step holding the token, package matrix and update workers alike, carries
-`pushFilter: kiro-cli|codeql`; the second alternative keeps the CodeQL engines
-(packages/codeql), whose terms forbid distribution, out too.
+Generated documents stay in the flake checks. The Ubuntu `kiro-scope` job
+decides whether Kiro validation is needed before the required `kiro-patched`
+legs choose runners. Irrelevant legs run on Ubuntu and report success with their
+original matrix context names; relevant legs use their native runners. Scope
+failure fails both required legs. Push and dispatch events always need
+validation. Kiro's scoped native jobs build the extracted-metadata drift check
+and packaged KAS checks on both Linux and Darwin. They cover strict vendor patch
+selection, native resources, ACP initialization and fresh/stale-cache dispatch
+on macOS where the Linux-only flake check cannot; the drift check reads both
+platforms' releases on Linux and compares nothing on Darwin. These jobs
+explicitly enable and assert the Nix sandbox; Darwin's Nix default does not
+provide that guarantee. Patched proprietary Kiro stays in those jobs without
+cache publication; every Cachix step holding the token, package matrix and
+update workers alike, carries `pushFilter: kiro-cli|codeql`; the second
+alternative keeps the CodeQL engines (packages/codeql), whose terms forbid
+distribution, out too.
 
 Codex facts are host-run, so a Linux update carries its fresh Linux raw into
 `extracted.json` and Darwin's side follows every unforked node while keeping its
@@ -331,14 +327,16 @@ filters, scope and fallback limitations are documented in
 
 Beside it, three jobs perform eval-once check building; `checks-matrix` is a
 required status context. `checks-eval` runs Hestia's matrix subaction over
-`.#.ciChecks.x86_64-linux` (one row per `meta.hestia.group`), `checks-build`
-builds each uncached row as `<drvPath>^*` without flake evaluation, and
-`checks-matrix` fails on a failed evaluation or a failed or cancelled worker; an
-all-cached plan passes. Hestia keeps nix-eval-jobs' stdout to itself and lists
-only uncached rows by their first member, so a wrapper captures the raw rows of
-that same evaluation. The plan check requires the evaluated attrs to equal
-`checks.x86_64-linux` attr names and the planned drvs to equal the uncached
-ones.
+`.#.ciChecks.x86_64-linux` (one row per `meta.hestia.group`). After verifying
+the original plan, it combines uncached groups into at most four bundles,
+balancing installable counts and rejecting plans with multiple OS labels.
+`checks-build` prefetches each bundle and builds its `<drvPath>^*` installables
+with `--keep-going` without flake evaluation, and `checks-matrix` fails on a
+failed evaluation or a failed or cancelled worker; an all-cached plan passes.
+Hestia keeps nix-eval-jobs' stdout to itself and lists only uncached rows by
+their first member, so a wrapper captures the raw rows of that same evaluation.
+The plan check requires the evaluated attrs to equal `checks.x86_64-linux` attr
+names and the planned drvs to equal the uncached ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.

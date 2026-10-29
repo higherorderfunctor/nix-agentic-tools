@@ -39,7 +39,9 @@
     pname = "git-branchless";
     recipeFile = repoPath ./package.nix;
   };
-  gbSrc = inputs.git-branchless;
+  # A path, not the flake-input set: the source-version fixer runs
+  # `nix build .#<attr>.src`, which refuses a set.
+  gbSrc = inputs.git-branchless.outPath;
   extraction = gitToolExtraction {inherit pkgs;};
 
   # Unpack + patch of the package's own `src` and `patches`: the
