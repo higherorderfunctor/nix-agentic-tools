@@ -29,7 +29,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   microvm:
-    url: github:microvm-nix/microvm.nix/c37d37a876a3c4bd7ff78fcc716b2e4fac770360
+    url: github:microvm-nix/microvm.nix/b7bd556974fa8a171b5b639200e81d52244dfde4
     inputs:
       nixpkgs:
         follows: nixpkgs
