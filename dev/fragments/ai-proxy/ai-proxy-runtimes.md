@@ -1,17 +1,11 @@
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-28 — each runtime's proxy library holds one
+> **Last verified:** 2026-10-29 — each runtime's proxy library holds one
 > lowering per backend (only `cliproxyapi`, which also lowers external
-> selections) and derives native values at `mkDefault`. Claude uses
-> `redact.assign` and the shared reader through `apiKeyHelper` for file, command
-> and concat references, and clears inherited API keys, bearer tokens, custom
-> headers and Bedrock/Vertex/Foundry switches in settings, and suppresses the
-> inherited API-key descriptor before Claude starts. Codex uses command-backed
-> provider auth. Named client routes supply Claude `/model` picker rows (listed
-> and selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
-> discovers CPA models without per-credential profiles. Both use the shared
-> client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
-> and warn through the generated warning cases.
+> selections) and asserts on any other; lowerings derive native values at
+> `mkDefault`. Claude's helper and launcher keep inherited credentials away from
+> the proxy; Codex uses command-backed provider auth; Kimchi, Kiro and Copilot
+> warn.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -36,9 +30,9 @@ inherited custom headers, which can carry a credential.
 `CLAUDE_CODE_USE_FOUNDRY` are blank because an inherited switch sends model
 traffic past the proxy; the live check measures both on the pinned CLI. Claude
 Code 2.1.302 reads and caches `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before
-applying settings env. A blank in settings cannot suppress it. A selected proxy
-therefore installs a launcher through `lib.ai.mkLauncher` that unsets the
-descriptor before exec; the flag is the `cliproxyapi` lowering's
+applying settings env. A blank in settings cannot suppress it. A `cliproxyapi`
+selection therefore installs a launcher through `lib.ai.mkLauncher` that unsets
+the descriptor before exec; the flag is the `cliproxyapi` lowering's
 `launcherFlags`, so another backend's lowering adds none unless it asks, and
 without a selection the package stays unchanged. An explicit
 `ai.claude.package = null` keeps settings delivery and warns that the caller
@@ -102,7 +96,7 @@ environment does not reach devenv's.
   passes `-c model_providers.ai-proxy-devenv={…}` and
   `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
   `--add-flag`s. With `ai.codex.package = null` nothing carries them, so devenv
-  warns.
+  warns whenever the lowering produced session flags.
 - **Models.** Codex's `auth.command` provider fetches
   `<base_url>/models?client_version=`, which CPA answers in Codex's catalog
   shape (every registered model, unfiltered by client key), merged into the

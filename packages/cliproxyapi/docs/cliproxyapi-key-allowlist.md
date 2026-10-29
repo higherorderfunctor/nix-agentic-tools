@@ -31,15 +31,15 @@ instance.
 
 An entry identifies one client key and grants a list of credential rules. The
 client key is a redact reference shared with `access.api-keys[]`. An Instance
-owns named client keys and upstream credentials (`ai-proxy.md`); each named
-route generates one rule, and Harness selection adds no rules. Write settings
-entries by hand only for other clients. A rule requires `provider` and `kind`
-(`oauth` or `apikey`); `accounts`, `ids` and `base-urls` narrow it further.
-Generated compatibility-provider rules follow CPA's name normalization in
-`internal/util/provider.go`. An OAuth credential's ID is its login path relative
-to `<stateDir>/auth`. Named upstream credentials require `oauth.vendor` and
-`oauth.account` (a redact reference), lowering to an `accounts` rule through the
-existing secret renderer. An account rule matches only OAuth with a nonempty
+owns named client keys and upstream credentials (`cliproxyapi-providers.md`);
+each named route generates one rule, and Harness selection adds no rules. Write
+settings entries by hand only for other clients. A rule requires `provider` and
+`kind` (`oauth` or `apikey`); `accounts`, `ids` and `base-urls` narrow it
+further. Generated compatibility-provider rules follow CPA's name normalization
+in `internal/util/provider.go`. An OAuth credential's ID is its login path
+relative to `<stateDir>/auth`. Named upstream credentials require `oauth.vendor`
+and `oauth.account` (a redact reference), lowering to an `accounts` rule through
+the existing secret renderer. An account rule matches only OAuth with a nonempty
 native `AccountInfo()` email, compared case-sensitively after trimming both
 values. `AccountInfo()` reads `Metadata.email`, with a service-account
 `client_email` fallback (`sdk/cliproxy/auth/types.go:788`). An account with no
@@ -58,15 +58,15 @@ file-sourced provider and ID, so high-value OAuth rules should use `accounts` or
 `ids`.
 
 `base-urls` compares the credential's trimmed `base_url` with each listed URL
-after trimming. Provider URL constraints are in `ai-proxy.md`. Scheme, host,
-path, case, and trailing slash still matter. A group without an explicit base
-URL may have no attribute and cannot match this narrowing; set `base-url`
-explicitly for default-endpoint Claude, Gemini, and Interactions groups. A rule
-with `base-urls` never matches OAuth, even if an OAuth login carries that
-attribute; the instance module refuses that combination. A listed URL absent
-from the configured groups is accepted but selects nothing. Key-less OpenAI
-compatibility groups have no matching kind and cannot be reached while the
-allowlist is set.
+after trimming. Provider URL constraints are in `cliproxyapi-providers.md`.
+Scheme, host, path, case, and trailing slash still matter. A group without an
+explicit base URL may have no attribute and cannot match this narrowing; set
+`base-url` explicitly for default-endpoint Claude, Gemini, and Interactions
+groups. A rule with `base-urls` never matches OAuth, even if an OAuth login
+carries that attribute; the instance module refuses that combination. A listed
+URL absent from the configured groups is accepted but selects nothing. Key-less
+OpenAI compatibility groups have no matching kind and cannot be reached while
+the allowlist is set.
 
 ## Model listings
 

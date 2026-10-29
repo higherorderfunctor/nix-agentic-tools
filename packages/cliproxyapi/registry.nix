@@ -12,12 +12,22 @@
       {
         dir = facetOwner;
         location = "package";
+        name = "cliproxyapi-client-keys";
+      }
+      {
+        dir = facetOwner;
+        location = "package";
         name = "cliproxyapi-extraction";
       }
       {
         dir = facetOwner;
         location = "package";
         name = "cliproxyapi-key-allowlist";
+      }
+      {
+        dir = facetOwner;
+        location = "package";
+        name = "cliproxyapi-providers";
       }
       {
         dir = facetOwner;
