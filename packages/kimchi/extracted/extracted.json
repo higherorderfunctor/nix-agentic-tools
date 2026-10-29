@@ -1423,6 +1423,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_E2E_STATIC_TODO_SPINNER": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_ENABLE_RESOURCES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -4161,7 +4166,7 @@
           {
             "host": "api.github.com",
             "kind": "url",
-            "origin": "src/update/github.ts:8",
+            "origin": "src/update/github.ts:9",
             "value": "https://api.github.com"
           },
           {
@@ -4179,7 +4184,7 @@
           {
             "host": "github.com",
             "kind": "url",
-            "origin": "src/update/github.ts:9",
+            "origin": "src/update/github.ts:10",
             "value": "https://github.com"
           },
           {

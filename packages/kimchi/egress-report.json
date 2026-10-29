@@ -257,8 +257,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-DcjlIOT5hYM8cVDK9SPghsp9LzriqKkyoj87HImlLjE=",
-      "kimchiVersion": "1.22.5",
+      "kimchiSourceHash": "sha256-wsEPeprnYfSeDHtrvFfS6FwcbEWloU3ldwieLdZ0JQI=",
+      "kimchiVersion": "1.23.2",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -4016,7 +4016,7 @@
         {
           "host": "api.github.com",
           "kind": "url",
-          "origin": "src/update/github.ts:8",
+          "origin": "src/update/github.ts:9",
           "value": "https://api.github.com"
         },
         {
@@ -4034,7 +4034,7 @@
         {
           "host": "github.com",
           "kind": "url",
-          "origin": "src/update/github.ts:9",
+          "origin": "src/update/github.ts:10",
           "value": "https://github.com"
         },
         {
