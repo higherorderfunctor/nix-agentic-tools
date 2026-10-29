@@ -150,6 +150,11 @@
           type = lib.types.str;
           default = "/tmp/devenv-root";
         };
+        # Airlock keeps a devenv instance's CA under this runtime root.
+        runtime = lib.mkOption {
+          type = lib.types.str;
+          default = "/tmp/devenv-runtime";
+        };
         state = lib.mkOption {
           type = lib.types.str;
           default = "/tmp/devenv-state";
