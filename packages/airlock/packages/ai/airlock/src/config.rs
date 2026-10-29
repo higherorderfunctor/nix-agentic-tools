@@ -18,14 +18,16 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Interception {
-    pub ca_directory: PathBuf,
+    pub ca_directory: Option<PathBuf>,
     pub destinations: Vec<String>,
     /// Extra PEM roots for private origins or a corporate TLS-inspecting proxy; widens upstream trust.
     pub upstream_roots: Option<PathBuf>,
 }
 
 impl Config {
-    pub fn read(path: impl AsRef<Path>) -> Result<Self, String> {
+    /// Read the file at `path`; `ca_directory`, from `--ca-directory`,
+    /// replaces the configured interception CA directory.
+    pub fn read(path: impl AsRef<Path>, ca_directory: Option<PathBuf>) -> Result<Self, String> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
             .map_err(|error| format!("could not read config {}: {error}", path.display()))?;
@@ -37,7 +39,16 @@ impl Config {
             ));
         }
 
-        serde_json::from_str(&content)
-            .map_err(|error| format!("invalid config {}: {error}", path.display()))
+        let mut config: Self = serde_json::from_str(&content)
+            .map_err(|error| format!("invalid config {}: {error}", path.display()))?;
+        if let Some(interception) = config.interception.as_mut() {
+            interception.ca_directory = ca_directory.or(interception.ca_directory.take());
+            if interception.ca_directory.is_none() {
+                return Err("interception requires ca_directory or --ca-directory".to_owned());
+            }
+        } else if ca_directory.is_some() {
+            return Err("--ca-directory requires interception configuration".to_owned());
+        }
+        Ok(config)
     }
 }
