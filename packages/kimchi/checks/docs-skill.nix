@@ -86,7 +86,7 @@ in {
         '[ "$(readlink "$workflows")" = ${workflowsPackage} ]'
       require "the workflows README is unreadable through the skill" '[ -s "$workflows/README.md" ]'
       require "SKILL.md omits the workflows source directions" 'grep -q workflows/src "$skill_md"'
-      for index in llms.txt docs/llms.txt; do
+      for index in llms.txt docs/llms.txt reference/llms.txt; do
         require "the index snapshot/$index is unreadable through the skill" '[ -s "$snapshot/$index" ]'
         require "the index snapshot/$index does not name docs.kimchi.dev, so it is not the upstream index" \
           'grep -q docs.kimchi.dev "$snapshot/$index"'
