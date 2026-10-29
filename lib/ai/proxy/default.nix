@@ -117,12 +117,12 @@ in {
       then selection
       else own
     ));
-  # The instance's `backend` and `url`, plus the selected client's attributes
-  # when the instance declares clients; null for a selection `problems`
-  # refuses. An external `url` is CPA-shaped, so it lowers as `cliproxyapi`.
+  # The instance's `backend` and `url`, its `trust` when it has one, plus the
+  # selected client's attributes when the instance declares clients; null for
+  # a selection `problems` refuses. An external `url` is CPA-shaped, so it lowers as `cliproxyapi`.
   resolve = registry: selection: let
     found = lookup registry "" selection.instance;
-    endpoint = {inherit (found.entry) backend url;};
+    endpoint = {inherit (found.entry) backend url;} // lib.optionalAttrs (found.entry.trust != null) {inherit (found.entry) trust;};
     clients = found.entry.clients;
   in
     if !isSelected selection
@@ -165,6 +165,11 @@ in {
           type = types.bool;
           default = true;
           description = "Whether the instance runs; selecting a disabled instance fails evaluation.";
+        };
+        trust = mkOption {
+          type = types.nullOr types.package;
+          default = null;
+          description = "For an instance that intercepts TLS: an executable printing the path of a PEM bundle a client must trust, the instance's CA after the bundle its optional argument names. It fails when the CA does not exist yet.";
         };
         url = mkOption {
           type = types.strMatching urlPattern;

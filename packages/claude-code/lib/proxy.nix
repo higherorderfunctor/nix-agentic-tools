@@ -19,8 +19,24 @@
   proxyLib = import ../../../lib/ai/proxy {inherit lib;};
   # Each lowering takes the module backend (`hm` or `devenv`), then the
   # resolved proxy. Airlock tunnels HTTPS with CONNECT, so Claude keeps its
-  # own credentials, base URL and TLS configuration.
-  lowerings.airlock = _backend: {url, ...}: {settings.env.HTTPS_PROXY = url;};
+  # own credentials, base URL and TLS configuration. An intercepting instance
+  # also needs its CA trusted; Claude reads NODE_EXTRA_CA_CERTS only at
+  # process start, so the launcher sets it, keeping any inherited extra CA.
+  lowerings.airlock = _backend: {
+    trust ? null,
+    url,
+    ...
+  }:
+    {settings.env.HTTPS_PROXY = url;}
+    // lib.optionalAttrs (trust != null) {
+      launcherFlags = [
+        "--run ${lib.escapeShellArg ''
+          NODE_EXTRA_CA_CERTS="$(${lib.getExe trust} "''${NODE_EXTRA_CA_CERTS:-}")"
+          export NODE_EXTRA_CA_CERTS
+        ''}"
+      ];
+      withoutLauncher = "launch Claude with NODE_EXTRA_CA_CERTS set to the path `${lib.getExe trust}` prints, or Airlock's intercepted connections fail TLS verification.";
+    };
   lowerings.cliproxyapi = backend: {
     credentials,
     key,
@@ -51,6 +67,7 @@
     launcherFlags =
       ["--unset CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"]
       ++ lib.optional (backend == "devenv" && rows != []) "--add-flags ${lib.escapeShellArg "--settings ${picker}"}";
+    withoutLauncher = "launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup.";
     # Settings env overrides inherited API keys, bearer tokens and custom
     # headers, so a lower-scope credential cannot accompany the reference
     # resolved by apiKeyHelper, and inherited Bedrock, Vertex or Foundry
@@ -88,6 +105,13 @@
       (lower backend resolvedProxy).launcherFlags or [];
   in {
     inherit launcherFlags;
+    # What a consumer launching Claude without the managed launcher must do
+    # instead, or null when the selection needs no launcher.
+    withoutLauncher = {
+      backend,
+      resolvedProxy,
+    }:
+      (lower backend resolvedProxy).withoutLauncher or null;
     installPackage = {
       backend,
       cfg,

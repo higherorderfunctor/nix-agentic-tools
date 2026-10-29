@@ -601,10 +601,10 @@ in
         (lib.optionalAttrs (options ? warnings) {
           warnings =
             nativeFileWarnings cfg
-            # package = null is the config-only opt-out: no launcher can clear
-            # the descriptor Claude caches before loading these settings.
-            ++ lib.optional (cfg.package == null && claudeProxy.launcherFlags {inherit backend resolvedProxy;} != [])
-            "ai.claude.proxy is selected but ai.claude.package is null; launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup."
+            # package = null is the config-only opt-out: no launcher sets up
+            # what Claude reads before loading these settings.
+            ++ lib.optional (cfg.package == null && claudeProxy.withoutLauncher {inherit backend resolvedProxy;} != null)
+            "ai.claude.proxy is selected but ai.claude.package is null; ${claudeProxy.withoutLauncher {inherit backend resolvedProxy;}}"
             ++ lib.optional (!isHm && cfg.plugins != {})
             "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";
         })

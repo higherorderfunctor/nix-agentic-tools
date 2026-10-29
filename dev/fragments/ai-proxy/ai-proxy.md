@@ -33,8 +33,8 @@ unrelated MCP credential proxy.
 ### Registry
 
 A proxy owner adds each instance to `ai.internal.proxyInstances.<name>` by
-ordinary module merge: `{backend; enable; url; clients;}`. `backend` is the
-owner's name (`ai.<backend>`). `clients.<clientKey> = {...}` holds the
+ordinary module merge: `{backend; enable; url; clients; trust;}`. `backend` is
+the owner's name (`ai.<backend>`). `clients.<clientKey> = {...}` holds the
 attributes that backend's lowering reads for each named client; an owner whose
 instances have no clients leaves `clients` null, and its instances are selected
 by name alone. The owner also claims each name in `ai.claims.proxy-instance`
@@ -44,8 +44,10 @@ evaluation through the claims registry. CLIProxyAPI registers every
 at `http://127.0.0.1:<port>`, each client key carrying `{key; credentials;}`.
 Airlock registers every `ai.airlock.instances` entry
 (`packages/airlock/modules/instances.nix`) at the same loopback origin with no
-clients. The registry is internal: a root option would count as a consumer
-surface and fan out.
+clients. `trust`, null by default, is an executable printing the CA bundle a
+client must trust; Airlock sets it for an intercepting instance, and `resolve`
+passes it to the lowering when set. The registry is internal: a root option
+would count as a consumer surface and fan out.
 
 ### Selection and the resolved endpoint
 
