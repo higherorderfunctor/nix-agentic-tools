@@ -17,14 +17,13 @@
 }: let
   keyHelper = import ../../../lib/ai/proxy/key-helper.nix {inherit lib pkgs;};
   proxyLib = import ../../../lib/ai/proxy {inherit lib;};
-  # Each lowering takes the module backend (`hm` or `devenv`), then the
-  # resolved proxy.
-  lowerings.cliproxyapi = backend: {
-    credentials,
-    key,
-    url,
-    ...
+  # Each lowering takes a request with the module backend (`hm` or `devenv`)
+  # and the resolved proxy.
+  lowerings.cliproxyapi = {
+    backend,
+    resolvedProxy,
   }: let
+    inherit (resolvedProxy) credentials key url;
     helper = keyHelper {
       inherit key;
       option = "ai.claude.proxy.key";
@@ -74,17 +73,20 @@
   };
 
   forLowerings = lowerings: let
-    # `{}` when nothing is selected.
-    lower = backend: resolvedProxy:
-      lib.optionalAttrs (resolvedProxy != null)
-      (proxyLib.lower "claude" (lib.mapAttrs (_: lowering: lowering backend) lowerings) resolvedProxy);
+    proxyLowering = proxyLib.forRuntime "claude" lowerings;
     launcherFlags = {
       backend,
       resolvedProxy,
-    }:
-      (lower backend resolvedProxy).launcherFlags or [];
+    } @ request:
+      (proxyLowering.lower (builtins.seq backend (builtins.seq resolvedProxy request))).launcherFlags or [];
   in {
-    inherit launcherFlags;
+    inherit (proxyLowering) assertions;
+    config = {
+      backend,
+      resolvedProxy,
+    } @ request: {
+      ai.claude.native.settings = lib.mapAttrsRecursive (_: lib.mkDefault) ((proxyLowering.lower (builtins.seq backend (builtins.seq resolvedProxy request))).settings or {});
+    };
     installPackage = {
       backend,
       cfg,
@@ -97,14 +99,7 @@
         name = "claude-code-proxy";
         inherit (cfg) package;
       };
-
-    config = {
-      backend,
-      resolvedProxy,
-    }:
-      lib.mkIf (resolvedProxy != null) {
-        ai.claude.native.settings = lib.mapAttrsRecursive (_: lib.mkDefault) ((lower backend resolvedProxy).settings or {});
-      };
+    inherit launcherFlags;
   };
 in
   forLowerings lowerings

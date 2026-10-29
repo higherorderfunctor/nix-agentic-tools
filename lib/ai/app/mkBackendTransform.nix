@@ -822,9 +822,10 @@ in {
     (lib.optionalAttrs hasNativeAgents {
       ai.${appRecord.name}.native.agents = nativeAgentDefaults;
     })
-    # Root fields at default priority, so a runtime value wins field by field;
-    # copyDown clears the root's other form once the runtime switches forms,
-    # and its clientKey once the runtime selects a clientless instance.
+    # Set root fields at default priority, so a runtime value wins field by
+    # field; copyDown withdraws the root's other form once the runtime
+    # switches forms, and its clientKey once the runtime selects a clientless
+    # instance.
     (lib.optionalAttrs (supportsPool "proxy") (lib.setAttrByPath proxyPath (proxyLib.copyDown config.ai.internal.proxyInstances config.ai.proxy poolCfg.proxy)))
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
