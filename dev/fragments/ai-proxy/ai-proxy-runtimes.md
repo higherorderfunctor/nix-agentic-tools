@@ -41,18 +41,25 @@ therefore installs a launcher through `lib.ai.mkLauncher` that unsets the
 descriptor before exec; the flag is the `cliproxyapi` lowering's
 `launcherFlags`, so another backend's lowering adds none unless it asks, and
 without a selection the package stays unchanged. An explicit
-`ai.claude.package = null` keeps settings delivery and warns that the caller
-must unset the descriptor when launching an unmanaged Claude.
+`ai.claude.package = null` keeps settings delivery and warns with the lowering's
+`withoutLauncher` text: here, that the caller must unset the descriptor when
+launching an unmanaged Claude.
 
 The `cliproxyapi` lowering also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
 and `DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
 `settings.disableClaudeAiConnectors` to `true` to disable claude.ai connectors.
-A lowering returns `settings` and optional `launcherFlags`; nothing outside it
+A lowering returns `settings`, and optionally `launcherFlags` with the
+`withoutLauncher` advice the `package = null` warning gives; nothing outside it
 adds Claude settings for a selection.
 
 The `airlock` lowering sets only `env.HTTPS_PROXY` to the instance origin.
-Airlock tunnels HTTPS with CONNECT, so Claude keeps its credentials, base URL
-and TLS configuration, and no launcher is needed.
+Airlock tunnels HTTPS with CONNECT, so Claude keeps its credentials and base
+URL. An opaque instance needs no launcher. An intercepting instance registers a
+`trust` helper, and the lowering's `launcherFlags` run it before exec to set
+`NODE_EXTRA_CA_CERTS`: Claude reads that variable only at process start, so
+settings env cannot carry it. The helper prints the CA path, or a private
+content-addressed bundle of the inherited extra-CA file followed by the CA, and
+fails the launch when the CA does not exist yet.
 
 The endpoint lands in `native.settings`, so the settings.json the backend
 already writes (user on Home Manager, project on devenv). Every derived leaf is

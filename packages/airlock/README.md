@@ -110,8 +110,31 @@ The service passes `--ca-directory` so the CA lives in `ca/` beside the rendered
 config, in the service's private runtime directory
 (`$XDG_RUNTIME_DIR/ai-service-airlock-<name>`). Airlock creates or validates it
 before listening, a restart reuses it, and a new runtime directory, for example
-after logout, gets a new CA. Nothing installs trust: a client must trust that
-`ca.pem` itself.
+after logout, gets a new CA. Nothing installs system trust.
+
+### Claude and an intercepting instance
+
+Selecting an intercepting instance for Claude also makes Claude's launcher trust
+its CA. Before exec, the launcher runs `airlock-<name>-trust`, which finds the
+CA in the service's runtime directory and sets `NODE_EXTRA_CA_CERTS` for that
+Claude process only. An inherited `NODE_EXTRA_CA_CERTS` file is kept: Claude
+gets a private bundle of that file followed by the CA, written once per content
+beside the service's config. An opaque instance changes no trust.
+
+Start the service before Claude. Without the CA the launch stops with
+`airlock-<name>: no CA at …; start airlock-<name> …`; an unreadable inherited
+extra-CA file also stops it. Claude and the service must see the same
+`XDG_RUNTIME_DIR` (or `TMPDIR` when it is unset). The default `ai.jail` keeps
+the host filesystem and environment, so a jailed Claude reads the same files;
+excluding the runtime directory stops the launch. Set extra trust in the
+launching environment, not in Claude's settings `env`, which applies after
+startup. With `ai.claude.package = null` there is no launcher, and a warning
+names the helper to run yourself.
+
+To check, confirm `$XDG_RUNTIME_DIR/ai-service-airlock-<name>/ca/ca.pem` exists
+once the service is up, then start Claude. To roll back, remove `interception`
+or the Claude selection and restart Claude; leftover bundles go with the runtime
+directory.
 
 ## Selective TLS interception
 
@@ -214,5 +237,7 @@ points.
 registration, interception settings and what a selection gives Claude and Codex.
 `checks.airlock-instance-runtime` starts each backend's generated service
 launcher, requests `/health` at a configured nondefault port and checks the
-runtime CA's reuse across restarts. Rust protocol tests run through the Nix
-package's `doCheck`.
+runtime CA's reuse across restarts. It also runs Claude's launcher with a mock
+Claude: the CA, or the inherited file plus the CA, for interception; no change
+for an opaque instance; and a refused launch before the CA exists. Rust protocol
+tests run through the Nix package's `doCheck`.
