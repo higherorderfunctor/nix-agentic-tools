@@ -1,7 +1,7 @@
 {
-  "version": "12.15.0",
-  "srcHash": "sha256-G2WL5n96GUWcST9qNZH4pnceAUugUAUuwmYGmqgGYDs=",
+  "version": "12.16.1",
+  "srcHash": "sha256-JxemhwZMZi2UIGOFgAzu3X+aHM/C0p36p6OSPbAC61Y=",
   "rustToolchainChannel": "1.97.0",
-  "cargoHash": "sha256-tvxkHVpr364Tst6mIOlBpOMZSuH+E4wqYv27p6OShGI=",
-  "pnpmDepsHash": "sha256-czRBBG1H0JGZtmcy4Bpt4ErPYvbNy+yanCr1moyW4tY="
+  "cargoHash": "sha256-Pk7FCey8fR7SIl1BeFTMmmsvzxgqNlTSBfZBe9hPlcE=",
+  "pnpmDepsHash": "sha256-KamPEcn0nf5+11TPrQ8bpAqlZrE7deMsLsWtVfllTS8="
 }
