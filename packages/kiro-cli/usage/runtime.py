@@ -175,7 +175,7 @@ def settle_captures(path, invocation):
 def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settled=True):
     """Read only exact marker matches; the exit path settles them first."""
     from capture import retained_bytes
-    from query import FOOTER_WARNINGS, query, render_summary
+    from query import query, render_summary
     try:
         with read_only(path) as db:
             retained = retained_bytes(db)
@@ -190,21 +190,14 @@ def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settl
             if not sessions:
                 print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
                 return
-            print("\nKiro usage summary (full root-lineage totals observed in this invocation; includes resumed work and forks):", file=sys.stderr)
-            # The exit path's wait outcome counts even if a call finished after it timed out.
-            if not settled or any(state == "recording" for _, _, state in rows):
-                print("Warning: capture writer still has unfinished calls; totals may be incomplete.", file=sys.stderr)
-            if any(not name for name in identities):
-                print("Warning: some invocation calls have no conversation identity and are excluded.", file=sys.stderr)
+            # The exit path's wait outcome counts even if a call finished after it timed out. These describe the
+            # invocation, not one session, so only the last block carries them.
+            caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, _, state in rows) else []),
+                       *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
             for session in sessions:
                 report = query(db, session, "tree")
                 report["disk"]["refreshed"] = disk_refreshed
-                print(f"Session: {session}  Scope: tree", file=sys.stderr)
-                print(render_summary(report), file=sys.stderr)
-                for warning in report["warnings"]:
-                    if warning in FOOTER_WARNINGS:
-                        continue
-                    print("Warning: " + warning, file=sys.stderr)
+                print("\n" + render_summary(report, caveats if session == sessions[-1] else ()), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:
         print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
 

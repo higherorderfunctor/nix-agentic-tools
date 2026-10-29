@@ -12,9 +12,11 @@ def value(item):
     return str(item).encode("unicode_escape").decode("ascii")
 
 
-def table(headers, rows):
+def table(headers, rows, right=()):
+    """Left-aligned columns; indexes in right are right-aligned (the exit summary's numbers)."""
     rows = [[value(cell) for cell in row] for row in rows]
     widths = [max([len(header), *(len(row[index]) for row in rows)])
               for index, header in enumerate(headers)]
-    return "\n".join("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip()
+    return "\n".join("  ".join(cell.rjust(width) if index in right else cell.ljust(width)
+                               for index, (cell, width) in enumerate(zip(row, widths))).rstrip()
                      for row in [headers, *rows])

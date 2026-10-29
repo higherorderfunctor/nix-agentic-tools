@@ -202,7 +202,10 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(pools["other_linked_conversations"]["metrics"]["credits"]["observed_sum"], 2)
         self.assertEqual(pools["unknown"]["metrics"]["credits"]["observed_sum"], 3)
         self.assertEqual(report["captures"]["metrics"]["credits"]["observed_sum"], 5)
-        self.assertRegex(query.render_summary(report), r"Root conversation\s+2.*0.000000 \(1/2\)")
+        self.assertRegex(query.render(report), r"Root conversation\s+2.*0.000000 \(1/2\)")
+        summary = query.render_summary(report)
+        self.assertIn("Main conversation  2 req · 0.00 cr    Subagents/workflows  1 req · 2.00 cr    Unknown  1 req · 3.00 cr", summary)
+        self.assertTrue(summary.endswith("\n⚠ credits unknown for 1/4 requests"))
         self.assertIn("does not identify main versus delegate roles", report["attribution"]["pool_rule"])
 
     def test_tree_membership_paths_overlap_without_counting_capture_twice(self):
@@ -218,7 +221,8 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(report["captures"]["duplicate_upstream_request_ids"],
                          [{"request_id": "request-sess_child", "captures": 2}])
         self.assertTrue(any("ambiguous" in warning for warning in report["warnings"]))
-        self.assertNotIn("200.000000", query.render_summary(report))
+        self.assertNotIn("200.00", query.render_summary(report))
+        self.assertTrue(query.render_summary(report).endswith("\n⚠ 1 duplicate request ID"))
         self.captured("request-only", request="request-sess_root", credits=4)
         self.captured("no-identity", credits=99)
         report = query.query(self.db, "sess_root", "tree")
@@ -236,17 +240,25 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(report["captures"]["observations"], 1001)
         self.assertEqual(report["captures"]["pools"]["other_linked_conversations"]["metrics"]["credits"],
                          {"observed_sum": 500, "known": 1000, "unknown": 0})
-        output = query.render_summary(report)
-        self.assertLess(len(output.splitlines()), 16)
+        output = query.render(report)
         self.assertRegex(output, r"Total\s+1,001\s+—\s+10,000 \(1000/1001\)\s+—\s+—\s+—\s+500.000000 \(1000/1001\)")
         self.assertRegex(output, r"Root conversation\s+1\s+—\s+—\s+—\s+—\s+—\s+—")
-        self.assertIn("credits known 1000/1001; incomplete 1", output)
-        self.assertNotIn("child999", output)
-        self.assertNotIn("~500", output)
+        output = query.render_summary(report)
+        self.assertEqual(output, "\n".join([
+            "Kiro usage · sess_root · tree · 1,001 requests · 500.00 credits", "",
+            "Model            Requests  Credits  Tokens  Cache hit",
+            "requested-model     1,001   500.00       —          —", "",
+            "Main conversation  1 req · — cr    Subagents/workflows  1,000 req · 500.00 cr",
+            "⚠ credits unknown for 1/1,001 requests; 1 incomplete"]))
         self.db.execute("DELETE FROM captures")
         self.captured("zero", conversation="root", credits=0, tokens=0)
-        self.assertRegex(query.render_summary(query.query(self.db, "sess_root", "tree")),
-                         r"Total\s+1\s+—\s+0\s+—\s+—\s+—\s+0.000000")
+        output = query.render(query.query(self.db, "sess_root", "tree"))
+        self.assertRegex(output, r"Total\s+1\s+—\s+0\s+—\s+—\s+—\s+0.000000")
+        output = query.render_summary(query.query(self.db, "sess_root", "tree"))
+        self.assertIn("· 1 request · 0.00 credits", output)
+        self.assertRegex(output, r"requested-model\s+1\s+0.00\s+—\s+—\n")
+        self.assertNotIn("⚠", output)
+        self.assertNotIn("Unknown", output)
 
     def test_model_hit_rate_is_request_based_with_coverage_and_total_pairs(self):
         self.captured("hit", conversation="root", tokens=100)
@@ -258,22 +270,44 @@ class QueryTests(unittest.TestCase):
         model = report["captures"]["models"][0]
         self.assertEqual(model["cache_hit_rate"], {"hits": 1, "evaluable": 2, "unknown": 1, "percentage": 50})
         self.assertEqual(model["metrics"]["total_tokens"], {"observed_sum": 1010, "known": 2, "unknown": 1})
-        output = query.render_summary(report)
+        output = query.render(report)
         self.assertIn("~50.0% (2/3)", output)
-        self.assertIn(query.capture_tables(report["captures"]), query.render(report))
         self.assertIn(query.capture_tables(report["captures"]), output)
         self.assertIn("1,010 (2/3)", output)
         self.assertNotIn("~5.0%", output)
         self.assertIn("Other linked holds workflow steps and subagents and may include helpers/forks", output)
+        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+~50%\n")
 
-    def test_compact_summary_only_labels_explicit_estimates(self):
+    def test_report_labels_only_explicit_estimates_and_missing_capture(self):
         report = query.query(self.db, "sess_root", "tree")
         report["captures"]["estimates"] = {"input_tokens": query.metric(1234, 1, 1)}
-        output = query.render_summary(report)
+        output = query.render(report)
         self.assertRegex(output, r"Total\s+0\s+—\s+~1,234\s+—\s+—\s+—\s+—")
         with sqlite3.connect(":memory:") as empty:
-            missing = query.render_summary(query.query(empty, "sess_root", "tree"))
-        self.assertRegex(missing, r"Total\s+—\s+—\s+—\s+—\s+—\s+—\s+—")
+            missing = query.query(empty, "sess_root", "tree")
+        self.assertRegex(query.render(missing), r"Total\s+—\s+—\s+—\s+—\s+—\s+—\s+—")
+        self.assertEqual(query.render_summary(missing), "Kiro usage · sess_root · tree · 0 requests · — credits\n⚠ capture unavailable")
+
+    def test_summary_rounding_rounds_credits_and_tokens(self):
+        self.assertEqual([query.credits_text(total) for total in (None, 0, .004, .005, 2.834, 1234.5)],
+                         [None, "0.00", "<0.01", "0.01", "2.83", "1,234.50"])
+        self.assertEqual([query.tokens_text(total) for total in (0, 950, 999.6, 12_345, 99_960, 318_000, 999_600, 1_234_567, 5e12)],
+                         ["0", "950", "1.0K", "12.3K", "100K", "318K", "1.0M", "1.2M", "5000B"])
+
+    def test_summary_headline_sort_and_pool_line(self):
+        root = "sess_90da0f80-0000-4000-8000-000000000000"
+        for ident, model, credits in (("a", "cheap", .01), ("b", "costly", 2), ("c", "unpriced", None), ("d", "also-cheap", .01)):
+            self.captured(ident, conversation=root, credits=credits, metadata={"model": model})
+        self.captured("e", conversation="child", credits=.5, metadata={"model": "costly", "kiro:root_conversation_id": root})
+        output = query.render_summary(query.query(self.db, root, "tree"))
+        lines = output.splitlines()
+        self.assertEqual(lines[0], "Kiro usage · sess_90da0f80 · tree · 5 requests · 2.52 credits")
+        self.assertEqual([line.split()[0] for line in lines[3:7]], ["costly", "also-cheap", "cheap", "unpriced"])
+        self.assertEqual(lines[8], "Main conversation  4 req · 2.02 cr    Subagents/workflows  1 req · 0.50 cr")
+        self.assertEqual(lines[9], "⚠ credits unknown for 1/5 requests")
+        self.db.execute("UPDATE captures SET credits=1 WHERE id='c'")
+        self.assertNotIn("⚠", query.render_summary(query.query(self.db, root, "tree")))
+        self.assertTrue(query.render_summary(query.query(self.db, root, "tree"), ["x", "y"]).endswith("\n⚠ x; y"))
 
     def estimable(self, ident, credits, chars=0, model="claude-opus-5.5", conversation="root", context=3.0):
         self.captured(ident, conversation=conversation, credits=credits, tokens=None, metadata={"model": model})
@@ -298,7 +332,8 @@ class QueryTests(unittest.TestCase):
         models = {model["requested_model"]: model for model in report["captures"]["models"]}
         self.assertEqual(models["other-model"]["estimates"], {})
         self.assertEqual(report["captures"]["metrics"]["input_tokens"], query.metric(100, 1, 4))
-        output = query.render_summary(report)
+        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~33%\n")
+        output = query.render(report)
         self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~33.3% \(3/4\)")
         self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
         self.assertRegex(output, r"other-model\s+1\s+—\s+—\s+—\s+—\s+—")
@@ -424,6 +459,9 @@ class QueryTests(unittest.TestCase):
         self.assertEqual((report["captures"]["multiple_metering_events"], report["captures"]["incomplete"]), (1, 0))
         self.assertEqual(report["captures"]["metrics"]["credits"]["observed_sum"], 2)
         self.assertIn("1 selected call(s) carried more than one meteringEvent", " ".join(report["warnings"]))
+        self.assertRegex(query.render_summary(report), r"\n⚠ (.*; )?1 multi-metered call$")
+        report["captures"]["multiple_metering_events"] = 2
+        self.assertRegex(query.render_summary(report), r"\n⚠ (.*; )?2 multi-metered calls$")
         self.db.execute("UPDATE captures SET summary_json=NULL WHERE id='twice'")
         self.assertFalse(any("meteringEvent" in warning for warning in query.query(self.db, "sess_root")["warnings"]))
 
