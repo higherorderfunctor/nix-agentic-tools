@@ -1,6 +1,6 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-29 — pnpm_12 bootstrap has no hash fixers.
+> **Last verified:** 2026-10-28 — pnpm_12 bootstrap has no hash fixers.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -672,22 +672,24 @@ to any versioned attribute family:
   and policies from `.config/pnpm/*.yaml`, which requires pnpm >= 12.15.0;
   nixpkgs' pnpm_12 is older. The private bootstrap is reachable through the main
   `pnpmDeps.nativeBuildInputs`; its dependency FOD has a distinct name from the
-  main release's FOD. Bootstrap builds construct no hash fixers, update script
-  or registry entry. The bootstrap is bumped deliberately. Both stages check
-  their installed version against their own sidecar. Both installs disable the
-  global virtual store: otherwise upstream's `virtualStoreType: global` puts
-  package files under the dependency fetcher's store, and nixpkgs' JSON
-  normalization tries to parse non-JSON fixtures. The configure hook installs
-  dependencies offline with lifecycle scripts disabled; the explicit bundle step
-  performs the required preparation afterward. Both installs pass `--no-runtime`
-  so upstream's platform-specific Node runtime entries stay in the frozen
-  lockfile but are not downloaded or linked; the bundler uses Nix's build Node.
-  Without it, a dependency store fetched on Linux contains only Linux's managed
-  Node and offline Darwin configuration tries to download its own runtime.
+  main release's FOD. The bootstrap exposes no hash fixers, update script or
+  registry entry. The bootstrap is bumped deliberately. Both stages check their
+  installed version against their own sidecar. Both installs disable the global
+  virtual store: otherwise upstream's `virtualStoreType: global` puts package
+  files under the dependency fetcher's store, and nixpkgs' JSON normalization
+  tries to parse non-JSON fixtures. The configure hook installs dependencies
+  offline with lifecycle scripts disabled; the explicit bundle step performs the
+  required preparation afterward. Both installs pass `--no-runtime` so
+  upstream's platform-specific Node runtime entries stay in the frozen lockfile
+  but are not downloaded or linked; the bundler uses Nix's build Node. Without
+  it, a dependency store fetched on Linux contains only Linux's managed Node and
+  offline Darwin configuration tries to download its own runtime.
 - pnpm_12 keeps version/source/cargo/pnpm pins and `rustToolchainChannel` in its
-  sidecar, with `mkUpdateScript`'s cheap no-op exit. The main sidecar
-  `sources-12.json` omits `pnpmDepsHash`, so `lib.fakeHash` forces its
-  dependency fetch to report the replacement hash. Its `rustUpdateExtract`
+  sidecar, with `mkUpdateScript`'s cheap no-op exit. The main `pnpmDeps` keeps
+  its name and pinned hash, so at the current pin its output path equals the one
+  fetched by pnpm_11 and is substituted. Rust pnpm first fetches the main
+  dependencies when the Update sweep moves the version, giving the FOD a new
+  name; the hash fixer then derives `pnpmDepsHash`. Its `rustUpdateExtract`
   restores the source hash, records the source's channel through
   `fixRustToolchain`, then restores Cargo and pnpm hashes after a bump or input
   update. npm's `latest-12` dist-tag picks the release and the source fixer
@@ -817,11 +819,10 @@ commit its `sidecars`. git-branchless's target is its own `passthru.extracted`.
 
 The hash fixers (the vendor and src fixers `mkGoUpdateExtract` builds
 internally, and `mkNpmDepsFix`) are one body — `vu.mkHashFix` — parameterized by
-an ordered list of `hashFixTargets` entries, each an `(attrPath, key)` pair.
-`fodHashFixFn` evaluates the target's exact `.drvPath` and reads `got:` only
-from that derivation's fixed-output mismatch block; a failed bootstrap
-dependency cannot supply the main target's hash. Add a target to that attrset
-rather than open-coding a fourth `writeShellScript`.
+an ordered list of `hashFixTargets` entries, each a
+`(attrPath, drvPattern, key)` triple. Add a target to that attrset rather than
+open-coding a fourth `writeShellScript`; the derivation-name patterns are
+load-bearing (see `fodHashFixFn`) and a copy is how they drift.
 
 `glab` also does NOT use the `gh` shape for its version check: it is hosted on
 gitlab.com, which has no `releases/latest` redirect to read a tag out of, so
@@ -914,10 +915,10 @@ The platform owns its `passthru`: `rustToolchainChannel`, `fixRustToolchain`, an
 optional `rustToolchainOverride` and `rustToolchainRoot`, and, for sidecars,
 `rustUpdateExtract`. Recipes merge that passthru rather than restating its
 metadata or constructing a second writer. Sidecar update scripts pass
-`extraExtract = "${rustPlatform.passthru.rustUpdateExtract}"`; the platform's
-`targets` parameter defaults to the Cargo vendor target. The pnpm_12 stages
-select Rust through `mkRustToolchain` and `makeRustPlatform`; only the main
-release constructs `mkRustReleaseUpdate` with Cargo and pnpm hash targets.
+`extraExtract = "${rustPlatform.passthru.rustUpdateExtract}"`; extra hash
+repairs such as pnpm_12's pnpm dependencies use the platform's `targets`
+parameter, whose default is the Cargo vendor target. The pnpm_12 bootstrap
+passes no fixer targets and does not merge the platform's passthru.
 
 Rust updaters extract `channel` from `rust-toolchain.toml` or `rust-toolchain`
 at the recipe's crate/workspace root, using `codex-rs` for `chatgpt-codex`.

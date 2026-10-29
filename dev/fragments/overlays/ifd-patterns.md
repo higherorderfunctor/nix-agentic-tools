@@ -576,9 +576,7 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   window that moved the `@napi-rs/cli` catalog pin. Patch compatibility says
   nothing about the pnpm major; validate that independently.
 
-  **Do not chase it reflexively.** On 2026-09-08 pnpm 12 could not drive
-  `fetchPnpmDeps` at the then-current nixpkgs pin, due to a nixpkgs defect
-  rather than anything about pnpm 12. At the 2026-09-08 pin,
+  **The registry guard matters for Rust pnpm.** At the measured 2026-09-08 pin,
   `fetch-pnpm-deps/default.nix:149` interpolated
   `--registry="$NIX_NPM_REGISTRY"` unconditionally; that variable had no default
   anywhere in nixpkgs and appeared only twice, both in that file. In that
@@ -598,13 +596,13 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   to fix a misconfigured registry buys nothing and costs a real check.
 
   The pinned fetcher guards `--registry` with a non-empty `NIX_NPM_REGISTRY`
-  check, so Rust pnpm 12 can use its normal registry default. Oxlint uses
-  `pnpm_11` while upstream declares 12; any swap must move BOTH pnpm sites
-  together and validate that consumer, or the parity check fails on the
-  store-path mismatch. pnpm_12's staged bootstrap uses `fetcherVersion = 4`: the
-  pinned nixpkgs supports 3, 4 and 5, and rejects only 3 for pnpm >= 11. Version
-  4 dumps the v11 SQLite store to SQL, which `pnpmConfigHook` reconstructs
-  before installing.
+  check, so Rust pnpm 12 can use its normal registry default. Do not move oxlint
+  from `pnpm_11` just because upstream's `packageManager` moved to 12; any swap
+  must move BOTH pnpm sites together and validate that consumer, or the parity
+  check fails on the store-path mismatch. pnpm_12's staged bootstrap uses
+  `fetcherVersion = 4`: the pinned nixpkgs supports 3, 4 and 5, and rejects only
+  3 for pnpm >= 11. Version 4 dumps the v11 SQLite store to SQL, which
+  `pnpmConfigHook` reconstructs before installing.
 
 - **A multi-document `pnpm-lock.yaml` is fine for the awk.** pnpm 12 writes a
   leading `---` document carrying its own self-management deps

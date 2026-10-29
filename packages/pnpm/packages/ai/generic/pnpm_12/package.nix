@@ -23,19 +23,6 @@
     "--no-runtime"
   ];
   pnpmWorkspaces = ["@pnpm/esm-loader"];
-  # pnpm 12 provisions its own Rust toolchain from `cargo`; Nix supplies Rust.
-  prePnpmInstall = ''
-    (
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    sed -i '/^cargo:$/,+1d' pnpm-workspace.yaml
-    if grep -Eq '^cargo[[:space:]]*:' pnpm-workspace.yaml; then
-      echo "pnpm_12: unexpected top-level cargo setting remains in pnpm-workspace.yaml" >&2
-      exit 1
-    fi
-    )
-  '';
-
   mkPnpm = {
     bootstrap ? false,
     pnpm,
@@ -49,13 +36,38 @@
     sourcesFile = repoPath sidecar;
     srcHash = sources.srcHash or lib.fakeHash;
     sidecarMajor = lib.versions.major sources.version;
-    rust = packageLib.mkRustToolchain {
-      inherit pkgs pname;
-      channel = sources.rustToolchainChannel or null;
-    };
-    rustPlatform = pkgs.makeRustPlatform {
-      cargo = rust;
-      rustc = rust;
+    # pnpm 12 provisions its own Rust toolchain from `cargo`; Nix supplies Rust.
+    prePnpmInstall = ''
+      (
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      if ! awk '
+        /^cargo:$/ {
+          if (seen++ || getline != 1 || $0 != "  enabled: true") exit 1
+          cargo = 1
+          next
+        }
+        cargo && /^[[:space:]]*(#|$)/ { next }
+        cargo && /^[[:space:]]/ { exit 1 }
+        { cargo = 0 }
+        END { if (seen != 1) exit 1 }
+      ' pnpm-workspace.yaml; then
+        echo "${pname}: expected exactly cargo: followed by two-space enabled: true, with no other children in pnpm-workspace.yaml" >&2
+        exit 1
+      fi
+      sed -i '/^cargo:$/,+1d' pnpm-workspace.yaml
+      if grep -Eq '^cargo[[:space:]]*:' pnpm-workspace.yaml; then
+        echo "${pname}: unexpected top-level cargo setting remains in pnpm-workspace.yaml" >&2
+        exit 1
+      fi
+      )
+    '';
+    rustPlatform = packageLib.mkRustPlatform {
+      inherit pkgs pname sources sourcesFile;
+      targets =
+        if bootstrap
+        then []
+        else with packageLib.hashFixTargets; [cargoVendor pnpmDeps];
     };
     package = pkgs.pnpm_12.override {
       inherit (sources) version;
@@ -113,7 +125,7 @@
             shopt -s inherit_errexit 2>/dev/null || :
             got=$("$out/bin/pnpm" --version)
             if [ "$got" != "${finalAttrs.version}" ]; then
-              echo "pnpm_12: binary reports $got, sidecar pins ${finalAttrs.version}" >&2
+              echo "${pname}: binary reports $got, sidecar pins ${finalAttrs.version}" >&2
               false
             fi
             "$out/bin/pnpx" --help >/dev/null
@@ -121,20 +133,12 @@
           '';
         passthru =
           (builtins.removeAttrs (prev.passthru or {}) ["updateScript"])
-          // lib.optionalAttrs (!bootstrap) (let
-            update = packageLib.mkRustReleaseUpdate {
-              inherit pkgs pname sourcesFile;
-              attr = pname;
-              targets = with packageLib.hashFixTargets; [cargoVendor pnpmDeps];
-            };
-          in
-            update
+          // lib.optionalAttrs (!bootstrap) (rustPlatform.passthru
             // {
-              rustToolchainChannel = sources.rustToolchainChannel or null;
               updateScript = packageLib.mkUpdateScript {
                 inherit pkgs pname sourcesFile;
                 platforms = {};
-                extraExtract = update.rustUpdateExtract;
+                extraExtract = rustPlatform.passthru.rustUpdateExtract;
                 # npm's per-major dist-tag picks the release; the source fixer then
                 # fetches the matching GitHub tag and fails loudly if it is missing.
                 versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-12\"] // empty'";
@@ -146,6 +150,8 @@
   # Fetch and configure both need pnpm >= 12.15.0 to read those includes;
   # nixpkgs' pnpm_12 is older. Build a frozen Rust stage with JavaScript pnpm 11,
   # then use that stage for both fetchPnpmDeps and pnpmConfigHook.
+  # On a cache miss, bootstrap pnpmDeps hash drift (e.g. a pnpm_11 or nixpkgs
+  # fetcher change) can feed the main fixer; the next build fails on the main mismatch.
   bootstrapPnpm = mkPnpm {
     bootstrap = true;
     pnpm = pkgs.ai.generic.pnpm_11;

@@ -108,15 +108,17 @@ rec {
 
   # Shared body for sidecar hash fixers, including owner-declared pnpm
   # repairs. Emits a bash function
-  # `fix_fod_hash <attrPath> <sidecarKey>` that builds
+  # `fix_fod_hash <attrPath> <drvPattern> <sidecarKey>` that builds
   # `<attr>.<attrPath>` through the FLAKE'S OWN `packages` output — so the
   # derivation under test is the one consumers get, overlay stack and all
   # — and, on a fixed-output hash mismatch, writes the scraped `got:` hash
   # back to `sourcesFile` under `sidecarKey`.
   #
-  # A failing dependency also prints `got:`. Match the evaluated target's
-  # exact drvPath and read only its mismatch block, so a bootstrap's hash
-  # cannot be recorded as the final package's dependency hash.
+  # `drvPattern` is not decoration. A failing `src` — or any other
+  # fixed-output derivation on the path — also prints `got:`, and writing
+  # THAT into a vendor/deps key produces a plausible-looking WRONG hash
+  # that nothing downstream would flag. So a mismatch is only trusted when
+  # the message names a derivation matching the pattern.
   #
   # It is a shell FUNCTION rather than an inlined body because the npm
   # shape needs it TWICE in one script: `npmDeps` is downstream of `src`,
@@ -156,25 +158,33 @@ rec {
     sourcesFile,
   }: ''
     fix_fod_hash() {
-      local attrPath="$1" key="$2"
-      local drvPath expr output hash tmp
+      local attrPath="$1" drvPattern="$2" key="$3"
+      local expr output hash tmp
 
       # The expression carries no brace substitution sequence, so bash never
       # tries to expand any part of it.
       expr="(builtins.getFlake (toString ./.)).${ciAttr {inherit attr pkgs;}}.$attrPath"
-      drvPath=$(${pkgs.nix}/bin/nix eval --impure --raw --expr "$expr.drvPath")
 
       if output=$(${pkgs.nix}/bin/nix build --impure --no-link --expr "$expr" 2>&1); then
         echo "${pname}: $key ok"
         return 0
       fi
 
-      # Feed the transcript through a here-string: grep's early exit on a
-      # pipeline from echo can cause EPIPE under the enclosing pipefail.
-      # Nix prints specified/got on the two lines after the mismatch header.
-      hash=$(${pkgs.gnugrep}/bin/grep -F -A2 "fixed-output derivation '$drvPath':" <<<"$output" | ${pkgs.gnugrep}/bin/grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | ${pkgs.coreutils}/bin/head -n1 || :)
+      hash=""
+      # Here-string, not `echo "$output" | grep -q`. This runs under the
+      # enclosing writeShellScript's `set -euETo pipefail`, `$output` is a
+      # whole failed `nix build` transcript (tens of KB), and bash's echo
+      # builtin writes it a line at a time — so `grep -q` exiting at its first
+      # match sends the remaining writes to EPIPE and poisons the pipeline's
+      # status even though the match SUCCEEDED. That flips this `if` false,
+      # leaves `hash` empty, and reports a real hash mismatch as the unrelated
+      # "build failed without a hash mismatch" error below. Measured at 3/200
+      # on a 34 KB transcript.
+      if ${pkgs.gnugrep}/bin/grep -q "fixed-output derivation '[^']*$drvPattern" <<<"$output"; then
+        hash=$(echo "$output" | ${pkgs.gnugrep}/bin/grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | ${pkgs.coreutils}/bin/head -n1 || :)
+      fi
       if [ -z "$hash" ]; then
-        echo "${pname}: $attrPath build failed without a '$drvPath' hash mismatch:" >&2
+        echo "${pname}: $attrPath build failed without a '$drvPattern' hash mismatch:" >&2
         echo "$output" >&2
         exit 1
       fi
@@ -452,27 +462,36 @@ rec {
     rustUpdateExtract = update.extract;
   };
 
-  # Attribute paths and sidecar keys shared by Go, npm, source and
-  # owner-declared pnpm repairs. fodHashFixFn evaluates each target's drvPath.
+  # The (attrPath, drvPattern, key) triples that the sidecar hash fixers
+  # below compose. Declared once and named, so the derivation-name
+  # patterns — which are load-bearing rather than decorative; see
+  # `fodHashFixFn` — cannot drift between the three consumers that replay
+  # them: `mkGoUpdateExtract`, `mkNpmDepsFix`, and an
+  # owner-declared `mkHashFix` such as kimchi's pnpm repair.
   hashFixTargets = {
     cargoVendor = {
       attrPath = "cargoDeps";
+      drvPattern = "-vendor";
       key = "cargoHash";
     };
     goVendor = {
       attrPath = "goModules";
+      drvPattern = "-go-modules";
       key = "vendorHash";
     };
     npmDeps = {
       attrPath = "npmDeps";
+      drvPattern = "-npm-deps";
       key = "npmDepsHash";
     };
     pnpmDeps = {
       attrPath = "pnpmDeps";
+      drvPattern = "-pnpm-deps";
       key = "pnpmDepsHash";
     };
     src = {
       attrPath = "src";
+      drvPattern = "-source";
       key = "srcHash";
     };
   };
@@ -557,7 +576,7 @@ rec {
   # per target, in the order given.
   #
   # Shared by the Go, npm, source and owner-declared pnpm repairs. Callers
-  # select the named (attrPath, key) targets; this helper owns
+  # select the named (attrPath, drvPattern, key) targets; this helper owns
   # strict mode and invokes the common mismatch parser for each target.
   #
   # ORDER IS SIGNIFICANT and is the caller's responsibility: a derived
@@ -578,7 +597,7 @@ rec {
 
       ${fodHashFixFn {inherit attr pkgs pname sourcesFile;}}
 
-      ${builtins.concatStringsSep "\n" (map (t: ''fix_fod_hash "${t.attrPath}" "${t.key}"'') targets)}
+      ${builtins.concatStringsSep "\n" (map (t: ''fix_fod_hash "${t.attrPath}" "${t.drvPattern}" "${t.key}"'') targets)}
     '';
 
   # Hash fixer for buildNpmPackage packages pinned via a sidecar. Same
