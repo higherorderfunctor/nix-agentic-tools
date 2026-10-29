@@ -46,11 +46,14 @@ impl Interceptor {
             .with_root_certificates(load_roots(config.upstream_roots.as_deref())?)
             .with_no_client_auth();
         upstream.alpn_protocols = alpn_protocols();
-        let authority = Authority::open(
-            &config.ca_directory,
-            destinations.iter().map(|(host, _)| host),
-        )
-        .map_err(io::Error::other)?;
+        let ca_directory = config.ca_directory.as_deref().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "interception requires ca_directory or --ca-directory",
+            )
+        })?;
+        let authority = Authority::open(ca_directory, destinations.iter().map(|(host, _)| host))
+            .map_err(io::Error::other)?;
         Ok(Self {
             authority,
             destinations,

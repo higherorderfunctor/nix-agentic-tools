@@ -10,24 +10,53 @@ backend: {
   ...
 }: let
   instances = import ../../ai-module/lib/instances.nix {inherit lib;};
+  withoutNulls = lib.filterAttrs (_: value: value != null);
 in {
   imports = [
     (instances.module {
-      arguments = _: ''serve --config "$AIRLOCK_CONFIG"'';
+      # An intercepting instance keeps its CA beside the rendered config, in
+      # the private runtime directory, so it lives as long as that directory.
+      arguments = instance:
+        ''serve --config "$AIRLOCK_CONFIG"''
+        + lib.optionalString (instance.settings.interception != null) " --ca-directory \"\${AIRLOCK_CONFIG%/*}/ca\"";
       inherit backend;
       defaultPort = 8318;
       derived = {instance, ...}: {listen = "127.0.0.1:${toString instance.port}";};
       owner = "airlock";
       packagePath = "airlock";
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "airlock";
+      # Keep plain instances' config hashes stable: adding null fields would
+      # change their service launchers and restart them on upgrade.
       render = settings: {
-        content = builtins.toJSON {inherit (settings) listen;};
+        content = builtins.toJSON (withoutNulls {
+          inherit (settings) listen;
+          interception = lib.mapNullable withoutNulls settings.interception;
+        });
         secrets = {};
       };
       settingsType = lib.types.submodule {
-        options.listen = lib.mkOption {
-          type = lib.types.str;
-          description = "The strict JSON listen address. The instance fixes it to `127.0.0.1:<port>`.";
+        options = {
+          interception = lib.mkOption {
+            type = lib.types.nullOr (lib.types.submodule {
+              options = {
+                destinations = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  description = "Exact `DNS-name:port` destinations to intercept. Airlock refuses invalid or duplicate entries before listening.";
+                };
+                upstream_roots = lib.mkOption {
+                  type = lib.types.nullOr lib.types.pathInStore;
+                  default = null;
+                  description = "A PEM certificate file under /nix/store for private origins or a corporate TLS-inspecting proxy. Mutable paths outside /nix/store are refused so a same-user client cannot rewrite upstream trust. Adding it widens trust beyond the system roots.";
+                };
+              };
+            });
+            default = null;
+            description = "Selective TLS interception. The CA lives in the service's private runtime directory and is created or validated before listening.";
+          };
+          listen = lib.mkOption {
+            type = lib.types.str;
+            description = "The strict JSON listen address. The instance fixes it to `127.0.0.1:<port>`.";
+          };
         };
       };
       tool = "Airlock";
