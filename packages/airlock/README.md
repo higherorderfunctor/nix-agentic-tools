@@ -67,7 +67,9 @@ a separate 10-second bound.
 
 `--config FILE` instead of `--listen` reads a strict JSON object such as
 `{"listen":"127.0.0.1:9000"}`. It requires `listen` and rejects unknown or
-duplicate fields, non-loopback addresses, and additional arguments.
+duplicate fields, non-loopback addresses, and other arguments except
+`--ca-directory DIRECTORY`, which replaces the configured interception
+`ca_directory` and requires an `interception` object.
 
 ## Nix instances
 
@@ -102,6 +104,22 @@ $ systemctl --user stop airlock-main.service
 
 On devenv, use `devenv processes up` and `devenv processes down`. Restart Claude
 and other selected runtimes after changing the selection.
+
+An instance can also intercept selected destinations:
+
+```nix
+ai.airlock.instances.main.settings.interception = {
+  destinations = ["api.anthropic.com:443"];
+  upstream_roots = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"; # optional
+};
+```
+
+The service passes `--ca-directory` so the CA lives in `ca/` beside the rendered
+config, in the service's private runtime directory
+(`$XDG_RUNTIME_DIR/ai-service-airlock-<name>`). Airlock creates or validates it
+before listening, a restart reuses it, and a new runtime directory, for example
+after logout, gets a new CA. Nothing installs trust: a client must trust that
+`ca.pem` itself.
 
 ## Selective TLS interception
 
@@ -201,7 +219,8 @@ deadlines, owned tunnel shutdown, local CA validation and CLI signals.
 points.
 
 `checks.airlock-instances` covers module wiring, port and name claims, proxy
-registration, selection defaults and overrides, and Claude settings delivery.
-`checks.airlock-instance-runtime` starts each backend's generated service
-launcher and requests `/health` at a configured nondefault port. Rust protocol
+registration, interception settings, selection defaults and overrides, and
+Claude settings delivery. `checks.airlock-instance-runtime` starts each
+backend's generated service launcher, requests `/health` at a configured
+nondefault port and checks the runtime CA's reuse across restarts. Rust protocol
 tests run through the Nix package's `doCheck`.
