@@ -1,0 +1,7 @@
+{
+  "cargoHash": "sha256-tvxkHVpr364Tst6mIOlBpOMZSuH+E4wqYv27p6OShGI=",
+  "pnpmDepsHash": "sha256-czRBBG1H0JGZtmcy4Bpt4ErPYvbNy+yanCr1moyW4tY=",
+  "rustToolchainChannel": "1.97.0",
+  "srcHash": "sha256-G2WL5n96GUWcST9qNZH4pnceAUugUAUuwmYGmqgGYDs=",
+  "version": "12.15.0"
+}
