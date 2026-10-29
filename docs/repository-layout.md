@@ -102,14 +102,10 @@ outputs; all of them hand out the same builds of this flake's own nixpkgs.
 roots (unfree ones need the consumer's opt-in), and `ciPackages` is the
 unfree-enabled set CI builds. The `kiro-cli-rollout-canary` checks every
 measured patchable rollout entry that needs a patch. It is exposed only through
-`ciPackages` and is excluded from the two cache-writing native shards per
-system. The required `kiro-patched` legs validate it on native runners when the
-Ubuntu `kiro-scope` job outputs `needed=true`; irrelevant PRs report those same
-context names on Ubuntu. Public check coverage is verified against Hestia's
-original group rows before uncached installables are balanced into at most four
-bundles, keeping each OS separate. The flat outputs derive from native package
-basenames, with no compatibility aliases for earlier prefixed names. Consumer
-repository updates are separate from this repository redesign.
+`ciPackages` and is excluded from cache-writing native shards. The flat outputs
+derive from native package basenames, with no compatibility aliases for earlier
+prefixed names. Consumer repository updates are separate from this repository
+redesign.
 
 For contribution contracts and the pitfalls that tests enforce, read
 [Package ownership and native composition](../dev/fragments/facets/package-ownership.md).

@@ -132,8 +132,8 @@ LRU eviction. This cache carries no Cachix publishing token.
 
 The `checks-eval` job registers every evaluated `.drv` closure in the same cache
 and verifies the original Hestia rows before bundling them into at most four
-workers balanced by installable count, with each OS kept separate. Its workers
-pass the eval job's `manifest-version` through the helper's
+workers balanced by installable count. Plans with multiple OS labels fail. Its
+workers pass the eval job's `manifest-version` through the helper's
 `wait-manifest-version` input and run `hestia prefetch` before building: with
 `filter-drv-closures`, the public references are omitted from the closure and
 prefetch prepares them. Prefetch accepts the concatenated `<drvPath>^*`

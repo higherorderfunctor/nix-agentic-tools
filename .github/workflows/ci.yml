@@ -50,7 +50,6 @@ jobs:
     name: packages (${{ matrix.system }}, shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
-      max-parallel: 4
       matrix:
         shard: [0, 1]
         system: [x86_64-linux, aarch64-darwin]
@@ -450,15 +449,15 @@ jobs:
   # artifact stays local. Renaming it changes the status-check CONTEXT, so the
   # branch ruleset's required-checks list has to move with it.
   #
-  # ALWAYS-REPORTING, deliberately: the JOB always runs and the expensive steps
+  # Unless cancelled, the job reports even when scope fails; expensive steps
   # are gated on `needs.kiro-scope.outputs.needed`. Irrelevant legs report on
-  # Ubuntu, preserving their matrix names without holding a macOS runner. A required
-  # check that is genuinely SKIPPED never reports a conclusion, and GitHub
-  # blocks the PR forever waiting for it — so "make it required" and "skip it
-  # when irrelevant" can only coexist in this shape.
+  # Ubuntu, preserving their matrix names without holding a macOS runner.
+  # A required check that is genuinely SKIPPED never reports a conclusion,
+  # and GitHub blocks the PR forever waiting for it — so "make it required"
+  # and "skip it when irrelevant" can only coexist in this shape.
   kiro-patched:
     needs: kiro-scope
-    if: always()
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
@@ -479,7 +478,8 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           test "$RESULT" = success
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: needs.kiro-scope.outputs.needed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Use the same multi-user installer as package shards. The old
       # single-user nix-quick-install setup deadlocked when clients of
@@ -813,8 +813,8 @@ jobs:
   # The check gate. `checks-matrix` is a required context; `test` above only
   # evaluates. These three jobs evaluate the Linux checks ONCE with Hestia's
   # matrix subaction, then bundle uncached ownership groups into at most four
-  # workers balanced by installable count, keeping each OS separate. Workers
-  # build by drv path without flake evaluation.
+  # workers balanced by installable count. Workers build by drv path without
+  # flake evaluation.
   #
   # The evaluator is nix-eval-jobs with its worker garbage collector
   # re-enabled (dev/ci-check-evaluator.nix). Stock nix-eval-jobs sets
@@ -935,27 +935,17 @@ jobs:
           root = os.environ["RUNNER_TEMP"]
           with open(os.path.join(root, "matrix.json")) as plan:
               rows = json.load(plan)["include"]
-          groups = {runner: [] for runner in sorted({row["os"] for row in rows})}
-          if len(groups) > 4:
-              raise SystemExit("check plan has more than four runner OS labels")
-          for row in rows:
-              groups[row["os"]].append(row["installables"].split())
-          counts = {runner: 1 for runner in groups}
-          while sum(counts.values()) < min(4, len(rows)):
-              runner = max(
-                  (runner for runner in groups if counts[runner] < len(groups[runner])),
-                  key=lambda runner: sum(map(len, groups[runner])) / counts[runner],
-              )
-              counts[runner] += 1
-          bundles = []
-          for runner, group in groups.items():
-              buckets = [[] for _ in range(counts[runner])]
-              for installables in sorted(group, key=lambda items: (-len(items), items)):
-                  min(buckets, key=len).extend(installables)
-              bundles.extend((runner, bucket) for bucket in buckets)
+          # Hestia's `os` is a runs-on label list, so compare its JSON form.
+          runners = sorted({json.dumps(row["os"]) for row in rows})
+          if len(runners) > 1:
+              raise SystemExit(f"check plan has multiple runner OS labels: {', '.join(runners)}")
+          buckets = [[] for _ in range(min(4, len(rows)))]
+          groups = [row["installables"].split() for row in rows]
+          for installables in sorted(groups, key=lambda items: (-len(items), items)):
+              min(buckets, key=len).extend(installables)
           matrix = json.dumps({"include": [
-              {"installables": " ".join(bucket), "name": f"bundle {i}/{len(bundles)}", "os": runner}
-              for i, (runner, bucket) in enumerate(bundles, 1)
+              {"installables": " ".join(bucket), "name": f"bundle {i}/{len(buckets)}", "os": rows[0]["os"]}
+              for i, bucket in enumerate(buckets, 1)
           ]}, separators=(",", ":"))
           with open(os.path.join(root, "bundled-matrix.json"), "w") as bundled:
               bundled.write(matrix + "\n")
@@ -990,10 +980,10 @@ jobs:
     if: needs.checks-eval.outputs.any-jobs == 'true'
     strategy:
       fail-fast: false
-      max-parallel: 4
       matrix: ${{ fromJSON(needs.checks-eval.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    # Cold run 40689968544: 10,929 s across 65 groups, ~45 min per bundle.
+    timeout-minutes: 120
     env:
       INSTALLABLES: ${{ matrix.installables }}
     steps:

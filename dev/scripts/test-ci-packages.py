@@ -189,7 +189,7 @@ export -f curl nix nix-store
                         self.assertEqual(len(queries.read_text().splitlines()), 8)
 
 class CheckBundlesTest(unittest.TestCase):
-    def bundle(self, rows):
+    def bundle(self, rows, expected_error=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             original = json.dumps({"include": rows})
@@ -199,20 +199,25 @@ class CheckBundlesTest(unittest.TestCase):
                 env=dict(os.environ, GITHUB_OUTPUT=str(root / "output"), RUNNER_TEMP=directory),
                 capture_output=True, text=True,
             )
+            if expected_error is not None:
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected_error, result.stderr)
+                self.assertFalse((root / "bundled-matrix.json").exists())
+                self.assertFalse((root / "output").exists())
+                return
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual((root / "matrix.json").read_text(), original)
             matrix = json.loads((root / "bundled-matrix.json").read_text())
             self.assertEqual(json.loads((root / "output").read_text().removeprefix("matrix=")), matrix)
             return matrix["include"]
 
-    def test_empty_small_mixed_and_cold_plans_keep_every_installable_once(self):
+    def test_empty_small_and_cold_plans_keep_every_installable_once(self):
         for sizes, runners in (
             ([], []),
-            ([1], ["ubuntu-latest"]),
-            ([2, 1, 3], ["ubuntu-latest"]),
-            ([30, 1, 18, 3, 9, 2] * 4, ["ubuntu-latest"]),
-            ([30, 1, 18, 3, 9, 2] * 4, ["macos-latest", "ubuntu-latest"]),
-            ([110] * 25, ["ubuntu-latest"]),
+            ([1], [["ubuntu-latest"]]),
+            ([2, 1, 3], [["ubuntu-latest"]]),
+            ([30, 1, 18, 3, 9, 2] * 4, [["ubuntu-latest"]]),
+            ([110] * 25, [["ubuntu-latest"]]),
         ):
             rows = [
                 {"installables": " ".join(f"/nix/store/{i:032d}-{j}-check.drv^*" for j in range(size)),
@@ -235,6 +240,12 @@ class CheckBundlesTest(unittest.TestCase):
                     loads = [len(row["installables"].split()) for row in bundles if row["os"] == runner]
                     largest = max(size for size, row in zip(sizes, rows) if row["os"] == runner)
                     self.assertLessEqual(max(loads) - min(loads), largest)
+
+    def test_multiple_runner_os_labels_are_rejected(self):
+        self.bundle([
+            {"installables": "/nix/store/first.drv^*", "os": ["ubuntu-latest"]},
+            {"installables": "/nix/store/second.drv^*", "os": ["macos-latest"]},
+        ], expected_error='check plan has multiple runner OS labels: ["macos-latest"], ["ubuntu-latest"]')
 
     def test_worker_prefetches_all_installables_and_keeps_going(self):
         script = ci_step_script("Build evaluated derivations without flake evaluation")

@@ -236,10 +236,9 @@ are exempt is unverified.
 ### Native package build shards
 
 `ci.yml` distributes every eligible package across two shards per native
-platform, with at most four package workers across Linux and Darwin. New exports
-enter the sorted round-robin partition automatically. Each runner builds one
-derivation at a time using all cores, with a 120-minute ceiling for a cold
-shard.
+platform. New exports enter the sorted round-robin partition automatically. Each
+runner builds one derivation at a time using all cores, with a 120-minute
+ceiling for a cold shard.
 
 `ci-packages.py` checks every selected evaluation and requires a successful
 build or cache hit. Empty, failed, skipped, or incomplete results fail. Coverage
@@ -330,13 +329,13 @@ Beside it, three jobs perform eval-once check building; `checks-matrix` is a
 required status context. `checks-eval` runs Hestia's matrix subaction over
 `.#.ciChecks.x86_64-linux` (one row per `meta.hestia.group`). After verifying
 the original plan, it combines uncached groups into at most four bundles,
-keeping each OS separate and balancing installable counts. `checks-build`
-prefetches each bundle and builds its `<drvPath>^*` installables with
-`--keep-going` without flake evaluation, and `checks-matrix` fails on a failed
-evaluation or a failed or cancelled worker; an all-cached plan passes. Hestia
-keeps nix-eval-jobs' stdout to itself and lists only uncached rows by their
-first member, so a wrapper captures the raw rows of that same evaluation. The
-plan check requires the evaluated attrs to equal `checks.x86_64-linux` attr
+balancing installable counts and rejecting plans with multiple OS labels.
+`checks-build` prefetches each bundle and builds its `<drvPath>^*` installables
+with `--keep-going` without flake evaluation, and `checks-matrix` fails on a
+failed evaluation or a failed or cancelled worker; an all-cached plan passes.
+Hestia keeps nix-eval-jobs' stdout to itself and lists only uncached rows by
+their first member, so a wrapper captures the raw rows of that same evaluation.
+The plan check requires the evaluated attrs to equal `checks.x86_64-linux` attr
 names and the planned drvs to equal the uncached ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
