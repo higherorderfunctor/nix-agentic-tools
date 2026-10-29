@@ -1,16 +1,17 @@
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-10-28 — Kiro warming uses the kiro-scope job output;
-> irrelevant required legs report on Ubuntu without reserving a macOS runner.
+> pnpm_12 fetches and configures with one frozen Rust pnpm 12 bootstrap.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
 >
-> - **The pnpm 12 fetcher needs a registry guard and matched inputs.** The
->   pinned nixpkgs now omits an empty registry flag; pnpm_12 uses its frozen
->   12.15.0 bootstrap for both fetching and configuration. Oxlint still uses
->   pnpm_11; moving that consumer requires validating its fetch/build pair
->   separately.
+> - **Packaging a pnpm major does not prove fetcher compatibility.**
+>   `pnpm-fetcher-parity` enumerates existing `pnpmDeps` consumers; no consumer
+>   exercised pnpm 12 when its package was added. The pinned fetcher omits an
+>   empty registry flag; pnpm_12 uses its frozen 12.15.0 bootstrap for fetching
+>   and configuration. Oxlint uses pnpm_11; moving that consumer requires
+>   validating its fetch/build pair separately.
 > - **An empty capture can be the ANSWER, not a dead anchor.** Demand a
 >   non-empty result only where absence is impossible. Where a mechanism can
 >   legitimately not exist, assert instead on the thing proving the probe COULD
@@ -577,11 +578,12 @@ names need no annotation rows. Feature maturity policy stays at the factory's
 
   **Do not chase it reflexively.** On 2026-09-08 pnpm 12 could not drive
   `fetchPnpmDeps` at the then-current nixpkgs pin, due to a nixpkgs defect
-  rather than anything about pnpm 12: `fetch-pnpm-deps/default.nix:149`
-  interpolates `--registry="$NIX_NPM_REGISTRY"` unconditionally, and that
-  variable has no default anywhere in nixpkgs — it appears only twice, both in
-  that file. pnpm 11 falls back to the default registry when handed an empty
-  base; pnpm 12's Rust rewrite treats `""` as the base and every request becomes
+  rather than anything about pnpm 12. At the 2026-09-08 pin,
+  `fetch-pnpm-deps/default.nix:149` interpolated
+  `--registry="$NIX_NPM_REGISTRY"` unconditionally; that variable had no default
+  anywhere in nixpkgs and appeared only twice, both in that file. In that
+  measurement, pnpm 11 fell back to the default registry when handed an empty
+  base; pnpm 12's Rust rewrite treated `""` as the base and every request became
   a relative URL. Measured: metadata fetches against bare paths
   (`/@andrewbranch%2Funtar.js`), ~28 minutes of retry backoff over 1004 lockfile
   entries, then `ERR_PNPM_META_FETCH_FAIL`.
@@ -595,15 +597,14 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   endpoint with `relative URL without a base`. Turning off a supply-chain check
   to fix a misconfigured registry buys nothing and costs a real check.
 
-  The pinned fetcher now guards `--registry` with a non-empty `NIX_NPM_REGISTRY`
-  check, so Rust pnpm 12 can use its normal registry default. Oxlint still uses
+  The pinned fetcher guards `--registry` with a non-empty `NIX_NPM_REGISTRY`
+  check, so Rust pnpm 12 can use its normal registry default. Oxlint uses
   `pnpm_11` while upstream declares 12; any swap must move BOTH pnpm sites
-  together and validate that consumer, or
-  `checks/packaging/pnpm-fetcher-parity.nix` fails on the store-path mismatch.
-  pnpm_12's staged bootstrap uses `fetcherVersion = 4`: the pinned nixpkgs
-  supports 3, 4 and 5, and rejects only 3 for pnpm >= 11. Version 4 dumps the
-  v11 SQLite store to SQL, which `pnpmConfigHook` reconstructs before
-  installing.
+  together and validate that consumer, or the parity check fails on the
+  store-path mismatch. pnpm_12's staged bootstrap uses `fetcherVersion = 4`: the
+  pinned nixpkgs supports 3, 4 and 5, and rejects only 3 for pnpm >= 11. Version
+  4 dumps the v11 SQLite store to SQL, which `pnpmConfigHook` reconstructs
+  before installing.
 
 - **A multi-document `pnpm-lock.yaml` is fine for the awk.** pnpm 12 writes a
   leading `---` document carrying its own self-management deps
@@ -627,10 +628,8 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   helper, which is a JS program. So "this pnpm needs no Node" is true of the
   tool and false of the fetcher contract.
 
-  pnpm_12 now inherits `nodejs-slim` from nixpkgs' `generic-rust.nix` and merges
-  passthru when adding our update script and hash fixer. Its former standalone
-  binary recipe needed to add the attribute explicitly; see
-  `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
+  pnpm_12 inherits `nodejs-slim` from nixpkgs' `generic-rust.nix` and merges
+  passthru when adding its update script and hash fixer.
   `checks/packaging/pnpm-fetcher-contract.nix` enforces this across every
   exposed `pnpm_<major>`, including majors no package yet uses for `pnpmDeps`.
 
@@ -690,6 +689,12 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   only 1.1.33 locks. With the names versioned, the same stale hash forces a
   fetch whose mismatch reports the real `got:`. oxlint, context7-mcp and
   effect-mcp still pass the bare `pname`.
+
+  A pnpm_12 bootstrap-stage swap has the same constraint: FODs with the same
+  name and hash share an output path, regardless of their pnpm input. Its
+  bootstrap dependency FOD has a distinct name from the main dependency FOD;
+  changing the bootstrap input requires moving the name or hash to exercise the
+  fetch instead of substituting the recorded output.
 
   A versioned name covers a VERSION bump only. A nixpkgs or pnpm bump at an
   unchanged kimchi version moves neither the name nor the declared hash, so the

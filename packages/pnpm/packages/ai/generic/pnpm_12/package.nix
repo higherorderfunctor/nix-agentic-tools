@@ -23,19 +23,39 @@
     "--no-runtime"
   ];
   pnpmWorkspaces = ["@pnpm/esm-loader"];
+  # pnpm 12 provisions its own Rust toolchain from `cargo`; Nix supplies Rust.
+  prePnpmInstall = ''
+    (
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    sed -i '/^cargo:$/,+1d' pnpm-workspace.yaml
+    if grep -Eq '^cargo[[:space:]]*:' pnpm-workspace.yaml; then
+      echo "pnpm_12: unexpected top-level cargo setting remains in pnpm-workspace.yaml" >&2
+      exit 1
+    fi
+    )
+  '';
 
   mkPnpm = {
+    bootstrap ? false,
     pnpm,
-    sources,
-    sourcesFile,
-    update ? false,
+    sidecar,
   }: let
+    pname =
+      if bootstrap
+      then "pnpm_12-bootstrap"
+      else "pnpm_12";
+    sources = builtins.fromJSON (builtins.readFile sidecar);
+    sourcesFile = repoPath sidecar;
     srcHash = sources.srcHash or lib.fakeHash;
     sidecarMajor = lib.versions.major sources.version;
-    rustPlatform = packageLib.mkRustPlatform {
-      inherit pkgs sources sourcesFile;
-      pname = "pnpm_12";
-      targets = lib.optionals update (with packageLib.hashFixTargets; [cargoVendor pnpmDeps]);
+    rust = packageLib.mkRustToolchain {
+      inherit pkgs pname;
+      channel = sources.rustToolchainChannel or null;
+    };
+    rustPlatform = pkgs.makeRustPlatform {
+      cargo = rust;
+      rustc = rust;
     };
     package = pkgs.pnpm_12.override {
       inherit (sources) version;
@@ -49,17 +69,21 @@
     };
   in
     assert lib.assertMsg (sidecarMajor == "12") ''
-      pnpm_12: ${sourcesFile} records version "${sources.version}" (major ${sidecarMajor}), but this attribute is pnpm_12.
-      Either point the sidecar back at a 12.x release, or add a pnpm_${sidecarMajor} attribute and move it there.
+      ${pname}: ${sourcesFile} records version "${sources.version}" (major ${sidecarMajor}), but this stage requires pnpm 12.
+      ${
+        if bootstrap
+        then "This is a frozen 12.x bootstrap stage; restore its 12.x pin and bump it deliberately when the bootstrap needs updating."
+        else "Either point the sidecar back at a 12.x release, or add a pnpm_${sidecarMajor} attribute and move it there."
+      }
     '';
       package.overrideAttrs (finalAttrs: prev: {
-        inherit pnpmInstallFlags pnpmWorkspaces;
+        inherit pnpmInstallFlags pnpmWorkspaces prePnpmInstall;
         pnpmDeps = pkgs.fetchPnpmDeps {
           inherit (finalAttrs) src version;
-          inherit pnpm pnpmInstallFlags pnpmWorkspaces;
+          inherit pnpm pnpmInstallFlags pnpmWorkspaces prePnpmInstall;
           fetcherVersion = 4;
           hash = sources.pnpmDepsHash or lib.fakeHash;
-          pname = "pnpm-${finalAttrs.version}";
+          pname = "pnpm-${lib.optionalString bootstrap "bootstrap-"}${finalAttrs.version}";
         };
         nativeBuildInputs =
           (prev.nativeBuildInputs or [])
@@ -97,14 +121,20 @@
           '';
         passthru =
           (builtins.removeAttrs (prev.passthru or {}) ["updateScript"])
-          // lib.optionalAttrs update (rustPlatform.passthru
+          // lib.optionalAttrs (!bootstrap) (let
+            update = packageLib.mkRustReleaseUpdate {
+              inherit pkgs pname sourcesFile;
+              attr = pname;
+              targets = with packageLib.hashFixTargets; [cargoVendor pnpmDeps];
+            };
+          in
+            update
             // {
-              bootstrapPnpm = pnpm;
+              rustToolchainChannel = sources.rustToolchainChannel or null;
               updateScript = packageLib.mkUpdateScript {
-                inherit pkgs sourcesFile;
-                pname = "pnpm_12";
+                inherit pkgs pname sourcesFile;
                 platforms = {};
-                extraExtract = "${rustPlatform.passthru.rustUpdateExtract}";
+                extraExtract = update.rustUpdateExtract;
                 # npm's per-major dist-tag picks the release; the source fixer then
                 # fetches the matching GitHub tag and fails loudly if it is missing.
                 versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-12\"] // empty'";
@@ -117,14 +147,12 @@
   # nixpkgs' pnpm_12 is older. Build a frozen Rust stage with JavaScript pnpm 11,
   # then use that stage for both fetchPnpmDeps and pnpmConfigHook.
   bootstrapPnpm = mkPnpm {
+    bootstrap = true;
     pnpm = pkgs.ai.generic.pnpm_11;
-    sources = builtins.fromJSON (builtins.readFile ../../../../sources-12-bootstrap.json);
-    sourcesFile = repoPath ../../../../sources-12-bootstrap.json;
+    sidecar = ../../../../sources-12-bootstrap.json;
   };
 in
   mkPnpm {
     pnpm = bootstrapPnpm;
-    sources = builtins.fromJSON (builtins.readFile ../../../../sources-12.json);
-    sourcesFile = repoPath ../../../../sources-12.json;
-    update = true;
+    sidecar = ../../../../sources-12.json;
   }
