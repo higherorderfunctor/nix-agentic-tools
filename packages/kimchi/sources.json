@@ -1,9 +1,9 @@
 {
-  "version": "1.22.1",
+  "version": "1.22.5",
   "extraction": {
     "kimchiSource": {
-      "hash": "sha256-FRhGFV0cYlz9SHXmDZjdk3i3AS77b/OFoyhghSr8UCE=",
-      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.22.1.tar.gz"
+      "hash": "sha256-DcjlIOT5hYM8cVDK9SPghsp9LzriqKkyoj87HImlLjE=",
+      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.22.5.tar.gz"
     },
     "piAgentCorePackage": {
       "hash": "sha256-ysVosz0AfYCaH/1o87QiCjys0DRQDZJ2i6m4ygSNS8c=",
