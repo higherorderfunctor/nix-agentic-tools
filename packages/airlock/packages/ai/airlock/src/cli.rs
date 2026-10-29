@@ -22,6 +22,16 @@ pub enum Command {
         /// Read strict JSON proxy configuration.
         #[arg(long, value_name = "FILE")]
         config: Option<PathBuf>,
+        /// Replace the configured interception CA directory.
+        // `requires` alone would accept it beside the default `--listen`;
+        // the conflict refuses that.
+        #[arg(
+            long,
+            value_name = "DIRECTORY",
+            requires = "config",
+            conflicts_with = "listen"
+        )]
+        ca_directory: Option<PathBuf>,
     },
     /// Manage the private local CA without installing trust.
     Ca {
