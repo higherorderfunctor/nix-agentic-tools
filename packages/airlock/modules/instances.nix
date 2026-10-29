@@ -4,13 +4,17 @@
 #
 # Every instance is also a clientless proxy instance (lib/ai/proxy): a Harness
 # selects it by name with `ai.<runtime>.proxy.instance`, and the runtime's
-# `airlock` lowering points it at the instance's loopback origin.
+# `airlock` lowering points it at the instance's loopback origin. An
+# intercepting instance also registers the trust helper that hands a client
+# its CA.
 backend: {
   config,
   lib,
+  pkgs,
   ...
 }: let
   instances = import ../../ai-module/lib/instances.nix {inherit lib;};
+  trust = import ../lib/trust.nix {inherit lib pkgs;};
   withoutNulls = lib.filterAttrs (_: value: value != null);
 in {
   imports = [
@@ -68,9 +72,13 @@ in {
   config.ai = {
     airlock.claims.proxy-instance = builtins.attrNames config.ai.airlock.instances;
     internal.proxyInstances =
-      lib.mapAttrs (_: instance: {
+      lib.mapAttrs (name: instance: {
         backend = "airlock";
         inherit (instance) enable;
+        trust =
+          if instance.settings.interception == null
+          then null
+          else trust "airlock-${name}";
         url = instances.origin instance;
       })
       config.ai.airlock.instances;

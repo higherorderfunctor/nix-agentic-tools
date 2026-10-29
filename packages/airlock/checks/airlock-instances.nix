@@ -1,6 +1,6 @@
 # `ai.airlock.instances` on both backends: service contract, claims, rendered
 # settings, proxy registration, and what selecting an instance gives Claude
-# and Codex.
+# and Codex, including an intercepting instance's CA at Claude's launch.
 {
   harness,
   lib,
@@ -41,9 +41,26 @@
           settings = lib.optionalAttrs intercepting {interception = interceptionSettings;};
           stateDir = "/tmp/airlock-main-runtime-check-${backend}";
         };
+        ai.claude = {
+          enable = true;
+          package = mockClaude;
+          proxy.instance = "main";
+        };
       }
     )
     .config;
+  # A stand-in for Claude that prints the extra-CA file it was started with.
+  mockClaude = pkgs.writeScriptBin "claude" ''
+    #!${pkgs.python3}/bin/python3
+    import json, os
+    print(json.dumps(os.environ.get("NODE_EXTRA_CA_CERTS")))
+  '';
+  # The Claude command the runtime configuration installs: the managed
+  # launcher, or the mock itself when the selection needs none.
+  clientLauncher = backend: intercepting: let
+    config = runtime backend intercepting;
+    installed = lib.findFirst (package: builtins.elem (lib.getName package) ["claude" "claude-code-proxy"]) (throw "no Claude package installed") (config.home.packages or config.packages);
+  in "${installed}/bin/claude";
   claudeProxy = import ../../claude-code/lib/proxy.nix {inherit lib pkgs;};
   # Claude's own environment, which a selection must leave in place.
   nativeEnv = {
@@ -185,6 +202,7 @@
       backend = "airlock";
       clients = null;
       enable = true;
+      trust = null;
       url = "http://127.0.0.1:8318";
     }
     && config.ai.claims.proxy-instance.main == ["airlock"];
@@ -220,6 +238,30 @@
       resolvedProxy = evaluated.config.ai.claude.normalized.proxy;
     }
     == [];
+  # Interception adds one launcher step, reading the instance's trust helper;
+  # settings still gain only HTTPS_PROXY.
+  intercepted = backend: claudeWith backend {ai.airlock.instances.main.settings.interception.destinations = ["localhost:443"];};
+  claudeTrustsCa = backend: let
+    evaluated = intercepted backend;
+    resolvedProxy = evaluated.config.ai.claude.normalized.proxy;
+    flags = claudeProxy.launcherFlags {inherit backend resolvedProxy;};
+  in
+    failedAssertions evaluated
+    == []
+    && resolvedProxy.trust == evaluated.config.ai.internal.proxyInstances.main.trust
+    && lib.getName resolvedProxy.trust == "airlock-main-trust"
+    && builtins.length flags == 1
+    && lib.hasInfix "NODE_EXTRA_CA_CERTS" (builtins.head flags)
+    && lib.hasInfix (builtins.unsafeDiscardStringContext (lib.getExe resolvedProxy.trust)) (builtins.unsafeDiscardStringContext (builtins.head flags))
+    && claudeSettings evaluated == claudeSettings (claudeWith backend {});
+  nullPackageWarnsTrust = backend:
+    builtins.any (lib.hasInfix "NODE_EXTRA_CA_CERTS")
+    (claudeWith backend {
+      ai.airlock.instances.main.settings.interception.destinations = ["localhost:443"];
+      ai.claude.package = null;
+    })
+    .config
+    .warnings;
   nativeProxyWins = backend:
     (claudeSettings (claudeWith backend {ai.claude.native.settings.env.HTTPS_PROXY = "http://127.0.0.1:9999";})).env.HTTPS_PROXY
     == "http://127.0.0.1:9999";
@@ -249,6 +291,8 @@
   # Named so a failure reports which condition broke.
   conditions = backend: {
     "${backend}: Claude selection sets only HTTPS_PROXY" = claudeSelected backend;
+    "${backend}: Claude trusts an intercepting instance's CA at launch" = claudeTrustsCa backend;
+    "${backend}: Claude without a launcher is told to trust the CA" = nullPackageWarnsTrust backend;
     "${backend}: claim collisions are reported" = claimsCollide backend;
     "${backend}: clientKey is refused" = clientKeyRefused backend;
     "${backend}: Codex cannot select an instance" = codexRefused backend;
@@ -287,10 +331,11 @@ in {
           ${pkgs.writeText "airlock-runtime-cases.json" (builtins.toJSON (lib.concatMap (backend:
           map (intercepting: {
             inherit backend intercepting;
+            client = clientLauncher backend intercepting;
             config = (runtime backend intercepting).ai.services.airlock-main.files.config.content;
             launcher = launcher backend intercepting;
           }) [false true]) ["hm" "devenv"]))}
-        echo "ok — both generated Airlock launchers serve health and keep an interception CA beside the runtime config" >"$out"
+        echo "ok — both generated Airlock launchers serve health, keep an interception CA beside the runtime config and hand it to Claude's launcher" >"$out"
       '';
     };
 }
