@@ -6,11 +6,11 @@
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
 >
-> - **The pnpm 12 swap inside the fetcher stays deferred.** It was attempted and
->   blocked: nixpkgs' fetcher passes an empty registry base, which pnpm 12 does
->   not tolerate. Packaging the major is not the same as making it usable as a
->   fetcher argument, and `checks/packaging/pnpm-fetcher-parity.nix` enumerates
->   only packages that already ship a `pnpmDeps`, so nothing exercised the pair.
+> - **The pnpm 12 fetcher needs a registry guard and matched inputs.** The
+>   pinned nixpkgs now omits an empty registry flag; pnpm_12 uses its frozen
+>   12.15.0 bootstrap for both fetching and configuration. Oxlint still uses
+>   pnpm_11; moving that consumer requires validating its fetch/build pair
+>   separately.
 > - **An empty capture can be the ANSWER, not a dead anchor.** Demand a
 >   non-empty result only where absence is impossible. Where a mechanism can
 >   legitimately not exist, assert instead on the thing proving the probe COULD
@@ -575,16 +575,16 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   window that moved the `@napi-rs/cli` catalog pin. Patch compatibility says
   nothing about the pnpm major; validate that independently.
 
-  **Do not chase it reflexively.** As of 2026-09-08 pnpm 12 CANNOT drive
-  `fetchPnpmDeps` at this nixpkgs pin, and the reason is a nixpkgs defect rather
-  than anything about pnpm 12: `fetch-pnpm-deps/default.nix:149` interpolates
-  `--registry="$NIX_NPM_REGISTRY"` unconditionally, and that variable has no
-  default anywhere in nixpkgs — it appears only twice, both in that file. pnpm
-  11 falls back to the default registry when handed an empty base; pnpm 12's
-  Rust rewrite treats `""` as the base and every request becomes a relative URL.
-  Measured: metadata fetches against bare paths (`/@andrewbranch%2Funtar.js`),
-  ~28 minutes of retry backoff over 1004 lockfile entries, then
-  `ERR_PNPM_META_FETCH_FAIL`.
+  **Do not chase it reflexively.** On 2026-09-08 pnpm 12 could not drive
+  `fetchPnpmDeps` at the then-current nixpkgs pin, due to a nixpkgs defect
+  rather than anything about pnpm 12: `fetch-pnpm-deps/default.nix:149`
+  interpolates `--registry="$NIX_NPM_REGISTRY"` unconditionally, and that
+  variable has no default anywhere in nixpkgs — it appears only twice, both in
+  that file. pnpm 11 falls back to the default registry when handed an empty
+  base; pnpm 12's Rust rewrite treats `""` as the base and every request becomes
+  a relative URL. Measured: metadata fetches against bare paths
+  (`/@andrewbranch%2Funtar.js`), ~28 minutes of retry backoff over 1004 lockfile
+  entries, then `ERR_PNPM_META_FETCH_FAIL`.
 
   **The supply-chain banner is a symptom, and silencing it does not help.** The
   failure is preceded by `✗ Lockfile failed supply-chain policy check`, because
@@ -595,12 +595,15 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   endpoint with `relative URL without a base`. Turning off a supply-chain check
   to fix a misconfigured registry buys nothing and costs a real check.
 
-  So oxlint deliberately stays on `pnpm_11` while upstream declares 12. Revisit
-  when the nixpkgs pin carries a registry guard; the swap then needs a
-  `NIX_NPM_REGISTRY` default supplied in the same change, and BOTH pnpm sites
-  must move together or `checks/packaging/pnpm-fetcher-parity.nix` fails on the
-  store-path mismatch. Leave `fetcherVersion = 4` alone: 4 is the maximum the
-  pinned nixpkgs supports.
+  The pinned fetcher now guards `--registry` with a non-empty `NIX_NPM_REGISTRY`
+  check, so Rust pnpm 12 can use its normal registry default. Oxlint still uses
+  `pnpm_11` while upstream declares 12; any swap must move BOTH pnpm sites
+  together and validate that consumer, or
+  `checks/packaging/pnpm-fetcher-parity.nix` fails on the store-path mismatch.
+  pnpm_12's staged bootstrap uses `fetcherVersion = 4`: the pinned nixpkgs
+  supports 3, 4 and 5, and rejects only 3 for pnpm >= 11. Version 4 dumps the
+  v11 SQLite store to SQL, which `pnpmConfigHook` reconstructs before
+  installing.
 
 - **A multi-document `pnpm-lock.yaml` is fine for the awk.** pnpm 12 writes a
   leading `---` document carrying its own self-management deps

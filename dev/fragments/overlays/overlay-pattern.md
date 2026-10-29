@@ -677,18 +677,24 @@ to any versioned attribute family:
 - pnpm_12 generates `cas-loader.mjs.inc` with upstream's
   `pnpm/esm-loader/scripts/bundle-runtime.mjs` in `preBuild`, preserving the
   inherited Cargo phase. Its `fetchPnpmDeps` and `pnpmConfigHook` use the same
-  pinned JavaScript pnpm_11 bootstrap and `@pnpm/esm-loader` workspace
-  selection, so there is no dependency on the Rust pnpm being built. Both
-  installs disable the global virtual store: otherwise upstream's
-  `virtualStoreType: global` puts package files under the dependency fetcher's
-  store, and nixpkgs' JSON normalization tries to parse non-JSON fixtures. The
-  configure hook installs dependencies offline with lifecycle scripts disabled;
-  the explicit bundle step performs the required preparation afterward. Both
-  installs pass `--no-runtime` so upstream's platform-specific Node runtime
-  entries stay in the frozen lockfile but are not downloaded or linked; the
-  bundler uses Nix's build Node. Without it, a dependency store fetched on Linux
-  contains only Linux's managed Node and offline Darwin configuration tries to
-  download its own runtime.
+  frozen Rust pnpm 12.15.0 bootstrap and `@pnpm/esm-loader` workspace selection.
+  The bootstrap uses the same recipe with
+  `packages/pnpm/sources-12-bootstrap.json` and JavaScript pnpm_11; the main
+  release uses `packages/pnpm/sources-12.json`. pnpm 12.16+ includes catalogs
+  and policies from `.config/pnpm/*.yaml`, which requires pnpm >= 12.15.0;
+  nixpkgs' pnpm_12 is older. `pnpm_12.bootstrapPnpm` exposes the frozen stage
+  for inspection. It has no update script, hash-fix targets or registry entry:
+  it is built as a dependency and bumped deliberately. Both stages check their
+  installed version against their own sidecar. Both installs disable the global
+  virtual store: otherwise upstream's `virtualStoreType: global` puts package
+  files under the dependency fetcher's store, and nixpkgs' JSON normalization
+  tries to parse non-JSON fixtures. The configure hook installs dependencies
+  offline with lifecycle scripts disabled; the explicit bundle step performs the
+  required preparation afterward. Both installs pass `--no-runtime` so
+  upstream's platform-specific Node runtime entries stay in the frozen lockfile
+  but are not downloaded or linked; the bundler uses Nix's build Node. Without
+  it, a dependency store fetched on Linux contains only Linux's managed Node and
+  offline Darwin configuration tries to download its own runtime.
 - pnpm_12 keeps version/source/cargo/pnpm pins and `rustToolchainChannel` in its
   sidecar, with `mkUpdateScript`'s cheap no-op exit. Its `rustUpdateExtract`
   restores the source hash, records the source's channel through
