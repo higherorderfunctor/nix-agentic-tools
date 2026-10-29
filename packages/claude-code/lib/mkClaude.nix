@@ -621,6 +621,7 @@ in
         })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
         (claudeProxy.config {inherit backend resolvedProxy;})
+        {assertions = claudeProxy.assertions resolvedProxy;}
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
         # `ai.claude.hookScripts`. Content is `readFile`'d into
         # `lib.types.lines` via hooksFromDir.

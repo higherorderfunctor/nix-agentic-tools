@@ -22,13 +22,15 @@ installs it directly as `$out/bin/claude`.
 ### Proxy credential suppression at launch
 
 The base package's `$out/bin/claude` is the pre-built binary itself. Without a
-proxy selection, the shared backend transform installs it unchanged. A selected
-`ai.proxy` or `ai.claude.proxy` installs a `lib.ai.mkLauncher` wrapper on both
-backends that unsets `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec. Claude
-Code 2.1.302 caches that descriptor before settings env applies, so clearing it
-in settings alone still sends the inherited key to the proxy. The endpoint and
-reference-reading `apiKeyHelper` stay in settings; no key is baked into the
-launcher.
+proxy selection, the shared backend transform installs it unchanged. A selection
+(`ai.proxy` or `ai.claude.proxy`) that resolves to a `cliproxyapi` backend
+installs a `lib.ai.mkLauncher` wrapper on both backends that unsets
+`CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec; the flag comes from that
+backend's lowering, so another backend's selection leaves the package unchanged
+unless its lowering asks for launcher flags. Claude Code 2.1.302 caches that
+descriptor before settings env applies, so clearing it in settings alone still
+sends the inherited key to the proxy. The endpoint and reference-reading
+`apiKeyHelper` stay in settings; no key is baked into the launcher.
 
 Claude Code 2.1.157 and later discovers a plugin as a personal plugin at
 `<configDir>/skills/<name>` (yes, `skills/`, not `plugins/`), so nothing needs a
