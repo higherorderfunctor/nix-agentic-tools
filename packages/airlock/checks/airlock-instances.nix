@@ -21,6 +21,7 @@
       }
     )
     .config;
+  enabledWith = backend: settings: (evaluate backend {ai.airlock.instances.main.settings = settings;}).config;
   configured = backend:
     (
       evaluate backend {
@@ -28,11 +29,17 @@
       }
     )
     .config;
-  runtime = backend:
+  # A store-backed trust bundle, so the rendered file carries store context.
+  interceptionSettings = {
+    destinations = ["localhost:443"];
+    upstream_roots = "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt";
+  };
+  runtime = backend: intercepting:
     (
       evaluate backend {
         ai.airlock.instances.main = {
           port = 18439;
+          settings = lib.optionalAttrs intercepting {interception = interceptionSettings;};
           stateDir = "/tmp/airlock-main-runtime-check-${backend}";
         };
       }
@@ -119,10 +126,55 @@
         true
       )
     ).success;
-  launcher = backend:
+  # The services launcher validates placeholders on a context-free copy and
+  # keeps the bundle a dependency of the content it renders.
+  interceptionRendered = backend: let
+    inherit ((enabledWith backend {interception = interceptionSettings;}).ai.services.airlock-main.files.config) content;
+  in
+    builtins.fromJSON (builtins.unsafeDiscardStringContext content)
+    == {
+      interception = interceptionSettings;
+      listen = "127.0.0.1:8318";
+    }
+    && builtins.hasContext content;
+  # Home Manager keeps the XDG default; devenv roots the CA under the
+  # project's runtime root, and only for an instance that intercepts.
+  runtimeHome = backend:
+    (enabledWith backend {interception = interceptionSettings;}).ai.services.airlock-main.environment
+    == lib.optionalAttrs (backend == "devenv") {AIRLOCK_HOME = "/tmp/devenv-runtime/airlock";};
+  # The name becomes the CA's runtime directory, so an intercepting instance
+  # follows Airlock's name rule at evaluation.
+  interceptingNameChecked = backend: let
+    launches = name:
+      (builtins.tryEval (builtins.deepSeq
+        (evaluate backend {ai.airlock.instances.${name}.settings.interception = interceptionSettings;}).config.ai.services."airlock-${name}".command
+        true)).success;
+  in
+    launches "work_2-b" && !(launches "bad.name");
+  # The CA directory belongs to the runtime directory, never to settings.
+  invalidInterceptionRefused = backend:
+    lib.all (interception:
+      !(builtins.tryEval (builtins.deepSeq
+        (enabledWith backend {inherit interception;}).ai.services.airlock-main.files.config
+        true)).success) [
+      {destinations = [443];}
+      {
+        destinations = ["localhost:443"];
+        upstream_roots = 443;
+      }
+      {
+        destinations = ["localhost:443"];
+        upstream_roots = "/home/alice/certs/roots.pem";
+      }
+      {
+        ca_directory = "/persistent/ca";
+        destinations = ["localhost:443"];
+      }
+    ];
+  launcher = backend: intercepting:
     if backend == "hm"
-    then (runtime backend).systemd.user.services.airlock-main.Service.ExecStart
-    else (runtime backend).processes.airlock-main.exec;
+    then (runtime backend intercepting).systemd.user.services.airlock-main.Service.ExecStart
+    else (runtime backend intercepting).processes.airlock-main.exec;
   registered = backend: let
     config = enabled backend;
   in
@@ -265,6 +317,10 @@
     {
       "${backend}: inference and network instance names coexist" = inferenceIndependent backend;
       "${backend}: instances are registered proxies" = registered backend;
+      "${backend}: interception renders with its store bundle" = interceptionRendered backend;
+      "${backend}: interception sets the CA's runtime base" = runtimeHome backend;
+      "${backend}: intercepting instance names follow Airlock's rule" = interceptingNameChecked backend;
+      "${backend}: invalid interception is refused" = invalidInterceptionRefused backend;
       "${backend}: listen cannot be overridden" = listenOverrideRefused backend;
       "${backend}: native HTTPS_PROXY and NO_PROXY win" = nativeProxyWins backend;
       "${backend}: no instance by default" =
@@ -305,10 +361,14 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
 
         ${pkgs.python3}/bin/python3 ${./airlock-instance-runtime.py} \
-          ${lib.escapeShellArg (runtime "hm").ai.services.airlock-main.files.config.content} \
-          ${launcher "hm"} \
-          ${launcher "devenv"}
-        echo "ok — both generated Airlock launchers serve health at the configured nondefault port" >"$out"
+          ${pkgs.writeText "airlock-runtime-cases.json" (builtins.toJSON (lib.concatMap (backend:
+          map (intercepting: {
+            inherit backend intercepting;
+            config = (runtime backend intercepting).ai.services.airlock-main.files.config.content;
+            home = (runtime backend intercepting).ai.services.airlock-main.environment.AIRLOCK_HOME or null;
+            launcher = launcher backend intercepting;
+          }) [false true]) ["hm" "devenv"]))}
+        echo "ok — generated Airlock launchers serve health, keep an interception CA in the instance's runtime directory, and refuse a shared runtime root" >"$out"
       '';
     };
 }

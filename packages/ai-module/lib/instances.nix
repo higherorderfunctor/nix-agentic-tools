@@ -45,7 +45,8 @@ in {
   # file's path; `arguments` are the shell words after the executable, per instance,
   # and `directories` the state subdirectories created with `stateDir`.
   # `preStart` is shell the run script runs in `stateDir`, with `variable`
-  # exported, before it execs the executable.
+  # exported, before it execs the executable. Both receive the instance with
+  # its attribute `name`.
   # `packagePath` is the default package's path under `ai.internal.packages`
   # and `packageText` its documentation.
   module = {
@@ -136,6 +137,7 @@ in {
     };
 
     config.ai.${owner}.services = lib.mapAttrs' (name: instance: let
+      named = instance // {inherit name;};
       rendered = render instance.settings;
       state = map lib.escapeShellArg ([instance.stateDir] ++ directories instance);
       # The tool resolves relative paths (CLIProxyAPI's `.env` and `logs/`)
@@ -146,8 +148,8 @@ in {
           ${pkgs.coreutils}/bin/mkdir -p ${toString state}
           ${pkgs.coreutils}/bin/chmod 0700 ${toString state}
           cd ${lib.escapeShellArg instance.stateDir}
-          ${preStart instance}
-          exec ${lib.getExe instance.package} ${arguments instance}
+          ${preStart named}
+          exec ${lib.getExe instance.package} ${arguments named}
         '';
       };
     in
