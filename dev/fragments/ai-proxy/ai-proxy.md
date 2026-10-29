@@ -1,10 +1,11 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-24 — OAuth upstream credentials require vendor and
-> a secret account email; native CPA account rules match logins, including ones
-> added while the service runs. The existing rendered-file launcher lifts
-> accounts into secret placeholders on both backends. Named API-key credentials
-> can select the built-in z.ai vendor defaults and an optional priority.
+> **Last verified:** 2026-10-28 — proxy owners register instances in
+> `ai.internal.proxyInstances`, with or without named clients; root fields copy
+> down by priority and drop for a runtime selecting the other form; the selected
+> instance's backend picks the one lowering a runtime runs. OAuth upstream
+> credentials require vendor and a secret account email; named API-key
+> credentials can select the built-in z.ai vendor defaults and a priority.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -13,9 +14,11 @@ credential proxy.
 
 ### Shape
 
-- Library: `lib/ai/proxy/default.nix`. Options, validation and `resolve` live
-  there.
-- `sharedOptions.nix` registers the root option and asserts the root selection.
+- Library: `lib/ai/proxy/default.nix`. Options, the registry, validation,
+  `resolve` and the lowering dispatch `lower` live there; it names no proxy
+  owner except that an external `url` lowers as `cliproxyapi`.
+- `sharedOptions.nix` registers the root option and `ai.internal.proxyInstances`
+  and asserts the root selection.
 - `proxy` is a key of `sharedSurfaceOptions`, so it is a delivery-policy surface
   and every enabled runtime whose `surfaceSupport` omits `proxy` gets the
   standard decomposition warning. Claude and Codex declare support; the other
@@ -26,26 +29,51 @@ credential proxy.
   and `resolvedProxy`. Harness selection publishes no keys, rules or claims;
   these belong to the selected instance's named entries.
 
+### Registry
+
+A proxy owner adds each instance to `ai.internal.proxyInstances.<name>` by
+ordinary module merge: `{backend; enable; url; clients;}`. `backend` is the
+owner's name (`ai.<backend>`). `clients.<clientKey> = {...}` holds the
+attributes that backend's lowering reads for each named client; an owner whose
+instances have no clients leaves `clients` null, and its instances are selected
+by name alone. The owner also claims each name in `ai.claims.proxy-instance`
+(`ai.<owner>.claims.proxy-instance`), so two owners registering one name fail
+evaluation through the claims registry. CLIProxyAPI registers every
+`ai.cliproxyapi.instances` entry (`packages/cliproxyapi/modules/instances.nix`)
+at `http://127.0.0.1:<port>`, each client key carrying `{key; credentials;}`.
+The registry is internal: a root option would count as a consumer surface and
+fan out.
+
 ### Selection and the resolved endpoint
 
-A selection is `url` + `key` for a proxy configured by hand, or `instance` +
-`clientKey` for one this flake runs. `instance` names an
-`ai.cliproxyapi.instances` entry (`packages/cliproxyapi/modules/instances.nix`)
-and resolves through `packages/ai-module/lib/instances.nix`'s `select` to
-`http://127.0.0.1:<port>`; `url` and `instance` are mutually exclusive.
-`clientKey` names that instance's `clientKeys` entry. Missing or disabled
-instances, unknown client keys, and incomplete selections fail as assertions at
-either scope, outside the runtime enable gate. An external selection without a
-key is rejected because the harness would send its own login token, if any, to
-the proxy. The instances are read as `config.ai.cliproxyapi.instances or {}`,
-since an evaluation without the owner module (the factory harness) has none.
+A selection is `url` + `key` for a CPA configured by hand, or `instance` for a
+registered instance; `url` and `instance` are mutually exclusive. An instance
+that declares clients needs `clientKey` naming one of them; a clientless
+instance refuses one. Unregistered or disabled instances, unknown or unwanted
+client keys, and incomplete selections fail as assertions at either scope,
+outside the runtime enable gate. An external selection without a key is rejected
+because the harness would send its own login token, if any, to the proxy.
 
-A per-runtime selection that selects anything (a `url` or an `instance`)
-replaces the root selection WHOLE. Fields never mix across levels: a runtime
-`key` or `clientKey` alone leaves the root selection in force and fails its own
-assertion. The resolved value is null or `{key; credentials; url;}`. `url` is
-the origin only: each runtime appends its own protocol path, so a path would be
-doubled.
+Each root field copies down to `ai.<runtime>.proxy` at `mkDefault`, so a runtime
+value wins field by field: root `instance = "a"` with
+`ai.claude.proxy.instance = "b"` gives Claude `b` with the root's `clientKey`. A
+runtime opts out of an inherited selection with `instance = null` (or
+`url = null` for an external one); the fields it leaves behind are ignored,
+since an unselected runtime is checked only on the fields it changed. A runtime
+selection equal to the root's is asserted once, at `ai.proxy`. A runtime that
+selects the other form (`instance` under a root `url`, or `url` under a root
+`instance`) inherits none of the root's fields of that form, so switching forms
+clears nothing by hand; within one form the per-field override still applies.
+`copyDown` keeps that test inside each copied value, which reads the runtime's
+other selector only while the root's is null, so no copy reads itself back.
+
+The resolved value is null or `{backend; url;}` plus the selected client's
+attributes when the instance declares clients; an external selection resolves to
+`{backend = "cliproxyapi"; key; url; credentials = [];}`. `url` is the origin
+only: each runtime appends its own protocol path, so a path would be doubled.
+Each runtime's proxy library keeps `lowerings.<backend>` and calls
+`lower <runtime> lowerings resolved`, so only the selected backend's lowering
+runs, and a backend the runtime has no lowering for fails evaluation.
 
 An external `key` or an instance client entry's `key` requires
 `redact.types.redacted`: `redact.file`, `redact.command` or `redact.concat` with

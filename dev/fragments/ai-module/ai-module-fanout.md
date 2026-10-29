@@ -18,10 +18,11 @@
 > runtime and backend, set at the root, the runtime pool or its normalized
 > option, and record gaps are `path`, `each`, `when` and `reason` only;
 > ai-module owns the delivered-path inventory and backend lowering; `ai.proxy`
-> selects a shared endpoint with a whole per-runtime override, gated by runtime
-> capability; Claude consumes it and suppresses its inherited API-key descriptor
-> through the installed launcher; `ai.jail` folds field by field and jails the
-> finished launcher in place at the install seam on Linux, warning elsewhere.
+> selects a registered proxy instance, its fields copied down to each capable
+> runtime by priority; Claude consumes it and suppresses its inherited API-key
+> descriptor through the installed launcher; `ai.jail` folds field by field and
+> jails the finished launcher in place at the install seam on Linux, warning
+> elsewhere.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -600,10 +601,13 @@ non-empty list for `fileMatch` content.
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
 
-- `ai.proxy` — a client selection (`url` + `key`) pointing harnesses at a local
-  CLIProxyAPI. A runtime that declares `proxy` gets `ai.<runtime>.proxy`, which
-  replaces the root selection whole when it selects anything, and consumes the
-  resolved `normalized.proxy`; Claude and Codex do. See the `ai-proxy` fragment.
+- `ai.proxy` — a selection (`instance` of a registered proxy instance, with
+  `clientKey` when it declares clients, or an external CPA `url` + `key`)
+  pointing harnesses at a proxy. A runtime that declares `proxy` gets
+  `ai.<runtime>.proxy`, whose fields default to the root's (`mkDefault`) except
+  the other form's once it switches forms, and consumes the resolved
+  `normalized.proxy` through the selected backend's lowering; Claude and Codex
+  do. See the `ai-proxy` fragment.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools

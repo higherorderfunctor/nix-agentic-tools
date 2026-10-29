@@ -508,6 +508,7 @@ in {
           visible = false;
           description = "This flake's package tree (`ai.*`) for the module's pkgs: `ai.internal.roots.ai`.";
         };
+        proxyInstances = proxyLib.registryOption;
         # Every root a module site reads (`ai`, `docs`, `*-content`).
         roots = lib.mkOption {
           type = lib.types.raw;
@@ -573,7 +574,7 @@ in {
     (lib.optionalAttrs hasAssertions {assertions = proxyValidationAssertions;})
     # `ai.proxy`'s root selection; mkBackendTransform.nix asserts each
     # runtime's own.
-    (lib.optionalAttrs hasAssertions {assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) ["ai" "proxy"] config.ai.proxy;})
+    (lib.optionalAttrs hasAssertions {assertions = proxyLib.assertionsFor config.ai.internal.proxyInstances ["ai" "proxy"] config.ai.proxy;})
     {
       ai =
         {internal.services = proxyServices usedTopLevelProxyDeclarations;}
