@@ -204,7 +204,8 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(report["captures"]["metrics"]["credits"]["observed_sum"], 5)
         self.assertRegex(query.render(report), r"Root conversation\s+2.*0.000000 \(1/2\)")
         summary = query.render_summary(report)
-        self.assertIn("Main conversation  2 req · 0.00 cr    Subagents/workflows  1 req · 2.00 cr    Unknown  1 req · 3.00 cr", summary)
+        self.assertEqual([line.split()[:3] for line in summary.splitlines()[6:12]],
+                         [["Main", "2", "0.00"], ["Sub/WF", "1", "2.00"], ["Unknown", "1", "3.00"], ["-" * 62], ["Total", "4", "5.00"], ["⚠", "credits", "unknown"]])
         self.assertTrue(summary.endswith("\n⚠ credits unknown for 1/4 requests"))
         self.assertIn("does not identify main versus delegate roles", report["attribution"]["pool_rule"])
 
@@ -246,9 +247,13 @@ class QueryTests(unittest.TestCase):
         output = query.render_summary(report)
         self.assertEqual(output, "\n".join([
             "Kiro usage · sess_root · tree · 1,001 requests · 500.00 credits", "",
-            "Model            Requests  Credits  Tokens  Cache hit",
-            "requested-model     1,001   500.00       —          —", "",
-            "Main conversation  1 req · — cr    Subagents/workflows  1,000 req · 500.00 cr",
+            "Model            Requests  Credits     In  Out  Cached  Cache hit",
+            "requested-model     1,001   500.00  10.0K    —       —          —", "",
+            "Conversation     Requests  Credits     In  Out  Cached  Cache hit",
+            "Main                    1        —      —    —       —          —",
+            "Sub/WF              1,000   500.00  10.0K    —       —          —",
+            "-" * 65,
+            "Total               1,001   500.00  10.0K    —       —          —",
             "⚠ credits unknown for 1/1,001 requests; 1 incomplete"]))
         self.db.execute("DELETE FROM captures")
         self.captured("zero", conversation="root", credits=0, tokens=0)
@@ -256,7 +261,7 @@ class QueryTests(unittest.TestCase):
         self.assertRegex(output, r"Total\s+1\s+—\s+0\s+—\s+—\s+—\s+0.000000")
         output = query.render_summary(query.query(self.db, "sess_root", "tree"))
         self.assertIn("· 1 request · 0.00 credits", output)
-        self.assertRegex(output, r"requested-model\s+1\s+0.00\s+—\s+—\n")
+        self.assertRegex(output, r"requested-model\s+1\s+0.00\s+0\s+—\s+—\s+—\n")
         self.assertNotIn("⚠", output)
         self.assertNotIn("Unknown", output)
 
@@ -276,7 +281,7 @@ class QueryTests(unittest.TestCase):
         self.assertIn("1,010 (2/3)", output)
         self.assertNotIn("~5.0%", output)
         self.assertIn("Other linked holds workflow steps and subagents and may include helpers/forks", output)
-        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+~50%\n")
+        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10\s+50\s+~50%\n")
 
     def test_report_labels_only_explicit_estimates_and_missing_capture(self):
         report = query.query(self.db, "sess_root", "tree")
@@ -303,11 +308,24 @@ class QueryTests(unittest.TestCase):
         lines = output.splitlines()
         self.assertEqual(lines[0], "Kiro usage · sess_90da0f80 · tree · 5 requests · 2.52 credits")
         self.assertEqual([line.split()[0] for line in lines[3:7]], ["costly", "also-cheap", "cheap", "unpriced"])
-        self.assertEqual(lines[8], "Main conversation  4 req · 2.02 cr    Subagents/workflows  1 req · 0.50 cr")
-        self.assertEqual(lines[9], "⚠ credits unknown for 1/5 requests")
+        self.assertEqual([line.split()[:3] for line in lines[8:13]],
+                         [["Conversation", "Requests", "Credits"], ["Main", "4", "2.02"], ["Sub/WF", "1", "0.50"], ["-" * 59], ["Total", "5", "2.52"]])
+        self.assertEqual(lines[13], "⚠ credits unknown for 1/5 requests")
         self.db.execute("UPDATE captures SET credits=1 WHERE id='c'")
         self.assertNotIn("⚠", query.render_summary(query.query(self.db, root, "tree")))
         self.assertTrue(query.render_summary(query.query(self.db, root, "tree"), ["x", "y"]).endswith("\n⚠ x; y"))
+
+    def test_summary_tables_share_column_widths_and_total_row_closes_the_second(self):
+        for ident, conversation, tokens in (("a", "root", 5), ("b", "child", 123_456_789)):
+            self.captured(ident, conversation=conversation, tokens=tokens, metadata={"kiro:root_conversation_id": "root"})
+        lines = query.render_summary(query.query(self.db, "sess_root", "tree")).splitlines()
+        header, models, blank, groups, main, sub, rule, total = lines[2:10]
+        self.assertEqual((blank, rule), ("", "-" * len(groups)))
+        self.assertEqual([line.split()[0] for line in (header, models, groups, main, sub, total)],
+                         ["Model", "requested-model", "Conversation", "Main", "Sub/WF", "Total"])
+        self.assertEqual(total.split()[1:4], ["2", "2.00", "123M"])
+        self.assertEqual({len(line) for line in (header, models, groups, main, sub, total)}, {len(header)})
+        self.assertNotIn("Unknown", "\n".join(lines))
 
     def estimable(self, ident, credits, chars=0, model="claude-opus-5.5", conversation="root", context=3.0):
         self.captured(ident, conversation=conversation, credits=credits, tokens=None, metadata={"model": model})
@@ -332,7 +350,8 @@ class QueryTests(unittest.TestCase):
         models = {model["requested_model"]: model for model in report["captures"]["models"]}
         self.assertEqual(models["other-model"]["estimates"], {})
         self.assertEqual(report["captures"]["metrics"]["input_tokens"], query.metric(100, 1, 4))
-        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~33%\n")
+        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~5\s+~30.0K\s+~33%\n")
+        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K\s+~5\s+~30.0K\s+~33%$")
         output = query.render(report)
         self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~33.3% \(3/4\)")
         self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
