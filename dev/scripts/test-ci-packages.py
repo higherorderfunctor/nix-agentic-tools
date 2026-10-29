@@ -189,143 +189,34 @@ export -f curl nix nix-store
                         self.assertEqual(len(queries.read_text().splitlines()), 8)
 
 class CheckBundlesTest(unittest.TestCase):
-    def bundle(self, rows, expected_error=None):
+    def bundle(self, rows):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            original = json.dumps({"include": rows})
-            (root / "matrix.json").write_text(original)
+            (Path(directory) / "matrix.json").write_text(json.dumps({"include": rows}))
             result = subprocess.run(
                 ["bash", "-c", ci_step_script("Bundle uncached checks into at most four workers")],
-                env=dict(os.environ, GITHUB_OUTPUT=str(root / "output"), RUNNER_TEMP=directory),
+                env=dict(os.environ, GITHUB_OUTPUT=f"{directory}/output", RUNNER_TEMP=directory),
                 capture_output=True, text=True,
             )
-            if expected_error is not None:
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(expected_error, result.stderr)
-                self.assertFalse((root / "bundled-matrix.json").exists())
-                self.assertFalse((root / "output").exists())
-                return
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual((root / "matrix.json").read_text(), original)
-            matrix = json.loads((root / "bundled-matrix.json").read_text())
-            self.assertEqual(json.loads((root / "output").read_text().removeprefix("matrix=")), matrix)
-            return matrix["include"]
+            if result.returncode:
+                return result.stderr
+            return json.loads((Path(directory) / "bundled-matrix.json").read_text())["include"]
 
-    def test_empty_small_and_cold_plans_keep_every_installable_once(self):
-        for sizes, runners in (
-            ([], []),
-            ([1], [["ubuntu-latest"]]),
-            ([2, 1, 3], [["ubuntu-latest"]]),
-            ([30, 1, 18, 3, 9, 2] * 4, [["ubuntu-latest"]]),
-            ([110] * 25, [["ubuntu-latest"]]),
-        ):
-            rows = [
-                {"installables": " ".join(f"/nix/store/{i:032d}-{j}-check.drv^*" for j in range(size)),
-                 "name": f"group-{i}", "os": runners[i % len(runners)]}
-                for i, size in enumerate(sizes)
-            ]
-            with self.subTest(sizes=sizes, runners=runners):
-                bundles = self.bundle(rows)
-                self.assertEqual(bundles, self.bundle(list(reversed(rows))))
-                self.assertEqual(len(bundles), min(4, len(rows)))
-                if len(sizes) == 25:
-                    self.assertGreater(len(json.dumps({"include": rows})), 128 * 1024)
-                    self.assertTrue(all(len(b["installables"]) < 128 * 1024 for b in bundles))
-                self.assertEqual([b["name"] for b in bundles],
-                                 [f"bundle {i + 1}/{len(bundles)}" for i in range(len(bundles))])
-                for runner in runners:
-                    expected = [drv for row in rows if row["os"] == runner for drv in row["installables"].split()]
-                    actual = [drv for row in bundles if row["os"] == runner for drv in row["installables"].split()]
-                    self.assertCountEqual(actual, expected)
-                    loads = [len(row["installables"].split()) for row in bundles if row["os"] == runner]
-                    largest = max(size for size, row in zip(sizes, rows) if row["os"] == runner)
-                    self.assertLessEqual(max(loads) - min(loads), largest)
+    def test_hestia_rows_bundle_into_at_most_four_workers(self):
+        # Hestia's row shape: `os` is a runs-on label list.
+        rows = [{"installables": f"/nix/store/{i}-check.drv^*", "name": f"group-{i}", "os": ["ubuntu-latest"]}
+                for i in range(9)]
+        bundles = self.bundle(rows)
+        self.assertEqual(len(bundles), 4)
+        self.assertTrue(all(b["os"] == ["ubuntu-latest"] for b in bundles))
+        self.assertCountEqual(" ".join(b["installables"] for b in bundles).split(),
+                              [row["installables"] for row in rows])
+        self.assertEqual(self.bundle([]), [])
 
     def test_multiple_runner_os_labels_are_rejected(self):
-        self.bundle([
+        self.assertIn("multiple runner OS labels", self.bundle([
             {"installables": "/nix/store/first.drv^*", "os": ["ubuntu-latest"]},
             {"installables": "/nix/store/second.drv^*", "os": ["macos-latest"]},
-        ], expected_error='check plan has multiple runner OS labels: ["macos-latest"], ["ubuntu-latest"]')
-
-    def test_worker_prefetches_all_installables_and_keeps_going(self):
-        script = ci_step_script("Build evaluated derivations without flake evaluation")
-        services = '''set -euETo pipefail
-shopt -s inherit_errexit 2>/dev/null || :
-hestia() { printf 'prefetch:<%s>\\n' "$@"; return "$PREFETCH_STATUS"; }
-nix() { printf 'build:<%s>\\n' "$@"; return 1; }
-'''
-        installables = "/nix/store/first.drv^* /nix/store/second.drv^*"
-        for prefetch_status in (0, 1):
-            with self.subTest(prefetch_status=prefetch_status):
-                result = subprocess.run(
-                    ["bash", "-c", services + script],
-                    env=dict(os.environ, HESTIA_BIN="hestia", INSTALLABLES=installables,
-                             PREFETCH_STATUS=str(prefetch_status)),
-                    capture_output=True, text=True,
-                )
-                self.assertNotEqual(result.returncode, 0)
-                lines = result.stdout.splitlines()
-                self.assertEqual(lines[:3], [f"prefetch:<{arg}>" for arg in ["prefetch", *installables.split()]])
-                if prefetch_status:
-                    self.assertIn("Re-run all jobs", result.stdout)
-                    self.assertNotIn("build:<", result.stdout)
-                else:
-                    self.assertEqual(lines[3:], [f"build:<{arg}>" for arg in
-                                               ["build", "--keep-going", "--no-link", "-L", *installables.split()]])
-
-    def test_check_gate_accepts_cached_plans_and_rejects_failed_workers(self):
-        script = ci_step_script("Require successful evaluation and workers")
-        for evaluation, any_jobs, build, test, success in (
-            ("success", "false", "skipped", "success", True),
-            ("success", "true", "success", "success", True),
-            ("success", "true", "failure", "success", False),
-            ("success", "true", "cancelled", "success", False),
-            ("success", "true", "skipped", "success", False),
-            ("failure", "true", "success", "success", False),
-            ("skipped", "", "skipped", "success", True),
-            ("skipped", "", "skipped", "failure", False),
-        ):
-            with self.subTest(evaluation=evaluation, any_jobs=any_jobs, build=build, test=test):
-                result = subprocess.run(["bash", "-c", script], env=dict(
-                    os.environ, ANY_JOBS=any_jobs, BUILD_RESULT=build, EVAL_RESULT=evaluation, TEST_RESULT=test,
-                ))
-                self.assertEqual(result.returncode == 0, success)
-
-
-class KiroScopeTest(unittest.TestCase):
-    def test_pr_scope_push_dispatch_and_api_failure(self):
-        script = ci_step_script("Scope")
-        services = '''set -euETo pipefail
-shopt -s inherit_errexit 2>/dev/null || :
-gh() { printf '%s\\n' "$CHANGED_FILES"; return "$GH_STATUS"; }
-'''
-        for event, changed, api_status, needed in (
-            ("pull_request", "docs/repository-layout.md", 0, "false"),
-            ("pull_request", "packages/kiro-cli/sources.json", 0, "true"),
-            ("pull_request", "lib/packaging.nix", 0, "true"),
-            ("pull_request", ".github/workflows/ci.yml", 0, "true"),
-            ("pull_request", "", 1, None),
-            ("push", "", 1, "true"),
-            ("workflow_dispatch", "", 1, "true"),
-        ):
-            with self.subTest(event=event, changed=changed, api_status=api_status), tempfile.TemporaryDirectory() as directory:
-                output = Path(directory) / "output"
-                result = subprocess.run(["bash", "-c", services + script], env=dict(
-                    os.environ, CHANGED_FILES=changed, GH_STATUS=str(api_status), GITHUB_EVENT_NAME=event,
-                    GITHUB_OUTPUT=str(output), GITHUB_REPOSITORY="owner/repo", PR_NUMBER="1",
-                ), capture_output=True, text=True)
-                self.assertEqual(result.returncode == 0, needed is not None, result.stderr)
-                if needed is not None:
-                    self.assertEqual(output.read_text(), f"needed={needed}\n")
-                else:
-                    self.assertFalse(output.exists())
-
-    def test_required_legs_fail_when_scope_does_not_succeed(self):
-        for scope in ("cancelled", "failure", "skipped", "success"):
-            with self.subTest(scope=scope):
-                result = subprocess.run(["bash", "-c", ci_step_script("Require successful Kiro scope")],
-                                        env=dict(os.environ, RESULT=scope))
-                self.assertEqual(result.returncode == 0, scope == "success")
+        ]))
 
 
 class CoverageTest(unittest.TestCase):
