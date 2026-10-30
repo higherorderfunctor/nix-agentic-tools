@@ -248,6 +248,17 @@
           text = readContent rule;
         })))
     rules;
+  normalizedSettingsType = lib.types.submodule {
+    options.reasoningEffort = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
+      default = null;
+      description = ''
+        Portable reasoning effort across runtimes that persist the same
+        semantic values. Runtime-specific values belong in
+        `ai.<runtime>.native.settings`.
+      '';
+    };
+  };
 in {
   # ── Markdown content records ───────────────────────────────────────
   # Context and rules share one text-source record. The type resolves source
@@ -333,19 +344,12 @@ in {
   # ── Settings utilities ──────────────────────────────────────────────
 
   # Closed normalized settings shared by the root and every runtime whose
-  # app record supports the `settings` pool (all but Kiro).
+  # app record supports the `settings` pool. Each runtime declares consumed
+  # fields separately in surfaceSupport.settings.fields. Every field must be
+  # nullOr with default null so an unset field neither warns nor overrides.
   # Native settings live in each factory's separate `native.settings` option.
-  normalizedSettingsType = lib.types.submodule {
-    options.reasoningEffort = lib.mkOption {
-      type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
-      default = null;
-      description = ''
-        Portable reasoning effort across runtimes that persist the same
-        semantic values. Runtime-specific values belong in
-        `ai.<runtime>.native.settings`.
-      '';
-    };
-  };
+  normalizedSettingsFields = builtins.attrNames (builtins.removeAttrs (normalizedSettingsType.getSubOptions []) ["_module"]);
+  inherit normalizedSettingsType;
 
   # Recursively filter null values from an attrset (for typed settings
   # with freeformType where defaults are null). Also removes empty

@@ -1,10 +1,11 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-30 — shared AGENTS.md uses readable
-> `.agents/rules/` child indexes, preserves runtime audiences and retains
-> structured index metadata; Copilot writes named rules and unnamed context
-> independently under `.github/`; non-AI owners use the same layer-1 helper;
-> delivery facts derive delivered and absent cells, keyed withdrawal and
+> **Last verified:** 2026-10-30 — `surfaceSupport.settings.fields` limits
+> resolved normalized settings; unlisted fields warn per field; shared AGENTS.md
+> uses readable `.agents/rules/` child indexes, preserves runtime audiences and
+> retains structured index metadata; Copilot writes named rules and unnamed
+> context independently under `.github/`; non-AI owners use the same layer-1
+> helper; delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
 > launcher and pool options; the devenv file observer lives in ai-module and
@@ -282,10 +283,10 @@ rather than a second path field: a runtime names exactly the groups it moves.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   whose `surfaceSupport.settings` declares a non-empty backend list receives the
   same closed `settings` submodule; Kiro does not, because it persists effort
-  only per model. Each field resolves root versus per-runtime with
-  `resolveOverride`; native lowering remains per-runtime and may support only a
-  subset of fields. Runtime-shaped passthrough is separate under
-  `native.settings` and is not a normalized pool.
+  only per model. Each field listed in `surfaceSupport.settings.fields` resolves
+  root versus per-runtime with `resolveOverride`; unlisted fields stay null in
+  the normalized option, and native lowering stays per-runtime. Runtime-shaped
+  passthrough is separate under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -312,7 +313,8 @@ Each surface, runtime and backend cell is one row, `delivered` or
 absences and their reasons. A native writer can exist alongside an unavailable
 normalized pool (Kiro hooks and settings, `nativeWriters` in
 `config/ai-delivery-facts.nix`); that cell stays delivered and gains the absence
-as a diagnostic child. Static record gaps project into diagnostic children too.
+as a diagnostic child. Static record gaps and undeclared normalized settings
+fields project into diagnostic children too, using the shared fallback reasons.
 Gaps requiring keyed entries, effective scalar selection, predicates or dynamic
 reasons remain record-only diagnostics. Hand rows state native-only absences on
 the policy-only permissions surface; a hand row on a shared surface fails naming
@@ -443,7 +445,9 @@ own configuration omitted.
 3. Declare `surfaceSupport.X` only on app records whose delivery `config`
    consumes it. The normalized `settings` pool follows the same rule: a runtime
    with no lossless target for any field (Kiro) leaves it out, and one that
-   lowers only some fields keeps it and warns for the rest.
+   lowers only some fields lists those names in
+   `surfaceSupport.settings.fields`. New fields warn for every runtime that has
+   not listed them.
 4. Add L4 routing/rendering into `ai.<runtime>._generatedFiles` in each
    supporting per-CLI factory's `config`. State content, format, method and
    surface; commands use `ai.<runtime>.activation`.

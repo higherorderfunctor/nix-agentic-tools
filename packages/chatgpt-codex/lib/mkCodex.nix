@@ -1089,7 +1089,7 @@ in
       mcpServers = {};
       proxy = {};
       rules = {};
-      settings = {};
+      settings.fields = ["reasoningEffort"];
       shell = {};
       skills = {};
     };

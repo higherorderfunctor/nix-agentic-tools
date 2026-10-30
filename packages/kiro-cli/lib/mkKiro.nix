@@ -1217,7 +1217,7 @@ in
       };
       settings = {
         backends = [];
-        reason = "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target. Use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort for the native per-model value (packages/kiro-cli/lib/mkKiro.nix).";
+        reason = "Kiro persists settings such as effort only per model in chat.modelDefaults, so normalized settings have no lossless target. For reasoning effort, use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort.";
       };
       shell = {};
       skills = {};
