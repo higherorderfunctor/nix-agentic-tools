@@ -1,6 +1,6 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-10-26 — shared guidance uses individually named
+> **Last verified:** 2026-10-29 — shared guidance uses individually named
 > always-on rules; scoped rules keep registry matchers and references. Local
 > AGENTS.md and readable `.agents/rules/` indexes are generated and gitignored.
 > Copilot receives selected named rules through `.github/instructions/` and
@@ -16,7 +16,8 @@ content. Two location flavors are supported by `dev/generate.nix`:
   through `ai.rules` alongside the published coding standards. Other documents
   in that directory remain authoritative references loaded by the operating
   policy's action triggers; their directory alone does not make them
-  always-loaded.
+  always-loaded. The `architecture` category also selects its decisions as an
+  always-loaded rule, outside the Copilot reviewer category selection.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
 
@@ -32,8 +33,9 @@ it per runtime through the `lib/ai/transformers/` pipeline:
 - Claude: `.claude/rules/<name>.md` with `paths:` YAML list
 - Copilot: `.github/instructions/<name>.instructions.md` with `applyTo:`
   comma-joined globs
-- Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
-  `fileMatchPattern:`
+- Kiro supports `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an
+  array `fileMatchPattern:`. This repository selects only shared root AGENTS.md;
+  see `dev/fragments/pipeline/generation-architecture.md`.
 - Codex / AGENTS.md: named always-on bodies plus a compact
   `## Path-scoped rules` index. Codex has no glob-scoped instruction primitive,
   so the index maps registry scopes to authoritative source documents. Shorter
@@ -46,12 +48,13 @@ it per runtime through the `lib/ai/transformers/` pipeline:
 
 The source fragments are authoritative. Every runtime file above is a generated
 projection written by `ai.*`. Only the `.github/` instruction files are
-committed; AGENTS.md, `.agents/rules/`, Claude rules and Kiro steering are
-gitignored and written on devenv shell entry. Copilot does not contribute to the
-shared AGENTS.md composer. Named rules become separate
-`.github/instructions/<name>.instructions.md` files, including `applyTo: "**"`
-for selected always-on rules. An explicit unnamed Copilot context independently
-uses `.github/copilot-instructions.md`; this repository declares none.
+committed. Local runtime opt-ins write gitignored AGENTS.md, `.agents/rules/`
+and Claude rules on devenv shell entry; this repository gives Kiro only shared
+root AGENTS.md. Copilot does not contribute to the shared AGENTS.md composer.
+Named rules become separate `.github/instructions/<name>.instructions.md` files,
+including `applyTo: "**"` for selected always-on rules. An explicit unnamed
+Copilot context independently uses `.github/copilot-instructions.md`; this
+repository declares none.
 
 Never edit a projection directly; the next generation replaces it.
 `devenv tasks run --mode before generate:all` regenerates instructions and

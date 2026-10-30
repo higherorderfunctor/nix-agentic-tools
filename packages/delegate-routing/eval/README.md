@@ -1,6 +1,6 @@
 # Acceptance suite
 
-> **Last verified:** 2026-10-09 — Claude and Kiro each run a reminder on/off
+> **Last verified:** 2026-10-29 — Claude and Kiro each run a reminder on/off
 > pair; the other harnesses run one-task and dependent-chain cases.
 
 One manual suite of real sessions on Claude, Codex, Kiro and Kimchi. Each case
@@ -38,9 +38,10 @@ those needs proof that child messages never reach the parent stream.
 
 ## Cases
 
-`cases.nix` evaluates this repository's own delivery (`dev/ai.nix`) through the
-devenv module harness, with only the case's switches changed, and exports every
-delivered file. The prompt is the task plus synthetic usage numbers; the
+`cases.nix` evaluates repository delivery (`dev/ai.nix`) with explicit suite
+runtime and delegate-routing settings, then applies each case's switches and
+exports every delivered file. Personal `devenv.local.nix` is outside this
+fixture configuration. The prompt is the task plus synthetic usage numbers; the
 expected behavior never enters it.
 
 | Cases                                                                                | Switch or shape                                | Assertion      |
@@ -133,10 +134,11 @@ to `logs/hook-calls.jsonl` and always exits 0; it is a second record, not
 counted. A `claude` binary must resolve inside `/nix/store` (`~/.local/bin`
 holds a stale native install); `--bin NAME=PATH` overrides any harness binary.
 Each case first runs the binary's `--version` in the fixture; a non-zero exit is
-an `ERROR` naming its output. A devenv shell puts this repository's project
-Kimchi wrapper first on `PATH`, and it refuses any other directory, so run from
-that shell with `--bin kimchi=<path>` (for example the profile's pinned
-`kimchi`).
+an `ERROR` naming its output. With Kimchi enabled in personal
+`devenv.local.nix`, the devenv shell puts the project Kimchi wrapper first on
+`PATH`; it refuses any other directory. From that shell, pass
+`--bin kimchi=<path>` for a binary that can launch in the fixture (for example
+the profile's pinned `kimchi`).
 
 **Caps.** 600 s wall clock per case, then the whole process group gets SIGTERM
 and, 30 s later, SIGKILL; delegates still running when the session ends are

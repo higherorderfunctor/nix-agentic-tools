@@ -1,6 +1,6 @@
 ## Copilot config delivery — github.com Copilot
 
-> **Last verified:** 2026-10-26 — `ai.copilot.github` writes its own context to
+> **Last verified:** 2026-10-29 — `ai.copilot.github` writes its own context to
 > `<projectDir>/<context.filename>` (default `.github/copilot-instructions.md`)
 > and each named rule to its native instructions file, independently of the
 > shared AGENTS.md composer. Home Manager retains explicit unsupported warnings.
@@ -82,10 +82,11 @@ module stays registered on Home Manager for exactly that: a value set there
 warns instead of vanishing. Package rule and skill contributors
 (`mkSkillPackageModule.nix`) skip Copilot on Home Manager.
 
-The repository's own `dev/ai.nix` null-suppresses its root skills for Copilot:
-these are local-session operations, not a default committed payload. Package
-runtime disables remain authoritative, including peer communication's explicit
-Copilot disable. `.github/skills` is committable when a consumer selects skills.
+The repository's `dev/ai.nix` null-suppresses its root skills for Copilot
+because they operate local sessions. Package runtime disables remain
+authoritative, including peer communication's explicit Copilot disable. See
+`dev/fragments/pipeline/generation-architecture.md` for repository runtime
+opt-ins. `.github/skills` is committable when a consumer selects skills.
 
 The hooks reason names a real reader this module does not serve: the cloud agent
 loads `.github/hooks/*.json` from the default branch (bash entries only, `ask`

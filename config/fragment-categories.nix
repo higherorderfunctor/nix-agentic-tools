@@ -47,7 +47,7 @@
     # ai-config-scope: whether a devenv-delivered runtime reads the
     # developer's user-global config, and why every runtime answers "yes".
     # Scoped to the factories and wrappers that COULD redirect a config root,
-    # plus dev/ai.nix and devenv.nix, where the runtimes are enabled.
+    # plus dev/ai.nix and devenv.nix, where project runtime settings live.
     # Deliberately NOT scoped to package recipes under `packages/*/packages/**`
     # — a recipe packages a binary and never decides where that binary looks
     # for config.
@@ -232,6 +232,11 @@
         "packages/stacked-workflows/modules/**"
       ];
       sources = ["skills-fanout-pattern"];
+    };
+    # Architecture decisions apply to every repository task.
+    architecture = {
+      scopes = null;
+      sources = ["architecture"];
     };
     # devenv: devenv files.* internals + skills layout walker. Scoped
     # to per-package devenv modules and the helper file.

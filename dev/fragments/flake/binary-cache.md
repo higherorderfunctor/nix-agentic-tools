@@ -1,6 +1,6 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-28 — at most four check bundles share the evaluator
+> **Last verified:** 2026-10-29 — at most four check bundles share the evaluator
 > manifest version and prefetch every installable before building with
 > `--keep-going`.
 
@@ -34,10 +34,12 @@ selections rebuild only store JSON and a bin-only launcher. The
 with that variant's runtime config and exercises mapped-file discovery and
 language selection.
 
-This is separate from `devenv test` closure policy.
-`ai.programs.semble.install = !isCI` (dev/ai.nix) keeps the interactive package
-out of that cold runtime-test shell while every runtime keeps the Semble rule;
-it does not remove or weaken the flake check above.
+This is separate from `devenv test` closure policy. `dev/ai.nix` retains
+`ai.programs.semble.install = !isCI`. With Semble enabled, diagnostic mode skips
+the package while selected supported runtimes keep CLI guidance. See
+`dev/fragments/pipeline/generation-architecture.md` for repository runtime
+opt-ins. The flake check above validates the package independently of shell
+opt-ins.
 
 ### CI-only check cache
 

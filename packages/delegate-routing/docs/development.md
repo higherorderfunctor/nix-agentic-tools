@@ -1,6 +1,6 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-24 — usage follows each runtime's selected proxy,
+> **Last verified:** 2026-10-29 — usage follows each runtime's selected proxy,
 > with direct reads when management metadata is absent; review role overrides
 > migrate to the single Review step, with no compatibility keys shipped.
 >
@@ -75,12 +75,8 @@ executable first-match routing. Workflow steps have their own ordering map. To
 keep a terminal step last when inserting a new step, give the new step a
 `before` edge to that terminal step.
 
-This repository enables "Orchestrator session" in `dev/ai.nix`. Its portable
-"Local limits" entry caps external CLI delegates at two while leaving native
-parallelism uncapped. Its Claude-only "Pool drain" entry follows "Size the work"
-and asks for usage before each batch of delegates, then applies the operator's
-pool allocation and vendor separation. These house entries are consumer policy,
-not shipped defaults.
+Repository runtime and skill ownership is documented in
+`dev/fragments/pipeline/generation-architecture.md`.
 
 ## Families and runtime capabilities
 
@@ -88,8 +84,9 @@ not shipped defaults.
 capability tier, task and effort guidance, and a required normalized live-model
 pattern. Package fields use `mkDefault`, so consumers can override a field or
 add a family. `lib/families.nix` carries the package families without concrete
-model versions or Kimchi-served vendors. Kimchi serves other vendors' models, so
-this repository declares those families in `dev/ai.nix`.
+model versions or Kimchi-served vendors. Consumers selecting Kimchi models
+declare the corresponding vendor families in their delegate-routing
+configuration.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
@@ -130,10 +127,11 @@ behind it.
 
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
-command without a model tool; `dev/ai.nix` enables its interactive resource
-separately. External and manual runtime sections include external, introspect
-and usage nodes. Kimchi has no usage node because no command reads usage without
-a model turn. Shared table rendering escapes cells once.
+command without a model tool; `dev/ai.nix` configures its interactive resource
+for local activation (see `dev/fragments/pipeline/generation-architecture.md`).
+External and manual runtime sections include external, introspect and usage
+nodes. Kimchi has no usage node because no command reads usage without a model
+turn. Shared table rendering escapes cells once.
 
 ## Delivery and previews
 
@@ -186,7 +184,7 @@ its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
 helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
 direct read. `zai-usage claude|codex` selects the route whose GLM pool it reads;
-this repository attaches it to both runtimes as a usage technique.
+consumers attach it to a runtime through that runtime's usage techniques.
 
 Usage follows generic `ai.<runtime>.proxy` selection. A selected local instance
 with a file management-key reference supplies metadata automatically. With no
@@ -244,23 +242,24 @@ output.
 
 `eval/` is the acceptance suite: one manual suite of real sessions on Claude,
 Codex, Kiro and Kimchi that checks what the delivered configuration makes an
-agent do with a real task. `eval/cases.nix` evaluates `dev/ai.nix` through the
-devenv module harness with only each case's switches changed, and exports every
-delivered file plus the evaluated delegate technique names. `eval/suite.py` is
-the single runner: it renders each case into a fresh fixture repository, runs
-one session under a scratch `HOME` that keeps only the login and carried-over
-settings; the Kiro fixture writes the global workflow setting from its effective
-technique inventory without changing the operator's home. It hides config from
-the loader, not files from the model. It caps the session and asserts on the
-session's own event log. Root model and effort come from the single
-`ROOT_BASELINES` table at the operator’s strong-tier medium; Codex model/effort
-and Kiro default model are not copied. Claude debug scope counts attribute
-bundled skills without a name allowlist; Codex resolves catalog paths, and Kiro
-reads workspace skill source metadata from CLI stream updates. Kimchi separates
-extension flags from the task with `--`. Kiro resolves the newest matching Opus
-model only for live runs. Results record requested controls separately from root
-event/log observations, with `not exposed` for missing fields. Harness
-differences live in its `HARNESSES` table; assertions in its `ASSERTIONS` table.
+agent do with a real task. `eval/cases.nix` evaluates the repository delivery
+configuration with explicit acceptance-suite runtime and delegate-routing
+settings, then applies each case's switches. It exports every delivered file
+plus the evaluated delegate technique names. `eval/suite.py` is the single
+runner: it renders each case into a fresh fixture repository, runs one session
+under a scratch `HOME` that keeps only the login and carried-over settings; the
+Kiro fixture writes the global workflow setting from its effective technique
+inventory without changing the operator's home. It hides config from the loader,
+not files from the model. It caps the session and asserts on the session's own
+event log. Root model and effort come from the single `ROOT_BASELINES` table at
+the operator’s strong-tier medium; Codex model/effort and Kiro default model are
+not copied. Claude debug scope counts attribute bundled skills without a name
+allowlist; Codex resolves catalog paths, and Kiro reads workspace skill source
+metadata from CLI stream updates. Kimchi separates extension flags from the task
+with `--`. Kiro resolves the newest matching Opus model only for live runs.
+Results record requested controls separately from root event/log observations,
+with `not exposed` for missing fields. Harness differences live in its
+`HARNESSES` table; assertions in its `ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
 skill read one table. Same-runtime nested children ARE logged in and can run and

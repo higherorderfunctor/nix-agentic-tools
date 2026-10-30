@@ -1,15 +1,8 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-16 — only runtimes with launcher packages enter the
-> wrapper closure; github.com Copilot has none. The CI matrix reads
-> `ciPackages`; the repo shell applies `buildOverlay`. Kimchi source builds
-> require fresh closure measurements; old binary-release figures are not current
-> estimates. The Codex permission-mix assertions and runtime PATH provenance are
-> consumer-wide shell-entry warnings, not repository enterTest loops. The
-> repository shell sets no harness permissions; contributors choose them in
-> their user config. Files-engine runtime checks cover delivery independently.
->
-> Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
+> **Last verified:** 2026-10-29 — the CI matrix reads `ciPackages`; the repo
+> shell applies `buildOverlay`. Files-engine runtime checks cover delivery
+> independently of local opt-ins.
 
 The Devenv Diagnostic workflow (`.github/workflows/devenv-test.yml`) runs only
 on `workflow_dispatch`. Its cold interactive shell closure is therefore an
@@ -26,13 +19,11 @@ previously justified the runtime workflow:
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
   lifecycle selection and scan the complete tracked validator corpus.
 
-The repository's extra dev-skill delivery assertions are retired. Codex's
-whole-directory skill link is covered by `module-codex-skills-fanout`, and
-`module-sws-skill-references-resolve` checks bundled references. The dev-prefix
-builder in `dev/ai.nix` dereferences references with `cp -RL` and rewrites the
-skill name with `substituteInPlace --replace-fail`; missing references or name
-matches fail the build. These checks do not inspect a developer's materialized
-skill directories.
+Runtime and skill ownership follows
+`dev/fragments/pipeline/generation-architecture.md`. Repository skills in
+`dev/ai.nix` cover project-specific operations; `module-codex-skills-fanout` and
+`module-sws-skill-references-resolve` verify the packages' delivery contracts
+independently of a developer's materialized skill directories.
 
 The repository no longer repeats instruction-file and Claude settings delivery
 assertions in `enterTest`. ai-module's checks pin where the files plan lands
@@ -56,13 +47,13 @@ could make ordinary shell entry scan the full corpus.
 
 ## The five buckets
 
-| Bucket                   | Examples                                               | Manual diagnostic closure?             | Automatic CI treatment                                |
-| ------------------------ | ------------------------------------------------------ | -------------------------------------- | ----------------------------------------------------- |
-| Diagnostic dependencies  | generation pipeline, coreutils-class tools, validators | yes                                    | narrow flake checks realize only their declared tools |
-| Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`), Semble | no — `lib.optionals (!isCI)`           | not invoked                                           |
-| Validation hooks         | prek plus declared hook tools                          | yes — policy is unconditional          | validator-only projection; commit lifecycle excluded  |
-| Factory CLI wrappers     | launcher-bearing `ai.*` runtimes (see note)            | yes — enterTest exercises files fanout | package/build checks remain separate                  |
-| Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages              | never unless explicitly selected       | CI build matrix over `ciPackages`                     |
+| Bucket                   | Examples                                               | Manual diagnostic closure?         | Automatic CI treatment                                |
+| ------------------------ | ------------------------------------------------------ | ---------------------------------- | ----------------------------------------------------- |
+| Diagnostic dependencies  | generation pipeline, coreutils-class tools, validators | yes                                | narrow flake checks realize only their declared tools |
+| Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`)         | no — `lib.optionals (!isCI)`       | not invoked                                           |
+| Validation hooks         | prek plus declared hook tools                          | yes — policy is unconditional      | validator-only projection; commit lifecycle excluded  |
+| Factory CLI wrappers     | locally enabled launcher-bearing `ai.*` runtimes       | only with personal runtime opt-ins | package/build checks remain separate                  |
+| Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages              | never unless explicitly selected   | CI build matrix over `ciPackages`                     |
 
 ## The decision rule
 
@@ -77,7 +68,8 @@ own narrow closures.
 launcher package: Claude, Codex, Kimchi and Kiro. github.com Copilot has no
 launcher, so enabling it adds no runtime package to the closure. A consumer may
 also set a launcher's package to null to keep configuration without installing
-its binary.
+its binary. Repository runtime opt-ins and content selection are documented in
+`dev/fragments/pipeline/generation-architecture.md`.
 
 Measure the MARGINAL runtime cost: the store paths Kimchi adds to the existing
 shell, excluding dependencies already present. Neither the executable's size
@@ -99,11 +91,9 @@ comm -23 \
   <(nix-store -qR "$DEVENV_PROFILE" | sort)
 ```
 
-It is unconditional — no `!isCI` guard, by design. If that closure growth ever
-becomes unacceptable, the answer is `ai.kimchi.enable`, not an `!isCI` branch;
-the decision rule above forbids using that branch for anything a guard depends
-on, and the shared installation block warns at shell entry when PATH resolves a
-runtime outside the devenv profile.
+For a locally enabled runtime, installation follows its `ai.*` enable and
+package options. The shared installation block warns at shell entry when PATH
+resolves that runtime outside the devenv profile.
 
 ### Harness permissions belong to each contributor
 
@@ -130,17 +120,13 @@ Two earlier measurements still constrain any future project permission profile:
   `:workspace_roots."." = "write"` made that false from the start. The stated
   security property never existed.
 
-The repository enables Semble only outside diagnostic mode, pins it to this
-flake, adds AWK and jq Tree-sitter grammars, and maps its non-standard Bash,
-Gitignore, JSON, and Markdown paths. Its devenv facet still owns and invalidates
-`${config.devenv.state}/semble-cache`. It is the root `ai.programs.semble` in
-`dev/ai.nix`, so every runtime it supports gets its CLI rule (Claude as a rule
-file, Codex and Kiro inline in AGENTS.md) and none gets its MCP server. The
-user-global cache is no longer in play for this shell. Keeping `enable = !isCI`
-is load-bearing: the manual diagnostic does not invoke Semble and must not
-realize its model, MCP, or grammar closure. The diagnostic therefore rewrites
-its throwaway AGENTS.md without the Semble rule; the drift check pins
-`isCI = false`, so the committed bytes never depend on it.
+`dev/ai.nix` retains the Semble package, AWK and jq grammars, and mappings for
+its non-standard Bash, Gitignore, JSON and Markdown paths. The retained
+`install = !isCI` setting omits the package during the manual diagnostic while
+keeping CLI guidance for enabled supported runtimes. The program delivers no MCP
+server here. Its devenv facet owns and invalidates
+`${config.devenv.state}/semble-cache`; this configuration uses that
+project-local cache instead of the user-global cache.
 
 Integration roots remain available to workspace-write and named-profile
 consumers. The repository no longer asserts a Codex sandbox policy or repeats
@@ -150,9 +136,9 @@ warning. The old `--profile` wrapper and stale whole-file profile assertions are
 gone: `ai.codex.profiles` was removed, and
 `packages/chatgpt-codex/lib/launcher-flags.nix` owns the launcher flags.
 
-Two proofs to preserve when touching the diagnostic: with `CI` unset the shell
-must contain grammar/path-customized Semble and its scoped cache root, while an
-on-demand `CI=1 devenv test` must stay green without either in that closure.
+With Semble enabled, contributors can verify the grammar/path-customized package
+and project-local cache interactively; `CI=1` keeps its installation out of the
+diagnostic closure.
 
 ## The manual diagnostic carries #821 telemetry
 

@@ -46,9 +46,7 @@
   # enterTest never invokes. Validation policy is deliberately NOT conditional:
   # local hooks, their manual-stage projection, and the flake CI projection all
   # exist regardless of $CI, so exporting CI cannot silently make a guard
-  # disappear. The ai.* modules stay enabled because enterTest exercises their
-  # files fanout (their CLI wrappers ride along in the closure; gating those
-  # needs a factory-level option).
+  # disappear.
   # devenv evaluates impurely and its eval cache records env-var inputs
   # (devenv-eval-cache EnvInputDesc), so flipping $CI re-evaluates
   # instead of serving a stale shell. A developer who exports CI=1 gets the
@@ -67,17 +65,11 @@ in {
     ./packages/microvm/modules/devenv
     ./packages/peer-communication/modules/devenv
     ./packages/semble/modules/devenv
+    # Runtime opt-in policy: dev/fragments/pipeline/generation-architecture.md.
     # This repository's `ai.*` configuration. It consumes `ai.*` exactly as
     # any project would, fed the context and rules dev/generate.nix produces;
     # checks/instructions/instructions-drift.nix evaluates the same module.
     (import ./dev/ai.nix {inherit isCI;})
-    # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
-    # it would fan its skills into `ai.skills` UNPREFIXED (stack-*), which, once
-    # installed user-global via nixos-config, would silently shadow the
-    # project-scope copies (Claude precedence: Personal > Project). This dev
-    # repo instead wires the same skills directly under a `dev-` prefix (see the
-    # `ai.skills` block in dev/ai.nix) so the in-repo copies remain distinctly
-    # invocable.
   ];
 
   # This repository assembles the modules directly instead of consuming the
@@ -183,7 +175,6 @@ in {
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     echo "Validating devenv configuration..."
-    nat_codex_bin="$(command -v codex)"
     ${lib.optionalString (!isCI) ''
       nat_hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
       for nat_hook in pre-commit commit-msg; do

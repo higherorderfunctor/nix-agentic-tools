@@ -937,13 +937,6 @@ in {
           grep -F 'delegate-routing.routing: ordering cycle involving Self' actual.stderr
           touch "$out"
         '';
-      module-delegate-routing-repo-router = let
-        repo = harness.evalDevenvModules [(import ../../../dev/ai.nix {isCI = false;})];
-        routerRules = lib.genAttrs runtimes (runtime: repo.config.ai.${runtime}.rules ? delegate-routing-router);
-      in
-        (mkTest "delegate-routing-repo-router" (lib.all (value: value) (builtins.attrValues routerRules))).overrideAttrs {
-          passthru = {inherit routerRules;};
-        };
     }
     // checkBackend {
       name = "devenv";

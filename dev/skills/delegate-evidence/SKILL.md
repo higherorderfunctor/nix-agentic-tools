@@ -35,8 +35,10 @@ new row must follow.
 ## The acceptance suite: does the skill route correctly
 
 `packages/delegate-routing/eval/` runs real sessions on Claude, Codex, Kiro and
-Kimchi and checks what the delivered configuration makes an agent do. Validate
-every case and print each launch without starting anything:
+Kimchi and checks what the explicit suite configuration makes an agent do. Its
+fixtures enable their own runtimes and routing; personal `devenv.local.nix` is
+outside those inputs. Validate every case and print each launch without starting
+anything:
 
 ```bash
 python3 packages/delegate-routing/eval/suite.py --dry-run

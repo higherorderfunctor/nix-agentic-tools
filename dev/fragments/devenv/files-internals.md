@@ -1,16 +1,17 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-10-26 — Kiro steering uses engine copies; Codex skill
-> discovery was re-probed on 0.161.0; skills are staged entries the ai-module
-> files engine walks. Codex declares its skill migration through activation,
-> before linkCheck on both backends. The repository's committed instruction
-> files are read-only copies the files engine writes, never `files.*` symlinks.
-> Kiro and Kimchi settings and Codex daemon settings are owned copies; Copilot
-> writes repository instructions and selected skills as owned copies; its agents
-> declare a gap; recursive `ro` skills retain the engine's directory-symlink
-> refusal and file-symlink dereference; the files engine writes Claude's project
-> rules. Identical copy bytes with changed permissions are corrected without a
-> backup. Recursive leaf links target one source-tree store root while retaining
+> **Last verified:** 2026-10-29 — local instruction delivery requires runtime
+> opt-ins; Kiro receives only shared root AGENTS.md. Codex skill discovery was
+> re-probed on 0.161.0; skills are staged entries the ai-module files engine
+> walks. Codex declares its skill migration through activation, before linkCheck
+> on both backends. The repository's committed instruction files are read-only
+> copies the files engine writes, never `files.*` symlinks. Kiro and Kimchi
+> settings and Codex daemon settings are owned copies; Copilot writes repository
+> instructions and selected skills as owned copies; its agents declare a gap;
+> recursive `ro` skills retain the engine's directory-symlink refusal and
+> file-symlink dereference; the files engine writes Claude's project rules.
+> Identical copy bytes with changed permissions are corrected without a backup.
+> Recursive leaf links target one source-tree store root while retaining
 > per-file input contexts. The symlink guard uses devenv's final file target and
 > runs after engine pruning and before native file creation. Recursive expansion
 > belongs only to the files engine.
@@ -229,13 +230,15 @@ the user-space walker is a viable fix while waiting for upstream.
 ### Instruction files are copies, not `files.*` symlinks
 
 This repository's instruction files are written by `ai.*` (configured in
-`dev/ai.nix`) like any consumer's. On devenv local `AGENTS.md`, its
-`.agents/rules/` child indexes, committed `.github/` instructions, and Claude's
-and Kiro's project rules are read-only COPIES the ai-module files engine writes
-on every `devenv shell`, `direnv reload`, `devenv up`, `devenv reload` and
-manual `devenv test`, after `devenv:files:cleanup` and before
-`devenv:enterShell`. Claude's `.claude/CLAUDE.md` stays a store link (its
-project context loader follows one; its scoped-rule loader does not).
+`dev/ai.nix`) like any consumer's. The committed configuration writes only
+`.github/` instructions. After runtime opt-ins in ignored `devenv.local.nix`,
+the files engine also writes local `AGENTS.md`, `.agents/rules/` child indexes
+and Claude's project rules as read-only COPIES. Kiro receives only shared root
+`AGENTS.md`, with no project steering. The engine runs on every `devenv shell`,
+`direnv reload`, `devenv up`, `devenv reload` and manual `devenv test`, after
+`devenv:files:cleanup` and before `devenv:enterShell`. With Claude enabled,
+`.claude/CLAUDE.md` is a store link (its project context loader follows one; its
+scoped-rule loader does not).
 
 Why copies rather than `files.*` symlinks:
 

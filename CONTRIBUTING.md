@@ -4,7 +4,8 @@
 
 ## Development Setup
 
-All tools are provided by the devenv shell. No global installs required.
+All development tools are provided by the devenv shell. AI harnesses are opt-in;
+see Generation Architecture below.
 
 ```bash
 devenv shell          # enter dev shell with all tools
@@ -58,7 +59,7 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-10-26 — shared guidance is individually named
+> **Last verified:** 2026-10-29 — shared guidance is individually named
 > always-on rules, selected per runtime through existing rule disables. Copilot
 > writes its own GitHub files and does not contribute to shared AGENTS.md. Local
 > AGENTS.md and `.agents/rules/` are generated and gitignored; drift compares
@@ -76,34 +77,45 @@ nix flake check       # linters + evaluation (does NOT build packages)
 Two kinds of generated content, two owners:
 
 - **Agent instructions** — `dev/generate.nix` returns `rules`: one named
-  always-on rule per published coding-standard fragment and selected `monorepo`
-  source, plus one scoped rule per other registry category. Scoped rules carry
-  composed text, scope globs as `matcher`, source documents as `references`, and
-  the matcher-derived `fileMatch` default. `dev/ai.nix` assigns `ai.rules`;
-  `ai.*` renders and writes each runtime's files through its generated tree.
-  Codex, Kimchi and Kiro share local AGENTS.md, with a path-scoped index and
-  readable child indexes under `.agents/rules/` when shorter. Claude receives
-  `.claude/rules/`, Copilot receives `.github/instructions/`, and Kiro receives
-  `.kiro/steering/`. All local instruction projections are gitignored; GitHub
-  instructions are committed read-only copies. An explicitly declared unnamed
-  Copilot context independently writes `.github/copilot-instructions.md`; this
-  repository declares none.
+  always-on rule per published coding-standard fragment and source in an
+  unscoped registry category, plus one scoped rule per scoped category. Scoped
+  rules carry composed text, scope globs as `matcher`, source documents as
+  `references`, and the matcher-derived `fileMatch` default. `dev/ai.nix`
+  assigns `ai.rules`; `ai.*` renders and writes enabled runtimes' files through
+  its generated tree. Codex and Kimchi share local AGENTS.md, with a path-scoped
+  index and readable child indexes under `.agents/rules/` when shorter. Claude
+  receives `.claude/rules/`, and Copilot receives `.github/instructions/`. Kiro
+  participates only in shared root AGENTS.md. All local instruction projections
+  are gitignored; GitHub instructions are committed read-only copies. An
+  explicitly declared unnamed Copilot context independently writes
+  `.github/copilot-instructions.md`; this repository declares none.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
   evaluated treefmt config, and the same named guards `ai.guards` selects);
   `generate:repo:*` copies them out.
 
-`dev/ai.nix` bounds github.com's reviewer instructions with an explicit category
-allowlist and `ai.copilot.github.rules.<name>.enable = false` for every other
-shared rule and the root stacked-workflows router. Newly registered categories
-stay out until selected. Local runtimes keep every named shared rule. The
-fragment-shadow guard accepts content-free runtime disables but rejects same-key
-replacement text or sources, including disabled replacements. Peer communication
-uses its existing Copilot program disable; delegate-routing and Semble already
-exclude Copilot. `instructions-reviewer-policy` checks the emitted instruction
-set, always-on metadata, the absence of Copilot from shared AGENTS.md, local
-content retention, and the shadow guard.
+`dev/ai.nix` enables only github.com Copilot and bounds its reviewer
+instructions with an explicit category allowlist and
+`ai.copilot.github.rules.<name>.enable = false` for every other shared rule.
+Newly registered categories stay out until selected. The operator's Home Manager
+already provides the local runtimes and programs, so the committed devenv config
+leaves them disabled. Contributors enable Claude, Codex, Kimchi, Kiro CLI, peer
+communication and Semble in ignored `devenv.local.nix`; repository settings for
+Claude, Codex, Kimchi, peer communication and Semble remain in `dev/ai.nix`.
+Kiro is enabled locally only to probe the kiro-cli build on main. It receives no
+repository skills, program rules or scoped steering in its own pool;
+`dev/ai.nix` suppresses those in its `kiro` block and program settings, and
+declares no Kiro MCP servers, hooks or environment. Its shared root AGENTS.md
+remains available, including the always-loaded `architecture` category. The
+other local runtimes inherit all named shared rules. The fragment-shadow guard
+accepts content-free runtime disables but rejects same-key replacement text or
+sources, including disabled replacements. Peer communication's Copilot disable
+remains part of its repository settings; Semble excludes Copilot. Home Manager
+supplies delegate-routing and the stacked-workflows router and skills.
+`instructions-reviewer-policy` checks the emitted instruction set, always-on
+metadata, the absence of Copilot from shared AGENTS.md, opted-in local content
+retention, Kiro isolation, and the shadow guard.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
@@ -114,36 +126,38 @@ deleted by hand.
 
 ### Source Layout
 
+- `dev/ai.nix` — this repository's `ai.*` configuration, imported by
+  `devenv.nix` and evaluated by the drift check. Its generated trees use the
+  default `ai.formatter`, which is this flake's exported treefmt module, so a
+  committed file is already in the same house style as `nix fmt` produces.
+- `dev/fragments/` — dev-only instruction fragments; its
+  `architecture/architecture.md` is always-loaded repository architecture
+  guidance, registered in `config/fragment-categories.nix`.
+- `dev/generate.nix` — fragment composition into content, plus the two human
+  documents.
+- `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 - `lib/facets/registry.nix` — native metadata assembly shared by flake and
   document generation. Workspace categories come from
   `config/fragment-categories.nix`; package categories and descriptions come
   from owner `registry.nix` files. Options live in `lib/fragments-registry.nix`
   and `lib/documentation.nix`.
-- `dev/fragments/` — dev-only instruction fragments.
-- `dev/generate.nix` — fragment composition into content, plus the two human
-  documents.
-- `dev/ai.nix` — this repository's `ai.*` configuration, imported by
-  `devenv.nix` and evaluated by the drift check. Its generated trees use the
-  default `ai.formatter`, which is this flake's exported treefmt module, so a
-  committed file is already in the same house style as `nix fmt` produces.
 - `packages/coding-standards/fragments/` — published coding standards, delivered
   as named rules.
-- `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
-  always-on routing rules, delivered as `ai.*` rules of their own (the
-  delegate-routing program and a root rule) through the same rule pool.
-- `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
 ### Committed files and the drift check
 
 `checks/instructions/instructions-drift.nix` evaluates `dev/ai.nix` with both
-`isCI` values and requires identical instruction plans. It compares the tracked
-`.github/instructions/` tree and `.github/copilot-instructions.md` when
-generated with the built files the Copilot writer's plan points at. README.md
-and CONTRIBUTING.md compare against the `repo-*` packages. Local AGENTS.md and
-child indexes have no tracked bytes to compare; generated composition, audience
-rules and the configured Codex byte limit remain checked. `treefmt.nix` excludes
-none of the committed instruction files: they come out of the generated tree in
-the house format, and `checks.formatting` reads them like any tracked file.
+`isCI` values and requires identical instruction plans. It evaluates the same
+module with `checks/instructions/fixtures/local-runtimes.nix` for the local
+composition checks: AGENTS.md, local fragments, routers and Kiro isolation. It
+compares the tracked `.github/instructions/` tree and
+`.github/copilot-instructions.md` when generated with the built files the
+Copilot writer's plan points at. README.md and CONTRIBUTING.md compare against
+the `repo-*` packages. Local AGENTS.md and child indexes have no tracked bytes
+to compare; generated composition, audience rules and the configured Codex byte
+limit remain checked. `treefmt.nix` excludes none of the committed instruction
+files: they come out of the generated tree in the house format, and
+`checks.formatting` reads them like any tracked file.
 
 ### Running Generation
 
@@ -152,9 +166,9 @@ devenv tasks run --mode before generate:all  # instructions, repo docs, devenv.y
 ```
 
 `generate:all` orders the instruction and repository projection writers:
-`ai:files-ready`, by which the files engine has written AGENTS.md, the
-`.github/` instruction files and the gitignored Claude and Kiro rules; then
-`devenv:files` for the other gitignored links, `generate:devenv-yaml`, and
+`ai:files-ready`, by which the files engine has written the enabled runtimes'
+instruction projections (the `.github/` files in the committed configuration);
+then `devenv:files` for the other gitignored links, `generate:devenv-yaml`, and
 `generate:repo`. It is not a second writer. The aggregate form requires
 `--mode before`; without it devenv runs the named aggregate but skips its
 dependency leaves.
@@ -261,8 +275,9 @@ removing or renaming a concept, all surfaces must be updated in the same commit.
 ## Adding a Fragment
 
 Fragments are composable instruction blocks. `dev/generate.nix` composes them
-into named rules that `ai.*` writes for every runtime (AGENTS.md, Claude,
-Copilot, Kiro), and into CONTRIBUTING.md.
+into named rules for `ai.*` and into CONTRIBUTING.md.
+`dev/fragments/pipeline/generation-architecture.md` says which runtimes receive
+them.
 
 <!-- TODO: refine with maintainer input -->
 

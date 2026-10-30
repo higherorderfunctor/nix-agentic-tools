@@ -1,4 +1,4 @@
-# cspell:ignore nemotron sembleignore zhipu
+# cspell:ignore sembleignore
 # `isCI` is a parameter so instructions-drift stays pure; it gates installation
 # only, keeping the committed projections independent of the evaluator environment.
 {isCI}: {
@@ -7,18 +7,14 @@
   pkgs,
   ...
 }: let
-  gen = import ./generate.nix {inherit lib pkgs;};
-  # The stacked-workflows program is not imported (see devenv.nix), but its
-  # always-on routing rule is wanted: deliver it from the program's source.
-  swsRouter = import ../packages/stacked-workflows/router.nix {inherit lib pkgs;};
   agnixMcp = {
     type = "stdio";
     package = pkgs.ai.mcpServers.agnix-mcp;
     command = "${pkgs.ai.mcpServers.agnix-mcp}/bin/agnix-mcp";
   };
-  # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
-  # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
-  shell = pkgs.bash;
+  disableRules = lib.mapAttrs (_: _: {enable = false;});
+  gen = import ./generate.nix {inherit lib pkgs;};
+  noSkills = lib.mapAttrs (_: _: null) config.ai.skills;
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   # Keep github.com's reviewer context bounded. New categories stay local until
   # explicitly selected here; their source and local-runtime delivery stay shared.
@@ -41,17 +37,17 @@
     "project-overview"
   ];
   # A runtime may omit a fragment, but replacement content would silently hide
-  # its source. The stacked-workflows router must also use its own key.
-  shadowed =
-    map (key: "the stacked-workflows rule `${key}`")
-    (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames swsRouter))
-    ++ lib.concatMap (runtime: let
-      path = optionPaths.pool runtime "rules";
-      replacements = lib.filterAttrs (_: rule: rule.enable || rule.text != "" || rule.source != null) (lib.getAttrFromPath path config);
-    in
-      map (key: lib.showOption (path ++ [key]))
-      (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames replacements)))
-    (lib.filter (runtime: config.ai.${runtime}.enable) (builtins.attrNames optionPaths.records));
+  # its source.
+  shadowed = lib.concatMap (runtime: let
+    path = optionPaths.pool runtime "rules";
+    replacements = lib.filterAttrs (_: rule: rule.enable || rule.text != "" || rule.source != null) (lib.getAttrFromPath path config);
+  in
+    map (key: lib.showOption (path ++ [key]))
+    (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames replacements)))
+  (lib.filter (runtime: config.ai.${runtime}.enable) (builtins.attrNames optionPaths.records));
+  # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
+  # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
+  shell = pkgs.bash;
 in {
   assertions = [
     {
@@ -61,139 +57,19 @@ in {
   ];
 
   ai = {
-    rules = gen.rules // swsRouter;
-
-    # Fresh guests have no host/project config paths; select the raw harnesses.
-    sandboxes = lib.optionalAttrs (pkgs.stdenv.hostPlatform.isLinux && !isCI) {
-      claude-sandbox = {
-        exe = lib.getExe' pkgs.ai.claude-code "claude";
-      };
-      codex-sandbox = {
-        exe = lib.getExe' pkgs.ai.chatgpt-codex "codex";
-      };
-      kimchi-sandbox = {
-        exe = lib.getExe' pkgs.ai.kimchi "kimchi";
-      };
-      kiro-sandbox = {
-        exe = lib.getExe' pkgs.ai.kiro-cli "kiro-cli";
-      };
-    };
+    inherit (gen) rules;
 
     programs = {
-      delegate-routing = {
-        enable = true;
-        # The package ships no Kimchi-served families.
-        families = {
-          deepseek.deepseek-flash = {
-            avoidFor = "review, building code, correctness judgment; knowledge-heavy questions";
-            effort = "thinks by default; low for reads, high for tracing; never cap output tokens small (returns empty)";
-            match = "deepseek-v*-flash*";
-            tier = "small";
-            useFor = "codebase exploration, research reads, compaction, trivial re-verification";
-          };
-          minimax.minimax = {
-            avoidFor = "judging or review (abstains, weak abstract reasoning)";
-            effort = "no documented knob; expect long reasoning traces";
-            match = "minimax-m*";
-            tier = "mid";
-            useFor = "well-scoped code to a spec; screenshot or image input";
-          };
-          moonshot = {
-            kimi-k2 = {
-              avoidFor = "build subagents on a time budget (slow, times out); mixed-goal prompts";
-              effort = "always thinks";
-              match = "kimi-k2*";
-              tier = "mid";
-              useFor = "coding with image input";
-            };
-            kimi-k3 = {
-              avoidFor = "simple or latency-bound work (slow, always thinks); ambiguous briefs; mid-session model switches";
-              effort = "always thinks; treat effort as fixed";
-              match = "kimi-k3*";
-              tier = "strong";
-              useFor = "orchestration and review; frontend and browsing-heavy agentic work";
-            };
-          };
-          nvidia.nemotron-ultra = {
-            avoidFor = "review, building code, multi-file edits, long-horizon planning";
-            effort = "keep the reasoning budget low; the value is speed";
-            match = "nemotron-*-ultra*";
-            tier = "small";
-            useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
-          };
-          zhipu = {
-            glm = {
-              avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
-              effort = "low, high or max; high default, max for judging";
-              match = "glm-[0-9]*.[0-9]";
-              tier = "strong";
-              useFor = "planning, spec writing, judging; hard multi-file coding";
-            };
-            glm-flash = {
-              avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
-              effort = "token-hungry thinking; keep the default effort";
-              match = "glm-*-flash";
-              tier = "mid";
-              useFor = "code to a spec; image or document input";
-            };
-          };
-        };
-        routing = {
-          "Architecture" = {
-            always = true;
-            source = ./house-rules/architecture.md;
-          };
-          "Local limits" = {
-            always = true;
-            source = ./house-rules/local-limits.md;
-          };
-          "Orchestrator session".enable = true;
-        };
-        runtimes = {
-          claude = {
-            extraRuntimes = ["codex"];
-            manualExternalDelegates = ["kimchi" "kiro"];
-            models = [
-              {vendors = ["anthropic"];}
-              {families = ["glm" "glm-flash"];}
-            ];
-            routing."Pool drain" = {
-              after = ["Size the work"];
-              always = true;
-              source = ./house-rules/pool-drain.md;
-            };
-            techniques.zai-usage = {
-              command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} claude";
-              kind = "usage";
-            };
-          };
-          codex = {
-            models = [
-              {vendors = ["openai"];}
-              {families = ["glm" "glm-flash"];}
-            ];
-            techniques.zai-usage = {
-              command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} codex";
-              kind = "usage";
-            };
-          };
-          kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
-          # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
-          # only, and not Fable, which this account does not have.
-          kiro = {
-            models = [{families = ["haiku" "opus" "sonnet"];}];
-          };
-        };
-      };
-
       peer-communication = {
-        enable = true;
-        runtimes.copilot.enable = false;
+        runtimes = {
+          copilot.enable = false;
+          # Kiro is a build probe only; exclude peer communication rules.
+          kiro.enable = false;
+        };
       };
 
       # Only installation reads isCI, so committed instructions never depend on it.
       semble = {
-        enable = true;
         install = !isCI;
         # Grammars Semble recognizes but its bundled archive does not ship.
         grammars = with pkgs.tree-sitter-grammars; [
@@ -236,6 +112,8 @@ in {
         ];
         cli.instructions.enable = true;
         mcp.enable = false;
+        # Kiro is a build probe only; exclude Semble CLI guidance.
+        runtimes.kiro.cli.instructions.enable = false;
       };
     };
 
@@ -246,7 +124,6 @@ in {
 
         Architecture fragments under `dev/fragments/` and `packages/*/docs/` reach you as path-scoped rules in `.claude/rules/*.md`, loaded automatically when you edit a matching path. You do not look them up.
       '';
-      enable = true;
       mcpServers = {
         agnix = agnixMcp;
         devenv = {
@@ -257,7 +134,6 @@ in {
     };
     codex = {
       inherit shell;
-      enable = true;
       # Named local guidance exceeds the default budget; activation delivers
       # this configuration together with the generated AGENTS.md.
       projectDocMaxBytes = 131072;
@@ -265,59 +141,37 @@ in {
     copilot = {
       enable = true;
       github = {
-        rules = lib.mapAttrs (_: _: {enable = false;}) (
-          lib.filterAttrs (name: _: !(lib.elem name reviewerCategories)) (gen.rules // swsRouter)
+        rules = disableRules (
+          lib.filterAttrs (name: _: !(lib.elem name reviewerCategories)) gen.rules
         );
         # These skills operate the local session; github.com receives none of them.
-        skills = lib.mapAttrs (_: _: null) config.ai.skills;
+        skills = noSkills;
       };
     };
     kimchi = {
-      enable = true;
       extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
       native.harnessSettings.resources = {
         "extensions.ferment-v2" = true;
       };
     };
+    # Kiro runs only to probe main's build: it reads the shared AGENTS.md, and
+    # its own pool receives no scoped steering or repo skills.
     kiro = {
-      mcpServers.agnix = agnixMcp;
-      cli = {
-        inherit shell;
-        enable = true;
-        # Select v3 so this configuration's hooks and slash commands load.
-        v3 = true;
-        # Workflows are GA; devenv still needs the global chat.enableWorkflows
-        # setting. See packages/kiro-cli/docs/workflow-gating.md.
-        workflows.enable = true;
-      };
+      rules = disableRules (
+        lib.filterAttrs (_: rule: rule.matcher != null) gen.rules
+      );
+      skills = noSkills;
     };
 
-    skills = let
-      # A dev- prefix prevents user-global stack-* skills from shadowing these copies.
-      prefixSkill = name: value: let
-        devName = "dev-${name}";
-      in
-        pkgs.runCommand "${devName}-skill" {} ''
-          cp -RL ${value} "$out"
-          chmod -R u+w "$out"
-          substituteInPlace "$out/SKILL.md" \
-            --replace-fail ${lib.escapeShellArg "name: ${name}"} ${lib.escapeShellArg "name: ${devName}"}
-        '';
-      prefixDev = lib.mapAttrs' (name: value: let
-        devName = "dev-${name}";
-      in
-        lib.nameValuePair devName (prefixSkill name value));
-    in
-      prefixDev pkgs.stacked-workflows-content.passthru.skills
-      // {
-        # The delivery router tracks each leaf for direnv watches; wrapping these
-        # directories in lib/traceSource.nix would add nothing (measured 2026-09-22).
-        delegate-evidence = ./skills/delegate-evidence;
-        index-repo-docs = ./skills/index-repo-docs;
-        kimchi-egress-report = ./skills/kimchi-egress-report;
-        kimchi-surface-scan = ./skills/kimchi-surface-scan;
-        pr-review-loop = ./skills/pr-review-loop;
-        repo-review = ./skills/repo-review;
-      };
+    skills = {
+      # The delivery router tracks each leaf for direnv watches; wrapping these
+      # directories in lib/traceSource.nix would add nothing (measured 2026-09-22).
+      delegate-evidence = ./skills/delegate-evidence;
+      index-repo-docs = ./skills/index-repo-docs;
+      kimchi-egress-report = ./skills/kimchi-egress-report;
+      kimchi-surface-scan = ./skills/kimchi-surface-scan;
+      pr-review-loop = ./skills/pr-review-loop;
+      repo-review = ./skills/repo-review;
+    };
   };
 }
