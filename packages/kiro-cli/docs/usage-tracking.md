@@ -260,12 +260,13 @@ reach their root this way, and tree queries follow the same links. Unlinked
 sessions whose files all predate the earliest capture are skipped without
 reading; Kiro rewrites `session.json` when a session resumes. Children written
 before tracking began are therefore not indexed. The explicit command prunes
-disk rows for sessions no longer in scope and then runs `VACUUM`, so the file
-shrinks. `VACUUM` holds the write lock while it rewrites the file, so a running
-collector waits on its busy timeout meanwhile; after pruning this takes well
-under a second, but run it between Kiro sessions on a large capture store. A
-second explicit index waits for a running one; a tracked launch's exit scan
-skips while it runs.
+disk rows for sessions no longer in scope and, when that deleted rows, runs
+`VACUUM` plus a WAL checkpoint, so the file shrinks. Pages freed by sealing are
+reused by later captures rather than vacuumed. `VACUUM` holds the write lock
+while it rewrites the file, so a running collector waits on its busy timeout
+meanwhile; after pruning this takes well under a second, but run it between Kiro
+sessions on a large capture store. A second explicit index waits for a running
+one; a tracked launch's exit scan skips while it runs.
 
 Malformed or unreadable session metadata does not stop other sessions from
 indexing. Its omission is recorded, stale metadata is retired, and a successful

@@ -471,7 +471,7 @@ and messages only for those linked to captures (less one second for coarse file
 timestamps) and never prunes; already indexed sessions still link their new
 descendants. The explicit `index` command is the full capture-scoped pass: it
 prunes `disk_*` rows for sessions no longer linked to captures and runs `VACUUM`
-plus a WAL checkpoint when free pages remain. Lineage comes from
+plus a WAL checkpoint when its prune deleted rows. Lineage comes from
 `parentSessionId`, `rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
 `workflowId` and `nodeId` are retained as identifiers. Index failures warn

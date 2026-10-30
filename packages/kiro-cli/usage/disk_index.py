@@ -288,25 +288,26 @@ def modified_ns(session):
 
 
 def prune(db, table, column, keep, root):
-    """Delete rows under root that are not in keep; rows from other session roots stay."""
+    """Delete rows under root that are not in keep and return how many; rows from other session roots stay."""
     prefix = str(root) + os.sep
     stale = [(row[0],) for row in db.execute(f"SELECT DISTINCT {column} FROM {table}")
              if row[0].startswith(prefix) and row[0] not in keep]
     if not stale:
-        return
+        return 0
     # One set-based DELETE; per-row deletes made the first prune take seconds.
     with db:
         db.execute("CREATE TEMP TABLE IF NOT EXISTS stale_paths(path TEXT PRIMARY KEY)")
         db.execute("DELETE FROM stale_paths")
         db.executemany("INSERT INTO stale_paths VALUES (?)", stale)
-        db.execute(f"DELETE FROM {table} WHERE {column} IN (SELECT path FROM stale_paths)")
+        return db.execute(f"DELETE FROM {table} WHERE {column} IN (SELECT path FROM stale_paths)").rowcount
 
 
 def index_tree(db, sessions, since=None):
     """Scan exactly <root>/<workspace>/sess_*; no home-directory discovery.
 
     With since (UTC ns), only sessions modified since then are read and nothing
-    is pruned; already indexed sessions still anchor their descendants.
+    is pruned; already indexed sessions still anchor their descendants. Returns
+    the number of pruned rows.
     """
     sessions = Path(sessions).resolve(strict=True)
     if not sessions.is_dir():
@@ -363,12 +364,13 @@ def index_tree(db, sessions, since=None):
         messages = session / "messages.jsonl"
         if messages.is_file() and not messages.is_symlink():
             index_messages(db, messages, session)
-    if since is None:
-        keep = {str(session) for session in indexed}
-        prune(db, "disk_sessions", "path", keep, sessions)
-        prune(db, "disk_sources", "session_path", keep, sessions)
-        prune(db, "disk_session_omissions", "session_path",
-              {str(session) for session, facts in candidates.items() if isinstance(facts, str)}, sessions)
+    if since is not None:
+        return 0
+    keep = {str(session) for session in indexed}
+    return (prune(db, "disk_sessions", "path", keep, sessions)
+            + prune(db, "disk_sources", "session_path", keep, sessions)
+            + prune(db, "disk_session_omissions", "session_path",
+                    {str(session) for session, facts in candidates.items() if isinstance(facts, str)}, sessions))
 
 
 def main():
@@ -380,9 +382,9 @@ def main():
     try:
         with open_database(args.db) as db:
             lock_beside(args.db, INDEX_LOCK, blocking=True)  # Held until this process exits.
-            index_tree(db, args.sessions)
-            if db.execute("PRAGMA freelist_count").fetchone()[0]:
-                # Pruned pages only leave the file after VACUUM and a WAL checkpoint.
+            if index_tree(db, args.sessions):
+                # Pruned pages only leave the file after VACUUM and a WAL checkpoint; pages
+                # freed by anything else, such as sealing, are left for later captures to reuse.
                 db.execute("VACUUM")
                 db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             sources = db.execute("SELECT count(*) FROM disk_sources").fetchone()[0]

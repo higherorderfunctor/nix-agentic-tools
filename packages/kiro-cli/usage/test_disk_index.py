@@ -545,6 +545,22 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.db.execute("PRAGMA freelist_count").fetchone()[0], 0)
         self.assertLess(self.path.stat().st_size, before / 4)
 
+    def test_cli_leaves_free_pages_it_did_not_prune(self):
+        self.messages.write_bytes(usage())
+        self.scan()
+        # Pages another writer freed, as sealing does, are reused by later captures, not vacuumed.
+        self.db.execute("CREATE TABLE scratch(data BLOB)")
+        self.db.execute("INSERT INTO scratch VALUES (?)", (bytes(1000000),))
+        self.db.execute("DROP TABLE scratch")
+        self.db.commit()
+        free = self.db.execute("PRAGMA freelist_count").fetchone()[0]
+        self.assertGreater(free, 0)
+        result = subprocess.run([sys.executable, disk_index.__file__, "--db", str(self.path),
+                                 "--sessions", str(self.sessions), "--json"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"sources": 1, "records": 1, "omitted_records": 0})
+        self.assertEqual(self.db.execute("PRAGMA freelist_count").fetchone()[0], free)
+
 
 if __name__ == "__main__":
     unittest.main()
