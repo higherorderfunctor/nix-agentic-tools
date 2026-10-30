@@ -257,8 +257,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-VQ72TLdNI9F7dIP+7LCB74PBq38p+2KtpRfAseylpUY=",
-      "kimchiVersion": "1.24.3",
+      "kimchiSourceHash": "sha256-Qsxd4RC0dT/2VuNt9Z0fPGyRwjQ2/jmRWUUhLZ5REAg=",
+      "kimchiVersion": "1.25.0",
       "piVersion": "1.3.0"
     },
     "provenance": {
