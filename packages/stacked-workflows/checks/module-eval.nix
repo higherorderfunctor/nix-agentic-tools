@@ -154,17 +154,17 @@ in {
         && !(result.config.ai.codex.skills ? stack-fix)
     );
 
-    # The presets are sugar over `git.*`. Against the preset data frozen at
-    # cd934bb4, the rendered configuration on BOTH backends differs by
-    # exactly the approved changes: branchless.core.mainBranch gone from
-    # both, fetch.pruneTags gone from full, alias.sync (scopedSync) added to
-    # full. Every other leaf is byte-identical.
+    # Both backends must render the fixture with only the changes listed in
+    # approved below.
     module-sws-presets-approved-diff = mkTest "sws-presets-approved-diff" (
       let
         before = lib.importJSON ./fixtures/git-presets-cd934bb4.json;
         approved = {
           full = {
-            added = {"alias.sync" = "branchless sync 'stack()'";};
+            added = {
+              "alias.sync" = "branchless sync 'stack()'";
+              "branchless.restack.defaultRevset" = "descendants(roots((stack() & ::HEAD) - ::origin/main)) - ::origin/main";
+            };
             removed = ["branchless.core.mainBranch" "fetch.pruneTags"];
           };
           minimal = {
@@ -287,6 +287,21 @@ in {
         })
         ? "ai:git-branchless-init")
         && (tasksOf {stacked-workflows.gitPreset = "none";}) ? "git:config"
+    );
+
+    # The documented restack Gitconfig value must match the preset consumed by
+    # Home Manager and devenv; unrelated defaultRevset examples do not satisfy it.
+    module-sws-restack-default-doc-matches-preset = mkTest "sws-restack-default-doc-matches-preset" (
+      let
+        documented = builtins.readFile ../references/recommended-config.md;
+        preset = (import ../lib/git-config-full.nix).branchless.restack.defaultRevset;
+        restack = builtins.head (lib.splitString "\n[" (builtins.elemAt sections 1));
+        sections = lib.splitString "[branchless \"restack\"]\n" documented;
+        values = lib.filter (lib.hasPrefix "  defaultRevset = ") (lib.splitString "\n" restack);
+      in
+        builtins.length sections
+        == 2
+        && values == ["  defaultRevset = \"${preset}\""]
     );
 
     # References are bundled as REAL files inside each skill dir (deref'd at

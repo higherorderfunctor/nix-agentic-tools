@@ -329,6 +329,17 @@
       ],
       "writes": {}
     },
+    "branchless.restack.defaultRevset": {
+      "description": "The configured revset for bare restack; setting it also limits explicit restack's branch repair to the selection. An unresolvable configured default stops before restacking commits or moving branches; pass a revset explicitly to override it.",
+      "reads": {
+        "git-branchless-lib/src/core/config.rs#get_restack_default_revset": [
+          "repository"
+        ]
+      },
+      "status": "current",
+      "type": "string",
+      "writes": {}
+    },
     "branchless.restack.preserveTimestamps": {
       "default": false,
       "description": "If `true`, when restacking a commit, do not update its timestamp to the current time.",

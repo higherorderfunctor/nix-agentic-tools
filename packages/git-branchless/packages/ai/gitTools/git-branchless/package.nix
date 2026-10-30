@@ -16,6 +16,8 @@
 #     worktree has checked out (`branchless.core.protectCheckedOutBranches`).
 #   repair-idempotent — `git branchless repair` skips commits it already
 #     obsoleted; upstream re-reports and re-obsoletes them on every run.
+#   restack-scope — configure the default restack revset and limit branch
+#     repair to its selection (`branchless.restack.defaultRevset`).
 #
 # Source + Cargo.lock come from `inputs.git-branchless` (the
 # flake source), same data the upstream overlay uses. Updated via
@@ -45,9 +47,8 @@
   extraction = gitToolExtraction {inherit pkgs;};
 
   # Unpack + patch of the package's own `src` and `patches`: the
-  # checked-out-branch patch adds a key
-  # (`branchless.core.protectCheckedOutBranches`) the upstream tree does not
-  # read.
+  # patches add keys (`branchless.core.protectCheckedOutBranches` and
+  # `branchless.restack.defaultRevset`) the upstream tree does not read.
   patchedSource = extraction.patchedSource {
     name = "git-branchless";
     inherit package;
@@ -73,6 +74,7 @@
       ++ [
         ../../../../patches/protect-checked-out-branches.patch
         ../../../../patches/repair-idempotent.patch
+        ../../../../patches/restack-scope.patch
       ];
     postPatch = "";
     nativeInstallCheckInputs =

@@ -101,6 +101,10 @@
       accepts real {branchless.smartlog.reverse = true;}
       && !(accepts removed {branchless.smartlog.reverse = true;});
 
+    restack-default-revset-is-a-string =
+      !(committed.settings."branchless.restack.defaultRevset" ? default)
+      && committed.settings."branchless.restack.defaultRevset".type == "string";
+
     enum-follows-the-sidecar =
       accepts widened {branchless.test.strategy = "probe";}
       && !(accepts real {branchless.test.strategy = "probe";})

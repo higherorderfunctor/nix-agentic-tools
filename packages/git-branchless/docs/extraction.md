@@ -18,8 +18,9 @@
 >   `(deprecated)` marker in doc text. Old version:
 >   `git show b56c7fca:packages/git-branchless/extract/extract.py`.
 > - **Extract from the PATCHED source.** The unpatched tree misses
->   `branchless.core.protectCheckedOutBranches`, which only this repository's
->   patch reads.
+>   `branchless.core.protectCheckedOutBranches` and
+>   `branchless.restack.defaultRevset`, which only this repository's patches
+>   read.
 > - **`test.jobs` does not imply the worktree strategy.** Only the command-line
 >   `--jobs` above 1 switches strategy; a configured value above 1 with
 >   `test.strategy = working-copy` fails every `git test run` (measured
