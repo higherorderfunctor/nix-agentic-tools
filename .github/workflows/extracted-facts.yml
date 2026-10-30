@@ -89,13 +89,14 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Only successful checks contribute deltas, including empty no-op patches.
       - name: Check extracted facts
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           nix build ".#.checks.${SYSTEM}.${OWNER}-extracted" --no-link
 
+      # Runs only after the check passes: a failed owner's delta must not publish;
+      # no-op owners upload an empty patch.
       - name: Upload native extracted facts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -119,8 +120,7 @@ jobs:
           echo "  git apply --3way --index \"\$facts_dir/${OWNER}.patch\""
           exit 1
 
-  # Keep each owner's 60-minute native build budget, then publish once per
-  # system: an App push cancels this run, so workers cannot push individually.
+  # An App push cancels this run, so workers cannot push individually.
   commit:
     needs: produce
     if: >-
@@ -166,9 +166,9 @@ jobs:
           git checkout --detach "$HEAD_SHA"
           owners=()
           for patch in "$RUNNER_TEMP/facts/"*.patch; do
-            if [ ! -s "$patch" ]; then
-              continue
-            fi
+            # No-op owners upload empty patches, which git apply rejects;
+            # an unmatched glob is skipped too.
+            [ -s "$patch" ] || continue
             git apply --3way --index "$patch"
             owner=${patch##*/}
             owners+=("${owner%.patch}")

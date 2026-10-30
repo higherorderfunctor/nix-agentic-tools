@@ -1,8 +1,7 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-29 — Linux CI compares all drift-check handled
-> derivations; Darwin retains declaration-based host-run selection; a failed
-> Linux derivation plan falls back to the owner map without forcing checks.
+> **Last verified:** 2026-10-29 — Linux CI compares all handled extractions;
+> failed planning falls back to owner names without forcing checks.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -283,10 +282,9 @@ files; Nix consumers read the aggregate directly.
 `checks.extracted-index` and both native CI planners load the explicit
 logical-name-to-directory map in `checks/extracted/owners.nix`. These names
 identify its JSON files and index keys independently of owner directory names.
-When Linux derivation evaluation fails, its planner reads every name directly
-from this map without evaluating extraction derivations, so a broken owner fails
-visibly in its own producer leg. External index readers build that attribute and
-read its files.
+Linux planning falls back to this map when derivation evaluation fails, so
+broken owners fail in their producer legs rather than preventing scheduling.
+External index readers build that attribute and read its files.
 
 ## Drift
 

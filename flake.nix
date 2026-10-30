@@ -219,9 +219,8 @@
         })
       checkWorlds.${system}.checks);
 
-    # Each revision supplies its own owner map and extraction inputs. Linux
-    # follows the drift check's handled systems, including composite inputs;
-    # Darwin keeps the host-run selection without evaluating native checks.
+    # ci-extracted-facts.py compares Linux's handled inputs; Darwin selection
+    # must not force native checks on the Linux planner.
     ciExtractedFacts = forAllSystems (system: let
       facts = import ./lib/extracted/facts.nix {inherit lib;};
       owners = import ./checks/extracted/owners.nix;
@@ -232,12 +231,10 @@
         else facts.hostRunOn system dir)
       owners;
     in
-      lib.mapAttrs (name: _: {
-        drvPaths =
-          if system == "x86_64-linux"
-          then lib.genAttrs (ownerCheck name).handled (handled: (ownerCheck name).extracted.${handled}.drvPath)
-          else {${system} = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;};
-      })
+      lib.mapAttrs (name: _:
+        if system == "x86_64-linux"
+        then lib.genAttrs (ownerCheck name).handled (handled: (ownerCheck name).extracted.${handled}.drvPath)
+        else {${system} = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;})
       selected);
 
     ciCheckEvaluator =

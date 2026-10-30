@@ -40,21 +40,19 @@ pinned main base.
 
 **A PR must already contain its locks, source and dependency hashes, and
 formatting. PR CI regenerates extracted facts and commits changes to
-same-repository PR branches.** It commits only the delta regeneration makes
-against the merge ref; unchanged measurements leave the branch untouched even
-when its facts are behind main. Update workers still regenerate facts before
-publication, so a correct branch needs no CI facts commit. The package worker
-does not build the package; hash derivation and embedded-file extraction run
-before publication. Input workers retain build verification and its hash-repair
-pass because those repairs can mutate the prepared branch. After successful
-package verification, the `devenv` input alone must also enter its updated shell
-with the installed CLI (`devenv --no-tui shell true`); failure holds the bump
-back. This runs inside the existing preparation deadline. The shell's closure
-holds the patched Kiro, which `pushFilter` does not catch inside a closure, so
-the `devenv` lane sets `skipPush`. A writable update may open with failing build
-checks; an incomplete update is held back and its existing PR is preserved. A
-worker whose build verification failed still publishes and arms auto-merge,
-uploads its receipt, and then fails in `Fail on failed build verification`
+same-repository PR branches.** Update workers still regenerate facts before
+publication. The package worker does not build the package; hash derivation and
+embedded-file extraction run before publication. Input workers retain build
+verification and its hash-repair pass because those repairs can mutate the
+prepared branch. After successful package verification, the `devenv` input alone
+must also enter its updated shell with the installed CLI
+(`devenv --no-tui shell true`); failure holds the bump back. This runs inside
+the existing preparation deadline. The shell's closure holds the patched Kiro,
+which `pushFilter` does not catch inside a closure, so the `devenv` lane sets
+`skipPush`. A writable update may open with failing build checks; an incomplete
+update is held back and its existing PR is preserved. A worker whose build
+verification failed still publishes and arms auto-merge, uploads its receipt,
+and then fails in `Fail on failed build verification`
 (`update-matrix.py verdict`) with an `::error::` naming the target, failed
 attributes and PR -- when that PR is new or its patch changed. A PR that already
 proposed the same patch, and a branch that is not the bot's own last push, are
@@ -273,65 +271,37 @@ update workers alike, carries `pushFilter: kiro-cli|codeql`; the second
 alternative keeps the CodeQL engines (packages/codeql), whose terms forbid
 distribution, out too.
 
-The `plan-extracted-facts` job evaluates `ciExtractedFacts.<system>` at the
-merge ref and the immutable base revision. Linux selects owners whose drift
-check has handled extractions on that host, including static owners. It compares
-the check's `passthru.extracted.<handled-system>.drvPath` for every handled
-system, so cliproxyapi's composite z.ai docs input and Kiro's Linux-measured
-Darwin release both trigger regeneration. Darwin keeps the
-`lib.extracted.hostRunOn` selection and compares Darwin `ciPackages` derivations
-without evaluating Darwin checks on Linux. A shared `lib/extracted/` change or
-unavailable base comparison schedules every selected HEAD owner. If HEAD
-derivation evaluation fails, Linux falls back to every name in
-`checks/extracted/owners.nix` without evaluating checks or derivations; Darwin
-retries names from its declaration-based selection. `workflow_dispatch` runs all
-selected owners. Empty system matrices skip their producers; the required build
-contexts accept that only after successful planning.
+The `plan-extracted-facts` job compares extraction inputs at the merge ref and
+immutable base revision (see `dev/fragments/extracted/facts-contract.md`). A
+shared `lib/extracted/` change or unavailable base comparison schedules every
+selected HEAD owner.
 
-`extracted-facts-linux` and `extracted-facts-darwin` call the same reusable
-producer workflow. Linux waits for all package shards to finish publishing to
-Cachix, then runs even if a shard failed: stale facts must not prevent their own
-repair. Each owner has its own 60-minute native job budget. Linux owners may run
-in parallel; Darwin owners run serially to share the repository's four macOS
-runners. Producers measure the same merge ref as the planner and package shards,
-then record a binary patch of only the changes regeneration made. A no-op
-contributes an empty patch. Only owners whose extraction checks pass upload
-their patches. Each credentialed Cachix step filters `kiro-cli|codeql`.
+Linux waits for package shards' Cachix finalization but runs even after shard
+failure: stale facts must not prevent their own repair. Each owner keeps its
+60-minute native budget; Darwin owners run serially to share the four macOS
+runners. The Kiro scope gate gates neither producer.
 
-On any same-repository PR, one collector applies the uploaded regeneration
-deltas onto the immutable PR head with `git apply --3way --index`, preserving
-unrelated head content and failing loudly on conflicts. It never copies the
-merge ref's whole fact trees. The patch itself identifies additions, changes,
-deletions and paths to stage, including Kimchi's egress report. The collector
-also runs after an owner fails, publishing deltas from successful owners; the
-failed owner still fails the required build context. It does not publish after
-cancellation. Empty deltas produce no commit, even when the PR's existing facts
-differ from main.
+Producers measure the same merge ref as package shards. The collector applies
+only regeneration deltas onto the immutable PR head, never whole merge-ref fact
+trees: copying those would overwrite unrelated head content. Empty deltas make
+no commit even when the branch's facts differ from main; conflicts fail.
+Successful owners' deltas publish even after another owner fails, while that
+failure still fails the required build context. Cancellation prevents
+publication.
 
-The collector publishes at most one
-`chore(extracted): record <system> extracted facts` commit per system, listing
-only owners with nonempty regeneration deltas. It preserves bot author and
-committer identities and App-token push credit for `update/*` ownership. A
-concurrent branch move rejects the plain push. Linux's carry must land first: if
-Linux publishes or any Linux owner fails, Darwin is skipped in that run. The App
-push triggers fresh CI and cancels the old run; the next merge ref contains the
-Linux carry, so its Linux producer is a no-op before Darwin measures its side.
-There are at most two fact-writing passes, Linux then Darwin, followed by
-validation of the final head; the number of owners does not add CI cycles. Both
-producer/collector results feed the required build aggregate. The Kiro scope
-gate gates neither.
+One commit per system preserves bot author, committer and App-token push credit
+for `update/*` ownership. A concurrent branch move rejects the plain push.
+Linux's carry must land before Darwin measures: a Linux publication or failure
+skips Darwin in that run. The App push starts fresh CI and cancels the old run,
+limiting fact-writing passes to Linux then Darwin regardless of owner count. An
+update sweep may drop a CI facts commit and CI records it again; a human or LLM
+fix freezes the branch under existing ownership checks.
 
-Each owner runs its check's `passthru.regenerate` and drift check. Kimchi also
-runs its egress report regenerator with Node and the flake formatter, and
-includes `packages/kimchi/egress-report.json`. An update sweep may rebuild a
-bot-owned branch and drop a CI facts commit; CI records the facts again. A human
-or LLM fix commit freezes the branch under the existing ownership checks.
-
-Fork heads, pushes and dispatches upload an `<owner>-extracted-<system>` delta
-artifact and fail on changed facts. The diagnostic downloads into a fresh
-scratch directory, then applies `<owner>.patch` with `git apply --3way --index`
-for review and commit. GitHub CLI never has to overwrite existing checkout
-files. CI names owner directories; the drift library chooses the fact file.
+Kimchi's delta includes its egress report. Fork heads, pushes and dispatches
+upload delta artifacts and fail on changed facts; follow the diagnostic's
+scratch-directory download and patch commands to avoid GitHub CLI overwriting
+checkout files. CI names owner directories; the drift library chooses the fact
+file.
 
 The internal `kiro-cli-rollout-canary` patches every feature whose aggregate
 vendor state needs a patch and whose measured patchability is true. Its scope

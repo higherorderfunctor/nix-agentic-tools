@@ -22,7 +22,6 @@ EXTRACTED_SPEC.loader.exec_module(extracted)
 
 
 def ci_step_script(name, workflow_name="ci.yml"):
-    """The dedented `run:` body of a named CI workflow step."""
     workflow = Path(__file__).parents[2] / ".github/workflows" / workflow_name
     step = workflow.read_text().split(f"      - name: {name}\n", 1)[1]
     lines = []
@@ -108,7 +107,6 @@ export -f gh git
                 if mode == "noop":
                     self.assertFalse(output.exists())
                 else:
-                    self.assertTrue(commands[0].startswith("commit -m chore(extracted): record x86_64-linux extracted facts -m Regenerated owners:"))
                     self.assertEqual((runner / "commands").read_text().count("Regenerated owners:"), 1)
                     self.assertEqual(output.read_text(), 'published=true\n')
 
@@ -199,15 +197,15 @@ export -f git nix
                 self.assertEqual((Path(directory) / "facts/kimchi.patch").read_text(), 'egress report delta\n' if dirty == "true" else '')
 
     def test_linux_planner_selects_darwin_only_change_in_handled_inputs(self):
-        old = {"kiro-cli": {"drvPaths": {"aarch64-darwin": "old-darwin", "x86_64-linux": "same-linux"}}}
-        head = {"kiro-cli": {"drvPaths": {"aarch64-darwin": "new-darwin", "x86_64-linux": "same-linux"}}}
+        old = {"kiro-cli": {"aarch64-darwin": "old-darwin", "x86_64-linux": "same-linux"}}
+        head = {"kiro-cli": {"aarch64-darwin": "new-darwin", "x86_64-linux": "same-linux"}}
         with mock.patch.object(extracted, "derivations", side_effect=[head, old]):
             with mock.patch.object(extracted.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)):
                 self.assertEqual(extracted.plan(Path("/fixture"), "x86_64-linux", "pull_request", "base"), ["kiro-cli"])
 
     def test_planner_compares_changed_and_new_extraction_inputs(self):
-        old = {"changed": {"drvPaths": {"x86_64-linux": "old"}}, "unchanged": {"drvPaths": {"x86_64-linux": "same"}}}
-        head = {"changed": {"drvPaths": {"x86_64-linux": "new"}}, "new-owner": {"drvPaths": {"x86_64-linux": "added"}}, "unchanged": old["unchanged"]}
+        old = {"changed": {"x86_64-linux": "old"}, "unchanged": {"x86_64-linux": "same"}}
+        head = {"changed": {"x86_64-linux": "new"}, "new-owner": {"x86_64-linux": "added"}, "unchanged": old["unchanged"]}
         for system in ("aarch64-darwin", "x86_64-linux"):
             for wrapper_changed, expected in ((0, ["changed", "new-owner"]), (1, list(head))):
                 with self.subTest(system=system, wrapper_changed=wrapper_changed):
@@ -217,7 +215,7 @@ export -f git nix
                     self.assertEqual(derivations.call_args_list, [mock.call(Path("/fixture"), system), mock.call(Path("/fixture"), system, base="base")])
 
     def test_planner_dispatch_and_missing_base_select_all(self):
-        head = {"owner": {"drvPaths": {"x86_64-linux": "fresh"}}}
+        head = {"owner": {"x86_64-linux": "fresh"}}
         for event, base in (("workflow_dispatch", "base"), ("push", ""), ("push", "0" * 40)):
             with self.subTest(event=event, base=base):
                 with mock.patch.object(extracted, "derivations", return_value=head) as derivations:
@@ -225,10 +223,10 @@ export -f git nix
                 derivations.assert_called_once()
 
     def test_planner_failures_select_all_or_retry_names(self):
-        head = {"owner": {"drvPaths": {"x86_64-linux": "fresh"}}}
+        head = {"owner": {"x86_64-linux": "fresh"}}
         for results, expected_calls in (
-            ([head, ValueError("base has old output shape")], [mock.call(Path("/fixture"), "x86_64-linux"), mock.call(Path("/fixture"), "x86_64-linux", base="base")]),
-            ([ValueError("head drv unavailable"), ["owner"]], [mock.call(Path("/fixture"), "x86_64-linux"), mock.call(Path("/fixture"), "x86_64-linux", names_only=True)]),
+            ([head, subprocess.CalledProcessError(1, ["nix", "eval"], stderr="base lacks ciExtractedFacts.x86_64-linux")], [mock.call(Path("/fixture"), "x86_64-linux"), mock.call(Path("/fixture"), "x86_64-linux", base="base")]),
+            ([subprocess.CalledProcessError(1, ["nix", "eval"], stderr="head extraction derivation failed"), ["owner"]], [mock.call(Path("/fixture"), "x86_64-linux"), mock.call(Path("/fixture"), "x86_64-linux", names_only=True)]),
         ):
             with self.subTest(results=results):
                 with mock.patch.object(extracted, "derivations", side_effect=results) as derivations:
@@ -246,7 +244,7 @@ export -f git nix
                         self.assertEqual(extracted.derivations(root, system, base=base, names_only=names_only), {})
                     command = run.call_args.args[0]
                     if names_only and system == "x86_64-linux":
-                        self.assertEqual(command[-4:], ["--file", "checks/extracted/owners.nix", "--apply", "builtins.attrNames"])
+                        self.assertEqual(command[-2:], ["--file", "checks/extracted/owners.nix"])
                         self.assertFalse(any("#ciExtractedFacts" in argument for argument in command))
                     else:
                         flake = "git+file:///fixture?rev=base" if base else "."

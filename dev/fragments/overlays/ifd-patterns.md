@@ -281,12 +281,10 @@ The invariant is that committed extracted raws always describe the CURRENTLY
 pinned artifact. Nothing enforces that continuously. Two halves cooperate, and
 it is worth knowing which is which before reaching for a fix:
 
-1. **The self-heal** — PR CI runs the owner check's `passthru.regenerate`, Linux
-   before Darwin, and commits changed facts to any same-repository PR branch as
-   the update bot. That visible commit puts the measurements in the review diff.
-   Update scripts also still run `lib.extracted.regenCommand { name; }` through
-   `mkUpdateScript`'s `extraExtract` or discovery-driven
-   `passthru.regenerateExtracted`, so an already refreshed update is a CI no-op.
+1. **The self-heal** — update scripts run `lib.extracted.regenCommand { name; }`
+   through `mkUpdateScript`'s `extraExtract` or discovery-driven
+   `passthru.regenerateExtracted`. PR CI also regenerates facts and commits
+   changes to same-repository branches.
 2. **The backstop** — `checks/<pkg>-extracted.nix`, which compares committed
    against freshly-built.
 
@@ -303,11 +301,9 @@ extracted package, wire the regeneration in the same commit.
 
 For `mkUpdateScript` callers, `extraExtract` is spliced into `mkUpdateScript`'s
 `commitCandidate`, immediately after the sidecar `mv`, on the version-bump path.
-PR CI also compares extraction derivations, so editing an extractor at an
-unchanged version now self-heals on the PR. Editing `mkClaudeExtract`'s grep
-anchors or census walker, or glab's Go dump, produces a visible CI facts commit;
-review that diff with the extractor change. Fork PRs receive an artifact and a
-failing check until the measured files are committed.
+PR CI also self-heals extractor changes at unchanged versions; review the facts
+diff with the extractor change. Fork PRs receive an artifact and a failing check
+until the measured files are committed.
 
 The separate `fix_sidecar_hashes` mechanism (`dev/scripts/update-common.sh`)
 re-derives a `vendorHash`, `npmDepsHash` or `pnpmDepsHash` invalidated by a

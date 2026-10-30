@@ -11,12 +11,12 @@ import sys
 def derivations(root, system, base=None, names_only=False):
     flake = f"git+{root.as_uri()}?rev={base}" if base else "."
     command = ["timeout", "300", "nix", "eval", "--json"]
+    if names_only:
+        command.extend(["--apply", "builtins.attrNames"])
     if names_only and system == "x86_64-linux":
-        # Do not force any check or derivation while recovering a broken plan.
-        command.extend(["--file", "checks/extracted/owners.nix", "--apply", "builtins.attrNames"])
+        # A broken Linux owner check must not prevent recovering its name.
+        command.extend(["--file", "checks/extracted/owners.nix"])
     else:
-        if names_only:
-            command.extend(["--apply", "builtins.attrNames"])
         command.append(f"{flake}#ciExtractedFacts.{system}")
     result = subprocess.run(
         command,
