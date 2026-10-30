@@ -1,3 +1,8 @@
+// Each test binary compiles this module but uses only the helpers it needs.
+#![allow(dead_code)]
+
+pub mod process;
+
 use std::{io, net::SocketAddr, time::Duration};
 
 use airlock::server;
