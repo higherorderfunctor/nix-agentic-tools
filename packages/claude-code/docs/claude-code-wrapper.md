@@ -1,17 +1,17 @@
 ## claude-code Package and Plugin Delivery
 
 > **Last verified:** 2026-10-30 — settings env defaults auto-update off on both
-> backends when Nix installs the binary; a selected proxy wraps the binary and
-> suppresses the inherited API-key descriptor before Claude caches it; plugins
-> are staged entries delivered through the ai-module files layers; the personal
-> plugin carries MCP servers only; unknown native settings and stale warning
-> suppressions use the generic open-keys inspector on both backends; settings
-> are generated from the committed facts in packages/claude-code/extracted/,
-> measured once on Linux; Darwin validates its own extraction against that raw.
-> The schema check gates stale and shadowed rows, missing paths and wildcard
-> grammar. Catalog, retirement and launch-pin facts are content-located AST
-> reads of the unpacked graph; unsupported catalog properties, retirement rows
-> and launch-pin shapes fail with PROBE.
+> backends when Nix installs the binary; the managed launcher handles inference
+> credential suppression and startup proxy CA trust with native extra-CA
+> precedence; plugins are staged entries delivered through the ai-module files
+> layers; the personal plugin carries MCP servers only; unknown native settings
+> and stale warning suppressions use the generic open-keys inspector on both
+> backends; settings are generated from the committed facts in
+> packages/claude-code/extracted/, measured once on Linux; Darwin validates its
+> own extraction against that raw. The schema check gates stale and shadowed
+> rows, missing paths and wildcard grammar. Catalog, retirement and launch-pin
+> facts are content-located AST reads of the unpacked graph; unsupported catalog
+> properties, retirement rows and launch-pin shapes fail with PROBE.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -34,18 +34,27 @@ With a proxy selected, also set
 `ai.claude.native.settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = ""`,
 since that variable independently disables updates.
 
-### Proxy credential suppression at launch
+### Inference credentials and proxy trust at launch
 
-The base package's `$out/bin/claude` is the pre-built binary itself. Without a
-proxy selection it is installed bare. A selection (`ai.settings.inference` or
+The base package's `$out/bin/claude` is the pre-built binary itself. Without
+inference launcher flags or selected proxy trust, the shared backend transform
+installs it unchanged. A selection (`ai.settings.inference` or
 `ai.claude.settings.inference`) that resolves to a `cliproxyapi` backend
-installs the `claude-code-inference` launcher on both backends to unset
+installs a `lib.ai.mkLauncher` wrapper on both backends that unsets
 `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec; the flag comes from that
-backend's lowering, so another backend's selection leaves the package unchanged
-unless its lowering asks for launcher flags. Claude Code 2.1.302 caches that
-descriptor before settings env applies, so clearing it in settings alone still
-sends the inherited key to the proxy. The endpoint and reference-reading
-`apiKeyHelper` stay in settings; no key is baked into the launcher.
+backend's lowering. These flags compose with the selected network proxy's
+startup trust in one launcher. Claude Code 2.1.302 caches that descriptor before
+settings env applies, so clearing it in settings alone still sends the inherited
+key to the proxy. The endpoint and reference-reading `apiKeyHelper` stay in
+settings; no key is baked into the launcher.
+
+An intercepting network proxy's trust helper supplies `NODE_EXTRA_CA_CERTS`
+before the Bun single-exec starts. A non-null
+`ai.claude.native.settings.env.NODE_EXTRA_CA_CERTS` wins; otherwise the helper
+preserves an inherited extra-CA bundle. Bun's CA-read timing relative to
+Claude's settings `env` remains **UNVERIFIED**; see
+[Proxy Trust](../../../dev/fragments/ai-proxy/ai-proxy-trust.md) for evidence,
+selection, missing-CA refusal and launcher opt-out behavior.
 
 Claude Code 2.1.157 and later discovers a plugin as a personal plugin at
 `<configDir>/skills/<name>` (yes, `skills/`, not `plugins/`), so nothing needs a

@@ -221,7 +221,9 @@
         "lib/ai/launcher.nix"
         "lib/ai/proxy.nix"
         "lib/ai/sharedOptions.nix"
+        "packages/airlock/checks/airlock-instance-runtime.py"
         "packages/airlock/checks/airlock-instances.nix"
+        "packages/airlock/lib/trust.nix"
         "packages/airlock/modules/instances.nix"
         "packages/chatgpt-codex/lib/mkCodex.nix"
         "packages/claude-code/lib/mkClaude.nix"
@@ -231,7 +233,10 @@
         "packages/kiro-cli/lib/usageTracking.nix"
         "packages/kiro-cli/lib/wrapPackage.nix"
       ];
-      sources = ["ai-proxy"];
+      sources = [
+        "ai-proxy"
+        "ai-proxy-trust"
+      ];
     };
     # ai-skills: uniform skill layout through the shared `mkSkillFiles` helper.
     # Scoped to the runtime implementations, package factory modules, and skill
