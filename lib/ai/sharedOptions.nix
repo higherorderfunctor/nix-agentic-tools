@@ -40,6 +40,7 @@
   jailLib = import ./jail {inherit lib;};
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   inferenceLib = import ./inference {inherit lib;};
+  proxyLib = import ./proxy.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -245,6 +246,7 @@
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
+    proxy = proxyLib.options config.ai.proxy options.ai.proxy;
     rules = keyedOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};

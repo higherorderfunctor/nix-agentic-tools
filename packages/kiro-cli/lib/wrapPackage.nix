@@ -76,6 +76,7 @@
   chatValueFlags = ["--resume-id"];
 
   wrapperReasons = {
+    environmentDefaults ? {},
     environmentVariables ? {},
     environmentVariablesName ? "ai.environmentVariables / ai.kiro.cli.environmentVariables",
     extraPackages ? [],
@@ -84,6 +85,10 @@
     usageTracking ? {enable = false;},
     v3 ? false,
   }: {
+    environmentDefaults = {
+      active = environmentDefaults != {};
+      name = "ai.proxy / ai.kiro.proxy";
+    };
     environmentVariables = {
       active = environmentVariables != {};
       name = environmentVariablesName;
@@ -118,15 +123,16 @@
     v3,
     trustedMcpTools,
     usageTracking ? {enable = false;},
+    environmentDefaults ? {},
     environmentVariables ? {},
     extraPackages ? [],
     secretEnv ? {},
     secretOptionPaths ? {},
   }: let
     reasons = wrapperReasons {
-      inherit environmentVariables extraPackages secretEnv trustedMcpTools usageTracking v3;
+      inherit environmentDefaults environmentVariables extraPackages secretEnv trustedMcpTools usageTracking v3;
     };
-    hasEnv = reasons.environmentVariables.active;
+    hasEnv = reasons.environmentVariables.active || reasons.environmentDefaults.active;
     hasExtraPackages = reasons.extraPackages.active;
     hasSecret = reasons.secrets.active;
     hasTrust = reasons.trustedMcpTools.active;
@@ -302,6 +308,7 @@
       pkgs.writeShellScript name (
         lib.concatStringsSep "\n" (
           ["set -euETo pipefail" "shopt -s inherit_errexit 2>/dev/null || :"]
+          ++ lib.optional (environmentDefaults != {}) (import ../../../lib/ai/environment-defaults.nix {inherit lib;} environmentDefaults)
           ++ lib.optional (envExports != "") envExports
           ++ lib.optionals (secretExports != "") [
             ''export PATH="''${PATH-${pkgs.coreutils}/bin}"''
@@ -347,6 +354,7 @@ in {
     v3,
     trustedMcpTools,
     usageTracking ? {enable = false;},
+    environmentDefaults ? {},
     environmentVariables ? {},
     extraPackages ? [],
     secretEnv ? {},
@@ -385,7 +393,7 @@ in {
   in
     wrapDirect {
       package = selectedPackage;
-      inherit environmentVariables extraPackages secretEnv secretOptionPaths usageTracking v3;
+      inherit environmentDefaults environmentVariables extraPackages secretEnv secretOptionPaths usageTracking v3;
       trustedMcpTools =
         if placeTrustInsideFhs
         then []

@@ -5,6 +5,7 @@
   ...
 }: let
   policy = import ../../config/ai-delivery.nix {inherit lib;};
+  proxyLib = import ../../lib/ai/proxy.nix {inherit lib;};
   reasonsFor = import ../../lib/ai/app/supportReasons.nix;
   settingsProbes = import ../../lib/testing/normalized-settings-probes.nix {inherit lib;};
   # lib/testing/module-harness.nix declares `warnings` in both backend stubs,
@@ -54,6 +55,7 @@
         effect = "allow";
       }
     ];
+    proxy.http = "http://proxy.invalid:8080";
     rules.probe.text = "probe";
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
@@ -126,6 +128,15 @@
         then ["args" "package" "settings"]
         else ["settings"]
       )) [false true]
+    ++ map (field: {
+      runtime = "kiro";
+      surface = "proxy";
+      gapPath = [field];
+      path = ["ai" "proxy" field];
+      value = sample.proxy.http;
+      extra.ai.kiro.cli.v3 = false;
+    })
+    proxyLib.fields
     # A tool policy value with no surface on the runtime or backend.
     ++ map (runtime: {
       inherit runtime;
@@ -269,7 +280,9 @@
       policy.rows);
       absent = lib.filter (writer:
         (writer.primitive == "notApplicable" || writer ? deliveryGap)
-        && builtins.elem ["ai" case.surface] (writer.inputOptions or []))
+        # A plain option tree lists declared leaves under this root request;
+        # inputsDeclared still checks each complete leaf path exactly.
+        && lib.any (lib.lists.hasPrefix ["ai" case.surface]) (writer.inputOptions or []))
       writers;
     in
       if builtins.length absent == 1
@@ -437,9 +450,12 @@
   conditionalGaps;
   supportedCases = lib.filter deliveredCase surfaceCases;
   consumedRootsQuiet = lib.all (case: let
-    messages =
-      evaluate case.mode (lib.recursiveUpdate (harness.setEnable case.runtime true)
-        (lib.setAttrByPath case.path case.value));
+    messages = evaluate case.mode (lib.recursiveUpdate
+      (lib.recursiveUpdate (harness.setEnable case.runtime true)
+        (lib.optionalAttrs (case.runtime == "kiro" && case.surface == "proxy") {
+          ai.kiro.cli.v3 = true;
+        }))
+      (lib.setAttrByPath case.path case.value));
     allowed = map expectedMessage (lib.filter (gap:
       gap.runtime == case.runtime && gap.mode == case.mode && gap.path == case.path)
     staticCases);
