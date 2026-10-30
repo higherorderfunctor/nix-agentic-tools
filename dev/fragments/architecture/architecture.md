@@ -102,6 +102,12 @@ hoc machinery beside an existing abstraction.
   registry belongs to this surface yet. Vetted 2026-10-30. See
   `lib/ai/proxy.nix`, `lib/ai/sharedOptions.nix`,
   `lib/ai/app/mkBackendTransform.nix` and `dev/fragments/ai-proxy/ai-proxy.md`.
+- **PROPOSAL (not yet vetted): Network proxy instance selection.** Owners
+  register named proxies in `ai.internal.proxyInstances` and claim names in
+  `ai.claims.proxy-instance`. Root and runtime `proxy.instance` select them.
+  Instance selection also supplies a loopback `NO_PROXY` default. See
+  [Network Proxy](../ai-proxy/ai-proxy.md) for selection, protocol defaults and
+  precedence.
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;
