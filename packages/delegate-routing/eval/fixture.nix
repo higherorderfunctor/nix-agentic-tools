@@ -70,10 +70,6 @@
       };
     };
     routing = {
-      "Architecture" = {
-        always = true;
-        source = ../../../dev/fragments/architecture/architecture.md;
-      };
       "Local limits" = {
         always = true;
         text = ''

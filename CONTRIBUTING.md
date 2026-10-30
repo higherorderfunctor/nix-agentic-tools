@@ -97,22 +97,24 @@ Two kinds of generated content, two owners:
 `dev/ai.nix` enables only github.com Copilot and bounds its reviewer
 instructions with an explicit category allowlist and
 `ai.copilot.github.rules.<name>.enable = false` for every other shared rule.
-Newly registered categories stay out until selected. Contributors enable Claude,
-Codex, Kimchi, Kiro CLI, peer communication and Semble in ignored
-`devenv.local.nix`; their runtime and program settings remain in `dev/ai.nix`.
+Newly registered categories stay out until selected. The operator's Home Manager
+already provides the local runtimes and programs, so the committed devenv config
+leaves them disabled. Contributors enable Claude, Codex, Kimchi, Kiro CLI, peer
+communication and Semble in ignored `devenv.local.nix`; repository settings for
+Claude, Codex, Kimchi, peer communication and Semble remain in `dev/ai.nix`.
 Kiro is enabled locally only to probe the kiro-cli build on main. It receives no
-repository skills, program rules, MCP servers, hooks, environment or scoped
-steering; `dev/ai.nix` suppresses those contributions next to their sources. Its
-shared root AGENTS.md remains available, including the always-loaded
-`architecture` category. The other local runtimes inherit all named shared
-rules. The fragment-shadow guard accepts content-free runtime disables but
-rejects same-key replacement text or sources, including disabled replacements.
-Peer communication's Copilot disable remains part of its repository settings;
-Semble excludes Copilot. Home Manager supplies delegate-routing and the
-stacked-workflows router and skills. `instructions-reviewer-policy` checks the
-emitted instruction set, always-on metadata, the absence of Copilot from shared
-AGENTS.md, opted-in local content retention, Kiro isolation, and the shadow
-guard.
+repository skills, program rules or scoped steering; `dev/ai.nix` suppresses
+those contributions next to their sources and declares no Kiro MCP servers,
+hooks or environment. Its shared root AGENTS.md remains available, including the
+always-loaded `architecture` category. The other local runtimes inherit all
+named shared rules. The fragment-shadow guard accepts content-free runtime
+disables but rejects same-key replacement text or sources, including disabled
+replacements. Peer communication's Copilot disable remains part of its
+repository settings; Semble excludes Copilot. Home Manager supplies
+delegate-routing and the stacked-workflows router and skills.
+`instructions-reviewer-policy` checks the emitted instruction set, always-on
+metadata, the absence of Copilot from shared AGENTS.md, opted-in local content
+retention, Kiro isolation, and the shadow guard.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.

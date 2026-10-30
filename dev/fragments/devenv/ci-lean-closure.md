@@ -19,11 +19,11 @@ previously justified the runtime workflow:
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
   lifecycle selection and scan the complete tracked validator corpus.
 
-Home Manager supplies delegate-routing and the stacked-workflows router and
-skills. Repository skills in `dev/ai.nix` cover project-specific operations;
-`module-codex-skills-fanout` and `module-sws-skill-references-resolve` verify
-the packages' delivery contracts independently of a developer's materialized
-skill directories.
+Runtime and skill ownership follows
+`dev/fragments/pipeline/generation-architecture.md`. Repository skills in
+`dev/ai.nix` cover project-specific operations; `module-codex-skills-fanout` and
+`module-sws-skill-references-resolve` verify the packages' delivery contracts
+independently of a developer's materialized skill directories.
 
 The repository no longer repeats instruction-file and Claude settings delivery
 assertions in `enterTest`. ai-module's checks pin where the files plan lands

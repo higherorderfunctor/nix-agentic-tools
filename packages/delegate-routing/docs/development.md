@@ -75,10 +75,10 @@ executable first-match routing. Workflow steps have their own ordering map. To
 keep a terminal step last when inserting a new step, give the new step a
 `before` edge to that terminal step.
 
-Home Manager supplies this repository's delegate-routing skill and router.
-Repository architecture guidance is an always-loaded fragment from
-`dev/fragments/architecture/architecture.md`, delivered through the normal
-`dev/generate.nix` rule registry.
+Repository runtime and skill ownership is documented in
+`dev/fragments/pipeline/generation-architecture.md`. Architecture guidance is an
+always-loaded fragment from `dev/fragments/architecture/architecture.md`,
+delivered through the normal `dev/generate.nix` rule registry.
 
 ## Families and runtime capabilities
 

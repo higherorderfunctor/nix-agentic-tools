@@ -12,9 +12,9 @@
 #   * README.md and CONTRIBUTING.md are human documents dev/generate.nix
 #     renders; the `repo-*` packages are what `generate:repo:*` copies out.
 #
-# The local instruction files (AGENTS.md, .agents/rules/, .claude/,
-# .kiro/steering/) have no tracked bytes to compare. Their generated composition
-# remains checked with an explicit local opt-in fixture.
+# The local instruction files (AGENTS.md, .agents/rules/, .claude/) have no
+# tracked bytes to compare. Their generated composition remains checked with
+# an explicit local opt-in fixture.
 #
 # Why it exists: nothing else asserted tracked generated files matched their
 # source. Both repo-root documents once drifted far enough to be wrong —
@@ -47,9 +47,8 @@
     repoCI = evalRepo true [];
     # Exercise the operator's opt-in composition without reading personal config.
     localFixture = import ./fixtures/local-runtimes.nix;
-    localModules = [localFixture];
-    localRepo = evalRepo false localModules;
-    localRepoCI = evalRepo true localModules;
+    localRepo = evalRepo false [localFixture];
+    localRepoCI = evalRepo true [localFixture];
     evaluations = [localRepo localRepoCI repo repoCI];
     # Compare instruction inputs and destinations. One generated tree can also
     # contain structured files whose CI-only configuration changes its store
@@ -184,7 +183,7 @@
       optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
       fragmentOverride = runtime: rule: lib.setAttrByPath (optionPaths.pool runtime "rules" ++ ["packaging"]) rule;
       shadowAllowed = overrides: let
-        evaluated = evalRepo true (localModules ++ [overrides]);
+        evaluated = evalRepo true [localFixture overrides];
       in
         (lib.findFirst (assertion: lib.hasPrefix "dev/ai.nix:" assertion.message) (throw "missing fragment-shadow assertion") evaluated.config.assertions).assertion;
       observation = {
@@ -196,12 +195,11 @@
         disablesAllowed = shadowAllowed (lib.foldl' lib.recursiveUpdate {} (
           map (runtime: fragmentOverride runtime {enable = false;}) (builtins.attrNames optionPaths.records)
         ));
-        independentCopilot = lib.all (evaluated:
-          !(evaluated.config.ai.internal.agentsMdTargets ? copilot)
+        independentCopilot =
+          !(localRepo.config.ai.internal.agentsMdTargets ? copilot)
           && lib.all (target:
             lib.all (audience: !(builtins.elem "copilot" audience)) (builtins.attrValues target.audiences))
-          (builtins.attrValues evaluated.config.ai.internal.agentsMd))
-        [repo localRepo];
+          (builtins.attrValues localRepo.config.ai.internal.agentsMd);
         # The Kiro build probe gets only shared root AGENTS.md: no repo skills,
         # program rules, steering, hooks, MCP, environment or runtime context.
         kiroIsolation = let
@@ -226,13 +224,11 @@
             root = localRepo.config.ai.rules.${name};
             local = (localRules runtime).${name};
           in
-            if runtime == "kiro" && root.matcher != null
-            then !(builtins.hasAttr name (localRules runtime))
-            else local.text == root.text && local.matcher == root.matcher && local.references == root.references)
-          (builtins.attrNames localRepo.config.ai.rules));
-        localRouters = lib.genAttrs localRuntimes (runtime:
+            local.text == root.text && local.matcher == root.matcher && local.references == root.references)
+          (builtins.attrNames (lib.filterAttrs (_: rule: runtime != "kiro" || rule.matcher == null) localRepo.config.ai.rules)));
+        localRouters = lib.genAttrs (lib.remove "kiro" localRuntimes) (runtime:
           lib.all (name: builtins.hasAttr name (localRules runtime))
-          (lib.optionals (runtime != "kiro") (["peer-communication-router"] ++ lib.optional (runtime != "kimchi") "semble")));
+          (["peer-communication-router"] ++ lib.optional (runtime != "kimchi") "semble"));
         namedComposition =
           localRepo.config.ai.internal.agentsMd."AGENTS.md".context
           == null

@@ -48,12 +48,13 @@ it per runtime through the `lib/ai/transformers/` pipeline:
 
 The source fragments are authoritative. Every runtime file above is a generated
 projection written by `ai.*`. Only the `.github/` instruction files are
-committed; AGENTS.md, `.agents/rules/`, Claude rules and Kiro steering are
-gitignored and written on devenv shell entry. Copilot does not contribute to the
-shared AGENTS.md composer. Named rules become separate
-`.github/instructions/<name>.instructions.md` files, including `applyTo: "**"`
-for selected always-on rules. An explicit unnamed Copilot context independently
-uses `.github/copilot-instructions.md`; this repository declares none.
+committed. Local runtime opt-ins write gitignored AGENTS.md, `.agents/rules/`
+and Claude rules on devenv shell entry; this repository gives Kiro only shared
+root AGENTS.md. Copilot does not contribute to the shared AGENTS.md composer.
+Named rules become separate `.github/instructions/<name>.instructions.md` files,
+including `applyTo: "**"` for selected always-on rules. An explicit unnamed
+Copilot context independently uses `.github/copilot-instructions.md`; this
+repository declares none.
 
 Never edit a projection directly; the next generation replaces it.
 `devenv tasks run --mode before generate:all` regenerates instructions and

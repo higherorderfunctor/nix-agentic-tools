@@ -1,8 +1,7 @@
 # Acceptance cases: repository guidance plus the suite's explicit runtime and
 # routing fixture, with only the named switches changed. suite.py renders each
 # case into a fixture repository and runs one real session in it. `expect` names
-# an assertion in suite.py's
-# ASSERTIONS table; the prompt never carries it.
+# an assertion in suite.py's ASSERTIONS table; the prompt never carries it.
 {
   harness,
   lib,

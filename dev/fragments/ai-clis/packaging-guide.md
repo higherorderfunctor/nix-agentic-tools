@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-29 — two native package shards per system exclude
 > patched Kiro; its required validation legs use Ubuntu when kiro-scope finds no
-> relevant changes.
+> relevant changes. The committed devenv package lists contain no kiro-cli entry
+> with either CI setting; local runtime opt-ins are separate.
 
 ### Overview
 
@@ -150,15 +151,15 @@ days later, so `ci.yml` provably was not the source. That incident involved two
 workflow paths holding `CACHIX_AUTH_TOKEN`, only one of which was covered. The
 current token-bearing producers all need the filter:
 
-| job                           | builds patched?                  | pushes?                  |
-| ----------------------------- | -------------------------------- | ------------------------ |
-| `ci.yml` build-packages       | no — `ci-packages.py` exclusions | token → **`pushFilter`** |
-| `ci.yml` publish-hestia       | no — builds `ciHestia` only      | token → **`pushFilter`** |
-| `ci.yml` test                 | no                               | no token                 |
-| `extracted-facts.yml` produce | owner extraction closures        | token → **`pushFilter`** |
-| `kiro-patched`                | when scoped                      | no token                 |
-| `update.yml` devenv           | **yes — the repo devenv shell**  | token → **`skipPush`**   |
-| `update.yml` inputs           | **yes — `verify_all_packages`**  | token → **`pushFilter`** |
+| job                           | builds patched?                     | pushes?                  |
+| ----------------------------- | ----------------------------------- | ------------------------ |
+| `ci.yml` build-packages       | no — `ci-packages.py` exclusions    | token → **`pushFilter`** |
+| `ci.yml` publish-hestia       | no — builds `ciHestia` only         | token → **`pushFilter`** |
+| `ci.yml` test                 | no                                  | no token                 |
+| `extracted-facts.yml` produce | owner extraction closures           | token → **`pushFilter`** |
+| `kiro-patched`                | when scoped                         | no token                 |
+| `update.yml` devenv           | no — committed Kiro opt-in disabled | token → **`skipPush`**   |
+| `update.yml` inputs           | **yes — `verify_all_packages`**     | token → **`pushFilter`** |
 
 `ci-packages.py` removes its `EXCLUDED` names before partitioning the native
 package set into two shards per system and emits a positive `--select`
@@ -199,14 +200,15 @@ Supporting properties:
   the layers naming cannot reach (below). `ci.yml` used to publish the unpatched
   package on purpose; it no longer does.
 - **It is not a guarantee on its own**: "paths may still be pushed if they are
-  part of another path's closure". The repo devenv shell is such a path: it
-  depends on the patched output, and on 2026-10-17 the devenv lane's shell-entry
-  check published the patched closure through it (sweep `39032289943`), caught
-  by the tripwire below. That lane therefore sets `skipPush`, which
-  `test-ci-packages.py` pins. The package shards and the other update lanes
-  build the patched output only as its own `kiro-cli-…` root, and every layer
-  inside it matches the regex — a property of the current graph that fails
-  silently. The tripwire below is the actual guarantee.
+  part of another path's closure". The committed devenv package lists contain no
+  `kiro-cli` entry with or without `CI=1`; contributors opt into Kiro in ignored
+  `devenv.local.nix`. The devenv lane keeps `skipPush`, pinned by
+  `test-ci-packages.py`, because on 2026-10-17 its shell-entry check published a
+  patched closure through the then-enabled shell (sweep `39032289943`), caught
+  by the tripwire below. The package shards and the other update lanes build the
+  patched output only as its own `kiro-cli-…` root, and every layer inside it
+  matches the regex — a property of the current graph that fails silently. The
+  tripwire below is the actual guarantee.
 - **Patched derivations are RENAMED so a leak is self-identifying.** Both
   variants used to be `kiro-cli-unwrapped-<version>`, differing only by store
   hash, which is exactly why one sat unnoticed in a cache listing. The patched

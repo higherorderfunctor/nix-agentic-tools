@@ -70,8 +70,6 @@ in {
     # any project would, fed the context and rules dev/generate.nix produces;
     # checks/instructions/instructions-drift.nix evaluates the same module.
     (import ./dev/ai.nix {inherit isCI;})
-    # Home Manager delivers stacked-workflows skills and its routing rule.
-    # Repo-only skills are declared in dev/ai.nix.
   ];
 
   # This repository assembles the modules directly instead of consuming the

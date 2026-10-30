@@ -7,12 +7,14 @@
   pkgs,
   ...
 }: let
-  gen = import ./generate.nix {inherit lib pkgs;};
   agnixMcp = {
     type = "stdio";
     package = pkgs.ai.mcpServers.agnix-mcp;
     command = "${pkgs.ai.mcpServers.agnix-mcp}/bin/agnix-mcp";
   };
+  disableRules = lib.mapAttrs (_: _: {enable = false;});
+  gen = import ./generate.nix {inherit lib pkgs;};
+  noSkills = lib.mapAttrs (_: _: null) config.ai.skills;
   # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
   # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
   shell = pkgs.bash;
@@ -61,6 +63,7 @@ in {
       peer-communication = {
         runtimes = {
           copilot.enable = false;
+          # Kiro is a build probe only; exclude peer communication rules.
           kiro.enable = false;
         };
       };
@@ -109,6 +112,7 @@ in {
         ];
         cli.instructions.enable = true;
         mcp.enable = false;
+        # Kiro is a build probe only; exclude Semble CLI guidance.
         runtimes.kiro.cli.instructions.enable = false;
       };
     };
@@ -137,11 +141,11 @@ in {
     copilot = {
       enable = true;
       github = {
-        rules = lib.mapAttrs (_: _: {enable = false;}) (
+        rules = disableRules (
           lib.filterAttrs (name: _: !(lib.elem name reviewerCategories)) gen.rules
         );
         # These skills operate the local session; github.com receives none of them.
-        skills = lib.mapAttrs (_: _: null) config.ai.skills;
+        skills = noSkills;
       };
     };
     kimchi = {
@@ -153,10 +157,10 @@ in {
     # Kiro runs only to probe main's build: it reads the shared AGENTS.md and
     # receives no scoped steering or repo skills.
     kiro = {
-      rules = lib.mapAttrs (_: _: {enable = false;}) (
+      rules = disableRules (
         lib.filterAttrs (_: rule: rule.matcher != null) gen.rules
       );
-      skills = lib.mapAttrs (_: _: null) config.ai.skills;
+      skills = noSkills;
     };
 
     skills = {
