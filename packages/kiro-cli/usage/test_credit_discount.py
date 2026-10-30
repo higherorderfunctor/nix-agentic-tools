@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 import unittest
+from unittest.mock import patch
 
 import credit_discount as discount
 import test_query
@@ -75,6 +76,17 @@ class ModelFactsTests(unittest.TestCase):
         self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, 1, 8),  # listed, never probed
                          {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None})
 
+    def test_output_guess_uses_the_fitted_chars_per_token_else_the_default(self):
+        """8 chars read 4 tokens at a fitted 2 chars per token and 2 at CHARS_PER_TOKEN; the cache split follows."""
+        rates = {key: value for key, value in discount.RATES["claude-opus-5.5"].items()
+                 if key not in ("chars_per_token", "credit_error")}
+        for fitted, output in ((2, 4), (None, 8 // discount.CHARS_PER_TOKEN)):
+            with self.subTest(fitted=fitted), patch.dict(discount.RATES, {"claude-sonnet-4.6": {
+                    **rates, **({"chars_per_token": fitted} if fitted else {})}}):
+                miss = discount.price(rates, 30_000 - output, output, 0)
+                self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, miss, 8),
+                                 {"total_tokens": 30_000, "input_tokens": 30_000 - output, "output_tokens": output,
+                                  "cache_read_tokens": 0})
 
 class DiscountQueryTests(unittest.TestCase):
     def setUp(self):
@@ -131,7 +143,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertIn("~62.5% (8/10)", output)
         self.assertIn("not observed cache hits", output)
         output = query.render_summary(report)
-        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~183\s+~54.6K\s+~70%\s+~62%\n")
+        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~241\s+~55.7K\s+~70%\s+~62%\n")
         for label, discount in (("Main", "50"), ("Sub/WF", "75"), ("Total", "62")):
             self.assertRegex(output, rf"\n{re.escape(label)}\s+\d+\s+[\d.]+\s+\S+\s+\S+\s+\S+\s+~\d+%\s+~{discount}%\n?")
         self.assertNotIn("not observed cache hits", output)
@@ -171,7 +183,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertIn("Discount %", output)
         self.assertIn("Profile anomalies: 1", output)
         self.assertRegex(output, r"claude-opus-5.5\s+1\s.*\s1.000000\s+—\n")  # Discount % stays unavailable
-        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+1\s+1.00\s+~18.0K\s+~1\s+~0\s+~0%\s+—\n")
+        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+1\s+1.00\s+~18.0K\s+~2\s+~0\s+~0%\s+—\n")
 
     def test_retained_terminal_and_reasoning_proof_are_required(self):
         ident = self.add(FIXTURE[0], extra_output={"type": "reasoning", "summary": []})

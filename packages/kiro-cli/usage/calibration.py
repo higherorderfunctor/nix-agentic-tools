@@ -5,6 +5,7 @@ from collections import namedtuple
 from datetime import date
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -25,27 +26,38 @@ EFFORT = "low"
 # the quiet wait before the delayed repeat is paid once for all models.
 STEPS = (("medium_cold", "medium_warm"), ("size_short",), ("size_long",), ("output_short",), ("output_long",),
          ("conversation_1",), ("conversation_2",), ("conversation_3",), ("medium_delayed",))
+# validate's holdout: prompts the fit never used, each at a cache state fixed by design.
+HOLDOUT_STEPS = (("holdout_small_cold", "holdout_small_warm"), ("holdout_large_cold", "holdout_large_warm"),
+                 ("holdout_prose_out",))
+HOLDOUT_LABELS = tuple(label for step in HOLDOUT_STEPS for label in step)
 # A call's prompt family: the leading nonce of its user and agent prompts. Only calls sharing one send a common
 # prefix, so no call hits another family's cache (the output pair is two: output_long hit output_short's).
 FAMILIES = {"conversation_1": "conversation", "conversation_2": "conversation", "conversation_3": "conversation",
-            "medium_cold": "medium", "medium_delayed": "medium", "medium_warm": "medium", "output_long": "output_long",
-            "output_short": "output_short", "size_long": "long", "size_short": "short"}
+            "holdout_large_cold": "holdout_large", "holdout_large_warm": "holdout_large",
+            "holdout_prose_out": "holdout_prose", "holdout_small_cold": "holdout_small",
+            "holdout_small_warm": "holdout_small", "medium_cold": "medium", "medium_delayed": "medium", "medium_warm": "medium",
+            "output_long": "output_long", "output_short": "output_short", "size_long": "long", "size_short": "short"}
 RESUMES = {"conversation_2": "conversation_1", "conversation_3": "conversation_1"}  # resumed turn: its session's first
 COLD_LABELS = ("medium_cold", "size_long", "size_short")  # full misses
-HIT_PAIRS = (("medium_cold", "medium_delayed"), ("medium_cold", "medium_warm"))  # each repeat after its cold call
+# Each repeat after its cold call; validate's holdout pairs join when a pooled manifest has them.
+HIT_PAIRS = (("holdout_large_cold", "holdout_large_warm"), ("holdout_small_cold", "holdout_small_warm"),
+             ("medium_cold", "medium_delayed"), ("medium_cold", "medium_warm"))
 # A repeat is a hit only below this share of its cold call's credits: hits billed 10-53%, an expired one 97%.
 HIT_LIMIT = .8
 OUTPUT_LABELS = ("output_long", "output_short")
 # The miss line may miss a cold call by this share of its credits; claude-haiku-5.5's medium_cold billed 14% over.
 RESIDUAL_LIMIT = .05
+# Above this credit_error, credits cannot price one prose reply (claude-haiku-5.5's read 9.2-10.8 chars per token).
+CHARS_ERROR_LIMIT = .02
 RATE_NAMES = ("fixed_per_call", "hit_input", "miss_input", "output")
+TOLERANCE = (.02, .0005)  # a designed call passes within the larger of this share of its credits and these credits
 DELAY_SECONDS = 361
 CAPTURE_WAIT = 5
 CAPTURE_SETTLE = 0.2
 LOG_LIMIT = 16_384
 
 
-Call = namedtuple("Call", "input output credits")  # fit_calls' tokens
+Call = namedtuple("Call", "input output credits cached chars")  # fit_calls' tokens; cached is estimate()'s split
 
 
 class ExitError(RuntimeError):
@@ -174,9 +186,27 @@ def prompts(seed):
             "medium_delayed": medium}
 
 
-def fit_calls(db, manifest):
+def prose(words, start):
+    """Eight-word sentences over a word list unlike the cedar fixtures', rotated by start so each fixture's text is
+    its own."""
+    vocabulary = ("amber", "harbor", "lantern", "meadow", "orchard", "quietly", "river", "signal", "summit",
+                  "thunder", "travelers", "valley", "winter")
+    return " ".join(" ".join(vocabulary[(start + sentence + word) % len(vocabulary)] for word in range(8)).capitalize()
+                    + "." for sentence in range(words // 8))
+
+
+def holdout_prompts(seed):
+    small, large = fixture(seed, "holdout_small", prose(2000, 0)), fixture(seed, "holdout_large", prose(9000, 3))
+    return {"holdout_large_cold": large, "holdout_large_warm": large,
+            "holdout_prose_out": f"{nonce(seed, 'holdout_prose')}\nWrite about 150 words of plain prose about a river "
+                                 "town at dawn. No lists, headings, code or tools.",
+            "holdout_small_cold": small, "holdout_small_warm": small}
+
+
+def fit_calls(db, manifest, ratio=None):
     """One manifest's {model: {label: Call}} for complete one-capture calls, on query.call_counters' basis: exact
-    counters where reported, else estimate()'s split, so fitted rates price what estimate() later sees."""
+    counters where reported, else estimate()'s split, so fitted rates price what estimate() later sees. ratio
+    overrides rates.json's chars_per_token, so a fit never reads the entry it replaces."""
     calls = {}
     for call in manifest["calls"]:
         if call.get("status") != "complete" or call.get("capture_count") != 1:
@@ -186,10 +216,11 @@ def fit_calls(db, manifest):
                          "+coalesce(json_extract(summary_json,'$.reasoning_chars'),0),output_tokens,input_tokens FROM captures WHERE id=?",
                          (call["captures"][0]["id"],)).fetchone()
         # row is None for a capture absent from this --db.
-        tokens = row and discount.estimate(call["model"], row[1], row[0], row[2], row[3], row[4])
+        tokens = row and discount.estimate(call["model"], row[1], row[0], row[2], row[3], row[4], ratio)
         # The collector stores 0-credit captures; they price nothing and would divide every residual by zero.
         if tokens and tokens["output_tokens"] is not None and discount.finite(row[0]) and row[0] > 0:
-            calls.setdefault(call["model"], {})[call["label"]] = Call(tokens["input_tokens"], tokens["output_tokens"], row[0])
+            calls.setdefault(call["model"], {})[call["label"]] = Call(tokens["input_tokens"], tokens["output_tokens"],
+                                                                      row[0], tokens["cache_read_tokens"], row[2])
     return calls
 
 
@@ -208,8 +239,8 @@ def fit_model(model, runs, version, effort):
         return {"refused": "cold calls share one input size"}
     # The pair's prompts differ only in their nonces and final integer, so its total-token difference (context %,
     # which counts output) is the output-token difference. Splitting that total into input and output first would
-    # read input from chars / 4, which counts too few of the digit reply by ~150 tokens; the nonces move input by a
-    # few at most. A model replying identically to both prompts has no token difference to divide by.
+    # read input from chars / chars_per_token, which counts too few of the digit reply by ~150 tokens; the nonces move
+    # input by a few at most. A model replying identically to both prompts has no token difference to divide by.
     deltas = [(wide.credits - short.credits, wide.input + wide.output - short.input - short.output)
               for short, wide in pairs]
     if not all(tokens for _, tokens in deltas):
@@ -221,22 +252,49 @@ def fit_model(model, runs, version, effort):
     output = statistics.fmean(credits / tokens for credits, tokens in deltas)
     miss, fixed = statistics.linear_regression([call.input for call in colds],
                                                [call.credits - output * call.output for call in colds])
+    # validate's holdout cold calls only check the line: claude-haiku-5.5's holdout_small_cold billed 14% above it.
+    checked = [run[label] for run in runs for label in ("holdout_large_cold", "holdout_small_cold") if label in run]
     rates = {"fixed_per_call": fixed, "miss_input": miss, "output": output}
     hits = [(repeat, run[cold], run[repeat]) for run in runs for cold, repeat in HIT_PAIRS
             if cold in run and repeat in run and run[repeat].credits < HIT_LIMIT * run[cold].credits]
     if hits:  # each repeat on its own counters, which can differ from its cold call's (claude-haiku-5.5's output)
         rates["hit_input"] = statistics.fmean((hit.credits - fixed - output * hit.output) / hit.input for *_, hit in hits)
-    # The share of its credits the miss line misses each cold call by.
-    residual = max(abs(call.credits - fixed - miss * call.input - output * call.output) / call.credits for call in colds)
+    # The share of its credits the miss line misses each cold call by, and each hit's price at its whole input.
+    off = lambda call: abs(call.credits - fixed - miss * call.input - output * call.output) / call.credits
+    residual = max(map(off, colds))
+    errors = [*map(off, colds + checked),
+              *(abs(hit.credits - discount.price(rates, hit.input, hit.output, hit.input)) / hit.credits for *_, hit in hits)]
+    rates["credit_error"] = math.sqrt(statistics.fmean(error * error for error in errors))
     reference, multipliers = discount.RATES[discount.PROFILE_MODEL], discount.FACTS["models"]
     share = multipliers[model]["rate_multiplier"] / multipliers[discount.PROFILE_MODEL]["rate_multiplier"]
-    result = {"provenance": {"calls": len(colds) + len(hits) + 2 * len(pairs), "date": date.today().isoformat(),
-                             "effort": effort, "kiro_cli_version": version, "max_residual": residual},
+    result = {"provenance": {"calls": len(errors) + 2 * len(pairs), "date": date.today().isoformat(), "effort": effort,
+                             "kiro_cli_version": version, "max_residual": max(map(off, colds + checked))},
               "rates": rates, "ratios": {name: rates[name] / (reference[name] * share) for name in RATE_NAMES if name in rates}}
     if residual > RESIDUAL_LIMIT:
         result["refused"] = "cold calls disagree"
     elif not any(label == "medium_warm" for label, *_ in hits):
         result["refused"] = "no hit observed"
+    return result
+
+
+def fit_pool(db, manifests, model, version, effort):
+    """fit_model at CHARS_PER_TOKEN, then once more at the mean chars_per_token of the pool's holdout_prose_out replies,
+    which the entry carries, so estimate() reads output at the ratio its rates were fitted at.
+
+    One refit suffices: the ratio only moves the 1-6 char replies of the fitted calls by a token, so their rates and
+    credit_error barely move. Past CHARS_ERROR_LIMIT the credits cannot price one reply, so no ratio is fitted."""
+    runs = lambda ratio: [fit_calls(db, manifest, ratio).get(model, {}) for manifest in manifests]
+    pool = runs(discount.CHARS_PER_TOKEN)
+    result = fit_model(model, pool, version, effort)
+    if "refused" in result or result["rates"]["credit_error"] > CHARS_ERROR_LIMIT:
+        return result
+    ratios = [ratio for ratio in (prose_chars_per_token(result["rates"], run["holdout_prose_out"])
+                                  for run in pool if "holdout_prose_out" in run) if ratio]
+    if not ratios:
+        return result
+    result = fit_model(model, runs(statistics.fmean(ratios)), version, effort)
+    if "refused" not in result:
+        result["rates"]["chars_per_token"] = statistics.fmean(ratios)
     return result
 
 
@@ -248,21 +306,21 @@ def fit(args):
 
     db = open_evidence(args.db or state_directory(None) / "usage.sqlite3")
     try:
-        pool = [fit_calls(db, manifest) for manifest in manifests]
-        results = {model: fit_model(model, [calls.get(model, {}) for calls in pool], joined("kiro_cli_version"),
-                                    joined("effort"))
+        results = {model: fit_pool(db, manifests, model, joined("kiro_cli_version"), joined("effort"))
                    for model in sorted({call["model"] for manifest in manifests for call in manifest["calls"]})}
     finally:
         db.close()
-    rows = [[model, *(result.get("rates", {}).get(name) for name in RATE_NAMES),
+    extra = ("chars_per_token", "credit_error")
+    rows = [[model, *(result.get("rates", {}).get(name) for name in (*RATE_NAMES, *extra)),
              *(result.get("ratios", {}).get(name) for name in RATE_NAMES),
              result.get("provenance", {}).get("calls"), result.get("provenance", {}).get("max_residual"),
              result.get("refused", "fit")]
             for model, result in results.items()]
-    print(table(["Model", *RATE_NAMES, *(f"{name} ratio" for name in RATE_NAMES), "Calls", "Max residual",
+    print(table(["Model", *RATE_NAMES, *extra, *(f"{name} ratio" for name in RATE_NAMES), "Calls", "Max residual",
                  "Status"], rows))
     print(f"Ratio = fitted / ({discount.PROFILE_MODEL} rate × multiplier share); rates in credits per token or call. "
-          f"Max residual: the cold calls' largest |actual / line - 1|; refused when one exceeds {RESIDUAL_LIMIT:.0%}.")
+          f"Max residual: the cold and holdout cold calls' largest |actual / line - 1|; refused when a cold call's "
+          f"exceeds {RESIDUAL_LIMIT:.0%}. credit_error: RMS of (actual - predicted) / actual over those and the hits.")
     if args.write:  # each accepted model's whole entry, from these manifests alone
         manifest_names = [str(path) for path in args.manifests]
         fitted = {model: {**result["rates"], "provenance": {**result["provenance"], "manifests": manifest_names}}
@@ -282,15 +340,16 @@ def selected_models(args, parser):
     return models
 
 
-def experiment(args, parser, models):
-    """Preview, or with --run make, the probe's paid calls for each model; the exit status."""
-    print(f"Models {', '.join(models)}; effort {EFFORT}; {sum(map(len, STEPS)) * len(models)} CLI invocations, "
+def experiment(args, parser, models, steps, prompts_for):
+    """Preview, or with --run make, steps' paid calls for each model; (exit status, manifest path once one exists)."""
+    print(f"Models {', '.join(models)}; effort {EFFORT}; {sum(map(len, steps)) * len(models)} CLI invocations, "
           "possibly more provider requests.")
     print("Cold/warm/delayed are experiment labels, not verified cache states.")
-    print("Final repeats follow >6 quiet minutes after the other calls finish.")
+    if ("medium_delayed",) in steps:
+        print("Final repeats follow >6 quiet minutes after the other calls finish.")
     if not args.run:
         print("Dry run only. Add --run to execute. No CLI commands were called.")
-        return 0
+        return 0, None
     for executable in ("kiro-cli", "kiro-usage"):
         if not shutil.which(executable):
             parser.error(f"missing executable: {executable}")
@@ -305,7 +364,7 @@ def experiment(args, parser, models):
     agent_dir = workspace / ".kiro" / "agents"
     agent_dir.mkdir(parents=True)
     # One agent per (model, family): the agent prompt leads msg0, so a shared one would share a cached prefix.
-    agents = {agent_name(model, label): (model, FAMILIES[label]) for model in models for step in STEPS for label in step}
+    agents = {agent_name(model, label): (model, FAMILIES[label]) for model in models for step in steps for label in step}
     for agent, (model, family) in agents.items():
         (agent_dir / f"{agent}.json").write_text(json.dumps({"name": agent, "description": "Usage calibration",
             "prompt": f"Run {nonce(f'{seed}:{model}', family)}. Answer directly without tools.", "tools": [],
@@ -385,8 +444,8 @@ def experiment(args, parser, models):
             if run(["kiro-cli", "agent", "validate", "--path", str(agent_dir / f"{agent}.json")], f"{agent}.agent-validation"):
                 raise RuntimeError(f"local agent validation failed for {agent}; no paid call started")
         dropped, conversations = manifest["dropped_models"], {}
-        fixtures = {model: prompts(f"{seed}:{model}") for model in models}  # one model's call cannot warm another's
-        for step in STEPS:
+        fixtures = {model: prompts_for(f"{seed}:{model}") for model in models}  # one model's call cannot warm another's
+        for step in steps:
             if step == ("medium_delayed",):
                 print(f"Waiting {DELAY_SECONDS}s without probe calls...", flush=True)
                 time.sleep(DELAY_SECONDS)
@@ -397,7 +456,7 @@ def experiment(args, parser, models):
                         session = invoke(model, label, fixtures[model][label], resume)
                     except ExitError as error:
                         # A model refusing --effort low fails its first call; drop it and keep the others.
-                        if label != STEPS[0][0]:
+                        if label != steps[0][0]:
                             raise
                         dropped[model] = str(error)
                         save()
@@ -420,35 +479,96 @@ def experiment(args, parser, models):
         manifest["error"] = str(error)
         save()
         print(f"Stopped: {error}. No automatic retry. Manifest: {manifest_path}", flush=True)
-        return 1
+        return 1, manifest_path
     finally:
         db.close()
         for sig, handler in previous_handlers.items():
             signal.signal(sig, handler)
     print(f"Complete: {len(manifest['calls'])} CLI invocations. Manifest: {manifest_path}")
-    return 0
+    return 0, manifest_path
+
+
+def prose_chars_per_token(rates, call):
+    """holdout_prose_out's chars per output token, its output solved from credits as a full miss (cached 0).
+
+    None when credits leave no positive output or the reply no chars.
+    """
+    output = ((call.credits - rates["fixed_per_call"] - rates["miss_input"] * (call.input + call.output))
+              / (rates["output"] - rates["miss_input"]))
+    return call.chars / output if output > 0 and call.chars else None
+
+
+def evaluate(manifest, path):
+    """Each holdout call against rates.json at its designed cache state; non-zero when one fails or is missing, or its
+    model has no rates."""
+    db = open_evidence(path or state_directory(None) / "usage.sqlite3")
+    try:
+        calls = fit_calls(db, manifest)
+    finally:
+        db.close()
+    rows, failed = [], False
+    # Requested models too: a model whose calls never ran (e.g. "calls": []) must report missing, not pass.
+    for model in sorted({*manifest.get("models", ()), *(call["model"] for call in manifest["calls"])}):
+        rates, observed = discount.RATES.get(model), calls.get(model, {})
+        for label in HOLDOUT_LABELS:
+            call = observed.get(label)
+            if rates is None or call is None:
+                failed = True
+                rows.append([model, label, *[None] * 8, "no rates" if rates is None else "missing"])
+                continue
+            # Cached by design: a warm repeat's whole input, a cold call's none.
+            predicted = discount.price(rates, call.input, call.output, call.input if label.endswith("_warm") else 0)
+            residual = call.credits - predicted
+            ratio = prose_chars_per_token(rates, call) if label == "holdout_prose_out" else None
+            passed = abs(residual) <= max(TOLERANCE[0] * call.credits, TOLERANCE[1])
+            failed |= not passed
+            rows.append([model, label, call.input, call.output, round(call.credits, 6), round(predicted, 6),
+                         round(residual, 6), round(100 * residual / call.credits, 2),
+                         call.cached, ratio and round(ratio, 3), "PASS" if passed else "FAIL"])
+    print(table(["Model", "Call", "Input", "Output", "Actual", "Predicted", "Residual", "Residual %", "Cached est",
+                 "Chars/token", "Status"], rows))
+    print(f"PASS: |actual - predicted| <= max({TOLERANCE[0]:.0%} of actual, {TOLERANCE[1]} credits), cached fixed by "
+          "design (0 cold, input warm). Chars/token: prose_out's chars over its output solved from credits at cached 0.")
+    return int(failed)
+
+
+def validate(args, parser):
+    if args.manifest:
+        if args.run:
+            parser.error("a manifest is evaluated offline; drop --run")
+        return evaluate(json.loads(args.manifest.read_text()), args.db)
+    status, manifest_path = experiment(args, parser, selected_models(args, parser), HOLDOUT_STEPS, holdout_prompts)
+    if status or manifest_path is None:
+        return status
+    return evaluate(json.loads(manifest_path.read_text()), args.db)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     evidence = argparse.ArgumentParser(add_help=False)
     evidence.add_argument("--db", type=Path, help="collector database; defaults to runtime state directory")
+    paid = argparse.ArgumentParser(add_help=False)
+    paid.add_argument("--models", default=discount.PROFILE_MODEL, help="comma-separated model ids from models.json")
+    paid.add_argument("--run", action="store_true", help="authorize the paid CLI invocations the preview counts")
+    paid.add_argument("--timeout", type=float, default=180, help="seconds per CLI command")
     commands = parser.add_subparsers(dest="command", required=True)
-    probe = commands.add_parser("probe", parents=[evidence], help="preview, or with --run make, the paid probe calls")
-    probe.add_argument("--models", default=discount.PROFILE_MODEL, help="comma-separated model ids from models.json")
-    probe.add_argument("--run", action="store_true", help="authorize the paid CLI invocations the preview counts")
-    probe.add_argument("--timeout", type=float, default=180, help="seconds per CLI command")
+    probe = commands.add_parser("probe", parents=[evidence, paid], help="preview, or with --run make, the paid probe calls")
     commands.add_parser("models", help="refresh models.json from the free kiro-cli chat --list-models")
     fitting = commands.add_parser("fit", parents=[evidence], help="fit per-model rates from probe manifests and their captures")
     fitting.add_argument("manifests", type=Path, nargs="+", help="probe manifests; each model's calls pool")
     fitting.add_argument("--write", action="store_true", help="replace accepted models' rates.json entries")
+    holdout = commands.add_parser("validate", parents=[evidence, paid],
+                                  help="preview, or with --run make, holdout calls; with MANIFEST evaluate them offline")
+    holdout.add_argument("manifest", type=Path, nargs="?")
     args = parser.parse_args()
     if args.command == "models":
         refresh_models()
         return 0
     if args.command == "fit":
         return fit(args)
-    return experiment(args, probe, selected_models(args, probe))
+    if args.command == "validate":
+        return validate(args, holdout)
+    return experiment(args, probe, selected_models(args, probe), STEPS, prompts)[0]
 
 
 if __name__ == "__main__":

@@ -411,7 +411,7 @@ def capture_tables(captures):
 
 CAPTURE_NOTES = (
     "Partial cells: sum (known/all requests); ~ adds estimates where a call lacks the exact counter; — unavailable.",
-    "~Tokens: total = context % of the model window; output ≈ chars/4 (text, tool arguments, reasoning); cached fitted from credits.",
+    "~Tokens: total = context % of the model window; output ≈ chars / the model's fitted chars per token, else 4 (text, tool arguments, reasoning); cached fitted from credits.",
     "Hit % = requests with cached tokens (reported, or ~estimated at 1% of input or more) / requests with a cached value.",
     "Root conversation carries the selected ID; Other linked holds workflow steps and subagents and may include helpers/forks. Disk credits are excluded.",
 )

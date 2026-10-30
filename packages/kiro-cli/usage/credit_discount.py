@@ -22,6 +22,7 @@ FACTS = json.loads(MODELS_PATH.read_text())  # `calibration.py models` snapshots
 ROUTERS = {"auto"}  # Listed, but routes to an unknown real model, so its context% has no fixed window.
 WINDOWS = {model: facts["context_window_tokens"] for model, facts in FACTS["models"].items() if model not in ROUTERS}
 RATES = json.loads(RATES_PATH.read_text())  # Fitted credits per token and per call; `calibration.py fit --write`.
+CHARS_PER_TOKEN = 4  # estimate()'s output chars per token for a model without a fitted chars_per_token
 
 
 def finite(number):
@@ -96,8 +97,16 @@ def add(report, result, capture_id):
                             if report["eligible"] else None)
 
 
-def estimate(model, context, credits, chars, output=None, input=None):
-    """~Tokens for one call: total from context% and window, output ~chars/4, cached from credits.
+def price(rates, input, output, cached):
+    """Credits for one call: the fixed cost, uncached input at the miss rate, cached input (at most the input, so a
+    whole-input hit is a full hit) at the hit rate, output."""
+    cached = min(cached, input)
+    return (rates["fixed_per_call"] + rates["miss_input"] * (input - cached) + rates["hit_input"] * cached
+            + rates["output"] * output)
+
+
+def estimate(model, context, credits, chars, output=None, input=None, ratio=None):
+    """~Tokens for one call: total from context% and window, output ~chars/chars_per_token, cached from credits.
 
     Rates are the model's fitted credits per miss/hit input token and output token, plus a fixed cost per call.
     Exact output/input of the same call replace their guesses, so cached never exceeds exact input.
@@ -107,14 +116,14 @@ def estimate(model, context, credits, chars, output=None, input=None):
     if window is None or not finite(context) or context < 0:
         return None
     total = round(context / 100 * window)  # includes output tokens once
+    rates = RATES.get(model, {})
     if not count(output):
-        output = min(round(chars / 4), total) if count(chars) else None
+        # ratio overrides the fitted chars_per_token (`calibration.py fit --write`) while calibration.fit fits its own.
+        output = min(round(chars / (ratio or rates.get("chars_per_token", CHARS_PER_TOKEN))), total) if count(chars) else None
     if not count(input):
         input = max(total - output, 0) if output is not None else None
     result = {"total_tokens": total, "input_tokens": input, "output_tokens": output, "cache_read_tokens": None}
-    rates = RATES.get(model)
     if input is not None and output is not None and rates and finite(credits):
-        miss = rates["fixed_per_call"] + rates["miss_input"] * input + rates["output"] * output  # full-miss price
-        cached = (miss - credits) / (rates["miss_input"] - rates["hit_input"])
+        cached = (price(rates, input, output, 0) - credits) / (rates["miss_input"] - rates["hit_input"])
         result["cache_read_tokens"] = round(min(max(cached, 0), input))
     return result

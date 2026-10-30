@@ -327,6 +327,33 @@ writes that file. `--db` works as for `probe`. Refresh `usage/models.json` from
 the free model listing with
 `python3 packages/kiro-cli/usage/calibration.py models`.
 
+A pooled `validate` manifest adds its warm pairs to the hits and its cold calls
+to the recorded residual without refusing on them, and its prose replies fit
+`chars_per_token`, which the entry carries so estimates read output at the ratio
+its rates were fitted at. Each entry also carries `credit_error`, the RMS share
+of credits the fit misses its cold, holdout cold and hit calls by; past 2% no
+`chars_per_token` is fitted, since credits then cannot price one reply.
+
+Check the rates on calls the fit never used:
+
+```console
+python3 packages/kiro-cli/usage/calibration.py validate --models claude-opus-5.5,claude-haiku-4.5
+python3 packages/kiro-cli/usage/calibration.py validate --models claude-opus-5.5,claude-haiku-4.5 --run
+python3 packages/kiro-cli/usage/calibration.py validate MANIFEST
+```
+
+`--run` makes five calls per model with the probe's safeguards, on prose unlike
+the probe's: a ~2,000-word prompt and its exact repeat, the same pair at ~9,000
+words, and a request for about 150 words of prose. It then evaluates itself;
+`validate MANIFEST` repeats that offline and never writes. Each call is priced
+at its designed cache state (nothing cached cold, all input warm) and PASSes
+within the larger of 2% of its credits and 0.0005 credits; any FAIL or missing
+call, or a requested model without rates, exits non-zero. A flat hit share of
+the cold credits would leave both of `claude-opus-5.5`'s warm calls about
+−0.00046 credits off, inside that floor, so read the two warm residuals, not
+only their status. Pool a validate manifest into `fit` to fit `chars_per_token`;
+it is then in-sample.
+
 Findings of 2026-10-29 (`kiro-cli` 2.35.2, low effort):
 
 - Hits billed 10–53% of their cold calls and `claude-haiku-5.5`'s expired
@@ -336,9 +363,18 @@ Findings of 2026-10-29 (`kiro-cli` 2.35.2, low effort):
   hit and output tokens but bill misses at 0.51 of that. Their probe predates
   per-family agents: its `size_short` rode a shared prefix 6.5% below the line
   on the 1M models. `usage/rates.json` is regenerated with
-  `calibration.py fit MANIFEST... --write` over the probe manifests, and each
-  entry's provenance names the manifests it came from.
+  `calibration.py fit MANIFEST... --write` over the probe and validate
+  manifests, and each entry's provenance names the manifests it came from.
+- Out of sample, the first validate run passed every designed call within 0.4%.
+  Its prose replies read 3.00, 2.97 and 4.64 characters per token on
+  `claude-opus-5.5`, `claude-sonnet-5.5` and `claude-haiku-4.5`, where chars/4
+  had missed by +10%, +10% and −6.5%; `claude-sonnet-4.5` refused the prose
+  fixture (`content_filtered`) and reads chars/4.
 - The four models' `medium_delayed` repeats billed exactly their cold credits,
   consistent with the cache expiring within six quiet minutes. In interactive
   sessions every full miss followed at least 222 seconds idle, consistent with a
   ~5 minute TTL.
+- Resumed turns are no holdout: `kiro-cli chat --resume` strips the trailing
+  `<EnvironmentContext>` block from earlier user messages, so the turn bills a
+  full miss. Interactive sessions keep history byte-identical (105 of 106
+  requests).

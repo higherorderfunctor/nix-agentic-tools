@@ -12,6 +12,9 @@ import capture
 import disk_index
 import query
 
+# Output tokens estimate() reads from opus chars, at rates.json's fitted chars_per_token.
+opus_tokens = lambda chars: round(chars / query.credit_discount.RATES["claude-opus-5.5"]["chars_per_token"])
+
 
 class QueryTests(unittest.TestCase):
     def setUp(self):
@@ -393,15 +396,15 @@ class QueryTests(unittest.TestCase):
         self.db.executemany("INSERT INTO events(capture_id,seq,event_name,data_json) VALUES ('tools',?,?,?)",
                             [(seq, name, json.dumps(data)) for seq, (name, data) in enumerate(events)])
         metrics = query.query(self.db, "sess_root")["captures"]["estimates"]
-        self.assertEqual(metrics["output_tokens"], query.metric(20, 1, 1))  # 80 chars / 4; .done is not recounted
-        self.assertEqual(metrics["input_tokens"], query.metric(29980, 1, 1))
+        self.assertEqual(metrics["output_tokens"], query.metric(opus_tokens(80), 1, 1))  # .done is not recounted
+        self.assertEqual(metrics["input_tokens"], query.metric(30000 - opus_tokens(80), 1, 1))
 
     def test_live_tool_and_reasoning_counts_win_over_retained_events(self):
         # The collector counted 60 chars live although the queue omitted most event copies; one stray copy survived.
         self.estimable("live", (74 * 3.0 + .5034) / 603)
         self.db.execute("UPDATE captures SET summary_json=? WHERE id='live'", (json.dumps({"output_text_chars": 0, "tool_chars": 40, "reasoning_chars": 20}),))
         self.db.execute("INSERT INTO events(capture_id,seq,event_name,data_json) VALUES ('live',0,'toolUseEvent',?)", (json.dumps({"input": "z" * 400}),))
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(15, 1, 1))
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(opus_tokens(60), 1, 1))
 
     def completed(self, ident, output, deltas=()):
         events = [*deltas, ("response.completed", {"type": "response.completed", "response": {"output": output}})]
@@ -411,10 +414,10 @@ class QueryTests(unittest.TestCase):
     def test_terminal_only_tool_and_reasoning_output_counts_once(self):
         self.estimable("terminal", (74 * 3.0 + .5034) / 603)
         self.completed("terminal", [{"type": "function_call", "name": "shell", "arguments": "x" * 400}])
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(100, 1, 1))
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(opus_tokens(400), 1, 1))
         # A repeated completed event is the same output, not twice as much.
         self.db.execute("INSERT INTO events(capture_id,seq,event_name,data_json) SELECT capture_id,seq+100,event_name,data_json FROM events WHERE capture_id='terminal'")
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(100, 1, 1))
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(opus_tokens(400), 1, 1))
         # Deltas present: their terminal copies are not recounted; terminal-only reasoning still counts.
         self.db.execute("DELETE FROM captures")
         self.db.execute("DELETE FROM events")
@@ -422,14 +425,14 @@ class QueryTests(unittest.TestCase):
         self.completed("mixed", [{"type": "function_call", "arguments": "x" * 40},
                                  {"type": "reasoning", "content": [{"type": "reasoning_text", "text": "y" * 20}]}],
                        [("response.function_call_arguments.delta", {"type": "response.function_call_arguments.delta", "delta": "x" * 40})])
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(15, 1, 1))
+        self.assertEqual(query.query(self.db, "sess_root")["captures"]["estimates"]["output_tokens"], query.metric(opus_tokens(60), 1, 1))
 
     def test_estimator_refuses_unknown_inputs(self):
         estimate = query.credit_discount.estimate
         self.assertIsNone(estimate("other-model", 3.0, 1, 0))
         self.assertIsNone(estimate("claude-opus-5.5", None, 1, 0))
-        self.assertEqual(estimate("claude-opus-5.5", 3.0, None, 8),
-                         {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None})
+        self.assertEqual(estimate("claude-opus-5.5", 3.0, None, 8), {"total_tokens": 30000, "input_tokens": 30000 - opus_tokens(8),
+                                                                     "output_tokens": opus_tokens(8), "cache_read_tokens": None})
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 1, None)["output_tokens"], None)
         # Interrupted capture: exact input, no output count or characters; no cache split.
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 1, None, input=1200),
