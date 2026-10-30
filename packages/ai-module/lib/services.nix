@@ -124,17 +124,22 @@
       ${pkgs.coreutils}/bin/mv -f -- "$_ai_file" ${target}
       ${slot.variable}=${target}''
     else assignment;
+  # Shell setting `_ai_dir` to a service's runtime directory without creating
+  # it, so a client of the service (Airlock's trust helper) finds its files.
+  runtimeDirectoryPath = pkgs: name: ''
+    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
+      _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
+    else
+      _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${pkgs.coreutils}/bin/id -u)-"${lib.escapeShellArg name}
+    fi
+  '';
   # The 0700 per-service runtime directory every launcher file goes to. It is
   # chosen after the declared environment is applied, so a declared
   # XDG_RUNTIME_DIR or TMPDIR picks it as it does for the daemon.
   runtimeDirectory = pkgs: name: let
     coreutils = "${pkgs.coreutils}/bin";
   in ''
-    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
-      _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
-    else
-      _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
-    fi
+    ${runtimeDirectoryPath pkgs name}
     umask 077
     if ! ${coreutils}/mkdir -m 0700 -- "$_ai_dir" 2>/dev/null; then
       if [ -L "$_ai_dir" ] || [ ! -d "$_ai_dir" ] || [ ! -O "$_ai_dir" ]; then
@@ -434,5 +439,5 @@
       };
     };
 in {
-  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher serviceEntry triggers;
+  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher runtimeDirectoryPath serviceEntry triggers;
 }
