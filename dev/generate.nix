@@ -1341,7 +1341,8 @@
 
     ## Development Setup
 
-    All tools are provided by the devenv shell. No global installs required.
+    All development tools are provided by the devenv shell. AI harnesses are
+    opt-in; see Generation Architecture below.
 
     ```bash
     devenv shell          # enter dev shell with all tools
@@ -1425,8 +1426,9 @@
     ## Adding a Fragment
 
     Fragments are composable instruction blocks. `dev/generate.nix` composes
-    them into named rules that `ai.*` writes for every runtime
-    (AGENTS.md, Claude, Copilot, Kiro), and into CONTRIBUTING.md.
+    them into named rules for `ai.*` and into CONTRIBUTING.md.
+    `dev/fragments/pipeline/generation-architecture.md` says which runtimes
+    receive them.
 
     <!-- TODO: refine with maintainer input -->
 

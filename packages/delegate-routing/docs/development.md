@@ -76,9 +76,7 @@ keep a terminal step last when inserting a new step, give the new step a
 `before` edge to that terminal step.
 
 Repository runtime and skill ownership is documented in
-`dev/fragments/pipeline/generation-architecture.md`. Architecture guidance is an
-always-loaded fragment from `dev/fragments/architecture/architecture.md`,
-delivered through the normal `dev/generate.nix` rule registry.
+`dev/fragments/pipeline/generation-architecture.md`.
 
 ## Families and runtime capabilities
 

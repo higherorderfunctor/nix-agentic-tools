@@ -15,9 +15,6 @@
   disableRules = lib.mapAttrs (_: _: {enable = false;});
   gen = import ./generate.nix {inherit lib pkgs;};
   noSkills = lib.mapAttrs (_: _: null) config.ai.skills;
-  # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
-  # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
-  shell = pkgs.bash;
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   # Keep github.com's reviewer context bounded. New categories stay local until
   # explicitly selected here; their source and local-runtime delivery stay shared.
@@ -48,6 +45,9 @@
     map (key: lib.showOption (path ++ [key]))
     (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames replacements)))
   (lib.filter (runtime: config.ai.${runtime}.enable) (builtins.attrNames optionPaths.records));
+  # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
+  # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
+  shell = pkgs.bash;
 in {
   assertions = [
     {
@@ -154,8 +154,8 @@ in {
         "extensions.ferment-v2" = true;
       };
     };
-    # Kiro runs only to probe main's build: it reads the shared AGENTS.md and
-    # receives no scoped steering or repo skills.
+    # Kiro runs only to probe main's build: it reads the shared AGENTS.md, and
+    # its own pool receives no scoped steering or repo skills.
     kiro = {
       rules = disableRules (
         lib.filterAttrs (_: rule: rule.matcher != null) gen.rules

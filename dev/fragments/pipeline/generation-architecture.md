@@ -45,15 +45,15 @@ leaves them disabled. Contributors enable Claude, Codex, Kimchi, Kiro CLI, peer
 communication and Semble in ignored `devenv.local.nix`; repository settings for
 Claude, Codex, Kimchi, peer communication and Semble remain in `dev/ai.nix`.
 Kiro is enabled locally only to probe the kiro-cli build on main. It receives no
-repository skills, program rules or scoped steering; `dev/ai.nix` suppresses
-those contributions next to their sources and declares no Kiro MCP servers,
-hooks or environment. Its shared root AGENTS.md remains available, including the
-always-loaded `architecture` category. The other local runtimes inherit all
-named shared rules. The fragment-shadow guard accepts content-free runtime
-disables but rejects same-key replacement text or sources, including disabled
-replacements. Peer communication's Copilot disable remains part of its
-repository settings; Semble excludes Copilot. Home Manager supplies
-delegate-routing and the stacked-workflows router and skills.
+repository skills, program rules or scoped steering in its own pool;
+`dev/ai.nix` suppresses those in its `kiro` block and program settings, and
+declares no Kiro MCP servers, hooks or environment. Its shared root AGENTS.md
+remains available, including the always-loaded `architecture` category. The
+other local runtimes inherit all named shared rules. The fragment-shadow guard
+accepts content-free runtime disables but rejects same-key replacement text or
+sources, including disabled replacements. Peer communication's Copilot disable
+remains part of its repository settings; Semble excludes Copilot. Home Manager
+supplies delegate-routing and the stacked-workflows router and skills.
 `instructions-reviewer-policy` checks the emitted instruction set, always-on
 metadata, the absence of Copilot from shared AGENTS.md, opted-in local content
 retention, Kiro isolation, and the shadow guard.
@@ -88,14 +88,17 @@ deleted by hand.
 ### Committed files and the drift check
 
 `checks/instructions/instructions-drift.nix` evaluates `dev/ai.nix` with both
-`isCI` values and requires identical instruction plans. It compares the tracked
-`.github/instructions/` tree and `.github/copilot-instructions.md` when
-generated with the built files the Copilot writer's plan points at. README.md
-and CONTRIBUTING.md compare against the `repo-*` packages. Local AGENTS.md and
-child indexes have no tracked bytes to compare; generated composition, audience
-rules and the configured Codex byte limit remain checked. `treefmt.nix` excludes
-none of the committed instruction files: they come out of the generated tree in
-the house format, and `checks.formatting` reads them like any tracked file.
+`isCI` values and requires identical instruction plans. It evaluates the same
+module with `checks/instructions/fixtures/local-runtimes.nix` for the local
+composition checks: AGENTS.md, local fragments, routers and Kiro isolation. It
+compares the tracked `.github/instructions/` tree and
+`.github/copilot-instructions.md` when generated with the built files the
+Copilot writer's plan points at. README.md and CONTRIBUTING.md compare against
+the `repo-*` packages. Local AGENTS.md and child indexes have no tracked bytes
+to compare; generated composition, audience rules and the configured Codex byte
+limit remain checked. `treefmt.nix` excludes none of the committed instruction
+files: they come out of the generated tree in the house format, and
+`checks.formatting` reads them like any tracked file.
 
 ### Running Generation
 

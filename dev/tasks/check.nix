@@ -18,7 +18,7 @@ in {
         log "Kiro: querying live model catalog"
         kiro_json=$(kiro-cli chat --list-models -f json 2>/dev/null || true)
         if [ -z "$kiro_json" ]; then
-          log "Kiro: no output (not authed / offline) — SKIPPED"
+          log "Kiro: no output (kiro-cli not on PATH, not authed or offline) — SKIPPED"
         else
           # Stub-guard: the offline degraded payload is auto-only. Treat as
           # not-authed; do NOT report drift (avoids a false positive).
