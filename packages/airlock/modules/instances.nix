@@ -7,9 +7,13 @@
 backend: {
   config,
   lib,
+  pkgs,
   ...
 }: let
+  caDirectory = "ca";
   instances = import ../../ai-module/lib/instances.nix {inherit lib;};
+  owner = "airlock";
+  trust = import ../lib/trust.nix {inherit caDirectory lib pkgs;};
   withoutNulls = lib.filterAttrs (_: value: value != null);
 in {
   imports = [
@@ -18,13 +22,13 @@ in {
       # the private runtime directory, so it lives as long as that directory.
       arguments = instance:
         ''serve --config "$AIRLOCK_CONFIG"''
-        + lib.optionalString (instance.settings.interception != null) " --ca-directory \"\${AIRLOCK_CONFIG%/*}/ca\"";
-      inherit backend;
+        + lib.optionalString (instance.settings.interception != null) " --ca-directory \"\${AIRLOCK_CONFIG%/*}/${caDirectory}\"";
+      inherit backend owner;
       defaultPort = 8318;
       derived = {instance, ...}: {listen = "127.0.0.1:${toString instance.port}";};
-      owner = "airlock";
       packagePath = "airlock";
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "airlock";
+      preStart = instance: lib.optionalString (instance.settings.interception != null) (trust.publish instance.package);
       # Keep plain instances' config hashes stable: adding null fields would
       # change their service launchers and restart them on upgrade.
       render = settings: {
@@ -68,10 +72,14 @@ in {
   config.ai = {
     airlock.claims.proxy-instance = builtins.attrNames config.ai.airlock.instances;
     internal.proxyInstances =
-      lib.mapAttrs (_: instance: {
+      lib.mapAttrs (name: instance: {
         inherit (instance) enable;
         http = instances.origin instance;
         https = instances.origin instance;
+        trust =
+          if instance.settings.interception == null
+          then null
+          else trust.helper (instances.serviceName owner name);
       })
       config.ai.airlock.instances;
   };

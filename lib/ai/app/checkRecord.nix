@@ -36,7 +36,7 @@
   # `poolOption`, and so the only ones `poolOptions` can override.
   poolOptionPools = ["environmentVariables"];
   sharedAgentsMdKeys = ["hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
-  supportKeys = ["backends" "fields" "gaps" "reason"];
+  supportKeys = ["backends" "fields" "gaps" "reason" "trust"];
   gapKeys = ["each" "path" "reason" "when"];
   validBackends = backends: builtins.isList backends && lib.all (backend: builtins.elem backend ["devenv" "hm"]) backends;
   validReason = reason: builtins.isString reason || builtins.isFunction reason;
@@ -54,6 +54,7 @@
     unknownIn supportKeys support
     == []
     && validBackends support.backends
+    && (!(support ? trust) || (surface == "proxy" && builtins.isBool support.trust))
     && (!(support ? reason) || builtins.isString support.reason)
     && (!(support ? fields) || (surface == "settings" && support.backends != [] && builtins.isList support.fields && lib.all (field: builtins.elem field normalizedSettingsFields) support.fields))
     && builtins.isList (support.gaps or [])
@@ -90,7 +91,7 @@ in {
     unknownNamespaces = unknownIn namespaceGroups optionNamespaces;
   in
     lib.assertMsg (lib.all (surface: validSupport surface surfaceSupport.${surface}) (builtins.attrNames surfaceSupport))
-    "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; settings takes consumed fields from normalizedSettingsType only when a backend delivers it, and gaps may only name listed fields; each gap takes a nonempty relative path, a boolean `each`, a reason and a when predicate."
+    "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; proxy also takes a boolean trust capability; settings takes consumed fields from normalizedSettingsType only when a backend delivers it, and gaps may only name listed fields; each gap takes a nonempty relative path, a boolean `each`, a reason and a when predicate."
     && checkBackend "hm" hm
     && checkBackend "devenv" devenv
     && lib.assertMsg (builtins.isAttrs optionNamespaces && unknownNamespaces == [] && lib.all validPath (builtins.attrValues optionNamespaces))

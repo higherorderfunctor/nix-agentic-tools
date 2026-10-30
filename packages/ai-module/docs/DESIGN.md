@@ -288,7 +288,10 @@ environment, never argv. The launcher atomically creates a 0700 directory at
 the declared environment is applied, so a declared `XDG_RUNTIME_DIR` or `TMPDIR`
 picks it as it does for the daemon. An existing directory must be owned by the
 current user and must not be a symlink; other inputs fail before chmod or
-writes. The runtime root must already exist. jq replaces every placeholder
+writes. The runtime root must already exist. `lib/services.nix` owns
+`runtimeRootPath` and `runtimeDirectoryPath`, shared with Airlock's certificate
+publication and client trust; `prepareRuntimeDirectory` applies the same owned,
+non-symlink 0700 directory rule to their files. jq replaces every placeholder
 string with its secret as a JSON string, writes a 0600 temporary file, renames
 it to `<file key>.json` and exports `variable` with that path. Content and
 secrets are both known at evaluation, so the launcher refuses to build when a

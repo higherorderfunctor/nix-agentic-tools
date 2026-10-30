@@ -1,10 +1,19 @@
 """Start each backend's generated launcher: health at the configured port, a
-private runtime config, and an interception CA kept beside it."""
+private runtime config, a published certificate without the key, and reusable
+client trust without a supervising process.
 
+CI runs service/trust checks and missing-key refusals before bubblewrap. The
+separate hand-run live check requires all real jailed probes to succeed; CI's
+build sandbox cannot execute them. There is no fallback from live to CI mode.
+"""
+
+import argparse
 import contextlib
+import hashlib
 import http.client
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
@@ -55,12 +64,151 @@ def private(path, mode):
     assert metadata.st_uid == os.getuid(), path
 
 
-def start_twice(case):
+def launch_client(case, environment, inherited=None):
+    """Run Claude's launcher; return its exit status, extra-CA file and stderr."""
+    environment = dict(environment)
+    environment.pop("NODE_EXTRA_CA_CERTS", None)
+    if inherited is not None:
+        environment["NODE_EXTRA_CA_CERTS"] = str(inherited)
+    result = subprocess.run([case["client"]], env=environment, capture_output=True, timeout=10)
+    extra = json.loads(result.stdout) if result.returncode == 0 else None
+    return result.returncode, extra, result.stderr.decode()
+
+
+def client_trust(case, environment, runtime):
+    """An intercepting instance's CA reaches Claude, after any inherited CA."""
+    inherited = runtime.parent / "inherited.pem"
+    inherited.write_bytes(b"inherited certificate fixture\n")
+    status, extra, error = launch_client(case, environment)
+    assert status == 0, error
+    if not case["intercepting"]:
+        assert extra is None, "an opaque selection set an extra CA"
+        assert launch_client(case, environment, inherited)[1]["path"] == str(inherited)
+        return
+    override = case | {"client": case["clientOverride"]}
+    ca = runtime.with_name(runtime.name + ".trust") / "ca.pem"
+    assert extra["content"] == ca.read_text()
+    native = launch_client(override, environment, inherited)[1]
+    assert native["content"] == Path(case["nativeCa"]).read_text() + "\n" + ca.read_text(), "native CA replaced Airlock trust"
+    status, bundle, error = launch_client(case, environment, inherited)
+    assert status == 0, error
+    assert bundle["content"] == inherited.read_text() + "\n" + ca.read_text()
+    relaunched = launch_client(case, environment, inherited)[1]
+    assert relaunched["path"] == bundle["path"], "identical inputs did not reuse their bundle"
+    assert extra["path"] == str(ca), "a single CA should use the published file"
+    for result, source in ((native, Path(case["nativeCa"])), (bundle, inherited), (relaunched, inherited)):
+        path = Path(result["path"])
+        assert path.parent == runtime.parent / "airlock-trust", path
+        expected = source.read_bytes() + b"\n" + ca.read_bytes()
+        assert path.name == hashlib.sha256(expected).hexdigest() + ".pem", path
+        assert result["mode"] == 0o600 and result["uid"] == os.getuid(), result
+        private(path.parent, 0o700)
+        assert path.read_text() == result["content"], "an exited client lost its bundle"
+    inherited.write_bytes(b"changed inherited certificate fixture\n")
+    changed = launch_client(case, environment, inherited)[1]
+    assert changed["path"] != bundle["path"], "changed inputs reused stale trust"
+    assert changed["content"] == inherited.read_text() + "\n" + ca.read_text()
+    status, _, _ = launch_client(case, environment | {"AIRLOCK_TEST_EXIT": "37"}, inherited)
+    assert status == 37, "the launcher lost the command's exit status"
+    with tempfile.TemporaryFile() as descriptor:
+        descriptor.write(b"airlock inherited fd\n")
+        descriptor.seek(0)
+        result = subprocess.run(
+            [case["client"]], pass_fds=(descriptor.fileno(),), capture_output=True, timeout=10,
+            env=environment | {"AIRLOCK_TEST_FD": str(descriptor.fileno()), "NODE_EXTRA_CA_CERTS": str(inherited)},
+        )
+        assert result.returncode == 0, result.stderr.decode()
+    status, _, error = launch_client(case, environment, inherited.with_name("missing.pem"))
+    assert status != 0, "a missing inherited CA was dropped"
+    assert not list((runtime.parent / "airlock-trust").glob(".bundle.*")), "a failed launch left a temporary bundle"
+
+
+def concurrent_clients(case, environment, runtime):
+    """Shared composed bundles survive clients; group signals keep signal status."""
+    inherited = runtime.parent / "inherited.pem"
+    with contextlib.ExitStack() as stack:
+        paths = []
+        children = []
+        for _ in range(4):
+            child = subprocess.Popen(
+                [case["client"]],
+                env=environment | {"AIRLOCK_TEST_WAIT": "1", "NODE_EXTRA_CA_CERTS": str(inherited)},
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+            )
+            stack.callback(lambda process=child: process.poll() is None and process.kill())
+            result = json.loads(child.stdout.readline())
+            path = Path(result["path"])
+            private(path, 0o600)
+            private(path.parent, 0o700)
+            children.append(child)
+            paths.append(path)
+        assert len(set(paths)) == 1, "concurrent launches did not reuse identical trust"
+        for child, number in zip(children, (signal.SIGHUP, signal.SIGINT, signal.SIGQUIT, signal.SIGTERM)):
+            os.killpg(child.pid, number)
+            _, error = child.communicate(timeout=10)
+            assert child.returncode == -number, (child.returncode, error)
+            assert paths[0].exists(), "a client's exit removed shared trust"
+
+
+def missing_ca_refused(case):
+    """Before the service has made its CA, Claude's launcher refuses to start."""
+    with tempfile.TemporaryDirectory(prefix="airlock-client-") as directory:
+        status, _, error = launch_client(case, os.environ | {"XDG_RUNTIME_DIR": directory})
+    if case["intercepting"]:
+        assert status != 0 and "no CA at" in error and "start airlock-main" in error, error
+    else:
+        assert status == 0, error
+
+
+def jailed_clients(case):
+    return [case[name] for name in ("jailedNativeClient", "jailedProbe", "jailedClient")]
+
+
+def missing_key_refused(case):
+    """Even native-CA Claude and a client with no trust delivery fail closed."""
+    for runtime_variable in ("XDG_RUNTIME_DIR", "TMPDIR"):
+        with tempfile.TemporaryDirectory(prefix="airlock-missing-key-") as directory:
+            environment = dict(os.environ)
+            environment.pop("XDG_RUNTIME_DIR", None)
+            environment[runtime_variable] = directory
+            name = ("ai-service-airlock-main" if runtime_variable == "XDG_RUNTIME_DIR"
+                    else f"ai-service-{os.getuid()}-airlock-main")
+            key = Path(directory) / name / "ca" / "ca.key"
+            for client in jailed_clients(case):
+                result = subprocess.run([client], env=environment, capture_output=True, timeout=10)
+                error = result.stderr.decode()
+                assert result.returncode != 0, "jailed client launched without a CA key"
+                assert f"airlock-main: cannot jail client: CA key missing or inaccessible at {key}" in error, error
+                assert "same XDG_RUNTIME_DIR/TMPDIR" in error, error
+
+
+def jail_clients(case, environment, runtime):
+    """Use a real CA from the generated service and production jail permissions."""
+    # The Codex-profile probe has no trust helper and must see an empty key
+    # while the certificate remains readable. Removing the mask exposes it.
+    assert (runtime / "ca" / "ca.key").stat().st_size > 0
+    result = subprocess.run(
+        [case["jailedProbe"], str(runtime)], env=environment, capture_output=True, timeout=10,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+    assert result.stdout.strip() == b"CA key hidden; certificate readable", result.stdout
+    jailed = case | {"client": case["jailedClient"], "clientOverride": case["jailedNativeClient"]}
+    client_trust(jailed, environment, runtime)
+    # A different client runtime directory must refuse rather than skip the mask.
+    missing_key_refused(case)
+    print("AIRLOCK-JAIL: real CA key masked, certificate readable, trust helper ran inside jail", flush=True)
+
+
+def start_twice(case, live, runtime_variable="XDG_RUNTIME_DIR"):
     """Return the CA certificate each start of one runtime directory used."""
     certificates = []
     with tempfile.TemporaryDirectory(prefix="airlock-launcher-") as directory:
-        environment = os.environ | {"XDG_RUNTIME_DIR": directory}
-        runtime = Path(directory) / "ai-service-airlock-main"
+        environment = dict(os.environ)
+        environment.pop("XDG_RUNTIME_DIR", None)
+        environment[runtime_variable] = directory
+        name = ("ai-service-airlock-main" if runtime_variable == "XDG_RUNTIME_DIR"
+                else f"ai-service-{os.getuid()}-airlock-main")
+        runtime = Path(directory) / name
         with (Path(directory) / "output").open("w+") as output:
             for _ in range(2):
                 with running(case["launcher"], environment, output) as child:
@@ -79,19 +227,50 @@ def start_twice(case):
                         private(ca, 0o700)
                         private(ca / "ca.key", 0o600)
                         certificates.append((ca / "ca.pem").read_bytes())
+                        published = runtime.with_name(runtime.name + ".trust")
+                        private(published, 0o700)
+                        private(published / "ca.pem", 0o600)
+                        assert (published / "ca.pem").read_bytes() == certificates[-1]
+                        assert sorted(path.name for path in published.iterdir()) == ["ca.pem"], "publication exposed private files"
+                        # Client trust must work with the private service directory
+                        # inaccessible. This fails when the helper still reads there.
+                        runtime.chmod(0o000)
+                        try:
+                            client_trust(case, environment, runtime)
+                        finally:
+                            runtime.chmod(0o700)
+                        # Path.glob suppresses PermissionError, so assert only
+                        # after restoring directory access.
+                        assert not list(runtime.glob("*trust*")), "a client wrote trust into the private service directory"
+                        concurrent_clients(case, environment, runtime)
                     else:
                         assert not ca.exists(), "an opaque instance created a CA"
+                        client_trust(case, environment, runtime)
+                    if case["intercepting"] and live:
+                        jail_clients(case, environment, runtime)
                 assert child.returncode == 0, child.returncode
     return certificates
 
 
 if __name__ == "__main__":
-    for case in json.loads(Path(sys.argv[1]).read_text()):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=("ci", "live"))
+    parser.add_argument("cases", type=Path)
+    args = parser.parse_args()
+    live = args.mode == "live"
+    print("AIRLOCK: mandatory real jail probes" if live else
+          "AIRLOCK: CI service/trust checks; real jail requires airlock-instance-jail-live", flush=True)
+    for case in json.loads(args.cases.read_text()):
         case["config"] = json.loads(case["config"])
-        certificates = start_twice(case)
+        missing_ca_refused(case)
+        if case["intercepting"]:
+            missing_key_refused(case)
+        certificates = start_twice(case, live)
+        fallback = start_twice(case, live, "TMPDIR")
         if case["intercepting"]:
             first, restarted = certificates
             assert first.startswith(b"-----BEGIN CERTIFICATE-----")
             assert restarted == first, "a restart replaced the runtime CA"
-            assert start_twice(case)[0] != first, "a new runtime directory reused a CA"
+            assert fallback[0] != first, "the TMPDIR fallback reused another runtime's CA"
+            assert start_twice(case, live)[0] != first, "a new runtime directory reused a CA"
         print(f"ok: {case['backend']} intercepting={case['intercepting']}")

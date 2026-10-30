@@ -124,21 +124,35 @@
       ${pkgs.coreutils}/bin/mv -f -- "$_ai_file" ${target}
       ${slot.variable}=${target}''
     else assignment;
+  # One runtime-root rule for services and clients that compose runtime files.
+  runtimeRootPath = ''
+    _ai_root="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}"
+  '';
+  # Shell setting `_ai_dir` to a service's runtime directory without creating
+  # it, so a client of the service (Airlock's trust helper) finds its files.
+  runtimeDirectoryPath = pkgs: name: ''
+    ${runtimeRootPath}
+    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
+      _ai_dir="$_ai_root"/${lib.escapeShellArg "ai-service-${name}"}
+    else
+      _ai_dir="$_ai_root/ai-service-$(${pkgs.coreutils}/bin/id -u)-"${lib.escapeShellArg name}
+    fi
+  '';
   # The 0700 per-service runtime directory every launcher file goes to. It is
   # chosen after the declared environment is applied, so a declared
   # XDG_RUNTIME_DIR or TMPDIR picks it as it does for the daemon.
-  runtimeDirectory = pkgs: name: let
+  runtimeDirectory = pkgs: name: ''
+    ${runtimeDirectoryPath pkgs name}
+    ${prepareRuntimeDirectory pkgs "ai.services.${name}"}
+  '';
+  # Service and client runtime directories follow the same ownership rules.
+  prepareRuntimeDirectory = pkgs: description: let
     coreutils = "${pkgs.coreutils}/bin";
   in ''
-    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
-      _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
-    else
-      _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
-    fi
     umask 077
     if ! ${coreutils}/mkdir -m 0700 -- "$_ai_dir" 2>/dev/null; then
       if [ -L "$_ai_dir" ] || [ ! -d "$_ai_dir" ] || [ ! -O "$_ai_dir" ]; then
-        printf '%s\n' ${lib.escapeShellArg "ai.services.${name}: runtime directory must be an owned directory, not a symlink:"} "$_ai_dir" >&2
+        printf '%s\n' ${lib.escapeShellArg "${description}: runtime directory must be an owned directory, not a symlink:"} "$_ai_dir" >&2
         exit 1
       fi
     fi
@@ -434,5 +448,5 @@
       };
     };
 in {
-  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher serviceEntry triggers;
+  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher prepareRuntimeDirectory runtimeDirectoryPath runtimeRootPath serviceEntry triggers;
 }

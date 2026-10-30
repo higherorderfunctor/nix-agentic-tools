@@ -146,7 +146,7 @@
   # so it is defined once here rather than duplicated per callback.
   # Claude settings env beats process env, so both the typed shell and the
   # module-contributed sandbox-safe SSH command ride settings.json. The optional
-  # proxy launcher only clears the inherited API-key descriptor before startup.
+  # launcher handles inference credentials and network-proxy CA trust at startup.
   #
   # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
@@ -230,6 +230,10 @@
       the document is written, so an option left at its default writes
       nothing.
 
+      When an intercepting proxy instance delivers trust, the launcher composes
+      `env.NODE_EXTRA_CA_CERTS` with its CA before startup and omits that key
+      from settings.json so Claude cannot replace the composed bundle.
+
       The freeform catch-all still accepts a key newer than this
       package's schema. Unrecognized keys warn with spelling suggestions;
       `allowUnrecognizedSettings` suppresses selected warnings. The `ultracode`
@@ -245,7 +249,34 @@ in
     name = "claude";
     contextFilename = "CLAUDE.md";
     executables = ["claude"];
-    inherit (claudeInference) installPackage;
+    installPackage = {
+      backend,
+      cfg,
+      proxyTrust,
+      resolvedSettings,
+      ...
+    }: let
+      nativeCa = cfg.native.settings.env.NODE_EXTRA_CA_CERTS or null;
+    in
+      lib.ai.mkLauncher pkgs {
+        flags =
+          claudeInference.launcherFlags {
+            inherit backend;
+            resolvedInference = resolvedSettings.inference;
+          }
+          ++ lib.optional (proxyTrust != null) ("--run "
+            + lib.escapeShellArg ''
+              NODE_EXTRA_CA_CERTS="$(${lib.getExe proxyTrust} ${
+                if nativeCa == null
+                then ''"''${NODE_EXTRA_CA_CERTS:-}"''
+                else lib.escapeShellArg nativeCa
+              })"
+              export NODE_EXTRA_CA_CERTS
+            '');
+        exe = "claude";
+        name = "claude-launcher";
+        inherit (cfg) package;
+      };
     surfaceSupport = {
       agents = {};
       context = {};
@@ -256,7 +287,7 @@ in
       hooks = {};
       jail = {};
       mcpServers = {};
-      proxy = {};
+      proxy.trust = true;
       rules = {};
       settings.fields = ["inference" "reasoningEffort"];
       shell = {};
@@ -551,6 +582,7 @@ in
       mergedSkills,
       moduleEnvironmentVariables,
       options,
+      proxyTrust,
       resolvedSettings,
       resolvedShell,
       topHooks,
@@ -569,7 +601,14 @@ in
       # Every settings contribution reaches this one document through
       # `native.settings`, so a consumer's own key beats a generated default
       # by the ordinary option priorities.
-      settingsDocument = removeAttrs nativeSettings ["hooks"] // lib.optionalAttrs (hooks != {}) {inherit hooks;};
+      settingsDocument =
+        removeAttrs nativeSettings ["hooks"]
+        // lib.optionalAttrs (cfg.package != null && proxyTrust != null) {
+          # Claude applies settings env after launch; it must not replace the
+          # composed startup bundle with the native-only CA path.
+          env = removeAttrs (nativeSettings.env or {}) ["NODE_EXTRA_CA_CERTS"];
+        }
+        // lib.optionalAttrs (hooks != {}) {inherit hooks;};
       renderedServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
       personalPluginFiles = lib.filterAttrs (_: value: value != {}) {
         ".mcp.json" = lib.optionalAttrs (mergedServers != {}) {mcpServers = renderedServers;};
@@ -611,6 +650,8 @@ in
               }
               != [])
             "ai.claude.settings.inference is selected but ai.claude.package is null; launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup."
+            ++ lib.optional (cfg.package == null && proxyTrust != null)
+            "ai.claude.proxy selects an intercepting instance but ai.claude.package is null; launch Claude with NODE_EXTRA_CA_CERTS set before startup, or TLS through the intercepting proxy will fail."
             ++ lib.optional (!isHm && cfg.plugins != {})
             "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";
         })
