@@ -313,12 +313,13 @@ The collector publishes at most one
 only owners with nonempty regeneration deltas. It preserves bot author and
 committer identities and App-token push credit for `update/*` ownership. A
 concurrent branch move rejects the plain push. Linux's carry must land first: if
-Linux publishes, Darwin is skipped in that run. The App push triggers fresh CI
-and cancels the old run; the next merge ref contains the Linux carry, so its
-Linux producer is a no-op before Darwin measures its side. There are at most two
-fact-writing passes, Linux then Darwin, followed by validation of the final
-head; the number of owners does not add CI cycles. Both producer/collector
-results feed the required build aggregate. The Kiro scope gate gates neither.
+Linux publishes or any Linux owner fails, Darwin is skipped in that run. The App
+push triggers fresh CI and cancels the old run; the next merge ref contains the
+Linux carry, so its Linux producer is a no-op before Darwin measures its side.
+There are at most two fact-writing passes, Linux then Darwin, followed by
+validation of the final head; the number of owners does not add CI cycles. Both
+producer/collector results feed the required build aggregate. The Kiro scope
+gate gates neither.
 
 Each owner runs its check's `passthru.regenerate` and drift check. Kimchi also
 runs its egress report regenerator with Node and the flake formatter, and

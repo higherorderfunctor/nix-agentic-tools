@@ -972,7 +972,8 @@ jobs:
     timeout-minutes: 60
     env:
       # The IFD builds this evaluation triggers run in the daemon on the same
-      # 7 GB; keep them to one job on two cores, as extracted-facts does.
+      # 7 GB; keep them to one job on two cores, as the Darwin extracted-facts
+      # producer does.
       NIX_CONFIG: |
         max-jobs = 1
         cores = 2

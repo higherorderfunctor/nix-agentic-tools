@@ -109,6 +109,7 @@ export -f gh git
                     self.assertFalse(output.exists())
                 else:
                     self.assertTrue(commands[0].startswith("commit -m chore(extracted): record x86_64-linux extracted facts -m Regenerated owners:"))
+                    self.assertEqual((runner / "commands").read_text().count("Regenerated owners:"), 1)
                     self.assertEqual(output.read_text(), 'published=true\n')
 
     def test_collector_runs_after_owner_failure_but_not_cancellation(self):
@@ -205,8 +206,8 @@ export -f git nix
                 self.assertEqual(extracted.plan(Path("/fixture"), "x86_64-linux", "pull_request", "base"), ["kiro-cli"])
 
     def test_planner_compares_changed_and_new_extraction_inputs(self):
-        old = {"changed": {"drvPath": "old"}, "unchanged": {"drvPath": "same"}}
-        head = {"changed": {"drvPath": "new"}, "new-owner": {"drvPath": "added"}, "unchanged": old["unchanged"]}
+        old = {"changed": {"drvPaths": {"x86_64-linux": "old"}}, "unchanged": {"drvPaths": {"x86_64-linux": "same"}}}
+        head = {"changed": {"drvPaths": {"x86_64-linux": "new"}}, "new-owner": {"drvPaths": {"x86_64-linux": "added"}}, "unchanged": old["unchanged"]}
         for system in ("aarch64-darwin", "x86_64-linux"):
             for wrapper_changed, expected in ((0, ["changed", "new-owner"]), (1, list(head))):
                 with self.subTest(system=system, wrapper_changed=wrapper_changed):
@@ -216,7 +217,7 @@ export -f git nix
                     self.assertEqual(derivations.call_args_list, [mock.call(Path("/fixture"), system), mock.call(Path("/fixture"), system, base="base")])
 
     def test_planner_dispatch_and_missing_base_select_all(self):
-        head = {"owner": {"drvPath": "fresh"}}
+        head = {"owner": {"drvPaths": {"x86_64-linux": "fresh"}}}
         for event, base in (("workflow_dispatch", "base"), ("push", ""), ("push", "0" * 40)):
             with self.subTest(event=event, base=base):
                 with mock.patch.object(extracted, "derivations", return_value=head) as derivations:
@@ -224,7 +225,7 @@ export -f git nix
                 derivations.assert_called_once()
 
     def test_planner_failures_select_all_or_retry_names(self):
-        head = {"owner": {"drvPath": "fresh"}}
+        head = {"owner": {"drvPaths": {"x86_64-linux": "fresh"}}}
         for results, expected_calls in (
             ([head, ValueError("base has old output shape")], [mock.call(Path("/fixture"), "x86_64-linux"), mock.call(Path("/fixture"), "x86_64-linux", base="base")]),
             ([ValueError("head drv unavailable"), ["owner"]], [mock.call(Path("/fixture"), "x86_64-linux"), mock.call(Path("/fixture"), "x86_64-linux", names_only=True)]),

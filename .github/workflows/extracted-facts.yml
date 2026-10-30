@@ -177,6 +177,6 @@ jobs:
             exit 0
           fi
           git commit -m "chore(extracted): record ${SYSTEM} extracted facts" \
-            -m "$(printf 'Regenerated owners:\n%s\n' "${owners[@]}")"
+            -m "$(printf 'Regenerated owners:\n'; printf '%s\n' "${owners[@]}")"
           git push origin "HEAD:refs/heads/${HEAD_REF}"
           echo "published=true" >> "$GITHUB_OUTPUT"
