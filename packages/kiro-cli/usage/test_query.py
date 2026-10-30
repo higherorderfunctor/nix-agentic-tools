@@ -2,6 +2,7 @@
 # cspell:words tzset
 
 from datetime import datetime
+import io
 import json
 import math
 import os
@@ -662,7 +663,7 @@ class QueryTests(unittest.TestCase):
             path, theme = self.report_db(temporary), Path(temporary) / "theme.json"
             theme.write_text(json.dumps({"border": "ascii"}))
             command = [sys.executable, report.__file__, "--db", str(path)]
-            for arguments, rendered in (([], report.render(store)), (["--summary-theme", str(theme)], report.render(store, query.summary_theme.load(theme)))):
+            for arguments, rendered in (([], report.render(store)), (["--summary-theme", str(theme)], report.render(store, query.summary_theme.load(theme, io.StringIO())))):
                 result = subprocess.run([*command, *arguments], capture_output=True, text=True)
                 self.assertEqual((result.returncode, result.stderr), (0, ""))
                 self.assertEqual(result.stdout, rendered + "\n" + query.calculator_text([store]) + "\n")
