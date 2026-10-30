@@ -69,6 +69,7 @@
       "quietHours",
       "remoteControl",
       "remoteTools",
+      "responseComparisonEnabled",
       "skipWorkflowUsageWarning",
       "totalTokensReminder",
       "totalTokensReminderAfterUserTurn",
@@ -1061,6 +1062,7 @@
       "permissions.ask": { "type": "array" },
       "permissions.ask[]": { "type": "string" },
       "permissions.blockReadsOutsideWorkingDirectories": { "type": "boolean" },
+      "permissions.blockWritesOutsideWorkingDirectories": { "type": "boolean" },
       "permissions.defaultMode": {
         "enum": [
           "acceptEdits",
@@ -1227,6 +1229,7 @@
       "requiredMinimumVersion": { "type": "string" },
       "respectGitignore": { "type": "boolean" },
       "respondToBashCommands": { "type": "boolean" },
+      "responseComparisonEnabled": { "type": "boolean" },
       "sandbox": { "type": "object" },
       "sandbox.allowAppleEvents": { "type": "boolean" },
       "sandbox.allowNestedUserNamespaces": { "type": "boolean" },
