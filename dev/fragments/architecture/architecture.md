@@ -107,7 +107,8 @@ hoc machinery beside an existing abstraction.
   `ai.claims.proxy-instance`. Root and runtime `proxy.instance` select them.
   Instance selection also supplies a loopback `NO_PROXY` default. See
   [Network Proxy](../ai-proxy/ai-proxy.md) for selection, protocol defaults and
-  precedence.
+  precedence. Intercepting instances may supply CA trust; see
+  [Proxy Trust](../ai-proxy/ai-proxy-trust.md).
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;

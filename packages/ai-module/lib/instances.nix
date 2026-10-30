@@ -20,8 +20,9 @@
   };
   # Selection uses loopback, matching owner bind defaults.
   origin = instance: "http://127.0.0.1:${toString instance.port}";
+  serviceName = owner: name: "${owner}-${name}";
 in {
-  inherit origin;
+  inherit origin serviceName;
   # The `origin` of the enabled instance `name`, or why `option` cannot
   # select it.
   select = {
@@ -141,7 +142,7 @@ in {
       # The tool resolves relative paths (CLIProxyAPI's `.env` and `logs/`)
       # against its working directory, so it runs in its own state.
       run = strictShellApplication pkgs {
-        name = "${owner}-${name}";
+        name = serviceName owner name;
         text = ''
           ${pkgs.coreutils}/bin/mkdir -p ${toString state}
           ${pkgs.coreutils}/bin/chmod 0700 ${toString state}
@@ -151,7 +152,7 @@ in {
         '';
       };
     in
-      lib.nameValuePair "${owner}-${name}" {
+      lib.nameValuePair (serviceName owner name) {
         command = [(lib.getExe run)];
         inherit (instance) enable;
         # Manager Plus's render also returns the environment it reads.
