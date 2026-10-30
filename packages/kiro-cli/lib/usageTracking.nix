@@ -43,7 +43,7 @@ in {
     payloadWarnBytes = lib.mkOption {
       type = lib.types.ints.positive;
       default = 1073741824;
-      description = "Compressed payload bytes past which usage capture warns. Payloads are always retained; once the retained compressed payload bytes exceed this, the collector logs one warning per run and each tracked exec summary repeats it with retirement guidance. SQLite metadata and WAL are not counted.";
+      description = "Compressed payload bytes past which usage capture warns: sealed captures' compressed blobs, the gzip copies of captures not yet sealed, and usage summaries. Payloads are always retained; once they exceed this, the collector logs one warning per run and each tracked exec summary repeats it with retirement guidance. SQLite metadata and WAL are not counted.";
     };
     port = lib.mkOption {
       type = lib.types.port;

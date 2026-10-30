@@ -96,10 +96,13 @@ class CaptureTests(unittest.TestCase):
     def unpack(self, ident, mode):
         return subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "unpack", ident, mode], capture_output=True)
 
+    @staticmethod
+    def deferred():
+        """The collector leaves its captures staged and pending, so a test reads one before seal seals it."""
+        return patch.object(store.Sealer, "put")
+
     def seal(self, ident):
         with contextlib.closing(open_database(self.path)) as db:
-            db.execute("UPDATE capture_meta SET version=2")
-            db.commit()
             store.seal(db, ident)
             self.assertIsNotNone(db.execute("SELECT 1 FROM capture_facts WHERE capture_id=?", (ident,)).fetchone())
 
@@ -379,7 +382,7 @@ class CaptureTests(unittest.TestCase):
         def refused(writer, state, kind, data, seq, stamp, size, *parsed):
             """The real refusal branch drops chunk 1 as if the queue were full, leaving a seq gap a seal keeps."""
             put(writer, state, kind, data, seq, stamp, math.inf if (kind, seq) == ("response", 1) else size, *parsed)
-        with patch.object(Collector, "_put", refused), contextlib.redirect_stderr(io.StringIO()):
+        with patch.object(Collector, "_put", refused), self.deferred(), contextlib.redirect_stderr(io.StringIO()):
             _, row = self.run_capture(parts)
         self.assertEqual(json.loads(row["issues_json"]), ["response_payload_omitted"])
         for sealed in (False, True):
@@ -390,7 +393,8 @@ class CaptureTests(unittest.TestCase):
                 self.assertEqual((unpacked.returncode, unpacked.stdout), (1, parts[0]))
 
     def test_unpack_decoded_refuses_bytes_that_fail_the_response_hash(self):
-        db, row = self.run_capture([event(completed())])
+        with self.deferred():
+            db, row = self.run_capture([event(completed())])
         db.execute("UPDATE captures SET response_sha256=? WHERE id=?", ("0" * 64, row["id"]))
         db.commit()
         for sealed in (False, True):
@@ -402,7 +406,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_unpack_exits_2_on_corrupt_staged_gzip(self):
         for mode, table, column in (("request", "captures", "request_gzip"), ("chunks", "chunks", "entity_gzip"), ("events", "events", "frame_gzip")):
-            with self.subTest(mode):
+            with self.subTest(mode), self.deferred():
                 db, row = self.run_capture([event(completed())])
                 db.execute(f"UPDATE {table} SET {column}=?", (b"not gzip",))
                 db.commit()
@@ -788,6 +792,16 @@ class CaptureTests(unittest.TestCase):
         self.assertIsNone(addon.collector)
         addon.done()
 
+    def test_python_without_compression_zstd_fails_closed_at_startup(self):
+        addon = UsageCapture()  # a manual mitmdump on Python before 3.14 loads the addon, which then refuses as above
+        with patch.dict(os.environ, {"KIRO_USAGE_DB": str(self.path)}), patch.dict(sys.modules, {"codec": None}):
+            with contextlib.redirect_stderr(io.StringIO()) as warnings:
+                addon.load(None)
+        self.assertIn("capture startup failed", warnings.getvalue())
+        self.assertTrue(addon.failed)
+        addon.done()
+        Collector(self.path).close()  # the failed start released the writer lock
+
     def test_offline_list_human_and_original_json_lines(self):
         command = [sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "list"]
         Collector(self.path).close()
@@ -808,7 +822,8 @@ class CaptureTests(unittest.TestCase):
     def test_offline_unpack_cli_reads_staged_and_sealed_captures_alike(self):
         body = event(completed())
         encoded = gzip.compress(body)
-        db, row = self.run_capture([encoded[:9], encoded[9:]], "gzip")
+        with self.deferred():
+            db, row = self.run_capture([encoded[:9], encoded[9:]], "gzip")
         blob = lambda name, value: base64.b64decode(value) if name in ("application", "entity", "frame") and value is not None else value
         outputs = []
         for sealed in (False, True):

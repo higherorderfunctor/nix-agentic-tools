@@ -63,8 +63,8 @@ else:
     state.write_text(json.dumps(current))
 if mode != "no-captures":
     with sqlite3.connect(os.environ["CALIBRATION_DB"]) as db:
-        db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,request_gzip,dropped_bytes,credits,context_usage_percentage) VALUES (?,?,?,?,?,?,?,?,?)",
-                   (str(time.time_ns()),time.time_ns(),json.dumps({"kiro:conversation_id":session.removeprefix("sess_")}),"incomplete" if mode == "incomplete" else "complete","[\\"transport_error\\"]" if mode == "incomplete" else "[]",None if mode == "incomplete" else b"retained",0,0.01,2.0))
+        db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,request_sha256,dropped_bytes,credits,context_usage_percentage) VALUES (?,?,?,?,?,?,?,?,?)",
+                   (str(time.time_ns()),time.time_ns(),json.dumps({"kiro:conversation_id":session.removeprefix("sess_")}),"incomplete" if mode == "incomplete" else "complete","[\\"transport_error\\"]" if mode == "incomplete" else "[]",None if mode == "incomplete" else "retained",0,0.01,2.0))
 if mode == "descendant":
     subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
 '''
@@ -295,14 +295,14 @@ class CalibrationTests(unittest.TestCase):
 
     def test_complete_state_still_requires_payload_usage_and_no_issues(self):
         with contextlib.closing(sqlite3.connect(self.db_path)) as db:
-            for payload, dropped, credits, context, issues in (
-                    (None, 0, 1, 2, "[]"), (b"", 0, 1, 2, "[]"),
-                    (b"retained", 1, 1, 2, "[]"), (b"retained", 0, None, 2, "[]"),
-                    (b"retained", 0, 1, None, "[]"), (b"retained", 0, 1, 2, '["issue"]')):
+            for request_sha256, dropped, credits, context, issues in (
+                    (None, 0, 1, 2, "[]"),
+                    ("retained", 1, 1, 2, "[]"), ("retained", 0, None, 2, "[]"),
+                    ("retained", 0, 1, None, "[]"), ("retained", 0, 1, 2, '["issue"]')):
                 db.execute("DELETE FROM captures")
-                db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,request_gzip,dropped_bytes,credits,context_usage_percentage) VALUES (?,?,?,?,?,?,?,?,?)",
+                db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,request_sha256,dropped_bytes,credits,context_usage_percentage) VALUES (?,?,?,?,?,?,?,?,?)",
                            ("capture", 10, '{"kiro:conversation_id":"sess_test"}', "complete",
-                            issues, payload, dropped, credits, context))
+                            issues, request_sha256, dropped, credits, context))
                 with self.assertRaisesRegex(RuntimeError, "incomplete"):
                     calibration.capture_evidence(db, "sess_test", 5, 20)
 
@@ -354,9 +354,9 @@ class Captures(unittest.TestCase):
     def capture(self, model, label, context, credits, chars, status="complete", output=None):
         ident = f"{model}.{label}.{len(self.calls)}"  # a label may repeat across pooled manifests
         with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
-            db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,request_gzip,dropped_bytes,"
-                       "credits,context_usage_percentage,output_tokens,summary_json) VALUES (?,0,'{}','complete','[]',?,0,?,?,?,?)",
-                       (ident, b"retained", credits, context, output,
+            db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,dropped_bytes,"
+                       "credits,context_usage_percentage,output_tokens,summary_json) VALUES (?,0,'{}','complete','[]',0,?,?,?,?)",
+                       (ident, credits, context, output,
                         json.dumps({"output_text_chars": chars, "tool_chars": 0, "reasoning_chars": 0})))
         self.calls.append({"label": label, "model": model, "status": status, "capture_count": 1, "captures": [{"id": ident}]})
 

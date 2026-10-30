@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS capture_facts (
  extra_chars INTEGER,
  retained INTEGER, terminal INTEGER, text_only INTEGER, no_reasoning_tools INTEGER
 );
+-- A capture created at version 2 stays here until its seal commits; each start seals what a stop or crash left.
+CREATE TABLE IF NOT EXISTS pending_seals (capture_id TEXT PRIMARY KEY);
 """
 
 
@@ -571,7 +573,8 @@ class Analysis:
 
 
 class Collector:
-    """Callbacks parse each chunk and enqueue its payload copy without waiting for SQLite; one worker owns all writes."""
+    """Callbacks parse each chunk and enqueue its payload copy without waiting for SQLite; one worker writes captures,
+    and a store.Sealer compacts each one the worker finished."""
 
     OVERHEAD = 512  # tracemalloc: a queued item holds ~434 bytes and each event entry ~172 beyond payload bytes
     BATCH_ITEMS, BATCH_BYTES = 512, 4 * 1024 * 1024  # per write transaction: bounds lock hold and in-flight copies
@@ -595,16 +598,19 @@ class Collector:
             db.close()
             raise
         versions = [r[0] for r in db.execute("SELECT version FROM capture_meta")]
-        if versions and versions != [1]:
+        if versions not in ([], [1], [2]):
             db.close()
             os.close(self.writer_lock)
             raise ValueError("unsupported capture schema version")
-        if not versions:
-            db.execute("INSERT INTO capture_meta VALUES (1)")
+        # Version 2 seals new captures, which an older collector cannot read; it refuses the store instead.
+        db.execute("UPDATE capture_meta SET version=2" if versions else "INSERT INTO capture_meta VALUES (2)")
         db.execute("UPDATE captures SET state='incomplete',transport_ended=0,issues_json='[\"interrupted_capture\"]' WHERE state='recording'")
         db.commit()
         import store
         self.stored_bytes = store.payload_bytes(db)
+        # Start order seals each request's base before the requests built on it, so the sealer's request cache finds it.
+        backlog = [ident for (ident,) in db.execute(
+            "SELECT p.capture_id FROM pending_seals p JOIN captures c ON c.id=p.capture_id WHERE c.state!='recording' ORDER BY c.started_utc_ns,c.id")]
         db.close()
         self.queue = queue.Queue()  # bounded by max_bytes in _put
         self.lock = threading.Lock()
@@ -613,15 +619,27 @@ class Collector:
         self.carry = None  # an item _batch took that starts the next batch
         self.failure = None
         self.stopping = False
+        try:  # created after self.lock, which its callback takes
+            self.sealer = store.Sealer(path, self._count)
+        except BaseException:
+            os.close(self.writer_lock)
+            raise
         self.thread = threading.Thread(target=self._worker, name="kiro-capture", daemon=True)
         self.thread.start()
+        for ident in backlog:
+            self.sealer.put(ident, backlog=True)
 
     def _retain(self, *payloads):
-        """Payloads are always retained; one stderr line per collector run marks the warning threshold."""
-        self.stored_bytes += sum(len(p) if isinstance(p, bytes) else len(p.encode()) for p in payloads if p is not None)
-        if self.stored_bytes > self.warn_bytes and not self.warned:
-            self.warned = True
-            print(f"Kiro capture: retained payloads reached {self.stored_bytes} bytes, past the {self.warn_bytes}-byte warning; "
+        """Payloads are always retained; the worker counts each copy it writes."""
+        self._count(sum(len(p) if isinstance(p, bytes) else len(p.encode()) for p in payloads if p is not None))
+
+    def _count(self, delta):
+        with self.lock:
+            self.stored_bytes += delta
+            stored, warn = self.stored_bytes, self.stored_bytes > self.warn_bytes and not self.warned
+            self.warned = self.warned or warn
+        if warn:
+            print(f"Kiro capture: retained payloads reached {stored} bytes, past the {self.warn_bytes}-byte warning; "
                   "capture continues, see docs/usage-tracking.md to retire the store", file=sys.stderr)
 
     def check(self):
@@ -716,6 +734,7 @@ class Collector:
                     state["issues"].append("collector_shutdown")
             self.stopping = True
         self.thread.join()
+        self.sealer.close()  # a worker failure still seals what it committed; one sealer while the flock is held
         os.close(self.writer_lock)
         if self.failure:
             raise RuntimeError("Kiro capture database worker failed") from self.failure
@@ -770,6 +789,7 @@ class Collector:
                     self._finalize(db, state)
                     with self.lock:
                         del self.states[ident]
+                    self.sealer.put(ident)
                 with self.lock:
                     if self.stopping and not self.states:
                         break
@@ -789,6 +809,7 @@ class Collector:
 
     def _initialize(self, db, state):
         db.execute("INSERT INTO captures (id,started_utc_ns,started_mono_ns,metadata_json,response_json,fingerprints_json,state) VALUES (?,?,?,?,?,?,'recording')", (state["id"], *state["start"], packed(state["metadata"]), packed(state["response"]), packed(state["hashes"])))
+        db.execute("INSERT INTO pending_seals VALUES (?)", (state["id"],))  # queued with the row it seals
 
     def _event_rows(self, state, events, seq, stamp):
         rows = []

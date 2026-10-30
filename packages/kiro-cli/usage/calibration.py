@@ -121,7 +121,7 @@ def open_evidence(path):
     """Open an existing database without creating or changing collector state."""
     db = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=1)
     try:
-        db.execute("SELECT id,started_utc_ns,metadata_json,state,issues_json,request_gzip,"
+        db.execute("SELECT id,started_utc_ns,metadata_json,state,issues_json,request_sha256,"
                    "dropped_bytes,credits,context_usage_percentage,input_tokens,output_tokens,summary_json FROM captures LIMIT 0")
     except BaseException:
         db.close()
@@ -134,7 +134,8 @@ def capture_evidence(db, session, started, finished):
     previous, stable_since = None, None
     while True:
         rows = db.execute(
-            "SELECT id,state,issues_json,COALESCE(length(request_gzip),0)>0,dropped_bytes,credits,"
+            # A retained request keeps its hash staged or sealed; a seal clears request_gzip inside the settle window.
+            "SELECT id,state,issues_json,request_sha256 IS NOT NULL,dropped_bytes,credits,"
             "context_usage_percentage FROM captures WHERE started_utc_ns BETWEEN ? AND ? AND "
             "json_extract(metadata_json,'$.\"kiro:conversation_id\"') IN (?,?) ORDER BY id",
             (started, finished, session, session.removeprefix("sess_"))).fetchall()

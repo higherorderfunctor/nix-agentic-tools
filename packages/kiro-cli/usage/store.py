@@ -3,9 +3,13 @@
 from collections import OrderedDict
 import gzip
 import json
+import queue
+import sqlite3
+import sys
+import threading
 import zlib
 
-from capture import content_encoding, digest, framing_kind, packed, snapshot
+from capture import content_encoding, digest, framing_kind, open_database, packed, snapshot
 
 
 # (table, capture key, payload bytes per row) for payload_bytes; the sealed tables are absent from an older store.
@@ -174,6 +178,7 @@ def seal(db, capture_id, cache=None):
         db.execute("DELETE FROM chunks WHERE capture_id=?", (capture_id,))
         db.execute("DELETE FROM events WHERE capture_id=?", (capture_id,))
         db.execute("UPDATE captures SET request_gzip=NULL WHERE id=?", (capture_id,))
+        db.execute("DELETE FROM pending_seals WHERE capture_id=?", (capture_id,))
         delta = payload_bytes(db, capture_id) - staged[-1]
         db.commit()
     except BaseException:
@@ -182,3 +187,54 @@ def seal(db, capture_id, cache=None):
     if cache is not None and body is not None:
         cache.put(capture_id, body)
     return delta
+
+
+class Sealer:
+    """Seals each capture put to it on its own thread and connection, off the proxy callbacks and the capture writer.
+
+    on_sealed receives each seal's payload-byte delta. A busy store is retried in this run with backoff; a capture
+    that fails otherwise, or that close skips as backlog, stays in pending_seals for the next start."""
+
+    RETRIES = (1, 2, 4, 8, 16)  # seconds before each retry after sqlite3.OperationalError, as a busy store raises past its timeout
+
+    def __init__(self, path, on_sealed):
+        import codec  # needs compression.zstd: a Python before 3.14 fails the collector's start here, not every seal
+        self.path, self.on_sealed = path, on_sealed
+        self.queue, self.stop = queue.Queue(), threading.Event()
+        self.thread = threading.Thread(target=self._run, name="kiro-capture-seal", daemon=True)
+        self.thread.start()
+
+    def put(self, capture_id, backlog=False):
+        """backlog: a capture an earlier run left pending; close skips it rather than wait for a long backlog."""
+        self.queue.put((capture_id, backlog))
+
+    def close(self):
+        """Finish the seal in progress and seal every capture put since start; backlog captures not reached stay pending."""
+        self.stop.set()
+        self.queue.put(None)
+        self.thread.join()
+
+    def _run(self):
+        self.db, cache = None, RequestCache()
+        try:
+            for capture_id, backlog in iter(self.queue.get, None):
+                if not (backlog and self.stop.is_set()):
+                    self._seal(cache, capture_id)
+        finally:
+            if self.db is not None:
+                self.db.close()
+
+    def _seal(self, cache, capture_id):
+        for delay in (*self.RETRIES, None):
+            try:
+                if self.db is None:  # opened here so a locked store is retried like a busy seal, not fatal to the thread
+                    self.db = open_database(self.path)
+                return self.on_sealed(seal(self.db, capture_id, cache))
+            except sqlite3.OperationalError as error:
+                failure = error
+                if delay is None or self.stop.wait(delay):  # close interrupts the backoff
+                    break
+            except Exception as error:  # a codec or store defect: the staged rows still read as before
+                failure = error
+                break
+        print(f"Kiro capture: sealing {capture_id} failed ({type(failure).__name__}); staged payloads kept", file=sys.stderr)
