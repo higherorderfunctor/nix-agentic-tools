@@ -6,6 +6,7 @@ import functools
 import gzip
 import io
 import json
+import math
 import os
 from pathlib import Path
 import runtime
@@ -23,6 +24,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from capture import DECODE_LIMIT, Collector, EventStream, SSE, digest, open_database, request_details
+from codec import Chunk, Event
 from mitm_addon import UsageCapture
 
 
@@ -85,6 +87,12 @@ class CaptureTests(unittest.TestCase):
         row = db.execute("SELECT * FROM captures WHERE id=?", (ident,)).fetchone()
         return db, row
 
+    def payloads(self, ident):
+        """(request, chunks, events) through the store readers, which read a staged and a sealed capture alike."""
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            request, (chunks, events) = store.request_body(db, ident), store.response_rows(db, ident)
+        return request, [Chunk(*row) for row in chunks], [Event(*row) for row in events]
+
     def unpack(self, ident, mode):
         return subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "unpack", ident, mode], capture_output=True)
 
@@ -98,7 +106,7 @@ class CaptureTests(unittest.TestCase):
     def test_unicode_all_split_boundaries_and_final_counts(self):
         body = event({"type": "response.output_text.delta", "delta": "é🙂"}) + event(completed())
         # Every byte boundary, including inside Unicode and CRLF, is exercised by one-byte chunks.
-        db, row = self.run_capture([body[i:i+1] for i in range(len(body))])
+        _, row = self.run_capture([body[i:i+1] for i in range(len(body))])
         self.assertEqual(row["state"], "complete")
         self.assertEqual(row["response_sha256"], digest(body))
         self.assertEqual(row["credits"], .25)
@@ -109,37 +117,35 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(summary["output_text_bytes"], 6)
         self.assertEqual(summary["output_count_source"], "terminal_output")
         self.assertEqual(summary["usage_objects"][0]["value"]["unknown"], {"future": True})
-        chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
-        self.assertEqual(b"".join(gzip.decompress(c["application_gzip"]) for c in chunks), body)
-        self.assertEqual([c["seq"] for c in chunks], list(range(len(body))))
-        self.assertTrue(all(c["utc_ns"] > 0 and c["mono_ns"] > 0 for c in chunks))
+        _, chunks, _ = self.payloads(row["id"])
+        self.assertEqual(b"".join(c.application for c in chunks), body)
+        self.assertEqual([c.seq for c in chunks], list(range(len(body))))
+        self.assertTrue(all(c.utc_ns > 0 and c.mono_ns > 0 for c in chunks))
 
     def test_gzip_entity_replay(self):
         body = event(completed())
         encoded = gzip.compress(body)
-        db, row = self.run_capture([encoded[:9], encoded[9:]], "gzip")
+        _, row = self.run_capture([encoded[:9], encoded[9:]], "gzip")
         self.assertEqual(row["state"], "complete")
-        chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
-        self.assertEqual(b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks), encoded)
-        self.assertEqual(b"".join(gzip.decompress(c["application_gzip"]) for c in chunks), body)
+        _, chunks, _ = self.payloads(row["id"])
+        self.assertEqual(b"".join(c.entity for c in chunks), encoded)
+        self.assertEqual(b"".join(c.application for c in chunks), body)
 
     def test_gzip_chunk_past_the_decode_limit_keeps_its_partial_output(self):
         encoded = gzip.compress(bytes(2 * DECODE_LIMIT))
-        db, row = self.run_capture([encoded[:-8], encoded[-8:]], "gzip")
+        _, row = self.run_capture([encoded[:-8], encoded[-8:]], "gzip")
         self.assertIn("decode_error", json.loads(row["issues_json"]))
         self.assertIsNone(row["response_sha256"])
-        chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
-        self.assertEqual(b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks), encoded)
-        self.assertEqual(gzip.decompress(chunks[0]["application_gzip"]), bytes(DECODE_LIMIT + 1))
-        self.assertIsNone(chunks[1]["application_gzip"])
+        _, chunks, _ = self.payloads(row["id"])
+        self.assertEqual(b"".join(c.entity for c in chunks), encoded)
+        self.assertEqual([c.application for c in chunks], [bytes(DECODE_LIMIT + 1), None])
 
     def test_identity_chunk_past_the_decode_limit_keeps_its_output_and_decodes_nothing_after(self):
-        db, row = self.run_capture([bytes(DECODE_LIMIT + 1), b"after"], "identity")
+        _, row = self.run_capture([bytes(DECODE_LIMIT + 1), b"after"], "identity")
         self.assertIn("decode_error", json.loads(row["issues_json"]))
         self.assertIsNone(row["response_sha256"])
-        chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
-        self.assertEqual(gzip.decompress(chunks[0]["application_gzip"]), bytes(DECODE_LIMIT + 1))
-        self.assertIsNone(chunks[1]["application_gzip"])
+        _, chunks, _ = self.payloads(row["id"])
+        self.assertEqual([c.application for c in chunks], [bytes(DECODE_LIMIT + 1), None])
 
     def test_credit_envelope_in_sse_and_json_response(self):
         writer = Collector(self.path)
@@ -182,7 +188,7 @@ class CaptureTests(unittest.TestCase):
                     aws_event("metadataEvent", {"tokenUsage": {"uncachedInputTokens": 10, "cacheReadInputTokens": 80, "cacheWriteInputTokens": 5, "outputTokens": 4, "totalTokens": 99}, "stopReason": "END_TURN"}),
                     aws_event("meteringEvent", {"usage": .25, "unit": "credit", "unitPlural": "credits"})]
         body = b"".join(messages)
-        db, row = self.run_capture([body[i:i+1] for i in range(len(body))], content_type=EVENTSTREAM)
+        _, row = self.run_capture([body[i:i+1] for i in range(len(body))], content_type=EVENTSTREAM)
         self.assertEqual((row["state"], row["completion_seen"], json.loads(row["issues_json"])), ("complete", 1, []))
         self.assertEqual(row["response_sha256"], digest(body))
         self.assertEqual((row["credits"], row["context_usage_percentage"]), (.25, 12.3))
@@ -190,10 +196,10 @@ class CaptureTests(unittest.TestCase):
         summary = json.loads(row["summary_json"])
         self.assertEqual((summary["output_text_chars"], summary["output_text_bytes"], summary["terminal"]), (2, 6, "END_TURN"))
         self.assertEqual(summary["usage_objects"][0], {"path": "/tokenUsage", "value": json.loads(messages[3][messages[3].index(b"{"):-4])["tokenUsage"]})
-        events = db.execute("SELECT event_name,frame_gzip,data_json FROM events ORDER BY seq").fetchall()
-        self.assertEqual([e["event_name"] for e in events], ["assistantResponseEvent", "toolUseEvent", "contextUsageEvent", "metadataEvent", "meteringEvent"])
-        self.assertEqual([gzip.decompress(e["frame_gzip"]) for e in events], messages)
-        self.assertEqual(json.loads(events[0]["data_json"]), {"content": "é🙂"})
+        _, _, events = self.payloads(row["id"])
+        self.assertEqual([e.name for e in events], ["assistantResponseEvent", "toolUseEvent", "contextUsageEvent", "metadataEvent", "meteringEvent"])
+        self.assertEqual([e.frame for e in events], messages)
+        self.assertEqual(json.loads(events[0].data), {"content": "é🙂"})
 
     def test_event_stream_multiple_metering_events_keep_last_and_stay_complete(self):
         _, row = self.run_capture([aws_event("meteringEvent", {"usage": .25, "unit": "credit"}),
@@ -216,30 +222,30 @@ class CaptureTests(unittest.TestCase):
 
     def test_event_stream_crc_mismatch_and_untrusted_prelude(self):
         metering = aws_event("meteringEvent", {"usage": .5, "unit": "credit"})
-        db, row = self.run_capture([aws_event("assistantResponseEvent", {"content": "x"}, corrupt=1) + metering], content_type=EVENTSTREAM)
+        _, row = self.run_capture([aws_event("assistantResponseEvent", {"content": "x"}, corrupt=1) + metering], content_type=EVENTSTREAM)
         self.assertEqual((row["state"], row["completion_seen"], row["credits"]), ("incomplete", 0, .5))  # the trusted length resynchronizes
         self.assertIn("event_stream_crc", json.loads(row["issues_json"]))
-        self.assertIsNone(db.execute("SELECT data_json FROM events WHERE capture_id=? AND seq=0", (row["id"],)).fetchone()[0])
+        self.assertIsNone(self.payloads(row["id"])[2][0].data)
         broken = bytearray(metering)
         broken[8] ^= 1
-        db, row = self.run_capture([bytes(broken) + metering], content_type=EVENTSTREAM)
+        _, row = self.run_capture([bytes(broken) + metering], content_type=EVENTSTREAM)
         self.assertIn("event_stream_crc", json.loads(row["issues_json"]))
         self.assertIsNone(row["credits"])
-        self.assertEqual([gzip.decompress(e[0]) for e in db.execute("SELECT frame_gzip FROM events WHERE capture_id=?", (row["id"],))], [bytes(broken[:12])])
+        self.assertEqual([e.frame for e in self.payloads(row["id"])[2]], [bytes(broken[:12])])
 
     def test_event_stream_exception_unterminated_and_empty_are_incomplete(self):
         exception = aws_message({":message-type": "exception", ":exception-type": "ThrottlingException", ":content-type": "application/json"}, b'{"message":"synthetic"}')
         metering = aws_event("meteringEvent", {"usage": .5, "unit": "credit"})
         for parts, issue in (([metering, exception], "missing_completion"), ([metering + metering[:5]], "unterminated_event"), ([], "missing_completion")):
-            db, row = self.run_capture(parts, content_type=EVENTSTREAM)
+            _, row = self.run_capture(parts, content_type=EVENTSTREAM)
             self.assertEqual((row["state"], row["completion_seen"]), ("incomplete", 0))
             self.assertIn(issue, json.loads(row["issues_json"]))
-        db, row = self.run_capture([metering, exception], content_type=EVENTSTREAM)
+        _, row = self.run_capture([metering, exception], content_type=EVENTSTREAM)
         self.assertEqual(json.loads(row["summary_json"])["terminal"], "exception")
         metadata = aws_event("metadataEvent", {"stopReason": "END_TURN"})
-        db, row = self.run_capture([metering, exception, metadata], content_type=EVENTSTREAM)
+        _, row = self.run_capture([metering, exception, metadata], content_type=EVENTSTREAM)
         self.assertEqual(json.loads(row["summary_json"])["terminal"], "exception")  # a later stopReason does not hide it
-        self.assertEqual(tuple(db.execute("SELECT event_name,data_json FROM events WHERE capture_id=? AND seq=1", (row["id"],)).fetchone()), ("ThrottlingException", '{"message":"synthetic"}'))
+        self.assertEqual([(e.name, e.data) for e in self.payloads(row["id"])[2] if e.seq == 1], [("ThrottlingException", '{"message":"synthetic"}')])
 
     def test_event_stream_size_limit_and_invalid_headers(self):
         frames = []
@@ -277,33 +283,31 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(row["state"], "incomplete")
 
     def test_unknown_encoding_retains_entity(self):
-        db, row = self.run_capture([b"opaque"], "unknown")
+        _, row = self.run_capture([b"opaque"], "unknown")
         self.assertIn("unsupported_content_encoding", json.loads(row["issues_json"]))
         self.assertIsNone(row["response_sha256"])
-        chunk = db.execute("SELECT * FROM chunks").fetchone()
-        self.assertEqual(gzip.decompress(chunk["entity_gzip"]), b"opaque")
-        self.assertIsNone(chunk["application_gzip"])
+        self.assertEqual([(c.entity, c.application) for c in self.payloads(row["id"])[1]], [(b"opaque", None)])
 
     def test_partial_event_not_dispatched(self):
-        db, row = self.run_capture([event(completed())[:-1]])
+        _, row = self.run_capture([event(completed())[:-1]])
         self.assertFalse(row["completion_seen"])
         self.assertIn("unterminated_event", json.loads(row["issues_json"]))
-        self.assertIsNone(db.execute("SELECT data_json FROM events").fetchone()[0])
+        self.assertIsNone(self.payloads(row["id"])[2][0].data)
 
     def test_slow_commits_batch_a_long_stream_without_loss(self):
         parts = chatty()
         SlowCommits.commits = 0
         with patch("capture.sqlite3.connect", functools.partial(sqlite3.connect, factory=SlowCommits)):
-            db, row = self.run_capture(parts)
+            _, row = self.run_capture(parts)
         self.assertEqual((row["state"], json.loads(row["issues_json"]), row["dropped_chunks"]), ("complete", [], 0))
         self.assertEqual((row["credits"], row["context_usage_percentage"]), (.25, 12.3))
-        self.assertEqual(db.execute("SELECT count(*) FROM chunks").fetchone()[0], len(parts))
+        self.assertEqual(len(self.payloads(row["id"])[1]), len(parts))
         self.assertLess(SlowCommits.commits, len(parts) // 10)  # one request and 501 chunk items
 
     def test_refused_payloads_keep_usage_complete(self):
         parts = chatty()
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            db, row = self.run_capture(parts, max_bytes=1)
+            _, row = self.run_capture(parts, max_bytes=1)
         self.assertIn("response payload omitted, usage still parsed", stderr.getvalue())
         self.assertEqual((row["state"], json.loads(row["issues_json"])), ("complete", ["request_payload_omitted", "response_payload_omitted"]))
         self.assertEqual((row["credits"], row["context_usage_percentage"], row["completion_seen"]), (.25, 12.3, 1))
@@ -311,8 +315,7 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(row["response_sha256"], digest(b"".join(parts)))
         self.assertEqual((row["dropped_chunks"], row["observed_chunks"]), (len(parts) + 1, len(parts)))
         self.assertEqual(json.loads(row["metadata_json"])["kiro:conversation_id"], "sess_fake")
-        self.assertIsNone(row["request_gzip"])
-        self.assertEqual(db.execute("SELECT count(*) FROM chunks").fetchone()[0], 0)
+        self.assertEqual(self.payloads(row["id"])[:2], (None, []))
         for mode, message in (("request", b"request payload unavailable\n"), ("decoded", b"requested payload bytes unavailable (capture is incomplete)\n")):
             unpacked = self.unpack(row["id"], mode)
             self.assertEqual((unpacked.returncode, unpacked.stdout, unpacked.stderr), (1, b"", message))
@@ -323,9 +326,9 @@ class CaptureTests(unittest.TestCase):
             ("response.output_text.delta", 5), ("response.function_call_arguments.delta", 7), ("response.reasoning_text.delta", 3))] * 50
         terminal = {"type": "response.completed", "response": {"usage": {"kiro:credits": {"unit": "credit", "value": .25}}}}
         with contextlib.redirect_stderr(io.StringIO()):
-            db, row = self.run_capture([*deltas, event(terminal)], max_bytes=1)
+            _, row = self.run_capture([*deltas, event(terminal)], max_bytes=1)
         self.assertEqual(row["state"], "complete")
-        self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 0)
+        self.assertEqual(self.payloads(row["id"])[2], [])
         summary = json.loads(row["summary_json"])
         self.assertEqual((summary["output_count_source"], summary["output_text_chars"]), ("deltas", 250))
         self.assertEqual((summary["tool_chars"], summary["reasoning_chars"]), (350, 150))
@@ -372,9 +375,13 @@ class CaptureTests(unittest.TestCase):
 
     def test_unpack_refuses_a_chunk_gap(self):
         parts = [event({"type": "response.output_text.delta", "delta": "a"}), event({"type": "response.output_text.delta", "delta": "b"}), event(completed())]
-        db, row = self.run_capture(parts)
-        db.execute("DELETE FROM chunks WHERE seq=1")
-        db.commit()
+        put = Collector._put
+        def refused(writer, state, kind, data, seq, stamp, size, *parsed):
+            """The real refusal branch drops chunk 1 as if the queue were full, leaving a seq gap a seal keeps."""
+            put(writer, state, kind, data, seq, stamp, math.inf if (kind, seq) == ("response", 1) else size, *parsed)
+        with patch.object(Collector, "_put", refused), contextlib.redirect_stderr(io.StringIO()):
+            _, row = self.run_capture(parts)
+        self.assertEqual(json.loads(row["issues_json"]), ["response_payload_omitted"])
         for sealed in (False, True):
             if sealed:
                 self.seal(row["id"])
@@ -411,9 +418,9 @@ class CaptureTests(unittest.TestCase):
         writer.finish(ident)
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
-            state, issues, request = db.execute("SELECT state,issues_json,request_gzip FROM captures").fetchone()
+            state, issues = db.execute("SELECT state,issues_json FROM captures").fetchone()
         self.assertEqual((len(body), state, issues), (32 * 1024 * 1024, "complete", "[]"))
-        self.assertEqual(gzip.decompress(request), body)
+        self.assertEqual(self.payloads(ident)[0], body)
 
     def test_tiny_chunks_are_charged_their_object_overhead(self):
         writer = Collector(self.path, max_bytes=64 * 1024)
@@ -430,8 +437,7 @@ class CaptureTests(unittest.TestCase):
             release.set()
             writer.finish(ident)
             writer.close()
-        with contextlib.closing(sqlite3.connect(self.path)) as db:
-            self.assertLessEqual(db.execute("SELECT count(*) FROM chunks").fetchone()[0], 64 * 1024 // 512)
+        self.assertLessEqual(len(self.payloads(ident)[1]), 64 * 1024 // 512)
 
     def test_commits_skip_fsync_under_wal(self):
         with contextlib.closing(open_database(self.path)) as db:
@@ -439,18 +445,21 @@ class CaptureTests(unittest.TestCase):
 
     def test_payload_warning_threshold_keeps_retaining(self):
         writer = Collector(self.path, warn_bytes=1)
+        identifiers = []
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
             for _ in range(2):
                 ident = writer.begin({}, b"{}")
+                identifiers.append(ident)
                 writer.headers(ident, {"content_type": "text/event-stream"})
                 writer.chunk(ident, event(completed()))
                 writer.finish(ident)
             writer.close()
         self.assertEqual(stderr.getvalue().count("past the 1-byte warning"), 1)  # once per collector run
         with contextlib.closing(sqlite3.connect(self.path)) as db:
-            rows = db.execute("SELECT state,issues_json,dropped_bytes,credits,request_gzip IS NOT NULL FROM captures").fetchall()
-            self.assertEqual(rows, [("complete", "[]", 0, .25, 1)] * 2)
-            self.assertEqual(db.execute("SELECT count(*) FROM chunks WHERE entity_gzip IS NOT NULL").fetchone()[0], 2)
+            rows = db.execute("SELECT state,issues_json,dropped_bytes,credits FROM captures").fetchall()
+            self.assertEqual(rows, [("complete", "[]", 0, .25)] * 2)
+        retained = [self.payloads(ident) for ident in identifiers]
+        self.assertEqual([(request, [c.entity is not None for c in chunks]) for request, chunks, _ in retained], [(b"{}", [True])] * 2)
 
     def test_exact_counts_only_when_present(self):
         obj = completed()
@@ -579,12 +588,12 @@ class CaptureTests(unittest.TestCase):
             writer.finish(ident)
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
-            rows = [db.execute("SELECT state,issues_json,request_gzip FROM captures WHERE id=?", (ident,)).fetchone() for ident in identifiers]
+            rows = [db.execute("SELECT state,issues_json FROM captures WHERE id=?", (ident,)).fetchone() for ident in identifiers]
             self.assertEqual([row[0] for row in rows], ["incomplete"] * 3 + ["complete"])
             self.assertIn("invalid_request_json", rows[0][1])
             self.assertIn("invalid_event_data", rows[1][1])
             self.assertIn("invalid_json", rows[2][1])
-            self.assertEqual(gzip.decompress(rows[0][2]), nested)
+        self.assertEqual(self.payloads(identifiers[0])[0], nested)
 
     def test_lone_surrogates_preserve_evidence_and_worker_recovers(self):
         request = json.dumps({"model": chr(0xD800)}).encode("ascii")
@@ -603,14 +612,13 @@ class CaptureTests(unittest.TestCase):
             writer.finish(ident)
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
-            rows = [db.execute("SELECT state,issues_json,request_gzip FROM captures WHERE id=?", (ident,)).fetchone() for ident in identifiers]
+            rows = [db.execute("SELECT state,issues_json FROM captures WHERE id=?", (ident,)).fetchone() for ident in identifiers]
             self.assertEqual([row[0] for row in rows], ["incomplete"] * 3 + ["complete"])
             self.assertIn("invalid_request_json", rows[0][1])
             self.assertIn("invalid_event_data", rows[1][1])
             self.assertIn("invalid_json", rows[2][1])
-            self.assertEqual(gzip.decompress(rows[0][2]), request)
-            frame = db.execute("SELECT frame_gzip FROM events WHERE capture_id=?", (identifiers[1],)).fetchone()[0]
-            self.assertEqual(gzip.decompress(frame), bad_event)
+        self.assertEqual(self.payloads(identifiers[0])[0], request)
+        self.assertEqual([e.frame for e in self.payloads(identifiers[1])[2]], [bad_event])
 
     def test_transient_writer_lock_longer_than_sqlite_default(self):
         writer = Collector(self.path)
@@ -719,11 +727,12 @@ class CaptureTests(unittest.TestCase):
         writer.finish(ident)
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
-            row = db.execute("SELECT state,credits,response_sha256,request_gzip,fingerprints_json,issues_json,dropped_chunks FROM captures").fetchone()
-            self.assertEqual(row[:4], ("complete", .25, digest(payload), None))
-            self.assertIsNotNone(row[4])
-            self.assertEqual(row[5:], ('["request_payload_omitted"]', 1))
-            self.assertIsNotNone(db.execute("SELECT entity_gzip FROM chunks").fetchone()[0])
+            row = db.execute("SELECT state,credits,response_sha256,fingerprints_json,issues_json,dropped_chunks FROM captures").fetchone()
+            self.assertEqual(row[:3], ("complete", .25, digest(payload)))
+            self.assertIsNotNone(row[3])
+            self.assertEqual(row[4:], ('["request_payload_omitted"]', 1))
+        request, chunks, _ = self.payloads(ident)
+        self.assertEqual((request, [c.entity for c in chunks]), (None, [payload]))
 
     def test_recoverable_request_refusals_leave_addon_healthy(self):
         addon = UsageCapture()
