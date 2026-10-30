@@ -1,8 +1,9 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-29 — `surfaceSupport.settings.fields` limits
-> resolved normalized settings; unlisted fields warn per field; shared AGENTS.md
-> uses readable `.agents/rules/` child indexes, preserves runtime audiences and
+> **Last verified:** 2026-10-30 — network `ai.proxy` lowers once and selects
+> delivery per runtime; `surfaceSupport.settings.fields` limits resolved
+> normalized settings; unlisted fields warn per field; shared AGENTS.md uses
+> readable `.agents/rules/` child indexes, preserves runtime audiences and
 > retains structured index metadata; Copilot writes named rules and unnamed
 > context independently under `.github/`; non-AI owners use the same layer-1
 > helper; delivery facts derive delivered and absent cells, keyed withdrawal and
@@ -284,6 +285,8 @@ rather than a second path field: a runtime names exactly the groups it moves.
   URL; its normalized value is the resolved endpoint. Unlisted normalized fields
   stay null, and native lowering stays per-runtime. Runtime-shaped passthrough
   is separate under `native.settings` and is not a normalized pool.
+- `ai.proxy` is the shared network proxy; see
+  `dev/fragments/ai-proxy/ai-proxy.md`.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -300,10 +303,12 @@ rather than a second path field: a runtime names exactly the groups it moves.
 readers keep: `lib/ai/delivery-warnings.nix`, `checks/ai-warnings` and the
 Kimchi and peer-communication module evaluations. It needs no module evaluation
 or package set. `config/ai-delivery-schema.nix` reads `sharedSurfaceOptions`
-through its internal `sharedSurfaces` option default; keyed withdrawal is
-metadata on those same root declarations. Permissions is the sole policy-only
-surface because it inventories native policy vocabularies, with no normalized
-root translation.
+through its internal `sharedSurfaces` option default; that declaration's
+`leafFields` metadata supplies the input paths for plain option trees without
+adding policy branches for individual surfaces. Keyed withdrawal is metadata on
+those same root declarations. Permissions is the sole policy-only surface
+because it inventories native policy vocabularies, with no normalized root
+translation.
 
 Each surface, runtime and backend cell is one row, `delivered` or
 `notApplicable` with a reason. Runtime `surfaceSupport` derives whole-surface

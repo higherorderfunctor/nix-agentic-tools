@@ -23,6 +23,7 @@
       command = "probe";
       headers.Authorization = "probe";
     };
+    proxy.http = "http://proxy.invalid:8080";
     rules.probe.text = "probe";
     settings = lib.genAttrs settingsFields settingSample;
     shell = pkgs.bash;
