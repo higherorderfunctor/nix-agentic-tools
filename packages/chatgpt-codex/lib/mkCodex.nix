@@ -46,6 +46,7 @@
     backend,
     cfg,
     launcherEnvironment,
+    launcherEnvironmentDefaults,
     resolvedSettings,
     ...
   } @ args: let
@@ -53,6 +54,7 @@
     package = codexPackage cfg;
   in
     lib.ai.mkLauncher pkgs {
+      environmentDefaults = launcherEnvironmentDefaults;
       environmentVariables = launcherEnvironment;
       exe = "codex";
       flags = lib.optionals (backend == "devenv") (
@@ -1077,6 +1079,7 @@ in
       hooks = {};
       jail = {};
       mcpServers = {};
+      proxy = {};
       rules = {};
       settings.fields = ["inference" "reasoningEffort"];
       shell = {};
@@ -1299,6 +1302,7 @@ in
       cfg,
       config,
       hasMergedContext,
+      launcherEnvironmentDefaults,
       mergedContext,
       mergedRules,
       mergedServers,
@@ -1419,7 +1423,9 @@ in
             )
             # devenv carries the provider only as launcher flags.
             ++ lib.optional (!isHm && cfg.package == null && codexInference.launcherFlags resolvedSettings.inference != [])
-            "ai.codex.settings.inference is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it.");
+            "ai.codex.settings.inference is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it."
+            ++ lib.optional (cfg.package == null && launcherEnvironmentDefaults != {})
+            "ai.proxy is set but ai.codex.package is null; the proxy is delivered only through the managed launcher.");
           assertions =
             mkAgentAssertions {inherit nativeAgents rawAgents;}
             ++ mkExecpolicyAssertions cfg.execpolicyRules

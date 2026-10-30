@@ -38,6 +38,7 @@
   inferenceLib = import ../inference {inherit lib;};
   jailLib = import ../jail {inherit lib;};
   pathProvenanceNotice = import ../runtime-path-provenance-notice.nix appRecord.pkgs;
+  proxyLib = import ../proxy.nix {inherit lib;};
   runtimeModule = import ../../../packages/ai-module/lib/runtime.nix;
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -170,6 +171,7 @@
 
   consumesInference = builtins.elem "inference" settingsFields;
   inferencePath = ["ai" appRecord.name] ++ poolOptionsPath "settings" ++ ["settings" "inference"];
+  proxyPath = ["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"];
 
   # The jail folds field by field (`jailLib.resolve`). Null unless the result
   # enables it, or when the runtime does not consume the pool.
@@ -299,6 +301,14 @@
     # again would add defaults to the credential-free client record.
     mcpServers = {
       type = lib.types.attrsOf lib.types.raw;
+    };
+    proxy = {
+      default = poolCfg.proxy;
+      type = lib.types.submodule ({
+        config,
+        options,
+        ...
+      }: {options = proxyLib.options config options;});
     };
     rules = {
       type = lib.types.attrsOf aiCommon.ruleModule;
@@ -487,6 +497,9 @@
           '';
       };
     }
+    // lib.optionalAttrs (supportsPool "proxy") {
+      proxy = proxyLib.options poolCfg.proxy (lib.getAttrFromPath proxyPath options);
+    }
     // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
         type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
@@ -584,6 +597,7 @@
         SHELL = lib.getExe callbackArgs.resolvedShell;
       }
       // callbackArgs.mergedEnvironmentVariables;
+    launcherEnvironmentDefaults = proxyLib.environment (normalizedPool "proxy" {});
     hasMergedContext = normalizedHasContext;
     mergedAgents = normalizedPool "agents" {};
     inherit rawAgents;
@@ -808,6 +822,13 @@ in {
     # switches forms, and its clientKey once the runtime selects a clientless
     # instance.
     (lib.optionalAttrs consumesInference (lib.setAttrByPath inferencePath (inferenceLib.copyDown config.ai.internal.inferenceInstances config.ai.settings.inference poolCfg.settings.inference)))
+    # Copy both effective root leaves, including explicit null. With neither
+    # root leaf defined, copy nothing so a runtime-only peer can still default.
+    (lib.optionalAttrs (supportsPool "proxy") (lib.setAttrByPath proxyPath
+      (lib.mapAttrs (_: value:
+        lib.mkIf (lib.any (option: option.highestPrio < 1500) (builtins.attrValues options.ai.proxy))
+        (lib.mkDefault value))
+      config.ai.proxy)))
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
     (lib.optionalAttrs (consumesInference && options ? assertions) {

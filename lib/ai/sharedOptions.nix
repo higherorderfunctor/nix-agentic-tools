@@ -40,6 +40,7 @@
   jailLib = import ./jail {inherit lib;};
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   inferenceLib = import ./inference {inherit lib;};
+  proxyLib = import ./proxy.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -245,6 +246,7 @@
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
+    proxy = proxyLib.options config.ai.proxy options.ai.proxy;
     rules = keyedOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
@@ -528,14 +530,19 @@ in {
           visible = false;
           description = "Function from pkgs to this flake's package roots, supplied by the flake-level module wrappers.";
         };
-        sharedSurfaces = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = builtins.attrNames sharedSurfaceOptions;
-          internal = true;
-          readOnly = true;
-          visible = false;
-          description = "Shared fanout surfaces, derived from their root option declarations.";
-        };
+        sharedSurfaces =
+          lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = builtins.attrNames sharedSurfaceOptions;
+            internal = true;
+            readOnly = true;
+            visible = false;
+            description = "Shared fanout surfaces, derived from their root option declarations.";
+          }
+          // {
+            # Delivery facts need declared leaves for plain option trees.
+            leafFields.proxy = proxyLib.fields;
+          };
         treefmtNix = lib.mkOption {
           type = lib.types.raw;
           default = throw "ai.internal.treefmtNix: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those, or set it to inputs.treefmt-nix";
