@@ -322,7 +322,7 @@ settings an instance derives (the listen port, state paths) as ordinary
 definitions, so a consumer value that disagrees fails evaluation. `select`
 resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
 cannot: the name is missing or the instance is disabled; `origin` is that URL
-alone. CLIProxyAPI and CPA Manager Plus use it.
+alone. Airlock, CLIProxyAPI and CPA Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                                                                                                                                         |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -427,11 +427,13 @@ directories.
 Exclusive resources share `ai.claims.<group>.<key>`, a hidden registry of owner
 lists validated once in `modules/common.nix`. Runtime helpers register
 non-shared paths in `path`, service names in `service` and decimal ports in
-`port`. Other resources use `ai.<owner>.claims.<group> = [keys]`; a proxy owner
-claims each instance name it registers in `ai.internal.inferenceInstances` in
-`inference-instance`, so a Harness's `instance` names exactly one owner's
-instance. CPA client keys belong to named instance entries, so Harness selection
-adds no runtime client-key claim. Port owners are
+`port`. Other resources use `ai.<owner>.claims.<group> = [keys]`; an inference
+proxy owner claims each instance name it registers in
+`ai.internal.inferenceInstances` in `inference-instance`, so a Harness's
+`instance` names exactly one owner's instance. Network proxy owners claim names
+registered in `ai.internal.proxyInstances` under `proxy-instance`, separately
+from inference names. CPA client keys belong to named instance entries, so
+Harness selection adds no runtime client-key claim. Port owners are
 `<owner>:<service>.ports.<name>`. A list with more than one owner fails with
 `ai.claims.<group>.<key>: claimed by <a> and <b>`, sorted by owner. Adding a
 resource group needs no new validation code; owners register resources and never

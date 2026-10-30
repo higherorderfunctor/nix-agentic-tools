@@ -303,12 +303,8 @@
       type = lib.types.attrsOf lib.types.raw;
     };
     proxy = {
-      default = poolCfg.proxy;
-      type = lib.types.submodule ({
-        config,
-        options,
-        ...
-      }: {options = proxyLib.options config options;});
+      default = builtins.removeAttrs poolCfg.proxy ["instance"];
+      type = proxyLib.resolvedType;
     };
     rules = {
       type = lib.types.attrsOf aiCommon.ruleModule;
@@ -498,7 +494,7 @@
       };
     }
     // lib.optionalAttrs (supportsPool "proxy") {
-      proxy = proxyLib.options poolCfg.proxy (lib.getAttrFromPath proxyPath options);
+      proxy = proxyLib.options config.ai.internal.proxyInstances poolCfg.proxy (lib.getAttrFromPath proxyPath options);
     }
     // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
@@ -822,13 +818,15 @@ in {
     # switches forms, and its clientKey once the runtime selects a clientless
     # instance.
     (lib.optionalAttrs consumesInference (lib.setAttrByPath inferencePath (inferenceLib.copyDown config.ai.internal.inferenceInstances config.ai.settings.inference poolCfg.settings.inference)))
-    # Copy both effective root leaves, including explicit null. With neither
-    # root leaf defined, copy nothing so a runtime-only peer can still default.
     (lib.optionalAttrs (supportsPool "proxy") (lib.setAttrByPath proxyPath
-      (lib.mapAttrs (_: value:
-        lib.mkIf (lib.any (option: option.highestPrio < 1500) (builtins.attrValues options.ai.proxy))
-        (lib.mkDefault value))
-      config.ai.proxy)))
+        (proxyLib.copyDown config.ai.internal.proxyInstances config.ai.proxy options.ai.proxy poolCfg.proxy)))
+    # An inherited selection is asserted once at ai.proxy. Check only this
+    # runtime's own selection here, even when the runtime is disabled.
+    (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
+      assertions =
+        lib.optionals (poolCfg.proxy.instance != config.ai.proxy.instance)
+        (proxyLib.assertionsFor config.ai.internal.proxyInstances proxyPath poolCfg.proxy);
+    })
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
     (lib.optionalAttrs (consumesInference && options ? assertions) {
