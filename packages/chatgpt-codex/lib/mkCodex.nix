@@ -46,6 +46,7 @@
     backend,
     cfg,
     launcherEnvironment,
+    launcherEnvironmentDefaults,
     resolvedSettings,
     ...
   } @ args: let
@@ -53,6 +54,7 @@
     package = codexPackage cfg;
   in
     lib.ai.mkLauncher pkgs {
+      environmentDefaults = launcherEnvironmentDefaults;
       environmentVariables = launcherEnvironment;
       exe = "codex";
       flags = lib.optionals (backend == "devenv") (
@@ -1077,6 +1079,7 @@ in
       hooks = {};
       jail = {};
       mcpServers = {};
+      proxy = {};
       rules = {};
       settings.fields = ["inference" "reasoningEffort"];
       shell = {};

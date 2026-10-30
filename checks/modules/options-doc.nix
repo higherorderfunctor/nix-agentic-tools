@@ -77,6 +77,7 @@
         "ai.codex.package"
         "ai.codex.pinDaemonToPackage"
         "ai.codex.projectDocMaxBytes"
+        "ai.codex.proxy"
         "ai.codex.rules"
         "ai.codex.rulesDir"
         "ai.codex.services"

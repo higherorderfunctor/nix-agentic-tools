@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-30 — non-`each` gaps inspect runtime pool, root and
 > normalized inputs in order and warn once for the first input holding the
 > requested field. Root copy-down names the runtime pool; keyed-entry gaps
-> retain their existing selection.
+> retain their existing selection. Network `ai.proxy` copies fields down at
+> default priority with explicit null opt-outs.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -582,6 +583,9 @@ non-empty list for `fileMatch` content.
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
 
+- `ai.proxy` is the shared network proxy; see
+  `dev/fragments/ai-proxy/ai-proxy.md`.
+
 - `ai.settings.inference` — a selection (`instance` of a registered proxy
   instance, with `clientKey` when it declares clients, or an external CPA
   `url` + `key`) pointing harnesses at a proxy. A runtime that lists `inference`
@@ -606,9 +610,9 @@ runtime cannot consume is therefore an unknown-option error. A ROOT pool value
 stays portable and degrades to the neutral value for an incapable runtime.
 
 Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
-`mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat
-AGENTS.md handling: Home Manager writes the user harness file, while devenv
-contributes keyed units to the single repository aggregate.
+`mcpServers`, `proxy`, `rules`, `settings`, `shell`, and `skills`. Its rules
+share Codex's flat AGENTS.md handling: Home Manager writes the user harness
+file, while devenv contributes keyed units to the single repository aggregate.
 
 `sharedSurfaceOptions` in `sharedOptions.nix` is the registration of shared
 fanout surfaces. Its keys declare root options and populate the read-only
@@ -814,9 +818,9 @@ If the list stays empty despite `ai.claude.enable = true`, the fanout is broken
 
 ### Shared-pool is per-evaluation, NOT cross-backend
 
-`lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
-`ai.mcpServers`, `ai.environmentVariables`, `ai.agents`, `ai.hooks`,
-`ai.context`). Both backend module trees import it, and `lib/ai/app/default.nix`
+`lib/ai/sharedOptions.nix` declares cross-app pools (`ai.agents`, `ai.context`,
+`ai.environmentVariables`, `ai.hooks`, `ai.mcpServers`, `ai.proxy`, `ai.rules`,
+`ai.skills`). Both backend module trees import it, and `lib/ai/app/default.nix`
 selects the one shared transform body per backend.
 
 **The option declarations are shared. The values are NOT.**
