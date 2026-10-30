@@ -88,8 +88,8 @@ class CalibrationTests(unittest.TestCase):
                             "CALIBRATION_STATE": str(self.root / "sessions.json"),
                             "CALIBRATION_DB": str(self.db_path)}
 
-    def execute(self, mode="normal", run=True, models=None, command="probe"):
-        arguments = ["calibration", command, "--db", str(self.db_path), "--timeout", "0.6"] + (["--models", models] if models else [])
+    def execute(self, mode="normal", run=True, models=None, command="probe", extra=()):
+        arguments = ["calibration", command, "--db", str(self.db_path), "--timeout", "0.6", *extra] + (["--models", models] if models else [])
         if run:
             arguments.append("--run")
         output = io.StringIO()
@@ -164,6 +164,17 @@ class CalibrationTests(unittest.TestCase):
         self.assertNotEqual(calls[0][-1], calls[2][-1])  # per-model nonces
         resumes = [call[call.index("--resume-id") + 1] for call in calls if "--resume-id" in call]
         self.assertEqual(resumes, ["sess_13", "sess_14", "sess_13", "sess_14"])
+
+    def test_sweep_adds_cold_prose_calls_before_the_delayed_repeat(self):
+        status, text, _ = self.execute(run=False, models="claude-opus-5.5,claude-haiku-4.5", extra=["--sweep"])
+        self.assertEqual(status, 0)
+        self.assertIn("38 CLI invocations", text)  # (10 probe + 9 sweep) x 2 models
+        status, (manifest, root, _), calls = self.execute(extra=["--sweep"])
+        labels = [record["label"] for record in manifest["calls"]]
+        self.assertEqual((status, labels[-10:]), (0, [label for (label,) in calibration.SWEEP_STEPS] + ["medium_delayed"]))
+        self.assertEqual(len({call[-1].split("\n")[0] for call in calls[-10:-1]}), 9)  # a fresh family each
+        self.assertEqual(len(list((root / "workspace/.kiro/agents").glob("*-sweep_*.json"))), 9)
+        self.assertLess(len(calls[-2][-1].encode()), 128 * 1024)  # sweep_16000 fits one argv string
 
     def test_model_refusing_its_first_call_is_dropped_and_the_rest_continue(self):
         status, (manifest, _, output), calls = self.execute("reject:claude-haiku-4.5", models="claude-opus-5.5,claude-haiku-4.5")
@@ -318,7 +329,10 @@ class CalibrationTests(unittest.TestCase):
 
 
 def bill(rates, input, output, cached=0):
-    """Credits the synthetic captures are priced at, independent of the code under test."""
+    """Credits the synthetic captures are priced at, independent of the code under test: input less its unbilled
+    tokens, of which at most all are cached."""
+    input = max(input - rates.get("unbilled_tokens", 0), 0)
+    cached = min(cached, input)
     return (rates["fixed_per_call"] + rates["miss_input"] * (input - cached) + rates["hit_input"] * cached
             + rates["output"] * output)
 
@@ -394,11 +408,11 @@ class FitTests(Captures):
         return output.getvalue(), json.loads(rates.read_text())
 
     def test_write_replaces_accepted_entries_whole_and_refuses_the_rest(self):
-        """haiku-4.5's earlier entry loses a key the fit does not solve."""
+        """haiku-4.5's earlier chars_per_token and unbilled_tokens do not survive a fit that solved neither."""
         rates = self.synthetic("claude-haiku-4.5", .2)
         self.synthetic("claude-sonnet-4.5", .65, warm_hits=False)
         with patch.dict(calibration.discount.RATES, {"claude-haiku-4.5": {
-                **calibration.discount.RATES["claude-haiku-4.5"], "stale": 1}}):
+                **calibration.discount.RATES["claude-haiku-4.5"], "chars_per_token": 3, "unbilled_tokens": 900}}):
             output, written = self.fit(write=True)
         self.assertIn("no hit observed", output)
         self.assertIn("Wrote 1 model(s)", output)
@@ -505,6 +519,70 @@ class FitTests(Captures):
         self.assertAlmostEqual(haiku["fixed_per_call"] / (rates["fixed_per_call"] + rates["output"] - rates["miss_input"]),
                                1, places=6)
 
+    UNBILLED = {"fixed_per_call": .001, "hit_input": 1.2e-7, "miss_input": 1.15e-6, "output": 5.8e-6,
+                "unbilled_tokens": 2400}  # claude-haiku-5.5's shape: context% counts 2400 tokens it never bills
+
+    def unbilled(self, rates, warm=None):
+        """A probe, sweep and holdout pool priced at rates; warm prices the repeats instead when given."""
+        model = "claude-haiku-5.5"
+        for label, input, output in (("output_short", 7_000, 2), ("output_long", 7_000, 400), ("medium_cold", 16_000, 1),
+                                     ("sweep_00500", 9_000, 1), ("sweep_01000", 20_000, 1), ("sweep_02000", 40_000, 1),
+                                     ("holdout_small_cold", 12_000, 1), ("holdout_large_cold", 31_000, 1)):
+            self.priced(model, rates, label, input, output)
+        for label, input in (("medium_warm", 16_000), ("holdout_small_warm", 12_000), ("holdout_large_warm", 31_000)):
+            self.priced(model, warm or rates, label, input, 1, hit=1)
+        self.priced(model, rates, "holdout_prose_out", 7_000, 200, chars=1000)
+        return model
+
+    def test_two_hit_sizes_solve_the_unbilled_tokens_and_their_fixed_cost(self):
+        """Cold and warm lines' intercepts, fixed - miss * K and fixed - hit * K, give K and fixed back; the prose
+        reply's 1,000 chars over its 200 output tokens fit chars_per_token at 5."""
+        model = self.unbilled(self.UNBILLED)
+        output, written = self.fit(write=True)
+        for name, value in self.UNBILLED.items():
+            self.assertAlmostEqual(written[model][name] / value, 1, places=6)
+        self.assertAlmostEqual(written[model]["chars_per_token"], 5, places=6)
+        self.assertLess(written[model]["credit_error"], 1e-9)  # the hits' size-dependent miss is gone
+
+    def test_pooled_output_pairs_average_their_rates(self):
+        """A second probe's pair at twice the output rate over 798 tokens: the mean of the two rates (1.5x), not
+        their pooled credits over pooled tokens (1.67x)."""
+        model = self.unbilled(self.UNBILLED)
+        split = len(self.calls)
+        double = {**self.UNBILLED, "output": 2 * self.UNBILLED["output"]}
+        for label, output in (("output_short", 2), ("output_long", 800)):
+            self.priced(model, double, label, 7_000, output)
+        _, written = self.fit(write=True, splits=(split,))
+        self.assertAlmostEqual(written[model]["output"] / self.UNBILLED["output"], 1.5, places=6)
+
+    def test_unbilled_tokens_outside_the_calls_refuse_the_fit(self):
+        """Repeats whose line's intercept sits 0.0005 below the cold line's leave no K >= 0 to explain them."""
+        rates = {**self.UNBILLED, "unbilled_tokens": 0}
+        model = self.unbilled(rates, warm={**rates, "fixed_per_call": rates["fixed_per_call"] - .0005})
+        self.assertRegex(self.fit()[0], rf"{model}\s.*unbilled tokens -\d+ outside 0 to the smallest call's 7000\n")
+
+    def test_unbilled_tokens_past_any_call_refuse_the_fit(self):
+        """A K of 8,000 is below every cold and warm call's input but above the output pair's and prose reply's 7,000,
+        so context % cannot count it in them."""
+        model = self.unbilled({**self.UNBILLED, "unbilled_tokens": 8_000})
+        self.assertRegex(self.fit()[0], rf"{model}\s.*unbilled tokens 8000 outside 0 to the smallest call's 7000\n")
+
+    def test_unbilled_tokens_below_one_percent_of_the_smallest_call_are_zero(self):
+        """claude-opus-5.5's rounding artifact, a K of 15 against 7,000 input tokens, and exact data with no offset,
+        whose regression noise leaves a K of -0, keep the cold line's intercept; claude-haiku-5.5's 2,400 is solved."""
+        for unbilled in (15, 0):
+            with self.subTest(unbilled=unbilled):
+                self.calls = []
+                with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+                    db.execute("DELETE FROM captures")
+                rates = {**self.UNBILLED, "unbilled_tokens": unbilled}
+                model = self.unbilled(rates)
+                _, written = self.fit(write=True)
+                self.assertAlmostEqual(written[model]["fixed_per_call"]
+                                       / (rates["fixed_per_call"] - rates["miss_input"] * unbilled), 1, places=6)
+                self.assertNotIn("unbilled_tokens", written[model])
+                self.assertAlmostEqual(written[model]["hit_input"] / rates["hit_input"], 1, places=6)
+
     def test_identical_output_pair_refuses_that_model_and_fits_the_rest(self):
         """output_long totalling output_short's tokens leaves no difference to divide by; other models still fit."""
         self.synthetic("claude-haiku-4.5", .2)
@@ -554,26 +632,44 @@ class FitTests(Captures):
             self.assertAlmostEqual(result["rates"][name] / rates[name], 1, places=6)
         self.assertEqual(result["provenance"]["calls"], 6)
 
-    def test_pooled_output_pairs_average_their_rates(self):
-        """A second probe's pair at twice the output rate over 798 tokens: the mean of the two rates (1.5x), not
-        their pooled credits over pooled tokens (1.82x)."""
-        rates = self.synthetic("claude-haiku-4.5", .2)
-        split = len(self.calls)
-        double = {**rates, "output": 2 * rates["output"]}
-        for label, output in (("output_short", 2), ("output_long", 800)):
-            self.priced("claude-haiku-4.5", double, label, 7_000, output)
-        _, written = self.fit(write=True, splits=(split,))
-        self.assertAlmostEqual(written["claude-haiku-4.5"]["output"] / rates["output"], 1.5, places=6)
+    def test_sweep_replaces_the_probe_cold_calls_and_pools_across_manifests(self):
+        """claude-haiku-5.5's shape: the probe's medium_cold bills 14% over the line, so the probe alone is refused.
+        Pooled with three sweep calls from two more manifests, one label repeated, the sweep alone draws the line."""
+        model, rates = "claude-haiku-5.5", calibration.discount.RATES["claude-haiku-4.5"]
+        for label, input, output, hit, scale in (("medium_cold", 16_000, 1, 0, 1.14), ("medium_warm", 16_000, 1, 1, 1),
+                                                 ("output_long", 7_000, 400, 0, 1), ("output_short", 7_000, 2, 0, 1),
+                                                 ("size_long", 35_000, 1, 0, 1), ("size_short", 9_500, 1, 0, 1)):
+            self.capture(model, label, (input + output) / calibration.discount.WINDOWS[model] * 100,
+                         calibration.discount.price(rates, input, output, hit * input) * scale, 5, output=output)
+        probe = len(self.calls)
+        output, _ = self.fit()
+        self.assertRegex(output, r"claude-haiku-5.5\s.*cold calls disagree\n")
+        for words, input in ((500, 8_000), (1000, 20_000), (500, 40_000)):
+            self.priced(model, rates, f"sweep_{words:05}", input, 1)
+        output, written = self.fit(write=True, splits=(probe, probe + 2))
+        self.assertIn("Wrote 1 model(s)", output)
+        for name in ("fixed_per_call", "miss_input", "output"):
+            self.assertAlmostEqual(written[model][name] / rates[name], 1, places=6)
+        self.assertEqual(written[model]["provenance"]["calls"], 6)  # three sweep calls, the output pair, medium_warm
 
-    def test_cold_calls_of_one_size_refuse_that_model_and_fit_the_rest(self):
-        """size_short and size_long at medium_cold's context leave no slope to regress."""
-        self.synthetic("claude-haiku-4.5", .2)
+    def test_sweep_calls_of_one_size_refuse_that_model_and_fit_the_rest(self):
+        """Three sweep calls at 9,000 input tokens replace the probe's cold calls but leave no slope to regress."""
+        rates = self.synthetic("claude-haiku-4.5", .2)
         self.synthetic("claude-sonnet-4.5", .2)
-        with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
-            db.execute("UPDATE captures SET context_usage_percentage=8.0 WHERE id LIKE 'claude-haiku-4.5.size_%'")
+        for words in (500, 1000, 2000):
+            self.priced("claude-haiku-4.5", rates, f"sweep_{words:05}", 9_000, 1)
         results = self.fitted()
         self.assertEqual(results["claude-haiku-4.5"], {"refused": "cold calls share one input size"})
         self.assertNotIn("refused", results["claude-sonnet-4.5"])
+
+    def test_fewer_than_three_sweep_calls_join_the_probe_line_and_zero_credits_drop(self):
+        """One exact sweep call adds a seventh call to the line; a 0-credit one, which the collector stores, adds none."""
+        rates = self.synthetic("claude-haiku-4.5", .2)
+        self.priced("claude-haiku-4.5", rates, "sweep_00500", 9_000, 1)
+        self.capture("claude-haiku-4.5", "sweep_01000", 10.0, 0, 5, output=1)
+        result = self.fitted()["claude-haiku-4.5"]
+        self.assertEqual(result["provenance"]["calls"], 7)
+        self.assertAlmostEqual(result["rates"]["miss_input"] / rates["miss_input"], 1, places=6)
 
 class ValidateTests(Captures):
     """Holdout calls billed from rates.json; a perturbed call must fail by name."""

@@ -287,17 +287,18 @@ the call's exact input.
 Cached tokens need reported credits, a known or estimated `O`, and the model's
 `rates.json` entry from `calibration.py fit --write` (see
 [Run the calibration experiment](../docs/usage-tracking.md#run-the-calibration-experiment)):
-`cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`, with
+`cached = clamp((a*(I-O-K) + o*O + c - credits) / (a - b), 0, I - O - K)`, with
 full-miss and full-hit input rates `a` (`miss_input`) and `b` (`hit_input`),
-output rate `o` (`output`) and fixed cost `c` (`fixed_per_call`). Models with a
-window but no rates get total, input and output estimates and no cache split;
-calls without a context percentage or a known window stay unavailable.
-Digit-heavy text reads too few tokens (390 where chars/4 reads 173), and hidden
-thinking that context % counts but no streamed characters show is priced as
-input, so both understate cached. An estimated split counts as a hit only when
-cached reaches 1% of input, which keeps fit noise (tens of tokens on the 1–5
-character calibration calls) out of the hit percentage. The collector counts
-tool and reasoning characters live, by the same rule, into `summary_json`
+output rate `o` (`output`), fixed cost `c` (`fixed_per_call`) and `K` tokens
+that context % counts but the model does not bill (`unbilled_tokens`, 0 unless
+fitted). Models with a window but no rates get total, input and output estimates
+and no cache split; calls without a context percentage or a known window stay
+unavailable. Digit-heavy text reads too few tokens (390 where chars/4 reads
+173), and hidden thinking that context % counts but no streamed characters show
+is priced as input, so both understate cached. An estimated split counts as a
+hit only when cached reaches 1% of input, which keeps fit noise (tens of tokens
+on the 1–5 character calibration calls) out of the hit percentage. The collector
+counts tool and reasoning characters live, by the same rule, into `summary_json`
 `tool_chars` and `reasoning_chars`, so omitted payload copies do not lower `O`.
 Captures finalized before those counts existed, and interrupted captures, which
 have no summary, fall back to counting retained events; an omitted copy there

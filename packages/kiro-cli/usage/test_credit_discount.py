@@ -72,6 +72,14 @@ class ModelFactsTests(unittest.TestCase):
         self.assertEqual(discount.WINDOWS["claude-sonnet-4.5"], 200_000)
         self.assertIsNone(discount.estimate("auto", 3.0, 1, 8))
 
+    def test_unbilled_tokens_are_never_cached(self):
+        """A full hit on 29,998 input tokens, 2,400 of them unbilled, caches the 27,598 billed ones."""
+        rates = {**discount.RATES["claude-opus-5.5"], "chars_per_token": 4, "unbilled_tokens": 2400}
+        hit = discount.price(rates, 29_998, 2, 29_998)
+        self.assertAlmostEqual(hit, rates["fixed_per_call"] + rates["hit_input"] * 27_598 + rates["output"] * 2)
+        with patch.dict(discount.RATES, {"claude-sonnet-4.6": rates}):
+            self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, hit, 8)["cache_read_tokens"], 27_598)
+
     def test_windowed_model_without_rates_has_no_cache_split(self):
         self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, 1, 8),  # listed, never probed
                          {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None})
