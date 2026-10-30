@@ -317,8 +317,9 @@ carries the other systems forward at every unforked node, and their own host's
 check then validates their projection; any other host rewrites only its own
 side, forming a fork wherever it now differs.
 
-Owner update scripts use `regenCommand { name; }` to build and run that
-regenerator on the current host.
+PR CI runs that regenerator on Linux, then Darwin for host-run facts, and
+commits changed measurements to same-repository PR branches. Update workers
+prepare versions, hashes and locks before publication.
 
 A Go owner's `passthru.extracted` is
 `goTestExtract { package; packagePath; testFile; }`: through `goTest` it joins

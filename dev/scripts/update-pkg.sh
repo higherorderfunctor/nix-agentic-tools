@@ -407,33 +407,8 @@ set +e
     exit 1
   fi
 
-  # Regenerate the package's committed sidecar from the source it now
-  # builds. nix-update never runs mkUpdateScript's `extraExtract` for a
-  # rev-bump (`--version skip`) or plain nix-update target, so without this
-  # the bump PR ships a sidecar describing the old source and fails its
-  # drift check. Only packages exposing `passthru.regenerateExtracted` are
-  # touched (regenerate_sidecars in update-common.sh), and on an unchanged
-  # source the extraction is a cached no-op. The sidecar is content the PR
-  # carries, so a failure is a hold-back; the commit step below stages it.
-  if ! regenerate_sidecars package "$name" >/dev/null; then
-    log_failure "sidecar regeneration failed"
-    exit 1
-  fi
-
-  # Formatter pass — normalize anything the updateScript regenerated
-  # (e.g. claude-code's extraExtract cp's jq output, whose multi-line
-  # arrays biome collapses onto one line). Mirrors update-input.sh
-  # Phase 2.5, but the trigger here is "the updateScript wrote files"
-  # (dirty tree) rather than "the formatter store path moved" — a
-  # package bump can emit non-canonical files even when the formatter
-  # itself is unchanged. Without it the per-package PR ships an
-  # unformatted sidecar and PR CI's checks.formatting fails. No base-checkout
-  # final pass can see the isolated update branch, so this pass is authoritative.
-  # Gated on a dirty tree so a no-op update doesn't trigger a spurious reformat
-  # commit. `nix fmt` exits 0 on successful in-place
-  # format (no --fail-on-change); a non-zero exit is a real formatter
-  # error, which leaves the tree non-canonical and therefore holds the
-  # package back.
+  # Format pins written by nix-update and owner update scripts. A formatter
+  # failure leaves the branch incomplete and holds the package back.
   #
   # Both dirtiness gates below go through git_diff_quiet, which discriminates
   # the THREE-valued diff status by value instead of by truthiness. Under the
@@ -475,7 +450,7 @@ if [ "$target_rc" -ne 0 ]; then
   # resetting here is what makes held-back packages skip their PR.
   # Successful targets keep their commit and open their PR as before.
   git -C "$wt" reset --hard "$base_head"
-  report_held_back "$name" "toolchain refresh, nix-update, sidecar regeneration, formatter or commit failed" "$version_detail"
+  report_held_back "$name" "toolchain refresh, nix-update, formatter or commit failed" "$version_detail"
   exit 0
 fi
 

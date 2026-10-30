@@ -36,7 +36,7 @@ class DocumentationSnapshot(unittest.TestCase):
         self.root = Path(self.work.name)
         self.pin = self.root / "package.nix"
         self.pin.write_text('  snapshotDate = "2026-10-12";\n  contentHash = "old";\n  hash = "old";\n')
-        self.config = {**kiro, "afterUpdate": ""}
+        self.config = kiro
         self.fetch = lambda _: (kiro_tree / "models.md").read_bytes()
 
     def test_kimchi_walk_preserves_snapshot_bytes_and_hash(self):
@@ -84,13 +84,6 @@ class DocumentationSnapshot(unittest.TestCase):
         with self.assertRaises(OSError):
             snapshot.update(self.config, self.pin, nix, "2099-01-01", broken_fetch)
         self.assertEqual(self.pin.read_bytes(), original)
-
-    def test_failed_regeneration_rolls_pin_back(self):
-        original = self.pin.read_bytes()
-        with self.assertRaises(subprocess.CalledProcessError):
-            snapshot.update({**self.config, "afterUpdate": fail}, self.pin, nix, "2099-01-01", self.fetch)
-        self.assertEqual(self.pin.read_bytes(), original)
-        self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["package.nix"])
 
     def test_checked_publish_refuses_concurrent_change_and_ambiguous_pin(self):
         original = self.pin.read_text()

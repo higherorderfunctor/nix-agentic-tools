@@ -1306,18 +1306,12 @@ args = sys.argv[1:]
 with open(os.environ['NIX_CALLS'], 'a') as f: f.write(json.dumps(args) + '\\n')
 mode = os.environ.get('NIX_MODE', '')
 rust_mode = mode.startswith(('rust', 'input-rust'))
-# regenerate_sidecars' roster: the fixture packages expose no
-# passthru.regenerateExtracted, so both its build and its eval list nothing.
-if args[:1] in (['build'], ['eval']) and 'regenerateExtracted' in ' '.join(args):
-    if rust_mode and args[:1] == ['build']:
-        with open(os.environ['CALL_ORDER'], 'a') as f: f.write('sidecar-regeneration\\n')
-    raise SystemExit(0)
 if args[:1] == ['eval']:
     joined = ' '.join(args)
     if args == ['eval', '--impure', '--raw', '--expr', 'builtins.currentSystem']:
         print('x86_64-linux')
         raise SystemExit(0)
-    if 'fixRustToolchain' in joined and os.environ.get('NAT_UPDATE_BY') == 'input':
+    if 'fixRustToolchain' in joined and os.environ.get('NAT_UPDATE_NAME') == 'demo':
         if mode == 'input-rust-discovery-fail': raise SystemExit(17)
         if mode.startswith('input-rust') and mode != 'input-rust-none': print('demo')
         raise SystemExit(0)
@@ -1525,7 +1519,7 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
     def test_rust_toolchain_fixer_runs_before_nix_update_and_amends_rev_bump(self):
         result = self.run_package("rust", rust=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update", "sidecar-regeneration"])
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update"])
         updated = self.git("show", "update/demo:packages/demo/package.nix")
         self.assertIn('rustToolchainChannel = "1.91.0";', updated)
         self.assertEqual(self.git("rev-list", "--count", f"{self.base}..update/demo"), "1")
@@ -1541,20 +1535,20 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
     def test_rust_toolchain_fixer_repairs_unchanged_rev(self):
         result = self.run_package("rust-unchanged", rust=True, new_rev="0" * 40)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update", "sidecar-regeneration"])
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update"])
         self.assertIn('rustToolchainChannel = "1.91.0";', self.git("show", "update/demo:packages/demo/package.nix"))
 
     def test_rust_toolchain_fixer_noop_leaves_unchanged_rev_uncommitted(self):
         result = self.run_package("rust-noop", rust=True, new_rev="0" * 40)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update", "sidecar-regeneration"])
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["rust-fixer", "nix-update"])
         self.assertEqual(self.git("rev-parse", "update/demo"), self.base)
         self.assertIn("NO UPDATES: demo", (self.repo / ".update-report.txt").read_text())
 
     def test_release_script_owns_rust_toolchain_refresh(self):
         result = self.run_package("rust", rust=True, flags=["--use-update-script"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["nix-update", "sidecar-regeneration"])
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["nix-update"])
         calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
         self.assertFalse(any("fixRustToolchain" in " ".join(call) for call in calls))
 
@@ -1567,15 +1561,15 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
             text=True,
         )
 
-    def test_input_rust_toolchain_refresh_precedes_sidecars_and_verification(self):
+    def test_input_rust_toolchain_refresh_precedes_verification(self):
         self.commit_recipe(rust=True)
         result = self.run_rust_input("input-rust")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "rust-fixer", "sidecar-regeneration", "verification"])
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "rust-fixer", "verification"])
         self.assertIn('rustToolchainChannel = "1.91.0";', self.git("show", "update/demo:packages/demo/package.nix"))
         self.assertIn("UPDATED: demo", (self.repo / ".update-report.txt").read_text())
 
-    def test_input_rust_toolchain_failures_hold_back_before_sidecars(self):
+    def test_input_rust_toolchain_failures_hold_back_before_verification(self):
         self.commit_recipe(rust=True)
         for mode, order, diagnostic in (
             ("input-rust-discovery-fail", ["input-update"], "could not discover Rust toolchain refreshers"),
@@ -1597,14 +1591,14 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         self.commit_recipe(rust=True)
         result = self.run_rust_input("input-rust-noop")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "rust-fixer", "sidecar-regeneration", "verification"])
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "rust-fixer", "verification"])
         self.assertEqual(self.git("show", "update/demo:packages/demo/package.nix"), (self.repo / "packages/demo/package.nix").read_text().strip())
         self.assertIn("UPDATED: demo", (self.repo / ".update-report.txt").read_text())
 
     def test_input_without_rust_refreshers_skips_fixer(self):
         result = self.run_rust_input("input-rust-none")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "sidecar-regeneration", "verification"])
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["input-update", "verification"])
         self.assertIn("UPDATED: demo", (self.repo / ".update-report.txt").read_text())
 
     @unittest.skipUnless(shutil.which("nix"), "Nix is needed to evaluate the sidecar repair roster")

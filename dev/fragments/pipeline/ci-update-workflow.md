@@ -40,9 +40,9 @@ pinned main base.
 
 **A PR must already contain its locks, source and dependency hashes, and
 formatting. PR CI regenerates extracted facts and commits changes to
-same-repository PR branches.** Update workers still regenerate facts before
-publication. The package worker does not build the package; hash derivation and
-embedded-file extraction run before publication. Input workers retain build
+same-repository PR branches.** Update workers prepare pins only: versions,
+source and dependency hashes, locks, and formatting. Package workers leave
+package builds and extracted facts to PR CI. Input workers retain build
 verification and its hash-repair pass because those repairs can mutate the
 prepared branch. After successful package verification, the `devenv` input alone
 must also enter its updated shell with the installed CLI

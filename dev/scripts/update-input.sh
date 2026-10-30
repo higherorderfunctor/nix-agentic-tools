@@ -98,22 +98,6 @@ set +e
     exit 1
   fi
 
-  # Regenerate the committed sidecars of every package this input owns —
-  # discovered from `passthru.updateFlakeInput` and
-  # `passthru.regenerateExtracted`, see regenerate_sidecars in
-  # update-common.sh — so the PR carries them instead of failing their
-  # drift checks. Each one is content the PR carries, so a failure is a
-  # hold-back.
-  log_info "Regenerating sidecars of packages owned by $name..."
-  if ! sidecars=$(regenerate_sidecars input "$name"); then
-    log_failure "sidecar regeneration failed"
-    exit 1
-  fi
-  sidecar_paths=()
-  if [ -n "$sidecars" ]; then
-    mapfile -t sidecar_paths <<<"$sidecars"
-  fi
-
   # Check if anything changed. `git diff --staged --quiet` signals through its
   # exit code, and that code is THREE-valued (0 / 1 / >1), so it goes through
   # git_diff_quiet rather than being tested for truthiness — see the rationale
@@ -127,7 +111,7 @@ set +e
   # exited the subshell 0 — so the sweep printed `NO UPDATES` and the real
   # lock change was discarded with the worktree. Neither hold back nor
   # ship; the update simply vanished.
-  if ! git add flake.lock devenv.yaml devenv.lock "${sidecar_paths[@]}"; then
+  if ! git add flake.lock devenv.yaml devenv.lock; then
     log_failure "git add failed"
     exit 1
   fi

@@ -207,14 +207,13 @@ classifier handles only strings and string-to-string maps. Failures are
 controls prose are optional. Kimchi secret environment rows must state what they
 control.
 
-Owner update scripts run `lib.extracted.regenCommand { name; }`, which invokes
-the owner check's `passthru.regenerate`. Packages with discovery-driven
-regeneration list the committed files under `extracted/` in
-`passthru.regenerateExtracted.sidecars` for update staging. Hand annotation
-files are never regenerated. `lib/git-tool-settings/rules.nix` and Kimchi's
-`extract/rules.nix` share their rules between consumers and drift checks.
-Extractor floors detect collapsed surfaces; live consumer checks detect removed
-names used by this repo, including the git presets' typed-option check.
+PR CI runs the owner check's `passthru.regenerate` and commits changed
+measurements to same-repository PR branches, Linux before Darwin. Update scripts
+write versions, hashes and locks. Hand annotation files are never regenerated.
+`lib/git-tool-settings/rules.nix` and Kimchi's `extract/rules.nix` share their
+rules between consumers and drift checks. Extractor floors detect collapsed
+surfaces; live consumer checks detect removed names used by this repo, including
+the git presets' typed-option check.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and commits
 declared facts and measured raws in `packages/<owner>/extracted/`. Binary probes
@@ -281,10 +280,9 @@ The invariant is that committed extracted raws always describe the CURRENTLY
 pinned artifact. Nothing enforces that continuously. Two halves cooperate, and
 it is worth knowing which is which before reaching for a fix:
 
-1. **The self-heal** — update scripts run `lib.extracted.regenCommand { name; }`
-   through `mkUpdateScript`'s `extraExtract` or discovery-driven
-   `passthru.regenerateExtracted`. PR CI also regenerates facts and commits
-   changes to same-repository branches.
+1. **The self-heal** — PR CI runs the owner check's `passthru.regenerate`, Linux
+   before Darwin, and commits changed facts to any same-repository PR branch as
+   the update bot. That visible commit puts the measurements in the review diff.
 2. **The backstop** — `checks/<pkg>-extracted.nix`, which compares committed
    against freshly-built.
 
@@ -299,8 +297,7 @@ moves, and completely silent before that. glab shipped that way and the gap sat
 invisible from #560 until its first-ever bump (#621). If you add another
 extracted package, wire the regeneration in the same commit.
 
-For `mkUpdateScript` callers, `extraExtract` is spliced into `mkUpdateScript`'s
-`commitCandidate`, immediately after the sidecar `mv`, on the version-bump path.
+`mkUpdateScript` callers use `extraExtract` for source and dependency pin work.
 PR CI also self-heals extractor changes at unchanged versions; review the facts
 diff with the extractor change. Fork PRs receive an artifact and a failing check
 until the measured files are committed.
@@ -317,33 +314,22 @@ stale-`pnpmDeps` bullet below).
 
 Debugging entry points when a bump PR still goes red:
 
-- **Read the emitted script**:
-  `nix build .#<pkg>.updateScript --no-link --print-out-paths`, then read its
-  tail. The regeneration lines are the last thing in it. Absent means the
-  package never wired `extraExtract`; present means it ran and something inside
-  it failed.
-- **Check ordering** for a package whose extract builds from source rather than
-  probing a prebuilt binary. glab is the only one today: its extract realizes
-  `src` and `goModules`, which hold `lib.fakeHash` until the src and vendor
-  fixers have run, so `regenCommand` must come AFTER them — it is passed as
-  `mkGoUpdateExtract`'s `extraAfter` for exactly that reason. Reversed, it fails
-  on the hash mismatch instead of producing a schema.
-- **Check visibility of the new sources.json.** The regeneration `nix build`s
-  against the dirty worktree, so flake eval only sees the just-written sidecar
-  because it is a TRACKED file that has been modified. An untracked one is
-  invisible to eval, and the extract would silently describe the OLD version —
-  the same class of trap as "Flake Source Visibility" in the nix-standards
-  fragment.
+- **Read the PR CI producer logs** for the owner and system. The planner reads
+  `checks/extracted/owners.nix`; Linux selects handled extractions and Darwin
+  selects host-run facts. A missing owner or failed extraction prevents a carry.
+- **Check the published pins.** glab's schema dump realizes `src` and
+  `goModules`, so its source, floor and vendor hash must be repaired by Update
+  before PR CI can measure it. Codex likewise needs its Rust source and
+  dependency pins. A hash mismatch is a pin-preparation failure.
 - **A green drift check but a red `checks.formatting`** means the formatting
   step is missing. The owner check's `passthru.regenerate` formats the raws it
   writes.
 
-**That drift check does not tell you the extraction is CORRECT.** The update
-pipeline's `extraExtract` hook regenerates the sidecar inside the same bump PR,
-so an anchor that has gone stale and now matches the wrong structure is simply
-committed as the new truth — and the drift check goes green over it. The sidecar
-keys are module option surfaces, so the visible result is HM/devenv options
-quietly out of sync with the binary.
+**That drift check does not tell you the extraction is CORRECT.** PR CI
+regenerates the sidecar on the PR, so an anchor that has gone stale and now
+matches the wrong structure is simply committed as the new truth — and the drift
+check goes green over it. The sidecar keys are module option surfaces, so the
+visible result is HM/devenv options quietly out of sync with the binary.
 
 This is not hypothetical. The model-catalog grep anchored on camelCase
 `firstParty:"claude-…"`; the catalog spells that key `first_party:` inside

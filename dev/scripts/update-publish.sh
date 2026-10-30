@@ -488,7 +488,7 @@ Automated dependency update.
 
 **Branch:** $branch
 
-Hashes, locks, extracted files, and formatting are prepared before publication.
+Hashes, locks, and formatting are prepared before publication. PR CI produces extracted facts.
 CI validates the completed branch on x86_64-linux and aarch64-darwin.
 Auto-merge (squash) waits for the required checks and review-thread rules.
 EOF

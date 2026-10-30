@@ -115,7 +115,7 @@ upstream does not class it as a credential.
 
 ## Settings
 
-> **Last verified:** 2026-10-17 — glab resolves credentials and optional private
+> **Last verified:** 2026-10-29 — glab resolves credentials and optional private
 > instance URLs through redact; measured-once config-key facts still come from
 > one unforked `extracted.json` through the shared aggregate and owner drift
 > check.
@@ -130,10 +130,11 @@ descriptions remain upstream's own.
 
 `checks.glab-extracted` compares fresh measurements to each host's projection of
 the committed file. Its regenerator carries them into it:
-`nix run .#checks.x86_64-linux.glab-extracted.passthru.regenerate`. The update
-script runs the owner regenerator after source, Go-floor and vendor-hash repair.
-The extractor's scope, required-key and environment-variable guards still reject
-wrong measurements before they can become the committed truth.
+`nix run .#checks.x86_64-linux.glab-extracted.passthru.regenerate`. Update
+repairs source, Go-floor and vendor-hash pins; PR CI runs the owner regenerator
+from the published pins. The extractor's scope, required-key and
+environment-variable guards still reject wrong measurements before they can
+become the committed truth.
 
 That means the surface cannot silently disagree with the packaged version, and
 it also means env-var mapping is exact — several keys have non-obvious names

@@ -2,8 +2,8 @@ rec {
   # Extract the claude-code facts that mkClaude.nix's option surface is built
   # from, emitting `{effortLevels, hookEvents, launchEffortPins, models,
   # settings}` to `dest` (default stdout). Single source of the extraction
-  # logic — used by claude-code's passthru.extracted (and,
-  # transitively, by mkUpdateScript's extraExtract).
+  # logic — used by claude-code's passthru.extracted and the PR CI
+  # owner check's regenerator.
   #
   # TWO mechanisms, and the split is the whole design:
   #
@@ -84,8 +84,8 @@ rec {
 
     # Non-empty guard. The census can only fail loud OR return a schema; what it
     # must never do is return a nearly-empty one that gets committed as the new
-    # truth. The update pipeline regenerates this sidecar in the SAME PR as the
-    # bump, so the drift check would go green over a collapsed extraction — the
+    # truth. PR CI regenerates this sidecar on the bump PR, so the drift check
+    # would go green over a collapsed extraction — the
     # same blind spot the model-catalog shape assertion below exists for. 160
     # public keys at 2.1.245; the floor is a deliberate fraction of that.
     publicKeyCount=$("$jq" '.settings.publicKeys | length' ./census.json)

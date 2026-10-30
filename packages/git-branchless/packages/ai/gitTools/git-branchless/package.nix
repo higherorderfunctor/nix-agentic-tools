@@ -84,13 +84,7 @@
       // rustPlatform.passthru
       // {
         inherit extracted patchedSource;
-        # Source and Cargo.lock move with the normal flake-input sweep,
-        # which also runs `regenerateExtracted` so the bump PR carries the
-        # refreshed sidecar.
-        regenerateExtracted = extraction.regenerateExtracted {
-          dir = ../../../../extracted;
-          name = "git-branchless";
-        };
+        # Source and Cargo.lock move with the normal flake-input sweep.
         updateFlakeInput = "git-branchless";
       };
     meta =

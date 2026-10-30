@@ -1,6 +1,6 @@
 # Kiro public model catalog
 
-> **Last verified:** 2026-10-16 — public-document pins, model facts and updates
+> **Last verified:** 2026-10-29 — public-document pins, model facts and updates
 > are independent of the proprietary CLI release; Kiro and Kimchi share the
 > documentation snapshot and update machinery; Kimi model names are accepted.
 
@@ -21,10 +21,9 @@ mapping produces `models.md` in a recursively hashed fixed-output snapshot. The
 shared updater fetches in scratch space, validates with the owner parser, hashes
 upstream bytes separately from generated dated files, and leaves unchanged pins,
 dates and facts untouched. Changed snapshots calculate their NAR hash before
-checked atomic writes of the inline recipe pins; `lib.extracted.regenCommand`
-then regenerates this owner's measured-once raw. A regeneration failure restores
-the original pins. The existing regenerator owns fact writes and formatting; a
-failure during those writes can require rerunning regeneration. Neither snapshot
+checked atomic writes of the inline recipe pins. The fetched documentation is
+pinned source data; PR CI runs the owner check's `passthru.regenerate` to
+produce measured model facts from it after publication. Neither snapshot
 construction nor parser execution occurs during evaluation.
 `kiro-model-catalog-extracted` checks source drift and the `auto` suggestion;
 Darwin verifies the same committed raw. The `kiro-cli` update target and its

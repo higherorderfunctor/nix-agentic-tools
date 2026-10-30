@@ -4,7 +4,6 @@
   strictScript = import ../strict-shell-application.nix pkgs;
 in {
   mkSnapshot = {
-    afterUpdate ? "",
     contentHash,
     generated ? {},
     hash,
@@ -29,7 +28,6 @@ in {
         else {inherit index;}
       )
       // lib.optionalAttrs (validate != "") {validate = command "validate" validate;}
-      // lib.optionalAttrs (afterUpdate != "") {afterUpdate = command "regenerate" afterUpdate;}
     ));
     runner = strictScript {
       name = "fetch-${name}";

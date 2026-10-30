@@ -13,7 +13,6 @@
   extraction = extractedLib {inherit pkgs;};
   goUpdate = vu.mkGoUpdateExtract {
     attr = pname;
-    extraAfter = extraction.regenCommand {name = pname;};
     inherit pkgs pname sourcesFile;
   };
   inherit (goUpdate) fixGoFloor fixVendorHash;

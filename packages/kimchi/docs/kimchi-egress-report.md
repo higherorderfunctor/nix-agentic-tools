@@ -1,6 +1,6 @@
 ## Kimchi egress report
 
-> **Last verified:** 2026-10-22 (commit d5f613ea) — the report's network fields
+> **Last verified:** 2026-10-29 (commit d5f613ea) — the report's network fields
 > come from the `network` and `environment` facts, read through `lib.extracted`,
 > by `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
 > cover; the drift check compares parsed JSON; regeneration uses installed
@@ -40,9 +40,10 @@ pin's. `header.scan` is the release `scan.mjs` read, and it can trail.
 `checks.kimchi-egress-report.passthru.facts` reads the committed facts through
 `lib.extracted.get` and `children`. `regenerate.sh` evaluates it with
 `nix eval`, runs the generator, then formats with installed `treefmt`. Kimchi's
-update script calls it after fact regeneration. The check compares parsed JSON
-with the committed report and prints a diff on drift. No generator reads
-`extracted.json` directly, as required by `checks.extracted-contract-guard`.
+PR CI producer calls it after fact regeneration and commits its delta with the
+facts. The check compares parsed JSON with the committed report and prints a
+diff on drift. No generator reads `extracted.json` directly, as required by
+`checks.extracted-contract-guard`.
 
 The generator refuses missing scanner fields and env targets without an
 `environment` row. Scanner fields change only on an operator-requested scan:

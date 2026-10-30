@@ -1,6 +1,6 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-21 — updates run only as CI's per-target matrix,
+> **Last verified:** 2026-10-29 — updates run only as CI's per-target matrix,
 > and package lanes never build; fixture flake locks under
 > `checks/<concern>/flake.lock` are a third target kind, `update-lock.sh`; input
 > verification skips the CodeQL engines.
@@ -28,26 +28,26 @@ and owner registry; see `ci-update-workflow.md` for publication, receipts, and
 checkout isolation. Each runner's `update-matrix.py prepare` runs
 `update-init.sh` to clean stale state (abort stuck git ops, delete old
 `update/*` branches, clear the report file), then one target script. No target
-reads another's branch. Package workers never build: hashes, extracted files,
-and formatting are preparation work, and native PR CI validates the completed
-branch. Input verification reduces evaluator workers when the core-derived count
-would violate the 60% memory budget. If no viable evaluator can start, that
-setup failure holds the input back instead of being classified as an executed,
-ordinary red build. Before each verifier attempt, the updater enumerates
-`ciPackages` minus the CodeQL engines (`EXCLUDED_PREFIXES`, through
-`ci-packages.py update-plan`) and builds only that set via `--select`. The
-deliberately built `EXCLUDED` members, such as the Kiro canary, stay in. The
-engines stay out because the CodeQL smoke check proves them, and an engine
-missing from every substituter would be fetched again from upstream on every
-input bump. The pinned producer must then report exactly one evaluation per
-attribute, and every successful evaluation needs cached/local or build evidence;
-aliases may share one build through a common derivation path. Empty, partial, or
-malformed coverage is incomplete verification and holds the input back after the
-retry. The retry also distinguishes Nix's fixed-output hash mismatch from a
-compiler or test failure. Missing cargoDeps/pnpmDeps fixers can still require
-human repair (issue #1570), but a known unresolved hash now holds the input
-branch back; a fully covered update with an ordinary build failure remains
-eligible for a red PR.
+reads another's branch. Package workers prepare versions, locks, source and
+dependency hashes, and formatting without building the package. PR CI produces
+extracted facts and validates the branch. Input verification reduces evaluator
+workers when the core-derived count would violate the 60% memory budget. If no
+viable evaluator can start, that setup failure holds the input back instead of
+being classified as an executed, ordinary red build. Before each verifier
+attempt, the updater enumerates `ciPackages` minus the CodeQL engines
+(`EXCLUDED_PREFIXES`, through `ci-packages.py update-plan`) and builds only that
+set via `--select`. The deliberately built `EXCLUDED` members, such as the Kiro
+canary, stay in. The engines stay out because the CodeQL smoke check proves
+them, and an engine missing from every substituter would be fetched again from
+upstream on every input bump. The pinned producer must then report exactly one
+evaluation per attribute, and every successful evaluation needs cached/local or
+build evidence; aliases may share one build through a common derivation path.
+Empty, partial, or malformed coverage is incomplete verification and holds the
+input back after the retry. The retry also distinguishes Nix's fixed-output hash
+mismatch from a compiler or test failure. Missing cargoDeps/pnpmDeps fixers can
+still require human repair (issue #1570), but a known unresolved hash now holds
+the input branch back; a fully covered update with an ordinary build failure
+remains eligible for a red PR.
 
 Verifier failures can overlap. `run_nfb_build` returns incomplete coverage (4)
 before an observed fixed-output mismatch (3), so code 4 does not mean there is
@@ -58,16 +58,11 @@ skipping repair solely for code 4 can strand a repairable update. Setup failure
 Targets fall into three categories:
 
 - **Inputs** (`update-input.sh <name>`) — `nix flake update <name>` in a
-  worktree, then `devenv update` to sync `devenv.lock`, then
-  `regenerate_sidecars input <name>` (`update-common.sh`). It runs the
-  `passthru.regenerateExtracted` script (the git tools run
-  `lib.extracted.regenCommand`) of every package whose
-  `passthru.updateFlakeInput` names the input, and stages the `sidecars` each
-  one lists. Git-branchless's config census follows its input through this path.
-  A failed regeneration holds the input back. After successful package
-  verification, only the `devenv` input runs `devenv --no-tui shell true` with
-  the installed CLI in its updated worktree. A failed shell entry holds the bump
-  back before commit and publication.
+  worktree, then `devenv update` to sync `devenv.lock`, Rust toolchain pin
+  refresh, and package verification with hash repair on failure. After
+  successful verification, only the `devenv` input runs
+  `devenv --no-tui shell true` with the installed CLI in its updated worktree. A
+  failed shell entry holds the bump back before commit and publication.
 - **Fixture locks** (`update-lock.sh <name> <flake-dir>`) — every
   `checks/<concern>/flake.lock`, discovered rather than registered
   (`fixture_flakes` in `update-matrix.py`) and named by its concern. The worker
@@ -77,25 +72,19 @@ Targets fall into three categories:
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
-  nix-update, including on an unchanged-rev sweep. The worker then runs
-  `regenerate_sidecars package <name>`: a package exposing
-  `passthru.regenerateExtracted` (git-absorb and git-revise, whose
-  `--version skip` bumps never run an `extraExtract`) gets its sidecar refreshed
-  in the same commit, and a failure holds the bump back. MCP uses the same hook
-  to run Semble's `regenCommand` and declares
-  `packages/semble/extracted/extracted.json` in the script's `sidecars`, keeping
-  SDK-generated schemas with the SDK update. `update-targets-parity` fails when
-  a target with `passthru.extracted` has neither that nor `--use-update-script`.
-  The Beads binary target is a grouped package: its `passthru.updateScript` runs
-  independent Beads and Dolt release updaters in sequence, so either upstream
-  can move while the target still produces one branch and one PR. The paired
-  Dolt remains a nested package dependency, not a second registry row. There is
-  no base-checkout format/build finalizer because it cannot observe changes
-  committed only on target branches.
+  nix-update, including on an unchanged-rev sweep. Extracted facts, including
+  git-tool censuses and Semble's SDK-generated schemas after an MCP bump, are
+  produced by PR CI from the published pins. The Beads binary target is a
+  grouped package: its `passthru.updateScript` runs independent Beads and Dolt
+  release updaters in sequence, so either upstream can move while the target
+  still produces one branch and one PR. The paired Dolt remains a nested package
+  dependency, not a second registry row. There is no base-checkout format/build
+  finalizer because it cannot observe changes committed only on target branches.
 
   Semble's grouped script tracks the CLI, model2vec, vicinity and the grammar
-  wheels, then regenerates both snapshots. Human-reviewed template hashes stay
-  unchanged: a changed template fails coverage until its derivative is reviewed.
+  wheels. PR CI regenerates Semble's extracted surface. Human-reviewed template
+  hashes stay unchanged: a changed template fails coverage until its derivative
+  is reviewed.
 
 ### Packages are read from `ciPackages`
 
@@ -109,7 +98,7 @@ builds and pushes:
   asks `nix` lazily so sourcing the script never needs it; `nix-update` gets
   `--flake "$(nat_attr <name>)"`, which it resolves as a flake-root attribute
   path;
-- generated fixers and regeneration scripts in `lib/packaging.nix` use `ciAttr`;
+- generated hash fixers in `lib/packaging.nix` use `ciAttr`;
 - `verify_all_packages`, `update.yml` and the warm-ifd action evaluate
   `.#ciPackages.<system>`.
 
@@ -246,19 +235,17 @@ registry every package contributes a row to. It replaced the flat, top-level
   or update script with a targeted package, declare an existing flake input
   through `passthru.updateFlakeInput`, carry a non-empty
   `passthru.updateTargetExempt` reason, or match an explicit `excludePatterns`
-  exemption. It also fails when a `regenerateExtracted` names a sidecar that is
-  not a committed file, since `update-input.sh` stages exactly those paths. The
-  first CI run proved the reverse direction by finding two previously unrecorded
-  cases: `git-branchless` is owned by its flake input. (The other historical
-  exemption, the repository-local `kiro-memory-distiller`, was removed on
-  2026-09-01 — the shape it illustrated, an in-repo package with no upstream
-  release to sweep, has no current instance.) Targets → overlays: every
-  main-tracking target (with a `git` URL) must declare a non-null `file` equal
-  to `resolve_recipe_file(<git>, overlays, packages)`, and the resolved overlay
-  must carry an inline 40-hex `rev`. A positive control removes the real,
-  uniquely sourced `context7-mcp` row in memory and requires that its package
-  become uncovered; this proves the reverse direction can fail without mutating
-  the registry on disk.
+  exemption. The first CI run proved the reverse direction by finding two
+  previously unrecorded cases: `git-branchless` is owned by its flake input.
+  (The other historical exemption, the repository-local `kiro-memory-distiller`,
+  was removed on 2026-09-01 — the shape it illustrated, an in-repo package with
+  no upstream release to sweep, has no current instance.) Targets → overlays:
+  every main-tracking target (with a `git` URL) must declare a non-null `file`
+  equal to `resolve_recipe_file(<git>, overlays, packages)`, and the resolved
+  overlay must carry an inline 40-hex `rev`. A positive control removes the
+  real, uniquely sourced `context7-mcp` row in memory and requires that its
+  package become uncovered; this proves the reverse direction can fail without
+  mutating the registry on disk.
 
 ### Report format
 

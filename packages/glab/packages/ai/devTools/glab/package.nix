@@ -54,7 +54,6 @@
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
 {
-  extractedLib,
   packageLib,
   pkgs,
   repoPath,
@@ -91,13 +90,8 @@
   # so the prefetch path cannot produce a usable src hash and a fixer has
   # to. That is exactly the case whose correct order — src, THEN floor,
   # THEN vendor — is what `vu.mkGoUpdateExtract` emits.
-  #
-  # `extraAfter` carries the config-key schema dump, which COMPILES this
-  # module's Go against the vendor tree and therefore has to follow both
-  # the floor and the vendor fix (for `.goModules`).
   goUpdate = vu.mkGoUpdateExtract {
     attr = "glab";
-    extraAfter = (extractedLib {inherit pkgs;}).regenCommand {name = "glab";};
     inherit pkgs;
     pname = "glab";
     srcFromSidecar = true;
@@ -282,10 +276,8 @@
       go run ./cmd/glab-schema-dump | jq -S '{keys: map({key: .name, value: .}) | from_entries}' > schema.json
 
       # ── Shape guards ──────────────────────────────────────────────
-      # NOT a non-empty guard. The UPDATE PIPELINE regenerates this
-      # sidecar inside the same version-bump PR (`extraExtract` above,
-      # via the owner check's regenerator), so a wrong extract is
-      # simply committed as the new truth and the drift check goes green
+      # PR CI regenerates this sidecar through the owner check, so a wrong
+      # extract is committed as the new truth and the drift check goes green
       # over it. These assert the SHAPE of what was captured; when a key
       # or a field is added, its assertion is added with it.
       fail() {

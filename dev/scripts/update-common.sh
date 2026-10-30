@@ -630,33 +630,31 @@ refresh_package_source_version() {
   "$fixer"
 }
 
-# refresh_input_rust_toolchains needs package names; regenerate_sidecars needs
-# fixer derivations. Both select an input's packages by their passthru capability.
+# Select packages with the capability refresh_input_rust_toolchains needs.
 package_update_roster_expr() {
   local capability="$1" result="$2"
   cat <<EOF
 let
   flake = builtins.getFlake (toString ./.);
-  by = builtins.getEnv "NAT_UPDATE_BY";
   name = builtins.getEnv "NAT_UPDATE_NAME";
   ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
   selected = n:
     let
       p = builtins.getAttr n ps;
       r = builtins.tryEval ((p.passthru or {}) ? $capability
-        && (if by == "input" then (p.passthru.updateFlakeInput or null) == name else n == name));
+        && (p.passthru.updateFlakeInput or null) == name);
     in r.success && r.value;
   names = builtins.filter selected (builtins.attrNames ps);
 in $result
 EOF
 }
 
-# git-branchless moves with its flake input; refresh its recipe literal before
-# regenerate_sidecars compiles any extractor with the newly pinned source.
+# git-branchless moves with its flake input; refresh its Rust recipe literal
+# before input verification evaluates the newly pinned source.
 refresh_input_rust_toolchains() {
   local name="$1" packages package roster
   roster=$(package_update_roster_expr fixRustToolchain 'builtins.concatStringsSep "\n" names')
-  if ! packages=$(NAT_UPDATE_BY=input NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr "$roster"); then
+  if ! packages=$(NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr "$roster"); then
     log_failure "could not discover Rust toolchain refreshers for input $name"
     return 1
   fi
@@ -666,69 +664,6 @@ refresh_input_rust_toolchains() {
       return 1
     fi
   done <<<"$packages"
-}
-
-# ── Sidecar regeneration ─────────────────────────────────────────────────────
-#
-# A package whose update never runs mkUpdateScript's `extraExtract` would
-# ship a sidecar describing the OLD source, and its drift check would fail
-# the bump PR. Such a package exposes `passthru.regenerateExtracted`
-# (the shared git-tool extraction's regenerator), and both update paths run
-# it through this function:
-#
-#   regenerate_sidecars input <name>     every package whose
-#                                        `passthru.updateFlakeInput` is <name>
-#                                        (update-input.sh)
-#   regenerate_sidecars package <name>   the flat package <name> itself, when
-#                                        it has one (update-pkg.sh, after the
-#                                        rev bump and nix-update)
-#
-# It prints the sidecar paths the scripts wrote, one per line, for the
-# caller to stage.
-#
-# Discovered, never listed, for the same reason as the fixer roster above.
-# `tryEval` keeps one package that throws at evaluation from hiding every
-# other package's regeneration; a package that throws is broken on this
-# bump anyway, and the verification build reports it.
-#
-# Returns non-zero when discovery or any script fails. Each script writes
-# content the PR carries, so the caller holds the bump back on failure.
-regenerate_sidecars() {
-  local by="$1" name="$2" roster scripts sidecars script
-  case "$by" in
-  input | package) ;;
-  *)
-    log_failure "regenerate_sidecars: unknown selector '$by' (input or package)"
-    return 1
-    ;;
-  esac
-  roster=$(package_update_roster_expr regenerateExtracted \
-    'map (n: (builtins.getAttr n ps).passthru.regenerateExtracted) names')
-
-  # stderr stays out of both captures; see fix_sidecar_hashes.
-  if ! scripts=$(NAT_UPDATE_BY="$by" NAT_UPDATE_NAME="$name" nix build --impure --no-link --print-out-paths --expr "$roster"); then
-    log_failure "could not resolve the sidecar regenerators for $by $name (nix error above)"
-    return 1
-  fi
-  if ! sidecars=$(NAT_UPDATE_BY="$by" NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr \
-    "builtins.concatStringsSep \"\\n\" (builtins.concatMap (s: s.sidecars) ($roster))"); then
-    log_failure "could not resolve the sidecars regenerated for $by $name (nix error above)"
-    return 1
-  fi
-
-  while IFS= read -r script; do
-    case "$script" in
-    /nix/store/*) ;;
-    *) continue ;;
-    esac
-    if ! "$script" >&2; then
-      log_failure "sidecar regeneration failed: $script"
-      return 1
-    fi
-  done <<<"$scripts"
-  if [ -n "$sidecars" ]; then
-    printf '%s\n' "$sidecars"
-  fi
 }
 
 # Record that target $1 failed build verification while its PR still ships.

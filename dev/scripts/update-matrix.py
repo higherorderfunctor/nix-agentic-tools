@@ -448,7 +448,7 @@ def main():
         elif target["kind"] == "lock":
             command.append(target["flake"])
         subprocess.run(command, check=True)
-        # An early phase-0 commit is not proof that hashes/extraction completed.
+        # An early phase-0 commit is not proof that pin preparation completed.
         # Only a normal target return with its final report permits publication.
         report = Path(".update-report.txt").read_text()
         status = report_status(report, target["name"])

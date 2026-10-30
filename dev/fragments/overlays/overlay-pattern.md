@@ -1,6 +1,6 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-28 — pnpm_12 bootstrap has no hash fixers.
+> **Last verified:** 2026-10-29 — pnpm_12 bootstrap has no hash fixers.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -273,21 +273,19 @@ for majors of one package; this is the general form.
 
 Semble uses `buildPythonApplication` with this flake's nixpkgs. Its three
 vendored dependencies stay let-bound. Four source sidecars feed one grouped
-`--use-update-script` target; its final extraction step regenerates both
-committed Semble snapshots from package passthru. The MCP SDK is a separate
-supporting package at `pkgs.ai.generic.mcp`, owned by `packages/mcp`. It
-overrides nixpkgs' Python SDK without extending the Python package set. Its
-owner groups the SDK, transport and versioning-tool source pins under one update
-target. `mcp-types` shares the SDK source and version, while `httpcore2` shares
-HTTPX2's; those exact-version pairs cannot drift independently. The private
-versioning tool also needs a newer Dunamai. The shared
-`pythonDependencyVersionCmd` selects the newest stable release satisfying
-runtime requirements from PyPI or build requirements from pinned
-`pyproject.toml` URLs. MCP updates run in parent-first order: SDK, HTTPX2,
-uv-dynamic-versioning, Dunamai. The MCP group update script then runs
-`regenCommand { name = "semble"; }` to regenerate Semble's extracted surface,
-including the SDK-generated schemas, in the same update. These scoped
-dependencies leave nixpkgs' MCP 1.x consumers intact.
+`--use-update-script` target. PR CI regenerates the committed Semble facts from
+package passthru. The MCP SDK is a separate supporting package at
+`pkgs.ai.generic.mcp`, owned by `packages/mcp`. It overrides nixpkgs' Python SDK
+without extending the Python package set. Its owner groups the SDK, transport
+and versioning-tool source pins under one update target. `mcp-types` shares the
+SDK source and version, while `httpcore2` shares HTTPX2's; those exact-version
+pairs cannot drift independently. The private versioning tool also needs a newer
+Dunamai. The shared `pythonDependencyVersionCmd` selects the newest stable
+release satisfying runtime requirements from PyPI or build requirements from
+pinned `pyproject.toml` URLs. MCP updates run in parent-first order: SDK,
+HTTPX2, uv-dynamic-versioning, Dunamai. PR CI detects the changed Semble
+extraction derivation after an MCP pin bump and regenerates its SDK-generated
+schemas. These scoped dependencies leave nixpkgs' MCP 1.x consumers intact.
 
 When one derivation ships multiple role binaries, expose secondary roles with a
 plain attrset/meta overlay. `semble-mcp` changes only `meta.mainProgram`, so
@@ -792,34 +790,24 @@ POST-`postFetch` tree and `nix-prefetch-url --unpack` cannot reproduce it. It
 pairs `platforms = {}` with a chain that restores `srcHash`, derives the floor,
 then restores `vendorHash`.
 
-`glab` also carries a `passthru.extracted` sidecar, so the SAME `extraExtract`
-runs `lib.extracted.regenCommand { name; }` after the hash fixer. Its extract
-BUILDS `src` and `goModules`, so running it before the fixer would hit
-`lib.fakeHash` instead of producing a schema. `chatgpt-codex` is the same shape
-on a Rust build: it compiles from source, adding only its optional resources
-from per-platform release archives that `mkUpdateScript` prefetches, so its
-`extraExtract` runs `rustUpdateExtract` (`srcHash`, `rustToolchainChannel`, then
-`cargoHash`) and then `regenCommand`. `claude-code` fetches a prebuilt binary
-and passes `regenCommand` alone. Kiro also fetches a prebuilt binary, but its
-update wrapper refreshes the public model snapshot before regeneration on EVERY
-sweep: model changes do not wait for a binary version bump. Kimchi pins its
-release source ONCE, and both its source build and its extractor read that pin.
-Beside it sit its exact pi npm dependency and the three declaration packages
-that dependency's settings type imports. A version bump refreshes all five
-inputs and runs `regenCommand` against them before the Go and pnpm fixers.
+`glab` also exposes `passthru.extracted`. Its schema dump builds `src` and
+`goModules`, so Update must finish source, Go-floor and vendor-hash repair
+before PR CI measures it. `chatgpt-codex` compiles from source; its
+`extraExtract` resolves the source commit and rusty_v8 pins, then runs
+`rustUpdateExtract` for source, toolchain and Cargo dependency pins.
+`claude-code` and `kiro-cli` prefetch their prebuilt releases. The public Kiro
+model catalog has its own web-document pin target. Kimchi's source build and
+extractor share its release source pin; Update also refreshes its exact pi
+dependency and declaration-source pins before running the Go and pnpm hash
+fixers.
 
-Wiring that regeneration is not optional for an extracted package, and glab
-demonstrates the cost of missing it: it was the one such package that never had
-it, which nothing caught until its first-ever version bump (PR #621) turned
-`checks.<system>.glab-extracted` red on a sidecar that still described 1.110.0.
-
-A package owned by a flake input, or bumped by rev without its own update script
-(git-absorb, git-revise), has no `mkUpdateScript`, so it carries
-`passthru.regenerateExtracted` running `lib.extracted.regenCommand { name; }`
-instead. The owner check is built with `mkOwnerCheck` and exposes
-`passthru.regenerate`. `update-input.sh` discovers it through
-`passthru.updateFlakeInput`, `update-pkg.sh` by the target's own name, and both
-commit its `sidecars`. git-branchless's target is its own `passthru.extracted`.
+PR CI runs each owner's `mkOwnerCheck` regenerator through
+`passthru.regenerate`, including git-branchless after an input bump and
+git-absorb or git-revise after a rev bump. Register extracted owners in
+`checks/extracted/owners.nix` so the Linux planner can select their handled
+extractions. Darwin follows the Linux carry for host-run facts. Update workers
+leave fact production to those jobs, so a package build failure can publish as a
+writable red PR.
 
 The hash fixers (the vendor and src fixers `mkGoUpdateExtract` builds
 internally, and `mkNpmDepsFix`) are one body — `vu.mkHashFix` — parameterized by
@@ -1050,8 +1038,8 @@ So the floor is extracted from the pinned source's go.mod, by mechanism:
 
 **ORDER: hash fixers first, then the floor.** `mkGoFloorFix` builds `.src`, so a
 package whose `srcHash` also lives in the sidecar (`glab`) must have that
-restored first. For `glab` the vendor fixer then precedes `regenCommand`,
-because the schema dump compiles the module against `.goModules`.
+restored first. For `glab` the vendor fixer follows the floor; PR CI later
+compiles the schema dump against `.goModules`.
 
 Overlays read `sources.goFloor or vu.goFloorUnknown`, but `goFloorUnknown`
 (`"0"`) cannot select a compiler without an explicit recipe override.

@@ -71,7 +71,8 @@ it could not evaluate (PR #2559, kiro 2.29.1 → 2.31.1, 2026-10-15).
 
 PR CI lands Linux's carry before Darwin measures it. Darwin runs only owners
 with a `host-run` row for Darwin, today Codex (clap help is compiled per
-platform).
+platform). Update workers publish pins only; a package build failure leaves a
+writable red PR for CI and review.
 
 ## The subtractive rule
 

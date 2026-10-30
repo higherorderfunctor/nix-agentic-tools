@@ -1,7 +1,6 @@
 # Kiro CLI — override nixpkgs with nightly version.
 # Per-platform sources in kiro-cli-sources.json, managed by updateScript.
 {
-  extractedLib,
   pkgs,
   packageLib,
   repoPath,
@@ -172,7 +171,6 @@
                 "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
                 "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
               };
-              extraExtract = (extractedLib {inherit pkgs;}).regenCommand {name = "kiro-cli";};
               inherit pkgs;
             };
 
