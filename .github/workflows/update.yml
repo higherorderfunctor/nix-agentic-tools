@@ -422,17 +422,16 @@ jobs:
           gh_api() {
             # Buffered: a failed call prints its error body to stdout.
             local attempt out
-            for attempt in 1 2 3 4; do
+            for attempt in 1 2 3; do
               if out="$(gh api "$@")"; then
                 printf '%s\n' "${out}"
                 return 0
               fi
-              [ "${attempt}" -lt 4 ] || break
-              echo "gh api $1 failed on attempt ${attempt}; retrying in $((attempt * 5))s" >&2
+              echo "::warning::gh api $1 attempt ${attempt}/4 failed; retrying in $((attempt * 5))s." >&2
               sleep "$((attempt * 5))"
             done
-            echo "::error::gh api $1 failed after 4 attempts" >&2
-            return 1
+            # The last attempt fails the step through the caller's errexit.
+            gh api "$@"
           }
           # Newest first. Filtering here rather than with `status=completed`:
           # that listing has served a weeks-old snapshot.
