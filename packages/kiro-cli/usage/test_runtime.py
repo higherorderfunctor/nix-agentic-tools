@@ -61,6 +61,18 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual(text.count("calls with no conversation identity excluded"), 1)
             self.assertLess(text.index("Kiro usage · sess_second"), text.index("calls with no conversation identity excluded"))
 
+    def test_summary_theme_file_styles_the_summary_and_names_a_refused_token(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            collector = Collector(root / "usage.sqlite3")
+            collector.finish(collector.begin({"invocation": "a" * 32}, b'{"metadata":{"kiro:conversation_id":"sess_selected"}}'))
+            collector.close()
+            for theme, expected in (({"border": "ascii", "color": "always"}, "\n+-"), ({"styles": {"header": "blink"}}, "unavailable: unknown summary style token 'blink'")):
+                (root / "theme.json").write_text(json.dumps(theme))
+                with contextlib.redirect_stderr(io.StringIO()) as output:
+                    runtime.invocation_summary(root, "a" * 32, 1 << 30, theme=root / "theme.json")
+                self.assertIn(expected, output.getvalue())
+
     def test_summary_warns_past_the_payload_threshold(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

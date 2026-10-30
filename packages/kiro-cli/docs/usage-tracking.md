@@ -1,3 +1,5 @@
+<!-- cspell:words rrggbb -->
+
 # Private Kiro usage tracking
 
 `ai.kiro.cli.usageTracking` is an opt-in local TLS capture service and Kiro
@@ -74,6 +76,23 @@ signals intact. Tracked chat runs as a child of the summary supervisor, with its
 own process ID and the same terminal descriptors. Explicit help, version, login,
 and administrative commands skip the summary, including when recognized global
 options precede them. Other commands run without a Kiro summary.
+
+`usageTracking.summary` styles that summary. Null options keep the runtime
+defaults (`color = "auto"`: styled only on a terminal without `NO_COLOR`;
+`border = "none"`; `icons = false`), and only set options reach the theme file
+the tool passes as `--summary-theme`:
+
+```nix
+ai.kiro.cli.usageTracking.summary = {
+  border = "rounded"; # ascii, double, heavy, none, rounded or single
+  color = "always"; # always, auto or never
+  icons = true; # Nerd Font glyphs before the headline and caveat
+  styles.total = "bold #ffaf00"; # per element: attributes, palette colors, #rrggbb, on-<color>
+};
+```
+
+[The collector notes](../usage/README.md) list the style elements, their
+defaults and the spec grammar.
 
 A local proxy marker identifies captures from this invocation, and their
 recorded conversation identities select the sessions to report. The tool does

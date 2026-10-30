@@ -26,6 +26,10 @@
         usageTracking = {
           enable = true;
           port = 18091;
+          summary = {
+            border = "rounded";
+            styles.total = "bold #ffaf00";
+          };
         };
         v3 = true;
       };
@@ -43,6 +47,15 @@
     };
   };
   wrapped = ev: lib.findFirst (p: p.name == "kiro-cli-wrapped") (throw "missing managed Kiro launcher") (ev.config.packages or ev.config.home.packages);
+  usage = import ../lib/usageTracking.nix {inherit lib pkgs;};
+  # Only set summary keys reach the theme file, and only a set theme adds the flag.
+  themed = ev:
+    usage.summaryTheme ev.config.ai.kiro.cli.usageTracking
+    == {
+      border = "rounded";
+      styles.total = "bold #ffaf00";
+    }
+    && lib.elem "--summary-theme" (usage.toolArgs ev.config.ai.kiro.cli.usageTracking);
   rejected = change: lib.any (a: !a.assertion) (harness.evalDevenv (lib.recursiveUpdate configuration change)).config.assertions;
   directWrapper = v3:
     (import ../lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage {
@@ -57,6 +70,10 @@ in {
       == 18091
       && hm.config.ai.services.kiro-usage.command == dev.config.ai.services.kiro-usage.command
       && dev.config.ai.claims.port."18091" == ["kiro:kiro-usage.ports.proxy"]
+      && themed hm
+      && themed dev
+      && !(lib.elem "--summary-theme" (usage.toolArgs disabled.config.ai.kiro.cli.usageTracking))
+      && !(builtins.tryEval (harness.evalDevenv (lib.recursiveUpdate configuration {ai.kiro.cli.usageTracking.summary.border = "dashed";})).config.ai.kiro.cli.usageTracking.summary.border).success
       && !(disabled.config.ai.services ? kiro-usage)
       && !(disabled.config.env ? HTTPS_PROXY)
       && rejected {ai.kiro.cli.package = null;}

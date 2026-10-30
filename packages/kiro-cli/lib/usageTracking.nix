@@ -8,7 +8,17 @@
   stateArgs = cfg: lib.optionals (cfg.dataDirectory != null) ["--state-dir" cfg.dataDirectory];
   # The collector warns once past it; the tool's exec summary repeats the warning.
   warnArgs = cfg: ["--warn-bytes" (toString cfg.payloadWarnBytes)];
+  # Set keys only: summary_theme.py owns the defaults, so unset options add no flag and no store file.
+  # A direct wrapPackage usageTracking set may predate summary.
+  summaryTheme = cfg: lib.filterAttrs (_: value: value != null && value != {}) (cfg.summary or {});
+  summaryArgs = cfg: let
+    theme = summaryTheme cfg;
+  in
+    lib.optionals (theme != {}) ["--summary-theme" (toString (pkgs.writeText "kiro-usage-summary-theme.json" (builtins.toJSON theme)))];
+  # The tool runs `kiro-usage exec`, the only command that prints the exit summary.
+  toolArgs = cfg: ["--port" (toString cfg.port)] ++ warnArgs cfg ++ stateArgs cfg ++ summaryArgs cfg;
 in {
+  inherit summaryTheme toolArgs;
   options = {
     enable = lib.mkEnableOption "private local Kiro usage capture through a loopback TLS proxy";
     dataDirectory = lib.mkOption {
@@ -25,6 +35,32 @@ in {
       type = lib.types.port;
       default = 18089;
       description = "Port claimed by the usage proxy, listening only on 127.0.0.1.";
+    };
+    summary = {
+      border = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["ascii" "double" "heavy" "none" "rounded" "single"]);
+        default = null;
+        description = "Box drawn around the exit summary, its rule becoming a junction line. Null keeps the runtime default, none.";
+      };
+      color = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["always" "auto" "never"]);
+        default = null;
+        description = "Exit summary styling: auto styles only when standard error is a terminal and NO_COLOR is unset or empty. Null keeps the runtime default, auto.";
+      };
+      icons = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Prefix the exit summary headline and caveat with Nerd Font glyphs. Null keeps the runtime default, false.";
+      };
+      styles = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = {};
+        example = {
+          border = "bright-black";
+          total = "bold #ffaf00";
+        };
+        description = "Exit summary style specs by element, replacing the built-in defaults per element when color is on; see packages/kiro-cli/usage/README.md. An unknown element or token makes the summary report itself unavailable.";
+      };
     };
   };
   assertions = cfg: environment:
@@ -63,7 +99,7 @@ in {
     import ../../../lib/strict-shell-application.nix pkgs {
       name = "kiro-usage";
       text = ''
-        exec ${pkgs.python3}/bin/python3 ${runtime} cli ${lib.escapeShellArgs (["--port" (toString cfg.port)] ++ warnArgs cfg ++ stateArgs cfg)} -- "$@"
+        exec ${pkgs.python3}/bin/python3 ${runtime} cli ${lib.escapeShellArgs (toolArgs cfg)} -- "$@"
       '';
     };
   launcherBlock = cfg:
