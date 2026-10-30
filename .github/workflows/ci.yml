@@ -204,20 +204,22 @@ jobs:
     # Wait for Cachix finalization even when a package failed on stale facts.
     needs: [build-packages, plan-extracted-facts]
     if: >-
-      always() && !cancelled() && needs.plan-extracted-facts.result == 'success'
-      && needs.plan-extracted-facts.outputs.linux-matrix != '[]'
+      !cancelled() && needs.plan-extracted-facts.result == 'success' &&
+      needs.plan-extracted-facts.outputs.linux-matrix != '[]'
     uses: ./.github/workflows/extracted-facts.yml
     with:
       owners: ${{ needs.plan-extracted-facts.outputs.linux-matrix }}
       system: x86_64-linux
-    secrets: inherit
+    secrets:
+      APP_CLIENT_ID: ${{ secrets.APP_CLIENT_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
   extracted-facts-darwin:
     # A Linux push starts a new run whose merge ref includes the carry.
     needs: [extracted-facts-linux, plan-extracted-facts]
     if: >-
-      always() && !cancelled() && (needs.extracted-facts-linux.result ==
-      'success' ||
+      !cancelled() && (needs.extracted-facts-linux.result == 'success' ||
        needs.extracted-facts-linux.result == 'skipped') &&
       needs.plan-extracted-facts.result == 'success' &&
       needs.extracted-facts-linux.outputs.published != 'true' &&
@@ -226,7 +228,10 @@ jobs:
     with:
       owners: ${{ needs.plan-extracted-facts.outputs.darwin-matrix }}
       system: aarch64-darwin
-    secrets: inherit
+    secrets:
+      APP_CLIENT_ID: ${{ secrets.APP_CLIENT_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
   # Preserve the required contexts. A cancelled, skipped, or missing worker
   # must fail these checks, including failures after a receipt was uploaded.

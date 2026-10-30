@@ -34,62 +34,103 @@ def ci_step_script(name, workflow_name="ci.yml"):
 
 
 class ExtractedFactsTest(unittest.TestCase):
-    def test_collector_publishes_multiple_owners_once_and_skips_noop(self):
-        commit = ci_step_script("Commit native extracted facts as the update bot", "extracted-facts.yml")
+    def test_collector_carries_only_regeneration_deltas_onto_behind_main_head(self):
+        collect = ci_step_script("Commit native extracted facts as the update bot", "extracted-facts.yml")
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-gh() { printf '%s\n' "gh $*" >> "$RUNNER_TEMP/commands"; }
+gh() { :; }
 git() {
-  printf '%s\n' "$*" >> "$RUNNER_TEMP/commands"
   case "$1" in
-    diff) [ "$NOOP" = true ] ;;
-    add|checkout|commit|fetch|push) ;;
-    *) return 1 ;;
+    commit|push) printf '%s\n' "$*" >> "$RUNNER_TEMP/commands" ;;
+    fetch) ;;
+    *) command git "$@" ;;
   esac
 }
 export -f gh git
 '''
-        for noop in ("false", "true"):
-            with self.subTest(noop=noop), tempfile.TemporaryDirectory() as directory:
+        for mode in ("changed", "conflict", "multiple-owners", "noop"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                source, runner = root / "source", root / "runner"
-                source.mkdir()
-                paths = ["packages/kimchi/egress-report.json", "packages/kimchi/extracted/extracted.json", "packages/semble/extracted/extracted.json"]
-                for path in paths:
-                    artifact = runner / "facts" / path
-                    artifact.parent.mkdir(parents=True, exist_ok=True)
-                    artifact.write_text('fresh\n')
-                    old = source / path
-                    old.parent.mkdir(parents=True, exist_ok=True)
-                    old.write_text('stale\n')
+                repo, runner = root / "source", root / "runner"
+                repo.mkdir()
+                (runner / "facts").mkdir(parents=True)
+                def git(*args):
+                    return subprocess.check_output(["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", *args], cwd=repo, text=True, stderr=subprocess.DEVNULL).strip()
+                git("init", "--quiet", "--initial-branch=main")
+                git("config", "user.name", "Fixture")
+                git("config", "user.email", "fixture@example.test")
+                changed = repo / "packages/kimchi/extracted/extracted.json"
+                unchanged = repo / "packages/kimchi/extracted/unrelated.json"
+                second = repo / "packages/semble/extracted/extracted.json"
+                for path in (changed, unchanged, second):
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text('head\n')
+                git("add", ".")
+                git("commit", "--quiet", "-m", "fixture head")
+                head = git("rev-parse", "HEAD")
+                unchanged.write_text('main-only\n')
+                if mode == "conflict":
+                    changed.write_text('main-conflict\n')
+                git("add", ".")
+                git("commit", "--quiet", "-m", "fixture merge-ref changes")
+                if mode != "noop":
+                    changed.write_text('regenerated\n')
+                git("add", str(changed.relative_to(repo)))
+                (runner / "facts/kimchi.patch").write_text(git("diff", "--cached", "--binary", "--full-index") + ('\n' if mode != "noop" else ''))
+                git("reset", "--hard", "HEAD")
+                if mode == "multiple-owners":
+                    second.write_text('second-regeneration\n')
+                    git("add", str(second.relative_to(repo)))
+                    (runner / "facts/semble.patch").write_text(git("diff", "--cached", "--binary", "--full-index") + '\n')
+                    git("reset", "--hard", "HEAD")
+                # No third owner's artifact: a failed leg must not block these.
                 output = root / "output"
-                env = dict(os.environ, GITHUB_OUTPUT=str(output), HEAD_REF="feature/facts", HEAD_SHA="immutable-head",
-                           NOOP=noop, OWNERS='["kimchi","semble"]', RUNNER_TEMP=str(runner), SYSTEM="x86_64-linux")
-                result = subprocess.run(["bash", "-c", services + commit], cwd=source, env=env, capture_output=True, text=True)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                commands = (runner / "commands").read_text().splitlines()
-                self.assertIn("fetch --no-tags origin immutable-head", commands)
-                self.assertIn("checkout --detach immutable-head", commands)
-                for path in paths:
-                    self.assertEqual((source / path).read_text(), 'fresh\n')
-                self.assertEqual(sum(command.startswith("commit ") for command in commands), int(noop == "false"))
-                self.assertEqual(commands.count("push origin HEAD:refs/heads/feature/facts"), int(noop == "false"))
-                if noop == "false":
-                    self.assertIn("commit -m chore(extracted): record x86_64-linux extracted facts -m Measured owners:", commands)
-                    self.assertIn("kimchi", commands)
-                    self.assertIn("semble", commands)
-                    self.assertEqual(output.read_text(), 'published=true\n')
-                else:
+                env = dict(os.environ, GITHUB_OUTPUT=str(output), HEAD_REF="feature/facts", HEAD_SHA=head,
+                           RUNNER_TEMP=str(runner), SYSTEM="x86_64-linux")
+                result = subprocess.run(["bash", "-c", services + collect], cwd=repo, env=env, capture_output=True, text=True)
+                commands = (runner / "commands").read_text().splitlines() if (runner / "commands").exists() else []
+                self.assertEqual(git("rev-parse", "HEAD"), head)
+                self.assertEqual(unchanged.read_text(), 'head\n')
+                if mode == "conflict":
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("conflict", result.stderr.lower())
+                    self.assertEqual(commands, [])
                     self.assertFalse(output.exists())
+                    continue
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(changed.read_text(), 'head\n' if mode == "noop" else 'regenerated\n')
+                expected = [] if mode == "noop" else [str(changed.relative_to(repo))]
+                if mode == "multiple-owners":
+                    expected.append(str(second.relative_to(repo)))
+                self.assertEqual(git("diff", "--cached", "--name-only").splitlines(), expected)
+                self.assertEqual(sum(command.startswith("commit ") for command in commands), int(mode != "noop"))
+                self.assertEqual(commands.count("push origin HEAD:refs/heads/feature/facts"), int(mode != "noop"))
+                if mode == "noop":
+                    self.assertFalse(output.exists())
+                else:
+                    self.assertTrue(commands[0].startswith("commit -m chore(extracted): record x86_64-linux extracted facts -m Regenerated owners:"))
+                    self.assertEqual(output.read_text(), 'published=true\n')
 
-    def test_fork_diagnostic_overlays_existing_files_after_exclusive_download(self):
+    def test_collector_runs_after_owner_failure_but_not_cancellation(self):
+        workflow = (Path(__file__).parents[2] / ".github/workflows/extracted-facts.yml").read_text()
+        job = workflow.split("\n  commit:\n", 1)[1]
+        expression = " ".join(job.split("    if: >-\n", 1)[1].split("    runs-on:", 1)[0].split())
+        for cancelled, repository, expected in ((False, "same", True), (True, "same", False), (False, "fork", False)):
+            with self.subTest(cancelled=cancelled, repository=repository):
+                # The status function prevents Actions from adding success(), so
+                # this expression also runs after a failing producer matrix.
+                condition = expression.replace("!cancelled()", str(not cancelled))
+                condition = condition.replace("github.event.pull_request.head.repo.full_name", repr(repository)).replace("github.repository", repr("same"))
+                self.assertEqual(eval(condition.replace("&&", " and "), {"__builtins__": {}}), expected)
+
+    def test_fork_diagnostic_downloads_delta_to_scratch_then_applies_it(self):
         diagnostic = ci_step_script("Fail on stale native extracted facts", "extracted-facts.yml")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "checkout"
             source.mkdir()
             path = "packages/kimchi/extracted/extracted.json"
-            artifact = root / "artifact" / path
+            artifact = root / "artifact/kimchi.patch"
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text('fresh\n')
             old = source / path
@@ -108,6 +149,7 @@ gh() {
 from pathlib import Path
 import sys
 source, destination = map(Path, sys.argv[1:])
+assert destination.resolve() != Path.cwd()
 for path in source.rglob('*'):
     if path.is_file():
         target = destination / path.relative_to(source)
@@ -116,29 +158,26 @@ for path in source.rglob('*'):
             stream.write(path.read_bytes())
 EXCLUSIVE_DOWNLOAD
 }
-export -f gh
+git() {
+  [ "$1:$2:$3" = apply:--3way:--index ]
+  cp "$4" packages/kimchi/extracted/extracted.json
+}
+export -f gh git
 '''
             result = subprocess.run(["bash", "-c", services + commands], cwd=source, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(old.read_text(), 'fresh\n')
 
-    def test_kimchi_producer_includes_report_in_changes_and_artifact(self):
+    def test_kimchi_producer_includes_report_in_regeneration_delta(self):
         produce = ci_step_script("Produce native extracted facts", "extracted-facts.yml")
-        artifact = ci_step_script("Prepare extracted facts artifact", "extracted-facts.yml")
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-nix() {
+nix() { printf '%s\n' "$*" >> "$RUNNER_TEMP/commands"; }
+git() {
   printf '%s\n' "$*" >> "$RUNNER_TEMP/commands"
   case "$1" in
-    run) mkdir -p packages/kimchi/extracted; printf '{}\n' > packages/kimchi/extracted/extracted.json ;;
-    shell) printf '{}\n' > packages/kimchi/egress-report.json ;;
-    *) return 1 ;;
-  esac
-}
-git() {
-  case "$1:$DIRTY" in
-    status:true) printf ' M packages/kimchi/egress-report.json\n' ;;
-    status:false) ;;
+    add) ;;
+    diff) if [ "$DIRTY" = true ]; then printf 'egress report delta\n'; fi ;;
     *) return 1 ;;
   esac
 }
@@ -150,16 +189,13 @@ export -f git nix
                 env = dict(os.environ, DIRTY=dirty, GITHUB_OUTPUT=str(output), OWNER="kimchi", RUNNER_TEMP=directory, SYSTEM="x86_64-linux")
                 result = subprocess.run(["bash", "-c", services + produce], cwd=directory, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn(f"changed={dirty}\n", output.read_text())
-                paths = output.read_text().split("paths<<FACT_PATHS\n", 1)[1].split("\nFACT_PATHS", 1)[0]
-                self.assertEqual(paths.splitlines(), ["packages/kimchi/extracted", "packages/kimchi/egress-report.json"])
+                self.assertEqual(output.read_text(), f"changed={dirty}\n")
                 commands = (Path(directory) / "commands").read_text().splitlines()
                 self.assertEqual(commands[0], "run .#.checks.x86_64-linux.kimchi-extracted.passthru.regenerate")
                 self.assertIn("--command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh", commands[1])
-                result = subprocess.run(["bash", "-c", artifact], cwd=directory, env=dict(env, FACT_PATHS=paths), capture_output=True, text=True)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                for path in ("packages/kimchi/extracted/extracted.json", "packages/kimchi/egress-report.json"):
-                    self.assertEqual((Path(directory) / "facts" / path).read_text(), '{}\n')
+                self.assertEqual(commands[2], "add -- packages/kimchi/extracted packages/kimchi/egress-report.json")
+                self.assertEqual(commands[3], "diff --cached --binary --full-index -- packages/kimchi/extracted packages/kimchi/egress-report.json")
+                self.assertEqual((Path(directory) / "facts/kimchi.patch").read_text(), 'egress report delta\n' if dirty == "true" else '')
 
     def test_linux_planner_selects_darwin_only_change_in_handled_inputs(self):
         old = {"kiro-cli": {"drvPaths": {"aarch64-darwin": "old-darwin", "x86_64-linux": "same-linux"}}}
@@ -238,7 +274,7 @@ export -f git nix
                 (False, "success", "[]", "success", "", False),
             ):
                 with self.subTest(system=system, cancelled=cancelled, plan_result=plan_result, owners=owners, linux_result=linux_result, published=published):
-                    condition = expression.replace("always()", "True").replace("!cancelled()", str(not cancelled))
+                    condition = expression.replace("!cancelled()", str(not cancelled))
                     for key, value in (
                         ("needs.extracted-facts-linux.outputs.published", published),
                         ("needs.extracted-facts-linux.result", linux_result),

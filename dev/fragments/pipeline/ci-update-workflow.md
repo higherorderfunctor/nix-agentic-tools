@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-29 — PR CI measures merge refs, compares every
-> Linux-handled extraction and publishes one facts commit per system.
+> **Last verified:** 2026-10-29 — PR CI publishes only regeneration deltas,
+> including successful owners after another owner fails; Darwin runs serially.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -40,24 +40,26 @@ pinned main base.
 
 **A PR must already contain its locks, source and dependency hashes, and
 formatting. PR CI regenerates extracted facts and commits changes to
-same-repository PR branches.** Update workers still regenerate facts before
-publication, so CI regeneration on a correct update branch is a no-op. The
-package worker does not build the package; hash derivation and embedded-file
-extraction run before publication. Input workers retain build verification and
-its hash-repair pass because those repairs can mutate the prepared branch. After
-successful package verification, the `devenv` input alone must also enter its
-updated shell with the installed CLI (`devenv --no-tui shell true`); failure
-holds the bump back. This runs inside the existing preparation deadline. The
-shell's closure holds the patched Kiro, which `pushFilter` does not catch inside
-a closure, so the `devenv` lane sets `skipPush`. A writable update may open with
-failing build checks; an incomplete update is held back and its existing PR is
-preserved. A worker whose build verification failed still publishes and arms
-auto-merge, uploads its receipt, and then fails in
-`Fail on failed build verification` (`update-matrix.py verdict`) with an
-`::error::` naming the target, failed attributes and PR -- when that PR is new
-or its patch changed. A PR that already proposed the same patch, and a branch
-that is not the bot's own last push, are skips: a `::notice::`, and the lane
-stays green. The required checks keep auto-merge from landing a red PR.
+same-repository PR branches.** It commits only the delta regeneration makes
+against the merge ref; unchanged measurements leave the branch untouched even
+when its facts are behind main. Update workers still regenerate facts before
+publication, so a correct branch needs no CI facts commit. The package worker
+does not build the package; hash derivation and embedded-file extraction run
+before publication. Input workers retain build verification and its hash-repair
+pass because those repairs can mutate the prepared branch. After successful
+package verification, the `devenv` input alone must also enter its updated shell
+with the installed CLI (`devenv --no-tui shell true`); failure holds the bump
+back. This runs inside the existing preparation deadline. The shell's closure
+holds the patched Kiro, which `pushFilter` does not catch inside a closure, so
+the `devenv` lane sets `skipPush`. A writable update may open with failing build
+checks; an incomplete update is held back and its existing PR is preserved. A
+worker whose build verification failed still publishes and arms auto-merge,
+uploads its receipt, and then fails in `Fail on failed build verification`
+(`update-matrix.py verdict`) with an `::error::` naming the target, failed
+attributes and PR -- when that PR is new or its patch changed. A PR that already
+proposed the same patch, and a branch that is not the bot's own last push, are
+skips: a `::notice::`, and the lane stays green. The required checks keep
+auto-merge from landing a red PR.
 
 `update-matrix.py` requires a normal target return and exactly one final report
 before permitting publication. An early rev/source commit alone proves nothing:
@@ -289,16 +291,26 @@ contexts accept that only after successful planning.
 `extracted-facts-linux` and `extracted-facts-darwin` call the same reusable
 producer workflow. Linux waits for all package shards to finish publishing to
 Cachix, then runs even if a shard failed: stale facts must not prevent their own
-repair. Each owner has a parallel native job with its own 60-minute budget,
-rather than sharing one serial budget across all owners. Producers measure the
-same merge ref as the planner and package shards, then upload
-repository-relative artifacts. A single collector commits all owners for that
-system. Each credentialed Cachix step filters `kiro-cli|codeql`.
+repair. Each owner has its own 60-minute native job budget. Linux owners may run
+in parallel; Darwin owners run serially to share the repository's four macOS
+runners. Producers measure the same merge ref as the planner and package shards,
+then record a binary patch of only the changes regeneration made. A no-op
+contributes an empty patch. Only owners whose extraction checks pass upload
+their patches. Each credentialed Cachix step filters `kiro-cli|codeql`.
 
-On any same-repository PR, the collector moves the measured files onto the
-immutable PR head and stages only the planned owners' fact paths. It publishes
-at most one `chore(extracted): record <system> extracted facts` commit per
-system, listing the measured owners in its body. It preserves bot author and
+On any same-repository PR, one collector applies the uploaded regeneration
+deltas onto the immutable PR head with `git apply --3way --index`, preserving
+unrelated head content and failing loudly on conflicts. It never copies the
+merge ref's whole fact trees. The patch itself identifies additions, changes,
+deletions and paths to stage, including Kimchi's egress report. The collector
+also runs after an owner fails, publishing deltas from successful owners; the
+failed owner still fails the required build context. It does not publish after
+cancellation. Empty deltas produce no commit, even when the PR's existing facts
+differ from main.
+
+The collector publishes at most one
+`chore(extracted): record <system> extracted facts` commit per system, listing
+only owners with nonempty regeneration deltas. It preserves bot author and
 committer identities and App-token push credit for `update/*` ownership. A
 concurrent branch move rejects the plain push. Linux's carry must land first: if
 Linux publishes, Darwin is skipped in that run. The App push triggers fresh CI
@@ -314,11 +326,11 @@ includes `packages/kimchi/egress-report.json`. An update sweep may rebuild a
 bot-owned branch and drop a CI facts commit; CI records the facts again. A human
 or LLM fix commit freezes the branch under the existing ownership checks.
 
-Fork heads, pushes and dispatches upload an `<owner>-extracted-<system>`
+Fork heads, pushes and dispatches upload an `<owner>-extracted-<system>` delta
 artifact and fail on changed facts. The diagnostic downloads into a fresh
-scratch directory, then uses `cp -R "$facts_dir"/. .` to overlay its
-repository-relative paths onto existing committed files for review and commit.
-CI names owner directories; the drift library chooses the fact file.
+scratch directory, then applies `<owner>.patch` with `git apply --3way --index`
+for review and commit. GitHub CLI never has to overwrite existing checkout
+files. CI names owner directories; the drift library chooses the fact file.
 
 The internal `kiro-cli-rollout-canary` patches every feature whose aggregate
 vendor state needs a patch and whose measured patchability is true. Its scope

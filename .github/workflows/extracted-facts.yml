@@ -11,6 +11,13 @@ on:
         description: Native extraction system, Linux before Darwin in ci.yml.
         required: true
         type: string
+    secrets:
+      APP_CLIENT_ID:
+        required: false
+      APP_PRIVATE_KEY:
+        required: false
+      CACHIX_AUTH_TOKEN:
+        required: false
     outputs:
       published:
         description: A facts push requires Darwin to wait for the next PR run.
@@ -23,6 +30,7 @@ jobs:
   produce:
     strategy:
       fail-fast: false
+      max-parallel: ${{ inputs.system == 'aarch64-darwin' && 1 || 256 }}
       matrix:
         owner: ${{ fromJSON(inputs.owners) }}
     runs-on:
@@ -72,30 +80,22 @@ jobs:
               --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh
             paths+=(packages/kimchi/egress-report.json)
           fi
-          {
-            echo 'paths<<FACT_PATHS'
-            printf '%s\n' "${paths[@]}"
-            echo FACT_PATHS
-          } >> "$GITHUB_OUTPUT"
-          if [ -n "$(git status --porcelain -- "${paths[@]}")" ]; then
-            git status --porcelain -- "${paths[@]}"
+          git add -- "${paths[@]}"
+          mkdir -p "$RUNNER_TEMP/facts"
+          git diff --cached --binary --full-index -- "${paths[@]}" > "$RUNNER_TEMP/facts/${OWNER}.patch"
+          if [ -s "$RUNNER_TEMP/facts/${OWNER}.patch" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # All owners upload, including no-ops, so the system collector can stage
-      # one complete measurement set without a missing-artifact special case.
-      - name: Prepare extracted facts artifact
-        env:
-          FACT_PATHS: ${{ steps.produce.outputs.paths }}
+      # Only successful checks contribute deltas, including empty no-op patches.
+      - name: Check extracted facts
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          while IFS= read -r fact_path; do
-            mkdir -p "$RUNNER_TEMP/facts/$(dirname "$fact_path")"
-            cp -R "$fact_path" "$RUNNER_TEMP/facts/$fact_path"
-          done <<< "$FACT_PATHS"
+          nix build ".#.checks.${SYSTEM}.${OWNER}-extracted" --no-link
+
       - name: Upload native extracted facts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -116,26 +116,21 @@ jobs:
                "From the repository root, download the measured files and commit them:"
           echo "  facts_dir=\$(mktemp -d)"
           echo "  gh run download ${RUN_ID} -n ${OWNER}-extracted-${SYSTEM} -D \"\$facts_dir\""
-          echo "  cp -R \"\$facts_dir\"/. ."
+          echo "  git apply --3way --index \"\$facts_dir/${OWNER}.patch\""
           exit 1
-
-      - name: Check extracted facts
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          nix build ".#.checks.${SYSTEM}.${OWNER}-extracted" --no-link
 
   # Keep each owner's 60-minute native build budget, then publish once per
   # system: an App push cancels this run, so workers cannot push individually.
   commit:
     needs: produce
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      !cancelled() && github.event.pull_request.head.repo.full_name ==
+      github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       published: ${{ steps.commit.outputs.published }}
     env:
-      OWNERS: ${{ inputs.owners }}
       SYSTEM: ${{ inputs.system }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -169,18 +164,19 @@ jobs:
           gh auth setup-git --hostname github.com
           git fetch --no-tags origin "$HEAD_SHA"
           git checkout --detach "$HEAD_SHA"
-          cp -R "$RUNNER_TEMP/facts/." .
-          owners=$(python3 -c 'import json, os; print("\n".join(json.loads(os.environ["OWNERS"])))')
-          while IFS= read -r owner; do
-            git add -- "packages/${owner}/extracted"
-            if [ "$owner" = kimchi ]; then
-              git add -- packages/kimchi/egress-report.json
+          owners=()
+          for patch in "$RUNNER_TEMP/facts/"*.patch; do
+            if [ ! -s "$patch" ]; then
+              continue
             fi
-          done <<< "$owners"
+            git apply --3way --index "$patch"
+            owner=${patch##*/}
+            owners+=("${owner%.patch}")
+          done
           if git diff --cached --quiet; then
             exit 0
           fi
           git commit -m "chore(extracted): record ${SYSTEM} extracted facts" \
-            -m "$(printf 'Measured owners:\n%s' "$owners")"
+            -m "$(printf 'Regenerated owners:\n%s\n' "${owners[@]}")"
           git push origin "HEAD:refs/heads/${HEAD_REF}"
           echo "published=true" >> "$GITHUB_OUTPUT"
