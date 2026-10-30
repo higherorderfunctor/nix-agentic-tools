@@ -76,6 +76,10 @@
       != {}
     else if surface == "context"
     then aiCommon.hasContent value
+    # An empty proxy string still delivers an environment value; only null
+    # withdraws a protocol's request.
+    else if surface == "proxy"
+    then lib.any (field: field != null) (builtins.attrValues value)
     else nonEmpty value;
   message = path: reason: "${lib.showOption path} is set but ${backend} does not deliver it to ${runtime} (reason: ${reason})";
   gapRows = builtins.filter (row:

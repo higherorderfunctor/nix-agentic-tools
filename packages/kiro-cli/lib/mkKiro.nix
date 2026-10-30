@@ -28,6 +28,7 @@
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   openKeys = import ../../../lib/open-keys {inherit lib;};
+  proxyLib = import ../../../lib/ai/proxy.nix {inherit lib;};
 
   inherit (aiTypes) enabledTextOrNull;
 
@@ -1112,12 +1113,14 @@
   kiroInstallPackage = {
     cfg,
     launcherEnvironment,
+    launcherEnvironmentDefaults,
     mergedServers,
     ...
   }:
     wrapKiroPackage {
       inherit (cfg.cli) extraPackages trustedMcpTools usageTracking useFhsSandbox v3;
       package = resolvePackage cfg;
+      environmentDefaults = lib.optionalAttrs cfg.cli.v3 launcherEnvironmentDefaults;
       environmentVariables = launcherEnvironment;
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
       secretOptionPaths =
@@ -1189,6 +1192,13 @@ in
           reason = args: "Kiro enforces `prompt` and `disabled` only through v3 permission rules in the global settings/permissions.yaml, which only Home Manager with ai.kiro.cli.v3 writes, so these tools keep Kiro's default: ${lib.concatStringsSep ", " (kiroUndeliveredTools args)}.";
         }
       ];
+      proxy.gaps =
+        map (field: {
+          path = [field];
+          when = {cfg, ...}: !cfg.cli.v3 && cfg.normalized.proxy.${field} != null;
+          reason = "Kiro v2 model-request proxy consumption is unverified; only the v3 model request path has been verified.";
+        })
+        proxyLib.fields;
       rules = {
         gaps = [
           {
@@ -1575,6 +1585,7 @@ in
     config = {
       backend,
       cfg,
+      launcherEnvironmentDefaults,
       mergedEnvironmentVariables,
       nativeAgents,
       rawAgents,
@@ -1633,9 +1644,11 @@ in
       # pair counts as explicit when EITHER side clears that bar.
       explicitAt = paths: lib.any (path: (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500) paths;
       # Paths behind each `wrapperReasons` key, in the same order `wrapPackage`
-      # builds them. `environmentVariables` and `secrets` are backed by a
-      # root/per-runtime pool pair; the rest are Kiro-only options.
+      # builds them. `environmentDefaults` (ai.proxy copied to ai.kiro.proxy),
+      # `environmentVariables` and `secrets` are backed by root/per-runtime
+      # pool pairs; the rest are Kiro-only options.
       wrapperReasonPaths = {
+        environmentDefaults = map (field: ["ai" "kiro" "proxy" field]) proxyLib.fields;
         environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "cli" "environmentVariables"]];
         extraPackages = [["ai" "kiro" "cli" "extraPackages"]];
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
@@ -1647,6 +1660,7 @@ in
         lib.mapAttrsToList (key: reason:
           reason // {explicit = explicitAt wrapperReasonPaths.${key};})
         (wrapperReasons {
+          environmentDefaults = lib.optionalAttrs cfg.cli.v3 launcherEnvironmentDefaults;
           environmentVariables = mergedEnvironmentVariables;
           inherit (cfg.cli) extraPackages trustedMcpTools usageTracking v3;
           inherit (kiroSecrets) secretEnv;
@@ -1737,7 +1751,7 @@ in
           {
             assertions =
               mkAssertions cfg
-              ++ usageTracking.assertions cfg mergedEnvironmentVariables
+              ++ usageTracking.assertions cfg (mergedEnvironmentVariables // lib.optionalAttrs cfg.cli.v3 launcherEnvironmentDefaults)
               ++ mkAgentFormatAssertions nativeAgentPlans
               ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
           }
