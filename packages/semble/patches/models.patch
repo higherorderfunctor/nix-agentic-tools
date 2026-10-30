@@ -60,15 +60,13 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
 +            f"Default: {' '.join(DEFAULT_CONTENT)}. The model is the one configured for exactly this set."
 +        ),
      )
-@@ -131,3 +135,3 @@
+@@ -137,3 +141,3 @@
  
 -    content = _resolve_content(args.content, args.include_text_files)
 +    content = _resolve_content(DEFAULT_CONTENT if args.content is None else args.content, args.include_text_files)
-     asyncio.new_event_loop().run_until_complete(serve(content))
-@@ -148,2 +152,14 @@
-     return [ContentType(c) for c in content]
-+
-+
+     asyncio.new_event_loop().run_until_complete(serve(content, port=args.port if args.http else None))
+@@ -156,2 +160,14 @@
+ 
 +def _command_content(content: list[str] | None, include_text_files: bool) -> list[ContentType]:
 +    """Resolve a command's content, replacing the default wholesale, and select the model configured for it."""
 +    resolved = _resolve_content(DEFAULT_CONTENT if content is None else content, include_text_files)
@@ -79,13 +77,15 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
 +    if model is not None:
 +        os.environ["SEMBLE_MODEL_NAME"] = model
 +    return resolved
- 
-@@ -364,3 +380,3 @@
++
++
+ def _load_index(paths: list[str], content: list[ContentType]) -> tuple[SembleIndex, list[tuple[str, SembleIndex]]]:
+@@ -376,3 +392,3 @@
              args.top_k,
 -            _resolve_content(args.content, args.include_text_files),
 +            _command_content(args.content, args.include_text_files),
              args.max_snippet_lines,
-@@ -374,3 +390,3 @@
+@@ -386,3 +402,3 @@
              args.top_k,
 -            _resolve_content(args.content, args.include_text_files),
 +            _command_content(args.content, args.include_text_files),
@@ -103,7 +103,7 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
 -_CacheKey = tuple[str, tuple[ContentType, ...]]
 +_CacheKey = tuple[str, tuple[ContentType, ...], str]  # source, content, model
  
-@@ -180,15 +180,4 @@
+@@ -181,15 +181,4 @@
      cache = _IndexCache()
 -
 -    async def _load_and_prewarm() -> None:
@@ -121,7 +121,7 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
 +    # Pre-load the default content's model in parallel with starting the server; other models load on first use.
 +    init_task = cache._model_task(_model_for(content))
      server = create_server(cache, default_content=content)
-@@ -201,2 +190,17 @@
+@@ -205,2 +194,17 @@
  
 +def _model_for(content: Sequence[ContentType]) -> str:
 +    """Return the model configured for exactly this content set, resolved to a name."""
@@ -139,14 +139,14 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
 +
 +
  class _IndexCache:
-@@ -207,5 +211,3 @@
+@@ -211,5 +215,3 @@
          self._idle_timers: dict[_CacheKey, asyncio.TimerHandle] = {}
 -        self._model_path: str | None = None
 -        self._model_error: BaseException | None = None
 -        self._model_ready = asyncio.Event()
 +        self._models: dict[str, asyncio.Task[str]] = {}  # one load per model; a failed load stays failed
          self._tasks: OrderedDict[_CacheKey, asyncio.Task[SembleIndex]] = OrderedDict()  # ordered for LRU eviction
-@@ -221,9 +223,14 @@
+@@ -225,9 +227,14 @@
  
 -    async def _await_model(self) -> str:
 -        """Block until the model is installed; re-raise the load error if it failed."""
@@ -168,22 +168,22 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
 +        """Block until the model is loaded; re-raise the load error if it failed."""
 +        return await asyncio.shield(self._model_task(model_path))
  
-@@ -233,3 +240,3 @@
+@@ -237,3 +244,3 @@
          normalized = tuple(content_type for content_type in ContentType if content_type in content)
 -        return source_key, normalized
 +        return source_key, normalized, _model_for(normalized)
  
-@@ -237,3 +244,3 @@
+@@ -241,3 +248,3 @@
          """Build an index for the given source and cache it."""
 -        source_key, content = cache_key
 +        source_key, content, _ = cache_key
          index = (
-@@ -291,3 +298,3 @@
+@@ -295,3 +302,3 @@
              return
 -        validated = await asyncio.to_thread(get_validated_cache, cache_key[0], self._model_path, cache_key[1])
 +        validated = await asyncio.to_thread(get_validated_cache, cache_key[0], cache_key[2], cache_key[1])
          # Only evict if this entry hasn't already been replaced by a concurrent caller.
-@@ -306,3 +313,3 @@
+@@ -310,3 +317,3 @@
          if cache_key not in self._tasks:
 -            model_path = await self._await_model()
 +            model_path = await self._await_model(cache_key[2])
