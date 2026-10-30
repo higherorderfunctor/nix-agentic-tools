@@ -1,8 +1,8 @@
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-10-15 — measured-once git-tool facts are one unforked
-> `extracted.json`, checked by `mkOwnerCheck`; update discovery invokes
-> `regenCommand` and the check’s `passthru.regenerate`.
+> **Last verified:** 2026-10-29 — measured-once git-tool facts are one unforked
+> `extracted.json`, checked by `mkOwnerCheck`; PR CI invokes the owner check’s
+> `passthru.regenerate` after input or package pins change.
 >
 > **Settled — do not relitigate.**
 >
@@ -136,14 +136,10 @@ description field.
 
 ## Regeneration
 
-Each package's `passthru.regenerateExtracted` uses the shared extraction helper
-to run `lib.extracted.regenCommand`, which invokes the owner check's
-`passthru.regenerate`. Its `sidecars` lists the committed files under the
-owner's `extracted/` directory for update staging; `update-targets-parity`
-requires regular files. Hand annotations are not regenerated. git-branchless
-runs this on its flake-input bump; git-absorb and git-revise run it from
-`update-pkg.sh` after a rev bump. Extractor floors reject collapsed surfaces.
-Removing an unused name is allowed; live module checks and
+PR CI runs each owner check's `passthru.regenerate` after git-branchless's
+flake-input pin or git-absorb/git-revise's source rev changes. Hand annotations
+are not regenerated. Extractor floors reject collapsed surfaces. Removing an
+unused name is allowed; live module checks and
 `module-sws-preset-leaves-are-options` reject removals still used by the repo's
 presets. These consumer checks run in mandatory CI; the standalone drift check
 only checks facts and annotations.
@@ -154,7 +150,8 @@ Locally: `nix run .#checks.<host>.<tool>-extracted.passthru.regenerate`.
 
 `extracted/facts.json` + a measured raw, `extract/extract.py` + a rows file
 `annotations.json` (`{deadKeys, settings}`),
-`passthru.{patchedSource,extracted, regenerateExtracted}` on the package, a
-`checks.nix` calling `extraction.checks`, a mutant list covering every guard,
-and `lib/default.nix` exporting `<owner>.settings`. The generator check then
-covers it without an edit.
+`passthru.{patchedSource,extracted}` on the package, a `checks.nix` calling
+`extraction.checks`, a mutant list covering every guard, and `lib/default.nix`
+exporting `<owner>.settings`. Register the owner and its extracted directory in
+`checks/extracted/owners.nix` so PR CI runs regeneration. The generator check
+then covers it without an edit.

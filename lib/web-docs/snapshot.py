@@ -196,12 +196,6 @@ def update(config, pin, nix, snapshot_date=None, fetch_page=fetch):
         for key, value in (("contentHash", digest), ("hash", output_hash), ("snapshotDate", date)):
             updated = re.sub(rf'^  {key} = "[^"\n]+";$', f'  {key} = "{value}";', updated, count=1, flags=re.MULTILINE)
         publish(pin, original, updated)
-        try:
-            if config.get("afterUpdate"):
-                subprocess.run([config["afterUpdate"]], check=True)
-        except BaseException:
-            publish(pin, updated, original)
-            raise
     print(f"{config['name']}: {fields['snapshotDate']} -> {date}")
     return True
 

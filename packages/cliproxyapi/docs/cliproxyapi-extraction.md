@@ -1,9 +1,8 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-24 — CPA 8.0.41 custom YAML decoders are probed
+> **Last verified:** 2026-10-29 — CPA 8.0.41 custom YAML decoders are probed
 > through yaml.v3; z.ai documentation uses the shared `webDocsLib.mkSnapshot`
-> updater, validates candidate pages, and refreshes the same owner facts after
-> pinning changed content.
+> updater and validates candidate pages.
 
 ## Why reflection also needs the v8 tables
 
@@ -13,15 +12,14 @@ documents through `webDocsLib.mkSnapshot`, shared with `kimchi-docs` and
 hashed snapshot. The `cliproxyapi-z-ai-docs` update target fetches the mutable
 URLs on every sweep, keeps pins unchanged when the bytes match, and validates
 changed pages with `extract/z-ai.py` before publishing the content and NAR
-hashes. The updater then runs the existing owner regenerator; failure restores
-the original pins. `extract/z-ai.py` parses the overview's chat API table,
-Claude Code's JSON environment example, and the quick start's Python AST for the
-two base URLs. Featured/Text Models tables require a known chat reference on
-every model row, accepting relative paths or absolute links on
-`https://docs.z.ai` only; image, tool and agent sections are explicitly
-excluded. Unknown sections or references, missing tables, ambiguous URLs,
-malformed tier bullets, or a tier pointing outside the catalog fail extraction.
-The fixtures exclude prose-only model mentions and image models.
+hashes. `extract/z-ai.py` parses the overview's chat API table, Claude Code's
+JSON environment example, and the quick start's Python AST for the two base
+URLs. Featured/Text Models tables require a known chat reference on every model
+row, accepting relative paths or absolute links on `https://docs.z.ai` only;
+image, tool and agent sections are explicitly excluded. Unknown sections or
+references, missing tables, ambiguous URLs, malformed tier bullets, or a tier
+pointing outside the catalog fail extraction. The fixtures exclude prose-only
+model mentions and image models.
 
 The Claude Code page's explicitly labeled default tier bullets are parsed as
 prose (the regex tier: no executable mapping or structured source exists). Later
@@ -31,9 +29,8 @@ are checked separately: identical URLs may repeat, conflicting values fail. All
 three tiers must be present, so a changed or unclassified tier fails. These
 facts do not alter harness environment variables.
 
-The snapshot's update script refreshes both its pins and extracted facts; no
-source hashes are maintained by hand. To regenerate facts from the current pins,
-run `nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.
+To regenerate facts from the current pins, run
+`nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.
 `cliproxyapi-extracted` joins the config and vendor extraction and checks their
 shared committed facts through `mkOwnerCheck`.
 
@@ -117,8 +114,3 @@ and checks annotation reconciliation. Regenerate from the repository root:
 ```bash
 nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate
 ```
-
-The package exposes `passthru.extracted`. Its update script calls the shared
-`regenCommand` through `mkGoUpdateExtract.extraAfter`, after repairing the Go
-floor and vendor hash, so a release bump carries its new configuration shape
-before publication.

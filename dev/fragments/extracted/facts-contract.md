@@ -317,8 +317,7 @@ carries the other systems forward at every unforked node, and their own host's
 check then validates their projection; any other host rewrites only its own
 side, forming a fork wherever it now differs.
 
-Owner update scripts use `regenCommand { name; }` to build and run that
-regenerator on the current host.
+PR CI is its only automated caller (`facts-architecture.md`, The pipeline).
 
 A Go owner's `passthru.extracted` is
 `goTestExtract { package; packagePath; testFile; }`: through `goTest` it joins

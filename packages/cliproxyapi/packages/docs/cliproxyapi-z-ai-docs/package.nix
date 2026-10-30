@@ -1,5 +1,4 @@
 {
-  extractedLib,
   pkgs,
   repoPath,
   webDocsLib,
@@ -31,7 +30,6 @@ in
     validate = ''
       ${python}/bin/python3 ${../../../extract/z-ai.py} "$1/claude.md" "$1/overview.md" "$1/quick-start.md" > /dev/null
     '';
-    afterUpdate = (extractedLib {inherit pkgs;}).regenCommand {name = "cliproxyapi";};
     meta = {
       description = "Pinned official z.ai model and API documentation for CLIProxyAPI defaults";
       homepage = "https://docs.z.ai/";

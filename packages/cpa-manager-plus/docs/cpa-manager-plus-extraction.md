@@ -1,6 +1,6 @@
 # CPA Manager Plus extraction: config.json and environment
 
-> **Last verified:** 2026-10-21 — patched Manager Plus 1.14.7 measures 28
+> **Last verified:** 2026-10-29 — patched Manager Plus 1.14.7 measures 28
 > config.json keys, `defaultTheme` with its values, and 33 environment variables
 > through the shared Go test extractor; annotations mark the key files
 > `secretFile`.
@@ -66,7 +66,3 @@ facts and checks annotation reconciliation. Regenerate from the repository root:
 ```bash
 nix run .#checks.x86_64-linux.cpa-manager-plus-extracted.passthru.regenerate
 ```
-
-The package's update script calls the shared `regenCommand` through
-`mkGoUpdateExtract.extraAfter`, so a release bump carries its new shape before
-publication.

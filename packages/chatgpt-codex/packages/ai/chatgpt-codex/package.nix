@@ -120,9 +120,7 @@ in
             repo = "openai/codex";
             tagPrefix = "rust-v";
           };
-          # Resolve the source commit, rusty_v8 pin and hashes, then
-          # regenerate the committed sidecar from the freshly-bumped binary in
-          # the SAME update/chatgpt-codex PR (no intra-PR drift).
+          # Resolve the source commit, rusty_v8 pin and dependency hashes.
           extraExtract = ''
             buildCommit=$(
               ${pkgs.git}/bin/git ls-remote --exit-code https://github.com/openai/codex \
@@ -148,7 +146,6 @@ in
               '. + {buildCommit: $commit, librustyV8: $v8}' "${sourcesFile}" > "$tmp"
             ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
             ${rustPlatform.passthru.rustUpdateExtract}
-            ${(extractedLib {inherit pkgs;}).regenCommand {name = "chatgpt-codex";}}
           '';
         };
         extracted = pkgs.runCommandLocal "chatgpt-codex-facts-raw" {} (

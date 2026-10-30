@@ -3,7 +3,7 @@
 #
 # The sidecar is read as ordinary committed facts. Never read the package's
 # `passthru.extracted` derivation here: that is import-from-derivation and
-# poisons evaluation for every consumer. Freshness is the update job's and the
+# poisons evaluation for every consumer. Freshness is PR CI's and the
 # `kimchi-extracted` drift check's problem, not evaluation's.
 #
 # Settings and environment surfaces:

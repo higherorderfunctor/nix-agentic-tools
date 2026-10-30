@@ -17,8 +17,7 @@ kimchi_tree = Path(sys.argv.pop(1))
 kimchi_date = (kimchi_tree / "ATTRIBUTION").read_text().split("Snapshot date: ")[1].splitlines()[0]
 kiro = json.loads(Path(sys.argv.pop(1)).read_text())
 kiro_tree = Path(sys.argv.pop(1))
-nix, fail = sys.argv[1:3]
-del sys.argv[1:3]
+nix = sys.argv.pop(1)
 
 
 def captured_fetch(root):
@@ -36,7 +35,6 @@ class DocumentationSnapshot(unittest.TestCase):
         self.root = Path(self.work.name)
         self.pin = self.root / "package.nix"
         self.pin.write_text('  snapshotDate = "2026-10-12";\n  contentHash = "old";\n  hash = "old";\n')
-        self.config = {**kiro, "afterUpdate": ""}
         self.fetch = lambda _: (kiro_tree / "models.md").read_bytes()
 
     def test_kimchi_walk_preserves_snapshot_bytes_and_hash(self):
@@ -64,33 +62,26 @@ class DocumentationSnapshot(unittest.TestCase):
         self.assertFalse(snapshot.update(config, self.pin, nix, "2099-02-02", captured_fetch(kimchi_tree)))
 
     def test_changed_content_publishes_hashes_then_noop_preserves_date(self):
-        self.assertTrue(snapshot.update(self.config, self.pin, nix, "2099-01-01", self.fetch))
+        self.assertTrue(snapshot.update(kiro, self.pin, nix, "2099-01-01", self.fetch))
         fields = snapshot.pin_fields(self.pin.read_text())
         self.assertEqual(fields["snapshotDate"], "2099-01-01")
         self.assertEqual(fields["contentHash"], snapshot.content_hash(kiro_tree))
         self.assertEqual(fields["hash"], tree_hash(kiro_tree))
         before = self.pin.read_bytes(), self.pin.stat().st_mtime_ns
-        self.assertFalse(snapshot.update(self.config, self.pin, nix, "2099-02-02", self.fetch))
+        self.assertFalse(snapshot.update(kiro, self.pin, nix, "2099-02-02", self.fetch))
         self.assertEqual((self.pin.read_bytes(), self.pin.stat().st_mtime_ns), before)
 
     def test_fetch_or_owner_parser_failure_preserves_pin(self):
         original = self.pin.read_bytes()
         for fetch in (lambda _: b"<html>login</html>", lambda _: b"## Quick comparison\n| Model | Context |\n| --- | --- |\n| Auto | 1M |\n| Mystery 99 | 1M |\n"):
             with self.assertRaises(subprocess.CalledProcessError):
-                snapshot.update(self.config, self.pin, nix, "2099-01-01", fetch)
+                snapshot.update(kiro, self.pin, nix, "2099-01-01", fetch)
             self.assertEqual(self.pin.read_bytes(), original)
         def broken_fetch(_):
             raise OSError("upstream unavailable")
         with self.assertRaises(OSError):
-            snapshot.update(self.config, self.pin, nix, "2099-01-01", broken_fetch)
+            snapshot.update(kiro, self.pin, nix, "2099-01-01", broken_fetch)
         self.assertEqual(self.pin.read_bytes(), original)
-
-    def test_failed_regeneration_rolls_pin_back(self):
-        original = self.pin.read_bytes()
-        with self.assertRaises(subprocess.CalledProcessError):
-            snapshot.update({**self.config, "afterUpdate": fail}, self.pin, nix, "2099-01-01", self.fetch)
-        self.assertEqual(self.pin.read_bytes(), original)
-        self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["package.nix"])
 
     def test_checked_publish_refuses_concurrent_change_and_ambiguous_pin(self):
         original = self.pin.read_text()

@@ -1,5 +1,4 @@
 {
-  extractedLib,
   pkgs,
   repoPath,
   webDocsLib,
@@ -22,7 +21,6 @@
     validate = ''
       ${pkgs.python3}/bin/python3 ${../../../extract/models.py} "$1/models.md" > /dev/null
     '';
-    afterUpdate = (extractedLib {inherit pkgs;}).regenCommand {name = "kiro-model-catalog";};
     meta = {
       description = "Pinned Kiro public model documentation";
       homepage = "https://kiro.dev/docs/models/";

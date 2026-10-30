@@ -80,7 +80,7 @@
     };
   };
   # The package update script refreshes the pinned Kimchi and pi extraction
-  # sources, then regenerates packages/kimchi/extracted/ facts after every version bump.
+  # sources; PR CI regenerates packages/kimchi/extracted/ facts from those pins.
   update.targets = {
     kimchi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/kimchi/package.nix)];};
     kimchi-docs = {flags = ["--use-update-script"];};

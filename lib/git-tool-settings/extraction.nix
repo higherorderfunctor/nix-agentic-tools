@@ -15,9 +15,9 @@
 #
 # The package carries `passthru.{patchedSource,extracted}`. passthru is not a
 # derivation input, so neither moves the package's store path, and the drift
-# check and the update pipeline's regeneration read the same derivation.
+# check and PR CI's regeneration read the same derivation.
 {pkgs}: let
-  inherit (import ../extracted {inherit pkgs;}) mkOwnerCheck regenCommand;
+  inherit (import ../extracted {inherit pkgs;}) mkOwnerCheck;
   jq = "${pkgs.jq}/bin/jq";
 
   # One interpreter for every extractor: tree-sitter-rust for the Rust
@@ -32,18 +32,6 @@
   '';
 in {
   inherit python;
-
-  # update-common.sh runs this script; update-targets-parity requires file paths.
-  regenerateExtracted = {
-    dir,
-    name,
-  }:
-    (pkgs.writeShellScript "${name}-regenerate-extracted" ''
-      ${strict}
-      ${regenCommand {inherit name;}}
-    '').overrideAttrs (prev: {
-      passthru = (prev.passthru or {}) // {sidecars = map (file: "packages/${name}/extracted/${file}") (builtins.attrNames (builtins.readDir dir));};
-    });
 
   patchedSource = {
     name,

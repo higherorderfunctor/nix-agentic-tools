@@ -37,7 +37,6 @@
   extraction = extractedLib {inherit pkgs;};
   goUpdate = packageLib.mkGoUpdateExtract {
     attr = pname;
-    extraAfter = extraction.regenCommand {name = pname;};
     inherit goModPath pkgs pname sourcesFile;
   };
   frontend = pkgs.buildNpmPackage {

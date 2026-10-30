@@ -57,17 +57,13 @@ in
           "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
           "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
         };
-        # Regenerate the single committed raw from the freshly-bumped binary
-        # in the SAME update/claude-code PR (no intra-PR drift). The drift
-        # check's regenerate command includes the load-bearing `nix fmt` pass.
-        extraExtract = (import ../../../../../lib/extracted {inherit pkgs;}).regenCommand {name = "claude-code";};
         inherit pkgs;
       };
       # The host's pinned binary -> committed-raw shape: the settings
       # schema comes from the binary's own emitter (unpacked module graph +
       # census), the model catalog and launch pins from content-located AST reads.
-      # IFD-safe: consumed ONLY by `nix build` (drift check + update
-      # script), NEVER readFile'd at eval. See overlays.md § IFD Patterns.
+      # IFD-safe: consumed ONLY by `nix build` (PR CI + drift check),
+      # NEVER readFile'd at eval. See overlays.md § IFD Patterns.
       #
       # `runCommand`, NOT `runCommandLocal`. runCommandLocal adds
       # `allowSubstitutes = false`, which bars this output from ever being

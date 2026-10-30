@@ -205,13 +205,6 @@
       ${sourcesFile} > "$extraction_tmp"
     ${pkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}
     ${pkgs.nix}/bin/nix fmt -- ${sourcesFile}
-
-    ${(extractedLib {inherit pkgs;}).regenCommand {name = "kimchi";}}
-
-    # The egress report's fact fields follow the regenerated network fact, or
-    # checks.kimchi-egress-report fails. Its scanner fields wait for a scan.
-    PATH="${lib.makeBinPath [pkgs.coreutils pkgs.nix pkgs.nodejs]}:$PATH" \
-      dev/skills/kimchi-egress-report/scripts/regenerate.sh
   '';
 
   fixPnpmDepsHash = packageLib.mkHashFix {

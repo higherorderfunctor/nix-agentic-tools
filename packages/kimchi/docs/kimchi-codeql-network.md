@@ -1,6 +1,6 @@
 ## Kimchi network fact
 
-> **Last verified:** 2026-10-22 — Kimchi 1.19.1 with pi-mcp-adapter carried;
+> **Last verified:** 2026-10-29 — Kimchi 1.19.1 with pi-mcp-adapter carried;
 > `network` is measured on x86_64-linux by `ql/network` with the
 > `ql/models/{sdk,undici}` packs through `runQueries`; a modeled request is an
 > invocation of its row's own callee and takes its library from that row; a host
@@ -24,10 +24,9 @@ the release database with `codeql.runQueries`, and reshapes the result with
 adds it to `extract.mjs`'s output as `network`. Every CodeQL fact joins there,
 from `codeqlFacts`. Other hosts carry no CodeQL facts, and the declaration lists
 x86_64-linux only. `extractedRules.results.network.entries` is the fact. The
-regenerate command builds the database and runs the queries, so kimchi's update
-script now does too on update.yml's runner, with no check cache: the engine
-customization, the database, the pack compile (1m54s on CI) and an evaluation
-with `--ram=8192` (53.8 s).
+regenerate command builds the database and runs the queries in the Linux PR CI
+producer. The producer needs the engine customization, database, pack compile
+(1m54s on CI) and an evaluation with `--ram=8192` (53.8 s).
 
 ```text
 {callSites: [{readBy, file, line, library, bundledModule,

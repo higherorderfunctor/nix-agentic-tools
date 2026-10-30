@@ -75,11 +75,5 @@ in
           extractDir = ../../../../extract;
           tools = [pkgs.asciidoc];
         };
-        # A rev bump runs this through dev/scripts/update-pkg.sh, so the bump
-        # PR carries the refreshed sidecar.
-        regenerateExtracted = extraction.regenerateExtracted {
-          dir = ../../../../extracted;
-          name = "git-absorb";
-        };
       };
   })

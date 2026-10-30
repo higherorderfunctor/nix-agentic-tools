@@ -4,7 +4,6 @@
   strictScript = import ../strict-shell-application.nix pkgs;
 in {
   mkSnapshot = {
-    afterUpdate ? "",
     contentHash,
     generated ? {},
     hash,
@@ -16,11 +15,6 @@ in {
     sources ? [],
     validate ? "",
   }: let
-    command = suffix: text:
-      lib.getExe (strictScript {
-        name = "${name}-${suffix}";
-        inherit text;
-      });
     config = pkgs.writeText "${name}-snapshot.json" (builtins.toJSON (
       {inherit contentHash generated name;}
       // (
@@ -28,8 +22,12 @@ in {
         then {inherit sources;}
         else {inherit index;}
       )
-      // lib.optionalAttrs (validate != "") {validate = command "validate" validate;}
-      // lib.optionalAttrs (afterUpdate != "") {afterUpdate = command "regenerate" afterUpdate;}
+      // lib.optionalAttrs (validate != "") {
+        validate = lib.getExe (strictScript {
+          name = "${name}-validate";
+          text = validate;
+        });
+      }
     ));
     runner = strictScript {
       name = "fetch-${name}";

@@ -1,6 +1,5 @@
 # cspell:ignore manylinux
 {
-  extractedLib,
   fetchFromGitHub,
   lib,
   makeWrapper,
@@ -72,7 +71,6 @@
         })}")
       # Update the CLI first so dependency rows read the new release's constraints.
       ["semble" "model2vec" "semble-grammars" "vicinity"]}
-    ${(extractedLib {inherit pkgs;}).regenCommand {name = "semble";}}
   '';
 
   # Some of semble's direct runtime dependencies are not in nixpkgs.

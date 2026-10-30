@@ -1,7 +1,6 @@
 # cspell:ignore logfire mcpserver mtkennerly ninoseki truststore
 # The SDK and its private Python dependencies track releases as one update group.
 {
-  extractedLib,
   lib,
   packageLib,
   pkgs,
@@ -83,7 +82,6 @@
         })}")
       # Parent pins must be current before their dependency bounds are read.
       ["mcp" "httpx2" "uv-dynamic-versioning" "dunamai"]}
-    ${(extractedLib {inherit pkgs;}).regenCommand {name = "semble";}}
   '';
 
   dunamai = ps.dunamai.overridePythonAttrs (old: {

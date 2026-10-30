@@ -1,6 +1,6 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-24 (commit 14df0c3c) — bundled skills gated off by
+> **Last verified:** 2026-10-29 — bundled skills gated off by
 > `requires-resource` leave each visible skill as its own in-place root; config
 > guards include the helpers readConfigExtras hands `parsed.<key>` to, and a
 > `delete` target is not a read; pi 1.3 settings follow reexports and inherited
@@ -721,12 +721,12 @@ same pinned release. That source is pinned once, as `extraction.kimchiSource` in
 `sources.json`, because the extractor reads the same tree; a second copy of the
 URL and hash could drift from it. `pnpmDeps` and `proxyHelper.goModules` have
 independent hashes pinned beside it. `mkUpdateScript` records the version alone
-(`platforms = {}`); its `extraExtract` first refreshes the extraction pins and
-the declared facts in `packages/kimchi/extracted/`, then `mkGoUpdateExtract`
-derives the new Go floor before rebuilding the helper vendor hash and runs the
-shared pnpm hash fixer. The standalone dependency fixers also participate in
-input-bump repairs. The source checkout reports version `0.0.0`, so upstream's
-`set-version.js` runs before compiling and staging the resources.
+(`platforms = {}`); its `extraExtract` first refreshes the extraction-source
+pins, then `mkGoUpdateExtract` derives the new Go floor before rebuilding the
+helper vendor hash and runs the shared pnpm hash fixer. The standalone
+dependency fixers also participate in input-bump repairs. The source checkout
+reports version `0.0.0`, so upstream's `set-version.js` runs before compiling
+and staging the resources.
 
 The build rewrites pi 1.3.0's shared `getToolPath()` choke point after pnpm
 materializes `node_modules` and before Bun compiles the module graph. `fd` and

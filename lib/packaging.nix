@@ -497,7 +497,7 @@ rec {
   };
 
   # Source repair precedes floor extraction, which precedes vendor hashing.
-  # The optional final extractor may compile against the same vendor tree.
+  # Kimchi uses the final hook to repair its pnpm dependency hash.
   # Individual fixers remain exposed for input-bump repairs; the flat extract
   # script lets the ordering check inspect the actual chain.
   #
@@ -674,7 +674,7 @@ rec {
   #   a plausible, wrong value in the sidecar.
   # sourcesFile: path to sources.json relative to repo root
   # extraExtract: extra shell appended after the sources.json write (e.g.
-  #   regenerating a committed sidecar from the freshly-bumped binary).
+  #   repairing source and dependency hashes for the new version).
   #   Defaults to "" so callers that don't need it are unaffected.
   # unpack: hash the UNPACKED tarball (`nix-prefetch-url --unpack`) — for
   #   fetchzip consumers of repo-archive tarballs, whose fixed-output hash

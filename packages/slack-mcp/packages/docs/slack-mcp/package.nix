@@ -1,5 +1,4 @@
 {
-  extractedLib,
   pkgs,
   repoPath,
   webDocsLib,
@@ -22,7 +21,6 @@
     validate = ''
       ${pkgs.python3}/bin/python3 ${../../../extract/slack.py} "$1/slack-mcp-server.md" > /dev/null
     '';
-    afterUpdate = (extractedLib {inherit pkgs;}).regenCommand {name = "slack-mcp";};
     meta = {
       description = "Pinned Slack MCP server documentation";
       homepage = "https://docs.slack.dev/ai/slack-mcp-server";

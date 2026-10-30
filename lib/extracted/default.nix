@@ -3,7 +3,7 @@
   facts = import ./facts.nix {inherit lib;};
   platforms = import ./platforms.nix;
   host = pkgs.stdenv.hostPlatform.system;
-  # The drift check's `passthru.regenerate`; regenCommand runs it.
+  # PR CI runs the drift check's `passthru.regenerate`.
   regenerateName = name: "${name}-regenerate-extracted";
   mkDriftCheck = {
     # The owner's committed `extracted.json`.
@@ -171,12 +171,4 @@ in {
           });
       sidecar = "packages/${name}/extracted/extracted.json";
     };
-
-  # An owner's update script carries this host's extractions into its
-  # committed file; the script echoes the written path.
-  regenCommand = {name}: ''
-    regenerate=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
-      ".#checks.${host}.${name}-extracted.passthru.regenerate")
-    "$regenerate/bin/${regenerateName name}"
-  '';
 }

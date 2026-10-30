@@ -1,8 +1,8 @@
 # git-branchless config extraction
 
-> **Last verified:** 2026-10-15 — measured-once declared facts are one unforked
-> `extracted.json`, read by shared readers and checked by `mkOwnerCheck`; update
-> discovery invokes `regenCommand` and the check’s `passthru.regenerate`.
+> **Last verified:** 2026-10-29 — measured-once declared facts are one unforked
+> `extracted.json`, read by shared readers and checked by `mkOwnerCheck`; PR CI
+> invokes the check’s `passthru.regenerate` after the flake-input pin changes.
 >
 > **Settled — do not relitigate.**
 >
@@ -133,11 +133,8 @@ names).
 
 ## Regeneration
 
-git-branchless is owned by its flake input, so `mkUpdateScript` never runs for
-it. `passthru.regenerateExtracted` (the shared extraction helper running
-`lib.extracted.regenCommand`) is run by
-`dev/scripts/update-input.sh git-branchless` through discovery; see the update
-pipeline fragment. Locally, from the repository root:
+git-branchless is owned by its flake input; PR CI regenerates its facts after an
+input bump. Locally, from the repository root:
 
 ```bash
 nix run .#checks.x86_64-linux.git-branchless-extracted.passthru.regenerate

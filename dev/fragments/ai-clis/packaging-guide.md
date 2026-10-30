@@ -1,6 +1,6 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-28 — two native package shards per system exclude
+> **Last verified:** 2026-10-29 — two native package shards per system exclude
 > patched Kiro; its required validation legs use Ubuntu when kiro-scope finds no
 > relevant changes.
 
@@ -104,10 +104,9 @@ Each uses an update strategy managed by `config.update.targets` (see owner
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release
   tag; the same update pins the matching release source (shared by the source
   build and the extractor), exact pi npm package, and pi declaration
-  dependencies, then runs `lib.extracted.regenCommand` through the owner check's
-  `passthru.regenerate`; its extractor uses nixpkgs' TypeScript compiler API.
-  The update derives the Go floor before the proxy-helper vendor hash, and
-  refreshes pnpm dependencies
+  dependencies; its extractor uses nixpkgs' TypeScript compiler API. The update
+  derives the Go floor before the proxy-helper vendor hash, and refreshes pnpm
+  dependencies
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint
 - `kiro-gateway` — inline `rev` + `hash`; `update-pkg.sh` tracks the main branch
@@ -147,17 +146,19 @@ so it must never be republished.
 **Excluding it from `ci.yml`'s native package shards is necessary and NOT
 sufficient.** That was the whole mitigation from #665 (2026-08-01), and the
 patched 2.17.0 binary was live in the public cache on 2026-08-12 anyway — eleven
-days later, so `ci.yml` provably was not the source. Two workflow paths hold
-`CACHIX_AUTH_TOKEN`, and only one of them was covered:
+days later, so `ci.yml` provably was not the source. That incident involved two
+workflow paths holding `CACHIX_AUTH_TOKEN`, only one of which was covered. The
+current token-bearing producers all need the filter:
 
-| job                     | builds patched?                  | pushes?                  |
-| ----------------------- | -------------------------------- | ------------------------ |
-| `ci.yml` build-packages | no — `ci-packages.py` exclusions | token → **`pushFilter`** |
-| `ci.yml` publish-hestia | no — builds `ciHestia` only      | token → **`pushFilter`** |
-| `ci.yml` test           | no                               | no token                 |
-| `kiro-patched`          | when scoped                      | no token                 |
-| `update.yml` inputs     | **yes — `verify_all_packages`**  | token → **`pushFilter`** |
-| `update.yml` devenv     | **yes — the repo devenv shell**  | token → **`skipPush`**   |
+| job                           | builds patched?                  | pushes?                  |
+| ----------------------------- | -------------------------------- | ------------------------ |
+| `ci.yml` build-packages       | no — `ci-packages.py` exclusions | token → **`pushFilter`** |
+| `ci.yml` publish-hestia       | no — builds `ciHestia` only      | token → **`pushFilter`** |
+| `ci.yml` test                 | no                               | no token                 |
+| `extracted-facts.yml` produce | owner extraction closures        | token → **`pushFilter`** |
+| `kiro-patched`                | when scoped                      | no token                 |
+| `update.yml` devenv           | **yes — the repo devenv shell**  | token → **`skipPush`**   |
+| `update.yml` inputs           | **yes — `verify_all_packages`**  | token → **`pushFilter`** |
 
 `ci-packages.py` removes its `EXCLUDED` names before partitioning the native
 package set into two shards per system and emits a positive `--select`
