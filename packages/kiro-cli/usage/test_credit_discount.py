@@ -72,6 +72,16 @@ class ModelFactsTests(unittest.TestCase):
         self.assertEqual(discount.WINDOWS["claude-sonnet-4.5"], 200_000)
         self.assertIsNone(discount.estimate("auto", 3.0, 1, 8))
 
+    def test_cached_error_scales_the_fitted_credit_error_by_credits(self):
+        """A 10% credit error over the miss-hit spread; without credit_error the error is unknown."""
+        rates = {**discount.RATES["claude-opus-5.5"], "credit_error": .1}
+        with patch.dict(discount.RATES, {"claude-sonnet-4.6": rates}):
+            self.assertAlmostEqual(discount.estimate("claude-sonnet-4.6", 3.0, .2, 8)["cache_read_error"],
+                                   .1 * .2 / (rates["miss_input"] - rates["hit_input"]))
+        unknown = {key: value for key, value in rates.items() if key != "credit_error"}
+        with patch.dict(discount.RATES, {"claude-sonnet-4.6": unknown}):
+            self.assertIsNone(discount.estimate("claude-sonnet-4.6", 3.0, .2, 8)["cache_read_error"])
+
     def test_unbilled_tokens_are_never_cached(self):
         """A full hit on 29,998 input tokens, 2,400 of them unbilled, caches the 27,598 billed ones."""
         rates = {**discount.RATES["claude-opus-5.5"], "chars_per_token": 4, "unbilled_tokens": 2400}
@@ -82,7 +92,8 @@ class ModelFactsTests(unittest.TestCase):
 
     def test_windowed_model_without_rates_has_no_cache_split(self):
         self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, 1, 8),  # listed, never probed
-                         {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None})
+                         {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None,
+                          "cache_read_error": None})
 
     def test_output_guess_uses_the_fitted_chars_per_token_else_the_default(self):
         """8 chars read 4 tokens at a fitted 2 chars per token and 2 at CHARS_PER_TOKEN; the cache split follows."""
@@ -94,7 +105,7 @@ class ModelFactsTests(unittest.TestCase):
                 miss = discount.price(rates, 30_000 - output, output, 0)
                 self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, miss, 8),
                                  {"total_tokens": 30_000, "input_tokens": 30_000 - output, "output_tokens": output,
-                                  "cache_read_tokens": 0})
+                                  "cache_read_tokens": 0, "cache_read_error": None})
 
 class DiscountQueryTests(unittest.TestCase):
     def setUp(self):
@@ -151,7 +162,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertIn("~62.5% (8/10)", output)
         self.assertIn("not observed cache hits", output)
         output = query.render_summary(report)
-        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~241\s+~55.7K\s+~70%\s+~62%\n")
+        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~241\s+~55.7K\s+~38%\s+~62%\n")
         for label, discount in (("Main", "50"), ("Sub/WF", "75"), ("Total", "62")):
             self.assertRegex(output, rf"\n{re.escape(label)}\s+\d+\s+[\d.]+\s+\S+\s+\S+\s+\S+\s+~\d+%\s+~{discount}%\n?")
         self.assertNotIn("not observed cache hits", output)

@@ -118,6 +118,8 @@ def estimate(model, context, credits, chars, output=None, input=None, ratio=None
     Rates are the model's fitted credits per miss/hit input token and output token, plus a fixed cost per call.
     Exact output/input of the same call replace their guesses, so cached never exceeds exact input.
     Unknown parts are None: no window means nothing; no fitted rates, credits or output means no cache split.
+    cache_read_error is cached's standard error, the model's fitted credit_error (a share of credits) over the
+    miss-hit spread; None without one. The input/output split's own error is not modeled.
     """
     window = WINDOWS.get(model)
     if window is None or not finite(context) or context < 0:
@@ -129,8 +131,11 @@ def estimate(model, context, credits, chars, output=None, input=None, ratio=None
         output = min(round(chars / (ratio or rates.get("chars_per_token", CHARS_PER_TOKEN))), total) if count(chars) else None
     if not count(input):
         input = max(total - output, 0) if output is not None else None
-    result = {"total_tokens": total, "input_tokens": input, "output_tokens": output, "cache_read_tokens": None}
+    result = {"total_tokens": total, "input_tokens": input, "output_tokens": output, "cache_read_tokens": None,
+              "cache_read_error": None}
     if input is not None and output is not None and rates and finite(credits):
         cached = (price(rates, input, output, 0) - credits) / (rates["miss_input"] - rates["hit_input"])
         result["cache_read_tokens"] = round(min(max(cached, 0), billed(rates, input)))
+        if "credit_error" in rates:
+            result["cache_read_error"] = rates["credit_error"] * credits / (rates["miss_input"] - rates["hit_input"])
     return result

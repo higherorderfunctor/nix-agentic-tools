@@ -291,18 +291,21 @@ Cached tokens need reported credits, a known or estimated `O`, and the model's
 full-miss and full-hit input rates `a` (`miss_input`) and `b` (`hit_input`),
 output rate `o` (`output`), fixed cost `c` (`fixed_per_call`) and `K` tokens
 that context % counts but the model does not bill (`unbilled_tokens`, 0 unless
-fitted). Models with a window but no rates get total, input and output estimates
-and no cache split; calls without a context percentage or a known window stay
-unavailable. Digit-heavy text reads too few tokens (390 where chars/4 reads
-173), and hidden thinking that context % counts but no streamed characters show
-is priced as input, so both understate cached. An estimated split counts as a
-hit only when cached reaches 1% of input, which keeps fit noise (tens of tokens
-on the 1–5 character calibration calls) out of the hit percentage. The collector
-counts tool and reasoning characters live, by the same rule, into `summary_json`
-`tool_chars` and `reasoning_chars`, so omitted payload copies do not lower `O`.
-Captures finalized before those counts existed, and interrupted captures, which
-have no summary, fall back to counting retained events; an omitted copy there
-still lowers `O`.
+fitted). Its standard error is `credit_error * credits / (a - b)`, where
+`credit_error` is the fit's RMS share of credits its calls miss by; a group adds
+its calls' errors in quadrature as if they were independent, and the
+input/output split's own error is not modeled. Models with a window but no rates
+get total, input and output estimates and no cache split; calls without a
+context percentage or a known window stay unavailable. Digit-heavy text reads
+too few tokens (390 where chars/4 reads 173), and hidden thinking that context %
+counts but no streamed characters show is priced as input, so both understate
+cached. Cache hit is cached ÷ input tokens, so fit noise of tens of tokens on a
+call stays a negligible share. The collector counts tool and reasoning
+characters live, by the same rule, into `summary_json` `tool_chars` and
+`reasoning_chars`, so omitted payload copies do not lower `O`. Captures
+finalized before those counts existed, and interrupted captures, which have no
+summary, fall back to counting retained events; an omitted copy there still
+lowers `O`.
 
 ## Experimental credit-discount diagnostic
 
@@ -417,21 +420,22 @@ IDs and land in other linked conversations, which may also include helpers or
 forks. Requests, credits, and tokens are grouped by model and pool rather than
 listing individual delegates. Exact counters are used when observed; cells that
 add estimates for calls lacking the exact counter carry `~`, and missing values
-show an em dash (see [Token estimates](#token-estimates)). Hit percentage is
-cache-hit requests divided by requests with a reported or estimated cached
-value, where an estimated split counts as a hit only at 1% of input or more. The
-full report (`kiro-usage session` or `query`) keeps the Root conversation, Other
-linked, and Unknown pool tables and the partial-coverage markers. No captured
-conversation identity means an explicit unavailable summary. Before reporting,
-the outer launch incrementally indexes `~/.kiro/sessions` if present, using the
-existing database and checkpoints. It reads the `session.json` of sessions whose
-`session.json` or `messages.jsonl` changed since the launch, and messages only
-for those linked to captures (less one second for coarse file timestamps) and
-never prunes; already indexed sessions still link their new descendants. The
-explicit `index` command is the full capture-scoped pass: it prunes `disk_*`
-rows for sessions no longer linked to captures and runs `VACUUM` plus a WAL
-checkpoint when free pages remain. Lineage comes from `parentSessionId`,
-`rootSessionId`, `rootConversationId`, and
+show an em dash (see [Token estimates](#token-estimates)). Cache hit is cached ÷
+input tokens over requests with both. Estimated Cached and Cache hit cells, in
+both summary tables and the full report, carry `±N%`: the cached standard error
+as a whole-percent share of that cell's cached tokens, omitted below 1% or when
+unknown. The full report (`kiro-usage session` or `query`) keeps the Root
+conversation, Other linked, and Unknown pool tables and the partial-coverage
+markers. No captured conversation identity means an explicit unavailable
+summary. Before reporting, the outer launch incrementally indexes
+`~/.kiro/sessions` if present, using the existing database and checkpoints. It
+reads the `session.json` of sessions whose `session.json` or `messages.jsonl`
+changed since the launch, and messages only for those linked to captures (less
+one second for coarse file timestamps) and never prunes; already indexed
+sessions still link their new descendants. The explicit `index` command is the
+full capture-scoped pass: it prunes `disk_*` rows for sessions no longer linked
+to captures and runs `VACUUM` plus a WAL checkpoint when free pages remain.
+Lineage comes from `parentSessionId`, `rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
 `workflowId` and `nodeId` are retained as identifiers. Index failures warn
 without replacing the child exit status, and disk observations may then be

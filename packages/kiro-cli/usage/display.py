@@ -8,8 +8,8 @@ def value(item):
         return format(item, ",")
     if isinstance(item, float):
         return format(item, ",.12g")
-    # Render non-ASCII text, controls, and backslashes as visible ASCII escapes.
-    return str(item).encode("unicode_escape").decode("ascii")
+    # Render non-ASCII text, controls, and backslashes as visible ASCII escapes; query's error cells keep their ±.
+    return "".join(char if char == "±" else char.encode("unicode_escape").decode("ascii") for char in str(item))
 
 
 RULE = ()  # A row that renders as dashes across the full table width.

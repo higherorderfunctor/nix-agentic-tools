@@ -1,12 +1,14 @@
 """Synthetic calibration queries; no provider, home-directory or log reads."""
 
 import json
+import math
 from pathlib import Path
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import capture
 import disk_index
@@ -268,7 +270,7 @@ class QueryTests(unittest.TestCase):
         self.assertNotIn("⚠", output)
         self.assertNotIn("Unknown", output)
 
-    def test_model_hit_rate_is_request_based_with_coverage_and_total_pairs(self):
+    def test_model_hit_rate_is_a_token_share_with_coverage_and_total_pairs(self):
         self.captured("hit", conversation="root", tokens=100)
         self.captured("miss", conversation="root", tokens=900)
         self.captured("unknown", conversation="root", tokens=20)
@@ -276,15 +278,14 @@ class QueryTests(unittest.TestCase):
         self.db.execute("UPDATE captures SET output_tokens=5,cache_read_tokens=0 WHERE id='miss'")
         report = query.query(self.db, "sess_root", "tree")
         model = report["captures"]["models"][0]
-        self.assertEqual(model["cache_hit_rate"], {"hits": 1, "evaluable": 2, "unknown": 1, "percentage": 50})
+        self.assertEqual(model["cache_hit_rate"], query.hit_share(50, 1000, 2, 3))  # 50 of 100 + 900 input tokens
         self.assertEqual(model["metrics"]["total_tokens"], {"observed_sum": 1010, "known": 2, "unknown": 1})
         output = query.render(report)
-        self.assertIn("~50.0% (2/3)", output)
+        self.assertIn("~5.0% (2/3)", output)
         self.assertIn(query.capture_tables(report["captures"]), output)
         self.assertIn("1,010 (2/3)", output)
-        self.assertNotIn("~5.0%", output)
         self.assertIn("Other linked holds workflow steps and subagents and may include helpers/forks", output)
-        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10\s+50\s+~50%\n")
+        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10\s+50\s+~5%\n")
 
     def test_report_labels_only_explicit_estimates_and_missing_capture(self):
         report = query.query(self.db, "sess_root", "tree")
@@ -351,25 +352,78 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(estimates["input_tokens"], query.metric(60100, 3, 4))
         self.assertEqual(estimates["output_tokens"], query.metric(5, 3, 4))
         self.assertEqual(estimates["cache_read_tokens"], query.metric(30000, 3, 4))
-        self.assertEqual(estimates["cache_hit_rate"], {"hits": 1, "evaluable": 3, "unknown": 1, "percentage": 100 / 3})
+        rates = query.credit_discount.RATES["claude-opus-5.5"]
+        error = lambda credits: rates["credit_error"] * credits / (rates["miss_input"] - rates["hit_input"])
+        expected = query.hit_share(30000, 60100, 3, 4, math.hypot(error(miss), error(hit)))
+        self.assertEqual(estimates["cache_hit_rate"], expected)
         models = {model["requested_model"]: model for model in report["captures"]["models"]}
         self.assertEqual(models["other-model"]["estimates"], {})
         self.assertEqual(report["captures"]["metrics"]["input_tokens"], query.metric(100, 1, 4))
-        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~5\s+~30.0K\s+~33%\n")
-        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K\s+~5\s+~30.0K\s+~33%$")
+        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~5\s+~30.0K\s+~50%\n")
+        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K\s+~5\s+~30.0K\s+~50%$")
         output = query.render(report)
-        self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~33.3% \(3/4\)")
+        self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~49.9% \(3/4\)")
         self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
         self.assertRegex(output, r"other-model\s+1\s+—\s+—\s+—\s+—\s+—")
 
-    def test_estimated_fit_noise_is_not_a_cache_hit(self):
+    def test_estimated_fit_noise_is_a_negligible_share(self):
         # Full-miss price of 29,999 input tokens less 29 tokens' discount: below 1% of input.
         rates = query.credit_discount.RATES["claude-opus-5.5"]
         miss = rates["miss_input"] * 29999 + rates["output"] + rates["fixed_per_call"]
         self.estimable("noise", miss - 29 * (rates["miss_input"] - rates["hit_input"]), chars=5)
         report = query.query(self.db, "sess_root")
         self.assertGreater(report["captures"]["estimates"]["cache_read_tokens"]["observed_sum"], 0)
-        self.assertEqual(report["captures"]["estimates"]["cache_hit_rate"]["hits"], 0)
+        self.assertLess(report["captures"]["estimates"]["cache_hit_rate"]["percentage"], .2)
+
+    def test_cached_and_hit_cells_show_the_cached_standard_error(self):
+        """Two full hits at a 10% credit error: standard errors add in quadrature, as a share of cached tokens.
+        A call whose model has rates but no credit_error leaves its group's error unknown, so no ±."""
+        rates = {**query.credit_discount.RATES["claude-opus-5.5"], "credit_error": .1}
+        hit = query.credit_discount.price(rates, 30000, 0, 30000)
+        sonnet = {key: value for key, value in query.credit_discount.RATES["claude-sonnet-5.5"].items() if key != "credit_error"}
+        with patch.dict(query.credit_discount.RATES, {"claude-opus-5.5": rates, "claude-sonnet-5.5": sonnet}):
+            self.estimable("one", hit)
+            self.estimable("two", hit)
+            report = query.query(self.db, "sess_root")
+            self.estimable("unknown", hit, model="claude-sonnet-5.5")
+            mixed = query.query(self.db, "sess_root")
+        rate = report["captures"]["estimates"]["cache_hit_rate"]
+        error = (2 * (.1 * hit / (rates["miss_input"] - rates["hit_input"])) ** 2) ** .5
+        self.assertAlmostEqual(rate["error"], error)
+        share = f"±{error / rate['cached']:.0%}"
+        summary = query.render_summary(report)
+        for label in ("claude-opus-5.5", "Main", "Total"):  # both summary tables
+            self.assertRegex(summary, rf"\n{label}\s+2\s+\S+\s+~60.0K\s+~0\s+~60.0K {share}\s+~100% {share}(\n|$)")
+        self.assertRegex(query.render(report), rf"Total\s+2\s+~60,000\s+~60,000\s+~0\s+~60,000 {share}\s+~100.0% {share}\s")
+        self.assertIsNone(mixed["captures"]["estimates"]["cache_hit_rate"]["error"])
+        self.assertEqual(query.value("±é\x1b\\"), "±\\xe9\\x1b\\\\")  # only ± passes unescaped
+        self.assertNotIn("±", query.render(mixed).split("Pool")[1].splitlines()[1])  # Total row
+        self.assertEqual([query.error_text(error, 1000) for error in (9.9, 10)], ["", " ±1%"])
+
+    def test_cached_error_is_a_share_of_its_own_total(self):
+        """An exact 30,000 cached tokens on a call with no input joins Cached's 60,000 but not Cache hit's pairs, so
+        the estimated hit's one error is half the share of Cached it is of Cache hit."""
+        rates = {**query.credit_discount.RATES["claude-opus-5.5"], "credit_error": .1}
+        hit = query.credit_discount.price(rates, 30000, 0, 30000)
+        with patch.dict(query.credit_discount.RATES, {"claude-opus-5.5": rates}):
+            self.estimable("estimated", hit)
+            self.captured("exact", conversation="root", tokens=None, metadata={"model": "claude-opus-5.5"})
+            self.db.execute("UPDATE captures SET cache_read_tokens=30000 WHERE id='exact'")
+            report = query.query(self.db, "sess_root")
+        error = .1 * hit / (rates["miss_input"] - rates["hit_input"])
+        self.assertAlmostEqual(report["captures"]["estimates"]["cache_hit_rate"]["error"], error)
+        cached, paired = f"±{error / 60000:.0%}", f"±{error / 30000:.0%}"
+        self.assertNotEqual(cached, paired)
+        self.assertRegex(query.render(report), rf"Total\s+2\s+.*~60,000 {cached}\s+~100.0% {paired} \(1/2\)\s")
+        summary = query.render_summary(report)
+        for label in ("claude-opus-5.5", "Main", "Total"):
+            self.assertRegex(summary, rf"\n{label}\s+2\s+.*~60.0K {cached}\s+~100% {paired}(\n|$)")
+
+    def test_exact_cached_over_estimated_input_is_an_estimated_share(self):
+        self.estimable("partial", .1)
+        self.db.execute("UPDATE captures SET cache_read_tokens=15000 WHERE id='partial'")
+        rate = query.query(self.db, "sess_root")["captures"]["estimates"]["cache_hit_rate"]
+        self.assertEqual(rate, query.hit_share(15000, 30000, 1, 1))
 
     def test_estimates_respect_the_calls_exact_counters(self):
         estimate = query.credit_discount.estimate
@@ -384,7 +438,7 @@ class QueryTests(unittest.TestCase):
     def test_zero_input_estimate_is_not_a_cache_hit(self):
         self.estimable("empty", .001, context=0.0)
         rate = query.query(self.db, "sess_root")["captures"]["estimates"]["cache_hit_rate"]
-        self.assertEqual(rate["hits"], 0)
+        self.assertIsNone(rate["percentage"])
 
     def test_tool_and_reasoning_characters_count_as_estimated_output(self):
         self.estimable("tools", (74 * 3.0 + .5034) / 603)
@@ -432,11 +486,13 @@ class QueryTests(unittest.TestCase):
         self.assertIsNone(estimate("other-model", 3.0, 1, 0))
         self.assertIsNone(estimate("claude-opus-5.5", None, 1, 0))
         self.assertEqual(estimate("claude-opus-5.5", 3.0, None, 8), {"total_tokens": 30000, "input_tokens": 30000 - opus_tokens(8),
-                                                                     "output_tokens": opus_tokens(8), "cache_read_tokens": None})
+                                                                     "output_tokens": opus_tokens(8), "cache_read_tokens": None,
+                                                                     "cache_read_error": None})
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 1, None)["output_tokens"], None)
         # Interrupted capture: exact input, no output count or characters; no cache split.
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 1, None, input=1200),
-                         {"total_tokens": 30000, "input_tokens": 1200, "output_tokens": None, "cache_read_tokens": None})
+                         {"total_tokens": 30000, "input_tokens": 1200, "output_tokens": None, "cache_read_tokens": None,
+                          "cache_read_error": None})
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 100, 0)["cache_read_tokens"], 0)  # clamped, not negative
         self.assertEqual(estimate("claude-opus-5.5", .001, 1, 1000)["input_tokens"], 0)  # output capped at total
 

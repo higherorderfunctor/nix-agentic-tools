@@ -105,7 +105,7 @@ conversation ID. These are conversation groups, not caller roles: workflow steps
 and subagents carry their own conversation IDs and land in other linked
 conversations, which can also include helpers or forks. Disk turn credits never
 enter these captured-call totals. Requests, total/input/output/cached tokens,
-request hit rate, and credits are grouped by model and pool, with no
+cache-hit token share, and credits are grouped by model and pool, with no
 per-delegate listing. Missing counters stay unavailable. For `claude-opus-5.5`
 at low effort, retained complete text-only responses of 1–5 characters within
 the calibrated context range can additionally show `Discount %`. This
@@ -121,27 +121,30 @@ win per call; a `~` cell adds estimates for calls that lack the exact counter,
 with (known/all) coverage. Estimates need a reported context percentage and a
 model with a known window; cached tokens also need reported credits and the
 model's fitted rates in `usage/rates.json`. Other calls stay unavailable;
-[Token estimates](../usage/README.md#token-estimates) has the formulas. Hit
-percentage is the share of requests with cached tokens among requests with a
-cached value; an estimated split counts as a hit only at 1% of input or more,
-with partial coverage shown. If no captured conversation identity is available,
-the tool reports that the summary is unavailable. On exit the tool first waits
-up to two seconds for this launch's captured calls to finish and stay unchanged
-for 0.1 s, since the disk scan below is scoped by them. The quiet period is a
-heuristic: a call started just before Kiro exits can still land later. After a
-timed-out wait, unfinished calls stay flagged as incomplete coverage and the
-disk observations as not refreshed. It then automatically refreshes the local
-disk index from `~/.kiro/sessions` when that directory exists. This exit scan
-reads the `session.json` of sessions changed since the launch, indexes the
-messages only of those linked to captures, and never prunes. Index failures warn
-and leave the child exit status intact; disk observations may then be stale. An
-explicit `kiro-usage index` holds a lock beside the database for its whole pass;
-the exit scan then skips with a one-line warning instead of interleaving, and
-reports disk observations as not refreshed. Exit scans of concurrent launches do
-not skip each other; they queue on a second lock and run one at a time, since
-two scans of one session would index the same records. Rerun the index if that
-pass began before Kiro exited. Nested `kiro-usage exec` launches share the
-parent's marker and produce one summary when the outer launch exits.
+[Token estimates](../usage/README.md#token-estimates) has the formulas. Cache
+hit is the share of input tokens that were cached, cached ÷ input over the
+requests with both (exact, or estimated where the call lacks the counter), with
+partial coverage shown. Estimated Cached and Cache hit cells carry `±N%`: the
+estimated cached tokens' standard error as a whole-percent share of the cell,
+omitted below 1% or when a model lacks a fitted credit error. If no captured
+conversation identity is available, the tool reports that the summary is
+unavailable. On exit the tool first waits up to two seconds for this launch's
+captured calls to finish and stay unchanged for 0.1 s, since the disk scan below
+is scoped by them. The quiet period is a heuristic: a call started just before
+Kiro exits can still land later. After a timed-out wait, unfinished calls stay
+flagged as incomplete coverage and the disk observations as not refreshed. It
+then automatically refreshes the local disk index from `~/.kiro/sessions` when
+that directory exists. This exit scan reads the `session.json` of sessions
+changed since the launch, indexes the messages only of those linked to captures,
+and never prunes. Index failures warn and leave the child exit status intact;
+disk observations may then be stale. An explicit `kiro-usage index` holds a lock
+beside the database for its whole pass; the exit scan then skips with a one-line
+warning instead of interleaving, and reports disk observations as not refreshed.
+Exit scans of concurrent launches do not skip each other; they queue on a second
+lock and run one at a time, since two scans of one session would index the same
+records. Rerun the index if that pass began before Kiro exited. Nested
+`kiro-usage exec` launches share the parent's marker and produce one summary
+when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -337,8 +340,8 @@ holdouts, also solve for `unbilled_tokens`, tokens context % counts and the
 model does not bill; a count below 0 or above the smallest call's input refuses
 the model, and one under 1% of it counts as none. Each entry also carries
 `credit_error`, the RMS share of credits the fit misses its cold, holdout cold
-and hit calls by; past 2% no `chars_per_token` is fitted, since credits then
-cannot price one reply.
+and hit calls by, which sets the `±` on estimated cached tokens; past 2% no
+`chars_per_token` is fitted, since credits then cannot price one reply.
 
 Check the rates on calls the fit never used:
 
