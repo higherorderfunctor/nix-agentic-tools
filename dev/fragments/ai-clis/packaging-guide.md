@@ -43,8 +43,12 @@ selecting the sidecar's source-declared channel from the locked rust-overlay.
 disables bundled Opus so voice links against its `libopus`. The recipe retains
 nixpkgs' `nix-package-layout.patch` and `nix-voice-runtime.patch`: daemon
 validation and the voice loader accept the declared store-linked rg, bwrap and
-GStreamer files. It filters only `no-daemon_auto_start.patch`, since modules
-declare that setting explicitly while the binary retains upstream's default.
+GStreamer files. While the pin is ahead of nixpkgs, the layout patch's
+`replaceVars` derivation takes
+`packages/chatgpt-codex/patches/nix-package-layout.patch` as its `src`: the copy
+rebases with the version bump, and nixpkgs still supplies the substituted paths.
+It filters only `no-daemon_auto_start.patch`, since modules declare that setting
+explicitly while the binary retains upstream's default.
 
 - nixpkgs installs the complete package at `$out`: `codex-package.json`,
   `bin/codex`, `bin/codex-code-mode-host`, `codex-path/rg`, Linux
