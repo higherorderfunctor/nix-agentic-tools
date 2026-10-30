@@ -97,9 +97,16 @@ def add(report, result, capture_id):
                             if report["eligible"] else None)
 
 
+def billed(rates, input):
+    """The input the model bills: context%'s input less its unbilled_tokens, which claude-haiku-5.5's context%
+    counts and its credits do not (fit solves them from its cold and warm lines' intercepts)."""
+    return max(input - rates.get("unbilled_tokens", 0), 0)
+
+
 def price(rates, input, output, cached):
-    """Credits for one call: the fixed cost, uncached input at the miss rate, cached input (at most the input, so a
-    whole-input hit is a full hit) at the hit rate, output."""
+    """Credits for one call: the fixed cost, uncached billed input at the miss rate, cached input (at most the billed
+    input, so a whole-input hit is a full hit) at the hit rate, output."""
+    input = billed(rates, input)
     cached = min(cached, input)
     return (rates["fixed_per_call"] + rates["miss_input"] * (input - cached) + rates["hit_input"] * cached
             + rates["output"] * output)
@@ -125,5 +132,5 @@ def estimate(model, context, credits, chars, output=None, input=None, ratio=None
     result = {"total_tokens": total, "input_tokens": input, "output_tokens": output, "cache_read_tokens": None}
     if input is not None and output is not None and rates and finite(credits):
         cached = (price(rates, input, output, 0) - credits) / (rates["miss_input"] - rates["hit_input"])
-        result["cache_read_tokens"] = round(min(max(cached, 0), input))
+        result["cache_read_tokens"] = round(min(max(cached, 0), billed(rates, input)))
     return result

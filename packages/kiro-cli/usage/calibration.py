@@ -30,15 +30,18 @@ STEPS = (("medium_cold", "medium_warm"), ("size_short",), ("size_long",), ("outp
 HOLDOUT_STEPS = (("holdout_small_cold", "holdout_small_warm"), ("holdout_large_cold", "holdout_large_warm"),
                  ("holdout_prose_out",))
 HOLDOUT_LABELS = tuple(label for step in HOLDOUT_STEPS for label in step)
+# probe --sweep's cold prose calls, before medium_delayed; 24000 words passed Linux's 128 KiB limit on one argument.
+SWEEP_STEPS = tuple((f"sweep_{words:05}",) for words in (500, 1000, 2000, 3000, 4000, 6000, 8000, 12000, 16000))
 # A call's prompt family: the leading nonce of its user and agent prompts. Only calls sharing one send a common
 # prefix, so no call hits another family's cache (the output pair is two: output_long hit output_short's).
 FAMILIES = {"conversation_1": "conversation", "conversation_2": "conversation", "conversation_3": "conversation",
             "holdout_large_cold": "holdout_large", "holdout_large_warm": "holdout_large",
             "holdout_prose_out": "holdout_prose", "holdout_small_cold": "holdout_small",
             "holdout_small_warm": "holdout_small", "medium_cold": "medium", "medium_delayed": "medium", "medium_warm": "medium",
-            "output_long": "output_long", "output_short": "output_short", "size_long": "long", "size_short": "short"}
+            "output_long": "output_long", "output_short": "output_short", "size_long": "long", "size_short": "short",
+            **{label: label for (label,) in SWEEP_STEPS}}
 RESUMES = {"conversation_2": "conversation_1", "conversation_3": "conversation_1"}  # resumed turn: its session's first
-COLD_LABELS = ("medium_cold", "size_long", "size_short")  # full misses
+COLD_LABELS = ("medium_cold", "size_long", "size_short")  # full misses; probe --sweep's sweep_* calls replace them
 # Each repeat after its cold call; validate's holdout pairs join when a pooled manifest has them.
 HIT_PAIRS = (("holdout_large_cold", "holdout_large_warm"), ("holdout_small_cold", "holdout_small_warm"),
              ("medium_cold", "medium_delayed"), ("medium_cold", "medium_warm"))
@@ -183,7 +186,9 @@ def prompts(seed):
             "conversation_1": f"{nonce(seed, 'conversation')}\nRemember CEDAR. Reply READY only.",
             "conversation_2": "What word did I ask you to remember? Reply with that word only.",
             "conversation_3": "Repeat that same remembered word. Reply with the word only.",
-            "medium_delayed": medium}
+            "medium_delayed": medium,
+            **{label: fixture(seed, label, prose(int(label.removeprefix("sweep_")), start))
+               for start, (label,) in enumerate(SWEEP_STEPS)}}
 
 
 def prose(words, start):
@@ -225,17 +230,19 @@ def fit_calls(db, manifest, ratio=None):
 
 
 def fit_model(model, runs, version, effort):
-    """Output rate from the output pairs, miss line by least squares over the cold calls, hit rate from each repeat
-    against its cold call. runs holds one {label: Call} per manifest, so a label repeated across manifests stays
-    distinct.
+    """Output rate from the output pairs, miss line by least squares over the cold calls (the sweep's when it has
+    three), hit rate from each repeat against its cold call. runs holds one {label: Call} per manifest, so a label
+    repeated across manifests stays distinct.
 
     Each probe family leads its agent and user prompt with its own nonce, so cold calls bill full misses.
     """
     pairs = [(run["output_short"], run["output_long"]) for run in runs if all(label in run for label in OUTPUT_LABELS)]
-    colds = [call for run in runs for label, call in run.items() if label in COLD_LABELS]
+    sweep = [call for run in runs for label, call in run.items() if label.startswith("sweep_")]
+    # Three sweep calls draw the line alone (claude-haiku-5.5's probe cold calls disagree); fewer join the probe's.
+    colds = sweep if len(sweep) >= 3 else sweep + [call for run in runs for label, call in run.items() if label in COLD_LABELS]
     if not pairs or len(colds) < 3:  # two cold calls always fit a line exactly, so a third checks it
-        return {"refused": f"needs {', '.join(OUTPUT_LABELS)} and three cold calls ({', '.join(COLD_LABELS)})"}
-    if len({call.input for call in colds}) < 2:  # no slope to regress
+        return {"refused": f"needs {', '.join(OUTPUT_LABELS)} and three cold calls ({', '.join(COLD_LABELS)} or sweep_*)"}
+    if len({call.input for call in colds}) < 2:  # e.g. three sweep calls of one size: no slope to regress
         return {"refused": "cold calls share one input size"}
     # The pair's prompts differ only in their nonces and final integer, so its total-token difference (context %,
     # which counts output) is the output-token difference. Splitting that total into input and output first would
@@ -257,7 +264,23 @@ def fit_model(model, runs, version, effort):
     rates = {"fixed_per_call": fixed, "miss_input": miss, "output": output}
     hits = [(repeat, run[cold], run[repeat]) for run in runs for cold, repeat in HIT_PAIRS
             if cold in run and repeat in run and run[repeat].credits < HIT_LIMIT * run[cold].credits]
-    if hits:  # each repeat on its own counters, which can differ from its cold call's (claude-haiku-5.5's output)
+    inputs = [hit.input for *_, hit in hits]
+    if inputs and min(inputs) <= max(inputs) / 2:
+        # Hits at two sizes (validate's small and large holdouts) draw their own line. Its intercept and the cold
+        # line's are fixed - hit * K and fixed - miss * K for K unbilled tokens, so they solve for both.
+        slope, warm = statistics.linear_regression(inputs, [call.credits - output * call.output for *_, call in hits])
+        unbilled = (warm - fixed) / (miss - slope)
+        smallest = min(call.input for run in runs for call in run.values())  # K is counted in every call's input
+        if abs(unbilled) < smallest / 100:
+            # Whole-token output rounding on exact data leaves claude-opus-5.5 and claude-sonnet-5.5 a K of 15.3
+            # against ~7,000 input tokens, and data with no offset a K of -0: artifacts, not an offset, so the cold
+            # line's intercept stands.
+            rates.update(hit_input=slope)
+        elif not 0 <= unbilled <= smallest:  # no K explains a warm intercept below the cold one, or past every input
+            return {"refused": f"unbilled tokens {unbilled:.0f} outside 0 to the smallest call's {smallest}"}
+        else:
+            rates.update(fixed_per_call=fixed + miss * unbilled, hit_input=slope, unbilled_tokens=unbilled)
+    elif hits:  # each repeat on its own counters, which can differ from its cold call's (claude-haiku-5.5's output)
         rates["hit_input"] = statistics.fmean((hit.credits - fixed - output * hit.output) / hit.input for *_, hit in hits)
     # The share of its credits the miss line misses each cold call by, and each hit's price at its whole input.
     off = lambda call: abs(call.credits - fixed - miss * call.input - output * call.output) / call.credits
@@ -310,7 +333,7 @@ def fit(args):
                    for model in sorted({call["model"] for manifest in manifests for call in manifest["calls"]})}
     finally:
         db.close()
-    extra = ("chars_per_token", "credit_error")
+    extra = ("unbilled_tokens", "chars_per_token", "credit_error")
     rows = [[model, *(result.get("rates", {}).get(name) for name in (*RATE_NAMES, *extra)),
              *(result.get("ratios", {}).get(name) for name in RATE_NAMES),
              result.get("provenance", {}).get("calls"), result.get("provenance", {}).get("max_residual"),
@@ -493,7 +516,7 @@ def prose_chars_per_token(rates, call):
 
     None when credits leave no positive output or the reply no chars.
     """
-    output = ((call.credits - rates["fixed_per_call"] - rates["miss_input"] * (call.input + call.output))
+    output = ((call.credits - rates["fixed_per_call"] - rates["miss_input"] * discount.billed(rates, call.input + call.output))
               / (rates["output"] - rates["miss_input"]))
     return call.chars / output if output > 0 and call.chars else None
 
@@ -553,9 +576,10 @@ def main():
     paid.add_argument("--timeout", type=float, default=180, help="seconds per CLI command")
     commands = parser.add_subparsers(dest="command", required=True)
     probe = commands.add_parser("probe", parents=[evidence, paid], help="preview, or with --run make, the paid probe calls")
+    probe.add_argument("--sweep", action="store_true", help="add the cold prose sweep calls to the miss line")
     commands.add_parser("models", help="refresh models.json from the free kiro-cli chat --list-models")
     fitting = commands.add_parser("fit", parents=[evidence], help="fit per-model rates from probe manifests and their captures")
-    fitting.add_argument("manifests", type=Path, nargs="+", help="probe manifests; each model's calls pool")
+    fitting.add_argument("manifests", type=Path, nargs="+", help="probe or sweep manifests; each model's calls pool")
     fitting.add_argument("--write", action="store_true", help="replace accepted models' rates.json entries")
     holdout = commands.add_parser("validate", parents=[evidence, paid],
                                   help="preview, or with --run make, holdout calls; with MANIFEST evaluate them offline")
@@ -568,7 +592,8 @@ def main():
         return fit(args)
     if args.command == "validate":
         return validate(args, holdout)
-    return experiment(args, probe, selected_models(args, probe), STEPS, prompts)[0]
+    steps = STEPS[:-1] + SWEEP_STEPS * args.sweep + STEPS[-1:]  # medium_delayed stays last, after its quiet wait
+    return experiment(args, probe, selected_models(args, probe), steps, prompts)[0]
 
 
 if __name__ == "__main__":
