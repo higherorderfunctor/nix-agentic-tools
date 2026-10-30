@@ -137,3 +137,48 @@ fn serve_config_rejects_conflicting_and_trailing_arguments() {
         "unexpected argument",
     );
 }
+
+#[test]
+fn interception_config_rejects_invalid_destinations_and_initializes_ca_before_bind() {
+    let root = tempfile::TempDir::new().unwrap();
+    let ca_directory = root.path().join("ca");
+    for destinations in [
+        vec![],
+        vec!["127.0.0.1:443"],
+        vec!["*.example.test:443"],
+        vec!["localhost"],
+        vec!["localhost:0"],
+        vec!["localhost:443", "LOCALHOST:443"],
+    ] {
+        let content = serde_json::json!({
+            "listen": "127.0.0.1:0",
+            "interception": { "ca_directory": ca_directory, "destinations": destinations }
+        })
+        .to_string();
+        assert_config_failure(&content, "interception");
+        assert!(
+            !ca_directory.exists(),
+            "invalid selection created CA material"
+        );
+    }
+    let content = serde_json::json!({
+        "listen": "127.0.0.1:0",
+        "interception": { "ca_directory": ca_directory, "destinations": ["localhost:443"], "insecure": true }
+    }).to_string();
+    assert_config_failure(&content, "unknown field `insecure`");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
+    let upstream_roots = root.path().join("roots.pem");
+    fs::write(&upstream_roots, certificate.cert.pem()).unwrap();
+    let content = serde_json::json!({
+        "listen": listener.local_addr().unwrap().to_string(),
+        "interception": { "ca_directory": ca_directory, "destinations": ["localhost:443"], "upstream_roots": upstream_roots }
+    })
+    .to_string();
+    assert_config_failure(&content, "Address already in use");
+    assert!(
+        ca_directory.join("ca.pem").exists(),
+        "CA must be created before bind is attempted"
+    );
+    assert!(ca_directory.join("ca.key").exists());
+}
