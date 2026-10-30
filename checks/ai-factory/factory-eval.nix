@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai devenvStubs factoryProxyServer hmStubs mkProxyTestRecord mkTest;
+  inherit (import ../../lib/testing/normalized-settings-probes.nix {inherit lib;}) requestFields settingSample settingsFields;
   sharedRequests = {
     agents.probe = {
       description = "probe";
@@ -27,7 +28,7 @@
       url = "http://127.0.0.1:8317";
     };
     rules.probe.text = "probe";
-    settings.reasoningEffort = "high";
+    settings = lib.genAttrs settingsFields settingSample;
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
   };
@@ -70,12 +71,15 @@
     # gets exactly one diagnostic through the public factory on both backends.
     builtins.attrNames sharedRequests
     == evaluated.config.ai.internal.sharedSurfaces
-    && builtins.length warnings == builtins.length unsupported
+    && builtins.length warnings
+    == builtins.length (lib.concatMap requestFields unsupported)
     && lib.all (surface:
-      builtins.length (lib.filter
-        (lib.hasPrefix "ai.${surface} is set but ${backend} does not deliver it to testapp (reason: ")
-        warnings)
-      == 1)
+      lib.all (path:
+        builtins.length (lib.filter
+          (lib.hasPrefix "ai.${path} is set but ${backend} does not deliver it to testapp (reason: ")
+          warnings)
+        == 1)
+      (map (field: surface + lib.optionalString (field != null) ".${field}") (requestFields surface)))
     unsupported
     && lib.all (surface: !(lib.any (lib.hasPrefix "ai.${surface} is set but ") warnings)) supportedSurfaces
     && (evaluate {} true).config.warnings == []
@@ -425,42 +429,131 @@ in {
         && record.surfaceSupport == {}
     );
 
-    # A runtime outside this repository declares normalized settings and any
-    # field it cannot deliver through surfaceSupport.settings.gaps. Supporting
-    # settings alone must not invent a reasoning-effort gap. The root value
-    # reaches the normalized option here, so quiet is declared support rather
-    # than an unread input; no first-party policy row speaks for this runtime.
-    factory-mkRuntime-no-generic-effort-warning = mkTest "mkRuntime-no-generic-effort-warning" (
+    # A runtime declares each normalized field it consumes; surface support
+    # alone does not imply support for a newly added field.
+    factory-mkRuntime-settings-fields = mkTest "mkRuntime-settings-fields" (
       let
-        record = ai.app.mkRuntime {
+        backendReason = "Only devenv lacks settings delivery.";
+        expected = backend: path: reason: "${path} is set but ${backend} does not deliver it to testapp (reason: ${reason})";
+        fieldReason = "testapp's surfaceSupport.settings.fields does not consume this normalized setting.";
+        testRecord = settings: pools:
+          ai.app.mkRuntime {
+            inherit pkgs;
+            name = "testapp";
+            optionNamespaces = {inherit pools;};
+            surfaceSupport.settings = settings;
+          };
+        partialRecord = testRecord {
+          backends = ["hm"];
+          reason = backendReason;
+        };
+        supportedRecord = testRecord {fields = settingsFields;};
+        unsupportedRecord = testRecord {};
+      in
+        lib.all (field: let
+          root = {settings.${field} = settingSample field;};
+        in
+          lib.all (pools: let
+            poolPath = ["testapp"] ++ pools;
+            normalizedPath = poolPath ++ ["normalized" "settings" field];
+            normalized = lib.setAttrByPath normalizedPath (settingSample field);
+            runtimePath = poolPath ++ ["settings" field];
+            runtime = lib.setAttrByPath runtimePath (settingSample field);
+            partialWarnings = backend: request: (evaluateSupport backend (partialRecord pools) request true).config.warnings;
+          in
+            partialWarnings "devenv" normalized
+            == [(expected "devenv" (lib.showOption (["ai"] ++ normalizedPath)) backendReason)]
+            && partialWarnings "hm" root == [(expected "hm" "ai.settings.${field}" fieldReason)]
+            && partialWarnings "devenv" root == [(expected "devenv" "ai.settings.${field}" backendReason)]
+            && lib.all (backend: let
+              evaluate = request: (evaluateSupport backend (unsupportedRecord pools) request true).config;
+              warnings = request: (evaluate request).warnings;
+              combined = warnings (lib.recursiveUpdate root runtime);
+              supported = (evaluateSupport backend (supportedRecord pools) root true).config;
+            in
+              lib.attrByPath normalizedPath null supported.ai
+              == settingSample field
+              && supported.warnings == []
+              && lib.all (request: lib.getAttrFromPath normalizedPath (evaluate request).ai == null) [root runtime]
+              && warnings root == [(expected backend "ai.settings.${field}" fieldReason)]
+              && warnings runtime == [(expected backend (lib.showOption (["ai"] ++ runtimePath)) fieldReason)]
+              && combined == warnings runtime
+              && warnings normalized == [(expected backend (lib.showOption (["ai"] ++ normalizedPath)) fieldReason)]) ["devenv" "hm"]) [[] ["arm"]])
+        settingsFields
+    );
+
+    # Only gaps on unlisted settings fields duplicate the default warning.
+    factory-mkRuntime-settings-field-contract = mkTest "mkRuntime-settings-field-contract" (
+      let
+        base = {
           inherit pkgs;
           name = "testapp";
-          surfaceSupport = lib.genAttrs ["settings"] (_: {backends = ["devenv" "hm"];});
-          defaults.package = pkgs.hello;
+          surfaceSupport.settings = {
+            backends = ["devenv" "hm"];
+            fields = settingsFields;
+          };
         };
-        evaluated = lib.evalModules {
-          modules = [
-            ai.sharedOptions
-            hmStubs
-            {
-              options.warnings = lib.mkOption {
-                type = lib.types.listOf lib.types.str;
-                default = [];
-              };
-            }
-            (ai.app.hmTransform record)
-            {
-              config.ai = {
-                settings.reasoningEffort = "high";
-                testapp.enable = true;
-              };
-            }
-          ];
+        withSettings = support: base // {surfaceSupport.settings = base.surfaceSupport.settings // support;};
+        rejected = record: !(builtins.tryEval (ai.app.mkRuntime record)).success;
+        gap = {
+          path = ["reasoningEffort"];
+          reason = "specific gap";
+        };
+        overlap = withSettings {
+          fields = [];
+          gaps = [gap];
+        };
+        typo = withSettings {fields = ["reasoning-effort"];};
+        inert = withSettings {backends = [];};
+      in
+        lib.all (gap: (builtins.tryEval (ai.app.mkRuntime (withSettings {gaps = [gap];}))).success) [gap (gap // {when = _: true;})]
+        && rejected overlap
+        && rejected typo
+        && rejected inert
+        && rejected (base // {surfaceSupport.skills.fields = settingsFields;})
+        && (builtins.tryEval (ai.app.mkRuntime base)).success
+        && (builtins.tryEval (ai.app.mkRuntime (withSettings {fields = [];}))).success
+    );
+
+    factory-mkRuntime-new-surfaces-warn = mkTest "mkRuntime-new-surfaces-warn" (
+      let
+        decompose = import ../../lib/ai/app/decompose.nix {inherit lib;};
+        config.ai = {
+          probeRoot = "requested";
+          settings = {
+            probeField = "requested";
+            reasoningEffort = null;
+          };
+          testapp = {};
+        };
+        warnings = support:
+          (decompose {
+            appRecord = {
+              name = "testapp";
+              surfaceSupport = support;
+            };
+            backend = "hm";
+            inherit config;
+            entries = _: [];
+            message = path: reason: "${lib.showOption path} is set but hm does not deliver it to testapp (reason: ${reason})";
+            nonEmpty = value: value != null && value != "";
+            present = _: value: value != null && value != "";
+            sharedSurfaces = ["probeRoot" "settings"];
+          }).warnings;
+        unsupported = warnings {};
+        supported = warnings {
+          probeRoot = {backends = ["hm"];};
+          settings = {
+            backends = ["hm"];
+            fields = ["probeField"];
+          };
         };
       in
-        evaluated.config.ai.testapp.normalized.settings.reasoningEffort
-        == "high"
-        && !(lib.any (lib.hasInfix "reasoningEffort") evaluated.config.warnings)
+        builtins.length unsupported
+        == 2
+        && lib.any (lib.hasPrefix "ai.probeRoot is set but hm does not deliver it to testapp") unsupported
+        && lib.any (lib.hasPrefix "ai.settings.probeField is set but hm does not deliver it to testapp") unsupported
+        && supported == []
     );
 
     factory-mkRuntime-builds-option-tree = mkTest "mkRuntime-builds-option-tree" (

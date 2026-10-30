@@ -7,6 +7,8 @@
   inherit (schema) key keyedSurfaces modes sharedSurfaces writersOf;
   facts = import ./ai-delivery-facts.nix {inherit lib;};
   inherit (facts) absent;
+  reasonsFor = import ../lib/ai/app/supportReasons.nix;
+  settingsFields = (import ../lib/ai/ai-common.nix {inherit lib;}).normalizedSettingsFields;
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   inherit (optionPaths) records;
   delivered = row: builtins.elem row.mode (records.${row.ecosystem}.surfaceSupport.${row.surface}.backends or []);
@@ -24,7 +26,7 @@
         support = records.${ecosystem}.surfaceSupport.${surface} or {};
       in
         lib.optional (!delivered row) (lib.nameValuePair (key row)
-          ((absent (support.reason or "${ecosystem}'s surfaceSupport does not consume this shared surface."))
+          ((absent (support.reason or (reasonsFor ecosystem).surface))
             // {inputOptions = [["ai" surface]];})))
       modes)
     schema.ecosystems)
@@ -42,11 +44,20 @@
       else {primitive = "delivered";}
     ))
   (lib.subtractLists (builtins.attrNames facts.hand) schema.expectedKeys);
+  settingsGaps = ecosystem: support:
+    map (field:
+      (absent (reasonsFor ecosystem).settingsField) // {inputOptions = [["ai" "settings" field]];})
+    (lib.subtractLists (support.fields or []) settingsFields);
   # A gap outside `each` names one field of the portable root.
-  staticGaps = row:
-    lib.optionals (delivered row) (map (gap: (absent gap.reason) // {inputOptions = [(["ai" row.surface] ++ gap.path)];})
+  staticGaps = row: let
+    support = records.${row.ecosystem}.surfaceSupport.${row.surface} or {};
+  in
+    lib.optionals (delivered row) (
+      map (gap: (absent gap.reason) // {inputOptions = [(["ai" row.surface] ++ gap.path)];})
       (lib.filter (gap: !(gap.each or false) && !(gap ? when) && builtins.isString gap.reason)
-        (records.${row.ecosystem}.surfaceSupport.${row.surface}.gaps or [])));
+        (support.gaps or []))
+      ++ lib.optionals (row.surface == "settings") (settingsGaps row.ecosystem support)
+    );
   assemble = row: let
     cell = key row;
     children =
@@ -63,5 +74,5 @@
   rows;
 in
   builtins.seq rows {
-    inherit definitions key keyedSurfaces modes rows writersOf;
+    inherit definitions key keyedSurfaces modes rows settingsGaps writersOf;
   }
