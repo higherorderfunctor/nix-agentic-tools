@@ -257,8 +257,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-taLjT3OtFjUGOybm2DeIKIv3u+noaMpQsADokBn08OA=",
-      "kimchiVersion": "1.24.2",
+      "kimchiSourceHash": "sha256-VQ72TLdNI9F7dIP+7LCB74PBq38p+2KtpRfAseylpUY=",
+      "kimchiVersion": "1.24.3",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -2921,13 +2921,13 @@
       "bundledModule": null,
       "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
       "library": "fetch",
-      "line": 1017,
+      "line": 1021,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "dynamic",
-          "origin": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js:1017",
+          "origin": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js:1021",
           "value": "`https: ... sion)}`"
         }
       ]
@@ -3839,67 +3839,79 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1137",
+          "origin": "src/extensions/agents/index.ts:1151",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1178",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1214",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:530",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1228",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:580",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:532",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:629",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:572",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:671",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:622",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/remote-run/post-completion.ts:341",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:672",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/remote-run/post-completion.ts:508",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:715",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/remote-run/post-completion.ts:536",
+          "origin": "src/extensions/remote-run/post-completion.ts:346",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/remote-run/post-completion.ts:792",
+          "origin": "src/extensions/remote-run/post-completion.ts:513",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/remote-run/post-completion.ts:981",
+          "origin": "src/extensions/remote-run/post-completion.ts:541",
+          "value": "KIMCHI_REMOTE_ENDPOINT"
+        },
+        {
+          "host": null,
+          "kind": "env",
+          "origin": "src/extensions/remote-run/post-completion.ts:799",
+          "value": "KIMCHI_REMOTE_ENDPOINT"
+        },
+        {
+          "host": null,
+          "kind": "env",
+          "origin": "src/extensions/remote-run/post-completion.ts:988",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3941,13 +3953,13 @@
       "bundledModule": null,
       "file": "src/sandbox/worker/acp-client.ts",
       "library": "websocket",
-      "line": 484,
+      "line": 498,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "dynamic",
-          "origin": "src/sandbox/worker/acp-client.ts:484",
+          "origin": "src/sandbox/worker/acp-client.ts:498",
           "value": "wsUrl"
         }
       ]
