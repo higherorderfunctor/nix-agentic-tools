@@ -272,7 +272,7 @@ in {
           codex.enable = false;
           cliproxyapi.instances.clients.clientKeys = lib.mkForce {};
         };
-        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-inference") null (result.config.home.packages or result.config.packages);
+        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-launcher") null (result.config.home.packages or result.config.packages);
         pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;

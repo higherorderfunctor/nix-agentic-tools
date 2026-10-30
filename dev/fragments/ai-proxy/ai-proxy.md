@@ -1,8 +1,8 @@
 ## Network Proxy
 
 > **Last verified:** 2026-10-30 — `ai.proxy` is the shared HTTP/HTTPS network
-> proxy surface with named instance selection; inference selection remains
-> `ai.settings.inference`.
+> proxy surface with named instance selection and optional CA trust; inference
+> selection remains `ai.settings.inference`.
 
 ```nix
 ai.proxy.http = "http://127.0.0.1:8080";
@@ -10,12 +10,12 @@ ai.proxy.http = "http://127.0.0.1:8080";
 ai.claude.proxy.https = null;
 ```
 
-The two nullable nonempty string fields are `http` and `https`, delivered as
-`HTTP_PROXY` and `HTTPS_PROXY`. These select where a process's traffic leaves
-the machine. Inference credentials and model routing belong to
-`ai.settings.inference`. The nullable `instance` field selects a network proxy
-from `ai.internal.proxyInstances`; each entry declares `{enable; http; https;}`
-with both protocol origins required nonempty strings. Owners claim names in
+The nullable nonempty strings `http` and `https` become `HTTP_PROXY` and
+`HTTPS_PROXY`, selecting where a process's traffic leaves the machine. Inference
+credentials and model routing belong to `ai.settings.inference`. The nullable
+`instance` selects from `ai.internal.proxyInstances`; entries declare
+`{enable; http; https; trust;}`, with both protocol origins required nonempty
+strings and `trust = null` by default. Owners claim names in
 `ai.claims.proxy-instance`, separately from inference claims, so an Airlock
 `main` and a CPA `main` can coexist. Unknown or disabled selections fail
 evaluation, naming the option and registered instances.
@@ -27,10 +27,11 @@ ai.claude.proxy.instance = null; # opt this runtime out of the root instance
 ```
 
 Airlock registers both protocols as `"http://127.0.0.1:8318"` at its default
-port. HTTPS uses CONNECT and preserves credentials and TLS. Plain HTTP requests
-through Airlock currently fail; HTTP forwarding is deferred to a later stack
-change. A runtime may select its own instance with
-`ai.<runtime>.proxy.instance`.
+port. HTTPS uses CONNECT and preserves credentials; opaque tunnels preserve TLS.
+An intercepting instance registers a CA helper; see
+[Proxy Trust](ai-proxy-trust.md) for retention and precedence. Plain HTTP
+requests currently fail pending forwarding. A runtime may select its own
+instance with `ai.<runtime>.proxy.instance`.
 
 Explicit root or runtime protocol fields, including null, override only that
 protocol's instance default. Each undefined field uses the selected instance's
@@ -54,15 +55,13 @@ override, otherwise a CLI flag. A user's native value wins over the generated
 default. Null suppresses generated delivery; it does not unset a user's
 independently configured native value or ambient environment.
 
-The option schema and generic mapping live in `lib/ai/proxy.nix`;
-`lib/ai/sharedOptions.nix` declares the root and
-`lib/ai/app/mkBackendTransform.nix` declares runtime fields and performs
-copy-down. Kiro uses `ai.kiro.proxy`, outside its launcher-specific `cli`
-namespace.
+`lib/ai/proxy.nix` defines the schema and lowering; `lib/ai/sharedOptions.nix`
+declares the root; `lib/ai/app/mkBackendTransform.nix` handles runtime fields
+and copy-down. Kiro uses `ai.kiro.proxy`, outside `cli`.
 
-Both Home Manager and devenv use the same declarations and lowering. Unsupported
-runtimes omit consumption in `surfaceSupport` and receive the library's default
-warning for a populated root request; they never accept a silent no-op.
+Both backends use the same declarations and lowering. Unsupported runtimes omit
+consumption in `surfaceSupport` and receive the library's default warning for a
+populated root request; they never accept a silent no-op.
 
 ### Runtime delivery
 
@@ -145,7 +144,6 @@ explicit-null opt-outs stay quiet. Null blocks generated delivery; an empty
 string is refused by the option type. Kiro v2 exports no generated proxy
 variables.
 
-`module-ai-proxy` checks protocol resolution order and null opt-outs across
-runtimes and both backends. `airlock-instances` checks registration, root and
-runtime selection, corporate proxy overrides, selection refusals and independent
-inference names on both backends.
+`module-ai-proxy` checks resolution order and null opt-outs across runtimes and
+both backends. `airlock-instances` checks registration, root/runtime selection,
+corporate overrides, selection refusals and independent inference names on both.

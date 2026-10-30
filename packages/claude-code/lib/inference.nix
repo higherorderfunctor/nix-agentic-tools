@@ -88,21 +88,6 @@
     } @ request: {
       ai.claude.native.settings = lib.mapAttrsRecursive (_: lib.mkDefault) ((inferenceLowering.lower (builtins.seq backend (builtins.seq resolvedInference request))).settings or {});
     };
-    installPackage = {
-      backend,
-      cfg,
-      resolvedSettings,
-      ...
-    }:
-      lib.ai.mkLauncher pkgs {
-        exe = "claude";
-        flags = launcherFlags {
-          inherit backend;
-          resolvedInference = resolvedSettings.inference;
-        };
-        name = "claude-code-inference";
-        inherit (cfg) package;
-      };
     inherit launcherFlags;
   };
 in
