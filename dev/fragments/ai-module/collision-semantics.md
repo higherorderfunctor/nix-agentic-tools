@@ -1,11 +1,11 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-29 — inference fields copy down at default
-> priority, preserving explicit null; claim rules defer to the ai-module
-> contract; every runtime stages its generated files; layer-1 defaults preserve
-> structured siblings and discarded-source laziness; runtime surfaceSupport
-> declarations own normalized backend reach; ai-module alone validates and
-> lowers the final entries.
+> **Last verified:** 2026-10-30 — inference and network proxy fields copy down
+> at default priority, preserving explicit null; claim rules defer to the
+> ai-module contract; every runtime stages its generated files; layer-1 defaults
+> preserve structured siblings and discarded-source laziness; runtime
+> surfaceSupport declarations own normalized backend reach; ai-module alone
+> validates and lowers the final entries.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -30,6 +30,7 @@ commit.
 | B4  | `ai.programs.<pkg>` ↔ `runtimes.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                         |
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Scalar fields use `resolveOverride`; inference fields copy down at default priority, with null opt-outs and form switching.   |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                             |
+| B5b | `ai.proxy` ↔ runtime proxy                        | field   | Root fields copy down at default priority; a runtime value or null wins only that field.                                      |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                             |
 | B6a | normalized rule trigger → native inclusion        | field   | The first supported `inclusion` entry wins; `fileMatch` consumes `matcher` and lowers to native scope or Codex routing prose. |
 | B7  | generated native file ↔ runtime file entry        | field   | Generator defaults content and metadata; a consumer replaces bytes or fields, or suppresses the entry with `enable = false`.  |

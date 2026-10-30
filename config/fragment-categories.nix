@@ -209,6 +209,28 @@
         }
       ];
     };
+    # Network proxy semantics and runtime delivery tiers.
+    ai-proxy = {
+      scopes = [
+        "checks/ai-proxy/**"
+        "checks/ai-warnings/default.nix"
+        "config/ai-delivery-facts.nix"
+        "lib/ai/app/mkBackendTransform.nix"
+        "lib/ai/delivery-warnings.nix"
+        "lib/ai/environment-defaults.nix"
+        "lib/ai/launcher.nix"
+        "lib/ai/proxy.nix"
+        "lib/ai/sharedOptions.nix"
+        "packages/chatgpt-codex/lib/mkCodex.nix"
+        "packages/claude-code/lib/mkClaude.nix"
+        "packages/copilot-cli/lib/mkCopilot.nix"
+        "packages/kimchi/lib/mkKimchi.nix"
+        "packages/kiro-cli/lib/mkKiro.nix"
+        "packages/kiro-cli/lib/usageTracking.nix"
+        "packages/kiro-cli/lib/wrapPackage.nix"
+      ];
+      sources = ["ai-proxy"];
+    };
     # ai-skills: uniform skill layout through the shared `mkSkillFiles` helper.
     # Scoped to the runtime implementations, package factory modules, and skill
     # helper.

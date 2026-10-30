@@ -89,6 +89,19 @@ hoc machinery beside an existing abstraction.
   `lib/ai/inference/default.nix`, `lib/ai/app/mkBackendTransform.nix`,
   `packages/claude-code/lib/inference.nix` and
   `packages/chatgpt-codex/lib/inference.nix`.
+- **Network proxy is a shared surface.** `ai.proxy.http` and `ai.proxy.https`
+  select the network proxy for a process's HTTP and HTTPS traffic. One generic
+  lowering names `HTTP_PROXY` and `HTTPS_PROXY`; runtimes choose delivery only.
+  An undefined field defaults to its defined sibling, using definition priority
+  rather than value to avoid circular defaults. Root fields copy to
+  `ai.<runtime>.proxy` at default priority; runtime overrides are field by field
+  and explicit null blocks the corresponding variable. Prefer a runtime settings
+  file that honors the value, then an environment wrapper default the user's
+  environment can override, then a CLI flag. Native user values win; unsupported
+  runtimes warn through `surfaceSupport`. No instance selection or proxy
+  registry belongs to this surface yet. Vetted 2026-10-30. See
+  `lib/ai/proxy.nix`, `lib/ai/sharedOptions.nix`,
+  `lib/ai/app/mkBackendTransform.nix` and `dev/fragments/ai-proxy/ai-proxy.md`.
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;
