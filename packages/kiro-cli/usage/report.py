@@ -1,4 +1,4 @@
-"""Report captured usage at the current rates: every capture by local day and model, or replay named session trees' exit summaries."""
+"""Report captured usage at the current rates: every capture by local day and model, or named session trees, every run included, in the exit summary's look."""
 
 import argparse
 from contextlib import closing
@@ -44,7 +44,7 @@ def main():
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--json", action="store_true", help="write the store report, or the list of session reports, as JSON")
     parser.add_argument("--session", action="append", metavar="ID",
-                        help="replay this session tree's exit summary instead of the store report; repeat it for each root after a switch or fork")
+                        help="show this session tree, every run included, in the exit summary's look instead of the store report; repeat it for each root after a switch or fork")
     parser.add_argument("--since", type=day, metavar="YYYY-MM-DD", help=f"first day to include, in local time ({zone}); inclusive")
     parser.add_argument("--summary-theme", help="the exit summary's theme JSON; kiro-usage passes its configured one")
     parser.add_argument("--until", type=day, metavar="YYYY-MM-DD", help=f"last day to include, in local time ({zone}); inclusive")

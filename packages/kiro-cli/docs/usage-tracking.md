@@ -69,12 +69,13 @@ launcher is also supported: the identical proxy and CA environment passes its
 conflict checks. No second collector starts.
 
 After `kiro-usage exec kiro-cli` or `kiro-usage exec kiro-cli-chat` exits, the
-tool prints model and conversation tables (requests, credits, input, output and
-cached tokens, cache hit) to standard error. Kiro inherits the terminal's input
-and output directly; the summary leaves standard output, exit status, and
-signals intact. Tracked chat runs as a child of the summary supervisor, with its
-own process ID and the same terminal descriptors. Explicit help, version, login,
-and administrative commands skip the summary, including when recognized global
+tool prints what that run captured to standard error: for each root session the
+run touched, model and conversation tables (requests, credits, input, output and
+cached tokens, cache hit). Kiro inherits the terminal's input and output
+directly; the summary leaves standard output, exit status, and signals intact.
+Tracked chat runs as a child of the summary supervisor, with its own process ID
+and the same terminal descriptors. Explicit help, version, login, and
+administrative commands skip the summary, including when recognized global
 options precede them. Other commands run without a Kiro summary.
 
 `usageTracking.summary` styles that summary. Null options keep the runtime
@@ -96,55 +97,62 @@ defaults and the spec grammar.
 
 A local proxy marker identifies captures from this invocation, and their
 recorded conversation identities select the sessions to report. The tool does
-not parse Kiro's screen or guess a session from its process ID. Reports contain
-full root-linked session totals, including earlier work when you resume a
-session and captured calls linked by explicit root conversation identity. Root
-conversation contains calls whose conversation ID matches the selected root;
-Other linked conversations have a different ID; Unknown has no recorded
-conversation ID. These are conversation groups, not caller roles: workflow steps
-and subagents carry their own conversation IDs and land in other linked
-conversations, which can also include helpers or forks. Disk turn credits never
-enter these captured-call totals. Requests, total/input/output/cached tokens,
-cache-hit token share, and credits are grouped by model and pool, with no
-per-delegate listing. Missing counters stay unavailable. For `claude-opus-5.5`
-at low effort, retained complete text-only responses of 1–5 characters within
-the calibrated context range can additionally show `Discount %`. This
-experimental credit-price signal classified 8 of the initial 10 calls: 5
-discount-like and 3 baseline (~62.5% discount-like, including partial discounts
-rather than only fully discounted requests); the two longer outputs were
-excluded. It is distinct from counter-derived `Hit %` and does not estimate
-input, output, or cached tokens. Coverage, anomalies, and exclusions remain
-visible; unsupported cases stay unavailable. The compared initial calls retained
-identical delivered hooks/context, but this small run establishes neither
-percentile accuracy nor a transferable cache-hit model. Exact counters always
-win per call; a `~` cell adds estimates for calls that lack the exact counter,
-with (known/all) coverage. Estimates need a reported context percentage and a
-model with a known window; cached tokens also need reported credits and the
-model's fitted rates in `usage/rates.json`. Other calls stay unavailable;
-[Token estimates](../usage/README.md#token-estimates) has the formulas. Cache
-hit is the share of input tokens that were cached, cached ÷ input over the
-requests with both (exact, or estimated where the call lacks the counter), with
-partial coverage shown. Estimated Cached and Cache hit cells carry `±N%`: the
-estimated cached tokens' standard error as a whole-percent share of the cell,
-omitted below 1% or when a model lacks a fitted credit error. If no captured
-conversation identity is available, the tool reports that the summary is
-unavailable. On exit the tool first waits up to two seconds for this launch's
-captured calls to finish and stay unchanged for 0.1 s, since the disk scan below
-is scoped by them. The quiet period is a heuristic: a call started just before
-Kiro exits can still land later. After a timed-out wait, unfinished calls stay
-flagged as incomplete coverage and the disk observations as not refreshed. It
-then automatically refreshes the local disk index from `~/.kiro/sessions` when
-that directory exists. This exit scan reads the `session.json` of sessions
-changed since the launch, indexes the messages only of those linked to captures,
-and never prunes. Index failures warn and leave the child exit status intact;
-disk observations may then be stale. An explicit `kiro-usage index` holds a lock
-beside the database for its whole pass; the exit scan then skips with a one-line
-warning instead of interleaving, and reports disk observations as not refreshed.
-Exit scans of concurrent launches do not skip each other; they queue on a second
-lock and run one at a time, since two scans of one session would index the same
-records. Rerun the index if that pass began before Kiro exited. Nested
-`kiro-usage exec` launches share the parent's marker and produce one summary
-when the outer launch exits.
+not parse Kiro's screen or guess a session from its process ID. Switching or
+forking a session with `/chat` inside one run touches several root sessions, so
+no single session view describes a run: the summary prints one block per root
+session, each counting only this run's captured calls whose root conversation
+ID, or else own conversation ID, names that root. Earlier runs of a resumed
+session, other runs and calls matched only through the disk index stay out. For
+a whole session, earlier runs included, run `kiro-usage report --session ID`,
+repeated for each root. Root conversation contains calls whose conversation ID
+matches the selected root; Other linked conversations have a different ID;
+Unknown has no recorded conversation ID. These are conversation groups, not
+caller roles: workflow steps and subagents carry their own conversation IDs and
+land in other linked conversations, which can also include helpers or forks.
+Disk turn credits never enter these captured-call totals. Requests,
+total/input/output/cached tokens, cache-hit token share, and credits are grouped
+by model and pool, with no per-delegate listing. Missing counters stay
+unavailable. For `claude-opus-5.5` at low effort, retained complete text-only
+responses of 1–5 characters within the calibrated context range can additionally
+show `Discount %`. This experimental credit-price signal classified 8 of the
+initial 10 calls: 5 discount-like and 3 baseline (~62.5% discount-like,
+including partial discounts rather than only fully discounted requests); the two
+longer outputs were excluded. It is distinct from counter-derived `Hit %` and
+does not estimate input, output, or cached tokens. Coverage, anomalies, and
+exclusions remain visible; unsupported cases stay unavailable. The compared
+initial calls retained identical delivered hooks/context, but this small run
+establishes neither percentile accuracy nor a transferable cache-hit model.
+Exact counters always win per call; a `~` cell adds estimates for calls that
+lack the exact counter, with (known/all) coverage. Estimates need a reported
+context percentage and a model with a known window; cached tokens also need
+reported credits and the model's fitted rates in `usage/rates.json`. Other calls
+stay unavailable; [Token estimates](../usage/README.md#token-estimates) has the
+formulas. Cache hit is the share of input tokens that were cached, cached ÷
+input over the requests with both (exact, or estimated where the call lacks the
+counter), with partial coverage shown. Estimated Cached and Cache hit cells
+carry `±N%`: the estimated cached tokens' standard error as a whole-percent
+share of the cell, omitted below 1% or when a model lacks a fitted credit error.
+A run with no captured calls, such as a session resumed and exited without a
+turn, prints one line saying so that points to `kiro-usage report --session ID`.
+If this run's calls carry no conversation identity, the tool reports that the
+summary is unavailable. On exit the tool first waits up to two seconds for this
+launch's captured calls to finish and stay unchanged for 0.1 s, since the disk
+scan below is scoped by them. The quiet period is a heuristic: a call started
+just before Kiro exits can still land later. After a timed-out wait, unfinished
+calls stay flagged as incomplete coverage. It then automatically refreshes the
+local disk index from `~/.kiro/sessions` when that directory exists. The summary
+reads no disk data; the refresh keeps `kiro-usage session` and
+`report --session`, which do, current. This exit scan reads the `session.json`
+of sessions changed since the launch, indexes the messages only of those linked
+to captures, and never prunes. Index failures warn and leave the child exit
+status intact; disk observations may then be stale. An explicit
+`kiro-usage index` holds a lock beside the database for its whole pass; the exit
+scan then skips with a one-line warning that disk observations were not
+refreshed instead of interleaving. Exit scans of concurrent launches do not skip
+each other; they queue on a second lock and run one at a time, since two scans
+of one session would index the same records. Rerun the index if that pass began
+before Kiro exited. Nested `kiro-usage exec` launches share the parent's marker
+and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -220,11 +228,11 @@ the exit summary's style: a table by day and a table by model, each with a Total
 row, recomputing every ~estimate per call from the current `rates.json` and
 `models.json`. Days are local calendar days in the time zone `--help` names;
 `--since` and `--until` take `YYYY-MM-DD` and include both ends. `--session ID`
-replays the exit summary for that session's whole tree instead, limited to the
-same days when they are given; repeat it for each root a session switch or fork
-left. A last line names the calculator: the fit dates in `rates.json`, then the
-reported models with no rates entry or no context window, when there are any.
-`--json` writes the structured report instead.
+shows that session's whole tree, every run included, in the exit summary's style
+instead, limited to the same days when they are given; repeat it for each root a
+session switch or fork left. A last line names the calculator: the fit dates in
+`rates.json`, then the reported models with no rates entry or no context window,
+when there are any. `--json` writes the structured report instead.
 
 Scripts that previously parsed session JSON or list JSON lines must now pass
 `--json`: `kiro-usage session sess_example --json` preserves the full report,

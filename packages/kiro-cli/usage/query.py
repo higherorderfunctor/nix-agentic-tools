@@ -48,6 +48,9 @@ CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:convers
 # Group keys over the chosen CTE. DAY is a call's local start day, in the process time zone (TZ), as report.py's --help names it.
 DAY = "date({}.started_utc_ns/1e9,'unixepoch','localtime')"
 MODEL = "json_extract(chosen.metadata_json,'$.model')"
+# A call's run identity over captures c: its root conversation, else its own. The exec exit summary draws one block per value.
+RUN_ROOT = """coalesce(nullif(json_extract(c.metadata_json,'$."kiro:root_conversation_id"'),''),
+    nullif(json_extract(c.metadata_json,'$."kiro:conversation_id"'),''))"""
 SUMS = ",".join(f"sum({name}) AS {name},count({name}) AS {name}_known" for name in DIMENSIONS) + """,
     sum(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN input_tokens+output_tokens END) AS total_tokens,
     count(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN 1 END) AS total_tokens_known,
@@ -116,6 +119,31 @@ def aggregate(db, chosen, parameters, partitions):
     """, parameters)]
     captures["multiple_metering_events"] = db.execute(chosen + "SELECT count(*) FROM chosen WHERE metering_events>1", parameters).fetchone()[0]
     return captures, groups
+
+
+def session_captures(db, session, chosen=None, parameters=()):
+    """A captures section around session's ID: the chosen calls' total, requested-model groups and conversation
+    pools, or an unavailable empty one without chosen. The session report and a run's exit summary share it."""
+    captures = {"available": chosen is not None, **group(None),
+                "pools": {pool: group(None) for pool in ("other_linked_conversations", "root_conversation", "unknown")}}
+    if chosen is None:
+        return captures
+    total, groups = aggregate(db, chosen, parameters, {
+        "models": (MODEL, ()),
+        "pools": (CONVERSATION_POOL.format(metadata="chosen.metadata_json"), (session, session.removeprefix("sess_")))})
+    captures.update(total)
+    captures["models"] = [{"requested_model": model, **source} for model, source in groups["models"].items()]
+    captures["pools"].update(groups["pools"])
+    return captures
+
+
+def run_report(db, invocation, session):
+    """render_summary's report for one root session of a kiro-usage exec run: only the invocation's marked captures
+    whose RUN_ROOT is session, with or without sess_. Earlier runs, other roots and disk observations stay out."""
+    db.row_factory = sqlite3.Row
+    chosen = chosen_calls(f"json_extract(c.metadata_json,'$.invocation')=? AND {RUN_ROOT} IN (?,?)")
+    return {"session": session, "scope": "this run",
+            "captures": session_captures(db, session, chosen, (invocation, session, session.removeprefix("sess_")))}
 
 
 def query(db, session, scope="session", since=None, until=None):
@@ -216,8 +244,7 @@ def query(db, session, scope="session", since=None, until=None):
             SELECT model_id,count(*) AS sessions FROM disk_sessions WHERE path IN ({path_marks}) GROUP BY model_id
         """, paths)]
     report["disk"] = disk
-    captures = {"available": "captures" in tables, **group(None)}
-    captures["pools"] = {pool: group(None) for pool in ("other_linked_conversations", "root_conversation", "unknown")}
+    captures = session_captures(db, session)
     if "captures" not in tables:
         captures["unavailable_reason"] = "No capture source has initialized this database."
     if "captures" in tables:
@@ -248,12 +275,7 @@ def query(db, session, scope="session", since=None, until=None):
         bounded, bounds = window(since, until)
         chosen = chosen_calls(f"""(json_extract(c.metadata_json,'$.\"kiro:conversation_id\"') IN ({placeholders}) {joins}) AND {bounded}""")
         parameters += bounds
-        total, groups = aggregate(db, chosen, parameters, {
-            "models": (MODEL, ()),
-            "pools": (CONVERSATION_POOL.format(metadata="chosen.metadata_json"), (session, session.removeprefix("sess_")))})
-        captures.update(total)
-        captures["models"] = [{"requested_model": model, **source} for model, source in groups["models"].items()]
-        captures["pools"].update(groups["pools"])
+        captures.update(session_captures(db, session, chosen, parameters))
         if scope == "tree":
             report["sessions"] = sorted(selected | {
                 session_id(name)
@@ -474,7 +496,7 @@ def render(report):
     lines += ["", "Disk observations (separate from captures):"]
     if disk["available"]:
         credits = disk["metrics"]["credits"]
-        lines += ["Disk observations refreshed after this launch." if disk.get("refreshed") else "Disk observations are from the last index and may be stale.",
+        lines += ["Disk observations are from the last index and may be stale.",
                   f"Turns: {disk['turns']}; observed credits: {value(credits['observed_sum'])}; fully known turns: {credits['known']}/{disk['turns']}.",
                   f"Omitted records: {value(disk['omitted_records'])}; turns without request IDs: {disk['turns_without_request_ids']}.",
                   f"Session metadata omissions (global): {value(disk['metadata_omitted_sessions'])}; omitted ancestry may hide descendants.",
@@ -567,7 +589,7 @@ def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN)
 
 
 def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
-    """One session report's exit summary: a model table and a conversation table with a Total row.
+    """One session or run report's exit summary: a model table and a conversation table with a Total row.
     invocation_summary and report.py pass their --summary-theme; the default PLAIN theme renders unstyled text without a border."""
     captures = report["captures"]
     available, pools = captures["available"], captures["pools"]

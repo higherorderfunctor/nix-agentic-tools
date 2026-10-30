@@ -325,6 +325,26 @@ class QueryTests(unittest.TestCase):
         self.assertNotIn("⚠", query.render_summary(query.query(self.db, root, "tree")))
         self.assertTrue(query.render_summary(query.query(self.db, root, "tree"), ["x", "y"]).endswith("\n⚠ x; y"))
 
+    def test_run_report_counts_only_the_invocations_calls_per_root(self):
+        run, earlier = {"invocation": "a" * 32}, {"invocation": "b" * 32}
+        self.session("sess_root")  # its disk credits and request ID would join the tree report, never a run
+        self.captured("main", conversation="sess_root", credits=1, metadata=run)
+        self.captured("helper", conversation="sess_helper", credits=2, metadata={**run, "kiro:root_conversation_id": "root"})
+        self.captured("unpriced", conversation="sess_root", credits=None, metadata=run)
+        self.captured("fork", conversation="sess_fork", credits=4, metadata=run)
+        self.captured("before", conversation="sess_root", credits=8, metadata=earlier)
+        self.captured("unmarked", conversation="sess_root", credits=16)
+        self.captured("disk-mapped", request="request-sess_root", credits=32, metadata=run)
+        self.assertEqual(query.query(self.db, "sess_root", "tree")["captures"]["observations"], 6)
+        report = query.run_report(self.db, "a" * 32, "sess_root")
+        pools = report["captures"]["pools"]
+        self.assertEqual([pools[pool]["observations"] for pool in ("root_conversation", "other_linked_conversations", "unknown")], [2, 1, 0])
+        lines = query.render_summary(report).splitlines()
+        self.assertEqual(lines[0], "Kiro usage · sess_root · this run · 3 requests · 3.00 credits")
+        self.assertEqual(lines[-1], "⚠ credits unknown for 1/3 requests")
+        self.assertEqual(query.render_summary(query.run_report(self.db, "a" * 32, "sess_fork")).splitlines()[0],
+                         "Kiro usage · sess_fork · this run · 1 request · 4.00 credits")
+
     def test_summary_tables_share_column_widths_and_total_row_closes_the_second(self):
         for ident, conversation, tokens in (("a", "root", 5), ("b", "child", 123_456_789)):
             self.captured(ident, conversation=conversation, tokens=tokens, metadata={"kiro:root_conversation_id": "root"})
