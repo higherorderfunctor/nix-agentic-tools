@@ -66,7 +66,7 @@
   in {
     "${name}-extracted" =
       pkgs.runCommand "${name}-extracted-drift" {
-        passthru = {inherit extracted regenerate;};
+        passthru = {inherit extracted handled regenerate;};
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

@@ -1,8 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-28 — native packages use two shards per system;
-> uncached checks use at most four balanced bundles; Kiro scope is evaluated on
-> Ubuntu before runner selection.
+> **Last verified:** 2026-10-29 — PR CI produces Linux facts before Darwin and
+> records them on any same-repository PR branch with the update App.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -39,13 +38,13 @@ failed worker cannot discard other workers' completed PRs. Branch names remain
 stable, existing PRs are reused, and every sweep rebuilds bot changes on the
 pinned main base.
 
-**A PR must already contain its locks, source and dependency hashes, extracted
-files, and formatting. Branch CI only validates; it never mutates a branch to
-finish an update.** The package worker does not build the package; hash
-derivation and embedded-file extraction run before publication. Input workers
-retain build verification and its hash-repair pass because those repairs can
-mutate the prepared branch. After successful package verification, the `devenv`
-input alone must also enter its updated shell with the installed CLI
+**A PR must already contain its locks, source and dependency hashes, and
+formatting. PR CI regenerates extracted facts and commits changes to
+same-repository PR branches.** Update workers still regenerate facts before
+publication, so CI regeneration on a correct update branch is a no-op. Input
+workers retain build verification and its hash-repair pass because those repairs
+can mutate the prepared branch. After successful package verification, the
+`devenv` input alone must also enter its updated shell with the installed CLI
 (`devenv --no-tui shell true`); failure holds the bump back. This runs inside
 the existing preparation deadline. The shell's closure holds the patched Kiro,
 which `pushFilter` does not catch inside a closure, so the `devenv` lane sets
@@ -271,38 +270,48 @@ update workers alike, carries `pushFilter: kiro-cli|codeql`; the second
 alternative keeps the CodeQL engines (packages/codeql), whose terms forbid
 distribution, out too.
 
-Codex facts are host-run, so a Linux update carries its fresh Linux raw into
-`extracted.json` and Darwin's side follows every unforked node while keeping its
-forks; the Darwin leg then re-measures and rewrites only Darwin's side, so a
-difference new in the release becomes a fork. The Linux `plan-extracted-facts`
-job evaluates the pure `ciExtractedFacts` flake output at HEAD and at the
-immutable base revision. Each revision uses its own logical owner map,
-`lib.extracted.hostRunOn` predicate and Darwin `ciPackages` to return
-`{ <owner> = { drvPath = ...; }; }` for owners declared host-run on Darwin. It
-does not evaluate Darwin checks on Linux. A shared `lib/extracted/` change or
-unavailable base comparison schedules every HEAD owner; if HEAD derivation
-evaluation fails, the same output is retried for names only. `workflow_dispatch`
-runs all selected owners. An empty matrix skips the Darwin producer; both
-required build contexts accept that only when planning passed. The producer
-waits for all package shards to finish, including Cachix upload finalization,
-before regenerating and checking each selected owner's facts. On authenticated
-runs it can substitute a cold release package already built by a Darwin shard,
-instead of racing that shard with its own 60-minute budget. Fork PRs lack the
-upload token, so they may still build the package locally. GitHub Actions cannot
-express a dependency on only the Darwin matrix legs; waiting for the whole
-package matrix can add extraction time after the slowest shard to both required
-build contexts. If a shard fails, the producer skips and the required build
-contexts fail. The Kiro patch Scope gate does not gate it.
+The `plan-extracted-facts` job evaluates `ciExtractedFacts.<system>` at HEAD and
+the immutable base revision. Linux selects owners whose drift check has handled
+extractions on that host, including static owners. Its comparison uses the
+check's own `passthru.extracted.x86_64-linux.drvPath`, so composite inputs such
+as cliproxyapi's z.ai docs trigger regeneration. Darwin keeps the
+`lib.extracted.hostRunOn` selection and compares Darwin `ciPackages` derivations
+without evaluating native checks on Linux. A shared `lib/extracted/` change or
+unavailable base comparison schedules every selected HEAD owner; if HEAD
+derivation evaluation fails, the output is retried for names only.
+`workflow_dispatch` runs all selected owners. An empty system matrix skips that
+producer, which both required build contexts accept only after successful
+planning.
 
-On a same-repository `update/*` branch, a changed `extracted.json` is committed
-with bot author and committer identities and pushed with the App token,
-preserving `update-publish.sh`'s bot ownership. Each matrix leg restores only
-its owner's directory onto the event's immutable head before a plain push. A
-moved branch rejects that push; an accepted push triggers fresh CI and cancels
-the old run. Other branches upload an `<owner>-extracted-aarch64-darwin`
-artifact, print copy commands derived from the owner's changed files, and fail
-until those measurements are committed. CI names owner directories only; the
-drift library chooses the file.
+`extracted-facts-linux` and `extracted-facts-darwin` call the same reusable
+producer workflow with their system and owners. Linux waits for all package
+shards to finish publishing to Cachix, then runs even if a shard failed: stale
+facts must not prevent their own repair. Darwin depends on Linux finishing
+successfully (or having no selected owners), and checks out the current PR
+branch to read Linux's committed carry. Linux refreshes the carry base in
+`extracted.json`; Darwin then re-measures its own side, preserving existing
+forks and recording new differences. The Kiro scope gate does not gate either
+producer. Both results are required by the build aggregate. Each credentialed
+Cachix step filters `kiro-cli|codeql`; forks can read caches without publishing.
+
+Each selected owner runs its native check's `passthru.regenerate` and drift
+check. Kimchi also runs its egress report regenerator with Node and the flake
+formatter, and includes `packages/kimchi/egress-report.json` with its facts. On
+any same-repository PR branch, changed files are committed as
+`chore(<owner>): record <system> extracted facts`, with bot author and committer
+identities and an App-token push. This preserves `update-publish.sh`'s ownership
+of `update/*` branches. An update sweep may rebuild a bot-owned branch and drop
+a CI facts commit; CI then records the facts again. A human or LLM fix commit
+freezes the branch under the existing ownership checks.
+
+Each producer checks out the current same-repository PR head; a branch that
+moves after checkout rejects the plain push. An accepted App push triggers fresh
+CI and cancels the old run. Subsequent runs regenerate Linux first; its carry is
+then a no-op before Darwin measures against it. Fork heads, pushes and
+dispatches upload an `<owner>-extracted-<system>` artifact with
+repository-relative paths and fail on changed facts. The diagnostic prints a
+`gh run download` command to overlay those files for review and commit. CI names
+owner directories; the drift library chooses the fact file.
 
 The internal `kiro-cli-rollout-canary` patches every feature whose aggregate
 vendor state needs a patch and whose measured patchability is true. Its scope

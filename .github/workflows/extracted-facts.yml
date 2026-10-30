@@ -1,0 +1,174 @@
+name: Produce extracted facts
+
+on:
+  workflow_call:
+    inputs:
+      owners:
+        description: JSON array of owners selected by plan-extracted-facts.
+        required: true
+        type: string
+      system:
+        description: Native extraction system, Linux before Darwin in ci.yml.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  produce:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        owner: ${{ fromJSON(inputs.owners) }}
+    runs-on:
+      ${{ inputs.system == 'x86_64-linux' && 'ubuntu-latest' || 'macos-latest'
+      }}
+    timeout-minutes: 60
+    env:
+      NIX_CONFIG: |
+        max-jobs = 1
+        cores = 2
+      OWNER: ${{ matrix.owner }}
+      SYSTEM: ${{ inputs.system }}
+    steps:
+      # Darwin starts after Linux and must read its committed carry. Checking
+      # out the current PR branch also lets successive owners see earlier facts.
+      # Plain pushes below reject a branch that moves after this checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref:
+            ${{ github.event.pull_request.head.repo.full_name ==
+            github.repository && github.head_ref || github.sha }}
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            sandbox = true
+      - uses: ./.github/actions/assert-nix-config
+        with:
+          require: |
+            ^accept-flake-config = true
+            ^sandbox = true
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: nix-agentic-tools
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          pushFilter: kiro-cli|codeql
+      - name: Warm IFD sources (retry, best-effort)
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: ${{ inputs.system }}
+      - name: Produce native extracted facts
+        id: produce
+        shell: bash
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          paths=("packages/${OWNER}/extracted")
+          nix run ".#.checks.${SYSTEM}.${OWNER}-extracted.passthru.regenerate"
+          if [ "$OWNER" = kimchi ]; then
+            nix shell --inputs-from . nixpkgs#nodejs ".#.formatter.${SYSTEM}" \
+              --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh
+            paths+=(packages/kimchi/egress-report.json)
+          fi
+          {
+            echo 'paths<<FACT_PATHS'
+            printf '%s\n' "${paths[@]}"
+            echo FACT_PATHS
+          } >> "$GITHUB_OUTPUT"
+          if [ -n "$(git status --porcelain -- "${paths[@]}")" ]; then
+            git status --porcelain -- "${paths[@]}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Every same-repository PR can record facts. update/* branches must keep
+      # both bot author/committer identities and App push credit: bot_owns,
+      # non_bot_commits and update-github.py push rely on those independently.
+      # Fork heads lack the secrets, so they take the artifact path.
+      - name: Generate publishing App token
+        id: app-token
+        if: >-
+          steps.produce.outputs.changed == 'true' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - if: steps.app-token.outcome == 'success'
+        uses: ./.github/actions/git-bot-identity
+        with:
+          account: nix-agentic-tools-bot[bot]
+          token: ${{ github.token }}
+
+      # An App push triggers fresh CI and cancels the old run. The next run's
+      # Linux regeneration is a no-op before Darwin measures its own side.
+      - name: Commit native extracted facts as the update bot
+        if: steps.app-token.outcome == 'success'
+        env:
+          FACT_PATHS: ${{ steps.produce.outputs.paths }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_REF: ${{ github.head_ref }}
+        shell: bash
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          gh auth setup-git --hostname github.com
+          while IFS= read -r fact_path; do
+            git add -- "$fact_path"
+          done <<< "$FACT_PATHS"
+          git commit -m "chore(${OWNER}): record ${SYSTEM} extracted facts"
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
+
+      # Forks, pushes and dispatches retain the artifact-and-fail contract.
+      # Preserve repository-relative paths so download can overlay them directly.
+      - name: Prepare extracted facts artifact
+        if: >-
+          steps.produce.outputs.changed == 'true' && steps.app-token.outcome ==
+          'skipped'
+        env:
+          FACT_PATHS: ${{ steps.produce.outputs.paths }}
+        shell: bash
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          while IFS= read -r fact_path; do
+            mkdir -p "$RUNNER_TEMP/facts/$(dirname "$fact_path")"
+            cp -R "$fact_path" "$RUNNER_TEMP/facts/$fact_path"
+          done <<< "$FACT_PATHS"
+      - name: Upload native extracted facts
+        if: >-
+          steps.produce.outputs.changed == 'true' && steps.app-token.outcome ==
+          'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.owner }}-extracted-${{ inputs.system }}
+          path: ${{ runner.temp }}/facts
+          if-no-files-found: error
+
+      - name: Fail on stale native extracted facts
+        if: >-
+          steps.produce.outputs.changed == 'true' && steps.app-token.outcome ==
+          'skipped'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          echo "::error::The committed ${SYSTEM} extracted facts are stale." \
+               "From the repository root, download the measured files and commit them:"
+          echo "  gh run download ${RUN_ID} -n ${OWNER}-extracted-${SYSTEM} -D ."
+          exit 1
+
+      - name: Check extracted facts
+        shell: bash
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          nix build ".#.checks.${SYSTEM}.${OWNER}-extracted" --no-link

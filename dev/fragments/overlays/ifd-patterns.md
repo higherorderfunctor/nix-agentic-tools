@@ -1,7 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-28 — Kiro warming uses the kiro-scope job output;
-> pnpm_12 fetches and configures with one frozen Rust pnpm 12 bootstrap.
+> **Last verified:** 2026-10-29 — extracted facts self-heal through visible PR
+> CI commits, with Linux carrying its facts before Darwin measures.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -281,11 +281,12 @@ The invariant is that committed extracted raws always describe the CURRENTLY
 pinned artifact. Nothing enforces that continuously. Two halves cooperate, and
 it is worth knowing which is which before reaching for a fix:
 
-1. **The self-heal** — update scripts run `lib.extracted.regenCommand { name; }`
-   through `mkUpdateScript`'s `extraExtract` or discovery-driven
-   `passthru.regenerateExtracted`. The owner check's `passthru.regenerate`
-   rebuilds and formats the measured raws, so a version bump carries its own new
-   facts.
+1. **The self-heal** — PR CI runs the owner check's `passthru.regenerate`, Linux
+   before Darwin, and commits changed facts to any same-repository PR branch as
+   the update bot. That visible commit puts the measurements in the review diff.
+   Update scripts also still run `lib.extracted.regenCommand { name; }` through
+   `mkUpdateScript`'s `extraExtract` or discovery-driven
+   `passthru.regenerateExtracted`, so an already refreshed update is a CI no-op.
 2. **The backstop** — `checks/<pkg>-extracted.nix`, which compares committed
    against freshly-built.
 
@@ -301,25 +302,22 @@ invisible from #560 until its first-ever bump (#621). If you add another
 extracted package, wire the regeneration in the same commit.
 
 For `mkUpdateScript` callers, `extraExtract` is spliced into `mkUpdateScript`'s
-`commitCandidate`, immediately after the sidecar `mv`. That is on the
-VERSION-BUMP path only. Consequences:
+`commitCandidate`, immediately after the sidecar `mv`, on the version-bump path.
+PR CI also compares extraction derivations, so editing an extractor at an
+unchanged version now self-heals on the PR. Editing `mkClaudeExtract`'s grep
+anchors or census walker, or glab's Go dump, produces a visible CI facts commit;
+review that diff with the extractor change. Fork PRs receive an artifact and a
+failing check until the measured files are committed.
 
-- **An extract that changes with no version bump does NOT self-heal.** Editing
-  `mkClaudeExtract`'s remaining grep anchors or its census walker, or glab's Go
-  dump, moves the extracted output while the version stands still, so nothing
-  regenerates and the drift check is the only signal. That case IS the
-  hand-regeneration case — the command is in each check's failure message.
-- Do not confuse this with the OTHER self-heal in this repo.
-  `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) re-derives a
-  `vendorHash`, `npmDepsHash` or `pnpmDepsHash` invalidated by a nixpkgs or
-  toolchain bump at an unchanged version, through `passthru.fixVendorHash`,
-  `passthru.fixNpmDepsHash` and `passthru.fixPnpmDepsHash`, or for Rust sidecars
-  `passthru.rustUpdateExtract`, which also repairs `cargoHash` — but only when
-  the old output cannot be substituted. An unchanged version leaves the FOD's
-  name and hash unchanged, so a cached path satisfies the fixer's build and it
-  reports `ok` (see the stale-`pnpmDeps` bullet below). Hashes have that
-  standalone escape hatch; extracts deliberately do not, because a changed
-  extract means someone edited the extractor and should look at the diff.
+The separate `fix_sidecar_hashes` mechanism (`dev/scripts/update-common.sh`)
+re-derives a `vendorHash`, `npmDepsHash` or `pnpmDepsHash` invalidated by a
+nixpkgs or toolchain bump at an unchanged version, through
+`passthru.fixVendorHash`, `passthru.fixNpmDepsHash` and
+`passthru.fixPnpmDepsHash`, or for Rust sidecars `passthru.rustUpdateExtract`,
+which also repairs `cargoHash` — but only when the old output cannot be
+substituted. An unchanged version leaves the FOD's name and hash unchanged, so a
+cached path satisfies the fixer's build and it reports `ok` (see the
+stale-`pnpmDeps` bullet below).
 
 Debugging entry points when a bump PR still goes red:
 
