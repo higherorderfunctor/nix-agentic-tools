@@ -1,4 +1,4 @@
-# Declares cross-app options (ai.context, ai.jail, ai.mcpServers, ai.proxy,
+# Declares cross-app options (ai.context, ai.jail, ai.mcpServers,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and formatting and guards: how
 # every runtime's generated files are formatted and checked.
 #
@@ -39,7 +39,7 @@
     formatter.programs.prettier.enable;
   jailLib = import ./jail {inherit lib;};
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
-  proxyLib = import ./proxy {inherit lib;};
+  inferenceLib = import ./inference {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -245,7 +245,6 @@
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
-    proxy = proxyLib.rootOption;
     rules = keyedOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
@@ -298,13 +297,16 @@
       '';
     };
     settings = lib.mkOption {
-      type = aiCommon.normalizedSettingsType;
+      type = aiCommon.rootSettingsType;
       default = {};
       description = ''
         Typed settings whose values preserve the same meaning across multiple
         AI runtimes. Each `ai.<runtime>.settings` field narrows this root
         default when non-null. Runtime records list consumed fields explicitly;
-        an unlisted non-null field warns for that runtime. Kiro declares none
+        an unlisted populated field warns for that runtime. Inference selects
+        a registered instance or external CPA endpoint for Claude and Codex,
+        with field-wise root defaults and explicit null opt-outs described in
+        `ai.settings.inference`. Kiro declares none
         because it persists effort only per model.
         The current `reasoningEffort` field lowers to
         Claude `effortLevel`, Codex `model_reasoning_effort` and Kimchi
@@ -509,7 +511,7 @@ in {
           visible = false;
           description = "This flake's package tree (`ai.*`) for the module's pkgs: `ai.internal.roots.ai`.";
         };
-        proxyInstances = proxyLib.registryOption;
+        inferenceInstances = inferenceLib.registryOption;
         # Every root a module site reads (`ai`, `docs`, `*-content`).
         roots = lib.mkOption {
           type = lib.types.raw;
@@ -573,9 +575,9 @@ in {
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
     (lib.optionalAttrs hasAssertions {assertions = proxyValidationAssertions;})
-    # `ai.proxy`'s root selection; mkBackendTransform.nix asserts each
+    # `ai.settings.inference`'s root selection; mkBackendTransform.nix asserts each
     # runtime's own.
-    (lib.optionalAttrs hasAssertions {assertions = proxyLib.assertionsFor config.ai.internal.proxyInstances ["ai" "proxy"] config.ai.proxy;})
+    (lib.optionalAttrs hasAssertions {assertions = inferenceLib.assertionsFor config.ai.internal.inferenceInstances ["ai" "settings" "inference"] config.ai.settings.inference;})
     {
       ai =
         {internal.services = proxyServices usedTopLevelProxyDeclarations;}

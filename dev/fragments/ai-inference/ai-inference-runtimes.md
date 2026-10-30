@@ -1,23 +1,23 @@
-## ai.proxy runtimes: how each harness consumes the resolved endpoint
+## ai.settings.inference runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-29 — each runtime's proxy library holds one
-> lowering per backend (only `cliproxyapi`, which also lowers external
-> selections) and asserts on any other; lowerings derive native values at
-> `mkDefault`. Claude's helper and launcher keep inherited credentials away from
-> the proxy; Codex uses command-backed provider auth; Kimchi, Kiro and Copilot
-> warn.
+> **Last verified:** 2026-10-29 — each runtime's inference library
+> (`packages/<owner>/lib/inference.nix`) holds one lowering per backend (only
+> `cliproxyapi`, which also lowers external selections) and asserts on any
+> other; lowerings derive native values at `mkDefault`. Claude's helper and
+> launcher keep inherited credentials away from the proxy; Codex uses
+> command-backed provider auth; Kimchi, Kiro and Copilot warn.
 
-### Claude (packages/claude-code/lib/proxy.nix)
+### Claude (packages/claude-code/lib/inference.nix)
 
 A settings `env` beats the process env, so the endpoint travels through settings
 files. The `cliproxyapi` lowering writes `env.ANTHROPIC_BASE_URL` (the origin;
 Claude appends `/v1/messages`) and one strict `apiKeyHelper`.
-`lib/ai/proxy/key-helper.nix`, shared with Codex, calls `redact.assign` with the
-selected file, command or concat reference, then prints the resolved key with a
-constant `printf` format. Its shell source carries only reference paths and
-concat's literal parts; the secret stays in the shared reader's stdout and the
-helper's shell variable. Resolution failures abort the helper before it returns
-a key.
+`lib/ai/inference/key-helper.nix`, shared with Codex, calls `redact.assign` with
+the selected file, command or concat reference, then prints the resolved key
+with a constant `printf` format. Its shell source carries only reference paths
+and concat's literal parts; the secret stays in the shared reader's stdout and
+the helper's shell variable. Resolution failures abort the helper before it
+returns a key.
 
 Both `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are written blank.
 Settings merge per key across scopes, so an inherited token or a lower-scope key
@@ -50,15 +50,15 @@ a `mkDefault`, so a consumer's own value for one, such as
 `env.ANTHROPIC_BASE_URL`, wins without `mkForce`.
 
 Each declared API-key model of each routed upstream credential
-(`normalized.proxy.credentials`) becomes one `modelPicker.options` row,
-`{model; description = "<credential> through CLIProxyAPI";}`, labelled with its
-id. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker builder
-returns the built-in lineup plus each new row unless that flag is `=== true`,
-and its schema says unset adds the rows after the built-ins. The same schema
-says `modelPicker` is honored only from managed, `--settings`/SDK and user
-settings, never a project checkout. So Home Manager writes the rows to user
-settings, where a consumer's own `modelPicker.options` list replaces the derived
-rows, and devenv's launcher adds `--settings <store file>` holding only
+(`normalized.settings.inference.credentials`) becomes one `modelPicker.options`
+row, `{model; description = "<credential> through CLIProxyAPI";}`, labelled with
+its id. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker
+builder returns the built-in lineup plus each new row unless that flag is
+`=== true`, and its schema says unset adds the rows after the built-ins. The
+same schema says `modelPicker` is honored only from managed, `--settings`/SDK
+and user settings, never a project checkout. So Home Manager writes the rows to
+user settings, where a consumer's own `modelPicker.options` list replaces the
+derived rows, and devenv's launcher adds `--settings <store file>` holding only
 `modelPicker`. Since the highest scope that defines `modelPicker` wins outright,
 that devenv session shows the credential rows instead of any user picker rows.
 
@@ -75,7 +75,7 @@ or a matching `deniedModels`, hides the row. Claude's handling of the unknown id
 once selected (context window, effort defaults) is not covered; `behavesAs` is
 the lever and the rows leave it unset.
 
-### Codex (`packages/chatgpt-codex/lib/proxy.nix`)
+### Codex (`packages/chatgpt-codex/lib/inference.nix`)
 
 One provider table per endpoint: `base_url` is the origin plus `/v1`, `name` is
 the provider id (Codex refuses to load a provider without one),
@@ -87,14 +87,14 @@ reader's failure checks; no resolved key is interpolated into shell or TOML.
 Never `env_key`: tool subprocesses inherit it, and Home Manager's launcher
 environment does not reach devenv's.
 
-- **Home Manager** writes `model_provider = "ai-proxy"` and
-  `[model_providers.ai-proxy]` into user config.toml, each leaf a `mkDefault`
-  that a consumer's `native.settings` value overrides. A devenv shell inherits
-  the user file with no devenv configuration.
+- **Home Manager** writes `model_provider = "ai-inference"` and
+  `[model_providers.ai-inference]` into user config.toml, each leaf a
+  `mkDefault` that a consumer's `native.settings` value overrides. A devenv
+  shell inherits the user file with no devenv configuration.
 - **devenv** cannot use project config for providers: Codex strips
   `model_provider` and `model_providers` from project layers. Its launcher
-  passes `-c model_providers.ai-proxy-devenv={…}` and
-  `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
+  passes `-c model_providers.ai-inference-devenv={…}` and
+  `-c model_provider=ai-inference-devenv`, the highest layer, baked in as
   `--add-flag`s. With `ai.codex.package = null` nothing carries them, so devenv
   warns whenever the lowering produced session flags.
 - **Models.** Codex's `auth.command` provider fetches
@@ -112,11 +112,11 @@ environment does not reach devenv's.
   not a claim about CPA's catalog. Consumers can override the count; other
   tooltips remain enabled.
 - **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
-  so session flags reusing `ai-proxy` could inherit incompatible user auth
+  so session flags reusing `ai-inference` could inherit incompatible user auth
   fields, such as `experimental_bearer_token`, beside the proxy's `auth`.
 
-`chatgpt-codex-proxy` runs the pinned binary against loopback mock proxies in
-the build sandbox. It covers all three reference forms on both backends, Home
+`chatgpt-codex-inference` runs the pinned binary against loopback mock proxies
+in the build sandbox. It covers all three reference forms on both backends, Home
 Manager plus devenv precedence, and a legacy user bearer token beside a devenv
 provider, with inherited `OPENAI_API_KEY`, `CODEX_API_KEY` and `auth.json`
 credentials that must appear in no request header. It also executes the helpers
@@ -125,18 +125,19 @@ failure output for leaks.
 
 ### Kimchi, Kiro, Copilot
 
-Kimchi and Kiro omit `proxy` from `surfaceSupport`. They receive the standard
-unsupported-surface warning, not a silent drop. Copilot is out of scope and
-warns the same way. `ai-warnings-delivery` generates those cases from the
-records on both backends.
+Kimchi, Kiro and Copilot do not consume `inference` in
+`surfaceSupport.settings.fields`. They receive the standard unsupported-setting
+warning for a populated selection, and their normalized inference stays at the
+library default. `ai-warnings-delivery` generates those cases from the records
+on both backends.
 
 ### Checks
 
-`packages/claude-code/checks/claude-proxy.nix` covers Claude on both backends:
-key forms, precedence (quiet defaults and proxy leaves yield to a consumer's
-value, nothing selected writes nothing, a selection does not warn), and the
-per-runtime override. Its runtime check executes each generated helper with
-shell metacharacters and multiline key contents, checks failure output for
+`packages/claude-code/checks/claude-inference.nix` covers Claude on both
+backends: key forms, precedence (quiet defaults and proxy leaves yield to a
+consumer's value, nothing selected writes nothing, a selection does not warn),
+and the per-runtime override. Its runtime check executes each generated helper
+with shell metacharacters and multiline key contents, checks failure output for
 leaks, and asserts inherited API-key and bearer variables are cleared. It also
 runs the pinned CLI through both backends' installed launchers against a
 loopback capture server with an inherited readable API-key descriptor, and

@@ -35,9 +35,9 @@
     inherit (appRecord) pkgs;
   };
   hooks = import ../hooks.nix {inherit lib;};
+  inferenceLib = import ../inference {inherit lib;};
   jailLib = import ../jail {inherit lib;};
   pathProvenanceNotice = import ../runtime-path-provenance-notice.nix appRecord.pkgs;
-  proxyLib = import ../proxy {inherit lib;};
   runtimeModule = import ../../../packages/ai-module/lib/runtime.nix;
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -153,25 +153,23 @@
   # translation input only: factories render supported fields into their
   # native.settings option at mkDefault priority, and native option merging
   # arbitrates against consumer-authored values.
+  settingsFields = appRecord.surfaceSupport.settings.fields or [];
   resolvedSettings =
     if supportsPool "settings"
     then
       lib.mapAttrs (field: topValue:
-        aiCommon.resolveOverride {
-          inherit topValue;
-          cliValue = poolCfg.settings.${field};
-        })
-      (lib.getAttrs (appRecord.surfaceSupport.settings.fields or []) config.ai.settings)
+        if field == "inference"
+        then inferenceLib.resolve config.ai.internal.inferenceInstances poolCfg.settings.inference
+        else
+          aiCommon.resolveOverride {
+            inherit topValue;
+            cliValue = poolCfg.settings.${field};
+          })
+      (lib.getAttrs settingsFields config.ai.settings)
     else {};
 
-  proxyPath = ["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"];
-  # The runtime's selection already holds the root fields it did not set
-  # (copied down in `config` below). Null when nothing is selected or the
-  # runtime does not consume the pool.
-  resolvedProxy =
-    if supportsPool "proxy"
-    then proxyLib.resolve config.ai.internal.proxyInstances poolCfg.proxy
-    else null;
+  consumesInference = builtins.elem "inference" settingsFields;
+  inferencePath = ["ai" appRecord.name] ++ poolOptionsPath "settings" ++ ["settings" "inference"];
 
   # The jail folds field by field (`jailLib.resolve`). Null unless the result
   # enables it, or when the runtime does not consume the pool.
@@ -302,16 +300,11 @@
     mcpServers = {
       type = lib.types.attrsOf lib.types.raw;
     };
-    proxy = {
-      default = resolvedProxy;
-      type = proxyLib.resolvedType;
-    };
     rules = {
       type = lib.types.attrsOf aiCommon.ruleModule;
     };
     settings = {
-      default = resolvedSettings;
-      type = aiCommon.normalizedSettingsType;
+      type = aiCommon.resolvedSettingsType;
     };
     shell = {
       default = resolvedShell;
@@ -375,7 +368,7 @@
       // {
         default = spec.default or {};
         defaultText = lib.literalExpression (
-          if normalizedKeyedPools ? ${pool}
+          if normalizedKeyedPools ? ${pool} || pool == "settings"
           then "{}"
           else "the root-to-runtime ${pool} fold"
         );
@@ -385,9 +378,10 @@
           Merged ${pool} consumed by ${appRecord.name}'s transformer. The
           supported root-to-runtime fold supplies per-key defaults after
           replacement and tombstone filtering for keyed pools, so ordinary
-          additions preserve unrelated inherited keys. Other pools default
-          to the fold as a whole. Use `lib.mkForce` on this ordinary option
-          to replace the transformer's input.
+          additions preserve unrelated inherited keys. Settings receive
+          per-field defaults, so overriding one field preserves the others.
+          Other pools default to the fold as a whole. Use `lib.mkForce` on
+          this ordinary option to replace the transformer's input.
         '';
       })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools));
   # Only a launcher's own options sit at its path, so a reserved namespace
@@ -461,23 +455,6 @@
         }
         // poolOptions.agentsDir or {});
     }
-    // lib.optionalAttrs (supportsPool "proxy") {
-      proxy = lib.mkOption {
-        type = lib.types.submodule {
-          options = proxyLib.runtimeOptions;
-        };
-        default = {};
-        description = ''
-          ${appRecord.name}'s proxy selection. Each `ai.proxy` field copies
-          down at default priority, so a value set here wins field by field;
-          selecting the other form (`instance` under a root `url`, or the
-          reverse) drops the root's fields of that form. `instance = null`
-          (or `url = null` for an external origin) opts this runtime out of
-          an inherited selection. The resolved endpoint
-          is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "proxy")}`.
-        '';
-      };
-    }
     // lib.optionalAttrs (supportsPool "settings") {
       settings = lib.mkOption {
         type = aiCommon.normalizedSettingsType;
@@ -485,7 +462,8 @@
         description = ''
           Normalized ${appRecord.name} settings. A non-null field overrides
           the matching `ai.settings` default for this runtime; null inherits
-          the root value. Supported fields translate into native keys at
+          the root value.${lib.optionalString consumesInference " Inference instead copies root fields at default priority, withdraws the other form when switching between instance and URL, and opts out with `instance = null` or `url = null`."}
+          Supported fields translate into native keys at
           `mkDefault` priority. Set the corresponding key under
           `ai.${appRecord.name}.native.settings`, including an explicit null,
           to arbitrate against the derived value.
@@ -616,7 +594,6 @@
     mergedServers = normalizedPool "mcpServers" {};
     mergedSkills = normalizedPool "skills" {};
     resolvedJail = normalizedPool "jail" null;
-    resolvedProxy = normalizedPool "proxy" null;
     resolvedSettings = normalizedPool "settings" {};
     resolvedShell = normalizedPool "shell" null;
     topHooks = normalizedPool "hooks" {};
@@ -819,21 +796,22 @@ in {
     {
       ai.${appRecord.name} = placeNormalized (
         lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)
-        (lib.filterAttrs (pool: _: supportsPool pool) normalizedKeyedPools)
+        (lib.filterAttrs (pool: _: supportsPool pool) (normalizedKeyedPools // {settings = resolvedSettings;}))
       );
     }
     (lib.optionalAttrs hasNativeAgents {
       ai.${appRecord.name}.native.agents = nativeAgentDefaults;
     })
-    # Set root fields at default priority, so a runtime value wins field by
-    # field; copyDown withdraws the root's other form once the runtime
+    # Inference cannot use resolveOverride: null opts out, and switching forms
+    # withdraws the opposite fields. Set root fields at default priority, so a
+    # runtime value wins field by field; copyDown withdraws the root's other form once the runtime
     # switches forms, and its clientKey once the runtime selects a clientless
     # instance.
-    (lib.optionalAttrs (supportsPool "proxy") (lib.setAttrByPath proxyPath (proxyLib.copyDown config.ai.internal.proxyInstances config.ai.proxy poolCfg.proxy)))
+    (lib.optionalAttrs consumesInference (lib.setAttrByPath inferencePath (inferenceLib.copyDown config.ai.internal.inferenceInstances config.ai.settings.inference poolCfg.settings.inference)))
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
-    (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = proxyLib.runtimeAssertionsFor config.ai.internal.proxyInstances proxyPath config.ai.proxy poolCfg.proxy;
+    (lib.optionalAttrs (consumesInference && options ? assertions) {
+      assertions = inferenceLib.runtimeAssertionsFor config.ai.internal.inferenceInstances inferencePath config.ai.settings.inference poolCfg.settings.inference;
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let

@@ -1,10 +1,11 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-17 — claim rules defer to the ai-module contract;
-> every runtime stages its generated files; layer-1 defaults preserve structured
-> siblings and discarded-source laziness; runtime surfaceSupport declarations
-> own normalized backend reach; ai-module alone validates and lowers the final
-> entries.
+> **Last verified:** 2026-10-29 — inference fields copy down at default
+> priority, preserving explicit null; claim rules defer to the ai-module
+> contract; every runtime stages its generated files; layer-1 defaults preserve
+> structured siblings and discarded-source laziness; runtime surfaceSupport
+> declarations own normalized backend reach; ai-module alone validates and
+> lowers the final entries.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -27,7 +28,7 @@ commit.
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                |
 | B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                |
 | B4  | `ai.programs.<pkg>` ↔ `runtimes.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                         |
-| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                         |
+| B5  | `ai.settings` ↔ runtime settings                  | field   | Scalar fields use `resolveOverride`; inference fields copy down at default priority, with null opt-outs and form switching.   |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                             |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                             |
 | B6a | normalized rule trigger → native inclusion        | field   | The first supported `inclusion` entry wins; `fileMatch` consumes `matcher` and lowers to native scope or Codex routing prose. |
@@ -193,7 +194,10 @@ and out of the package provenance guard.
   concatenate root-first into one runtime-named artifact.
 - `ai.hooks` is an event map whose matcher-group lists append shared-first.
   Event keys identify additive lifecycle streams, not replaceable pool items.
-- `ai.shell`, normalized `ai.settings` fields, and generated
+- `ai.settings.inference` uses default-priority field copy-down. Explicit
+  runtime null opts out instead of inheriting; form switching drops the other
+  form's root fields.
+- `ai.shell`, normalized scalar `ai.settings` fields, and generated
   `ai.programs.<pkg>.runtimes.<runtime>` leaves are nullable scalars.
   `resolveOverride` interprets runtime null as **inherit**, not delete; a
   non-null runtime scalar wins.

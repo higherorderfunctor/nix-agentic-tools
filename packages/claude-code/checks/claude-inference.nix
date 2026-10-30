@@ -1,5 +1,5 @@
 # cspell:ignore urandom wfile
-# `ai.proxy` delivered to Claude Code (packages/claude-code/lib/proxy.nix):
+# `ai.settings.inference` delivered to Claude Code (packages/claude-code/lib/inference.nix):
 # the `url` form in each backend's settings.json, reference-reading helpers,
 # cleared inherited credentials, quiet defaults, and the guards.
 {
@@ -16,13 +16,13 @@
   };
   perBackend = name: test:
     lib.mapAttrs' (backend: eval:
-      lib.nameValuePair "module-claude-${backend}-proxy-${name}"
-      (mkTest "claude-${backend}-proxy-${name}" (test eval)))
+      lib.nameValuePair "module-claude-${backend}-inference-${name}"
+      (mkTest "claude-${backend}-inference-${name}" (test eval)))
     evals;
   withClaude = config: lib.recursiveUpdate {ai.claude.enable = true;} config;
   origin = "http://127.0.0.1:8317";
   urlForm = key: {
-    ai.proxy = {
+    ai.settings.inference = {
       inherit key;
       url = origin;
     };
@@ -62,19 +62,19 @@ in {
 
     # The quiet defaults and the proxy-derived leaves yield to a consumer's
     # value; nothing selected writes nothing, and a selection no longer warns
-    # that Claude ignores ai.proxy.
+    # that Claude ignores ai.settings.inference.
     (perBackend "precedence" (eval: let
-      overridden = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
+      overridden = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-inference-key")) {
         ai.claude.native.settings = {
           disableClaudeAiConnectors = false;
           env.DISABLE_AUTOUPDATER = "0";
         };
       })));
-      userBase = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
+      userBase = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-inference-key")) {
         ai.claude.native.settings.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:9999";
       })));
       unselected = eval (withClaude {});
-      selected = eval (withClaude (urlForm (redact.file "/run/secrets/ai-proxy-key")));
+      selected = eval (withClaude (urlForm (redact.file "/run/secrets/ai-inference-key")));
       withoutPackage = eval (withClaude (lib.recursiveUpdate (urlForm keys.file) {ai.claude.package = null;}));
     in
       overridden.env.DISABLE_AUTOUPDATER
@@ -90,34 +90,50 @@ in {
       && !((claudeSettings unselected) ? disableClaudeAiConnectors)
       && !(builtins.any (lib.hasInfix "does not deliver it to claude") selected.config.warnings)))
 
-    # `ai.claude.proxy` fields win over the root's.
+    # `ai.claude.settings.inference` fields win over the root's.
     (perBackend "runtime-override" (eval: let
       result = eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/root-key")) {
-        ai.claude.proxy = {
+        ai.claude.settings.inference = {
           key = redact.file "/run/secrets/work-key";
           url = "http://127.0.0.1:8318";
         };
       }));
       settings = claudeSettings result;
     in
-      result.config.ai.claude.normalized.proxy.url
+      result.config.ai.claude.normalized.settings.inference.url
       == "http://127.0.0.1:8318"
       && settings.env.ANTHROPIC_AUTH_TOKEN == ""
-      && result.config.ai.claude.normalized.proxy.key == redact.file "/run/secrets/work-key"
+      && result.config.ai.claude.normalized.settings.inference.key == redact.file "/run/secrets/work-key"
       && settings.apiKeyHelper == (settingsFor eval (redact.file "/run/secrets/work-key")).apiKeyHelper))
+    # A direct effort field must preserve the inherited endpoint and its lowering.
+    (perBackend "normalized-field-override" (eval: let
+      selected = withClaude (urlForm keys.file);
+      control = eval selected;
+      overridden = eval (lib.recursiveUpdate selected {
+        ai.claude.normalized.settings.reasoningEffort = "high";
+      });
+      settings = claudeSettings overridden;
+    in
+      control.config.ai.claude.normalized.settings.inference
+      != null
+      && overridden.config.ai.claude.normalized.settings.inference == control.config.ai.claude.normalized.settings.inference
+      && overridden.config.ai.claude.normalized.settings.reasoningEffort == "high"
+      && settings.effortLevel == "high"
+      && settings.env.ANTHROPIC_BASE_URL == origin
+      && settings.apiKeyHelper == (claudeSettings control).apiKeyHelper))
     # The live run binds a loopback port, which the Darwin sandbox refuses.
     (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-      claude-proxy-runtime =
-        pkgs.runCommand "claude-proxy-runtime" {
+      claude-inference-runtime =
+        pkgs.runCommand "claude-inference-runtime" {
           nativeBuildInputs = [pkgs.python3];
-          launchers = pkgs.writeText "claude-proxy-runtime-launchers.json" (builtins.toJSON (
+          launchers = pkgs.writeText "claude-inference-runtime-launchers.json" (builtins.toJSON (
             lib.mapAttrs (_: eval:
               lib.getExe' (installed (eval (withClaude (lib.recursiveUpdate (urlForm keys.file) {
                 ai.claude.package = pkgs.ai.claude-code;
               })))) "claude")
             evals
           ));
-          settings = pkgs.writeText "claude-proxy-runtime-settings.json" (builtins.toJSON (
+          settings = pkgs.writeText "claude-inference-runtime-settings.json" (builtins.toJSON (
             lib.mapAttrs (_: eval: lib.mapAttrs (_: settingsFor eval) keys) evals
           ));
         } ''
@@ -157,7 +173,7 @@ in {
                       path.unlink()
                   result = run()
                   assert result.returncode != 0 and result.stdout == "", (backend, name, "failed reference succeeded")
-                  assert "ai.claude.proxy.key:" in result.stderr and secret not in result.stderr
+                  assert "ai.claude.settings.inference.key:" in result.stderr and secret not in result.stderr
                   cases += 1
           print(f"verified {cases} Claude helper cases: file, command, concat, failures and inherited credentials on both backends")
 

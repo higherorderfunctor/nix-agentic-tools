@@ -9,8 +9,8 @@
 contains a redacted client key and routes to named upstream credentials
 (`cliproxyapi-providers.md`). The instance adds the key to `access.api-keys` and
 maps its routes to an `access.key-allowlist` entry. The selected harness
-receives the same key through `normalized.proxy`; CPA fails closed for each
-listed key (`cliproxyapi-key-allowlist.md`).
+receives the same key through `normalized.settings.inference`; CPA fails closed
+for each listed key (`cliproxyapi-key-allowlist.md`).
 
 A harness selects an existing instance and client key; it must not define the
 instance. Defining it at the selection site would make a misspelled name look

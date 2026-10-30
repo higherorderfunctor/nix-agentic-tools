@@ -69,7 +69,8 @@
       if surface == "settings"
       then
         lib.concatMap (field: let
-          requested = lib.findFirst (unit: lib.attrByPath [field] null unit.value != null) null (units surface);
+          # Structured inference defaults to all-null fields, not a request.
+          requested = lib.findFirst (unit: nonEmpty (lib.attrByPath [field] null unit.value)) null (units surface);
           reason =
             if delivered
             then reasons.settingsField

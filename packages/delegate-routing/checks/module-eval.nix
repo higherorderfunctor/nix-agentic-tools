@@ -372,9 +372,9 @@
     };
     usageSelected.ai = {
       cliproxyapi.instances.main = usageInstance (redact.file "/run/secrets/management");
-      proxy = {
-        instance = "main";
+      settings.inference = {
         clientKey = "usage-test";
+        instance = "main";
       };
     };
     usage = extra: evaluate (lib.mkMerge [usageBase extra]);

@@ -550,7 +550,7 @@
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. github.com Copilot is explicitly excluded |
-    | Local AI proxy | Point each Harness at CPA | `ai.proxy` or per-Harness `ai.<runtime>.proxy` selects `instance` + `clientKey`; the Instance owns named upstream `credentials` and `clientKeys` with ordered routes. OAuth routes select exact auth-file IDs; API-key routes select exact base URLs and an API. Claude offers routed API-key models as `/model` rows; Codex discovers CPA's model catalog. Both share a redact client-key helper. External `url` + redact `key` adds no Instance access. Other runtimes warn | Same |
+    | Inference endpoint | Point each Harness at CPA | `ai.settings.inference` or per-Harness `ai.<runtime>.settings.inference` selects `instance` + `clientKey`; the Instance owns named upstream `credentials` and `clientKeys` with ordered routes. OAuth routes select exact auth-file IDs; API-key routes select exact base URLs and an API. Claude offers routed API-key models as `/model` rows; Codex discovers CPA's model catalog. Both share a redact client-key helper. External `url` + redact `key` adds no Instance access. Other runtimes warn | Same |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
     ### Kimchi project delivery
