@@ -131,7 +131,7 @@
     "remote_changelog": { "channel": "stable", "treatment_percent": 100 },
     "remote_sandbox": { "segment": "all", "treatment_percent": 100 },
     "session_dashboard": { "segment": "all", "treatment_percent": 100 },
-    "standalone_public": { "treatment_percent": 30 },
+    "standalone_public": { "treatment_percent": 50 },
     "standalone_toolbox": { "segment": "all", "treatment_percent": 100 },
     "tangent": { "segment": "all", "treatment_percent": 100 },
     "test": { "treatment_percent": 100 },
@@ -141,10 +141,7 @@
       "segment": "internal",
       "treatment_percent": 100
     },
-    "trust_classifier_enforce": {
-      "segment": "internal",
-      "treatment_percent": 100
-    },
+    "trust_classifier_enforce": { "segment": "all", "treatment_percent": 100 },
     "trust_classifier_shadow": {
       "channel": "nightly",
       "segment": "internal",
