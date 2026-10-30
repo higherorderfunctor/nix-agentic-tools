@@ -44,6 +44,33 @@ have no lifetime timeout. SIGINT and SIGTERM stop accepting and allow existing
 connections up to 3 seconds to finish before closing them. Runtime teardown has
 a separate 10-second bound.
 
+## Nix instances
+
+An `ai.airlock.instances.<name>` entry runs `airlock-<name>` on its loopback
+port (default 8318) through `ai.services`, on Home Manager and devenv alike.
+Selecting it defaults both `HTTP_PROXY` and `HTTPS_PROXY` to that listener for
+supported runtimes. HTTPS uses CONNECT, preserving credentials and TLS. Plain
+HTTP requests through Airlock currently fail; HTTP forwarding comes in a later
+stack change.
+
+```nix
+ai.airlock.instances.main = {};
+ai.proxy.instance = "main"; # both protocols default to "http://127.0.0.1:8318"
+```
+
+See [Network Proxy](../../dev/fragments/ai-proxy/ai-proxy.md) for runtime
+selection, protocol defaults and native overrides.
+
+On Home Manager Linux, start and stop the instance with:
+
+```console
+$ systemctl --user start airlock-main.service
+$ systemctl --user stop airlock-main.service
+```
+
+On devenv, use `devenv processes up` and `devenv processes down`. Restart Claude
+and other selected runtimes after changing the selection.
+
 ## Build and validate
 
 From the repository root:
@@ -70,3 +97,9 @@ cancellation, HTTP/2 multiplexing and flow control, stream reset isolation,
 loopback binding, listener limits, header deadlines, owned tunnel shutdown and
 CLI signals. `checks.airlock-package` checks the packaged `--help` and
 `--version` entry points.
+
+`checks.airlock-instances` covers module wiring, port and name claims, proxy
+registration, selection defaults and overrides, and Claude settings delivery.
+`checks.airlock-instance-runtime` starts each backend's generated service
+launcher and requests `/health` at a configured nondefault port. Rust protocol
+tests run through the Nix package's `doCheck`.

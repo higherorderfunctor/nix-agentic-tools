@@ -46,6 +46,48 @@
         inherit https;
       };
     };
+    instance-http = {
+      root = {
+        inherit http;
+        instance = "main";
+      };
+      expected = {inherit http https;};
+      expectedInstance = "main";
+    };
+    instance-null-https = {
+      root = {
+        inherit http;
+        instance = "main";
+        https = null;
+      };
+      expected = {
+        inherit http;
+        https = null;
+      };
+      expectedInstance = "main";
+    };
+    instance-null-peer = {
+      root = {
+        instance = "main";
+        http = null;
+      };
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = "main";
+    };
+    instance-peer-fallback = {
+      root = {
+        instance = "main";
+        https = local;
+      };
+      expected = {
+        http = https;
+        https = local;
+      };
+      expectedInstance = "main";
+    };
     null-http = {
       root = {
         http = null;
@@ -66,6 +108,17 @@
         https = null;
       };
     };
+    root-explicit-https = {
+      root = {
+        https = local;
+        instance = "main";
+      };
+      expected = {
+        http = https;
+        https = local;
+      };
+      expectedInstance = "main";
+    };
     runtime-http = {
       root = {inherit http https;};
       runtime.http = local;
@@ -82,6 +135,67 @@
         https = local;
       };
     };
+    runtime-instance-http = {
+      root = {};
+      runtime = {
+        inherit http;
+        instance = "main";
+      };
+      expected = {inherit http https;};
+      expectedInstance = "main";
+    };
+    runtime-instance-null = {
+      root.instance = "main";
+      runtime.instance = null;
+      expected = {
+        http = null;
+        https = null;
+      };
+      expectedInstance = null;
+    };
+    runtime-instance-null-keeps-root-protocols = {
+      root = {
+        http = null;
+        inherit https;
+        instance = "main";
+      };
+      runtime.instance = null;
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = null;
+    };
+    runtime-instance-null-peer = {
+      root = {};
+      runtime = {
+        instance = "main";
+        http = null;
+      };
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = "main";
+    };
+    runtime-instance-overrides-root-instance = {
+      root = {
+        inherit http;
+        instance = "main";
+      };
+      runtime.instance = "other";
+      expected = {
+        inherit http;
+        https = local;
+      };
+      expectedInstance = "other";
+    };
+    runtime-instance-root-http = {
+      root = {inherit http;};
+      runtime.instance = "main";
+      expected = {inherit http https;};
+      expectedInstance = "main";
+    };
     runtime-null-http = {
       root = {inherit http;};
       runtime.http = null;
@@ -97,6 +211,18 @@
         http = https;
         https = null;
       };
+    };
+    runtime-null-inherited-instance-https = {
+      root = {
+        inherit http;
+        instance = "main";
+      };
+      runtime.https = null;
+      expected = {
+        inherit http;
+        https = null;
+      };
+      expectedInstance = "main";
     };
     runtime-only-http = {
       root = {};
@@ -125,18 +251,45 @@
         https = local;
       };
     };
+    runtime-reselect-keeps-root-protocols = {
+      root = {
+        http = null;
+        inherit https;
+        instance = "main";
+      };
+      runtime.instance = "other";
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = "other";
+    };
   };
   semantics = lib.concatMapAttrs (backend: evaluate:
     lib.mapAttrs' (name: test:
       lib.nameValuePair "module-ai-proxy-${backend}-${name}"
       (mkTest "ai-proxy-${backend}-${name}" (let
         result = evaluate {
-          ai = {proxy = test.root;} // lib.genAttrs runtimes (_: {proxy = test.runtime or {};});
+          ai =
+            {
+              internal.proxyInstances = {
+                main = {
+                  http = https;
+                  inherit https;
+                };
+                other = {
+                  http = local;
+                  https = local;
+                };
+              };
+              proxy = test.root;
+            }
+            // lib.genAttrs runtimes (_: {proxy = test.runtime or {};});
         };
       in
         lib.all (runtime:
           result.config.ai.${runtime}.proxy
-          == test.expected
+          == test.expected // {instance = test.expectedInstance or null;}
           && result.config.ai.${runtime}.normalized.proxy == test.expected)
         runtimes)))
     cases)
@@ -162,6 +315,10 @@
     #!${pkgs.bash}/bin/bash
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+    if [[ "''${1-}" == no-proxy ]]; then
+      printf '%s\n' "''${NO_PROXY-absent}"
+      exit
+    fi
     printf '%s\n' "''${HTTP_PROXY-absent}" "''${HTTPS_PROXY-absent}" "''${https_proxy-absent}"
     EOF
     chmod +x "$out/bin/proxy-sentinel"
@@ -205,6 +362,9 @@
           else result.config.packages
         );
       installed = env: proxy: installedConfig (launcherConfig runtime env proxy);
+      selectedInstance = installedConfig (lib.recursiveUpdate (launcherConfig runtime {} {instance = "main";}) {
+        ai.internal.proxyInstances.main = {inherit http https;};
+      });
       kimchiNative = installedConfig (lib.recursiveUpdate (launcherConfig runtime {} {inherit http https;}) {
         ai.kimchi.native.harnessSettings.httpProxy = local;
       });
@@ -225,6 +385,8 @@
         export HOME="$TMPDIR/home" DEVENV_ROOT="$PWD"
         mkdir -p "$HOME"
         unset http_proxy https_proxy
+        actual=$(env -u NO_PROXY -u no_proxy ${selectedInstance}/bin/${exe} no-proxy)
+        test "$actual" = '127.0.0.1,localhost,::1'
         expected=$(printf '%s\n' ${lib.escapeShellArg http} ${lib.escapeShellArg https} absent)
         actual=$(env -u HTTP_PROXY -u HTTPS_PROXY ${ordinary}/bin/${exe})
         test "$actual" = "$expected"
@@ -388,10 +550,11 @@
   usageTracking = lib.mapAttrs' (backend: evaluate:
     lib.nameValuePair "module-ai-proxy-${backend}-kiro-usage-tracking"
     (mkTest "ai-proxy-${backend}-kiro-usage-tracking" (let
-      evaluateProxy = proxy:
+      evaluateProxy = root: proxy:
         evaluate {
           ai = {
-            proxy = {inherit http;};
+            proxy = root;
+            internal.proxyInstances.main = {inherit http https;};
             kiro = {
               inherit proxy;
               cli = {
@@ -402,8 +565,8 @@
             };
           };
         };
-      failures = map (entry: entry.message) (lib.filter (entry: !entry.assertion) (evaluateProxy {}).config.assertions);
-      optedOut = evaluateProxy {
+      failures = map (entry: entry.message) (lib.filter (entry: !entry.assertion) (evaluateProxy {inherit http;} {}).config.assertions);
+      optedOut = evaluateProxy {inherit http;} {
         http = null;
         https = null;
       };
@@ -412,7 +575,12 @@
       == 1
       && lib.hasInfix "usageTracking owns HTTP(S)/ALL/NO_PROXY" (builtins.head failures)
       && lib.hasInfix "ai.kiro.proxy = {http = null; https = null;}" (builtins.head failures)
-      && lib.all (entry: entry.assertion) optedOut.config.assertions)))
+      && lib.all (entry: entry.assertion) optedOut.config.assertions
+      && lib.all (entry: entry.assertion)
+      (evaluateProxy {instance = "main";} {
+        http = null;
+        https = null;
+      }).config.assertions)))
   backends;
 in {
   checks =
