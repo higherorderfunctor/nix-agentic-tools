@@ -1,20 +1,35 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-17 — proxy session flags carry a reference-reading
-> auth helper; the package uses nixpkgs' source-built voice and store-linked
-> runtime at its output root; daemon pins unwrap selected launchers; settings
-> stage through the files engine and selection uses an ungated layer-3 command;
-> devenv can opt into runtime project trust; launcher flags are checked as
-> root-command `uses`; Home Manager owns daemon selection and settings; both
-> backends run the offline project-document and project-config preflight before
-> it execs the original binary, isolated by the shared
-> `lib/ai/launcher-preflight.nix`.
+> **Last verified:** 2026-10-30 — the CLI update check defaults off in Home
+> Manager user config and devenv launcher flags for managed packages; proxy
+> session flags carry a reference-reading auth helper; the package uses nixpkgs'
+> source-built voice and store-linked runtime at its output root; daemon pins
+> unwrap selected launchers; settings stage through the files engine and
+> selection uses an ungated layer-3 command; devenv can opt into runtime project
+> trust; launcher flags are checked as root-command `uses`; Home Manager owns
+> daemon selection and settings; both backends run the offline project-document
+> and project-config preflight before it execs the original binary, isolated by
+> the shared `lib/ai/launcher-preflight.nix`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
 it. Left to upstream, the first start copies the invoking package into
 `releases/`, and an hourly updater then replaces it from GitHub, so a Nix bump
 never reaches the process that runs every tool call.
+
+## CLI update checks
+
+When `ai.codex.package != null`, `native.settings.check_for_update_on_startup`
+defaults to `false` at default priority. An explicit `true` re-enables the
+check; `null` omits the override. With `package = null`, the module adds no
+updater default, and devenv, having no launcher, keeps an explicit value in the
+trust-gated project file.
+
+Home Manager writes the setting in user `config.toml`. The managed devenv
+launcher passes the effective merged setting as
+`--config check_for_update_on_startup=false` or `true`, so the override applies
+even when Codex ignores an untrusted project's config. For managed packages,
+devenv excludes this key from `.codex/config.toml`.
 
 ## Home Manager pins it (`ai.codex.pinDaemonToPackage`, default on)
 
@@ -77,10 +92,14 @@ the next activation backs it up and restores the declaration.
 
 ## devenv never touches daemon state
 
-Its launcher always passes `--no-daemon`, the only flag that skips auto-start
-AND refuses to attach to a running daemon. Tools see the project shell, and the
-devenv-pinned version is what runs. `daemon_auto_start = true` or any
-`native.daemonSettings` in devenv is an assertion, not a silent no-op;
+Devenv cannot own the user-scope `app-server-daemon/settings.json`; the daemon
+starts only on an explicit user command under devenv. Its hourly updater is
+therefore outside devenv's managed CLI default.
+
+The devenv launcher always passes `--no-daemon`, the only flag that skips
+auto-start AND refuses to attach to a running daemon. Tools see the project
+shell, and the devenv-pinned version is what runs. `daemon_auto_start = true` or
+any `native.daemonSettings` in devenv is an assertion, not a silent no-op;
 `pinDaemonToPackage` is Home Manager-only and does not exist under devenv at
 all, so declaring it there is an unknown-option evaluation error rather than a
 rejected value. With the flag, `codex agents`, `codex queue` and `--remote`

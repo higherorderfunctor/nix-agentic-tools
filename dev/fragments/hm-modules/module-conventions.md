@@ -1,6 +1,6 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-23 — the services reconcile entry follows
+> **Last verified:** 2026-10-30 — the services reconcile entry follows
 > `reloadSystemd`; glab resolves redact references at service runtime; non-AI
 > owners use the layer-1 helper; Claude uses engine-backed `rw` ownership, Kiro
 > stages settings and hooks and drains all three legacy ledgers through the
@@ -266,13 +266,18 @@ old ledgers stay declared while Kiro is disabled.
 
 Devenv-side writes are otherwise unconditional (always write the file when
 `enable = true`): devenv deliveries are project-local links or engine copies,
-not home-dir writes. Claude is the exception. Its devenv `.claude/settings.json`
-and `.mcp.json` are emitted only when non-empty, because either one would shadow
-a project's own committed file, so an empty declaration writes nothing there.
-Kiro and Kimchi are the other exceptions: Kiro's project `settings/cli.json` and
-`settings/mcp.json` and Kimchi's project settings copies are claimed only when
-something is declared, so enabling the runtime does not take over and back up
-those files.
+not home-dir writes. Claude writes `.claude/settings.json` whenever Nix installs
+the package, because it carries the updater default, and otherwise only when
+something is declared. Its devenv `.mcp.json` is still emitted only when
+non-empty, because an empty document would shadow a project's own file. Codex
+passes its effective startup update-check setting through devenv's managed
+launcher, because Codex ignores project config in untrusted projects. Devenv
+excludes that key from project `.codex/config.toml` for managed packages. With
+`package = null`, neither runtime adds an updater default; Codex has no launcher
+and keeps explicit settings in the trust-gated project file. Kiro and Kimchi are
+exceptions: Kiro's project `settings/cli.json` and `settings/mcp.json` and
+Kimchi's project settings copies are claimed only when something is declared, so
+enabling the runtime does not take over and back up those files.
 
 **Secrets at activation time, not eval time.** Sops-nix paths
 (`cfg.userId.file`) are read by the activation script at run time via

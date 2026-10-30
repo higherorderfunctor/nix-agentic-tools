@@ -9,10 +9,12 @@
   hmCodexSettings = evaluated:
     evaluated.config.ai.codex.files."${evaluated.config.ai.codex.configDir}/config.toml".content.value;
 
-  # Home Manager alone turns daemon auto-start off by default; devenv's
-  # launcher runs without a daemon instead. Parity checks compare the rest.
-  withHmDaemonDefault = settings:
-    lib.recursiveUpdate settings {features.daemon_auto_start = false;};
+  # Home Manager renders both managed defaults in user config.toml.
+  withHmDefaults = settings:
+    lib.recursiveUpdate settings {
+      check_for_update_on_startup = false;
+      features.daemon_auto_start = false;
+    };
 in {
-  inherit codexGlobalFlags hmCodexSettings withHmDaemonDefault;
+  inherit codexGlobalFlags hmCodexSettings withHmDefaults;
 }

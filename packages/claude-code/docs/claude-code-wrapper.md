@@ -1,6 +1,7 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-17 — a selected proxy installs a launcher that
+> **Last verified:** 2026-10-30 — settings env defaults auto-update off on both
+> backends when Nix installs the binary; a selected proxy wraps the binary and
 > suppresses the inherited API-key descriptor before Claude caches it; plugins
 > are staged entries delivered through the ai-module files layers; the personal
 > plugin carries MCP servers only; unknown native settings and stale warning
@@ -19,16 +20,29 @@ Claude Code ships as a **pre-built compiled binary** (a Bun single-exec). The
 base package (`packages/claude-code/packages/ai/claude-code/package.nix`)
 installs it directly as `$out/bin/claude`.
 
+Both backends default `ai.claude.native.settings.env.DISABLE_AUTOUPDATER = "1"`
+with `lib.mkDefault` when `ai.claude.package != null`: Home Manager writes user
+settings, devenv writes project `.claude/settings.json`. Claude Code 2.1.312
+applies user settings `env` through `assignFromAboveTheRepository` into
+`process.env`; project settings also apply this key before trust because it is
+in the pre-trust safe set. Its updater reads `process.env.DISABLE_AUTOUPDATER`
+(static inspection of the pinned binary). A Nix-installed binary therefore
+always gets a settings document; with `ai.claude.package = null` the default is
+omitted and, with nothing else declared, no document is written. Set
+`ai.claude.native.settings.env.DISABLE_AUTOUPDATER = "0"` to re-enable updates.
+With a proxy selected, also set
+`ai.claude.native.settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = ""`,
+since that variable independently disables updates.
+
 ### Proxy credential suppression at launch
 
 The base package's `$out/bin/claude` is the pre-built binary itself. Without a
-proxy selection, the shared backend transform installs it unchanged. A selected
-`ai.proxy` or `ai.claude.proxy` installs a `lib.ai.mkLauncher` wrapper on both
-backends that unsets `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec. Claude
-Code 2.1.302 caches that descriptor before settings env applies, so clearing it
-in settings alone still sends the inherited key to the proxy. The endpoint and
-reference-reading `apiKeyHelper` stay in settings; no key is baked into the
-launcher.
+proxy selection it is installed bare. A selected `ai.proxy` or `ai.claude.proxy`
+installs the `claude-code-proxy` launcher on both backends to unset
+`CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec. Claude Code 2.1.302 caches
+that descriptor before settings env applies, so clearing it in settings alone
+still sends the inherited key to the proxy. The endpoint and reference-reading
+`apiKeyHelper` stay in settings; no key is baked into the launcher.
 
 Claude Code 2.1.157 and later discovers a plugin as a personal plugin at
 `<configDir>/skills/<name>` (yes, `skills/`, not `plugins/`), so nothing needs a

@@ -1,6 +1,6 @@
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-28 — each runtime's proxy library holds one
+> **Last verified:** 2026-10-30 — each runtime's proxy library holds one
 > lowering per backend (only `cliproxyapi`, which also lowers external
 > selections) and derives native values at `mkDefault`. Claude uses
 > `redact.assign` and the shared reader through `apiKeyHelper` for file, command
@@ -36,19 +36,20 @@ inherited custom headers, which can carry a credential.
 `CLAUDE_CODE_USE_FOUNDRY` are blank because an inherited switch sends model
 traffic past the proxy; the live check measures both on the pinned CLI. Claude
 Code 2.1.302 reads and caches `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before
-applying settings env. A blank in settings cannot suppress it. A selected proxy
-therefore installs a launcher through `lib.ai.mkLauncher` that unsets the
-descriptor before exec; the flag is the `cliproxyapi` lowering's
-`launcherFlags`, so another backend's lowering adds none unless it asks, and
-without a selection the package stays unchanged. An explicit
-`ai.claude.package = null` keeps settings delivery and warns that the caller
-must unset the descriptor when launching an unmanaged Claude.
+applying settings env. A selected proxy therefore adds `launcherFlags` to the
+managed launcher to unset the descriptor before exec. `ai.claude.package = null`
+keeps settings delivery without an updater default and warns that the caller
+must unset the descriptor for the unmanaged binary.
 
 The `cliproxyapi` lowering also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
-and `DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
-`settings.disableClaudeAiConnectors` to `true` to disable claude.ai connectors.
-A lowering returns `settings` and optional `launcherFlags`; nothing outside it
-adds Claude settings for a selection.
+at `mkDefault` and `settings.disableClaudeAiConnectors = true`. Independently,
+`mkClaude.nix` defaults `native.settings.env.DISABLE_AUTOUPDATER = "1"` on both
+backends when Nix installs the package. Re-enable with
+`ai.claude.native.settings.env.DISABLE_AUTOUPDATER = "0"`; with a proxy, also
+set
+`ai.claude.native.settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = ""`,
+since that variable independently disables updates. The settings default needs
+no launcher; `proxy.nix` wraps the package only when its lowering adds flags.
 
 The endpoint lands in `native.settings`, so the settings.json the backend
 already writes (user on Home Manager, project on devenv). Every derived leaf is
@@ -140,7 +141,7 @@ records on both backends.
 
 `packages/claude-code/checks/claude-proxy.nix` covers Claude on both backends:
 key forms, precedence (quiet defaults and proxy leaves yield to a consumer's
-value, nothing selected writes nothing, a selection does not warn), and the
+value, no proxy leaves the updater default, a selection does not warn), and the
 per-runtime override. Its runtime check executes each generated helper with
 shell metacharacters and multiline key contents, checks failure output for
 leaks, and asserts inherited API-key and bearer variables are cleared. It also

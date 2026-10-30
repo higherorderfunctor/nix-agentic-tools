@@ -59,7 +59,7 @@ in
 
     postInstall = ''
       makeWrapper $out/libexec/copilot $out/bin/copilot \
-        --add-flags "--no-auto-update"
+        --set-default COPILOT_AUTO_UPDATE false
     '';
 
     passthru = {

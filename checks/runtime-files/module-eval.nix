@@ -766,27 +766,31 @@ in {
       '';
 
     module-ai-checks-tier-replacement = let
+      fixture = {
+        ai = {
+          checks = {
+            all = "exit 1";
+            # Nix-installed Claude always has settings, independent of rules.
+            settings = ''
+              test "$AI_RUNTIME" = claude
+              test "$#" = 1
+              test "$1" = .claude/settings.json
+              ${pkgs.jq}/bin/jq -e '. == {
+                "$schema": "https://json.schemastore.org/claude-code-settings.json",
+                "env": {"DISABLE_AUTOUPDATER": "1"}
+              }' "$1" >/dev/null
+            '';
+          };
+          claude.enable = true;
+          gitSshConfigWorkaround = false;
+          rules.probe.text = "probe";
+        };
+      };
       replaced =
-        (evalDevenv {
-          ai = {
-            checks.all = "exit 1";
-            gitSshConfigWorkaround = false;
-            claude = {
-              checks.rules = "";
-              enable = true;
-            };
-            rules.probe.text = "probe";
-          };
-        }).config;
-      inherited =
-        (evalDevenv {
-          ai = {
-            checks.all = "exit 1";
-            gitSshConfigWorkaround = false;
-            claude.enable = true;
-            rules.probe.text = "probe";
-          };
-        }).config;
+        (evalDevenv (lib.recursiveUpdate fixture {
+          ai.claude.checks.rules = "";
+        })).config;
+      inherited = (evalDevenv fixture).config;
       expectedFailure = pkgs.testers.testBuildFailure inherited.ai.claude._generatedTree;
     in
       assert replaced.ai.claude.checks.rules == "";

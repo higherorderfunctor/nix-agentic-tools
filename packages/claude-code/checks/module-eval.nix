@@ -84,7 +84,8 @@
       in
         arm.packages evaluated.config
         == []
-        && (claudeSettings evaluated).effortLevel == "medium"))
+        && (claudeSettings evaluated).effortLevel == "medium"
+        && !((claudeSettings evaluated).env or {} ? DISABLE_AUTOUPDATER)))
 
       # Native settings reach the document, including nested permission leaves,
       # and the document names its JSON schema for editors.
@@ -113,6 +114,15 @@
           };
         }).env.FOO
         == "bar"))
+
+      (perBackend "autoupdate-default-overridable" (arm:
+        (settingsOf arm {
+          ai.claude = {
+            enable = true;
+            native.settings.env.DISABLE_AUTOUPDATER = "0";
+          };
+        }).env.DISABLE_AUTOUPDATER
+        == "0"))
 
       (perBackend "effort-level-valid-written" (arm:
         (settingsOf arm {
@@ -352,14 +362,30 @@
           && lib.all (path: on.config.ai.files.${path}.method == "symlink") paths
       ))
 
-      # Nothing set, nothing written: an empty settings.json would still
-      # shadow a project's own committed file on devenv.
-      # `gitSshConfigWorkaround` would put GIT_SSH_COMMAND in `env` on devenv
-      # (it has no `programs.git`), so it is off to keep the document empty.
-      (perBackend "settings-empty-writes-no-file" (arm:
+      # Even with no consumer settings, the updater default owns the document.
+      # Disable the SSH workaround to isolate that default on devenv.
+      (perBackend "settings-default-only-document" (arm: let
+        evaluated = arm.eval {
+          ai.claude.enable = true;
+          ai.gitSshConfigWorkaround = false;
+        };
+      in
+        (arm.files evaluated.config) ? ".claude/settings.json"
+        && claudeSettings evaluated
+        == {
+          "$schema" = "https://json.schemastore.org/claude-code-settings.json";
+          env.DISABLE_AUTOUPDATER = "1";
+        }))
+
+      # An external installation keeps its own updater policy, and with
+      # nothing else declared no document is written to shadow a project's own.
+      (perBackend "settings-package-null-writes-no-file" (arm:
         !((arm.files
           (arm.eval {
-            ai.claude.enable = true;
+            ai.claude = {
+              enable = true;
+              package = null;
+            };
             ai.gitSshConfigWorkaround = false;
           }).config)
           ? ".claude/settings.json")))
@@ -853,7 +879,8 @@ in {
       );
 
       # An empty flag map with no installMethod delivers no files. Prune still
-      # retires the prior generation's keys; no apply pass is needed.
+      # retires the prior generation's keys; no apply pass is needed. The
+      # always-written settings document is dropped so only the flag map counts.
       module-claude-hm-unpin-empty-emits-prune = mkTest "claude-hm-unpin-empty-emits-prune" (
         let
           result = evalHm {
@@ -861,6 +888,7 @@ in {
               enable = true;
               native = {
                 installMethod = null;
+                settings = lib.mkForce {};
                 unpinLaunchEffort = lib.mkForce {};
               };
             };

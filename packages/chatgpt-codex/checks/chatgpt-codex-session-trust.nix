@@ -1,5 +1,6 @@
 # The rendered launcher must carry runtime project trust into both Codex and
-# the preflight, without writing persistent user trust.
+# the preflight, without writing persistent user trust, and the effective
+# check_for_update_on_startup as a --config session flag that a later user -c overrides.
 {
   lib,
   pkgs,
@@ -11,11 +12,12 @@
     import json, sys
     print(json.dumps(sys.argv[1:]))
   '';
-  launcher = package: trustProjectForSession: "${lib.head
+  launcher = package: settings: trustProjectForSession: "${lib.head
     (harness.evalDevenv {
       ai.codex = {
         enable = true;
         inherit package trustProjectForSession;
+        native.settings = settings;
       };
     }).config.packages}/bin/codex";
 in {
@@ -24,7 +26,14 @@ in {
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.python3}/bin/python3 ${./session-trust-test.py} \
-        ${lib.escapeShellArgs [(launcher stub false) (launcher stub true) (launcher harness.aiStubs.chatgpt-codex false) (launcher harness.aiStubs.chatgpt-codex true)]}
+        ${lib.escapeShellArgs [
+        (launcher stub {} false)
+        (launcher stub {} true)
+        (launcher harness.aiStubs.chatgpt-codex {} false)
+        (launcher harness.aiStubs.chatgpt-codex {} true)
+        (launcher stub {check_for_update_on_startup = true;} false)
+        (launcher stub {check_for_update_on_startup = null;} false)
+      ]}
       echo PASS > "$out"
     '';
     module-codex-session-trust-hm-unknown-option = harness.mkTest "codex-session-trust-hm-unknown-option" (!(builtins.tryEval (builtins.deepSeq

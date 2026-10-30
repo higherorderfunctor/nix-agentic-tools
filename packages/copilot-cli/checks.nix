@@ -1,3 +1,6 @@
-{
-  imports = [./checks/module-eval.nix];
+{...}: {
+  imports = [
+    ./checks/autoupdate-default.nix
+    ./checks/module-eval.nix
+  ];
 }

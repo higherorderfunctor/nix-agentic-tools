@@ -25,6 +25,7 @@
     if entry.content.text != null
     then entry.content.text
     else builtins.readFile entry.content.source;
+  settingsWarnings = result: lib.filter (lib.hasPrefix "ai.kiro.cli.native.settings") result.config.warnings;
 in {
   checks =
     {
@@ -350,7 +351,6 @@ in {
               };
             };
           };
-          settingsWarnings = result: lib.filter (lib.hasPrefix "ai.kiro.cli.native.settings") result.config.warnings;
           warnings = settingsWarnings unknown;
         in
           (
@@ -448,6 +448,7 @@ in {
           devenv.config.packages
           == []
           && hm.config.home.packages == []
+          && !(kiroCliSettings hm ? "app.disableAutoupdates")
           && lib.hasInfix "PACKAGE-NULL-CONTEXT" (markdownInput devenv "AGENTS.md").text
           && lib.hasInfix "PACKAGE-NULL-CONTEXT" (kiroSteeringContent hm)."AGENTS.md".text
       );
@@ -769,14 +770,32 @@ in {
           builtins.length packages >= 1
       );
 
-      module-kiro-hm-empty-settings-emits-writer = mkTest "kiro-hm-empty-settings-emits-writer" (
+      module-kiro-hm-autoupdate-override = let
+        evaluated = evalHm {
+          ai.kiro.cli = {
+            enable = true;
+            native.settings.app.disableAutoupdates = false;
+          };
+        };
+      in
+        assert (kiroCliSettings evaluated)."app.disableAutoupdates" == false;
+        assert settingsWarnings evaluated == [];
+          mkWrapperGrepTest {
+            name = "kiro-hm-autoupdate-override";
+            package = builtins.head evaluated.config.home.packages;
+            bin = "kiro-cli";
+            needles = ["export KIRO_NO_AUTO_UPDATE=0"];
+          };
+
+      module-kiro-hm-default-settings-emits-writer = mkTest "kiro-hm-default-settings-emits-writer" (
         let
           evaluated = evalHm {ai.kiro.cli.enable = true;};
         in
           evaluated.config.ai.files.".kiro/settings/cli.json".method
           == "ro"
           && evaluated.config.ai.files.".kiro/settings/cli.json".mode == null
-          && kiroCliSettings evaluated == {}
+          && kiroCliSettings evaluated == {"app.disableAutoupdates" = true;}
+          && settingsWarnings evaluated == []
       );
 
       module-kiro-hm-writes-settings-activation = mkTest "kiro-hm-writes-settings-activation" (

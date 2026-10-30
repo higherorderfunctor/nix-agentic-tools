@@ -83,7 +83,24 @@
   mkKiroCliWithPayload = rawFeatures: bundlePatches: fhsPayload: let
     kas = mkKas bundlePatches;
     managedKas = (bundlePatches.replace or []) != [];
-    kasFlags = "${
+    # Linux dispatch traverses both wrappers; preserve opt-in after removing the variable.
+    autoUpdateGuard = lastHop:
+      pkgs.lib.escapeShellArg ''
+        if [ -n "''${KIRO_NO_AUTO_UPDATE+x}" ] || [ "''${NAT_KIRO_AUTO_UPDATE-}" != on ]; then
+          nat_kiro_no_auto_update="''${KIRO_NO_AUTO_UPDATE-1}"
+          case "''${nat_kiro_no_auto_update,,}" in
+            ""|0|false|off|no)
+              export NAT_KIRO_AUTO_UPDATE=on
+              unset KIRO_NO_AUTO_UPDATE
+              ;;
+            *) export KIRO_NO_AUTO_UPDATE=1 ;;
+          esac
+          unset nat_kiro_no_auto_update
+        fi
+        ${pkgs.lib.optionalString lastHop "unset NAT_KIRO_AUTO_UPDATE"}
+      '';
+    autoUpdateWrapperFlags = lastHop: "--run 'set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :' --run ${autoUpdateGuard lastHop}";
+    wrapperFlags = lastHop: "${autoUpdateWrapperFlags lastHop} ${
       if managedKas
       then "--set"
       else "--set-default"
@@ -138,15 +155,15 @@
               }
               rm "$out/bin/kiro-cli"
               makeWrapper "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli" "$out/bin/kiro-cli" \
-                --set-default TERM xterm-256color ${kasFlags} \
+                --set-default TERM xterm-256color ${wrapperFlags false} \
                 --argv0 "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli"
             ''
             else ''
-              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color ${kasFlags}
+              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color ${wrapperFlags false}
             ''
           )
           + ''
-            wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color ${kasFlags}
+            wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color ${wrapperFlags true}
           ''
           # Deliberately AFTER the wrapProgram calls: the patcher finds the ELF by
           # content, so it is indifferent to how many times wrappers have renamed
@@ -186,7 +203,7 @@
               }))
             platforms;
 
-            inherit kas;
+            inherit autoUpdateWrapperFlags kas;
             withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches null;
             withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches null;
 

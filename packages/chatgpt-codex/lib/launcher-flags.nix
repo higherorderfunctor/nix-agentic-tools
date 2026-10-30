@@ -4,5 +4,5 @@
 # `removed`.
 {
   devenv = ["--no-daemon"];
-  hookTrust = ["--config"];
+  sessionConfig = ["--config"];
 }

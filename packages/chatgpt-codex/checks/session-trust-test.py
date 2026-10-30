@@ -1,4 +1,7 @@
-"""Offline session trust controls against rendered launchers and pinned Codex."""
+"""Offline session trust controls against rendered launchers and pinned Codex,
+and the effective check_for_update_on_startup as a --config session flag that a
+later user -c overrides.
+"""
 
 import json
 import os
@@ -8,7 +11,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-stub_off, stub_on, codex_off, codex_on = sys.argv[1:]
+stub_off, stub_on, codex_off, codex_on, stub_update_true, stub_update_null = sys.argv[1:]
 root = Path(os.environ["TMPDIR"]) / r'repo.with.dot 😀 and space "quote" \ slash'
 root.mkdir()
 (root / ".codex").mkdir()
@@ -26,6 +29,21 @@ environment = os.environ | {"CODEX_HOME": str(codex_home), "DEVENV_ROOT": str(ro
 def launch(binary, *arguments):
     return subprocess.run([binary, *arguments], cwd=root, env=environment, capture_output=True, text=True, check=True)
 
+
+for binary, expected in ((stub_off, False), (stub_update_true, True), (stub_update_null, None)):
+    arguments = json.loads(launch(binary, "--version").stdout)
+    overrides = [tomllib.loads(arguments[index + 1]) for index, flag in enumerate(arguments) if flag == "--config"]
+    assert overrides == ([] if expected is None else [{"check_for_update_on_startup": expected}]), arguments
+    print(f"verified: update-check session override={expected}")
+
+arguments = json.loads(launch(stub_off, "-c", "check_for_update_on_startup=true", "--version").stdout)
+overrides = [
+    tomllib.loads(arguments[index + 1])["check_for_update_on_startup"]
+    for index, flag in enumerate(arguments)
+    if flag in ("--config", "-c")
+]
+assert overrides == [False, True], arguments
+print("verified: user -c overrides the launcher update-check default")
 
 for binary, trusted in ((stub_off, False), (stub_on, True)):
     result = launch(binary, "--version")
