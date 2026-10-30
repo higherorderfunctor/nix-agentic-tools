@@ -99,6 +99,32 @@
         }
       ];
     };
+    # ai-inference: selection and the resolved endpoint for runtimes.
+    ai-inference = {
+      scopes = [
+        "checks/ai-inference/**"
+        "lib/ai/inference/**"
+        "packages/chatgpt-codex/lib/inference.nix"
+        "packages/claude-code/lib/inference.nix"
+      ];
+      sources = ["ai-inference"];
+    };
+    # ai-inference-runtimes: how Claude and Codex render the resolved endpoint.
+    ai-inference-runtimes = {
+      scopes = [
+        "packages/chatgpt-codex/checks/chatgpt-codex-inference.nix"
+        "packages/chatgpt-codex/checks/inference-test.py"
+        "packages/chatgpt-codex/lib/inference.nix"
+        "packages/claude-code/checks/claude-inference.nix"
+        "packages/claude-code/lib/inference.nix"
+      ];
+      sources = [
+        {
+          dir = "ai-inference";
+          name = "ai-inference-runtimes";
+        }
+      ];
+    };
     # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
     # The files and activation contract has one separate rule below.
     # Post-factory, the fanout logic lives in each per-package factory
@@ -180,32 +206,6 @@
           dir = "ai-module";
           location = "package";
           name = "contract";
-        }
-      ];
-    };
-    # ai-proxy: selection and the resolved endpoint for runtimes.
-    ai-proxy = {
-      scopes = [
-        "checks/ai-proxy/**"
-        "lib/ai/proxy/**"
-        "packages/chatgpt-codex/lib/proxy.nix"
-        "packages/claude-code/lib/proxy.nix"
-      ];
-      sources = ["ai-proxy"];
-    };
-    # ai-proxy-runtimes: how Claude and Codex render the resolved endpoint.
-    ai-proxy-runtimes = {
-      scopes = [
-        "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix"
-        "packages/chatgpt-codex/checks/proxy-test.py"
-        "packages/chatgpt-codex/lib/proxy.nix"
-        "packages/claude-code/checks/claude-proxy.nix"
-        "packages/claude-code/lib/proxy.nix"
-      ];
-      sources = [
-        {
-          dir = "ai-proxy";
-          name = "ai-proxy-runtimes";
         }
       ];
     };

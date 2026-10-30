@@ -52,8 +52,8 @@ hoc machinery beside an existing abstraction.
   `packages/ai-module/lib/instances.nix`: one service and port claim per
   instance, its settings rendered through `serviceEntry.files`, the same owner
   module on Home Manager and devenv. Selecting an owner's instance by name goes
-  through its `select`; a proxy selection names an instance across owners, so it
-  looks the name up in the proxy registry instead. This keeps every
+  through its `select`; an inference selection names an instance across owners,
+  so it looks the name up in the inference registry instead. This keeps every
   instance-shaped tool on one option shape and one lowering. See
   `packages/ai-module/docs/DESIGN.md`, Services.
 - **Typed settings come from the extracted generator.** An owner with extracted
@@ -67,33 +67,34 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
-- **Proxy selection is runtime library code.** Proxy owners add their instances
-  to one registry, `ai.internal.proxyInstances`, by ordinary module merge and
-  claim each name in `ai.claims.proxy-instance`; `lib/ai/proxy` names no owner
-  except one: an external `url` + `key` selection has no registry entry, so it
-  lowers as `cliproxyapi`, named once in `externalBackend`. An instance's
-  `clients` are optional, so an owner whose instances take no client key
-  registers none. Root `ai.proxy` copies its set fields down to
-  `ai.<runtime>.proxy` at default priority, so a runtime value wins field by
-  field; a runtime selecting the other form (`instance` vs `url`) inherits none
-  of the root's fields of that form; `instance = null` opts a runtime out. The
-  selected instance's backend picks the one lowering a runtime runs, and a
-  runtime without that lowering fails an assertion naming the backend.
-  Everything a backend sets, launcher flags included, lives in its lowering.
-  Lowerings set native values at default priority, so a consumer's own native
-  value wins. Vetted 2026-10-28. This keeps a second proxy owner a module merge
-  rather than an edit to a shared owner table, and keeps a consumer's override a
-  plain definition. See `lib/ai/proxy/default.nix`,
-  `lib/ai/app/mkBackendTransform.nix`, `packages/claude-code/lib/proxy.nix` and
-  `packages/chatgpt-codex/lib/proxy.nix`.
+- **Inference selection is runtime library code.** Inference proxy owners add
+  their instances to one registry, `ai.internal.inferenceInstances`, by ordinary
+  module merge and claim each name in `ai.claims.inference-instance`;
+  `lib/ai/inference` names no owner except one: an external `url` + `key`
+  selection has no registry entry, so it lowers as `cliproxyapi`, named once in
+  `externalBackend`. An instance's `clients` are optional, so an owner whose
+  instances take no client key registers none. Root `ai.settings.inference`
+  copies its set fields down to `ai.<runtime>.settings.inference` at default
+  priority, so a runtime value wins field by field; a runtime selecting the
+  other form (`instance` vs `url`) inherits none of the root's fields of that
+  form; `instance = null` opts a runtime out. The selected instance's backend
+  picks the one lowering a runtime runs, and a runtime without that lowering
+  fails an assertion naming the backend. Everything a backend sets, launcher
+  flags included, lives in its lowering. Lowerings set native values at default
+  priority, so a consumer's own native value wins. Vetted 2026-10-28. This keeps
+  a second proxy owner a module merge rather than an edit to a shared owner
+  table, and keeps a consumer's override a plain definition. See
+  `lib/ai/inference/default.nix`, `lib/ai/app/mkBackendTransform.nix`,
+  `packages/claude-code/lib/inference.nix` and
+  `packages/chatgpt-codex/lib/inference.nix`.
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;
   OAuth rules carry exact auth-file IDs, API-key rules carry exact base URLs,
   and one API table lowers those credentials. A Harness selects
-  `proxy = {instance; clientKey;}` without publishing keys or rules. External
-  `url` + `key` selections add nothing to Instances. See
-  `lib/ai/proxy/default.nix`, `packages/cliproxyapi/lib/providers.nix` and
+  `settings.inference = {instance; clientKey;}` without publishing keys or
+  rules. External `url` + `key` selections add nothing to Instances. See
+  `lib/ai/inference/default.nix`, `packages/cliproxyapi/lib/providers.nix` and
   `packages/cliproxyapi/modules/instances.nix`.
 - **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
   (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`
