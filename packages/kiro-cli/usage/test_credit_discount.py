@@ -131,7 +131,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertIn("~62.5% (8/10)", output)
         self.assertIn("not observed cache hits", output)
         output = query.render_summary(report)
-        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~183\s+~55.6K\s+~70%\s+~62%\n")
+        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~183\s+~54.6K\s+~70%\s+~62%\n")
         for label, discount in (("Main", "50"), ("Sub/WF", "75"), ("Total", "62")):
             self.assertRegex(output, rf"\n{re.escape(label)}\s+\d+\s+[\d.]+\s+\S+\s+\S+\s+\S+\s+~\d+%\s+~{discount}%\n?")
         self.assertNotIn("not observed cache hits", output)

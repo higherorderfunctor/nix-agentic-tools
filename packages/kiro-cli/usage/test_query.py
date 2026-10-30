@@ -333,8 +333,9 @@ class QueryTests(unittest.TestCase):
                         (context, json.dumps({"output_text_chars": chars}), ident))
 
     def test_estimates_fill_only_missing_counters_and_mark_coverage(self):
-        # Full miss / full hit at 30,000 tokens and no output, on the discount curves rates.json's opus entry migrated.
-        miss, hit = ((slope * 3.0 + .5034) / 603 for slope in (74, 20))
+        # Full miss / full hit at 30,000 tokens and no output, at rates.json's opus rates.
+        rates = query.credit_discount.RATES["claude-opus-5.5"]
+        miss, hit = (rates["fixed_per_call"] + rate * 30000 for rate in (rates["miss_input"], rates["hit_input"]))
         self.estimable("miss", miss)
         self.estimable("hit", hit, conversation="child")
         self.db.execute("""UPDATE captures SET metadata_json=json_set(metadata_json,'$."kiro:root_conversation_id"','root') WHERE id='hit'""")

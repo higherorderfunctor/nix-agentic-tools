@@ -307,12 +307,38 @@ Keep those artifacts for offline attribution. Its final session-index step is
 nonfatal and prints a separate retry command if needed. Tests use fake
 executables and make no provider calls.
 
-Refresh `usage/models.json` from the free model listing with
+Fit the runs' rates, reading their captures read-only:
+
+```console
+python3 packages/kiro-cli/usage/calibration.py fit MANIFEST...
+python3 packages/kiro-cli/usage/calibration.py fit MANIFEST... --write
+```
+
+`fit` pools each model's calls across the manifests into its fixed cost per call
+and its miss, hit and output credits per token. A model needs three cold calls
+(`medium_cold`, `size_short`, `size_long`) at two input sizes or more, an output
+pair whose long reply bills more than its short one, and a `medium_warm` repeat
+billed below 80% of its cold call. Without them, or when a cold call is more
+than 5% of its credits off the fitted line, the model is refused and never
+written. The table shows each rate's ratio to `claude-opus-5.5`'s, scaled by the
+rate-multiplier share. `--write` replaces each accepted model's whole
+`usage/rates.json` entry, with provenance naming the manifests; nothing else
+writes that file. `--db` works as for `probe`. Refresh `usage/models.json` from
+the free model listing with
 `python3 packages/kiro-cli/usage/calibration.py models`.
 
 Findings of 2026-10-29 (`kiro-cli` 2.35.2, low effort):
 
-- The four probed models' `medium_delayed` repeats billed exactly their cold
-  credits, consistent with the cache expiring within six quiet minutes. In
-  interactive sessions every full miss followed at least 222 seconds idle,
-  consistent with a ~5 minute TTL.
+- Hits billed 10–53% of their cold calls and `claude-haiku-5.5`'s expired
+  `medium_delayed` 97%. `claude-sonnet-5.5` bills exactly its multiplier share
+  of `claude-opus-5.5`'s rates in `usage/rates.json`. The 200k-window
+  `claude-sonnet-4.5` and `claude-haiku-4.5` scale with their multipliers for
+  hit and output tokens but bill misses at 0.51 of that. Their probe predates
+  per-family agents: its `size_short` rode a shared prefix 6.5% below the line
+  on the 1M models. `usage/rates.json` is regenerated with
+  `calibration.py fit MANIFEST... --write` over the probe manifests, and each
+  entry's provenance names the manifests it came from.
+- The four models' `medium_delayed` repeats billed exactly their cold credits,
+  consistent with the cache expiring within six quiet minutes. In interactive
+  sessions every full miss followed at least 222 seconds idle, consistent with a
+  ~5 minute TTL.
