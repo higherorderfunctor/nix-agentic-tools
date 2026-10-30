@@ -147,18 +147,21 @@
       }
     else null;
 
-  # Normalized settings narrow the root one field at a time. This is a
+  # Normalized settings narrow the root one field at a time, for the fields
+  # the record lists in surfaceSupport.settings.fields; unlisted fields stay
+  # null in the normalized option. This is a
   # translation input only: factories render supported fields into their
   # native.settings option at mkDefault priority, and native option merging
   # arbitrates against consumer-authored values.
   resolvedSettings =
     if supportsPool "settings"
-    then {
-      reasoningEffort = aiCommon.resolveOverride {
-        topValue = config.ai.settings.reasoningEffort;
-        cliValue = poolCfg.settings.reasoningEffort;
-      };
-    }
+    then
+      lib.mapAttrs (field: topValue:
+        aiCommon.resolveOverride {
+          inherit topValue;
+          cliValue = poolCfg.settings.${field};
+        })
+      (lib.getAttrs (appRecord.surfaceSupport.settings.fields or []) config.ai.settings)
     else {};
 
   proxyPath = ["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"];

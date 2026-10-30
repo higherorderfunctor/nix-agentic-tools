@@ -5,6 +5,8 @@
   ...
 }: let
   policy = import ../../config/ai-delivery.nix {inherit lib;};
+  reasonsFor = import ../../lib/ai/app/supportReasons.nix;
+  settingsProbes = import ../../lib/testing/normalized-settings-probes.nix {inherit lib;};
   # lib/testing/module-harness.nix declares `warnings` in both backend stubs,
   # so this reads the module-system branch of mkBackendTransform rather than
   # extending the eval to create the option a real backend always has.
@@ -57,30 +59,31 @@
       url = "http://127.0.0.1:8317";
     };
     rules.probe.text = "probe";
-    settings.reasoningEffort = "high";
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
   };
+  inherit (settingsProbes) requestFields settingSample settingsFields;
   # Every absent or inert primary row gets a populated request and an empty
   # control through the actual factory. Unsupported runtime options use root.
   gaps = lib.filter (row: row.primitive == "notApplicable" || row ? deliveryGap) policy.rows;
   rowCase = row: let
     enabled = harness.setEnable row.ecosystem true;
     empty = evaluate row.mode enabled;
-    messagesFor = path: evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath path sample.${row.surface}));
-    warns = path: let
-      messages = messagesFor path;
-      needle = "${lib.showOption path} is set but ${row.mode} does not deliver it to ${row.ecosystem} (reason: ${row.deliveryGap or row.reason})";
+    warns = field: path: let
+      warningPath = path ++ lib.optional (row.surface == "settings") field;
+      value =
+        if row.surface == "settings"
+        then settingSample field
+        else sample.${row.surface};
+      messages = evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath warningPath value));
+      needle = "${lib.showOption warningPath} is set but ${row.mode} does not deliver it to ${row.ecosystem} (reason: ${row.deliveryGap or row.reason})";
     in
       builtins.elem needle messages
       && !(builtins.elem needle empty);
-    # A runtime without a native settings file is probed at the root.
+    # Policy rows probe normalized settings at the portable root.
     path =
       if row.surface == "settings"
-      then
-        if optionPaths.hasNativeSettings row.ecosystem
-        then optionPaths.nativeSettings row.ecosystem
-        else ["ai" "settings"]
+      then ["ai" "settings"]
       else if row.surface == "permissions"
       then ["ai" row.ecosystem "permissions"]
       else ["ai" row.surface];
@@ -91,7 +94,7 @@
     # default instead of staying silently unexercised.
     if row.surface == "permissions" && row.ecosystem != "kiro"
     then row.inputOptions == []
-    else warns path;
+    else lib.all (field: warns field path) (requestFields row.surface);
   # Conditional record gaps keep focused requests that trigger their predicates.
   requestedCases =
     map (runtime: {
@@ -249,12 +252,18 @@
   (builtins.attrNames records);
   delivered = cell: builtins.elem cell.mode (cell.support.backends or []);
   surfaceCases = lib.concatMap (cell:
-    map (path:
-      cell
-      // {
-        inherit path;
-        value = sampleAt cell.surface [];
-      })
+    lib.concatMap (path:
+      map (field:
+        cell
+        // {
+          inherit field;
+          path = path ++ lib.optional (field != null) field;
+          value =
+            if field == null
+            then sampleAt cell.surface []
+            else settingSample field;
+        })
+      (requestFields cell.surface))
     (surfacePaths cell.runtime cell.surface))
   surfaceCells;
   absenceReason = case:
@@ -270,22 +279,27 @@
       if builtins.length absent == 1
       then (builtins.head absent).deliveryGap or (builtins.head absent).reason
       else throw "expected one policy absence writer for ${case.runtime}/${case.mode}/${case.surface}");
-  unavailableCases = lib.filter (case: !(delivered case)) surfaceCases;
+  deliveredCase = case:
+    delivered case && (case.field == null || builtins.elem case.field (case.support.fields or []));
+  unavailableCases = lib.filter (case: !(deliveredCase case)) surfaceCases;
   missingCases =
     map (case:
-      {
-        reason = absenceReason case;
+      case
+      // {
+        reason =
+          if delivered case
+          then (reasonsFor case.runtime).settingsField
+          else absenceReason case;
         count = 1;
-      }
-      // case)
+      })
     (let
-      runtimeCases = lib.filter (case: builtins.length case.path > 2) unavailableCases;
+      runtimeCases = lib.filter (case: builtins.elemAt case.path 1 == case.runtime) unavailableCases;
     in
       unavailableCases
       # Root and runtime pool both set still warn once, naming the runtime pool.
-      ++ map (case: case // {extra = lib.setAttrByPath ["ai" case.surface] case.value;}) runtimeCases
+      ++ map (case: case // {extra = lib.setAttrByPath (["ai" case.surface] ++ lib.optional (case.field != null) case.field) case.value;}) runtimeCases
       # A value set only on the public normalized option warns too.
-      ++ map (case: case // {path = lib.init case.path ++ ["normalized" case.surface];}) runtimeCases);
+      ++ map (case: case // {path = lib.init (optionPaths.pool case.runtime case.surface) ++ ["normalized" case.surface] ++ lib.optional (case.field != null) case.field;}) runtimeCases);
   conditional = gap: gap ? when || (gap.each or false);
   staticCases = lib.concatMap (cell:
     map (gap:
@@ -331,7 +345,7 @@
     assert lib.assertMsg (lib.any (case: matchesGap case recorded) cases)
     "conditional warning gap has no case: ${recorded.runtime}/${recorded.mode}/${recorded.surface}/${lib.showOption recorded.gap.path}"; true)
   conditionalGaps;
-  supportedCases = lib.filter delivered surfaceCases;
+  supportedCases = lib.filter deliveredCase surfaceCases;
   consumedRootsQuiet = lib.all (case: let
     messages =
       evaluate case.mode (lib.recursiveUpdate (harness.setEnable case.runtime true)
@@ -341,7 +355,10 @@
     staticCases);
     prefix = "${lib.showOption case.path} is set but ${case.mode} does not deliver it to ${case.runtime} (reason:";
   in
-    lib.assertMsg (lib.all (message: !(lib.hasPrefix prefix message) || builtins.elem message allowed) messages)
+    lib.assertMsg (lib.all (message:
+      !(lib.hasPrefix prefix message)
+      || builtins.elem message allowed)
+    messages)
     "supported surface warned: ${case.runtime}/${case.mode}/${lib.showOption case.path}")
   supportedCases;
   expectedMessage = case: "${lib.showOption case.path} is set but ${case.mode} does not deliver it to ${case.runtime} (reason: ${case.reason})";
@@ -350,30 +367,51 @@
       (lib.setAttrByPath ["ai" "hooks" "PermissionRequest"] gapSamples.hooks.PermissionRequest))
     == [])
   policy.modes;
-  # Supported effort delivery stays quiet.
-  effortSilent = lib.all ({
-    runtime,
-    modes,
-    paths,
-    extra ? {},
-  }:
-    lib.all (mode:
-      lib.all (path: let
-        enabled = lib.recursiveUpdate (harness.setEnable runtime true) extra;
-      in
-        evaluate mode (lib.recursiveUpdate enabled (lib.setAttrByPath path "high"))
-        == evaluate mode enabled)
-      paths)
-    modes) [
-    {
-      runtime = "kimchi";
-      modes = ["devenv" "hm"];
-      paths = [
-        ["ai" "settings" "reasoningEffort"]
-        ["ai" "kimchi" "settings" "reasoningEffort"]
-      ];
+  # Pin support before evaluating writers that require their settings fields.
+  settingsFieldsSilent = let
+    # Pin existing delivery independently of the declaration being tested.
+    expectedConsumers.reasoningEffort = ["claude" "codex" "kimchi"];
+  in
+    lib.all (case: let
+      enabled = harness.setEnable case.runtime true;
+    in
+      deliveredCase case
+      && evaluate case.mode (lib.recursiveUpdate enabled (lib.setAttrByPath case.path case.value))
+      == evaluate case.mode enabled)
+    (lib.filter (case:
+      case.field
+      != null
+      && (deliveredCase case || builtins.elem case.runtime (expectedConsumers.${case.field} or [])))
+    surfaceCases);
+  settingsPolicyChildren =
+    # Real delivered records consume every field; this fixture must have a gap.
+    policy.settingsGaps "testapp" {
+      backends = ["hm"];
+      fields = builtins.tail settingsFields;
     }
-  ];
+    == [
+      {
+        inputOptions = [["ai" "settings" (builtins.head settingsFields)]];
+        primitive = "notApplicable";
+        reason = "testapp's surfaceSupport.settings.fields does not consume this normalized setting.";
+      }
+    ]
+    && lib.all (row: let
+      support = supportFor row.ecosystem "settings";
+      expected = lib.subtractLists (support.fields or []) settingsFields;
+      children = lib.filter (writer:
+        lib.any (path: builtins.length path == 3 && lib.take 2 path == ["ai" "settings"])
+        (writer.inputOptions or [])) (row.additionalWriters or []);
+      reason = (reasonsFor row.ecosystem).settingsField;
+    in
+      map (writer: builtins.elemAt (builtins.head writer.inputOptions) 2) children
+      == expected
+      && lib.all (writer: writer.primitive == "notApplicable" && writer.reason == reason) children)
+    (lib.filter (row:
+      row.surface
+      == "settings"
+      && builtins.elem row.mode ((supportFor row.ecosystem "settings").backends or []))
+    policy.rows);
   caseMode = case: case.mode or "devenv";
   # Memoize identical enabled-empty controls across both case collections.
   emptyCaseWarnings = lib.mapAttrs (mode: modeCases:
@@ -601,7 +639,8 @@ in {
       && trustWarnings {backend = "hm";} == []
     );
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
-      lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
+      lib.assertMsg settingsFieldsSilent "existing and declared normalized settings consumers must stay supported and quiet"
+      && lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
       && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
       && declarationsCovered
@@ -610,7 +649,7 @@ in {
       && lib.assertMsg consumedRootsQuiet "consumed shared surfaces must not warn"
       && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their paths, backend, runtime, count, and disabled/absent controls"
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
-      && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
+      && lib.assertMsg settingsPolicyChildren "policy must list every undeclared normalized settings field"
       && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );
     ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;

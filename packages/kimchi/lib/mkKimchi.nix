@@ -736,7 +736,7 @@ in
         }
       ];
       rules = {};
-      settings = {};
+      settings.fields = ["reasoningEffort"];
       shell = {};
       skills = {};
     };
