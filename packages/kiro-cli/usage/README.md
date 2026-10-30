@@ -263,7 +263,8 @@ win per call, and a group mixing both sums exact and estimated values with
 model with a known window `W`:
 
 - total `I = p/100 * W`, which includes output tokens once;
-- output `O = chars/4`, where chars counts `output_text` plus streamed
+- output `O = chars / chars_per_token`, the model's fitted ratio in `rates.json`
+  or 4 without one, where chars counts `output_text` plus streamed
   `response.function_call_arguments.delta` and `response.reasoning_text.delta`
   deltas, or GenerateAssistantResponse `toolUseEvent.input` and
   `reasoningContentEvent.text`, so tool-only calls are not `O=0`; a capture with

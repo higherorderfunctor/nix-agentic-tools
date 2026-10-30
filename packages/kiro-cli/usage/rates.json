@@ -1,37 +1,44 @@
 {
   "claude-haiku-4.5": {
+    "chars_per_token": 4.73728441872639,
+    "credit_error": 0.0003238671897074603,
     "fixed_per_call": 0.00017049097427348017,
-    "hit_input": 6.647726764183804e-7,
+    "hit_input": 6.647669676355021e-7,
     "miss_input": 1.2603648424543953e-6,
     "output": 4.54284287115904e-5,
     "provenance": {
-      "calls": 6,
+      "calls": 10,
       "date": "2026-10-30",
       "effort": "low",
       "kiro_cli_version": "2.35.2",
       "manifests": [
-        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json"
+        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json",
+        "/tmp/kiro-usage-calibration-iwdnx0sd/results/manifest.json"
       ],
-      "max_residual": 9.494687533816007e-17
+      "max_residual": 2.5177650811427466e-16
     }
   },
   "claude-opus-5.5": {
-    "fixed_per_call": 0.0006188704980842619,
-    "hit_input": 3.325686388529442e-6,
+    "chars_per_token": 3.11045437753971,
+    "credit_error": 0.0004913191245286382,
+    "fixed_per_call": 0.0004029854406130129,
+    "hit_input": 3.324643770895759e-6,
     "miss_input": 1.2271973466003316e-5,
     "output": 0.0002281570309372676,
     "provenance": {
-      "calls": 6,
+      "calls": 10,
       "date": "2026-10-30",
       "effort": "low",
       "kiro_cli_version": "2.35.2",
       "manifests": [
-        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json"
+        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json",
+        "/tmp/kiro-usage-calibration-iwdnx0sd/results/manifest.json"
       ],
-      "max_residual": 2.343611711031596e-16
+      "max_residual": 1.0086001066535498e-16
     }
   },
   "claude-sonnet-4.5": {
+    "credit_error": 1.5455280944232171e-16,
     "fixed_per_call": 0.0005573942807440418,
     "hit_input": 2.1605099023138113e-6,
     "miss_input": 4.096185737976783e-6,
@@ -42,25 +49,29 @@
       "effort": "low",
       "kiro_cli_version": "2.35.2",
       "manifests": [
-        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json"
+        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json",
+        "/tmp/kiro-usage-calibration-iwdnx0sd/results/manifest.json"
       ],
       "max_residual": 2.148852818325983e-16
     }
   },
   "claude-sonnet-5.5": {
-    "fixed_per_call": 0.0004055376568796454,
-    "hit_input": 2.1616965074825493e-6,
-    "miss_input": 7.976782752902156e-6,
+    "chars_per_token": 3.007487735605472,
+    "credit_error": 0.0004916588686076212,
+    "fixed_per_call": 0.0002684842026482448,
+    "hit_input": 2.1610190457841705e-6,
+    "miss_input": 7.976782752902154e-6,
     "output": 0.0001450302369843356,
     "provenance": {
-      "calls": 6,
+      "calls": 10,
       "date": "2026-10-30",
       "effort": "low",
       "kiro_cli_version": "2.35.2",
       "manifests": [
-        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json"
+        "/tmp/kiro-usage-calibration-adqi17x2/results/manifest.json",
+        "/tmp/kiro-usage-calibration-iwdnx0sd/results/manifest.json"
       ],
-      "max_residual": 5.957437948434721e-16
+      "max_residual": 2.7879811344559855e-16
     }
   }
 }

@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import sqlite3
@@ -191,6 +192,33 @@ class CalibrationTests(unittest.TestCase):
             "auto": {"context_window_tokens": 1000000, "rate_multiplier": 1.0},
             "m-1": {"context_window_tokens": 200000, "rate_multiplier": 0.4}}}, indent=2, sort_keys=True) + "\n")
 
+    def test_holdout_families_share_or_split_the_leading_nonce(self):
+        prompts = calibration.holdout_prompts("s")
+        self.assertEqual(len({calibration.agent_name("m", label) for label in calibration.HOLDOUT_LABELS}), 3)
+        self.assertEqual(len({prompts[label].split("\n")[0] for label in calibration.HOLDOUT_LABELS}), 3)
+        self.assertNotIn("cedar", " ".join(calibration.holdout_prompts("s").values()))  # the holdout reuses no probe text
+
+    def test_validate_run_interleaves_models_and_evaluates(self):
+        status, (manifest, root, output), calls = self.execute(models="claude-sonnet-4.6,claude-opus-5.5", command="validate")
+        self.assertEqual(len(calls), 10)
+        labels = [record["label"] for record in manifest["calls"]]
+        self.assertEqual(labels[:4], ["holdout_small_cold", "holdout_small_warm"] * 2)  # interleaved per step
+        self.assertEqual(calls[0][-1], calls[1][-1])
+        self.assertFalse(any("--resume-id" in call for call in calls))
+        self.assertEqual(len(list((root / "results").glob("*.agent-validation.*"))), 12)  # 2 models x 3 families x 2 logs
+        self.assertRegex(output, r"claude-sonnet-4.6\s+holdout_small_cold\s.*no rates")
+        # The fake captures carry no output characters, so opus-5.5's designed calls are missing and fail the run.
+        self.assertRegex(output, r"claude-opus-5.5\s+holdout_small_cold\s.*missing")
+        self.assertEqual(status, 1)
+        (self.root / "sessions.json.calls").unlink()
+        status, _, _ = self.execute(models="claude-sonnet-4.6", command="validate")
+        self.assertEqual(status, 1)  # a requested model without rates fails too
+
+    def test_validate_refuses_a_manifest_with_run(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()), \
+                patch.object(sys, "argv", ["calibration", "validate", "--run", str(self.root / "manifest.json")]):
+            calibration.main()
+
     def test_run_seed_changes_prefix(self):
         self.assertNotEqual(calibration.prompts("one")["medium_cold"], calibration.prompts("two")["medium_cold"])
 
@@ -296,7 +324,7 @@ def bill(rates, input, output, cached=0):
 
 
 class Captures(unittest.TestCase):
-    """A private collector database that fit reads manifests' captures from."""
+    """A private collector database that fit and validate read manifests' captures from."""
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -324,7 +352,7 @@ class FitTests(Captures):
         db = calibration.open_evidence(self.db_path)
         self.addCleanup(db.close)
         return {model: calibration.fit_model(model, [calls], "v", "low")
-                for model, calls in calibration.fit_calls(db, {"calls": self.calls}).items()}
+                for model, calls in calibration.fit_calls(db, {"calls": self.calls}, calibration.discount.CHARS_PER_TOKEN).items()}
 
     def priced(self, model, rates, label, input, output, hit=0, chars=5):
         """One capture priced at rates, its context the tokens over model's window and its output exact."""
@@ -332,19 +360,20 @@ class FitTests(Captures):
         self.capture(model, label, (input + output) / calibration.discount.WINDOWS[model] * 100, credits, chars,
                      output=output)
 
-    def synthetic(self, model, share, warm_hits=True, long_output=None, short_hit=0, delayed_hit=0):
+    def synthetic(self, model, share, warm_hits=True, long_output=None, short_hit=0, delayed_hit=0,
+                  ratio=calibration.discount.CHARS_PER_TOKEN):
         """Calls billed exactly at opus rates times share; the output pair differs only in output.
 
         long_output is output_long's exact output_tokens, billed in place of its 691 chars' estimate and added to its
-        context, so the pair's input stays equal."""
+        context, so the pair's input stays equal. ratio is the replies' true chars per token."""
         rates = {name: calibration.discount.RATES["claude-opus-5.5"][name] * share for name in calibration.RATE_NAMES}
         window = calibration.discount.WINDOWS[model]
-        added = (long_output or round(691 / 4)) - round(9 / 4)  # output_long's output over output_short's
+        added = (long_output or round(691 / ratio)) - round(9 / ratio)  # output_long's output over output_short's
         for label, context, chars, hit in (("medium_cold", 8.0, 5, 0), ("medium_warm", 8.0, 5, 1 if warm_hits else 0),
                                            ("size_short", 3.0, 5, short_hit), ("size_long", 20.0, 5, 0),
                                            ("output_short", 2.0, 9, .9), ("output_long", 2.0 + added / window * 100, 691, .9), ("medium_delayed", 8.0, 5, delayed_hit)):
             output = long_output if label == "output_long" else None
-            tokens = calibration.discount.estimate(model, context, None, chars, output)
+            tokens = calibration.discount.estimate(model, context, None, chars, output, ratio=ratio)
             credits = bill(rates, tokens["input_tokens"], tokens["output_tokens"], hit * tokens["input_tokens"])
             self.capture(model, label, context, credits, chars, output=output)
         return rates
@@ -376,7 +405,7 @@ class FitTests(Captures):
         for model in ("claude-opus-5.5", "claude-sonnet-4.5"):  # unfitted, and refused: both keep their entries
             self.assertEqual(written[model], calibration.discount.RATES[model])
         haiku = written["claude-haiku-4.5"]
-        self.assertEqual(haiku.keys(), {*calibration.RATE_NAMES, "provenance"})
+        self.assertEqual(haiku.keys(), {*calibration.RATE_NAMES, "credit_error", "provenance"})
         for name in calibration.RATE_NAMES:
             self.assertAlmostEqual(haiku[name] / rates[name], 1, places=6)
         self.assertEqual({key: haiku["provenance"][key] for key in ("calls", "effort", "kiro_cli_version", "manifests")},
@@ -426,6 +455,55 @@ class FitTests(Captures):
         results = self.fitted()
         self.assertEqual(results["claude-haiku-4.5"], {"refused": "output pair implies a non-positive output rate"})
         self.assertNotIn("refused", results["claude-sonnet-4.5"])
+
+    def test_holdout_pairs_join_the_hit_mean_and_their_cold_calls_the_residual(self):
+        """A pooled validate manifest: its warm pair hits half its input and its cold call bills 14% over the line,
+        which max_residual records without refusing the probe's own fit or moving the hit rate."""
+        rates = self.synthetic("claude-haiku-4.5", .2)
+        probe = len(self.calls)
+        self.priced("claude-haiku-4.5", rates, "holdout_small_warm", 12_000, 1, hit=.5)
+        cold = bill(rates, 12_000, 1) * 1.14
+        self.capture("claude-haiku-4.5", "holdout_small_cold", 12_001 / 200_000 * 100, cold, 5, output=1)
+        hit = (rates["hit_input"] + (rates["miss_input"] + rates["hit_input"]) / 2) / 2  # medium_warm's and the half hit
+        output, written = self.fit(write=True, splits=(probe,))
+        haiku = written["claude-haiku-4.5"]
+        self.assertEqual(haiku["provenance"]["calls"], 8)
+        self.assertAlmostEqual(haiku["provenance"]["max_residual"], .14 / 1.14, places=6)
+        self.assertGreater(haiku["credit_error"], .14 / 1.14 / 6 ** .5)  # the 14% cold call and the two hits' misses
+        self.assertAlmostEqual(haiku["hit_input"] / hit, 1, places=6)
+
+    def prose_pool(self, rates, ratio):
+        """A probe replying at ratio chars per token, then a validate manifest's 200-token prose reply at that ratio."""
+        probe = len(self.calls)
+        self.priced("claude-haiku-4.5", rates, "holdout_prose_out", 8_000, 200, chars=round(200 * ratio))
+        # chars only: the reply's tokens are what the fit solves for
+        with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+            db.execute("UPDATE captures SET output_tokens=NULL WHERE id LIKE '%holdout_prose_out%'")
+        return probe
+
+    def test_prose_reply_fits_chars_per_token_and_the_refit_reads_it(self):
+        """Replies at 2.5 chars per token: chars/4 reads the 5-char replies as 1 token, not 2, so the first fit's fixed
+        cost carries a token of output less input. Solved from those rates the prose reply reads 199 tokens, and the
+        refit at 500 / 199 reads the probe's replies as their true tokens and returns the rates billed."""
+        rates = self.synthetic("claude-haiku-4.5", .2, ratio=2.5)
+        _, written = self.fit(write=True, splits=(self.prose_pool(rates, 2.5),))
+        haiku = written["claude-haiku-4.5"]
+        self.assertAlmostEqual(haiku["chars_per_token"], 500 / 199, places=9)
+        for name in calibration.RATE_NAMES:
+            self.assertAlmostEqual(haiku[name] / rates[name], 1, places=6)
+
+    def test_credit_error_past_the_limit_fits_no_chars_per_token(self):
+        """A holdout cold call 14% over the line leaves credit_error near 5.5%: the entry keeps chars/4 and the rates
+        fitted at it, whose fixed cost carries the token of output read as input."""
+        rates = self.synthetic("claude-haiku-4.5", .2, ratio=2.5)
+        probe = self.prose_pool(rates, 2.5)
+        self.capture("claude-haiku-4.5", "holdout_small_cold", 12_002 / 200_000 * 100, bill(rates, 12_000, 2) * 1.14, 5)
+        _, written = self.fit(write=True, splits=(probe,))
+        haiku = written["claude-haiku-4.5"]
+        self.assertGreater(haiku["credit_error"], calibration.CHARS_ERROR_LIMIT)
+        self.assertNotIn("chars_per_token", haiku)
+        self.assertAlmostEqual(haiku["fixed_per_call"] / (rates["fixed_per_call"] + rates["output"] - rates["miss_input"]),
+                               1, places=6)
 
     def test_identical_output_pair_refuses_that_model_and_fits_the_rest(self):
         """output_long totalling output_short's tokens leaves no difference to divide by; other models still fit."""
@@ -496,6 +574,67 @@ class FitTests(Captures):
         results = self.fitted()
         self.assertEqual(results["claude-haiku-4.5"], {"refused": "cold calls share one input size"})
         self.assertNotIn("refused", results["claude-sonnet-4.5"])
+
+class ValidateTests(Captures):
+    """Holdout calls billed from rates.json; a perturbed call must fail by name."""
+
+    TOKENS = {"holdout_large_cold": (30_000, 1, 0), "holdout_large_warm": (30_000, 1, 30_000),
+              "holdout_prose_out": (8_000, 200, 0), "holdout_small_cold": (12_000, 1, 0),
+              "holdout_small_warm": (12_000, 1, 12_000)}  # (input, output, cached by design)
+
+    def billed(self, model, scale=None, prose_chars=None):
+        """Captures priced by model's rates at the designed cache, their chars read back at its chars_per_token."""
+        rates, window = calibration.discount.RATES[model], calibration.discount.WINDOWS[model]
+        for label, (input, output, cached) in self.TOKENS.items():
+            credits = calibration.discount.price(rates, input, output, cached)
+            chars = round(output * rates.get("chars_per_token", calibration.discount.CHARS_PER_TOKEN))
+            self.capture(model, label, (input + output) / window * 100, (scale or {}).get(label, 1) * credits,
+                         prose_chars if label == "holdout_prose_out" and prose_chars else chars)
+
+    def evaluated(self, models=()):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = calibration.evaluate({"calls": self.calls, "models": list(models)}, self.db_path)
+        rows = {tuple(cells[:2]): cells for cells in (re.split(r"\s{2,}", line) for line in output.getvalue().splitlines()
+                                                      if line.startswith("claude-"))}
+        return status, rows
+
+    def test_holdout_billed_by_the_rates_passes_and_reads_the_prose_ratio(self):
+        self.billed("claude-opus-5.5", prose_chars=1000)
+        with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:  # billed where priced; only the ratio moves
+            db.execute("UPDATE captures SET output_tokens=200 WHERE id LIKE '%holdout_prose_out%'")
+        status, rows = self.evaluated()
+        self.assertEqual(status, 0)
+        for label in calibration.HOLDOUT_LABELS:
+            self.assertEqual(rows["claude-opus-5.5", label][-1], "PASS")
+        self.assertEqual(rows["claude-opus-5.5", "holdout_prose_out"][-2], "5")  # 1,000 chars over 200 tokens
+
+    def test_perturbed_calls_fail_by_name(self):
+        """A flat 0.27 warm discount and a 5% credit error; haiku-4.5's hit/miss is 0.525, so 0.27 cannot pass."""
+        cold = calibration.discount.price(calibration.discount.RATES["claude-haiku-4.5"], 12_000, 1, 0)
+        warm = calibration.discount.price(calibration.discount.RATES["claude-haiku-4.5"], 12_000, 1, 12_000)
+        self.billed("claude-haiku-4.5", scale={"holdout_prose_out": 1.05, "holdout_small_warm": .27 * cold / warm})
+        status, rows = self.evaluated()
+        self.assertEqual(status, 1)
+        failed = {label for (model, label), row in rows.items() if row[-1] == "FAIL"}
+        self.assertEqual(failed, {"holdout_prose_out", "holdout_small_warm"})
+
+    def test_missing_designed_calls_fail_and_unfitted_model_reports_no_rates(self):
+        """A dropped call, and a requested model without calls, are missing; an unfitted model has no rates."""
+        self.billed("claude-opus-5.5")
+        self.calls = [call for call in self.calls if call["label"] != "holdout_large_warm"]
+        self.calls.append({"label": "holdout_small_cold", "model": "claude-sonnet-4.6", "status": "complete",
+                           "capture_count": 1, "captures": [{"id": "claude-opus-5.5.holdout_small_cold"}]})
+        status, rows = self.evaluated(["claude-sonnet-5.5"])
+        self.assertEqual(status, 1)
+        self.assertEqual(rows["claude-opus-5.5", "holdout_large_warm"][-1], "missing")
+        self.assertEqual(rows["claude-sonnet-5.5", "holdout_small_cold"][-1], "missing")
+        self.assertEqual({row[-1] for (model, _), row in rows.items() if model == "claude-sonnet-4.6"}, {"no rates"})
+
+    def test_zero_credit_call_is_missing(self):
+        self.billed("claude-opus-5.5", scale={"holdout_small_cold": 0})
+        status, rows = self.evaluated()
+        self.assertEqual((status, rows["claude-opus-5.5", "holdout_small_cold"][-1]), (1, "missing"))
 
 
 if __name__ == "__main__":
