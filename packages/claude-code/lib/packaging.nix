@@ -85,9 +85,9 @@ rec {
     # Non-empty guard. The census can only fail loud OR return a schema; what it
     # must never do is return a nearly-empty one that gets committed as the new
     # truth. PR CI regenerates this sidecar on the bump PR, so the drift check
-    # would go green over a collapsed extraction — the
-    # same blind spot the model-catalog shape assertion below exists for. 160
-    # public keys at 2.1.245; the floor is a deliberate fraction of that.
+    # would go green over a collapsed extraction — the same blind spot the
+    # model-catalog shape assertion below exists for. 160 public keys at 2.1.245;
+    # the floor is a deliberate fraction of that.
     publicKeyCount=$("$jq" '.settings.publicKeys | length' ./census.json)
     if [ "$publicKeyCount" -lt 100 ]; then
       echo "claude-extract: the settings census produced only $publicKeyCount public keys (expected >= 100) — the schema builder ran but returned almost nothing" >&2

@@ -153,5 +153,6 @@ Locally: `nix run .#checks.<host>.<tool>-extracted.passthru.regenerate`.
 `annotations.json` (`{deadKeys, settings}`),
 `passthru.{patchedSource,extracted}` on the package, a `checks.nix` calling
 `extraction.checks`, a mutant list covering every guard, and `lib/default.nix`
-exporting `<owner>.settings`. The generator check then covers it without an
-edit.
+exporting `<owner>.settings`. Register the owner and its extracted directory in
+`checks/extracted/owners.nix` so PR CI runs regeneration. The generator check
+then covers it without an edit.

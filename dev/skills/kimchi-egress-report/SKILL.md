@@ -9,8 +9,8 @@ description: >-
 
 - `scripts/generate.mjs` derives `hosts`, `networkCallSites` and
   `endpointVariables` from the committed network and environment facts through
-  `lib.extracted`. Kimchi updates run it automatically; the drift check compares
-  parsed JSON. `header.facts` names the release.
+  `lib.extracted`. PR CI runs it after Kimchi fact regeneration; the drift check
+  compares parsed JSON. `header.facts` names the release.
 - `scripts/scan.mjs` reads release trees for commands, dependencies, Go sites
   and hosts, spawned executables and path literals. Run it only on operator
   request. `header.scan` names its release; `header.provenance` names each

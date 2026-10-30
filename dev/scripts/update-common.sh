@@ -630,10 +630,12 @@ refresh_package_source_version() {
   "$fixer"
 }
 
-# Select packages with the capability refresh_input_rust_toolchains needs.
-package_update_roster_expr() {
-  local capability="$1" result="$2"
-  cat <<EOF
+# git-branchless moves with its flake input; refresh its Rust recipe literal
+# before input verification evaluates the newly pinned source.
+refresh_input_rust_toolchains() {
+  local name="$1" packages package roster
+  roster=$(
+    cat <<'EOF'
 let
   flake = builtins.getFlake (toString ./.);
   name = builtins.getEnv "NAT_UPDATE_NAME";
@@ -641,19 +643,13 @@ let
   selected = n:
     let
       p = builtins.getAttr n ps;
-      r = builtins.tryEval ((p.passthru or {}) ? $capability
+      r = builtins.tryEval ((p.passthru or {}) ? fixRustToolchain
         && (p.passthru.updateFlakeInput or null) == name);
     in r.success && r.value;
   names = builtins.filter selected (builtins.attrNames ps);
-in $result
+in builtins.concatStringsSep "\n" names
 EOF
-}
-
-# git-branchless moves with its flake input; refresh its Rust recipe literal
-# before input verification evaluates the newly pinned source.
-refresh_input_rust_toolchains() {
-  local name="$1" packages package roster
-  roster=$(package_update_roster_expr fixRustToolchain 'builtins.concatStringsSep "\n" names')
+  )
   if ! packages=$(NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr "$roster"); then
     log_failure "could not discover Rust toolchain refreshers for input $name"
     return 1

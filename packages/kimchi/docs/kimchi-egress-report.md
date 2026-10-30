@@ -1,8 +1,8 @@
 ## Kimchi egress report
 
-> **Last verified:** 2026-10-29 (commit d5f613ea) — the report's network fields
-> come from the `network` and `environment` facts, read through `lib.extracted`,
-> by `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
+> **Last verified:** 2026-10-29 — the report's network fields come from the
+> `network` and `environment` facts, read through `lib.extracted`, by
+> `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
 > cover; the drift check compares parsed JSON; regeneration uses installed
 > `treefmt`.
 

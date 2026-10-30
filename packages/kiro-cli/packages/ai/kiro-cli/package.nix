@@ -175,10 +175,9 @@
             };
 
             # Every platform's release, read statically on this host: no
-            # binary is executed, so the drift check and the update script
-            # measure every platform from one host. IFD-safe: consumed ONLY by
-            # `nix build` (drift check + update script), never readFile'd at
-            # eval.
+            # binary is executed, so PR CI and the drift check measure every
+            # platform from one host. IFD-safe: consumed ONLY by `nix build`
+            # (PR CI + drift check), never readFile'd at eval.
             extracted = pkgs.lib.mapAttrs (target: _:
               pkgs.runCommandLocal "kiro-cli-${target}-extracted.json" {} (vu.mkKiroExtract {
                 architecture = (pkgs.lib.systems.elaborate target).parsed.cpu.name;

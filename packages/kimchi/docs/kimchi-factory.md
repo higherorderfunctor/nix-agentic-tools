@@ -1,6 +1,6 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-29 (commit 14df0c3c) — bundled skills gated off by
+> **Last verified:** 2026-10-29 — bundled skills gated off by
 > `requires-resource` leave each visible skill as its own in-place root; config
 > guards include the helpers readConfigExtras hands `parsed.<key>` to, and a
 > `delete` target is not a read; pi 1.3 settings follow reexports and inherited

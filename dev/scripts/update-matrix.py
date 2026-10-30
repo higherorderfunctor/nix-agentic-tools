@@ -78,7 +78,7 @@ REASON_MAX_LINES = 12
 # says what a human must do -- e.g. oxlint's "catalog no longer pins
 # @napi-rs/cli at 3.9.1 - bump napi.version and regenerate the patch". The
 # plain tail of the log is useless here: it ends on the generic
-# "HELD BACK: <name> (nix-update, formatter or commit failed)" line, ~20 lines
+# "HELD BACK: <name> (toolchain refresh, nix-update, formatter or commit failed)" line, ~20 lines
 # after the sentence that actually names the blocker.
 BUILDER_OUTPUT = re.compile(r"^\s*> ?(.*)$")
 

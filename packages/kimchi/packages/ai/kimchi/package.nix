@@ -205,7 +205,6 @@
       ${sourcesFile} > "$extraction_tmp"
     ${pkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}
     ${pkgs.nix}/bin/nix fmt -- ${sourcesFile}
-
   '';
 
   fixPnpmDepsHash = packageLib.mkHashFix {

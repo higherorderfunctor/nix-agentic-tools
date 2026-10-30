@@ -3,7 +3,7 @@
 #
 # The sidecar is read as an ordinary committed file. Never read the check's
 # `passthru.extracted` derivation here: that is import-from-derivation and
-# poisons evaluation for every consumer. Freshness belongs to the update job
+# poisons evaluation for every consumer. Freshness belongs to PR CI
 # and the `semble-extracted` drift check, not to evaluation.
 #
 # Two layers decide how Semble treats a file, and they come from different

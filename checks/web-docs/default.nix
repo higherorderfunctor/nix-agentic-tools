@@ -12,7 +12,7 @@ in {
         ${pkgs.python3}/bin/python3 ${./snapshot.py} ${../../lib/web-docs/snapshot.py} \
           ${pkgs.docs.kimchi-docs.snapshotConfig} ${pkgs.docs.kimchi-docs} \
           ${pkgs.docs.kiro-model-catalog.src.snapshotConfig} ${pkgs.docs.kiro-model-catalog.src} \
-          ${pkgs.nix}/bin/nix ${pkgs.coreutils}/bin/false
+          ${pkgs.nix}/bin/nix
         touch "$out"
       '';
 }

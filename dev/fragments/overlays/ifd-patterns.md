@@ -207,13 +207,11 @@ classifier handles only strings and string-to-string maps. Failures are
 controls prose are optional. Kimchi secret environment rows must state what they
 control.
 
-PR CI runs the owner check's `passthru.regenerate` and commits changed
-measurements to same-repository PR branches, Linux before Darwin. Update scripts
-write versions, hashes and locks. Hand annotation files are never regenerated.
-`lib/git-tool-settings/rules.nix` and Kimchi's `extract/rules.nix` share their
-rules between consumers and drift checks. Extractor floors detect collapsed
-surfaces; live consumer checks detect removed names used by this repo, including
-the git presets' typed-option check.
+Update scripts write versions, hashes and locks. Hand annotation files are never
+regenerated. `lib/git-tool-settings/rules.nix` and Kimchi's `extract/rules.nix`
+share their rules between consumers and drift checks. Extractor floors detect
+collapsed surfaces; live consumer checks detect removed names used by this repo,
+including the git presets' typed-option check.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and commits
 declared facts and measured raws in `packages/<owner>/extracted/`. Binary probes
@@ -295,9 +293,9 @@ bump. Fix the wiring; the file is a symptom.
 failure**, not a cosmetic gap: it is guaranteed red the first time the version
 moves, and completely silent before that. glab shipped that way and the gap sat
 invisible from #560 until its first-ever bump (#621). If you add another
-extracted package, wire the regeneration in the same commit.
+extracted package, register its owner and extracted directory in
+`checks/extracted/owners.nix` so PR CI runs regeneration.
 
-`mkUpdateScript` callers use `extraExtract` for source and dependency pin work.
 PR CI also self-heals extractor changes at unchanged versions; review the facts
 diff with the extractor change. Fork PRs receive an artifact and a failing check
 until the measured files are committed.
@@ -690,8 +688,9 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   thing that spells itself that way.** `applyPatches` dying in `patchPhase`
   means `nix-build` never emits a hash mismatch, so nix-update reports
   `failed to retrieve hash when trying to update <pkg>.src` and the sweep
-  records `HELD BACK: <pkg> (nix-update, formatter or commit failed)`. Neither
-  names a patch. The real `Hunk #N FAILED` lines are in the
+  records
+  `HELD BACK: <pkg> (toolchain refresh, nix-update, formatter or commit failed)`.
+  Neither names a patch. The real `Hunk #N FAILED` lines are in the
   `--- nix stderr (last 20 lines) ---` tail in the update job log.
 
   **Read that tail before concluding anything**, because the `--no-src` failure

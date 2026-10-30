@@ -98,7 +98,8 @@ builds and pushes:
   asks `nix` lazily so sourcing the script never needs it; `nix-update` gets
   `--flake "$(nat_attr <name>)"`, which it resolves as a flake-root attribute
   path;
-- generated hash fixers in `lib/packaging.nix` use `ciAttr`;
+- generated hash and source-version fixers in `lib/packaging.nix`, including the
+  Go-floor and Rust-toolchain fixers, use `ciAttr`;
 - `verify_all_packages`, `update.yml` and the warm-ifd action evaluate
   `.#ciPackages.<system>`.
 

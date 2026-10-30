@@ -17,8 +17,7 @@ kimchi_tree = Path(sys.argv.pop(1))
 kimchi_date = (kimchi_tree / "ATTRIBUTION").read_text().split("Snapshot date: ")[1].splitlines()[0]
 kiro = json.loads(Path(sys.argv.pop(1)).read_text())
 kiro_tree = Path(sys.argv.pop(1))
-nix, fail = sys.argv[1:3]
-del sys.argv[1:3]
+nix = sys.argv.pop(1)
 
 
 def captured_fetch(root):
