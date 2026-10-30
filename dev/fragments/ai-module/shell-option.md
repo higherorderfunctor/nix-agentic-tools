@@ -1,9 +1,10 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-17 — Claude's proxy launcher suppresses only the
-> inherited API-key descriptor; shell delivery cells derive from each runtime
-> record's `surfaceSupport`, with Copilot's absence and reason from its record;
-> `optionNamespaces.launcher` places `shell`; Copilot is github.com Copilot.
+> **Last verified:** 2026-10-30 — Claude's managed launcher handles inference
+> credential suppression and startup proxy CA trust; shell delivery cells derive
+> from each runtime record's `surfaceSupport`, with Copilot's absence and reason
+> from its record; `optionNamespaces.launcher` places `shell`; Copilot is
+> github.com Copilot.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -212,8 +213,9 @@ three runtimes demonstrably do not perform.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Kimchi and Kiro. Claude is still outside it;
-  `native.settings.env` is its native equivalent. Its optional proxy launcher
-  only suppresses the inherited API-key descriptor.
+  `native.settings.env` is its native equivalent. Its managed launcher handles
+  inference credential suppression and startup proxy CA trust; an explicit
+  native extra-CA value wins. See [Network Proxy](../ai-proxy/ai-proxy.md).
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more
