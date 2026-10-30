@@ -148,6 +148,55 @@ in {
             && warnings request false == []
         ) ["devenv" "hm"]
     );
+    factory-mkRuntime-declared-static-gap = mkTest "mkRuntime-declared-static-gap" (
+      # Kimchi's only static gap, PermissionRequest, is not a native hook option.
+      # A fixture exposes a dropped field in a pool with root copy-down instead.
+      let
+        record = ai.app.mkRuntime {
+          inherit pkgs;
+          name = "testapp";
+          surfaceSupport.settings = {
+            fields = ["inference" "reasoningEffort"];
+            gaps = [
+              {
+                path = ["inference" "url"];
+                reason = "testapp drops the inference URL.";
+              }
+            ];
+          };
+        };
+        gap = builtins.head record.surfaceSupport.settings.gaps;
+        rootPath = ["settings" "inference"];
+        poolPath = [record.name "settings" "inference"];
+        normalizedPath = [record.name "normalized" "settings" "inference"];
+        inputs = [
+          {
+            config = lib.setAttrByPath rootPath (settingSample "inference");
+            warningPath = poolPath ++ ["url"];
+          }
+          {
+            config = lib.setAttrByPath poolPath (settingSample "inference");
+            warningPath = poolPath ++ ["url"];
+          }
+          {
+            config = lib.setAttrByPath normalizedPath (resolvedSettingSample "inference");
+            warningPath = normalizedPath ++ ["url"];
+          }
+        ];
+      in
+        lib.all (backend: let
+          evaluate = enabled: requests: (evaluateSupport backend record requests enabled).config.warnings;
+        in
+          evaluate true {}
+          == []
+          && evaluate true {testapp.settings.reasoningEffort = "high";} == []
+          && evaluate false (builtins.head inputs).config == []
+          && lib.all (input:
+            evaluate true input.config
+            == ["ai.${lib.showOption input.warningPath} is set but ${backend} does not deliver it to testapp (reason: ${gap.reason})"])
+          inputs)
+        ["devenv" "hm"]
+    );
     # ── mkRuntime tests ───────────────────────────────────────────────
     # The per-backend seam is retired: delivery is ONE record-level `config`,
     # and a backend spec takes only installPackage, migrationConfig and

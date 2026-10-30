@@ -48,7 +48,8 @@
     map (field:
       (absent (reasonsFor ecosystem).settingsField) // {inputOptions = [["ai" "settings" field]];})
     (lib.subtractLists (support.fields or []) settingsFields);
-  # A gap outside `each` names one field of the portable root.
+  # A non-`each` gap's policy row lists its portable root option;
+  # lib/ai/app/decompose.nix warns at the first input that holds the field.
   staticGaps = row: let
     support = records.${row.ecosystem}.surfaceSupport.${row.surface} or {};
   in
