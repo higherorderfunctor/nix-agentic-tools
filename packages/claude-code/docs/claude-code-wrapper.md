@@ -34,18 +34,31 @@ With a proxy selected, also set
 `ai.claude.native.settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = ""`,
 since that variable independently disables updates.
 
-### Proxy credential suppression at launch
+### Inference credentials and proxy trust at launch
 
-The base package's `$out/bin/claude` is the pre-built binary itself. Without a
-proxy selection it is installed bare. A selection (`ai.settings.inference` or
+The base package's `$out/bin/claude` is the pre-built binary itself. Without
+inference launcher flags or selected proxy trust, the shared backend transform
+installs it unchanged. A selection (`ai.settings.inference` or
 `ai.claude.settings.inference`) that resolves to a `cliproxyapi` backend
-installs the `claude-code-inference` launcher on both backends to unset
+installs a `lib.ai.mkLauncher` wrapper on both backends that unsets
 `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec; the flag comes from that
-backend's lowering, so another backend's selection leaves the package unchanged
-unless its lowering asks for launcher flags. Claude Code 2.1.302 caches that
-descriptor before settings env applies, so clearing it in settings alone still
-sends the inherited key to the proxy. The endpoint and reference-reading
-`apiKeyHelper` stay in settings; no key is baked into the launcher.
+backend's lowering. These flags compose with the selected network proxy's
+startup trust in one launcher. Claude Code 2.1.302 caches that descriptor before
+settings env applies, so clearing it in settings alone still sends the inherited
+key to the proxy. The endpoint and reference-reading `apiKeyHelper` stay in
+settings; no key is baked into the launcher.
+
+An intercepting network proxy's trust helper supplies `NODE_EXTRA_CA_CERTS`
+before the Bun single-exec starts. The helper appends the instance CA to
+`ai.claude.native.settings.env.NODE_EXTRA_CA_CERTS` when set, otherwise to the
+ambient extra-CA file. With an inherited file, the helper returns a reusable
+content-addressed bundle kept until runtime storage is cleared; otherwise it
+returns the instance's certificate directly. The launcher exports the path and
+execs Claude. Generated settings omit the native-only CA path when the launcher
+delivers trust. The pinned Bun binary's TLS trust behavior remains
+**UNVERIFIED**; see
+[Proxy Trust](../../../dev/fragments/ai-proxy/ai-proxy-trust.md) for evidence,
+selection, missing-CA refusal and launcher opt-out behavior.
 
 Claude Code 2.1.157 and later discovers a plugin as a personal plugin at
 `<configDir>/skills/<name>` (yes, `skills/`, not `plugins/`), so nothing needs a
