@@ -154,9 +154,9 @@ them.
   instruction files should include it, add to
   `extraPublishedFragments.<category>` in `dev/generate.nix`.
 - **New runtime or transform**: it belongs to `ai.*` (a runtime factory and its
-  transformer), not to the generator. Keep repository settings in `dev/ai.nix`;
-  contributors enable local runtimes in ignored `devenv.local.nix`. Copilot is
-  enabled by the committed configuration.
+  transformer), not to the generator. See
+  `dev/fragments/pipeline/generation-architecture.md` for repository runtime
+  opt-ins and content selection.
 
 - **Flat-consumer routing is derived, not curated.** `dev/generate.nix` resolves
   each source entry once for both fragment composition and a rule's

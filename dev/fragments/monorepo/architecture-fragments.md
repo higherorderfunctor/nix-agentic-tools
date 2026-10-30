@@ -33,8 +33,9 @@ it per runtime through the `lib/ai/transformers/` pipeline:
 - Claude: `.claude/rules/<name>.md` with `paths:` YAML list
 - Copilot: `.github/instructions/<name>.instructions.md` with `applyTo:`
   comma-joined globs
-- Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
-  `fileMatchPattern:`
+- Kiro supports `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an
+  array `fileMatchPattern:`. This repository selects only shared root AGENTS.md;
+  see `dev/fragments/pipeline/generation-architecture.md`.
 - Codex / AGENTS.md: named always-on bodies plus a compact
   `## Path-scoped rules` index. Codex has no glob-scoped instruction primitive,
   so the index maps registry scopes to authoritative source documents. Shorter

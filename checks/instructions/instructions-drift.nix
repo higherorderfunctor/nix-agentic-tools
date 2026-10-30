@@ -46,7 +46,8 @@
     repo = evalRepo false [];
     repoCI = evalRepo true [];
     # Exercise the operator's opt-in composition without reading personal config.
-    localModules = [./fixtures/local-runtimes.nix];
+    localFixture = import ./fixtures/local-runtimes.nix;
+    localModules = [localFixture];
     localRepo = evalRepo false localModules;
     localRepoCI = evalRepo true localModules;
     evaluations = [localRepo localRepoCI repo repoCI];
@@ -177,7 +178,8 @@
       ];
       reviewerAlways = ["coding-standards" "commit-convention" "config-parity" "project-overview"];
       copilotPaths = map (target: target.path) (harness.ownPlan "copilot" "files-apply" repo).targets;
-      localRuntimes = ["claude" "codex" "kimchi" "kiro"];
+      localRuntimes = builtins.attrNames (removeAttrs localFixture.ai ["programs"]);
+      localPrograms = builtins.attrNames localFixture.ai.programs;
       localRules = runtime: localRepo.config.ai.${runtime}.normalized.rules;
       optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
       fragmentOverride = runtime: rule: lib.setAttrByPath (optionPaths.pool runtime "rules" ++ ["packaging"]) rule;
@@ -200,6 +202,22 @@
             lib.all (audience: !(builtins.elem "copilot" audience)) (builtins.attrValues target.audiences))
           (builtins.attrValues evaluated.config.ai.internal.agentsMd))
         [repo localRepo];
+        # The Kiro build probe gets only shared root AGENTS.md: no repo skills,
+        # program rules, steering, hooks, MCP, environment or runtime context.
+        kiroIsolation = let
+          kiro = localRepo.config.ai.kiro;
+        in
+          builtins.attrNames (localRules "kiro")
+          == sharedAlways
+          && kiro.normalized.skills == {}
+          && kiro.normalized.agents == {}
+          && kiro.normalized.mcpServers == {}
+          && kiro.cli.normalized.environmentVariables == {}
+          && kiro.normalized.context == null
+          && kiro.hooks == {}
+          && kiro.hooksJson == {}
+          && kiro.hooksDir == null
+          && kiro._generatedFiles == {};
         localCopilotUnchanged =
           (harness.ownPlan "copilot" "files-apply" repo).targets
           == (harness.ownPlan "copilot" "files-apply" localRepo).targets;
@@ -208,11 +226,13 @@
             root = localRepo.config.ai.rules.${name};
             local = (localRules runtime).${name};
           in
-            local.text == root.text && local.matcher == root.matcher && local.references == root.references)
+            if runtime == "kiro" && root.matcher != null
+            then !(builtins.hasAttr name (localRules runtime))
+            else local.text == root.text && local.matcher == root.matcher && local.references == root.references)
           (builtins.attrNames localRepo.config.ai.rules));
         localRouters = lib.genAttrs localRuntimes (runtime:
           lib.all (name: builtins.hasAttr name (localRules runtime))
-          (["peer-communication-router"] ++ lib.optional (runtime != "kimchi") "semble"));
+          (lib.optionals (runtime != "kiro") (["peer-communication-router"] ++ lib.optional (runtime != "kimchi") "semble")));
         namedComposition =
           localRepo.config.ai.internal.agentsMd."AGENTS.md".context
           == null
@@ -224,9 +244,8 @@
         reviewerRules = builtins.attrNames repo.config.ai.copilot.github.normalized.rules;
         runtimeOptIn =
           repo.config.ai.copilot.enable
-          && localRepo.config.ai.copilot.enable
           && lib.all (runtime: !repo.config.ai.${runtime}.enable && localRepo.config.ai.${runtime}.enable) localRuntimes
-          && lib.all (program: !repo.config.ai.programs.${program}.enable && localRepo.config.ai.programs.${program}.enable) ["peer-communication" "semble"];
+          && lib.all (program: !repo.config.ai.programs.${program}.enable && localRepo.config.ai.programs.${program}.enable) localPrograms;
         sharedAlways = lib.all (name:
           repo.config.ai.rules.${name}.inclusion
           == ["always"]
@@ -244,6 +263,7 @@
         == expected
         && copilotPaths == map (name: ".github/instructions/${name}.instructions.md") expected
         && observation.runtimeOptIn
+        && observation.kiroIsolation
         && observation.localCopilotUnchanged
         && observation.independentCopilot
         && observation.namedComposition

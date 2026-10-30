@@ -96,7 +96,6 @@
     };
 
   # ── Extra published fragments per package (beyond commonFragments) ───
-  # Published workflow guidance supplements this repository's scoped docs.
   extraPublishedFragments = {
     stacked-workflows = swsFragments;
   };

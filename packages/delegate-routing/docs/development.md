@@ -129,10 +129,11 @@ behind it.
 
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
-command without a model tool; `dev/ai.nix` enables its interactive resource
-separately. External and manual runtime sections include external, introspect
-and usage nodes. Kimchi has no usage node because no command reads usage without
-a model turn. Shared table rendering escapes cells once.
+command without a model tool; `dev/ai.nix` configures its interactive resource
+for local activation (see `dev/fragments/pipeline/generation-architecture.md`).
+External and manual runtime sections include external, introspect and usage
+nodes. Kimchi has no usage node because no command reads usage without a model
+turn. Shared table rendering escapes cells once.
 
 ## Delivery and previews
 

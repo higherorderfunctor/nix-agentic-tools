@@ -57,25 +57,12 @@ in {
   ai = {
     inherit (gen) rules;
 
-    # Fresh guests have no host/project config paths; select the raw harnesses.
-    sandboxes = lib.optionalAttrs (pkgs.stdenv.hostPlatform.isLinux && !isCI) {
-      claude-sandbox = {
-        exe = lib.getExe' pkgs.ai.claude-code "claude";
-      };
-      codex-sandbox = {
-        exe = lib.getExe' pkgs.ai.chatgpt-codex "codex";
-      };
-      kimchi-sandbox = {
-        exe = lib.getExe' pkgs.ai.kimchi "kimchi";
-      };
-      kiro-sandbox = {
-        exe = lib.getExe' pkgs.ai.kiro-cli "kiro-cli";
-      };
-    };
-
     programs = {
       peer-communication = {
-        runtimes.copilot.enable = false;
+        runtimes = {
+          copilot.enable = false;
+          kiro.enable = false;
+        };
       };
 
       # Only installation reads isCI, so committed instructions never depend on it.
@@ -122,6 +109,7 @@ in {
         ];
         cli.instructions.enable = true;
         mcp.enable = false;
+        runtimes.kiro.cli.instructions.enable = false;
       };
     };
 
@@ -162,16 +150,13 @@ in {
         "extensions.ferment-v2" = true;
       };
     };
+    # Kiro runs only to probe main's build: it reads the shared AGENTS.md and
+    # receives no scoped steering or repo skills.
     kiro = {
-      mcpServers.agnix = agnixMcp;
-      cli = {
-        inherit shell;
-        # Select v3 so this configuration's hooks and slash commands load.
-        v3 = true;
-        # Workflows are GA; devenv still needs the global chat.enableWorkflows
-        # setting. See packages/kiro-cli/docs/workflow-gating.md.
-        workflows.enable = true;
-      };
+      rules = lib.mapAttrs (_: _: {enable = false;}) (
+        lib.filterAttrs (_: rule: rule.matcher != null) gen.rules
+      );
+      skills = lib.mapAttrs (_: _: null) config.ai.skills;
     };
 
     skills = {

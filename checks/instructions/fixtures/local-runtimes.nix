@@ -1,4 +1,5 @@
-# instructions-drift exercises the operator's local opt-ins independently of HM.
+# instructions-drift and packages/delegate-routing/eval/fixture.nix exercise
+# the operator's local opt-ins independently of HM.
 {
   ai = {
     claude.enable = true;

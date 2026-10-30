@@ -1,10 +1,8 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-29 — committed `dev/ai.nix` enables github.com
-> Copilot only. Personal `devenv.local.nix` opts into Claude, Codex, Kimchi,
-> Kiro CLI, peer communication and Semble; repository settings remain shared.
-> The CI matrix reads `ciPackages`; the repo shell applies `buildOverlay`.
-> Files-engine runtime checks cover delivery independently of local opt-ins.
+> **Last verified:** 2026-10-29 — the CI matrix reads `ciPackages`; the repo
+> shell applies `buildOverlay`. Files-engine runtime checks cover delivery
+> independently of local opt-ins.
 
 The Devenv Diagnostic workflow (`.github/workflows/devenv-test.yml`) runs only
 on `workflow_dispatch`. Its cold interactive shell closure is therefore an
@@ -70,9 +68,8 @@ own narrow closures.
 launcher package: Claude, Codex, Kimchi and Kiro. github.com Copilot has no
 launcher, so enabling it adds no runtime package to the closure. A consumer may
 also set a launcher's package to null to keep configuration without installing
-its binary. The committed repository configuration enables only Copilot.
-Contributors opt into launcher-bearing runtimes in ignored `devenv.local.nix`;
-those enables install the wrappers and deliver the retained repository settings.
+its binary. Repository runtime opt-ins and content selection are documented in
+`dev/fragments/pipeline/generation-architecture.md`.
 
 Measure the MARGINAL runtime cost: the store paths Kimchi adds to the existing
 shell, excluding dependencies already present. Neither the executable's size
@@ -124,11 +121,10 @@ Two earlier measurements still constrain any future project permission profile:
   security property never existed.
 
 `dev/ai.nix` retains the Semble package, AWK and jq grammars, and mappings for
-its non-standard Bash, Gitignore, JSON and Markdown paths. A contributor enables
-`ai.programs.semble` in ignored `devenv.local.nix` to install that
-configuration. The retained `install = !isCI` setting omits the package during
-the manual diagnostic while keeping CLI guidance for enabled supported runtimes.
-The program delivers no MCP server here. Its devenv facet owns and invalidates
+its non-standard Bash, Gitignore, JSON and Markdown paths. The retained
+`install = !isCI` setting omits the package during the manual diagnostic while
+keeping CLI guidance for enabled supported runtimes. The program delivers no MCP
+server here. Its devenv facet owns and invalidates
 `${config.devenv.state}/semble-cache`; this configuration uses that
 project-local cache instead of the user-global cache.
 
@@ -140,9 +136,8 @@ warning. The old `--profile` wrapper and stale whole-file profile assertions are
 gone: `ai.codex.profiles` was removed, and
 `packages/chatgpt-codex/lib/launcher-flags.nix` owns the launcher flags.
 
-The committed diagnostic requires no local AI runtime or Semble opt-in.
-Contributors enabling Semble can verify the grammar/path-customized package and
-project-local cache interactively; `CI=1` keeps its installation out of the
+With Semble enabled, contributors can verify the grammar/path-customized package
+and project-local cache interactively; `CI=1` keeps its installation out of the
 diagnostic closure.
 
 ## The manual diagnostic carries #821 telemetry

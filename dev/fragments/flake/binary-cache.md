@@ -35,11 +35,11 @@ with that variant's runtime config and exercises mapped-file discovery and
 language selection.
 
 This is separate from `devenv test` closure policy. `dev/ai.nix` retains
-`ai.programs.semble.install = !isCI`; contributors enable Semble in ignored
-`devenv.local.nix`. With that opt-in, diagnostic mode skips the package while
-enabled supported runtimes keep CLI guidance. The committed diagnostic
-configuration enables only Copilot and requires no Semble package. The flake
-check above validates the package independently of shell opt-ins.
+`ai.programs.semble.install = !isCI`. With Semble enabled, diagnostic mode skips
+the package while selected supported runtimes keep CLI guidance. See
+`dev/fragments/pipeline/generation-architecture.md` for repository runtime
+opt-ins. The flake check above validates the package independently of shell
+opt-ins.
 
 ### CI-only check cache
 

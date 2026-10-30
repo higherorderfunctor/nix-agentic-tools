@@ -82,13 +82,11 @@ module stays registered on Home Manager for exactly that: a value set there
 warns instead of vanishing. Package rule and skill contributors
 (`mkSkillPackageModule.nix`) skip Copilot on Home Manager.
 
-The repository's `dev/ai.nix` enables only Copilot and null-suppresses its root
-skills for Copilot because they operate local sessions. Contributors opt into
-Claude, Codex, Kimchi, Kiro CLI, peer communication and Semble in ignored
-`devenv.local.nix`; repository runtime and program settings remain in
-`dev/ai.nix`. Package runtime disables remain authoritative, including peer
-communication's explicit Copilot disable. `.github/skills` is committable when a
-consumer selects skills.
+The repository's `dev/ai.nix` null-suppresses its root skills for Copilot
+because they operate local sessions. Package runtime disables remain
+authoritative, including peer communication's explicit Copilot disable. See
+`dev/fragments/pipeline/generation-architecture.md` for repository runtime
+opt-ins. `.github/skills` is committable when a consumer selects skills.
 
 The hooks reason names a real reader this module does not serve: the cloud agent
 loads `.github/hooks/*.json` from the default branch (bash entries only, `ask`

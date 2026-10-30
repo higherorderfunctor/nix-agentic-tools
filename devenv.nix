@@ -46,9 +46,7 @@
   # enterTest never invokes. Validation policy is deliberately NOT conditional:
   # local hooks, their manual-stage projection, and the flake CI projection all
   # exist regardless of $CI, so exporting CI cannot silently make a guard
-  # disappear. Copilot is enabled in dev/ai.nix; the operator opts into local
-  # harnesses and programs through gitignored devenv.local.nix. Home Manager
-  # supplies their user-global installations.
+  # disappear.
   # devenv evaluates impurely and its eval cache records env-var inputs
   # (devenv-eval-cache EnvInputDesc), so flipping $CI re-evaluates
   # instead of serving a stale shell. A developer who exports CI=1 gets the
@@ -67,6 +65,7 @@ in {
     ./packages/microvm/modules/devenv
     ./packages/peer-communication/modules/devenv
     ./packages/semble/modules/devenv
+    # Runtime opt-in policy: dev/fragments/pipeline/generation-architecture.md.
     # This repository's `ai.*` configuration. It consumes `ai.*` exactly as
     # any project would, fed the context and rules dev/generate.nix produces;
     # checks/instructions/instructions-drift.nix evaluates the same module.

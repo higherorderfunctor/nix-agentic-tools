@@ -81,14 +81,13 @@ Two kinds of generated content, two owners:
   rules carry composed text, scope globs as `matcher`, source documents as
   `references`, and the matcher-derived `fileMatch` default. `dev/ai.nix`
   assigns `ai.rules`; `ai.*` renders and writes enabled runtimes' files through
-  its generated tree. When enabled, Codex, Kimchi and Kiro share local
-  AGENTS.md, with a path-scoped index and readable child indexes under
-  `.agents/rules/` when shorter. Claude receives `.claude/rules/`, Copilot
-  receives `.github/instructions/`, and Kiro receives `.kiro/steering/`. All
-  local instruction projections are gitignored; GitHub instructions are
-  committed read-only copies. An explicitly declared unnamed Copilot context
-  independently writes `.github/copilot-instructions.md`; this repository
-  declares none.
+  its generated tree. Codex and Kimchi share local AGENTS.md, with a path-scoped
+  index and readable child indexes under `.agents/rules/` when shorter. Claude
+  receives `.claude/rules/`, and Copilot receives `.github/instructions/`. Kiro
+  participates only in shared root AGENTS.md. All local instruction projections
+  are gitignored; GitHub instructions are committed read-only copies. An
+  explicitly declared unnamed Copilot context independently writes
+  `.github/copilot-instructions.md`; this repository declares none.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
@@ -101,15 +100,19 @@ instructions with an explicit category allowlist and
 Newly registered categories stay out until selected. Contributors enable Claude,
 Codex, Kimchi, Kiro CLI, peer communication and Semble in ignored
 `devenv.local.nix`; their runtime and program settings remain in `dev/ai.nix`.
-Enabled local runtimes inherit the named shared rules, including the
-always-loaded `architecture` category. The fragment-shadow guard accepts
-content-free runtime disables but rejects same-key replacement text or sources,
-including disabled replacements. Peer communication's Copilot disable remains
-part of its repository settings; Semble excludes Copilot. Home Manager supplies
-delegate-routing and the stacked-workflows router and skills.
-`instructions-reviewer-policy` checks the emitted instruction set, always-on
-metadata, the absence of Copilot from shared AGENTS.md, opted-in local content
-retention, and the shadow guard.
+Kiro is enabled locally only to probe the kiro-cli build on main. It receives no
+repository skills, program rules, MCP servers, hooks, environment or scoped
+steering; `dev/ai.nix` suppresses those contributions next to their sources. Its
+shared root AGENTS.md remains available, including the always-loaded
+`architecture` category. The other local runtimes inherit all named shared
+rules. The fragment-shadow guard accepts content-free runtime disables but
+rejects same-key replacement text or sources, including disabled replacements.
+Peer communication's Copilot disable remains part of its repository settings;
+Semble excludes Copilot. Home Manager supplies delegate-routing and the
+stacked-workflows router and skills. `instructions-reviewer-policy` checks the
+emitted instruction set, always-on metadata, the absence of Copilot from shared
+AGENTS.md, opted-in local content retention, Kiro isolation, and the shadow
+guard.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
