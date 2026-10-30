@@ -4,7 +4,8 @@
 > normalized inputs in order and warn once for the first input holding the
 > requested field. Root copy-down names the runtime pool; keyed-entry gaps
 > retain their existing selection. Network `ai.proxy` copies fields down at
-> default priority with explicit null opt-outs.
+> default priority with explicit null opt-outs; Claude's managed launcher also
+> delivers selected intercepting proxy CA trust before startup.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -572,8 +573,10 @@ non-empty list for `fileMatch` content.
   different thing and still is — that filters what SPAWNED commands inherit,
   while this pool configures the CLI process itself. Claude is the one
   exclusion: `ai.claude.native.settings.env` is its native equivalent and beats
-  process env. Its optional proxy launcher only suppresses the inherited API-key
-  descriptor before startup.
+  process env. Its managed launcher suppresses the inherited API-key descriptor
+  for a selected inference backend and delivers selected intercepting proxy CA
+  trust before startup, preserving the native extra-CA override. See
+  [Network Proxy](../ai-proxy/ai-proxy.md).
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
