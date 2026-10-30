@@ -580,6 +580,40 @@ class QueryTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertFalse(missing.exists())
 
+    def test_cli_summary_replays_the_tree_exit_summary_and_names_the_calculator(self):
+        self.estimable("rated", .01, chars=40)
+        self.estimable("unrated", .02, chars=40, model="claude-opus-4.5", conversation="child")  # window, no rates entry
+        self.estimable("windowless", None, chars=40, model="requested-model")  # neither; credits unknown
+        self.db.execute("""UPDATE captures SET metadata_json=json_set(metadata_json,'$."kiro:root_conversation_id"','root') WHERE id='unrated'""")
+        report = query.query(self.db, "sess_root", "tree")
+        unrated = next(model for model in report["captures"]["models"] if model["requested_model"] == "claude-opus-4.5")
+        self.assertEqual(unrated["estimates"]["input_tokens"]["known"], 1)
+        self.assertNotIn("cache_read_tokens", unrated["estimates"])  # no rates entry, so no cache split
+        windowless = next(model for model in report["captures"]["models"] if model["requested_model"] == "requested-model")
+        self.assertEqual(windowless["estimates"], {})
+        self.assertEqual(query.calculator_text(report), "Calculator: rates.json fitted 2026-10-30; no rates: claude-opus-4.5, requested-model; no context window: requested-model")
+        self.db.commit()
+        with tempfile.TemporaryDirectory() as temporary:
+            path, theme = Path(temporary) / "synthetic.sqlite", Path(temporary) / "theme.json"
+            with sqlite3.connect(path) as target:
+                self.db.backup(target)
+            theme.write_text(json.dumps({"border": "ascii"}))
+            command = [sys.executable, query.__file__, "--db", str(path), "--session", "sess_root", "--summary"]
+            for arguments, rendered in (([], query.render_summary(report)),
+                                        (["--scope", "tree", "--summary-theme", str(theme)], query.render_summary(report, theme=query.summary_theme.load(theme)))):
+                result = subprocess.run([*command, *arguments], capture_output=True, text=True)
+                self.assertEqual((result.returncode, result.stderr), (0, ""))
+                self.assertEqual(result.stdout, rendered + "\n" + query.calculator_text(report) + "\n")
+            self.assertIn("Kiro usage · sess_root · tree · 3 requests", result.stdout)
+            self.assertIn("⚠ credits unknown for 1/3 requests", result.stdout)
+            self.assertTrue(result.stdout.startswith("+-"))
+            for refused in (["--json"], ["--scope", "session"]):
+                result = subprocess.run([*command, *refused], capture_output=True, text=True)
+                self.assertEqual((result.returncode, result.stdout), (2, ""))
+        self.captured("rated-only", conversation="root", metadata={"model": "claude-opus-5.5"})
+        self.db.execute("DELETE FROM captures WHERE id!='rated-only'")
+        self.assertEqual(query.calculator_text(query.query(self.db, "sess_root", "tree")), "Calculator: rates.json fitted 2026-10-30")
+
     def test_credit_units_partial_turns_and_disk_overlap_ambiguity(self):
         self.session("sess_root")
         self.session("sess_child", {"parentSessionId": "root"})

@@ -496,7 +496,7 @@ def plural(count, noun):
 
 def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
     """The exit summary: headline, model and conversation tables; one caveat line only when totals are suspect.
-    invocation_summary passes its --summary-theme; the default PLAIN theme renders unstyled text without a border."""
+    invocation_summary and --summary pass their --summary-theme; the default PLAIN theme renders unstyled text without a border."""
     captures = report["captures"]
     n, credits = captures["observations"], captures["metrics"]["credits"]
     headline = (f"Kiro usage · {report['session'][:len('sess_') + 8]} · {report['scope']} · {plural(n, 'request')}"
@@ -550,18 +550,37 @@ def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
     return "\n".join(summary_theme.box(theme, lines(summary_theme.painter(summary_theme.PLAIN)), styled, {rule}))
 
 
+def calculator_text(report):
+    """--summary's last line: rates.json's fit dates, and this report's models with no rates entry or no context window."""
+    rates, windows = credit_discount.RATES, credit_discount.WINDOWS
+    dates = sorted({entry["provenance"]["date"] for entry in rates.values()})
+    models = sorted({model["requested_model"] for model in report["captures"].get("models", []) if isinstance(model["requested_model"], str)})
+    gaps = [f"{label}: {', '.join(names)}" for label, names in (
+        ("no rates", [model for model in models if model not in rates]),
+        ("no context window", [model for model in models if model not in windows])) if names]
+    return "; ".join([f"Calculator: rates.json fitted {', '.join(dates)}", *gaps])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--session", required=True)
-    parser.add_argument("--scope", choices=("session", "tree"), default="session")
-    parser.add_argument("--json", action="store_true", help="write the complete structured report as JSON")
+    parser.add_argument("--scope", choices=("session", "tree"))
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true", help="write the complete structured report as JSON")
+    output.add_argument("--summary", action="store_true", help="write the exec exit summary for the whole tree at the current rates")
+    parser.add_argument("--summary-theme", help="--summary's theme JSON; kiro-usage passes its configured one")
     args = parser.parse_args()
+    if args.summary and args.scope == "session":
+        parser.error("--summary always reports the whole session tree")
     try:
         uri = args.db.resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(uri, uri=True)) as db:
-            report = query(db, args.session, args.scope)
-            if args.json:
+            report = query(db, args.session, "tree" if args.summary else args.scope or "session")
+            if args.summary:
+                print(render_summary(report, theme=summary_theme.load(args.summary_theme, sys.stdout)))
+                print(calculator_text(report))
+            elif args.json:
                 print(json.dumps(report, indent=2, sort_keys=True))
             else:
                 print(render(report))

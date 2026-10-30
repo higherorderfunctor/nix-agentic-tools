@@ -326,20 +326,22 @@ def cli(path, arguments, port, warn_bytes, theme=None):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
-        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree]|list|replay ID}")
+        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json|--summary]|list|replay ID}")
     command, *tail = arguments
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
     if command == "exec":
         return exec_command(path, port, warn_bytes, tail, theme)
     if command == "session" and tail:
-        invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
+        # Only a replayed exit summary reads the theme; the full report has no styles.
+        styled = ["--summary-theme", str(theme)] if theme and "--summary" in tail else []
+        invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:], *styled]
     elif command == "index":
         invocation = [str(script / "disk_index.py"), *db_args, *tail]
     elif command in ("list", "replay"):
         invocation = [str(script / "capture.py"), *db_args, command, *tail]
     else:
-        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree]|list|replay ID}")
+        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json|--summary]|list|replay ID}")
     os.umask(0o077)
     private_directory(path, create=True)
     os.execv(sys.executable, [sys.executable, *invocation])
@@ -354,7 +356,7 @@ def main():
         child.add_argument("--port", type=int, required=True)
         if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
             child.add_argument("--warn-bytes", type=int, required=True)
-        if mode == "cli":  # read by the exec summary only
+        if mode == "cli":  # read by the exec summary and its session --summary replay only
             child.add_argument("--summary-theme")
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":

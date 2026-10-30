@@ -349,6 +349,13 @@ the full session JSON report or capture JSON lines. Unknown counters display as
 an em dash; observed zeroes remain zero. Session reports keep disk and capture
 sums separate and show coverage; warnings use standard error. The indexer also
 accepts `--json` for its source, record, and omission counts.
+`query.py --summary` instead prints the exit summary below for the session's
+whole tree to standard output, styled by `--summary-theme FILE` with `color`
+`auto` testing standard output, and re-estimated from the current `rates.json`
+and `models.json`. Its last line, absent from the exit summary, names the
+calculator: `rates.json`'s provenance fit dates, then the session's models with
+no rates entry (no cache split) or no context window (no ~tokens), when any.
+`kiro-usage session ID --summary` passes the configured theme.
 
 The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
 commands also print a short summary to standard error after Kiro exits: per root

@@ -415,6 +415,14 @@ class SummaryTests(unittest.TestCase):
         addon.client_disconnected(connection)
         self.assertEqual(addon.invocations, {})
 
+    def test_session_summary_alone_receives_the_summary_theme(self):
+        query = str(Path(runtime.__file__).parent / "query.py")
+        for tail, styled in ((["--summary"], ["--summary-theme", "/theme.json"]), (["--json"], [])):
+            with patch.object(runtime, "private_directory"), patch.object(os, "execv") as execute:
+                runtime.cli(Path("/state"), ["session", "sess_root", *tail], 19001, 1 << 30, "/theme.json")
+            execute.assert_called_once_with(sys.executable, [sys.executable, query, "--db", "/state/usage.sqlite3",
+                                                             "--session", "sess_root", *tail, *styled])
+
     def test_main_returns_child_status(self):
         with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--", "exec", "kiro-cli"]), patch.object(runtime, "cli", return_value=23):
             self.assertEqual(runtime.main(), 23)

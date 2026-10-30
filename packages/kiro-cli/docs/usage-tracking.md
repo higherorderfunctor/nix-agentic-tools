@@ -202,6 +202,7 @@ kiro-usage index --sessions ~/.kiro/sessions
 kiro-usage session sess_example
 kiro-usage session sess_example --scope tree
 kiro-usage session sess_example --json
+kiro-usage session sess_example --summary
 kiro-usage list
 kiro-usage replay CAPTURE_ID
 ```
@@ -211,6 +212,12 @@ show captured calls by requested model, counter coverage, and separate disk
 observations. An em dash means unknown or unobserved; zero means an observed
 zero. Disk turn credits overlap captured credits and must never be added.
 Warnings go to standard error.
+
+`--summary` replays the exit summary for the session's whole tree on standard
+output, with the configured summary style, recomputing every ~estimate from the
+current `rates.json` and `models.json`. A last line names that calculator: the
+fit dates in `rates.json`, then the session's models with no rates entry or no
+context window, when there are any. It refuses `--json` and `--scope session`.
 
 Scripts that previously parsed session JSON or list JSON lines must now pass
 `--json`: `kiro-usage session sess_example --json` preserves the full report,
