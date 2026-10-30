@@ -45,6 +45,23 @@ CREATE TABLE IF NOT EXISTS events (
  mono_ns INTEGER, event_name TEXT, frame_gzip BLOB, data_json TEXT,
  PRIMARY KEY(capture_id, seq)
 );
+CREATE TABLE IF NOT EXISTS sealed_requests (
+ capture_id TEXT PRIMARY KEY,
+ base_id TEXT, -- NULL: an independent frame; else the capture whose raw request is the prefix
+ body_zstd BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sealed_responses (
+ capture_id TEXT PRIMARY KEY,
+ transport_zstd BLOB NOT NULL,
+ recipe_zstd BLOB NOT NULL,
+ exceptions_zstd BLOB NOT NULL
+);
+-- A capture is sealed exactly when its capture_facts row exists: query.FACTS evaluated over its staged rows.
+CREATE TABLE IF NOT EXISTS capture_facts (
+ capture_id TEXT PRIMARY KEY,
+ extra_chars INTEGER,
+ retained INTEGER, terminal INTEGER, text_only INTEGER, no_reasoning_tools INTEGER
+);
 """
 
 
@@ -552,17 +569,6 @@ class Analysis:
                 "metering_events": self.metering_events, "estimates": {}}
 
 
-def retained_bytes(db):
-    """Compressed payload bytes a store retains; the collector's startup count and the exit summary's warning."""
-    total = sum(db.execute(query).fetchone()[0] or 0 for query in (
-        "SELECT SUM(length(request_gzip)) FROM captures",
-        "SELECT SUM(COALESCE(length(entity_gzip),0)+COALESCE(length(application_gzip),0)) FROM chunks",
-        "SELECT SUM(COALESCE(length(frame_gzip),0)+COALESCE(length(CAST(data_json AS BLOB)),0)) FROM events"))
-    return total + sum(len(packed(usage).encode())
-                       for row in db.execute("SELECT summary_json FROM captures WHERE summary_json IS NOT NULL")
-                       if (usage := json.loads(row[0]).get("usage_objects")))
-
-
 class Collector:
     """Callbacks parse each chunk and enqueue its payload copy without waiting for SQLite; one worker owns all writes."""
 
@@ -596,7 +602,8 @@ class Collector:
             db.execute("INSERT INTO capture_meta VALUES (1)")
         db.execute("UPDATE captures SET state='incomplete',transport_ended=0,issues_json='[\"interrupted_capture\"]' WHERE state='recording'")
         db.commit()
-        self.stored_bytes = retained_bytes(db)
+        import store
+        self.stored_bytes = store.payload_bytes(db)
         db.close()
         self.queue = queue.Queue()  # bounded by max_bytes in _put
         self.lock = threading.Lock()

@@ -176,12 +176,12 @@ def settle_captures(path, invocation):
 def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
     """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
     earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
-    from capture import retained_bytes
     from query import render_summary, run_report
+    from store import payload_bytes
     import summary_theme
     try:
         with read_only(path) as db:
-            retained = retained_bytes(db)
+            retained = payload_bytes(db)
             if retained > warn_bytes:
                 # Capture never stops for size; this is the operator's only prompt to retire the store.
                 print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "

@@ -147,6 +147,16 @@ warning only during a full pass. Exit refreshes then queue on a third,
 source's offset before its write transaction, so two concurrent refreshes of one
 session would insert the same records.
 
+`store.seal` replaces a finished capture's staged payloads (`request_gzip`,
+`chunks`, `events`) with `sealed_requests`, `sealed_responses` and
+`capture_facts`. A request is zstd-compressed against the previous request of
+its conversation; a response keeps its entity bytes and a recipe for the rows
+its parsers do not rebuild exactly. A seal verifies every row before deleting
+the staged copies and stores the report's payload facts as evaluated over them.
+Readers in `store.py` and `query.py` return identical data and reports for
+staged and sealed captures, and payload accounting counts both forms. A seal
+requires schema version 2, which the collector does not yet write.
+
 - `captures.request_gzip` preserves the complete decompressed application
   request bytes. Its full SHA-256 is over those exact bytes. Component hashes
   use sorted, compact UTF-8 JSON for `input`, individual input items,

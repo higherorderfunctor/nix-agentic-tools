@@ -43,6 +43,33 @@ EXTRA_OUTPUT_CHARS = """(SELECT sum(chars) FROM (
     FROM events e, json_each(e.data_json,'$.response.output') item
     WHERE e.capture_id=c.id AND e.seq=(SELECT min(f.seq) FROM events f WHERE f.capture_id=c.id
       AND json_extract(f.data_json,'$.type')='response.completed')))"""
+# Payload facts per capture c, as report SQL over its retained events and chunks. store.seal evaluates them once
+# into capture_facts before deleting those rows.
+FACTS = {"extra_chars": EXTRA_OUTPUT_CHARS,
+         "no_reasoning_tools": """NOT EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND (
+      coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%reasoning%'
+      OR coalesce(e.event_name,'') LIKE '%reasoning%'
+      OR coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%function_call%'
+      OR coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%tool%'
+      OR coalesce(e.event_name,'') LIKE '%function_call%'
+      OR coalesce(e.event_name,'') LIKE '%tool%'
+      OR coalesce(json_extract(e.data_json,'$.item.type'),'message')!='message'
+      OR coalesce(json_extract(e.data_json,'$.part.type'),'output_text')!='output_text'))""",
+         "retained": """c.request_gzip IS NOT NULL AND EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id)
+      AND EXISTS(SELECT 1 FROM chunks k WHERE k.capture_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND e.frame_gzip IS NULL)
+      AND NOT EXISTS(SELECT 1 FROM chunks k WHERE k.capture_id=c.id AND k.application_gzip IS NULL)""",
+         "terminal": """json_extract(c.summary_json,'$.terminal')='response.completed'
+      AND json_extract(c.summary_json,'$.output_count_source')='terminal_output'
+      AND (SELECT count(*) FROM events e WHERE e.capture_id=c.id AND json_extract(e.data_json,'$.type')='response.completed')=1""",
+         "text_only": """EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND json_extract(e.data_json,'$.type')='response.completed'
+      AND json_type(e.data_json,'$.response.output')='array' AND json_array_length(e.data_json,'$.response.output')>0
+      AND NOT EXISTS(SELECT 1 FROM json_each(e.data_json,'$.response.output') item
+        WHERE coalesce(json_extract(item.value,'$.type'),'')!='message'
+        OR coalesce(json_type(item.value,'$.content'),'')!='array'
+        OR EXISTS(SELECT 1 FROM json_each(item.value,'$.content') part
+          WHERE coalesce(json_extract(part.value,'$.type'),'')!='output_text'
+          OR coalesce(json_type(part.value,'$.text'),'')!='text')))"""}
 CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
     WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
@@ -307,6 +334,16 @@ def query(db, session, scope="session", since=None, until=None):
         return report
 
 
+def fact_columns(tables):
+    """Each FACTS name as SQL over captures c: a sealed capture's stored value, else the live SQL. Without the events
+    table there are no extra characters, and without events and chunks no proof; joins need capture_facts f."""
+    live = dict(FACTS) if {"events", "chunks"} <= tables else dict.fromkeys(FACTS, "0")
+    live["extra_chars"] = EXTRA_OUTPUT_CHARS if "events" in tables else "NULL"
+    if "capture_facts" not in tables:
+        return live
+    return {name: f"CASE WHEN f.capture_id IS NOT NULL THEN f.{name} ELSE ({sql}) END" for name, sql in live.items()}
+
+
 def call_reports(db, chosen, parameters, total, partitions):
     """Per-call credit-discount diagnostic and ~token estimates, added to total and to the call's group in each
     (key SQL over chosen, key parameters, groups by key) partition."""
@@ -315,50 +352,25 @@ def call_reports(db, chosen, parameters, total, partitions):
                             "known": dict.fromkeys(ESTIMATED, 0), "cached": 0, "input": 0, "evaluable": 0, "error": 0}
                for source in sources}
     keys = "".join(f",{key} AS key_{index}" for index, (key, *_) in enumerate(partitions))
-    event_tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    proof = "0 AS retained,0 AS terminal,0 AS text_only,0 AS no_reasoning_tools"
+    present = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    columns = fact_columns(present)
+    sealed = " LEFT JOIN capture_facts f ON f.capture_id=c.id" if "capture_facts" in present else ""
+    proof = ",".join(f"{columns[name]} AS {name}" for name in ("retained", "terminal", "text_only", "no_reasoning_tools"))
     extra_chars = f"""coalesce(json_extract(c.summary_json,'$.tool_chars')+json_extract(c.summary_json,'$.reasoning_chars'),
-        {EXTRA_OUTPUT_CHARS if "events" in event_tables else "NULL"})"""
-    if {"events", "chunks"} <= event_tables:
-        proof = """
-          c.request_gzip IS NOT NULL AND EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id)
-            AND EXISTS(SELECT 1 FROM chunks k WHERE k.capture_id=c.id)
-            AND NOT EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND e.frame_gzip IS NULL)
-            AND NOT EXISTS(SELECT 1 FROM chunks k WHERE k.capture_id=c.id AND k.application_gzip IS NULL) AS retained,
-          json_extract(c.summary_json,'$.terminal')='response.completed'
-            AND json_extract(c.summary_json,'$.output_count_source')='terminal_output'
-            AND (SELECT count(*) FROM events e WHERE e.capture_id=c.id AND json_extract(e.data_json,'$.type')='response.completed')=1 AS terminal,
-          EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND json_extract(e.data_json,'$.type')='response.completed'
-            AND json_type(e.data_json,'$.response.output')='array' AND json_array_length(e.data_json,'$.response.output')>0
-            AND NOT EXISTS(SELECT 1 FROM json_each(e.data_json,'$.response.output') item
-              WHERE coalesce(json_extract(item.value,'$.type'),'')!='message'
-              OR coalesce(json_type(item.value,'$.content'),'')!='array'
-              OR EXISTS(SELECT 1 FROM json_each(item.value,'$.content') part
-                WHERE coalesce(json_extract(part.value,'$.type'),'')!='output_text'
-                OR coalesce(json_type(part.value,'$.text'),'')!='text'))) AS text_only,
-          NOT EXISTS(SELECT 1 FROM events e WHERE e.capture_id=c.id AND (
-            coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%reasoning%'
-            OR coalesce(e.event_name,'') LIKE '%reasoning%'
-            OR coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%function_call%'
-            OR coalesce(json_extract(e.data_json,'$.type'),'') LIKE '%tool%'
-            OR coalesce(e.event_name,'') LIKE '%function_call%'
-            OR coalesce(e.event_name,'') LIKE '%tool%'
-            OR coalesce(json_extract(e.data_json,'$.item.type'),'message')!='message'
-            OR coalesce(json_extract(e.data_json,'$.part.type'),'output_text')!='output_text')) AS no_reasoning_tools
-        """
+        {columns["extra_chars"]})"""
     for row in db.execute(chosen + f"""SELECT c.id,c.metadata_json,c.credits,c.context_usage_percentage,
         c.input_tokens,c.output_tokens,c.cache_read_tokens,
         json_extract(c.summary_json,'$.output_text_chars') AS chars,{extra_chars} AS extra_chars{keys},
         c.state='complete' AND c.completion_seen=1 AND c.transport_ended=1 AND c.issues_json='[]'
           AND c.dropped_bytes=0 AND c.dropped_chunks=0 AS complete
-        FROM chosen JOIN captures c ON c.id=chosen.id""", [*parameters, *(parameter for _, values, _ in partitions for parameter in values)]):
+        FROM chosen JOIN captures c ON c.id=chosen.id{sealed}""", [*parameters, *(parameter for _, values, _ in partitions for parameter in values)]):
         metadata = json.loads(row["metadata_json"] or "{}")
         facts = {key: row[key] for key in ("credits", "chars")}
         facts.update(context=row["context_usage_percentage"], model=metadata.get("model"), effort=metadata.get("effort"))
         facts["complete"] = bool(row["complete"])
         result = credit_discount.preflight(facts)
         if result is None:
-            evidence = db.execute("SELECT " + proof + " FROM captures c WHERE c.id=?", (row["id"],)).fetchone()
+            evidence = db.execute(f"SELECT {proof} FROM captures c{sealed} WHERE c.id=?", (row["id"],)).fetchone()
             facts.update({key: bool(evidence[key]) for key in ("retained", "terminal", "text_only", "no_reasoning_tools")})
             result = credit_discount.classify(facts)
         values, estimated = call_counters(row, metadata.get("model"))
