@@ -123,6 +123,10 @@ def packed(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def event_text(obj):
+    return packed(obj) if obj is not None else None
+
+
 def digest(value):
     return hashlib.sha256(value).hexdigest()
 
@@ -313,6 +317,42 @@ def output_text(value):
 
 class CaptureCapacityError(RuntimeError):
     pass
+
+
+DECODE_LIMIT = 16 * 1024 * 1024  # Decoded bytes one entity chunk may expand to.
+
+
+def content_encoding(response):
+    return response.get("content_encoding", "identity").lower().strip() or "identity"
+
+
+def content_decoder(encoding):
+    """The zlib decompressobj for gzip or deflate, else None; returned whole so EOF and trailing data stay readable."""
+    if encoding in ("gzip", "deflate"):
+        return zlib.decompressobj(16 + zlib.MAX_WBITS if encoding == "gzip" else zlib.MAX_WBITS)
+
+
+def decode_chunk(decoder, data):
+    """(application, ok) for one entity chunk; decoder None is identity.
+
+    Corrupt input yields (None, False). Output past DECODE_LIMIT yields its partial output and False; the collector stores
+    that partial chunk and decodes nothing after it."""
+    if decoder is None:
+        return data, len(data) <= DECODE_LIMIT
+    try:
+        application = decoder.decompress(data, DECODE_LIMIT + 1)
+    except zlib.error:
+        return None, False
+    return application, len(application) <= DECODE_LIMIT and not decoder.unconsumed_tail
+
+
+def framing_kind(response, rpc):
+    if rpc:  # Kiro's client parses GenerateAssistantResponse as a binary event stream whatever its content type.
+        return "eventstream"
+    content_type = response.get("content_type", "")
+    for media, key in (("text/event-stream", "sse"), ("application/vnd.amazon.eventstream", "eventstream")):
+        if media in content_type:
+            return key
 
 
 # Synthetic 1 and 32 MiB requests: level 9 costs 1.8x level 6's CPU for 0.3% smaller BLOBs; level 1 is 3x
@@ -613,7 +653,7 @@ class Collector:
         Past it the item can no longer be queued (size inf) and later events are never copied: a chunk of 360,000 blank SSE
         frames otherwise staged ~87 MB of copies before _put refused them all."""
         if target["size"] <= target["budget"]:
-            text = packed(obj) if obj is not None else None
+            text = event_text(obj)
             target["size"] += len(frame) + len(text or "") + self.OVERHEAD
             target["events"].append((seq, name, frame, text))
         if target["size"] > target["budget"]:
@@ -761,36 +801,27 @@ class Collector:
         self._retain(entity, app)
         return [("INSERT INTO chunks VALUES (?,?,?,?,?,?)", (state["id"], seq, *stamp, entity, app)), *self._event_rows(state, events, seq, stamp)]
 
-    @staticmethod
-    def framing(target, response, rpc):
-        if rpc:  # Kiro's client parses GenerateAssistantResponse as a binary event stream whatever its content type.
-            return target["eventstream"]
-        content_type = response.get("content_type", "")
-        for media, key in (("text/event-stream", "sse"), ("application/vnd.amazon.eventstream", "eventstream")):
-            if media in content_type:
-                return target[key]
-
     def _parse(self, state, data, seq, stamp):
         """Decode and frame every observed byte in arrival order; returns application bytes, staged events and the queue charge."""
         target = state["parse"]
         target.update(seq=seq, stamp=stamp, events=[], size=self.OVERHEAD + len(data), budget=self.max_bytes - self.queued_bytes)
         response = state["response"]
-        encoding = response.get("content_encoding", "identity").lower().strip() or "identity"
+        encoding = content_encoding(response)
         if target["encoding"] is None:
             target["encoding"] = encoding
-            if encoding in ("gzip", "deflate"):
-                target["decoder"] = zlib.decompressobj(16 + zlib.MAX_WBITS if encoding == "gzip" else zlib.MAX_WBITS)
-            elif encoding != "identity":
+            target["decoder"] = content_decoder(encoding)
+            if encoding not in ("identity", "gzip", "deflate"):
                 state["issues"].append("unsupported_content_encoding")
         application = None
-        try:
-            if "decode_error" not in state["issues"] and encoding in ("identity", "gzip", "deflate"):
-                application = target["decoder"].decompress(data, 16 * 1024 * 1024 + 1) if target["decoder"] else data
-                if len(application) > 16 * 1024 * 1024 or (target["decoder"] and target["decoder"].unconsumed_tail):
-                    raise zlib.error("decompressed chunk exceeds safety limit")
+        if "decode_error" not in state["issues"] and encoding in ("identity", "gzip", "deflate"):
+            application, ok = decode_chunk(target["decoder"], data)
+            if not ok:
+                state["issues"].append("decode_error")
+                target["encoding"] = "invalid"
+            else:
                 target["hash"].update(application)
                 target["size"] += len(application) if application is not data else 0
-                parser = self.framing(target, response, "target" in state["metadata"])
+                parser = target.get(framing_kind(response, "target" in state["metadata"]))
                 if parser:
                     parser.feed(application)
                 elif len(target["json"]) + len(application) <= 4 * 1024 * 1024:
@@ -798,9 +829,6 @@ class Collector:
                 else:
                     if "json_parse_limit" not in state["issues"]:
                         state["issues"].append("json_parse_limit")
-        except zlib.error:
-            state["issues"].append("decode_error")
-            target["encoding"] = "invalid"
         return application, target["events"], target["size"]
 
     def _finalize(self, db, state):
@@ -812,7 +840,7 @@ class Collector:
         if target["decoder"] and not target["decoder"].eof:
             state["issues"].append("truncated_content_encoding")
         whole = not any(x in state["issues"] for x in ("decode_error", "unsupported_content_encoding", "truncated_content_encoding", "trailing_content_encoding"))
-        parser = self.framing(target, response, "target" in state["metadata"])
+        parser = target.get(framing_kind(response, "target" in state["metadata"]))
         if parser:
             target.update(events=[], size=0, budget=math.inf)  # The EOF tail is written here, never queued.
             parser.feed(b"", final=True)
