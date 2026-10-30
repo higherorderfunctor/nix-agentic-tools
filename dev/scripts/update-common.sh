@@ -634,9 +634,8 @@ refresh_package_source_version() {
 # before input verification evaluates the newly pinned source.
 refresh_input_rust_toolchains() {
   local name="$1" packages package roster
-  roster=$(
-    cat <<'EOF'
-let
+  # tryEval skips a ciPackages entry whose passthru throws at evaluation, so one broken package cannot hide git-branchless's refresher; input verification reports the broken one.
+  roster='let
   flake = builtins.getFlake (toString ./.);
   name = builtins.getEnv "NAT_UPDATE_NAME";
   ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
@@ -647,9 +646,7 @@ let
         && (p.passthru.updateFlakeInput or null) == name);
     in r.success && r.value;
   names = builtins.filter selected (builtins.attrNames ps);
-in builtins.concatStringsSep "\n" names
-EOF
-  )
+in builtins.concatStringsSep "\n" names'
   if ! packages=$(NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr "$roster"); then
     log_failure "could not discover Rust toolchain refreshers for input $name"
     return 1

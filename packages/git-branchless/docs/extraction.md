@@ -133,10 +133,8 @@ names).
 
 ## Regeneration
 
-git-branchless is owned by its flake input. `dev/scripts/update-input.sh`
-updates that pin and its Rust toolchain literal; PR CI runs the owner check's
-`passthru.regenerate` and commits changed facts to same-repository PR branches.
-Locally, from the repository root:
+git-branchless is owned by its flake input; PR CI regenerates its facts after an
+input bump. Locally, from the repository root:
 
 ```bash
 nix run .#checks.x86_64-linux.git-branchless-extracted.passthru.regenerate

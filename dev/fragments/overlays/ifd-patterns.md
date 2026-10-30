@@ -207,11 +207,10 @@ classifier handles only strings and string-to-string maps. Failures are
 controls prose are optional. Kimchi secret environment rows must state what they
 control.
 
-Update scripts write versions, hashes and locks. Hand annotation files are never
-regenerated. `lib/git-tool-settings/rules.nix` and Kimchi's `extract/rules.nix`
-share their rules between consumers and drift checks. Extractor floors detect
-collapsed surfaces; live consumer checks detect removed names used by this repo,
-including the git presets' typed-option check.
+Hand annotation files are never regenerated. `lib/git-tool-settings/rules.nix`
+and Kimchi's `extract/rules.nix` share their rules between consumers and drift
+checks. Extractor floors detect collapsed surfaces; live consumer checks detect
+removed names used by this repo, including the git presets' typed-option check.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and commits
 declared facts and measured raws in `packages/<owner>/extracted/`. Binary probes
@@ -292,9 +291,10 @@ bump. Fix the wiring; the file is a symptom.
 **A `passthru.extracted` with no regeneration path is therefore a LATENT bump
 failure**, not a cosmetic gap: it is guaranteed red the first time the version
 moves, and completely silent before that. glab shipped that way and the gap sat
-invisible from #560 until its first-ever bump (#621). If you add another
-extracted package, register its owner and extracted directory in
-`checks/extracted/owners.nix` so PR CI runs regeneration.
+invisible from #560 until its first-ever bump (#621).
+`checks.extracted-owner-registration` now refuses an owner with committed
+`extracted/facts.json` or an `<owner>-extracted` check that
+`checks/extracted/owners.nix` does not list.
 
 PR CI also self-heals extractor changes at unchanged versions; review the facts
 diff with the extractor change. Fork PRs receive an artifact and a failing check
@@ -312,9 +312,8 @@ stale-`pnpmDeps` bullet below).
 
 Debugging entry points when a bump PR still goes red:
 
-- **Read the PR CI producer logs** for the owner and system. The planner reads
-  `checks/extracted/owners.nix`; Linux selects handled extractions and Darwin
-  selects host-run facts. A missing owner or failed extraction prevents a carry.
+- **Read the PR CI producer logs.** Read the PR CI `extracted-facts` producer
+  log for the owner and system; a failed extraction prevents a carry.
 - **Check the published pins.** glab's schema dump realizes `src` and
   `goModules`, so its source, floor and vendor hash must be repaired by Update
   before PR CI can measure it. Codex likewise needs its Rust source and

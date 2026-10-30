@@ -137,10 +137,9 @@ description field.
 ## Regeneration
 
 PR CI runs each owner check's `passthru.regenerate` after git-branchless's
-flake-input pin or git-absorb/git-revise's source rev changes. Update workers
-write pins; CI commits changed measurements to same-repository PR branches. Hand
-annotations are not regenerated. Extractor floors reject collapsed surfaces.
-Removing an unused name is allowed; live module checks and
+flake-input pin or git-absorb/git-revise's source rev changes. Hand annotations
+are not regenerated. Extractor floors reject collapsed surfaces. Removing an
+unused name is allowed; live module checks and
 `module-sws-preset-leaves-are-options` reject removals still used by the repo's
 presets. These consumer checks run in mandatory CI; the standalone drift check
 only checks facts and annotations.

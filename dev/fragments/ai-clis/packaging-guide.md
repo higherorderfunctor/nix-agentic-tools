@@ -104,9 +104,9 @@ Each uses an update strategy managed by `config.update.targets` (see owner
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release
   tag; the same update pins the matching release source (shared by the source
   build and the extractor), exact pi npm package, and pi declaration
-  dependencies. PR CI runs the owner check's `passthru.regenerate`; its
-  extractor uses nixpkgs' TypeScript compiler API. The update derives the Go
-  floor before the proxy-helper vendor hash, and refreshes pnpm dependencies
+  dependencies; its extractor uses nixpkgs' TypeScript compiler API. The update
+  derives the Go floor before the proxy-helper vendor hash, and refreshes pnpm
+  dependencies
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint
 - `kiro-gateway` — inline `rev` + `hash`; `update-pkg.sh` tracks the main branch

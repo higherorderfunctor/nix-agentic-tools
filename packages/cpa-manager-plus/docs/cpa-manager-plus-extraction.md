@@ -66,7 +66,3 @@ facts and checks annotation reconciliation. Regenerate from the repository root:
 ```bash
 nix run .#checks.x86_64-linux.cpa-manager-plus-extracted.passthru.regenerate
 ```
-
-The package's update script repairs source and dependency pins. PR CI runs the
-owner check's `passthru.regenerate` to carry its measured shape into the PR
-after publication.

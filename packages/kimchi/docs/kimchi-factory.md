@@ -724,10 +724,9 @@ independent hashes pinned beside it. `mkUpdateScript` records the version alone
 (`platforms = {}`); its `extraExtract` first refreshes the extraction-source
 pins, then `mkGoUpdateExtract` derives the new Go floor before rebuilding the
 helper vendor hash and runs the shared pnpm hash fixer. The standalone
-dependency fixers also participate in input-bump repairs. PR CI regenerates
-`packages/kimchi/extracted/` facts and the egress report from the published
-pins. The source checkout reports version `0.0.0`, so upstream's
-`set-version.js` runs before compiling and staging the resources.
+dependency fixers also participate in input-bump repairs. The source checkout
+reports version `0.0.0`, so upstream's `set-version.js` runs before compiling
+and staging the resources.
 
 The build rewrites pi 1.3.0's shared `getToolPath()` choke point after pnpm
 materializes `node_modules` and before Bun compiles the module graph. `fd` and

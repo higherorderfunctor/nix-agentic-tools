@@ -273,8 +273,7 @@ for majors of one package; this is the general form.
 
 Semble uses `buildPythonApplication` with this flake's nixpkgs. Its three
 vendored dependencies stay let-bound. Four source sidecars feed one grouped
-`--use-update-script` target. PR CI regenerates the committed Semble facts from
-package passthru. The MCP SDK is a separate supporting package at
+`--use-update-script` target. The MCP SDK is a separate supporting package at
 `pkgs.ai.generic.mcp`, owned by `packages/mcp`. It overrides nixpkgs' Python SDK
 without extending the Python package set. Its owner groups the SDK, transport
 and versioning-tool source pins under one update target. `mcp-types` shares the
@@ -790,25 +789,6 @@ POST-`postFetch` tree and `nix-prefetch-url --unpack` cannot reproduce it. It
 pairs `platforms = {}` with a chain that restores `srcHash`, derives the floor,
 then restores `vendorHash`.
 
-`glab` also exposes `passthru.extracted`. Its schema dump builds `src` and
-`goModules`, so Update must finish source, Go-floor and vendor-hash repair
-before PR CI measures it. `chatgpt-codex` compiles from source; its
-`extraExtract` resolves the source commit and rusty_v8 pins, then runs
-`rustUpdateExtract` for source, toolchain and Cargo dependency pins.
-`claude-code` and `kiro-cli` prefetch their prebuilt releases. The public Kiro
-model catalog has its own web-document pin target. Kimchi's source build and
-extractor share its release source pin; Update also refreshes its exact pi
-dependency and declaration-source pins before running the Go and pnpm hash
-fixers.
-
-PR CI runs each owner's `mkOwnerCheck` regenerator through
-`passthru.regenerate`, including git-branchless after an input bump and
-git-absorb or git-revise after a rev bump. Register extracted owners in
-`checks/extracted/owners.nix` so the Linux planner can select their handled
-extractions. Darwin follows the Linux carry for host-run facts. Update workers
-leave fact production to those jobs, so a package build failure can publish as a
-writable red PR.
-
 The hash fixers (the vendor and src fixers `mkGoUpdateExtract` builds
 internally, and `mkNpmDepsFix`) are one body — `vu.mkHashFix` — parameterized by
 an ordered list of `hashFixTargets` entries, each a
@@ -1038,8 +1018,7 @@ So the floor is extracted from the pinned source's go.mod, by mechanism:
 
 **ORDER: hash fixers first, then the floor.** `mkGoFloorFix` builds `.src`, so a
 package whose `srcHash` also lives in the sidecar (`glab`) must have that
-restored first. For `glab` the vendor fixer follows the floor; PR CI later
-compiles the schema dump against `.goModules`.
+restored first.
 
 Overlays read `sources.goFloor or vu.goFloorUnknown`, but `goFloorUnknown`
 (`"0"`) cannot select a compiler without an explicit recipe override.

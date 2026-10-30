@@ -479,11 +479,10 @@ and model2vec, semble-grammars and vicinity in `<dep>-sources.json`. Each
 vendored dependency selects the newest stable PyPI release satisfying its
 non-extra requirement in the pinned Semble release's PyPI `requires_dist`. The
 dependency rows read the Semble version from `sources.json` when they run, so
-the CLI runs first to apply a new release's bounds in the same sweep. The
-grouped script writes pins only. PR CI carries the package's
-`passthru.extracted` into the committed file. MCP dependency pins also change
-that extraction derivation because the SDK generates the `mcpTools` schemas.
-Human-reviewed template hashes remain a separate approval gate.
+the CLI runs first to apply a new release's bounds in the same sweep. MCP
+dependency pins also change Semble's `passthru.extracted` derivation because the
+SDK generates the `mcpTools` schemas. Human-reviewed template hashes remain a
+separate approval gate.
 
 ## Direct configuration
 

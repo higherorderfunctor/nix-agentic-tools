@@ -72,9 +72,7 @@ Targets fall into three categories:
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
-  nix-update, including on an unchanged-rev sweep. Extracted facts, including
-  git-tool censuses and Semble's SDK-generated schemas after an MCP bump, are
-  produced by PR CI from the published pins. The Beads binary target is a
+  nix-update, including on an unchanged-rev sweep. The Beads binary target is a
   grouped package: its `passthru.updateScript` runs independent Beads and Dolt
   release updaters in sequence, so either upstream can move while the target
   still produces one branch and one PR. The paired Dolt remains a nested package
@@ -82,9 +80,8 @@ Targets fall into three categories:
   finalizer because it cannot observe changes committed only on target branches.
 
   Semble's grouped script tracks the CLI, model2vec, vicinity and the grammar
-  wheels. PR CI regenerates Semble's extracted surface. Human-reviewed template
-  hashes stay unchanged: a changed template fails coverage until its derivative
-  is reviewed.
+  wheels. Human-reviewed template hashes stay unchanged: a changed template
+  fails coverage until its derivative is reviewed.
 
 ### Packages are read from `ciPackages`
 
@@ -98,8 +95,7 @@ builds and pushes:
   asks `nix` lazily so sourcing the script never needs it; `nix-update` gets
   `--flake "$(nat_attr <name>)"`, which it resolves as a flake-root attribute
   path;
-- generated hash and source-version fixers in `lib/packaging.nix`, including the
-  Go-floor and Rust-toolchain fixers, use `ciAttr`;
+- generated fixers in `lib/packaging.nix` use `ciAttr`;
 - `verify_all_packages`, `update.yml` and the warm-ifd action evaluate
   `.#ciPackages.<system>`.
 

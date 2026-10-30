@@ -25,9 +25,8 @@ adds it to `extract.mjs`'s output as `network`. Every CodeQL fact joins there,
 from `codeqlFacts`. Other hosts carry no CodeQL facts, and the declaration lists
 x86_64-linux only. `extractedRules.results.network.entries` is the fact. The
 regenerate command builds the database and runs the queries in the Linux PR CI
-producer. Update writes the source and dependency pins before publication. The
-producer needs the engine customization, database, pack compile (1m54s on CI)
-and an evaluation with `--ram=8192` (53.8 s).
+producer. The producer needs the engine customization, database, pack compile
+(1m54s on CI) and an evaluation with `--ram=8192` (53.8 s).
 
 ```text
 {callSites: [{readBy, file, line, library, bundledModule,
