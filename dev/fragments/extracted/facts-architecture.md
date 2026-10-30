@@ -1,9 +1,7 @@
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-18 — Go owners run in-package extractor tests
-> through the shared `goTestExtract`; shared reconciliation accepts single-key
-> pattern rows. Every owner keeps one carried file; probes are not on the
-> contract yet.
+> **Last verified:** 2026-10-29 — PR CI produces Linux-handled extractions
+> before Darwin host-run facts and publishes one commit per system.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -71,8 +69,9 @@ rewrite only Linux's raw, and every `equal` key a new release changed went
 and `checks` forces every fact, so the Darwin regenerate that would have fixed
 it could not evaluate (PR #2559, kiro 2.29.1 → 2.31.1, 2026-10-15).
 
-Darwin CI's `extracted-facts` job therefore runs only owners with a `host-run`
-row for Darwin, today Codex (clap help is compiled per platform).
+PR CI lands Linux's carry before Darwin measures it. Darwin runs only owners
+with a `host-run` row for Darwin, today Codex (clap help is compiled per
+platform).
 
 ## The subtractive rule
 

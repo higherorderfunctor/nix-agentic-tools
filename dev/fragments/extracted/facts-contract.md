@@ -1,9 +1,7 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-18 — owners commit forked `extracted.json`; Linux
-> carries make other systems follow; owner checks use `mkOwnerCheck`; Go owners
-> extract with `goTestExtract` over the generic `goTest`; facts and
-> reconciliation share the private redact classifier.
+> **Last verified:** 2026-10-29 — Linux CI compares all handled extractions;
+> failed planning falls back to owner names without forcing checks.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -155,7 +153,9 @@ Needs only `lib`, like `reconcile`, so an option module can call it before
 and `hostRunOn system dir`. The latter selects owners with a `host-run` row
 requiring that system, using the configured systems as the default for an
 omitted `systems` field. The Darwin CI planner uses it without evaluating Darwin
-checks on Linux.
+checks on Linux. Linux instead selects owners with a nonempty drift check
+`passthru.handled` list and compares every handled system's extraction drvPath,
+including other platforms measured on Linux.
 
 ### `load`
 
@@ -279,10 +279,12 @@ owner plus `index.json` across owners, each key carrying `value`, `bySystem`,
 `type`, `source`, `combine`. External readers (skills, CI scripts) read these
 files; Nix consumers read the aggregate directly.
 
-`checks.extracted-index` and the Darwin CI planner load the explicit
+`checks.extracted-index` and both native CI planners load the explicit
 logical-name-to-directory map in `checks/extracted/owners.nix`. These names
 identify its JSON files and index keys independently of owner directory names.
-External readers build that attribute and read its files.
+Linux planning falls back to this map when derivation evaluation fails, so
+broken owners fail in their producer legs rather than preventing scheduling.
+External index readers build that attribute and read its files.
 
 ## Drift
 

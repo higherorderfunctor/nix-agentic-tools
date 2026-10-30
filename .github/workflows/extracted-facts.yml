@@ -1,0 +1,182 @@
+name: Produce extracted facts
+
+on:
+  workflow_call:
+    inputs:
+      owners:
+        description: JSON array of owners selected by plan-extracted-facts.
+        required: true
+        type: string
+      system:
+        description: Native extraction system, Linux before Darwin in ci.yml.
+        required: true
+        type: string
+    secrets:
+      APP_CLIENT_ID:
+        required: false
+      APP_PRIVATE_KEY:
+        required: false
+      CACHIX_AUTH_TOKEN:
+        required: false
+    outputs:
+      published:
+        description: A facts push requires Darwin to wait for the next PR run.
+        value: ${{ jobs.commit.outputs.published }}
+
+permissions:
+  contents: read
+
+jobs:
+  produce:
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.system == 'aarch64-darwin' && 1 || 256 }}
+      matrix:
+        owner: ${{ fromJSON(inputs.owners) }}
+    runs-on:
+      ${{ inputs.system == 'x86_64-linux' && 'ubuntu-latest' || 'macos-latest'
+      }}
+    timeout-minutes: 60
+    env:
+      # Preserve Darwin's memory budget; Linux uses the native build defaults.
+      NIX_CONFIG: |
+        ${{ inputs.system == 'aarch64-darwin' && 'max-jobs = 1
+        cores = 2' || '' }}
+      OWNER: ${{ matrix.owner }}
+      SYSTEM: ${{ inputs.system }}
+    steps:
+      # Measure the same merge ref as the planner and package/cache producers.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            sandbox = true
+      - uses: ./.github/actions/assert-nix-config
+        with:
+          require: |
+            ^accept-flake-config = true
+            ^sandbox = true
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: nix-agentic-tools
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          pushFilter: kiro-cli|codeql
+      - name: Warm IFD sources (retry, best-effort)
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: ${{ inputs.system }}
+      - name: Produce native extracted facts
+        id: produce
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          paths=("packages/${OWNER}/extracted")
+          nix run ".#.checks.${SYSTEM}.${OWNER}-extracted.passthru.regenerate"
+          if [ "$OWNER" = kimchi ]; then
+            nix shell --inputs-from . nixpkgs#nodejs ".#.formatter.${SYSTEM}" \
+              --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh
+            paths+=(packages/kimchi/egress-report.json)
+          fi
+          git add -- "${paths[@]}"
+          mkdir -p "$RUNNER_TEMP/facts"
+          git diff --cached --binary --full-index -- "${paths[@]}" > "$RUNNER_TEMP/facts/${OWNER}.patch"
+          if [ -s "$RUNNER_TEMP/facts/${OWNER}.patch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check extracted facts
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          nix build ".#.checks.${SYSTEM}.${OWNER}-extracted" --no-link
+
+      # Runs only after the check passes: a failed owner's delta must not publish;
+      # no-op owners upload an empty patch.
+      - name: Upload native extracted facts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.owner }}-extracted-${{ inputs.system }}
+          path: ${{ runner.temp }}/facts
+          if-no-files-found: error
+
+      - name: Fail on stale native extracted facts
+        if: >-
+          steps.produce.outputs.changed == 'true' &&
+          github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          echo "::error::The committed ${SYSTEM} extracted facts are stale." \
+               "From the repository root, download the measured files and commit them:"
+          echo "  facts_dir=\$(mktemp -d)"
+          echo "  gh run download ${RUN_ID} -n ${OWNER}-extracted-${SYSTEM} -D \"\$facts_dir\""
+          echo "  git apply --3way --index \"\$facts_dir/${OWNER}.patch\""
+          exit 1
+
+  # An App push cancels this run, so workers cannot push individually.
+  commit:
+    needs: produce
+    if: >-
+      !cancelled() && github.event.pull_request.head.repo.full_name ==
+      github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      published: ${{ steps.commit.outputs.published }}
+    env:
+      SYSTEM: ${{ inputs.system }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "*-extracted-${{ inputs.system }}"
+          path: ${{ runner.temp }}/facts
+          merge-multiple: true
+      # Preserve both bot identities and App push credit for update/* ownership.
+      - name: Generate publishing App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: ./.github/actions/git-bot-identity
+        with:
+          account: nix-agentic-tools-bot[bot]
+          token: ${{ github.token }}
+      - name: Commit native extracted facts as the update bot
+        id: commit
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          gh auth setup-git --hostname github.com
+          git fetch --no-tags origin "$HEAD_SHA"
+          git checkout --detach "$HEAD_SHA"
+          owners=()
+          for patch in "$RUNNER_TEMP/facts/"*.patch; do
+            # No-op owners upload empty patches, which git apply rejects;
+            # an unmatched glob is skipped too.
+            [ -s "$patch" ] || continue
+            git apply --3way --index "$patch"
+            owner=${patch##*/}
+            owners+=("${owner%.patch}")
+          done
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore(extracted): record ${SYSTEM} extracted facts" \
+            -m "$(printf 'Regenerated owners:\n'; printf '%s\n' "${owners[@]}")"
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
+          echo "published=true" >> "$GITHUB_OUTPUT"

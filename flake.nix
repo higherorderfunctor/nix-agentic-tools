@@ -219,18 +219,23 @@
         })
       checkWorlds.${system}.checks);
 
-    # Each revision supplies its own owner map, declarations, and packages to
-    # the native extraction planner. Attribute names stay lazy if a drv fails.
-    ciExtractedFacts = let
-      system = "aarch64-darwin";
+    # ci-extracted-facts.py compares Linux's handled inputs; Darwin selection
+    # must not force native checks on the Linux planner.
+    ciExtractedFacts = forAllSystems (system: let
       facts = import ./lib/extracted/facts.nix {inherit lib;};
       owners = import ./checks/extracted/owners.nix;
-      selected = lib.filterAttrs (_: dir: facts.hostRunOn system dir) owners;
+      ownerCheck = name: self.checks.${system}."${name}-extracted".passthru;
+      selected = lib.filterAttrs (name: dir:
+        if system == "x86_64-linux"
+        then (ownerCheck name).handled != []
+        else facts.hostRunOn system dir)
+      owners;
     in
-      lib.mapAttrs (name: _: {
-        drvPath = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;
-      })
-      selected;
+      lib.mapAttrs (name: _:
+        if system == "x86_64-linux"
+        then lib.genAttrs (ownerCheck name).handled (handled: (ownerCheck name).extracted.${handled}.drvPath)
+        else {${system} = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;})
+      selected);
 
     ciCheckEvaluator =
       forAllSystems (system:
