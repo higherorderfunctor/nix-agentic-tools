@@ -1,7 +1,8 @@
 ## Network Proxy
 
 > **Last verified:** 2026-10-30 — `ai.proxy` is the shared HTTP/HTTPS network
-> proxy surface; inference selection remains `ai.settings.inference`.
+> proxy surface with named instance selection; inference selection remains
+> `ai.settings.inference`.
 
 ```nix
 ai.proxy.http = "http://127.0.0.1:8080";
@@ -12,14 +13,39 @@ ai.claude.proxy.https = null;
 The two nullable nonempty string fields are `http` and `https`, delivered as
 `HTTP_PROXY` and `HTTPS_PROXY`. These select where a process's traffic leaves
 the machine. Inference credentials and model routing belong to
-`ai.settings.inference`; `ai.proxy` has no `instance`, registry or claims.
+`ai.settings.inference`. The nullable `instance` field selects a network proxy
+from `ai.internal.proxyInstances`; each entry declares `{enable; http; https;}`
+with both protocol origins required nonempty strings. Owners claim names in
+`ai.claims.proxy-instance`, separately from inference claims, so an Airlock
+`main` and a CPA `main` can coexist. Unknown or disabled selections fail
+evaluation, naming the option and registered instances.
 
-Each undefined field defaults to its defined sibling. Definition priority, not
-whether the value is null, distinguishes undefined from explicitly configured
+```nix
+ai.airlock.instances.main = {};
+ai.proxy.instance = "main";
+ai.claude.proxy.instance = null; # opt this runtime out of the root instance
+```
+
+Airlock registers both protocols as `"http://127.0.0.1:8318"` at its default
+port. HTTPS uses CONNECT and preserves credentials and TLS. Plain HTTP requests
+through Airlock currently fail; HTTP forwarding is deferred to a later stack
+change. A runtime may select its own instance with
+`ai.<runtime>.proxy.instance`.
+
+Explicit root or runtime protocol fields, including null, override only that
+protocol's instance default. Each undefined field uses the selected instance's
+value for that protocol first, then an explicitly defined sibling when no
+instance is selected, otherwise null. Thus
+`ai.proxy = {instance = "main"; http = "http://corp:3128";};` keeps HTTPS on
+Airlock. Instance-derived values never fill a sibling. Definition priority,
+rather than a null value, distinguishes undefined from explicitly configured
 fields and prevents mutual default recursion. Explicit null blocks that
-variable's generated value. The root copies its fields to each capable runtime
-at default priority, so runtime values and nulls win field by field; an override
-does not replace the other inherited field.
+variable's generated value. The root copies its selector and explicitly defined
+protocol fields at default priority. Its explicit sibling fallback also copies
+when no instance is selected at runtime scope, preserving the inherited fallback
+if the runtime overrides the peer. Instance-derived defaults resolve at runtime
+scope, so a runtime selection or null replaces the inherited instance. Runtime
+protocol values and nulls win field by field.
 
 One generic lowering maps the two fields to environment names without knowing a
 runtime or inference backend. Delivery uses an honored runtime settings file
@@ -120,3 +146,8 @@ defaults `https`, so both fields warn unless `https = null`. V3 and
 explicit-null opt-outs stay quiet. Null blocks generated delivery; an empty
 string is refused by the option type. Kiro v2 exports no generated proxy
 variables.
+
+`module-ai-proxy` checks protocol resolution order and null opt-outs across
+runtimes and both backends. `airlock-instances` checks registration, root and
+runtime selection, corporate proxy overrides, selection refusals and independent
+inference names on both backends.

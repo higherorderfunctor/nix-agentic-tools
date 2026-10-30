@@ -221,6 +221,8 @@
         "lib/ai/launcher.nix"
         "lib/ai/proxy.nix"
         "lib/ai/sharedOptions.nix"
+        "packages/airlock/checks/airlock-instances.nix"
+        "packages/airlock/modules/instances.nix"
         "packages/chatgpt-codex/lib/mkCodex.nix"
         "packages/claude-code/lib/mkClaude.nix"
         "packages/copilot-cli/lib/mkCopilot.nix"
