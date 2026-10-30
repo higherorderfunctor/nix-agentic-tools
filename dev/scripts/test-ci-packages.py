@@ -59,9 +59,9 @@ export -f gh git
                 git("init", "--quiet", "--initial-branch=main")
                 git("config", "user.name", "Fixture")
                 git("config", "user.email", "fixture@example.test")
-                changed = repo / "packages/kimchi/extracted/extracted.json"
+                changed = repo / "packages/kimchi/extracted/measured.json"
                 unchanged = repo / "packages/kimchi/extracted/unrelated.json"
-                second = repo / "packages/semble/extracted/extracted.json"
+                second = repo / "packages/semble/extracted/measured.json"
                 for path in (changed, unchanged, second):
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text('head\n')
@@ -130,7 +130,7 @@ export -f gh git
             root = Path(directory)
             source = root / "checkout"
             source.mkdir()
-            path = "packages/kimchi/extracted/extracted.json"
+            path = "packages/kimchi/extracted/measured.json"
             artifact = root / "artifact/kimchi.patch"
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text('fresh\n')
@@ -161,7 +161,7 @@ EXCLUSIVE_DOWNLOAD
 }
 git() {
   [ "$1:$2:$3" = apply:--3way:--index ]
-  cp "$4" packages/kimchi/extracted/extracted.json
+  cp "$4" packages/kimchi/extracted/measured.json
 }
 export -f gh git
 '''
