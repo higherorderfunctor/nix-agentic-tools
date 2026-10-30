@@ -1,6 +1,7 @@
 """Private, independent Kiro calibration evidence store; no provider calls."""
 
 import argparse
+import base64
 from contextlib import contextmanager
 import fcntl
 import gzip
@@ -882,15 +883,22 @@ class Collector:
         db.commit()
 
 
+def json_lines(names, rows):
+    """One packed JSON object per row, BLOB columns as base64."""
+    for row in rows:
+        print(packed({name: base64.b64encode(value).decode() if isinstance(value, bytes) else value for name, value in zip(names, row)}))
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Offline inspection; replay writes private payloads to stdout")
+    parser = argparse.ArgumentParser(description="Offline inspection; unpack writes private payloads to stdout")
     parser.add_argument("--db", required=True)
     sub = parser.add_subparsers(dest="command", required=True)
     listing = sub.add_parser("list")
     listing.add_argument("--json", action="store_true", help="write the existing complete JSON object per capture")
-    replay = sub.add_parser("replay")
-    replay.add_argument("id")
-    replay.add_argument("--entity", action="store_true", help="replay encoded response entity bytes")
+    unpack = sub.add_parser("unpack")
+    unpack.add_argument("id")
+    unpack.add_argument("mode", choices=("request", "transport", "decoded", "chunks", "events"),
+                        help="request bytes, response entity or application bytes, or chunk or event rows as JSON lines")
     args = parser.parse_args()
     path = Path(args.db).expanduser().resolve(strict=True)
     db = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
@@ -906,21 +914,41 @@ def main():
                         [[row["id"], row["state"], row["observed_bytes"], row["dropped_bytes"],
                           row["credits"], row["context_usage_percentage"], row["issues_json"]] for row in rows]))
     else:
-        capture = db.execute("SELECT state,observed_chunks FROM captures WHERE id=?", (args.id,)).fetchone()
-        if capture is None:
-            parser.error("unknown capture id")
-        if capture[0] != "complete":
-            print("warning: replaying incomplete evidence", file=sys.stderr)
-        column = "entity_gzip" if args.entity else "application_gzip"
-        expected = 0
-        # A queue-omitted chunk leaves no row, even in a complete capture; a gap or short tail is missing bytes.
-        for row in db.execute(f"SELECT seq,{column} FROM chunks WHERE capture_id=? ORDER BY seq", (args.id,)):
-            if row[0] != expected or row[1] is None:
-                break
-            sys.stdout.buffer.write(gzip.decompress(row[1]))
-            expected += 1
-        if expected != capture[1]:
-            parser.exit(1, "requested payload bytes unavailable (capture is incomplete)\n")
+        import store
+        with store.snapshot(db):
+            capture = db.execute("SELECT state,observed_chunks,response_sha256 FROM captures WHERE id=?", (args.id,)).fetchone()
+            if capture is None:
+                parser.error("unknown capture id")
+            if capture[0] != "complete":
+                print("warning: unpacking incomplete evidence", file=sys.stderr)
+            try:
+                if args.mode == "request":
+                    body = store.request_body(db, args.id)
+                    if body is None:
+                        parser.exit(1, "request payload unavailable\n")
+                    sys.stdout.buffer.write(body)
+                else:
+                    chunks, events = store.response_rows(db, args.id)
+            except ValueError as error:
+                parser.exit(2, f"capture payload failed verification: {error}\n")
+            if args.mode == "chunks":
+                json_lines(("seq", "utc_ns", "mono_ns", "entity", "application"), chunks)
+            elif args.mode == "events":
+                json_lines(("seq", "chunk_seq", "utc_ns", "mono_ns", "event_name", "frame", "data_json"), events)
+            elif args.mode != "request":
+                column, expected, written = 3 if args.mode == "transport" else 4, 0, hashlib.sha256()
+                # A queue-omitted chunk leaves no row, even in a complete capture; a gap or short tail is missing bytes.
+                for chunk in chunks:
+                    if chunk[0] != expected or chunk[column] is None:
+                        break
+                    sys.stdout.buffer.write(chunk[column])
+                    written.update(chunk[column])
+                    expected += 1
+                if expected != capture[1]:
+                    parser.exit(1, "requested payload bytes unavailable (capture is incomplete)\n")
+                # The collector hashes every decoded byte, and records the hash only when nothing failed to decode.
+                if args.mode == "decoded" and capture[2] and written.hexdigest() != capture[2]:
+                    parser.exit(2, "capture payload failed verification: response hash mismatch\n")
     db.close()
 
 

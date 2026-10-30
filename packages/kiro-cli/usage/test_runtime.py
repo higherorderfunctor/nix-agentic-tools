@@ -454,6 +454,13 @@ class SummaryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"\|report \[--since YYYY-MM-DD\]"):
             runtime.cli(Path("/state"), ["summary"], 19001, 1 << 30)
 
+    def test_list_and_unpack_route_to_the_capture_cli(self):
+        script = Path(runtime.__file__).parent
+        for arguments in (["list"], ["unpack", "ID", "events"]):
+            with patch.object(runtime, "private_directory"), patch.object(os, "execv") as execute:
+                runtime.cli(Path("/state"), arguments, 19001, 1 << 30)
+            execute.assert_called_once_with(sys.executable, [sys.executable, str(script / "capture.py"), "--db", "/state/usage.sqlite3", *arguments])
+
     def test_main_returns_child_status(self):
         with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--", "exec", "kiro-cli"]), patch.object(runtime, "cli", return_value=23):
             self.assertEqual(runtime.main(), 23)

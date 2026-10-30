@@ -24,7 +24,7 @@ PROXY_NAMES = (
 
 
 USAGE = ("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json]"
-         "|report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--session ID ...] [--json]|list|replay ID}")
+         "|report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--session ID ...] [--json]|list|unpack ID MODE}")
 
 
 class CommandError(Exception):
@@ -341,7 +341,7 @@ def cli(path, arguments, port, warn_bytes, theme=None):
         invocation = [str(script / "report.py"), *db_args, *tail, *(["--summary-theme", str(theme)] if theme else [])]
     elif command == "index":
         invocation = [str(script / "disk_index.py"), *db_args, *tail]
-    elif command in ("list", "replay"):
+    elif command in ("list", "unpack"):
         invocation = [str(script / "capture.py"), *db_args, command, *tail]
     else:
         raise ValueError(USAGE)
