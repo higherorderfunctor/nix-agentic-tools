@@ -417,9 +417,25 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           # The lock names the mirror, so flake.nix's URL stays its one statement.
           repo="$(jq -er '.nodes[.nodes[.root].inputs["jail-nix"]].locked | select(.type == "github") | "\(.owner)/\(.repo)"' flake.lock)"
+          # The verdict below can take dozens of calls, so one transient 5xx
+          # would otherwise fail the job, and a re-run during the same outage too.
+          gh_api() {
+            # Buffered: a failed call prints its error body to stdout.
+            local attempt out
+            for attempt in 1 2 3; do
+              if out="$(gh api "$@")"; then
+                printf '%s\n' "${out}"
+                return 0
+              fi
+              echo "::warning::gh api $1 attempt ${attempt}/4 failed; retrying in $((attempt * 5))s." >&2
+              sleep "$((attempt * 5))"
+            done
+            # The last attempt fails the step through the caller's errexit.
+            gh api "$@"
+          }
           # Newest first. Filtering here rather than with `status=completed`:
           # that listing has served a weeks-old snapshot.
-          runs="$(gh api "repos/${repo}/actions/workflows/mirror.yml/runs?per_page=100")"
+          runs="$(gh_api "repos/${repo}/actions/workflows/mirror.yml/runs?per_page=100")"
           status=0
 
           # The mirror runs every 6 hours. GitHub disables a schedule after 60
@@ -437,7 +453,7 @@ jobs:
           # both a started_at, so neither is evidence.
           synced=""
           for id in $(jq -r '.workflow_runs[] | select(.status == "completed") | .id' <<< "${runs}"); do
-            started="$(gh api "repos/${repo}/actions/runs/${id}/jobs" --jq 'any(.jobs[]; .name == "sync" and (.steps | length) > 0)')"
+            started="$(gh_api "repos/${repo}/actions/runs/${id}/jobs" --jq 'any(.jobs[]; .name == "sync" and (.steps | length) > 0)')"
             if [ "${started}" = true ]; then
               synced="${id}"
               break
