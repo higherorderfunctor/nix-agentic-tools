@@ -370,6 +370,7 @@
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--json"], "valueName": null },
           { "names": ["--disable"], "valueName": "FEATURE" },
+          { "names": ["--network-only"], "valueName": null },
           { "names": ["--summary"], "valueName": null },
           { "names": ["--all"], "valueName": null },
           { "names": ["--no-color"], "valueName": null },
@@ -831,26 +832,14 @@
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--message"], "valueName": "TEXT" },
           { "names": ["--disable"], "valueName": "FEATURE" },
+          { "names": ["--resume"], "valueName": null },
           { "names": ["--remote"], "valueName": "ADDR" },
           { "names": ["--remote-auth-token-env"], "valueName": "ENV_VAR" },
-          { "names": ["--image", "-i"], "valueName": "FILE" },
-          { "names": ["--model", "-m"], "valueName": "MODEL" },
-          { "names": ["--oss"], "valueName": null },
-          { "names": ["--local-provider"], "valueName": "OSS_PROVIDER" },
           { "names": ["--profile", "-p"], "valueName": "CONFIG_PROFILE_V2" },
-          { "names": ["--sandbox", "-s"], "valueName": "SANDBOX_MODE" },
-          { "names": ["--approve-for-me"], "valueName": null },
-          {
-            "names": ["--dangerously-bypass-approvals-and-sandbox"],
-            "valueName": null
-          },
-          { "names": ["--dangerously-bypass-hook-trust"], "valueName": null },
-          { "names": ["--cd", "-C"], "valueName": "DIR" },
-          { "names": ["--worktree"], "valueName": null },
-          { "names": ["--add-dir"], "valueName": "DIR" },
           { "names": ["--strict-config"], "valueName": null },
           { "names": ["--config", "-c"], "valueName": "key=value" },
-          { "names": ["--help", "-h"], "valueName": null }
+          { "names": ["--help", "-h"], "valueName": null },
+          { "names": ["--cd", "-C"], "valueName": "DIR" }
         ]
       },
       "codex remote-control": {
@@ -1111,10 +1100,7 @@
       "name": "code_mode_only_strict_3p_tools"
     },
     { "maturity": "under development", "name": "code_mode_prewarm" },
-    {
-      "maturity": "under development",
-      "name": "code_mode_tool_description_first"
-    },
+    { "maturity": "removed", "name": "code_mode_tool_description_first" },
     { "maturity": "under development", "name": "code_mode_tool_search" },
     { "maturity": "under development", "name": "codex_apps_mcp_2026_07_28" },
     { "maturity": "removed", "name": "codex_git_commit" },
@@ -1128,6 +1114,7 @@
     { "maturity": "stable", "name": "content_item_kinds" },
     { "maturity": "under development", "name": "context_management" },
     { "maturity": "under development", "name": "credential_masking" },
+    { "maturity": "under development", "name": "critical_path_timing" },
     { "maturity": "under development", "name": "current_time_reminder" },
     { "maturity": "under development", "name": "cwd_relative_turn_diffs" },
     { "maturity": "stable", "name": "daemon_auto_start" },
@@ -1167,6 +1154,10 @@
       "name": "guardian_enhanced_node_repl_transcripts"
     },
     { "maturity": "removed", "name": "guardian_ext" },
+    {
+      "maturity": "under development",
+      "name": "guardian_native_multi_agent_history"
+    },
     {
       "maturity": "under development",
       "name": "guardian_node_repl_transcript_images"
@@ -1210,6 +1201,7 @@
     { "maturity": "removed", "name": "local_thread_store_shared_compression" },
     { "maturity": "experimental", "name": "login_shell_package_path" },
     { "maturity": "under development", "name": "mcp_2026_07_28" },
+    { "maturity": "under development", "name": "mcp_connection_sharing" },
     { "maturity": "stable", "name": "mcp_oauth_refresh_coordination" },
     { "maturity": "under development", "name": "mcp_tool_list_changed" },
     { "maturity": "stable", "name": "memories" },
@@ -1227,8 +1219,10 @@
       "maturity": "under development",
       "name": "omit_app_server_notification_media"
     },
+    { "maturity": "under development", "name": "omit_skill_descriptions" },
     { "maturity": "under development", "name": "output_token_replay" },
     { "maturity": "removed", "name": "personality" },
+    { "maturity": "stable", "name": "plugin_discovery_prefetch" },
     { "maturity": "removed", "name": "plugin_hooks" },
     { "maturity": "stable", "name": "plugin_sharing" },
     { "maturity": "stable", "name": "plugins" },
@@ -1266,6 +1260,8 @@
     { "maturity": "under development", "name": "shell_snapshot_v2" },
     { "maturity": "stable", "name": "shell_tool" },
     { "maturity": "removed", "name": "shell_zsh_fork" },
+    { "maturity": "under development", "name": "simplified_selection_hints" },
+    { "maturity": "under development", "name": "skill_catalog_deltas" },
     { "maturity": "removed", "name": "skill_env_var_dependency_prompt" },
     { "maturity": "stable", "name": "skill_mcp_dependency_install" },
     { "maturity": "stable", "name": "skill_search" },
@@ -1303,6 +1299,7 @@
     { "maturity": "stable", "name": "unified_exec_tty" },
     { "maturity": "removed", "name": "unified_exec_zsh_fork" },
     { "maturity": "under development", "name": "unified_image_budget" },
+    { "maturity": "under development", "name": "untrusted_as_tool_output" },
     { "maturity": "under development", "name": "use_agent_identity" },
     { "maturity": "deprecated", "name": "use_legacy_landlock" },
     { "maturity": "removed", "name": "use_linux_sandbox_bwrap" },
