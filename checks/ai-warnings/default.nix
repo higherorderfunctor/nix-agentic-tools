@@ -699,6 +699,26 @@ in {
           contains "ai.kiro.hooks.probe.action.prompt" withPrompt)
       ["devenv" "hm"]
     );
+    ai-warnings-kiro-proxy-instance-package-null = harness.mkTest "ai-warnings-kiro-proxy-instance-package-null" (
+      lib.all (mode: let
+        messages = evaluate mode {
+          ai = {
+            airlock.instances.main = {};
+            kiro.cli = {
+              enable = true;
+              package = null;
+              v3 = true;
+            };
+            proxy.instance = "main";
+          };
+        };
+      in
+        lib.any (message:
+          lib.hasPrefix "ai.kiro.cli.package is null" message
+          && lib.hasInfix "ai.proxy / ai.kiro.proxy" message)
+        messages)
+      ["devenv" "hm"]
+    );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let
         valid = mcp.evalSettings "gitlab-mcp" {

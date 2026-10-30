@@ -46,6 +46,48 @@
         inherit https;
       };
     };
+    instance-http = {
+      root = {
+        inherit http;
+        instance = "main";
+      };
+      expected = {inherit http https;};
+      expectedInstance = "main";
+    };
+    instance-null-https = {
+      root = {
+        inherit http;
+        instance = "main";
+        https = null;
+      };
+      expected = {
+        inherit http;
+        https = null;
+      };
+      expectedInstance = "main";
+    };
+    instance-null-peer = {
+      root = {
+        instance = "main";
+        http = null;
+      };
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = "main";
+    };
+    instance-peer-fallback = {
+      root = {
+        instance = "main";
+        https = local;
+      };
+      expected = {
+        http = https;
+        https = local;
+      };
+      expectedInstance = "main";
+    };
     null-http = {
       root = {
         http = null;
@@ -66,6 +108,17 @@
         https = null;
       };
     };
+    root-explicit-https = {
+      root = {
+        https = local;
+        instance = "main";
+      };
+      expected = {
+        http = https;
+        https = local;
+      };
+      expectedInstance = "main";
+    };
     runtime-http = {
       root = {inherit http https;};
       runtime.http = local;
@@ -82,6 +135,67 @@
         https = local;
       };
     };
+    runtime-instance-http = {
+      root = {};
+      runtime = {
+        inherit http;
+        instance = "main";
+      };
+      expected = {inherit http https;};
+      expectedInstance = "main";
+    };
+    runtime-instance-null = {
+      root.instance = "main";
+      runtime.instance = null;
+      expected = {
+        http = null;
+        https = null;
+      };
+      expectedInstance = null;
+    };
+    runtime-instance-null-keeps-root-protocols = {
+      root = {
+        http = null;
+        inherit https;
+        instance = "main";
+      };
+      runtime.instance = null;
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = null;
+    };
+    runtime-instance-null-peer = {
+      root = {};
+      runtime = {
+        instance = "main";
+        http = null;
+      };
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = "main";
+    };
+    runtime-instance-overrides-root-instance = {
+      root = {
+        inherit http;
+        instance = "main";
+      };
+      runtime.instance = "other";
+      expected = {
+        inherit http;
+        https = local;
+      };
+      expectedInstance = "other";
+    };
+    runtime-instance-root-http = {
+      root = {inherit http;};
+      runtime.instance = "main";
+      expected = {inherit http https;};
+      expectedInstance = "main";
+    };
     runtime-null-http = {
       root = {inherit http;};
       runtime.http = null;
@@ -97,6 +211,18 @@
         http = https;
         https = null;
       };
+    };
+    runtime-null-inherited-instance-https = {
+      root = {
+        inherit http;
+        instance = "main";
+      };
+      runtime.https = null;
+      expected = {
+        inherit http;
+        https = null;
+      };
+      expectedInstance = "main";
     };
     runtime-only-http = {
       root = {};
@@ -125,18 +251,45 @@
         https = local;
       };
     };
+    runtime-reselect-keeps-root-protocols = {
+      root = {
+        http = null;
+        inherit https;
+        instance = "main";
+      };
+      runtime.instance = "other";
+      expected = {
+        http = null;
+        inherit https;
+      };
+      expectedInstance = "other";
+    };
   };
   semantics = lib.concatMapAttrs (backend: evaluate:
     lib.mapAttrs' (name: test:
       lib.nameValuePair "module-ai-proxy-${backend}-${name}"
       (mkTest "ai-proxy-${backend}-${name}" (let
         result = evaluate {
-          ai = {proxy = test.root;} // lib.genAttrs runtimes (_: {proxy = test.runtime or {};});
+          ai =
+            {
+              internal.proxyInstances = {
+                main = {
+                  http = https;
+                  inherit https;
+                };
+                other = {
+                  http = local;
+                  https = local;
+                };
+              };
+              proxy = test.root;
+            }
+            // lib.genAttrs runtimes (_: {proxy = test.runtime or {};});
         };
       in
         lib.all (runtime:
           result.config.ai.${runtime}.proxy
-          == test.expected
+          == test.expected // {instance = test.expectedInstance or null;}
           && result.config.ai.${runtime}.normalized.proxy == test.expected)
         runtimes)))
     cases)

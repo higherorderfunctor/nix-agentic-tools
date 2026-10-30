@@ -43,8 +43,6 @@
     key = "instance";
     url = "instance";
   };
-  # `{entry}` for the enabled instance `name`, or `{problem}` saying why
-  # `option` cannot select it.
   lookup = registry: option: name: let
     entry = registry.${name} or null;
   in

@@ -1661,7 +1661,7 @@ in
       # `environmentVariables` and `secrets` are backed by root/per-runtime
       # pool pairs; the rest are Kiro-only options.
       wrapperReasonPaths = {
-        environmentDefaults = map (field: ["ai" "kiro" "proxy" field]) proxyLib.fields;
+        environmentDefaults = map (field: ["ai" "kiro" "proxy" field]) (proxyLib.fields ++ ["instance"]);
         environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "cli" "environmentVariables"]];
         extraPackages = [["ai" "kiro" "cli" "extraPackages"]];
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];

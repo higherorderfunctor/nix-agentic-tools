@@ -5,6 +5,8 @@
 }: let
   package = pkgs.ai.airlock;
 in {
+  imports = [./checks/airlock-instances.nix];
+
   checks.airlock-package = pkgs.runCommandLocal "airlock-package" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
