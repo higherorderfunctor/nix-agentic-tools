@@ -34,6 +34,94 @@ def ci_step_script(name, workflow_name="ci.yml"):
 
 
 class ExtractedFactsTest(unittest.TestCase):
+    def test_collector_publishes_multiple_owners_once_and_skips_noop(self):
+        commit = ci_step_script("Commit native extracted facts as the update bot", "extracted-facts.yml")
+        services = r'''set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+gh() { printf '%s\n' "gh $*" >> "$RUNNER_TEMP/commands"; }
+git() {
+  printf '%s\n' "$*" >> "$RUNNER_TEMP/commands"
+  case "$1" in
+    diff) [ "$NOOP" = true ] ;;
+    add|checkout|commit|fetch|push) ;;
+    *) return 1 ;;
+  esac
+}
+export -f gh git
+'''
+        for noop in ("false", "true"):
+            with self.subTest(noop=noop), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source, runner = root / "source", root / "runner"
+                source.mkdir()
+                paths = ["packages/kimchi/egress-report.json", "packages/kimchi/extracted/extracted.json", "packages/semble/extracted/extracted.json"]
+                for path in paths:
+                    artifact = runner / "facts" / path
+                    artifact.parent.mkdir(parents=True, exist_ok=True)
+                    artifact.write_text('fresh\n')
+                    old = source / path
+                    old.parent.mkdir(parents=True, exist_ok=True)
+                    old.write_text('stale\n')
+                output = root / "output"
+                env = dict(os.environ, GITHUB_OUTPUT=str(output), HEAD_REF="feature/facts", HEAD_SHA="immutable-head",
+                           NOOP=noop, OWNERS='["kimchi","semble"]', RUNNER_TEMP=str(runner), SYSTEM="x86_64-linux")
+                result = subprocess.run(["bash", "-c", services + commit], cwd=source, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                commands = (runner / "commands").read_text().splitlines()
+                self.assertIn("fetch --no-tags origin immutable-head", commands)
+                self.assertIn("checkout --detach immutable-head", commands)
+                for path in paths:
+                    self.assertEqual((source / path).read_text(), 'fresh\n')
+                self.assertEqual(sum(command.startswith("commit ") for command in commands), int(noop == "false"))
+                self.assertEqual(commands.count("push origin HEAD:refs/heads/feature/facts"), int(noop == "false"))
+                if noop == "false":
+                    self.assertIn("commit -m chore(extracted): record x86_64-linux extracted facts -m Measured owners:", commands)
+                    self.assertIn("kimchi", commands)
+                    self.assertIn("semble", commands)
+                    self.assertEqual(output.read_text(), 'published=true\n')
+                else:
+                    self.assertFalse(output.exists())
+
+    def test_fork_diagnostic_overlays_existing_files_after_exclusive_download(self):
+        diagnostic = ci_step_script("Fail on stale native extracted facts", "extracted-facts.yml")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "checkout"
+            source.mkdir()
+            path = "packages/kimchi/extracted/extracted.json"
+            artifact = root / "artifact" / path
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_text('fresh\n')
+            old = source / path
+            old.parent.mkdir(parents=True, exist_ok=True)
+            old.write_text('stale\n')
+            scratch = root / "scratch"
+            scratch.mkdir()
+            env = dict(os.environ, ARTIFACT=str(root / "artifact"), OWNER="kimchi", RUN_ID="123", SYSTEM="x86_64-linux", TMPDIR=str(scratch))
+            result = subprocess.run(["bash", "-c", diagnostic], cwd=source, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            commands = "\n".join(line.strip() for line in result.stdout.splitlines() if line.startswith("  "))
+            services = r'''set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+gh() {
+  python3 - "$ARTIFACT" "$7" <<'EXCLUSIVE_DOWNLOAD'
+from pathlib import Path
+import sys
+source, destination = map(Path, sys.argv[1:])
+for path in source.rglob('*'):
+    if path.is_file():
+        target = destination / path.relative_to(source)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open('xb') as stream:
+            stream.write(path.read_bytes())
+EXCLUSIVE_DOWNLOAD
+}
+export -f gh
+'''
+            result = subprocess.run(["bash", "-c", services + commands], cwd=source, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(old.read_text(), 'fresh\n')
+
     def test_kimchi_producer_includes_report_in_changes_and_artifact(self):
         produce = ci_step_script("Produce native extracted facts", "extracted-facts.yml")
         artifact = ci_step_script("Prepare extracted facts artifact", "extracted-facts.yml")
@@ -72,6 +160,13 @@ export -f git nix
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 for path in ("packages/kimchi/extracted/extracted.json", "packages/kimchi/egress-report.json"):
                     self.assertEqual((Path(directory) / "facts" / path).read_text(), '{}\n')
+
+    def test_linux_planner_selects_darwin_only_change_in_handled_inputs(self):
+        old = {"kiro-cli": {"drvPaths": {"aarch64-darwin": "old-darwin", "x86_64-linux": "same-linux"}}}
+        head = {"kiro-cli": {"drvPaths": {"aarch64-darwin": "new-darwin", "x86_64-linux": "same-linux"}}}
+        with mock.patch.object(extracted, "derivations", side_effect=[head, old]):
+            with mock.patch.object(extracted.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)):
+                self.assertEqual(extracted.plan(Path("/fixture"), "x86_64-linux", "pull_request", "base"), ["kiro-cli"])
 
     def test_planner_compares_changed_and_new_extraction_inputs(self):
         old = {"changed": {"drvPath": "old"}, "unchanged": {"drvPath": "same"}}
@@ -113,32 +208,41 @@ export -f git nix
                     with mock.patch.object(extracted.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{}')) as run:
                         self.assertEqual(extracted.derivations(root, system, base=base, names_only=names_only), {})
                     command = run.call_args.args[0]
-                    flake = "git+file:///fixture?rev=base" if base else "."
-                    self.assertEqual(command[-1], f"{flake}#ciExtractedFacts.{system}")
+                    if names_only and system == "x86_64-linux":
+                        self.assertEqual(command[-4:], ["--file", "checks/extracted/owners.nix", "--apply", "builtins.attrNames"])
+                        self.assertFalse(any("#ciExtractedFacts" in argument for argument in command))
+                    else:
+                        flake = "git+file:///fixture?rev=base" if base else "."
+                        self.assertEqual(command[-1], f"{flake}#ciExtractedFacts.{system}")
                     self.assertEqual("builtins.attrNames" in command, names_only)
 
     def test_producer_orders_linux_before_darwin_without_package_success_gate(self):
         workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text()
         for system in ("linux", "darwin"):
             job = workflow.split(f"\n  extracted-facts-{system}:\n", 1)[1].split("\n  # Preserve" if system == "darwin" else "\n  extracted-facts-darwin:", 1)[0]
-            self.assertIn("build-packages", job.split("    if:", 1)[0])
+            dependencies = job.split("    if:", 1)[0]
             if system == "darwin":
-                self.assertIn("extracted-facts-linux", job.split("    if:", 1)[0])
+                self.assertIn("extracted-facts-linux", dependencies)
+                self.assertNotIn("build-packages", dependencies)
+            else:
+                self.assertIn("build-packages", dependencies)
             expression = " ".join(job.split("    if: >-\n", 1)[1].split("    uses:", 1)[0].split())
-            for cancelled, planned, owners, linux_result, expected in (
-                (False, "true", '["owner"]', "success", True),
-                (False, "true", '["owner"]', "skipped", True),
-                (False, "true", '["owner"]', "failure", system == "linux"),
-                (False, "true", '["owner"]', "cancelled", system == "linux"),
-                (True, "true", '["owner"]', "success", False),
-                (False, "false", '["owner"]', "success", False),
-                (False, "true", "[]", "success", False),
+            for cancelled, plan_result, owners, linux_result, published, expected in (
+                (False, "success", '["owner"]', "success", "", True),
+                (False, "success", '["owner"]', "skipped", "", True),
+                (False, "success", '["owner"]', "failure", "", system == "linux"),
+                (False, "success", '["owner"]', "cancelled", "", system == "linux"),
+                (False, "success", '["owner"]', "success", "true", system == "linux"),
+                (True, "success", '["owner"]', "success", "", False),
+                (False, "failure", '["owner"]', "success", "", False),
+                (False, "success", "[]", "success", "", False),
             ):
-                with self.subTest(system=system, cancelled=cancelled, planned=planned, owners=owners, linux_result=linux_result):
+                with self.subTest(system=system, cancelled=cancelled, plan_result=plan_result, owners=owners, linux_result=linux_result, published=published):
                     condition = expression.replace("always()", "True").replace("!cancelled()", str(not cancelled))
                     for key, value in (
+                        ("needs.extracted-facts-linux.outputs.published", published),
                         ("needs.extracted-facts-linux.result", linux_result),
-                        ("needs.plan-extracted-facts.outputs.planned", planned),
+                        ("needs.plan-extracted-facts.result", plan_result),
                         (f"needs.plan-extracted-facts.outputs.{system}-matrix", owners),
                     ):
                         condition = condition.replace(key, repr(value))
@@ -149,8 +253,8 @@ export -f git nix
         script = ci_step_script("Require successful package workers")
         defaults = dict(os.environ, EXTRACTED_DARWIN_MATRIX='["owner"]', EXTRACTED_DARWIN_RESULT="success",
                         EXTRACTED_LINUX_MATRIX='["owner"]', EXTRACTED_LINUX_RESULT="success",
-                        PLAN_RESULT="success", PLANNED="true", RESULT="success")
-        cases = [({}, True), ({"RESULT": "failure"}, False), ({"PLAN_RESULT": "failure"}, False), ({"PLANNED": "false"}, False)]
+                        PLAN_RESULT="success", RESULT="success")
+        cases = [({}, True), ({"RESULT": "failure"}, False), ({"PLAN_RESULT": "failure"}, False)]
         for system in ("DARWIN", "LINUX"):
             for result in ("cancelled", "failure", "skipped", ""):
                 cases.append(({f"EXTRACTED_{system}_RESULT": result}, False))

@@ -173,12 +173,12 @@ jobs:
   plan-extracted-facts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      EVENT_NAME: ${{ github.event_name }}
     outputs:
       darwin-matrix: ${{ steps.darwin.outputs.matrix }}
       linux-matrix: ${{ steps.linux.outputs.matrix }}
-      planned:
-        ${{ steps.linux.outputs.planned == 'true' &&
-        steps.darwin.outputs.planned == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -189,20 +189,12 @@ jobs:
             accept-flake-config = true
       - name: Plan Linux extraction
         id: linux
-        env:
-          BASE_SHA:
-            ${{ github.event.pull_request.base.sha || github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           python3 dev/scripts/ci-extracted-facts.py x86_64-linux
       - name: Plan Darwin extraction
         id: darwin
-        env:
-          BASE_SHA:
-            ${{ github.event.pull_request.base.sha || github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -212,8 +204,8 @@ jobs:
     # Wait for Cachix finalization even when a package failed on stale facts.
     needs: [build-packages, plan-extracted-facts]
     if: >-
-      always() && !cancelled() && needs.plan-extracted-facts.outputs.planned ==
-      'true' && needs.plan-extracted-facts.outputs.linux-matrix != '[]'
+      always() && !cancelled() && needs.plan-extracted-facts.result == 'success'
+      && needs.plan-extracted-facts.outputs.linux-matrix != '[]'
     uses: ./.github/workflows/extracted-facts.yml
     with:
       owners: ${{ needs.plan-extracted-facts.outputs.linux-matrix }}
@@ -221,13 +213,14 @@ jobs:
     secrets: inherit
 
   extracted-facts-darwin:
-    # Linux's carry must finish before Darwin measures against the new head.
-    needs: [build-packages, extracted-facts-linux, plan-extracted-facts]
+    # A Linux push starts a new run whose merge ref includes the carry.
+    needs: [extracted-facts-linux, plan-extracted-facts]
     if: >-
       always() && !cancelled() && (needs.extracted-facts-linux.result ==
       'success' ||
        needs.extracted-facts-linux.result == 'skipped') &&
-      needs.plan-extracted-facts.outputs.planned == 'true' &&
+      needs.plan-extracted-facts.result == 'success' &&
+      needs.extracted-facts-linux.outputs.published != 'true' &&
       needs.plan-extracted-facts.outputs.darwin-matrix != '[]'
     uses: ./.github/workflows/extracted-facts.yml
     with:
@@ -267,14 +260,12 @@ jobs:
             ${{ needs.plan-extracted-facts.outputs.linux-matrix }}
           EXTRACTED_LINUX_RESULT: ${{ needs.extracted-facts-linux.result }}
           PLAN_RESULT: ${{ needs.plan-extracted-facts.result }}
-          PLANNED: ${{ needs.plan-extracted-facts.outputs.planned }}
           RESULT: ${{ needs.build-packages.result }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           test "$RESULT" = success
           test "$PLAN_RESULT" = success
-          test "$PLANNED" = true
           require_extraction() {
             if [ "$1" = skipped ]; then
               test "$2" = '[]'

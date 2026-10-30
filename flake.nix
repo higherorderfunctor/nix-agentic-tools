@@ -233,10 +233,10 @@
       owners;
     in
       lib.mapAttrs (name: _: {
-        drvPath =
+        drvPaths =
           if system == "x86_64-linux"
-          then (ownerCheck name).extracted.${system}.drvPath
-          else self.ciPackages.${system}.${name}.passthru.extracted.drvPath;
+          then lib.genAttrs (ownerCheck name).handled (handled: (ownerCheck name).extracted.${handled}.drvPath)
+          else {${system} = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;};
       })
       selected);
 
