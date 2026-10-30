@@ -3,6 +3,7 @@
 # input options each row's warning probes.
 {lib}: let
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
+  inherit (import ./ai-delivery-schema.nix {inherit lib;}) leafFields;
   absent = reason: {
     inherit reason;
     primitive = "notApplicable";
@@ -30,9 +31,15 @@
       ++ lib.optional (builtins.elem ecosystem ["codex" "kiro"]) ["ai" ecosystem "native" "agents"]
     else if ecosystem == "kiro" && surface == "hooks"
     then [["ai" "kiro" "hooks"] ["ai" "kiro" "hooksDir"] ["ai" "kiro" "hooksJson"]]
-    else
-      [["ai" surface]]
-      ++ lib.optional (declaresPool surface ecosystem) (optionPaths.pool ecosystem surface);
+    else let
+      paths =
+        [["ai" surface]]
+        ++ lib.optional (declaresPool surface ecosystem) (optionPaths.pool ecosystem surface);
+    in
+      # Plain option trees declare leaf inputs on the shared registration.
+      if leafFields ? ${surface}
+      then lib.concatMap (path: map (field: path ++ [field]) leafFields.${surface}) paths
+      else paths;
 in {
   inherit absent inputOptions;
   # Absences on the policy-only permissions surface, which no runtime record

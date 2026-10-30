@@ -266,8 +266,14 @@
     backend,
     cfg,
     launcherEnvironment,
+    launcherEnvironmentDefaults,
     requiredProjectRoot ? null,
   }: let
+    # Native httpProxy (HM only; devenv rejects user scope) uses ??=, so exported defaults would override it.
+    proxyDefaults =
+      if cfg.native.harnessSettings.httpProxy != null
+      then {}
+      else launcherEnvironmentDefaults;
     # Non-secret env vars — baked into the wrapper via `--set`.
     shadowed = envShadowedSettings cfg.native;
     kimchiEnvVars = lib.optionalAttrs (backend == "devenv") (
@@ -318,11 +324,12 @@
       // lib.optionalAttrs (backend == "hm") {userHarnessDir = userHarnessDir cfg;});
 
     # wrapProgram args: `--set` for non-secret env, `--suffix` for devenv's
-    # resource ids, `--run` for the runtime secret export. Joined with a
-    # single space on the continued line — never a backslash-newline, which
+    # resource ids, `--run` for proxy defaults and the runtime secret export.
+    # Joined with a single space on the continued line — never a backslash-newline, which
     # breaks multi-arg wrapping.
     wrapArgs =
       lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
+      ++ lib.optional (proxyDefaults != {}) "--run ${lib.escapeShellArg (import ../../../lib/ai/environment-defaults.nix {inherit lib;} proxyDefaults)}"
       # KIMCHI_ENABLE_RESOURCES is an additive comma list (store.ts:45-61), so
       # the declared ids are appended to a caller's or an `ai.kimchi`
       # environment value instead of replacing it. Placed after `--set` so a
@@ -340,8 +347,12 @@
       name = "kimchi-wrapped";
       paths = [cfg.package];
       nativeBuildInputs = [pkgs.makeWrapper];
+      # Match lib/ai/launcher.nix: strict builder and makeWrapper runtime headers.
       postBuild = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         wrapProgram $out/bin/kimchi \
+          --run 'set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :' \
           ${lib.concatStringsSep " " wrapArgs}
       '';
     };
@@ -356,6 +367,7 @@
     cfg,
     config,
     launcherEnvironment,
+    launcherEnvironmentDefaults,
     mergedAgents,
     mergedServers,
     topHooks,
@@ -371,7 +383,7 @@
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
-      inherit backend cfg launcherEnvironment;
+      inherit backend cfg launcherEnvironment launcherEnvironmentDefaults;
       requiredProjectRoot =
         if backend == "devenv" && hasExactCwdProjectFiles
         then config.devenv.root
@@ -385,12 +397,14 @@
     backend,
     cfg,
     hasMergedContext,
+    launcherEnvironmentDefaults,
     mergedAgents,
     mergedContext,
     mergedEnvironmentVariables,
     mergedRules,
     mergedServers,
     mergedSkills,
+    options,
     resolvedSettings,
     resolvedShell,
     topHooks,
@@ -542,6 +556,9 @@
               '';
             }
           ];
+        warnings =
+          lib.optionals (options ? warnings) (lib.optional (cfg.package == null && launcherEnvironmentDefaults != {})
+            "ai.proxy is set but ai.kimchi.package is null; the proxy is delivered only through the managed launcher.");
       }
 
       # pi resolves package sources relative to the scope's harness directory.
@@ -735,6 +752,7 @@ in
           reason = "Kimchi's permissions.json has allow and deny lists but no ask list, and the pinned source establishes no rule spelling for an MCP tool, so the policy is not rendered and every tool keeps Kimchi's default.";
         }
       ];
+      proxy = {};
       rules = {};
       settings.fields = ["reasoningEffort"];
       shell = {};
