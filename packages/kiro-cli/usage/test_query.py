@@ -1,18 +1,24 @@
 """Synthetic calibration queries; no provider, home-directory or log reads."""
+# cspell:words tzset
 
+from datetime import datetime
 import json
 import math
+import os
 from pathlib import Path
+import re
 import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
 import capture
 import disk_index
 import query
+import report
 
 # Output tokens estimate() reads from opus chars, at rates.json's fitted chars_per_token.
 opus_tokens = lambda chars: round(chars / query.credit_discount.RATES["claude-opus-5.5"]["chars_per_token"])
@@ -580,39 +586,107 @@ class QueryTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertFalse(missing.exists())
 
-    def test_cli_summary_replays_the_tree_exit_summary_and_names_the_calculator(self):
-        self.estimable("rated", .01, chars=40)
-        self.estimable("unrated", .02, chars=40, model="claude-opus-4.5", conversation="child")  # window, no rates entry
-        self.estimable("windowless", None, chars=40, model="requested-model")  # neither; credits unknown
-        self.db.execute("""UPDATE captures SET metadata_json=json_set(metadata_json,'$."kiro:root_conversation_id"','root') WHERE id='unrated'""")
-        report = query.query(self.db, "sess_root", "tree")
-        unrated = next(model for model in report["captures"]["models"] if model["requested_model"] == "claude-opus-4.5")
-        self.assertEqual(unrated["estimates"]["input_tokens"]["known"], 1)
-        self.assertNotIn("cache_read_tokens", unrated["estimates"])  # no rates entry, so no cache split
-        windowless = next(model for model in report["captures"]["models"] if model["requested_model"] == "requested-model")
-        self.assertEqual(windowless["estimates"], {})
-        self.assertEqual(query.calculator_text(report), "Calculator: rates.json fitted 2026-10-30; no rates: claude-opus-4.5, requested-model; no context window: requested-model")
+    def local_days(self):
+        """Pin a POSIX zone, so local days differ from UTC ones without zoneinfo; report.py children inherit it."""
+        patcher = patch.dict(os.environ, {"TZ": "MST7"})
+        patcher.start()
+        self.addCleanup(time.tzset)
+        self.addCleanup(patcher.stop)
+        time.tzset()
+
+    def started(self, ident, utc):
+        nanoseconds = int(datetime.fromisoformat(utc).timestamp()) * 10**9
+        self.db.execute("UPDATE captures SET started_utc_ns=? WHERE id=?", (nanoseconds, ident))
+
+    def report_db(self, temporary):
         self.db.commit()
+        path = Path(temporary) / "synthetic.sqlite"
+        with sqlite3.connect(path) as target:
+            self.db.backup(target)
+        return path
+
+    def test_report_groups_every_capture_by_local_day_and_model_with_the_session_estimates(self):
+        self.local_days()
+        self.estimable("rated", .01, chars=40)
+        self.estimable("unrated", .02, chars=40, model="claude-opus-4.5", conversation=None)  # window, no rates entry; unattributed
+        self.estimable("windowless", None, chars=40, model="requested-model")  # neither; credits unknown
+        for ident, utc in (("rated", "2026-10-29T18:00:00+00:00"), ("unrated", "2026-10-30T03:00:00+00:00"),
+                           ("windowless", "2026-10-30T18:00:00+00:00")):
+            self.started(ident, utc)
+        store = report.store_report(self.db)
+        captures = store["captures"]
+        # 03:00 UTC on the 30th is the 29th at UTC-7.
+        self.assertEqual([(day["day"], day["observations"]) for day in captures["days"]], [("2026-10-29", 2), ("2026-10-30", 1)])
+        self.assertEqual(captures["observations"], 3)
+        models = {model["requested_model"]: model for model in captures["models"]}
+        self.assertEqual(models["claude-opus-4.5"]["estimates"]["input_tokens"]["known"], 1)
+        self.assertNotIn("cache_read_tokens", models["claude-opus-4.5"]["estimates"])  # no rates entry, so no cache split
+        self.assertEqual(models["requested-model"]["estimates"], {})  # no window, so no ~tokens
+        tree = {model["requested_model"]: model for model in query.query(self.db, "sess_root", "tree")["captures"]["models"]}
+        self.assertEqual(models["claude-opus-5.5"]["estimates"], tree["claude-opus-5.5"]["estimates"])  # one per-call estimate path
+        self.assertNotIn("claude-opus-4.5", tree)  # the session report excludes the unattributed call
+        self.assertEqual(query.calculator_text([store]), "Calculator: rates.json fitted 2026-10-30; no rates: claude-opus-4.5, requested-model; no context window: requested-model")
+        text = report.render(store)
+        self.assertTrue(text.startswith("Kiro usage · all captures · 3 requests · 0.03 credits\n\nDay "), text)
+        self.assertRegex(text, r"\n2026-10-29\s+2\s+0.03\s+~")
+        self.assertRegex(text, r"\n2026-10-30\s+1\s+—\s+—\s+—\s+—\s+—\n")
+        self.assertRegex(text, r"\nModel\s+Requests\s+Credits\s+In\s+Out\s+Cached\s+Cache hit\nclaude-opus-4.5\s+1\s+0.02\s+~")
+        self.assertEqual(len(re.findall(r"\nTotal\s+3\s+0.03\s+~", text)), 2)
+        self.assertTrue(text.endswith("\n⚠ credits unknown for 1/3 requests"))
+        self.assertEqual([day["day"] for day in report.store_report(self.db, since="2026-10-30")["captures"]["days"]], ["2026-10-30"])
+        bounded = report.store_report(self.db, "2026-10-29", "2026-10-29")
+        self.assertEqual((bounded["captures"]["observations"], [model["requested_model"] for model in bounded["captures"]["models"]]),
+                         (2, ["claude-opus-4.5", "claude-opus-5.5"]))
+        self.assertTrue(report.render(bounded).startswith("Kiro usage · all captures · 2026-10-29 – 2026-10-29 · 2 requests"))
         with tempfile.TemporaryDirectory() as temporary:
-            path, theme = Path(temporary) / "synthetic.sqlite", Path(temporary) / "theme.json"
-            with sqlite3.connect(path) as target:
-                self.db.backup(target)
+            path, theme = self.report_db(temporary), Path(temporary) / "theme.json"
             theme.write_text(json.dumps({"border": "ascii"}))
-            command = [sys.executable, query.__file__, "--db", str(path), "--session", "sess_root", "--summary"]
-            for arguments, rendered in (([], query.render_summary(report)),
-                                        (["--scope", "tree", "--summary-theme", str(theme)], query.render_summary(report, theme=query.summary_theme.load(theme)))):
+            command = [sys.executable, report.__file__, "--db", str(path)]
+            for arguments, rendered in (([], report.render(store)), (["--summary-theme", str(theme)], report.render(store, query.summary_theme.load(theme)))):
                 result = subprocess.run([*command, *arguments], capture_output=True, text=True)
                 self.assertEqual((result.returncode, result.stderr), (0, ""))
-                self.assertEqual(result.stdout, rendered + "\n" + query.calculator_text(report) + "\n")
-            self.assertIn("Kiro usage · sess_root · tree · 3 requests", result.stdout)
-            self.assertIn("⚠ credits unknown for 1/3 requests", result.stdout)
-            self.assertTrue(result.stdout.startswith("+-"))
-            for refused in (["--json"], ["--scope", "session"]):
+                self.assertEqual(result.stdout, rendered + "\n" + query.calculator_text([store]) + "\n")
+            # Both Total rows' rules become junction lines inside the box.
+            self.assertEqual(sum(line.startswith("++") or line.startswith("+-") for line in result.stdout.splitlines()), 4)
+            structured = subprocess.run([*command, "--json", "--until", "2026-10-29"], capture_output=True, text=True)
+            self.assertEqual(json.loads(structured.stdout)["captures"]["observations"], 2)
+            for refused in (["--since", "20261030"], ["--until", "2026-10"]):
                 result = subprocess.run([*command, *refused], capture_output=True, text=True)
                 self.assertEqual((result.returncode, result.stdout), (2, ""))
-        self.captured("rated-only", conversation="root", metadata={"model": "claude-opus-5.5"})
-        self.db.execute("DELETE FROM captures WHERE id!='rated-only'")
-        self.assertEqual(query.calculator_text(query.query(self.db, "sess_root", "tree")), "Calculator: rates.json fitted 2026-10-30")
+            self.assertIn("MST", subprocess.run([*command, "--help"], capture_output=True, text=True).stdout)
+            empty = Path(temporary) / "empty.sqlite"
+            sqlite3.connect(empty).close()
+            result = subprocess.run([sys.executable, report.__file__, "--db", str(empty)], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (1, "cannot query calibration database: no capture source has initialized this database\n"))
+
+    def test_report_sessions_replay_each_tree_exit_summary_in_the_window(self):
+        self.local_days()
+        self.estimable("rated", .01, chars=40)
+        self.estimable("unrated", .02, chars=40, model="claude-opus-4.5", conversation="child")
+        self.db.execute("""UPDATE captures SET metadata_json=json_set(metadata_json,'$."kiro:root_conversation_id"','root') WHERE id='unrated'""")
+        self.estimable("fork", .03, chars=40, model="requested-model", conversation="fork")  # a second root, e.g. after /chat fork
+        for ident, utc in (("rated", "2026-10-29T18:00:00+00:00"), ("unrated", "2026-10-30T18:00:00+00:00"), ("fork", "2026-10-30T19:00:00+00:00")):
+            self.started(ident, utc)
+        reports = [query.query(self.db, session, "tree") for session in ("sess_root", "sess_fork")]
+        windowed = query.query(self.db, "sess_root", "tree", since="2026-10-30")
+        self.assertEqual([model["requested_model"] for model in windowed["captures"]["models"]], ["claude-opus-4.5"])
+        self.assertEqual(query.query(self.db, "sess_root", "tree", until="2026-10-29")["captures"]["observations"], 1)
+        with tempfile.TemporaryDirectory() as temporary:
+            command = [sys.executable, report.__file__, "--db", str(self.report_db(temporary)), "--session", "sess_root"]
+            result = subprocess.run([*command, "--session", "sess_fork"], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (0, ""))
+            self.assertEqual(result.stdout, "\n\n".join(map(query.render_summary, reports)) + "\n" + query.calculator_text(reports) + "\n")
+            self.assertIn("Kiro usage · sess_root · tree · 2 requests", result.stdout)
+            self.assertIn("\n\nKiro usage · sess_fork · tree · 1 request", result.stdout)
+            self.assertTrue(result.stdout.endswith("; no rates: claude-opus-4.5, requested-model; no context window: requested-model\n"))
+            result = subprocess.run([*command, "--since", "2026-10-30"], capture_output=True, text=True)
+            self.assertEqual(result.stdout, query.render_summary(windowed) + "\n" + query.calculator_text([windowed]) + "\n")
+            structured = subprocess.run([*command, "--session", "sess_fork", "--json"], capture_output=True, text=True)
+            self.assertEqual([item["session"] for item in json.loads(structured.stdout)], ["sess_root", "sess_fork"])
+            result = subprocess.run([*command, "--session", "fork"], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (1, "cannot query calibration database: --session must be a sess_UUID identifier\n"))
+        self.db.execute("DELETE FROM captures WHERE id!='rated'")
+        self.assertEqual(query.calculator_text([query.query(self.db, "sess_root", "tree")]), "Calculator: rates.json fitted 2026-10-30")
 
     def test_credit_units_partial_turns_and_disk_overlap_ambiguity(self):
         self.session("sess_root")

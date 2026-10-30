@@ -349,13 +349,21 @@ the full session JSON report or capture JSON lines. Unknown counters display as
 an em dash; observed zeroes remain zero. Session reports keep disk and capture
 sums separate and show coverage; warnings use standard error. The indexer also
 accepts `--json` for its source, record, and omission counts.
-`query.py --summary` instead prints the exit summary below for the session's
-whole tree to standard output, styled by `--summary-theme FILE` with `color`
-`auto` testing standard output, and re-estimated from the current `rates.json`
-and `models.json`. Its last line, absent from the exit summary, names the
-calculator: `rates.json`'s provenance fit dates, then the session's models with
-no rates entry (no cache split) or no context window (no ~tokens), when any.
-`kiro-usage session ID --summary` passes the configured theme.
+`report.py --db DB` instead prints every capture in the store, attributed or
+not, in the exit summary's look below: a day table and a model table, each with
+requests, credits, input, output, cached, cache hit and a Total row, every
+~estimate recomputed per call from the current `rates.json` and `models.json` as
+the session report does. Days are the local calendar day of each call's start,
+in the process time zone that `--help` names; `--since DAY` and `--until DAY`
+(`YYYY-MM-DD`) bound them inclusively. `--session ID`, repeatable for the
+several roots a session switch or fork leaves, replays instead each named
+session tree's exit summary at the current rates, its calls limited to the same
+bounds. Text goes to standard output, styled by `--summary-theme FILE` with
+`color` `auto` testing standard output. Its last line, absent from the exit
+summary, names the calculator: `rates.json`'s provenance fit dates, then the
+reported models with no rates entry (no cache split) or no context window (no
+~tokens), when any. `--json` writes the store report, or the list of session
+reports, instead. `kiro-usage report` passes the configured theme.
 
 The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
 commands also print a short summary to standard error after Kiro exits: per root

@@ -23,6 +23,10 @@ PROXY_NAMES = (
 )
 
 
+USAGE = ("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json]"
+         "|report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--session ID ...] [--json]|list|replay ID}")
+
+
 class CommandError(Exception):
     """A ready collector could not execute the selected command."""
 
@@ -326,22 +330,23 @@ def cli(path, arguments, port, warn_bytes, theme=None):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
-        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json|--summary]|list|replay ID}")
+        raise ValueError(USAGE)
     command, *tail = arguments
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
     if command == "exec":
         return exec_command(path, port, warn_bytes, tail, theme)
     if command == "session" and tail:
-        # Only a replayed exit summary reads the theme; the full report has no styles.
-        styled = ["--summary-theme", str(theme)] if theme and "--summary" in tail else []
-        invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:], *styled]
+        invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
+    elif command == "report":
+        # The report alone renders the exit summary's look outside exec; the full session report has no styles.
+        invocation = [str(script / "report.py"), *db_args, *tail, *(["--summary-theme", str(theme)] if theme else [])]
     elif command == "index":
         invocation = [str(script / "disk_index.py"), *db_args, *tail]
     elif command in ("list", "replay"):
         invocation = [str(script / "capture.py"), *db_args, command, *tail]
     else:
-        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json|--summary]|list|replay ID}")
+        raise ValueError(USAGE)
     os.umask(0o077)
     private_directory(path, create=True)
     os.execv(sys.executable, [sys.executable, *invocation])
@@ -356,7 +361,7 @@ def main():
         child.add_argument("--port", type=int, required=True)
         if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
             child.add_argument("--warn-bytes", type=int, required=True)
-        if mode == "cli":  # read by the exec summary and its session --summary replay only
+        if mode == "cli":  # read by the exec summary and report only
             child.add_argument("--summary-theme")
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":

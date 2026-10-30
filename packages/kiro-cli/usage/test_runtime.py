@@ -415,13 +415,19 @@ class SummaryTests(unittest.TestCase):
         addon.client_disconnected(connection)
         self.assertEqual(addon.invocations, {})
 
-    def test_session_summary_alone_receives_the_summary_theme(self):
-        query = str(Path(runtime.__file__).parent / "query.py")
-        for tail, styled in ((["--summary"], ["--summary-theme", "/theme.json"]), (["--json"], [])):
+    def test_report_alone_receives_the_summary_theme(self):
+        script = Path(runtime.__file__).parent
+        db = ["--db", "/state/usage.sqlite3"]
+        for arguments, invocation in ((["report", "--session", "sess_root"], ["report.py", *db, "--session", "sess_root", "--summary-theme", "/theme.json"]),
+                                      (["session", "sess_root", "--json"], ["query.py", *db, "--session", "sess_root", "--json"])):
             with patch.object(runtime, "private_directory"), patch.object(os, "execv") as execute:
-                runtime.cli(Path("/state"), ["session", "sess_root", *tail], 19001, 1 << 30, "/theme.json")
-            execute.assert_called_once_with(sys.executable, [sys.executable, query, "--db", "/state/usage.sqlite3",
-                                                             "--session", "sess_root", *tail, *styled])
+                runtime.cli(Path("/state"), arguments, 19001, 1 << 30, "/theme.json")
+            execute.assert_called_once_with(sys.executable, [sys.executable, str(script / invocation[0]), *invocation[1:]])
+        with patch.object(runtime, "private_directory"), patch.object(os, "execv") as execute:
+            runtime.cli(Path("/state"), ["report"], 19001, 1 << 30)
+        execute.assert_called_once_with(sys.executable, [sys.executable, str(script / "report.py"), *db])
+        with self.assertRaisesRegex(ValueError, r"\|report \[--since YYYY-MM-DD\]"):
+            runtime.cli(Path("/state"), ["summary"], 19001, 1 << 30)
 
     def test_main_returns_child_status(self):
         with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--", "exec", "kiro-cli"]), patch.object(runtime, "cli", return_value=23):

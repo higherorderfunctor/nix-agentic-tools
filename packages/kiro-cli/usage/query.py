@@ -1,4 +1,5 @@
 """Read observed usage for an explicit Kiro session; exact counters win, ~estimates fill only their gaps."""
+# cspell:words unixepoch
 
 import argparse
 from contextlib import closing
@@ -44,6 +45,15 @@ EXTRA_OUTPUT_CHARS = """(SELECT sum(chars) FROM (
 CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
     WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
+# Group keys over the chosen CTE. DAY is a call's local start day, in the process time zone (TZ), as report.py's --help names it.
+DAY = "date({}.started_utc_ns/1e9,'unixepoch','localtime')"
+MODEL = "json_extract(chosen.metadata_json,'$.model')"
+SUMS = ",".join(f"sum({name}) AS {name},count({name}) AS {name}_known" for name in DIMENSIONS) + """,
+    sum(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN input_tokens+output_tokens END) AS total_tokens,
+    count(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN 1 END) AS total_tokens_known,
+    count(CASE WHEN cache_read_tokens IS NOT NULL AND input_tokens IS NOT NULL THEN 1 END) AS cache_evaluable,
+    sum(CASE WHEN input_tokens IS NOT NULL THEN cache_read_tokens END) AS cache_cached,
+    sum(CASE WHEN cache_read_tokens IS NOT NULL THEN input_tokens END) AS cache_input"""
 FOOTER_WARNINGS = (
     "Own-versus-delegate attribution within a session is unavailable; session scope can include delegate work.",
     "Disk turn credits and capture credits overlap and must never be added.",
@@ -65,7 +75,50 @@ def cache_hit_rate(row):
     return hit_share(row["cache_cached"], row["cache_input"], row["cache_evaluable"], row["n"])
 
 
-def query(db, session, scope="session"):
+def group(row):
+    """A call group's observed sums from an aggregate row, or None for a group without calls; call_reports adds
+    its ~estimates and credit discount."""
+    n = row["n"] if row else 0
+    return {"observations": n, "metrics": {name: metric(row[name], row[name + "_known"], n) if row else metric() for name in COUNTERS},
+            "cache_hit_rate": cache_hit_rate(row) if row else hit_share(0, 0, 0, 0), "estimates": {},
+            "credit_discount": credit_discount.aggregate()}
+
+
+def window(since=None, until=None):
+    """(SQL over captures c, parameters): calls whose local start day falls within the inclusive YYYY-MM-DD bounds."""
+    bounds = [(f"{DAY.format('c')}{operator}?", day) for operator, day in ((">=", since), ("<=", until)) if day]
+    return " AND ".join(sql for sql, _ in bounds) or "1", [day for _, day in bounds]
+
+
+def chosen_calls(where):
+    """The chosen CTE: captures c matching where, with the columns aggregate, its groups and call_reports read."""
+    columns = ",".join("c." + name for name in ("id", "metadata_json", "response_json", "started_utc_ns", "state", "completion_seen", *DIMENSIONS))
+    return f"""WITH chosen AS (SELECT {columns},json_extract(c.summary_json,'$.terminal') AS terminal,
+        json_extract(c.summary_json,'$.metering_events') AS metering_events FROM captures c WHERE {where}) """
+
+
+def aggregate(db, chosen, parameters, partitions):
+    """(total, groups): the chosen calls' total, and per partition name their groups by its (key SQL over chosen,
+    key parameters); observed sums, then call_reports' per-call ~estimates. The session report and report.py share it."""
+    total = db.execute(chosen + f"SELECT count(*) AS n,{SUMS},sum(CASE WHEN state!='complete' OR state IS NULL OR completion_seen!=1 OR completion_seen IS NULL THEN 1 ELSE 0 END) AS incomplete FROM chosen", parameters).fetchone()
+    captures = {**group(total), "incomplete": total["incomplete"] or 0}
+    groups = {name: {row["group_key"]: group(row) for row in db.execute(
+                  chosen + f"SELECT {key} AS group_key,count(*) AS n,{SUMS} FROM chosen GROUP BY group_key ORDER BY group_key",
+                  [*parameters, *key_parameters])}
+              for name, (key, key_parameters) in partitions.items()}
+    call_reports(db, chosen, parameters, captures, [(*partitions[name], groups[name]) for name in partitions])
+    captures["duplicate_upstream_request_ids"] = [dict(row) for row in db.execute(chosen + """
+        , identities AS (
+          SELECT id,json_extract(response_json,'$.upstream_request_id') AS request_id FROM chosen
+          UNION SELECT id,json_extract(response_json,'$.request_id') FROM chosen)
+        SELECT request_id,count(*) AS captures FROM identities
+        WHERE request_id IS NOT NULL GROUP BY request_id HAVING count(*)>1
+    """, parameters)]
+    captures["multiple_metering_events"] = db.execute(chosen + "SELECT count(*) FROM chosen WHERE metering_events>1", parameters).fetchone()[0]
+    return captures, groups
+
+
+def query(db, session, scope="session", since=None, until=None):
     if not re.fullmatch(r"sess_[A-Za-z0-9_-]+", session):
         raise ValueError("--session must be a sess_UUID identifier")
     if scope not in ("session", "tree"):
@@ -163,12 +216,8 @@ def query(db, session, scope="session"):
             SELECT model_id,count(*) AS sessions FROM disk_sessions WHERE path IN ({path_marks}) GROUP BY model_id
         """, paths)]
     report["disk"] = disk
-    captures = {"available": "captures" in tables, "observations": 0,
-                "metrics": {name: metric() for name in COUNTERS}}
-    captures["pools"] = {
-        pool: {"observations": 0, "metrics": {name: metric() for name in COUNTERS},
-               "cache_hit_rate": hit_share(0, 0, 0, 0), "estimates": {}}
-        for pool in ("other_linked_conversations", "root_conversation", "unknown")}
+    captures = {"available": "captures" in tables, **group(None)}
+    captures["pools"] = {pool: group(None) for pool in ("other_linked_conversations", "root_conversation", "unknown")}
     if "captures" not in tables:
         captures["unavailable_reason"] = "No capture source has initialized this database."
     if "captures" in tables:
@@ -196,42 +245,20 @@ def query(db, session, scope="session"):
                 WHERE s.session_path IN ({path_marks}) AND i.request_id IN (
                   json_extract(c.response_json,'$.upstream_request_id'),json_extract(c.response_json,'$.request_id')))"""
             parameters += paths
-        columns = ",".join("c." + name for name in ("id", "metadata_json", "response_json", "state", "completion_seen", *DIMENSIONS))
-        chosen = f"""WITH chosen AS (SELECT {columns},json_extract(c.summary_json,'$.terminal') AS terminal,
-            json_extract(c.summary_json,'$.metering_events') AS metering_events FROM captures c WHERE
-            json_extract(c.metadata_json,'$.\"kiro:conversation_id\"') IN ({placeholders}) {joins}) """
-        sums = ",".join(f"sum({name}) AS {name},count({name}) AS {name}_known" for name in DIMENSIONS)
-        sums += """,sum(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN input_tokens+output_tokens END) AS total_tokens,
-            count(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN 1 END) AS total_tokens_known,
-            count(CASE WHEN cache_read_tokens IS NOT NULL AND input_tokens IS NOT NULL THEN 1 END) AS cache_evaluable,
-            sum(CASE WHEN input_tokens IS NOT NULL THEN cache_read_tokens END) AS cache_cached,
-            sum(CASE WHEN cache_read_tokens IS NOT NULL THEN input_tokens END) AS cache_input"""
-        total = db.execute(chosen + f"SELECT count(*) AS n,{sums},sum(CASE WHEN state!='complete' OR state IS NULL OR completion_seen!=1 OR completion_seen IS NULL THEN 1 ELSE 0 END) AS incomplete FROM chosen", parameters).fetchone()
-        captures["observations"] = total["n"]
-        captures["incomplete"] = total["incomplete"] or 0
-        captures["metrics"] = {name: metric(total[name], total[name + "_known"], total["n"]) for name in COUNTERS}
-        captures["cache_hit_rate"] = cache_hit_rate(total)
+        bounded, bounds = window(since, until)
+        chosen = chosen_calls(f"""(json_extract(c.metadata_json,'$.\"kiro:conversation_id\"') IN ({placeholders}) {joins}) AND {bounded}""")
+        parameters += bounds
+        total, groups = aggregate(db, chosen, parameters, {
+            "models": (MODEL, ()),
+            "pools": (CONVERSATION_POOL.format(metadata="chosen.metadata_json"), (session, session.removeprefix("sess_")))})
+        captures.update(total)
+        captures["models"] = [{"requested_model": model, **source} for model, source in groups["models"].items()]
+        captures["pools"].update(groups["pools"])
         if scope == "tree":
             report["sessions"] = sorted(selected | {
                 session_id(name)
                 for row in db.execute(chosen + "SELECT DISTINCT json_extract(metadata_json,'$.\"kiro:conversation_id\"') FROM chosen", parameters)
                 if isinstance(name := row[0], str) and re.fullmatch(r"(?:sess_)?[A-Za-z0-9_-]+", name)})
-        captures["models"] = []
-        for row in db.execute(chosen + f"""
-            SELECT json_extract(metadata_json,'$.model') AS requested_model,count(*) AS n,{sums}
-            FROM chosen GROUP BY requested_model
-        """, parameters):
-            captures["models"].append({"requested_model": row["requested_model"], "observations": row["n"],
-                "metrics": {name: metric(row[name], row[name + "_known"], row["n"]) for name in COUNTERS},
-                "cache_hit_rate": cache_hit_rate(row), "estimates": {}})
-        for row in db.execute(chosen + f"""
-            SELECT {CONVERSATION_POOL.format(metadata="metadata_json")} AS pool,
-                count(*) AS n,{sums}
-            FROM chosen GROUP BY pool
-        """, [*parameters, session, session.removeprefix("sess_")]):
-            captures["pools"][row["pool"]] = {
-                "observations": row["n"], "metrics": {name: metric(row[name], row[name + "_known"], row["n"]) for name in COUNTERS},
-                "cache_hit_rate": cache_hit_rate(row), "estimates": {}}
         captures["association"] = "Explicit conversation ID or upstream request ID recorded for the selected session(s)."
         captures["terminal_states"] = [dict(row) for row in db.execute(chosen + """
             SELECT state,terminal,count(*) AS observations
@@ -241,41 +268,27 @@ def query(db, session, scope="session"):
             SELECT sum(CASE WHEN json_extract(metadata_json,'$."kiro:conversation_id"') IS NOT NULL THEN 1 ELSE 0 END) AS conversation_id_present,
               sum(CASE WHEN coalesce(json_extract(response_json,'$.upstream_request_id'),json_extract(response_json,'$.request_id')) IS NOT NULL THEN 1 ELSE 0 END) AS upstream_request_id_present FROM chosen
         """, parameters).fetchone())
-        captures["duplicate_upstream_request_ids"] = [dict(row) for row in db.execute(chosen + """
-            , identities AS (
-              SELECT id,json_extract(response_json,'$.upstream_request_id') AS request_id FROM chosen
-              UNION SELECT id,json_extract(response_json,'$.request_id') FROM chosen)
-            SELECT request_id,count(*) AS captures FROM identities
-            WHERE request_id IS NOT NULL GROUP BY request_id HAVING count(*)>1
-        """, parameters)]
         if captures["duplicate_upstream_request_ids"]:
             warnings.append("Duplicate upstream request IDs make capture totals ambiguous; every capture remains counted.")
-        captures["multiple_metering_events"] = db.execute(chosen + "SELECT count(*) FROM chosen WHERE metering_events>1", parameters).fetchone()[0]
         if captures["multiple_metering_events"]:
             warnings.append(f"{captures['multiple_metering_events']} selected call(s) carried more than one meteringEvent; their credits keep the last value, which may not be the call's total charge.")
-    captures["estimates"] = {}
     if scope == "tree":
         warnings.append("Root-linked lineage may include forks as well as subagents; it is not proof of caller role.")
     report["attribution"]["pool_rule"] = "Root conversation matches the selected session ID (with or without sess_); Other linked conversations have a different recorded conversation ID; Unknown has no recorded conversation ID. This partition does not identify main versus delegate roles."
     if scope == "tree":
         report["attribution"]["tree_identity"] = "Explicit " + "/".join(LINKS) + " or captured root_conversation_id only"
     report["captures"] = captures
-    call_reports(db, report, chosen if captures["available"] else None, parameters if captures["available"] else [])
     return report
 
 
-def call_reports(db, report, chosen, parameters):
-    """Per-call credit-discount diagnostic and ~token estimates, aggregated per model and pool."""
-    captures = report["captures"]
-    sources = [captures, *captures.get("models", []), *captures["pools"].values()]
-    tallies = {}
-    for source in sources:
-        source["credit_discount"] = credit_discount.aggregate()
-        tallies[id(source)] = {"estimated": dict.fromkeys(ESTIMATED, 0), "sums": dict.fromkeys(ESTIMATED, 0),
-                               "known": dict.fromkeys(ESTIMATED, 0), "cached": 0, "input": 0, "evaluable": 0, "error": 0}
-    if chosen is None:
-        return
-    models = {source["requested_model"]: source for source in captures["models"]}
+def call_reports(db, chosen, parameters, total, partitions):
+    """Per-call credit-discount diagnostic and ~token estimates, added to total and to the call's group in each
+    (key SQL over chosen, key parameters, groups by key) partition."""
+    sources = [total, *(source for *_, groups in partitions for source in groups.values())]
+    tallies = {id(source): {"estimated": dict.fromkeys(ESTIMATED, 0), "sums": dict.fromkeys(ESTIMATED, 0),
+                            "known": dict.fromkeys(ESTIMATED, 0), "cached": 0, "input": 0, "evaluable": 0, "error": 0}
+               for source in sources}
+    keys = "".join(f",{key} AS key_{index}" for index, (key, *_) in enumerate(partitions))
     event_tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     proof = "0 AS retained,0 AS terminal,0 AS text_only,0 AS no_reasoning_tools"
     extra_chars = f"""coalesce(json_extract(c.summary_json,'$.tool_chars')+json_extract(c.summary_json,'$.reasoning_chars'),
@@ -309,11 +322,10 @@ def call_reports(db, report, chosen, parameters):
         """
     for row in db.execute(chosen + f"""SELECT c.id,c.metadata_json,c.credits,c.context_usage_percentage,
         c.input_tokens,c.output_tokens,c.cache_read_tokens,
-        json_extract(c.summary_json,'$.output_text_chars') AS chars,{extra_chars} AS extra_chars,
-        {CONVERSATION_POOL.format(metadata="c.metadata_json")} AS pool,
+        json_extract(c.summary_json,'$.output_text_chars') AS chars,{extra_chars} AS extra_chars{keys},
         c.state='complete' AND c.completion_seen=1 AND c.transport_ended=1 AND c.issues_json='[]'
           AND c.dropped_bytes=0 AND c.dropped_chunks=0 AS complete
-        FROM chosen JOIN captures c ON c.id=chosen.id""", [*parameters, report["session"], report["session"].removeprefix("sess_")]):
+        FROM chosen JOIN captures c ON c.id=chosen.id""", [*parameters, *(parameter for _, values, _ in partitions for parameter in values)]):
         metadata = json.loads(row["metadata_json"] or "{}")
         facts = {key: row[key] for key in ("credits", "chars")}
         facts.update(context=row["context_usage_percentage"], model=metadata.get("model"), effort=metadata.get("effort"))
@@ -324,7 +336,7 @@ def call_reports(db, report, chosen, parameters):
             facts.update({key: bool(evidence[key]) for key in ("retained", "terminal", "text_only", "no_reasoning_tools")})
             result = credit_discount.classify(facts)
         values, estimated = call_counters(row, metadata.get("model"))
-        for source in (captures, models[metadata.get("model")], captures["pools"][row["pool"]]):
+        for source in (total, *(groups[row[f"key_{index}"]] for index, (*_, groups) in enumerate(partitions))):
             credit_discount.add(source["credit_discount"], result, row["id"])
             tally = tallies[id(source)]
             for name in ESTIMATED:
@@ -494,13 +506,19 @@ def plural(count, noun):
     return f"{count:,} {noun}{'s' if count != 1 else ''}"
 
 
-def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
-    """The exit summary: headline, model and conversation tables; one caveat line only when totals are suspect.
-    invocation_summary and --summary pass their --summary-theme; the default PLAIN theme renders unstyled text without a border."""
-    captures = report["captures"]
+def by_credits(models):
+    """(label, group) per model, most credits first; unknown credits and a missing model last."""
+    def order(model):
+        total = model["metrics"]["credits"]["observed_sum"]
+        return total is None, -(total or 0), model["requested_model"] is None, model["requested_model"] or ""
+    return [(model["requested_model"], model) for model in sorted(models, key=order)]
+
+
+def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN):
+    """The exit-summary look render_summary and report.py share: a headline for title, one table per (header, label
+    element, [(label, group)], Total row) block with shared columns, and one caveat line only when totals are suspect."""
     n, credits = captures["observations"], captures["metrics"]["credits"]
-    headline = (f"Kiro usage · {report['session'][:len('sess_') + 8]} · {report['scope']} · {plural(n, 'request')}"
-                f" · {value(credits_text(credits['observed_sum']))} credits")
+    headline = f"Kiro usage · {title} · {plural(n, 'request')} · {value(credits_text(credits['observed_sum']))} credits"
     show_discount = shows_discount(captures)
     def row(label, source):
         discount = source["credit_discount"]["percentage"]
@@ -514,47 +532,58 @@ def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
                 *(tokens(name) for name in ("input_tokens", "output_tokens", "cache_read_tokens")),
                 hit_text(hit_rate(source), 0),
                 *([None if discount is None else f"~{discount:.0f}%"] if show_discount else [])]
-    def order(model):
-        total = model["metrics"]["credits"]["observed_sum"]
-        return total is None, -(total or 0), model["requested_model"] is None, model["requested_model"] or ""
     columns = ["Requests", "Credits", "In", "Out", "Cached", "Cache hit", *(["Discount"] if show_discount else [])]
-    available, pools = captures["available"], captures.get("pools")
-    conversations = [row(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
-                     if available and (label != "Unknown" or pools[pool]["observations"])]
-    models = [row(model["requested_model"], model) for model in sorted(captures["models"], key=order)] if available else []
+    rows = [[*(row(label, source) for label, source in groups), *([RULE, row("Total", captures)] if total else [])]
+            for _, _, groups, total in blocks]
     unknown, metered = credits["unknown"], captures.get("multiple_metering_events")
     duplicates = len(captures.get("duplicate_upstream_request_ids", []))
-    caveats = [*([] if available else ["capture unavailable"]),
-               *([f"credits unknown for {unknown:,}/{plural(n, 'request')}"] if unknown else []),
+    caveats = [*([f"credits unknown for {unknown:,}/{plural(n, 'request')}"] if unknown else []),
                *([f"{captures['incomplete']:,} incomplete"] if captures.get("incomplete") else []),
                *([plural(duplicates, "duplicate request ID")] if duplicates else []),
                *([plural(metered, "multi-metered call")] if metered else []), *caveats]
     def lines(paint):
         def cell(block, number, column, text):
-            # Block 1 ends [rule, Total]; ~ cells are estimates whatever their column.
+            # A Total block ends [rule, Total]; ~ cells are estimates whatever their column.
             if column is None or number == 0:
                 return paint(("rule" if column is None else "header",), text)
-            element = (("model", "label")[block] if column == 0 else "muted" if text == "—" else "estimate" if text.startswith("~")
+            element = (blocks[block][1] if column == 0 else "muted" if text == "—" else "estimate" if text.startswith("~")
                        else {2: "credits", 5: "cached"}.get(column, "number"))
-            return paint(("total", element) if block == 1 and number == len(conversations) + 2 else (element,), text)
-        blocks = tables([(["Model", *columns], models), (["Conversation", *columns], [*conversations, RULE, row("Total", captures)])],
-                         range(1, len(columns) + 1), cell) if available else []
+            return paint(("total", element) if blocks[block][3] and number == len(rows[block]) else (element,), text)
+        tables_text = tables([([header, *columns], block_rows) for (header, *_), block_rows in zip(blocks, rows)],
+                             range(1, len(columns) + 1), cell) if blocks else []
         return [paint(("headline",), theme["icons"]["headline"] + headline),
-                *(line for block in blocks for line in ["", *block.split("\n")]),
+                *(line for block in tables_text for line in ["", *block.split("\n")]),
                 *([paint(("warning",), theme["icons"]["warning"] + "; ".join(caveats))] if caveats else [])]
     styled = lines(summary_theme.painter(theme))
     if not theme["border"]:
         return "\n".join(styled)
-    # The conversation table's rule sits after the headline, a blank, the model table, a blank and its own header and rows.
-    rule = 5 + len(models) + len(conversations) if available else None
-    return "\n".join(summary_theme.box(theme, lines(summary_theme.painter(summary_theme.PLAIN)), styled, {rule}))
+    # Each table follows a blank line and opens with its header; a Total row's rule sits just above it.
+    rules, start = set(), 1
+    for block_rows, (*_, total) in zip(rows, blocks):
+        if total:
+            rules.add(start + len(block_rows))
+        start += 2 + len(block_rows)
+    return "\n".join(summary_theme.box(theme, lines(summary_theme.painter(summary_theme.PLAIN)), styled, rules))
 
 
-def calculator_text(report):
-    """--summary's last line: rates.json's fit dates, and this report's models with no rates entry or no context window."""
+def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
+    """One session report's exit summary: a model table and a conversation table with a Total row.
+    invocation_summary and report.py pass their --summary-theme; the default PLAIN theme renders unstyled text without a border."""
+    captures = report["captures"]
+    available, pools = captures["available"], captures["pools"]
+    conversations = [(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
+                     if label != "Unknown" or pools[pool]["observations"]]
+    blocks = [("Model", "model", by_credits(captures["models"]), False), ("Conversation", "label", conversations, True)] if available else []
+    return summary_text(f"{report['session'][:len('sess_') + 8]} · {report['scope']}", captures, blocks,
+                        [*([] if available else ["capture unavailable"]), *caveats], theme)
+
+
+def calculator_text(reports):
+    """report.py's last line: rates.json's fit dates, and the reports' models with no rates entry or no context window."""
     rates, windows = credit_discount.RATES, credit_discount.WINDOWS
     dates = sorted({entry["provenance"]["date"] for entry in rates.values()})
-    models = sorted({model["requested_model"] for model in report["captures"].get("models", []) if isinstance(model["requested_model"], str)})
+    models = sorted({model["requested_model"] for report in reports for model in report["captures"].get("models", [])
+                     if isinstance(model["requested_model"], str)})
     gaps = [f"{label}: {', '.join(names)}" for label, names in (
         ("no rates", [model for model in models if model not in rates]),
         ("no context window", [model for model in models if model not in windows])) if names]
@@ -565,22 +594,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--session", required=True)
-    parser.add_argument("--scope", choices=("session", "tree"))
-    output = parser.add_mutually_exclusive_group()
-    output.add_argument("--json", action="store_true", help="write the complete structured report as JSON")
-    output.add_argument("--summary", action="store_true", help="write the exec exit summary for the whole tree at the current rates")
-    parser.add_argument("--summary-theme", help="--summary's theme JSON; kiro-usage passes its configured one")
+    parser.add_argument("--scope", choices=("session", "tree"), default="session")
+    parser.add_argument("--json", action="store_true", help="write the complete structured report as JSON")
     args = parser.parse_args()
-    if args.summary and args.scope == "session":
-        parser.error("--summary always reports the whole session tree")
     try:
         uri = args.db.resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(uri, uri=True)) as db:
-            report = query(db, args.session, "tree" if args.summary else args.scope or "session")
-            if args.summary:
-                print(render_summary(report, theme=summary_theme.load(args.summary_theme, sys.stdout)))
-                print(calculator_text(report))
-            elif args.json:
+            report = query(db, args.session, args.scope)
+            if args.json:
                 print(json.dumps(report, indent=2, sort_keys=True))
             else:
                 print(render(report))
