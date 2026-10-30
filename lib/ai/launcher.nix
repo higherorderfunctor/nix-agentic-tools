@@ -3,14 +3,15 @@
 # no backend re-derives its own `needsWrapper` and drifts from the other — the
 # failure the copilot wrapper's header records having shipped twice.
 #
-# `--set`, never `--set-default`: a configured value must beat the ambient
-# session, and `--set-default` is reserved for polite defaults (`TERM`).
+# Configured environmentVariables beat the ambient session. Environment
+# defaults (network proxies) preserve it, including an explicit empty value.
 # `flags` (`--add-flags …`) come before the environment, the order the
 # wrappers this replaced used. The preflight follows environment injection,
 # isolated by ./launcher-preflight.nix.
 # `launcherPackage` flattens a previously generated launcher: one preflight
 # and one exec of the package binary, even when a module selects a launcher.
 pkgs: {
+  environmentDefaults ? {},
   environmentVariables ? {},
   exe,
   flags ? [],
@@ -20,9 +21,11 @@ pkgs: {
 }: let
   inherit (pkgs) lib;
   unwrapped = package.launcherPackage or package;
+  defaults = import ./environment-defaults.nix {inherit lib;} environmentDefaults;
   args =
     flags
     ++ lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") environmentVariables
+    ++ lib.optional (defaults != "") "--run ${lib.escapeShellArg defaults}"
     ++ lib.optional (preflight != null) (import ./launcher-preflight.nix pkgs preflight);
 in
   if args == []

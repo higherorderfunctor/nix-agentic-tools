@@ -55,7 +55,7 @@
       in {
         effortLevel = ownWrite "ai.settings.reasoningEffort";
         enableWorkflows = ownWrite "ai.claude.ultracodeOnLaunch";
-        env = ownWrite "ai.shell / ai.environmentVariables";
+        env = ownWrite "ai.proxy / ai.shell / ai.environmentVariables";
         mcpServers = "MCP servers do not belong in settings.json — declare them\n      under `ai.mcpServers` or `ai.claude.mcpServers`, which render into\n      the project .mcp.json (devenv) or the Home Manager personal plugin.";
         ultracode = ownWrite "ai.claude.ultracodeOnLaunch";
       };
@@ -256,6 +256,7 @@ in
       hooks = {};
       jail = {};
       mcpServers = {};
+      proxy = {};
       rules = {};
       settings.fields = ["inference" "reasoningEffort"];
       shell = {};
@@ -542,6 +543,7 @@ in
       cfg,
       config,
       hasMergedContext,
+      launcherEnvironmentDefaults,
       mergedAgents,
       mergedContext,
       mergedRules,
@@ -626,7 +628,10 @@ in
         (lib.mkIf (cfg.package != null) {
           ai.claude.native.settings.env.DISABLE_AUTOUPDATER = lib.mkDefault "1";
         })
-        (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
+        (shellSettings {
+          inherit resolvedShell;
+          moduleEnvironmentVariables = moduleEnvironmentVariables // launcherEnvironmentDefaults;
+        })
         (claudeInference.config {
           inherit backend;
           resolvedInference = resolvedSettings.inference;

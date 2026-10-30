@@ -11,6 +11,7 @@
       pkgs = null;
     }).options.ai;
   sharedSurfaces = sharedOptions.internal.sharedSurfaces.default;
+  inherit (sharedOptions.internal.sharedSurfaces) leafFields;
   # Permissions has no normalized root option: it inventories native policy
   # files only, whose vocabularies cannot be translated losslessly across apps.
   policyOnlySurfaces = ["permissions"];
@@ -35,5 +36,5 @@
     assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: invalid row (primitive, reason, or inputOptions as key lists)";
     assert lib.assertMsg (lib.sort builtins.lessThan (map key rows) == lib.sort builtins.lessThan expectedKeys) "ai-delivery: rows must cover every surface/ecosystem in BOTH hm and devenv exactly once"; rows;
 in {
-  inherit ecosystems expectedKeys key keyedSurfaces modes sharedSurfaces validateHand validateRows writersOf;
+  inherit ecosystems expectedKeys key keyedSurfaces leafFields modes sharedSurfaces validateHand validateRows writersOf;
 }
