@@ -27,8 +27,8 @@
   # runtime's own pool, the portable root, then the runtime's public
   # normalized option. Both runtime options exist only where some backend
   # delivers the surface. The normalized option defaults to the fold of the
-  # other two, so it is reached only when both are empty, where any value it
-  # holds was set on it directly.
+  # other two, so it is reached only when neither earlier input holds the
+  # requested surface or field.
   units = surface: let
     runtimeUnit = relative:
       lib.optional (supported surface && lib.hasAttrByPath relative cfg) {
@@ -39,13 +39,17 @@
     runtimeUnit (runtimePath surface)
     ++ [(root surface)]
     ++ runtimeUnit (namespaces.pool appRecord surface ++ ["normalized" surface]);
+  holds = path: unit: nonEmpty (lib.attrByPath path null unit.value);
+  requestAt = surface: path: lib.findFirst (holds path) null (units surface);
   # A gap is one field a delivered surface drops: in every keyed entry (`each`,
-  # root or runtime pool), otherwise in the portable root.
+  # root or runtime pool), otherwise at the most specific input with that field
+  # set (runtime pool, root, normalized), once even when the root is copied down.
   gapWarnings = surface: gap: let
+    requested = requestAt surface gap.path;
     candidates =
       if gap.each or false
       then entries surface
-      else [(root surface)];
+      else lib.optional (requested != null) requested;
     warnings = entry: let
       args = entry // {inherit backend cfg;};
       reason =
@@ -53,7 +57,7 @@
         then gap.reason args
         else gap.reason;
     in
-      lib.optional (nonEmpty (lib.attrByPath gap.path null entry.value) && (gap.when or (_: true)) args)
+      lib.optional (holds gap.path entry && (gap.when or (_: true)) args)
       (message (entry.path ++ gap.path) reason);
   in
     lib.concatMap warnings candidates;
@@ -70,7 +74,7 @@
       then
         lib.concatMap (field: let
           # Structured inference defaults to all-null fields, not a request.
-          requested = lib.findFirst (unit: nonEmpty (lib.attrByPath [field] null unit.value)) null (units surface);
+          requested = requestAt surface [field];
           reason =
             if delivered
             then reasons.settingsField
