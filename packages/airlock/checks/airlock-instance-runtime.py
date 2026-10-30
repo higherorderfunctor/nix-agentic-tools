@@ -1,5 +1,6 @@
 """Start each backend's generated launcher: health at the configured port, a
-private runtime config, and an interception CA kept beside it."""
+private runtime config, an interception CA kept beside it, and that CA in the
+extra-CA file Claude's launcher starts a mock Claude with."""
 
 import contextlib
 import http.client
@@ -55,7 +56,104 @@ def private(path, mode):
     assert metadata.st_uid == os.getuid(), path
 
 
-def start_twice(case):
+def launch_client(case, environment, inherited=None):
+    """Run Claude's launcher; return its exit status, extra-CA file and stderr."""
+    environment = dict(environment)
+    environment.pop("NODE_EXTRA_CA_CERTS", None)
+    if inherited is not None:
+        environment["NODE_EXTRA_CA_CERTS"] = str(inherited)
+    result = subprocess.run([case["client"]], env=environment, capture_output=True, timeout=10)
+    extra = json.loads(result.stdout) if result.returncode == 0 else None
+    return result.returncode, extra, result.stderr.decode()
+
+
+def client_trust(case, environment, runtime):
+    """An intercepting instance's CA reaches Claude, after any inherited CA."""
+    inherited = Path(environment["XDG_RUNTIME_DIR"]) / "inherited.pem"
+    inherited.write_bytes(b"inherited certificate fixture\n")
+    status, extra, error = launch_client(case, environment)
+    assert status == 0, error
+    if not case["intercepting"]:
+        assert extra is None, "an opaque selection set an extra CA"
+        assert launch_client(case, environment, inherited)[1] == str(inherited)
+        return
+    override = case | {"client": case["clientOverride"]}
+    assert launch_client(override, environment, inherited)[1] == "/user/ca.pem", "native CA did not win"
+    ca = (runtime / "ca" / "ca.pem").read_bytes()
+    assert Path(extra).read_bytes() == ca
+    status, bundle, error = launch_client(case, environment, inherited)
+    assert status == 0, error
+    assert Path(bundle).read_bytes() == inherited.read_bytes() + b"\n" + ca
+    private(Path(bundle), 0o600)
+    assert launch_client(case, environment, inherited)[1] == bundle, "a relaunch wrote another bundle"
+    status, _, error = launch_client(case, environment, inherited.with_name("missing.pem"))
+    assert status != 0, "a missing inherited CA was dropped"
+    assert not list(runtime.glob(".trust.*")), "a failed launch left a partial bundle"
+
+
+def missing_ca_refused(case):
+    """Before the service has made its CA, Claude's launcher refuses to start."""
+    with tempfile.TemporaryDirectory(prefix="airlock-client-") as directory:
+        status, _, error = launch_client(case, os.environ | {"XDG_RUNTIME_DIR": directory})
+    if case["intercepting"]:
+        assert status != 0 and "no CA at" in error and "start airlock-main" in error, error
+    else:
+        assert status == 0, error
+
+
+def jailed_clients(case):
+    return [case[name] for name in ("jailedNativeClient", "jailedProbe", "jailedClient")]
+
+
+def missing_key_refused(case):
+    """Even native-CA Claude and a client with no trust delivery fail closed."""
+    for runtime_variable in ("XDG_RUNTIME_DIR", "TMPDIR"):
+        with tempfile.TemporaryDirectory(prefix="airlock-missing-key-") as directory:
+            environment = dict(os.environ)
+            environment.pop("XDG_RUNTIME_DIR", None)
+            environment[runtime_variable] = directory
+            name = ("ai-service-airlock-main" if runtime_variable == "XDG_RUNTIME_DIR"
+                    else f"ai-service-{os.getuid()}-airlock-main")
+            key = Path(directory) / name / "ca" / "ca.key"
+            for client in jailed_clients(case):
+                result = subprocess.run([client], env=environment, capture_output=True, timeout=10)
+                error = result.stderr.decode()
+                assert result.returncode != 0, "jailed client launched without a CA key"
+                assert f"airlock-main: cannot jail client: CA key missing at {key}" in error, error
+                assert "same XDG_RUNTIME_DIR/TMPDIR" in error, error
+
+
+def jail_control(bwrap):
+    """Host namespace policy can prevent bubblewrap inside a Nix build sandbox."""
+    result = subprocess.run(
+        [bwrap, "--unshare-user", "--unshare-pid", "--dev-bind", "/", "/",
+         "--proc", "/proc", "--dev", "/dev", "--", "true"],
+        capture_output=True, timeout=10,
+    )
+    if result.returncode:
+        sys.stderr.write(result.stderr.decode())
+        print("AIRLOCK-JAIL: structural-only, bubblewrap cannot run in this build sandbox", flush=True)
+    return result.returncode == 0
+
+
+def jail_clients(case, environment, runtime):
+    """Use a real CA from the generated service and production jail permissions."""
+    # The Codex-profile probe has no trust helper and must see an empty key
+    # while the certificate remains readable. Removing the mask exposes it.
+    assert (runtime / "ca" / "ca.key").stat().st_size > 0
+    result = subprocess.run(
+        [case["jailedProbe"], str(runtime)], env=environment, capture_output=True, timeout=10,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+    assert result.stdout.strip() == b"CA key hidden; certificate readable", result.stdout
+    jailed = case | {"client": case["jailedClient"], "clientOverride": case["jailedNativeClient"]}
+    client_trust(jailed, environment, runtime)
+    # A different client runtime directory must refuse rather than skip the mask.
+    missing_key_refused(case)
+    print("AIRLOCK-JAIL: real CA key masked, certificate readable, trust helper ran inside jail", flush=True)
+
+
+def start_twice(case, can_jail):
     """Return the CA certificate each start of one runtime directory used."""
     certificates = []
     with tempfile.TemporaryDirectory(prefix="airlock-launcher-") as directory:
@@ -81,17 +179,24 @@ def start_twice(case):
                         certificates.append((ca / "ca.pem").read_bytes())
                     else:
                         assert not ca.exists(), "an opaque instance created a CA"
+                    client_trust(case, environment, runtime)
+                    if case["intercepting"] and can_jail:
+                        jail_clients(case, environment, runtime)
                 assert child.returncode == 0, child.returncode
     return certificates
 
 
 if __name__ == "__main__":
-    for case in json.loads(Path(sys.argv[1]).read_text()):
+    can_jail = jail_control(sys.argv[1])
+    for case in json.loads(Path(sys.argv[2]).read_text()):
         case["config"] = json.loads(case["config"])
-        certificates = start_twice(case)
+        missing_ca_refused(case)
+        if case["intercepting"]:
+            missing_key_refused(case)
+        certificates = start_twice(case, can_jail)
         if case["intercepting"]:
             first, restarted = certificates
             assert first.startswith(b"-----BEGIN CERTIFICATE-----")
             assert restarted == first, "a restart replaced the runtime CA"
-            assert start_twice(case)[0] != first, "a new runtime directory reused a CA"
+            assert start_twice(case, can_jail)[0] != first, "a new runtime directory reused a CA"
         print(f"ok: {case['backend']} intercepting={case['intercepting']}")
