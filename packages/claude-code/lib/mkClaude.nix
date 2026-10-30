@@ -174,7 +174,7 @@
   # are formatted with, and the surface whose checks they run.
   staged = surface: format: content: {inherit content format surface;};
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-  claudeProxy = import ./proxy.nix {inherit lib pkgs;};
+  claudeInference = import ./inference.nix {inherit lib pkgs;};
   pluginLib = import ./plugin.nix {inherit lib pkgs;};
 
   # The Home Manager personal plugin that carries MCP servers. Its directory
@@ -245,7 +245,7 @@ in
     name = "claude";
     contextFilename = "CLAUDE.md";
     executables = ["claude"];
-    inherit (claudeProxy) installPackage;
+    inherit (claudeInference) installPackage;
     surfaceSupport = {
       agents = {};
       context = {};
@@ -256,9 +256,8 @@ in
       hooks = {};
       jail = {};
       mcpServers = {};
-      proxy = {};
       rules = {};
-      settings.fields = ["reasoningEffort"];
+      settings.fields = ["inference" "reasoningEffort"];
       shell = {};
       skills = {};
     };
@@ -550,7 +549,6 @@ in
       mergedSkills,
       moduleEnvironmentVariables,
       options,
-      resolvedProxy,
       resolvedSettings,
       resolvedShell,
       topHooks,
@@ -603,8 +601,14 @@ in
             nativeFileWarnings cfg
             # package = null is the config-only opt-out: no launcher can clear
             # the descriptor Claude caches before loading these settings.
-            ++ lib.optional (cfg.package == null && claudeProxy.launcherFlags {inherit backend resolvedProxy;} != [])
-            "ai.claude.proxy is selected but ai.claude.package is null; launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup."
+            ++ lib.optional (cfg.package
+              == null
+              && claudeInference.launcherFlags {
+                inherit backend;
+                resolvedInference = resolvedSettings.inference;
+              }
+              != [])
+            "ai.claude.settings.inference is selected but ai.claude.package is null; launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup."
             ++ lib.optional (!isHm && cfg.plugins != {})
             "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";
         })
@@ -623,8 +627,11 @@ in
           ai.claude.native.settings.env.DISABLE_AUTOUPDATER = lib.mkDefault "1";
         })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
-        (claudeProxy.config {inherit backend resolvedProxy;})
-        {assertions = claudeProxy.assertions resolvedProxy;}
+        (claudeInference.config {
+          inherit backend;
+          resolvedInference = resolvedSettings.inference;
+        })
+        {assertions = claudeInference.assertions resolvedSettings.inference;}
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
         # `ai.claude.hookScripts`. Content is `readFile`'d into
         # `lib.types.lines` via hooksFromDir.

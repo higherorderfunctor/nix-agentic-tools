@@ -57,10 +57,10 @@ backend: {
     # API-key names become CPA compatibility provider identities.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
-  # Every instance is a selectable proxy (lib/ai/proxy); a selected client
+  # Every instance is a selectable proxy (lib/ai/inference); a selected client
   # carries its key and its routed credentials, with declared API-key models,
   # in route order. The claim keeps the name unique across proxy owners.
-  proxyInstances =
+  inferenceInstances =
     lib.mapAttrs (_: instance: {
       backend = "cliproxyapi";
       clients =
@@ -141,8 +141,8 @@ in {
 
   config = {
     ai = {
-      cliproxyapi.claims.proxy-instance = builtins.attrNames config.ai.cliproxyapi.instances;
-      internal = {inherit proxyInstances;};
+      cliproxyapi.claims.inference-instance = builtins.attrNames config.ai.cliproxyapi.instances;
+      internal = {inherit inferenceInstances;};
     };
 
     # Plugin executors choose credentials outside access.key-allowlist, and the

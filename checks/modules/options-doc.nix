@@ -77,7 +77,6 @@
         "ai.codex.package"
         "ai.codex.pinDaemonToPackage"
         "ai.codex.projectDocMaxBytes"
-        "ai.codex.proxy"
         "ai.codex.rules"
         "ai.codex.rulesDir"
         "ai.codex.services"
@@ -95,7 +94,6 @@
       "ai.hooks"
       "ai.jail"
       "ai.mcpServers"
-      "ai.proxy"
       "ai.rules"
       "ai.rulesDir"
       # Its whole contract is which runtimes it reaches, and Codex is the one
@@ -234,6 +232,12 @@
         | join(".")
       ' "${hmJson}" | "$sort" -u > actual-codex-option-roots
       "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
+
+      # Inference lives under settings; option roots alone cannot prove its
+      # selection fields remain documented on both consumers and the root.
+      ${guardEach "require_key" jsonDocs [] (lib.concatMap
+        (scope: map (field: "ai.${scope}settings.inference.${field}") ["clientKey" "instance" "key" "url"])
+        ["" "claude." "codex."])}
 
       # Every runtime with a settings file owns it under an ordinary
       # namespace (Kiro's is CLI-specific); Kimchi owns a second, harness

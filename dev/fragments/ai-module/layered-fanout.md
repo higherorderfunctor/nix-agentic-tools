@@ -280,13 +280,15 @@ rather than a second path field: a runtime names exactly the groups it moves.
   `source`, chosen from the original record's `_sourceWins`. Carrying both lands
   them at one priority, which the record rejects, and computing that priority
   reads the source — a build during evaluation for a derivation.
-- **Normalized settings are a uniform scalar-field surface.** Every runtime
-  whose `surfaceSupport.settings` declares a non-empty backend list receives the
-  same closed `settings` submodule; Kiro does not, because it persists effort
-  only per model. Each field listed in `surfaceSupport.settings.fields` resolves
-  root versus per-runtime with `resolveOverride`; unlisted fields stay null in
-  the normalized option, and native lowering stays per-runtime. Runtime-shaped
-  passthrough is separate under `native.settings` and is not a normalized pool.
+- **Normalized settings share one closed schema.** Every runtime whose
+  `surfaceSupport.settings` declares a non-empty backend list receives the
+  `settings` submodule. Listed scalar fields resolve root versus per-runtime
+  with `resolveOverride`. Listed `inference` instead copies root selection
+  fields down at default priority, preserving explicit null opt-outs and
+  withdrawing the opposite form when a runtime switches between instance and
+  URL; its normalized value is the resolved endpoint. Unlisted normalized fields
+  stay null, and native lowering stays per-runtime. Runtime-shaped passthrough
+  is separate under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -349,9 +351,10 @@ cells without policy edits.
   `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
   `agentsDescriptionSuffix` without the agents pool, an empty or non-string
   `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
-  null counts as set. Proxy selection uses `instance` + `clientKey` or external
-  `url` + `key`; runtime records no longer supply `proxyAllow` or `proxyApi`
-  defaults (see `dev/fragments/ai-proxy/ai-proxy.md`).
+  null counts as set. `ai.settings.inference` selects `instance` + `clientKey`
+  or external `url` + `key`; runtime support is declared through
+  `surfaceSupport.settings.fields` (see
+  `dev/fragments/ai-inference/ai-inference.md`).
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus

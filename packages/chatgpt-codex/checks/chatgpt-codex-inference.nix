@@ -1,4 +1,4 @@
-# `ai.proxy` for Codex: both backends use the shared redact reader through
+# `ai.settings.inference` for Codex: both backends use the shared redact reader through
 # command-backed provider auth, and the selected provider wins across layers.
 {
   harness,
@@ -29,7 +29,7 @@
     evalHm {
       ai = {
         codex.enable = true;
-        inherit proxy;
+        settings.inference = proxy;
       };
     };
   hmEndpoint = key:
@@ -44,16 +44,16 @@
     };
   launcher = key: "${lib.head
     (devenvWith {
-      proxy = {
+      settings.inference = {
         url = devenvOrigin;
         inherit key;
       };
     }).config.packages}/bin/codex";
-  unsupportedWarning = backend: lib.hasPrefix "ai.proxy is set but ${backend} does not deliver it to codex";
+  unsupportedWarning = backend: lib.hasPrefix "ai.settings.inference is set but ${backend} does not deliver it to codex";
 in {
   checks =
     {
-      module-codex-proxy-availability-nux = mkTest "codex-proxy-availability-nux" (
+      module-codex-inference-availability-nux = mkTest "codex-inference-availability-nux" (
         lib.all (
           eval: let
             evaluate = settings: proxy:
@@ -63,7 +63,7 @@ in {
                     enable = true;
                     native.settings = settings;
                   };
-                  inherit proxy;
+                  settings.inference = proxy;
                 };
               };
             proxy = {
@@ -83,10 +83,10 @@ in {
 
       # Project config cannot carry providers. The launcher supplies them as
       # session flags; only the availability tooltip default reaches project config.
-      module-codex-proxy-devenv-project-config = mkTest "codex-proxy-devenv-project-config" (
+      module-codex-inference-devenv-project-config = mkTest "codex-inference-devenv-project-config" (
         let
           url = devenvWith {
-            proxy = {
+            settings.inference = {
               url = devenvOrigin;
               key = keys.file;
             };
@@ -94,7 +94,7 @@ in {
           none = devenvWith {};
           unmanaged = devenvWith {
             codex.package = null;
-            proxy = {
+            settings.inference = {
               url = devenvOrigin;
               key = keys.file;
             };
@@ -102,28 +102,28 @@ in {
         in
           failedMessages url
           == []
-          && builtins.any (lib.hasPrefix "ai.codex.proxy is selected but ai.codex.package is null") unmanaged.config.warnings
-          && !(builtins.any (lib.hasPrefix "ai.codex.proxy is selected") url.config.warnings)
+          && builtins.any (lib.hasPrefix "ai.codex.settings.inference is selected but ai.codex.package is null") unmanaged.config.warnings
+          && !(builtins.any (lib.hasPrefix "ai.codex.settings.inference is selected") url.config.warnings)
           && !(url.config.ai.codex.files.".codex/config.toml".content.value ? model_provider)
           && !(url.config.ai.codex.files.".codex/config.toml".content.value ? model_providers)
           && !(none.config.ai.codex.files ? ".codex/config.toml")
           && !(builtins.any (unsupportedWarning "devenv") url.config.warnings)
       );
 
-      module-codex-proxy-hm-provider = mkTest "codex-proxy-hm-provider" (
+      module-codex-inference-hm-provider = mkTest "codex-inference-hm-provider" (
         let
           file = hmEndpoint keys.file;
-          provider = (hmSettings file).model_providers.ai-proxy;
+          provider = (hmSettings file).model_providers.ai-inference;
           overridden = evalHm {
             ai = {
               codex = {
                 enable = true;
-                proxy = {
+                settings.inference = {
                   url = devenvOrigin;
                   key = keys.command;
                 };
               };
-              proxy = {
+              settings.inference = {
                 url = hmOrigin;
                 key = keys.file;
               };
@@ -133,9 +133,9 @@ in {
             ai = {
               codex = {
                 enable = true;
-                native.settings.model_providers.ai-proxy.base_url = "http://127.0.0.1:9999/v1";
+                native.settings.model_providers.ai-inference.base_url = "http://127.0.0.1:9999/v1";
               };
-              proxy = {
+              settings.inference = {
                 url = hmOrigin;
                 key = keys.file;
               };
@@ -146,31 +146,31 @@ in {
           == []
           && lib.filterAttrs (name: _: builtins.elem name ["model_provider" "model_providers"]) (hmSettings file)
           == {
-            model_provider = "ai-proxy";
-            model_providers.ai-proxy = {
+            model_provider = "ai-inference";
+            model_providers.ai-inference = {
               auth.command = provider.auth.command;
               base_url = "${hmOrigin}/v1";
-              name = "ai-proxy";
+              name = "ai-inference";
               requires_openai_auth = false;
               wire_api = "responses";
             };
           }
           && lib.all (key: let
-            auth = (hmSettings (hmEndpoint key)).model_providers.ai-proxy.auth;
+            auth = (hmSettings (hmEndpoint key)).model_providers.ai-inference.auth;
           in
             builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/cpa-client-key" auth.command) (builtins.attrValues keys)
-          && (hmSettings overridden).model_providers.ai-proxy.base_url == "${devenvOrigin}/v1"
-          && (hmSettings overridden).model_providers.ai-proxy.auth == (hmSettings (hmEndpoint keys.command)).model_providers.ai-proxy.auth
+          && (hmSettings overridden).model_providers.ai-inference.base_url == "${devenvOrigin}/v1"
+          && (hmSettings overridden).model_providers.ai-inference.auth == (hmSettings (hmEndpoint keys.command)).model_providers.ai-inference.auth
           # A consumer's own provider leaf wins over the derived one.
-          && (hmSettings userBase).model_providers.ai-proxy.base_url == "http://127.0.0.1:9999/v1"
-          && (hmSettings userBase).model_providers.ai-proxy.wire_api == "responses"
+          && (hmSettings userBase).model_providers.ai-inference.base_url == "http://127.0.0.1:9999/v1"
+          && (hmSettings userBase).model_providers.ai-inference.wire_api == "responses"
           && !(builtins.any (unsupportedWarning "hm") file.config.warnings)
           && !((hmSettings (hmWith {})) ? model_provider)
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-      chatgpt-codex-proxy =
-        pkgs.runCommand "chatgpt-codex-proxy" {
+      chatgpt-codex-inference =
+        pkgs.runCommand "chatgpt-codex-inference" {
           nativeBuildInputs = [pkgs.coreutils pkgs.python3];
           cases = pkgs.writeText "codex-proxy-cases.json" (builtins.toJSON {
             configs = lib.mapAttrs (_: hmConfig) keys;
@@ -179,7 +179,7 @@ in {
         } ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          python3 ${./proxy-test.py} ${lib.escapeShellArgs [
+          python3 ${./inference-test.py} ${lib.escapeShellArgs [
             "${harness.aiStubs.chatgpt-codex}/bin/codex"
             keyFile
           ]} "$cases"

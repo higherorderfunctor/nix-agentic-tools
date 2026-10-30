@@ -1,7 +1,7 @@
-# `ai.proxy` → Claude Code: point Claude at the selected proxy through its
+# `ai.settings.inference` → Claude Code: point Claude at the selected proxy through its
 # settings files and, where a lowering needs it, launcher flags.
 #
-# The resolved endpoint (see lib/ai/proxy/default.nix) runs the lowering of its
+# The resolved endpoint (see lib/ai/inference/default.nix) runs the lowering of its
 # backend, which alone decides what Claude gets: `settings` land in
 # `native.settings` at default priority, so the settings.json each backend
 # already writes (user on Home Manager, project on devenv) carries them and a
@@ -10,23 +10,23 @@
 #
 # CLIProxyAPI's lowering turns each routed upstream credential's models into
 # `/model` picker rows; where each backend delivers them, and why, is in
-# dev/fragments/ai-proxy/ai-proxy-runtimes.md.
+# dev/fragments/ai-inference/ai-inference-runtimes.md.
 {
   lib,
   pkgs,
 }: let
-  keyHelper = import ../../../lib/ai/proxy/key-helper.nix {inherit lib pkgs;};
-  proxyLib = import ../../../lib/ai/proxy {inherit lib;};
+  keyHelper = import ../../../lib/ai/inference/key-helper.nix {inherit lib pkgs;};
+  inferenceLib = import ../../../lib/ai/inference {inherit lib;};
   # Each lowering takes a request with the module backend (`hm` or `devenv`)
   # and the resolved proxy.
   lowerings.cliproxyapi = {
     backend,
-    resolvedProxy,
+    resolvedInference,
   }: let
-    inherit (resolvedProxy) credentials key url;
+    inherit (resolvedInference) credentials key url;
     helper = keyHelper {
       inherit key;
-      option = "ai.claude.proxy.key";
+      option = "ai.claude.settings.inference.key";
     };
     # One row per model of each routed upstream credential, in route order.
     # Claude labels a row with its model id when it has no label.
@@ -38,7 +38,7 @@
       credential.models)
     credentials;
     # toFile: the rows hold no store paths, and evaluation can read it back.
-    picker = builtins.toFile "claude-proxy-model-picker.json" (builtins.toJSON {modelPicker.options = rows;});
+    picker = builtins.toFile "claude-inference-model-picker.json" (builtins.toJSON {modelPicker.options = rows;});
   in {
     # Claude reads and caches this descriptor before applying settings env.
     # A settings-only blank therefore still leaks its key to the proxy.
@@ -73,30 +73,33 @@
   };
 
   forLowerings = lowerings: let
-    proxyLowering = proxyLib.forRuntime "claude" lowerings;
+    inferenceLowering = inferenceLib.forRuntime "claude" lowerings;
     launcherFlags = {
       backend,
-      resolvedProxy,
+      resolvedInference,
     } @ request:
-      (proxyLowering.lower (builtins.seq backend (builtins.seq resolvedProxy request))).launcherFlags or [];
+      (inferenceLowering.lower (builtins.seq backend (builtins.seq resolvedInference request))).launcherFlags or [];
   in {
-    inherit (proxyLowering) assertions;
+    inherit (inferenceLowering) assertions;
     config = {
       backend,
-      resolvedProxy,
+      resolvedInference,
     } @ request: {
-      ai.claude.native.settings = lib.mapAttrsRecursive (_: lib.mkDefault) ((proxyLowering.lower (builtins.seq backend (builtins.seq resolvedProxy request))).settings or {});
+      ai.claude.native.settings = lib.mapAttrsRecursive (_: lib.mkDefault) ((inferenceLowering.lower (builtins.seq backend (builtins.seq resolvedInference request))).settings or {});
     };
     installPackage = {
       backend,
       cfg,
-      resolvedProxy,
+      resolvedSettings,
       ...
     }:
       lib.ai.mkLauncher pkgs {
         exe = "claude";
-        flags = launcherFlags {inherit backend resolvedProxy;};
-        name = "claude-code-proxy";
+        flags = launcherFlags {
+          inherit backend;
+          resolvedInference = resolvedSettings.inference;
+        };
+        name = "claude-code-inference";
         inherit (cfg) package;
       };
     inherit launcherFlags;
