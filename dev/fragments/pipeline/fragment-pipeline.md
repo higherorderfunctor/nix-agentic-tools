@@ -1,6 +1,6 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-10-26 — the generator emits named always-on shared
+> **Last verified:** 2026-10-29 — the generator emits named always-on shared
 > rules and scoped category rules, with no monolithic orientation context.
 > Copilot writes GitHub files independently; local flat-document indexes use
 > readable `.agents/rules/` children. Source registration remains split between
@@ -154,8 +154,9 @@ them.
   instruction files should include it, add to
   `extraPublishedFragments.<category>` in `dev/generate.nix`.
 - **New runtime or transform**: it belongs to `ai.*` (a runtime factory and its
-  transformer), not to the generator. This repository picks it up by enabling
-  the runtime in `dev/ai.nix`.
+  transformer), not to the generator. Keep repository settings in `dev/ai.nix`;
+  contributors enable local runtimes in ignored `devenv.local.nix`. Copilot is
+  enabled by the committed configuration.
 
 - **Flat-consumer routing is derived, not curated.** `dev/generate.nix` resolves
   each source entry once for both fragment composition and a rule's

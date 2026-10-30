@@ -14,7 +14,7 @@
 #
 # The local instruction files (AGENTS.md, .agents/rules/, .claude/,
 # .kiro/steering/) have no tracked bytes to compare. Their generated composition
-# remains checked, and enterTest asserts they land as files.
+# remains checked with an explicit local opt-in fixture.
 #
 # Why it exists: nothing else asserted tracked generated files matched their
 # source. Both repo-root documents once drifted far enough to be wrong —
@@ -39,12 +39,17 @@
     # dev/ai.nix gates interactive package installation on `isCI`; the
     # committed bytes must not depend on who evaluates them. Both
     # values are evaluated and their instruction plans must agree.
-    evalRepo = isCI:
-      harness.evalDevenvModules [
-        (import ../../dev/ai.nix {inherit isCI;})
-      ];
-    repo = evalRepo false;
-    repoCI = evalRepo true;
+    evalRepo = isCI: extraModules:
+      harness.evalDevenvModules (
+        [(import ../../dev/ai.nix {inherit isCI;})] ++ extraModules
+      );
+    repo = evalRepo false [];
+    repoCI = evalRepo true [];
+    # Exercise the operator's opt-in composition without reading personal config.
+    localModules = [./fixtures/local-runtimes.nix];
+    localRepo = evalRepo false localModules;
+    localRepoCI = evalRepo true localModules;
+    evaluations = [localRepo localRepoCI repo repoCI];
     # Compare instruction inputs and destinations. One generated tree can also
     # contain structured files whose CI-only configuration changes its store
     # path while these Markdown bytes remain identical.
@@ -53,23 +58,28 @@
         inherit (target) path;
         content = harness.markdownInput evaluated target.path;
       })
-      ((composed evaluated).targets ++ (harness.ownPlan "copilot" "files-apply" evaluated).targets);
+      # Copilot-only evaluations have no shared AGENTS.md writer.
+      (lib.optionals (evaluated.config.ai.internal.agentsMd != {}) (composed evaluated).targets
+        ++ (harness.ownPlan "copilot" "files-apply" evaluated).targets);
     # The shared AGENTS.md composer's files, as the files engine writes them.
     composed = harness.ownPlan "internal" "files-apply";
-    failedAssertions = map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) repo.config.assertions);
+    failedAssertions = lib.concatMap (evaluated:
+      map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) evaluated.config.assertions))
+    evaluations;
     # Dev skills stay in the root pool until their program migration. Pin the
     # declared gaps they request rather than suppressing those real warnings.
     inherit (import ../../lib/ai/option-paths.nix {inherit lib;}) records;
-    expectedWarnings = lib.concatMap (runtime: let
-      support = records.${runtime}.surfaceSupport.skills;
-    in
-      lib.optional (repo.config.ai.${runtime}.enable
-        && repo.config.ai.skills != {}
-        && !(builtins.elem "devenv" support.backends))
-      "ai.skills is set but devenv does not deliver it to ${runtime} (reason: ${support.reason})")
-    (builtins.attrNames records);
+    expectedWarnings = evaluated:
+      lib.concatMap (runtime: let
+        support = records.${runtime}.surfaceSupport.skills;
+      in
+        lib.optional (evaluated.config.ai.${runtime}.enable
+          && evaluated.config.ai.skills != {}
+          && !(builtins.elem "devenv" support.backends))
+        "ai.skills is set but devenv does not deliver it to ${runtime} (reason: ${support.reason})")
+      (builtins.attrNames records);
 
-    agentsMd = (lib.findFirst (target: target.path == "AGENTS.md") (throw "instructions-drift: the composer writes no AGENTS.md") (composed repo).targets).content.source;
+    agentsMd = (lib.findFirst (target: target.path == "AGENTS.md") (throw "instructions-drift: the composer writes no AGENTS.md") (composed localRepo).targets).content.source;
     # The Copilot instruction files the files engine copies, as the built files
     # in Copilot's generated tree.
     copilotInstructions = pkgs.linkFarm "expected-github-instructions" (map (target: {
@@ -125,8 +135,8 @@
     # Local documents are generated alongside their runtime configuration.
     # Check the complete built composition against the configured byte budget;
     # the composer's generated tree also enforces each target's maxBytes.
-    codexLimit = repo.config.ai.codex.projectDocMaxBytes;
-    ruleNeedles = map (key: "<!-- rule: ${key} -->") (builtins.attrNames repo.config.ai.internal.agentsMd."AGENTS.md".rules);
+    codexLimit = localRepo.config.ai.codex.projectDocMaxBytes;
+    ruleNeedles = map (key: "<!-- rule: ${key} -->") (builtins.attrNames localRepo.config.ai.internal.agentsMd."AGENTS.md".rules);
     containsRule = needle: ''
       if ! grep -q -F -e ${lib.escapeShellArg needle} "$agentsMd"; then
         failed=1
@@ -154,6 +164,7 @@
         "project-overview"
       ];
       sharedAlways = [
+        "architecture"
         "build-commands"
         "change-propagation"
         "coding-standards"
@@ -167,54 +178,60 @@
       reviewerAlways = ["coding-standards" "commit-convention" "config-parity" "project-overview"];
       copilotPaths = map (target: target.path) (harness.ownPlan "copilot" "files-apply" repo).targets;
       localRuntimes = ["claude" "codex" "kimchi" "kiro"];
-      localRules = runtime: repo.config.ai.${runtime}.normalized.rules;
+      localRules = runtime: localRepo.config.ai.${runtime}.normalized.rules;
       optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
       fragmentOverride = runtime: rule: lib.setAttrByPath (optionPaths.pool runtime "rules" ++ ["packaging"]) rule;
       shadowAllowed = overrides: let
-        evaluated = harness.evalDevenvModules [
-          (import ../../dev/ai.nix {isCI = true;})
-          overrides
-        ];
+        evaluated = evalRepo true (localModules ++ [overrides]);
       in
         (lib.findFirst (assertion: lib.hasPrefix "dev/ai.nix:" assertion.message) (throw "missing fragment-shadow assertion") evaluated.config.assertions).assertion;
       observation = {
-        reviewerRules = builtins.attrNames repo.config.ai.copilot.github.normalized.rules;
-        reviewerPaths = copilotPaths;
-        reviewerAlways = lib.all (name:
-          lib.hasInfix ''applyTo: "**"'' (harness.markdownInput repo ".github/instructions/${name}.instructions.md").text)
-        reviewerAlways;
-        sharedAlways = lib.all (name:
-          repo.config.ai.rules.${name}.inclusion
-          == ["always"]
-          && repo.config.ai.rules.${name}.matcher == null)
-        sharedAlways;
-        independentCopilot =
-          !(repo.config.ai.internal.agentsMdTargets ? copilot)
-          && lib.all (target:
-            lib.all (audience: !(builtins.elem "copilot" audience)) (builtins.attrValues target.audiences))
-          (builtins.attrValues repo.config.ai.internal.agentsMd);
-        namedComposition =
-          repo.config.ai.internal.agentsMd."AGENTS.md".context
-          == null
-          && lib.all (name: builtins.hasAttr name repo.config.ai.internal.agentsMd."AGENTS.md".rules) sharedAlways;
-        localFragments = lib.genAttrs localRuntimes (runtime:
-          lib.all (name: let
-            root = repo.config.ai.rules.${name};
-            local = (localRules runtime).${name};
-          in
-            local.text == root.text && local.matcher == root.matcher && local.references == root.references)
-          (builtins.attrNames repo.config.ai.rules));
-        localRouters = lib.genAttrs localRuntimes (runtime:
-          lib.all (name: builtins.hasAttr name (localRules runtime))
-          (["delegate-routing-router" "peer-communication-router" "stacked-workflows-router"] ++ lib.optional (runtime != "kimchi") "semble"));
-        disablesAllowed = shadowAllowed (lib.foldl' lib.recursiveUpdate {} (
-          map (runtime: fragmentOverride runtime {enable = false;}) (builtins.attrNames optionPaths.records)
-        ));
         disabledReplacementRejected =
           !(shadowAllowed (fragmentOverride "copilot" {
             enable = false;
             text = "Replacement fragment.";
           }));
+        disablesAllowed = shadowAllowed (lib.foldl' lib.recursiveUpdate {} (
+          map (runtime: fragmentOverride runtime {enable = false;}) (builtins.attrNames optionPaths.records)
+        ));
+        independentCopilot = lib.all (evaluated:
+          !(evaluated.config.ai.internal.agentsMdTargets ? copilot)
+          && lib.all (target:
+            lib.all (audience: !(builtins.elem "copilot" audience)) (builtins.attrValues target.audiences))
+          (builtins.attrValues evaluated.config.ai.internal.agentsMd))
+        [repo localRepo];
+        localCopilotUnchanged =
+          (harness.ownPlan "copilot" "files-apply" repo).targets
+          == (harness.ownPlan "copilot" "files-apply" localRepo).targets;
+        localFragments = lib.genAttrs localRuntimes (runtime:
+          lib.all (name: let
+            root = localRepo.config.ai.rules.${name};
+            local = (localRules runtime).${name};
+          in
+            local.text == root.text && local.matcher == root.matcher && local.references == root.references)
+          (builtins.attrNames localRepo.config.ai.rules));
+        localRouters = lib.genAttrs localRuntimes (runtime:
+          lib.all (name: builtins.hasAttr name (localRules runtime))
+          (["peer-communication-router"] ++ lib.optional (runtime != "kimchi") "semble"));
+        namedComposition =
+          localRepo.config.ai.internal.agentsMd."AGENTS.md".context
+          == null
+          && lib.all (name: builtins.hasAttr name localRepo.config.ai.internal.agentsMd."AGENTS.md".rules) sharedAlways;
+        reviewerAlways = lib.all (name:
+          lib.hasInfix ''applyTo: "**"'' (harness.markdownInput repo ".github/instructions/${name}.instructions.md").text)
+        reviewerAlways;
+        reviewerPaths = copilotPaths;
+        reviewerRules = builtins.attrNames repo.config.ai.copilot.github.normalized.rules;
+        runtimeOptIn =
+          repo.config.ai.copilot.enable
+          && localRepo.config.ai.copilot.enable
+          && lib.all (runtime: !repo.config.ai.${runtime}.enable && localRepo.config.ai.${runtime}.enable) localRuntimes
+          && lib.all (program: !repo.config.ai.programs.${program}.enable && localRepo.config.ai.programs.${program}.enable) ["peer-communication" "semble"];
+        sharedAlways = lib.all (name:
+          repo.config.ai.rules.${name}.inclusion
+          == ["always"]
+          && repo.config.ai.rules.${name}.matcher == null)
+        sharedAlways;
         sourceReplacementRejected =
           !(shadowAllowed (fragmentOverride "claude" {
             enable = false;
@@ -226,6 +243,8 @@
         observation.reviewerRules
         == expected
         && copilotPaths == map (name: ".github/instructions/${name}.instructions.md") expected
+        && observation.runtimeOptIn
+        && observation.localCopilotUnchanged
         && observation.independentCopilot
         && observation.namedComposition
         && observation.reviewerAlways
@@ -240,16 +259,16 @@
 
     instructions-drift = assert lib.assertMsg (copilotContext != null || !(builtins.pathExists "${self}/.github/copilot-instructions.md"))
     "instructions-drift: tracked .github/copilot-instructions.md has no generated writer; remove the stale instruction file.";
-    assert lib.assertMsg (instructionPlans repo == instructionPlans repoCI)
+    assert lib.assertMsg (instructionPlans repo == instructionPlans repoCI && instructionPlans localRepo == instructionPlans localRepoCI)
     "instructions-drift: dev/ai.nix writes different instruction files when isCI is set; the committed bytes must not depend on the environment.";
     assert lib.assertMsg (failedAssertions == [])
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
-    assert lib.assertMsg (!(lib.hasInfix "/bin/ai-markdown-window-notice" repo.config.enterShell))
+    assert lib.assertMsg (lib.all (evaluated: !(lib.hasInfix "/bin/ai-markdown-window-notice" evaluated.config.enterShell)) evaluations)
     "instructions-drift: Codex's launcher owns the document warning; shell entry must not duplicate it.";
     # No instruction or other request may be dropped beyond the declared
     # root-skill gaps above; the warning matrix separately verifies their cause.
-    assert lib.assertMsg (lib.sort lib.lessThan repo.config.warnings == lib.sort lib.lessThan expectedWarnings)
-    "instructions-drift: dev/ai.nix warns:\n${lib.concatStringsSep "\n" repo.config.warnings}";
+    assert lib.assertMsg (lib.all (evaluated: lib.sort lib.lessThan evaluated.config.warnings == lib.sort lib.lessThan (expectedWarnings evaluated)) evaluations)
+    "instructions-drift: dev/ai.nix warns:\n${lib.concatMapStringsSep "\n" (evaluated: lib.concatStringsSep "\n" evaluated.config.warnings) evaluations}";
       pkgs.runCommand "instructions-drift" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

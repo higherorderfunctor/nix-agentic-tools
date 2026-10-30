@@ -1,5 +1,5 @@
-# Acceptance cases: the repository's real delivery (dev/ai.nix), with only the
-# named switches changed. suite.py renders each case into a fixture repository
+# Acceptance cases: repository guidance plus the suite's explicit runtime and
+# routing fixture, with only the named switches changed. suite.py renders each case into a fixture repository
 # and runs one real session in it. `expect` names an assertion in suite.py's
 # ASSERTIONS table; the prompt never carries it.
 {
@@ -18,6 +18,7 @@
   }: let
     evaluated = harness.evalDevenvModules [
       (import ../../../dev/ai.nix {isCI = false;})
+      ./fixture.nix
       {config = switches;}
     ];
     inherit (evaluated) config;

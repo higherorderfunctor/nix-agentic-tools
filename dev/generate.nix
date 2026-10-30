@@ -96,9 +96,7 @@
     };
 
   # ── Extra published fragments per package (beyond commonFragments) ───
-  # The always-loaded routing rules (delegate routing, stacked-workflow skill
-  # routing) are not orientation text: `ai.*` delivers each as a rule of its
-  # own, from the same source the programs use.
+  # Published workflow guidance supplements this repository's scoped docs.
   extraPublishedFragments = {
     stacked-workflows = swsFragments;
   };

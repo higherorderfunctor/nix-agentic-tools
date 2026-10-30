@@ -1,5 +1,7 @@
 # Architecture
 
+> **Last verified:** 2026-10-29 — repository architecture decisions.
+
 HITL-vetted decisions about how this repository is built. Each entry is a rule,
 its reason, and where the mechanism lives. Before adding a mechanism, check this
 list. A mechanism that is not here means: find the existing one with git grep,
