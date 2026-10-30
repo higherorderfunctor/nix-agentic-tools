@@ -107,8 +107,10 @@ one submodule, every field `null` by default: `enable`, `exclude.paths`
 (absolute), `exclude.environment` (variable names) and `permissions` (a function
 from the combinator set to a list). A non-null runtime field replaces the root
 field, lists included; `ai.<runtime>.normalized.jail` holds the fold, null
-unless it enables the jail. Nothing is jailed and nothing is excluded unless the
-consumer sets it.
+unless it enables the jail. Nothing is jailed until the consumer enables it. A
+selected proxy's trust helper may then add masks before the caller's final
+permissions; see
+[Intercepting Proxy Trust](../../../dev/fragments/ai-proxy/ai-proxy-trust.md).
 
 The install seam in `lib/ai/app/mkBackendTransform.nix` wraps the finished
 launcher, outermost and in place: one jail per entry point in `executables`,

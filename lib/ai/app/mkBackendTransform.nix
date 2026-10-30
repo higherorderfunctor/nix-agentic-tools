@@ -173,16 +173,37 @@
   inferencePath = ["ai" appRecord.name] ++ poolOptionsPath "settings" ++ ["settings" "inference"];
   proxyPath = ["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"];
 
-  # The jail folds field by field (`jailLib.resolve`). Null unless the result
-  # enables it, or when the runtime does not consume the pool.
-  resolvedJail =
-    if supportsPool "jail"
-    then
-      jailLib.resolve {
-        root = config.ai.jail;
-        runtime = launcherCfg.jail;
-      }
-    else null;
+  proxyTrust =
+    proxyLib.resolveTrust config.ai.internal.proxyInstances
+    (
+      if supportsPool "proxy"
+      then poolCfg.proxy
+      else config.ai.proxy
+    )
+    (normalizedPool "proxy" config.ai.proxy);
+
+  # The jail folds field by field. A selected trust helper can contribute
+  # masks before the caller's final permissions, on every consuming runtime.
+  resolvedJail = let
+    profile =
+      if supportsPool "jail"
+      then
+        jailLib.resolve {
+          root = config.ai.jail;
+          runtime = launcherCfg.jail;
+        }
+      else null;
+    trustPermissions = proxyTrust.jailPermissions or null;
+  in
+    if profile == null || trustPermissions == null
+    then profile
+    else
+      profile
+      // {
+        permissions = c:
+          trustPermissions c
+          ++ lib.optionals (profile.permissions != null) (profile.permissions c);
+      };
 
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
@@ -603,6 +624,7 @@
     mergedRules = normalizedPool "rules" {};
     mergedServers = normalizedPool "mcpServers" {};
     mergedSkills = normalizedPool "skills" {};
+    inherit proxyTrust;
     resolvedJail = normalizedPool "jail" null;
     resolvedSettings = normalizedPool "settings" {};
     resolvedShell = normalizedPool "shell" null;
@@ -707,7 +729,15 @@
       }
     else package;
   rawInstalledPackages = lib.optional (launcherPackage != null) (jailPackage (installPackageFn callbackArgs));
-  transformWarnings = deliveryWarnings ++ jailWarnings;
+  transformWarnings =
+    deliveryWarnings
+    ++ jailWarnings
+    ++ lib.optional (cfg.enable && appRecord.name != "claude" && callbackArgs.proxyTrust != null)
+    "${lib.showOption (
+      if supportsPool "proxy"
+      then proxyPath
+      else ["ai" "proxy"]
+    )} selects a TLS-intercepting network proxy for ${appRecord.name}, which does not deliver its CA; routing TLS through the intercepting proxy will fail unless you configure trust yourself.";
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
