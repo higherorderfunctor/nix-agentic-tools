@@ -14,8 +14,10 @@ The two nullable nonempty string fields are `http` and `https`, delivered as
 `HTTP_PROXY` and `HTTPS_PROXY`. These select where a process's traffic leaves
 the machine. Inference credentials and model routing belong to
 `ai.settings.inference`. The nullable `instance` field selects a network proxy
-from `ai.internal.proxyInstances`; each entry declares `{enable; http; https;}`
-with both protocol origins required nonempty strings. Owners claim names in
+from `ai.internal.proxyInstances`; each entry declares
+`{enable; http; https; trust;}` with both protocol origins required nonempty
+strings and optional `trust` defaulting to null. See
+[Proxy Trust](ai-proxy-trust.md) for CA delivery. Owners claim names in
 `ai.claims.proxy-instance`, separately from inference claims, so an Airlock
 `main` and a CPA `main` can coexist. Unknown or disabled selections fail
 evaluation, naming the option and registered instances.

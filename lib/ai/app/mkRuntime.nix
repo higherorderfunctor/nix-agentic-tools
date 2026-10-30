@@ -26,12 +26,14 @@
 #                                    #   per-runtime pools; omitted = runtime root.
 #                                    #   See optionNamespaces.nix.
 #     options ? {};                  # shared option declarations (both backends see these)
-#     surfaceSupport ? {};           # {<surface> = {backends?; fields?; gaps?; reason?;};}
+#     surfaceSupport ? {};           # {<surface> = {backends?; fields?; gaps?; reason?; trust?;};}
 #                                    # settings takes fields = [<consumed field>],
 #                                    # validated against normalizedSettingsType,
 #                                    # with nonempty backends; settings gaps
 #                                    # may only name listed fields.
-#                                    # Presence opts in, with hm/devenv by default.
+#                                    # proxy takes trust = true when its launcher
+# delivers a selected proxy CA.
+# Presence opts in, with hm/devenv by default.
 #                                    # backends = [] rejects the normalized pool;
 #                                    # a narrower list keeps backend option parity
 #                                    # but warns where delivery is unavailable.

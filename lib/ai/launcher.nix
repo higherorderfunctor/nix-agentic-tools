@@ -11,6 +11,9 @@
 # `launcherPackage` flattens a previously generated launcher: one preflight
 # and one exec of the package binary, even when a module selects a launcher.
 pkgs: {
+  # Executable followed by shell words, placed before the original command.
+  # A supervising prefix owns launch-scoped files until the runtime exits.
+  commandPrefix ? [],
   environmentDefaults ? {},
   environmentVariables ? {},
   exe,
@@ -21,9 +24,11 @@ pkgs: {
 }: let
   inherit (pkgs) lib;
   unwrapped = package.launcherPackage or package;
+  command = "${unwrapped}/bin/${exe}";
   defaults = import ./environment-defaults.nix {inherit lib;} environmentDefaults;
   args =
-    flags
+    lib.optional (commandPrefix != []) "--add-flags ${lib.escapeShellArg (lib.concatStringsSep " " (builtins.tail commandPrefix ++ [(lib.escapeShellArg command)]))}"
+    ++ flags
     ++ lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") environmentVariables
     ++ lib.optional (defaults != "") "--run ${lib.escapeShellArg defaults}"
     ++ lib.optional (preflight != null) (import ./launcher-preflight.nix pkgs preflight);
@@ -42,9 +47,13 @@ in
       postBuild = ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        # Replace the joined symlink; makeWrapper execs the original directly.
+        # Replace the joined symlink; the prefix, if present, owns the command.
         ${pkgs.coreutils}/bin/rm "$out/bin/${exe}"
-        makeWrapper ${unwrapped}/bin/${exe} "$out/bin/${exe}" \
+        makeWrapper ${
+          if commandPrefix == []
+          then command
+          else builtins.head commandPrefix
+        } "$out/bin/${exe}" \
           --run 'set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :' \
           ${lib.concatStringsSep " " args}
       '';

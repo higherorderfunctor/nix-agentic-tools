@@ -212,8 +212,10 @@ three runtimes demonstrably do not perform.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Kimchi and Kiro. Claude is still outside it;
-  `native.settings.env` is its native equivalent. Its optional proxy launcher
-  only suppresses the inherited API-key descriptor.
+  `native.settings.env` is its native equivalent. Its managed launcher handles
+  inference credential suppression and startup proxy CA trust; native or
+  inherited extra-CA files compose with the instance CA. See
+  [Network Proxy](../ai-proxy/ai-proxy.md).
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more
