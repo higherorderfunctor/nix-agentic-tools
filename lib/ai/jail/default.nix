@@ -1,6 +1,7 @@
 # `ai.jail`: run each harness launcher inside an exclusion-only bubblewrap
 # jail (jail.nix, `lib.ai.jail`). The jail starts from the full host view and
-# the full environment, and takes away only what the consumer lists.
+# the full environment, and takes away what the consumer lists plus the
+# selected intercepting proxy's CA key.
 #
 # One library for every place that touches the surface:
 #   * option declarations: root `ai.jail` (sharedOptions.nix) and per-runtime
@@ -156,11 +157,15 @@
     description = ''
       Run each AI harness launcher inside a bubblewrap jail built with
       jail.nix. Nothing is jailed until `enable = true`, here or on
-      `ai.<runtime>.jail`; no path or variable is excluded by default.
+      `ai.<runtime>.jail`. Nothing is excluded unless the consumer sets it,
+      except the CA private key of a selected intercepting network proxy:
+      every jailed runtime masks it, even without CA trust delivery. A
+      missing key refuses launch; start the service with the same runtime
+      directory environment first.
 
       The jail is exclusion-only: the harness sees the whole host
       filesystem with the user's own permissions, keeps its environment
-      and the host network, and loses only what is listed. Each
+      and the host network, and loses the listed paths and proxy key. Each
       `exclude.paths` entry is resolved through `realpath` at launch and
       masked there: a directory by an empty tmpfs, a file by an empty
       read-only file; a missing path is skipped. Each `exclude.environment`
