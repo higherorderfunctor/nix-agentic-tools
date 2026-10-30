@@ -322,6 +322,7 @@
       );
   in
     assert lib.assertMsg (!hasUsage || hasV3) "Kiro usage tracking requires v3 = true in the managed wrapper.";
+    assert lib.assertMsg (!hasUsage || usage.pythonRequirement.assertion) usage.pythonRequirement.message;
       if !needsWrapper
       then package
       else

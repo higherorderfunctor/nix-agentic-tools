@@ -18,7 +18,9 @@ is unencrypted. Protect backups and unpack output accordingly.
 
 Use an existing, explicitly configured mitmproxy installation and certificate
 trust setup. The addon does not install a CA, alter proxy environment variables,
-or configure Kiro itself:
+or configure Kiro itself. Usage tracking needs Python 3.14 or newer, for the
+standard-library `compression.zstd` module; the Nix module and the managed
+wrapper fail evaluation when `pkgs.python3` or mitmproxy's interpreter is older:
 
 ```bash
 export KIRO_USAGE_DB="$HOME/.local/state/kiro-usage/capture.sqlite3"
