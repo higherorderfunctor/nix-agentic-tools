@@ -43,16 +43,21 @@
     key = "instance";
     url = "instance";
   };
-  # `{entry}` for the enabled instance `name`, or `{problem}` saying why
-  # `option` cannot select it.
-  lookup = registry: option: name: let
-    entry = registry.${name} or null;
-  in
-    if entry == null
-    then {problem = "${option} names `${name}`, which no proxy owner registers; registered instances: ${lib.concatStringsSep ", " (builtins.attrNames registry)}.";}
-    else if !entry.enable
-    then {problem = "${option} names `ai.${entry.backend}.instances.${name}`, which is disabled.";}
-    else {inherit entry;};
+  lookup = import ../instance-lookup.nix {
+    inherit lib;
+    disabled = {
+      option,
+      name,
+      entry,
+      ...
+    }: "${option} names `ai.${entry.backend}.instances.${name}`, which is disabled.";
+    unregistered = {
+      option,
+      name,
+      registered,
+      ...
+    }: "${option} names `${name}`, which no proxy owner registers; registered instances: ${registered}.";
+  };
   problems = registry: path: selection: let
     name = lib.showOption path;
     has = field: selection.${field} != null;
