@@ -29,13 +29,14 @@
 # `sharedAgentsMd` checks the value that record callback returns, which exists
 # only once the transform calls it: true, or a throw naming stray fields.
 {lib}: let
+  inherit (import ../ai-common.nix {inherit lib;}) normalizedSettingsFields;
   backendKeys = ["installPackage" "migrationConfig" "options"];
   defaultsKeys = ["package" "packageText"];
   # The pools whose option `mkBackendTransform.nix` declares through
   # `poolOption`, and so the only ones `poolOptions` can override.
   poolOptionPools = ["environmentVariables"];
   sharedAgentsMdKeys = ["hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
-  supportKeys = ["backends" "gaps" "reason"];
+  supportKeys = ["backends" "fields" "gaps" "reason"];
   gapKeys = ["each" "path" "reason" "when"];
   validBackends = backends: builtins.isList backends && lib.all (backend: builtins.elem backend ["devenv" "hm"]) backends;
   validReason = reason: builtins.isString reason || builtins.isFunction reason;
@@ -49,13 +50,15 @@
     && validPath gap.path
     && builtins.isBool (gap.each or false)
     && (!(gap ? when) || builtins.isFunction gap.when);
-  validSupport = support:
+  validSupport = surface: support:
     unknownIn supportKeys support
     == []
     && validBackends support.backends
     && (!(support ? reason) || builtins.isString support.reason)
+    && (!(support ? fields) || (surface == "settings" && support.backends != [] && builtins.isList support.fields && lib.all (field: builtins.elem field normalizedSettingsFields) support.fields))
     && builtins.isList (support.gaps or [])
-    && lib.all validGap (support.gaps or []);
+    && lib.all validGap (support.gaps or [])
+    && (surface != "settings" || lib.all (gap: builtins.elem (builtins.head gap.path) (support.fields or [])) (support.gaps or []));
   contentTargetsKeys = ["context" "rules"];
   namespaceGroups = (import ./optionNamespaces.nix {inherit lib;}).groups;
   validPath = path: builtins.isList path && lib.all (part: builtins.isString part && part != "") path;
@@ -86,8 +89,8 @@ in {
     unknownPoolOptions = unknownIn poolOptionKeys poolOptions;
     unknownNamespaces = unknownIn namespaceGroups optionNamespaces;
   in
-    lib.assertMsg (lib.all validSupport (builtins.attrValues surfaceSupport))
-    "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; each gap takes a nonempty relative path, a boolean `each`, a reason and a when predicate."
+    lib.assertMsg (lib.all (surface: validSupport surface surfaceSupport.${surface}) (builtins.attrNames surfaceSupport))
+    "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; settings takes consumed fields from normalizedSettingsType only when a backend delivers it, and gaps may only name listed fields; each gap takes a nonempty relative path, a boolean `each`, a reason and a when predicate."
     && checkBackend "hm" hm
     && checkBackend "devenv" devenv
     && lib.assertMsg (builtins.isAttrs optionNamespaces && unknownNamespaces == [] && lib.all validPath (builtins.attrValues optionNamespaces))

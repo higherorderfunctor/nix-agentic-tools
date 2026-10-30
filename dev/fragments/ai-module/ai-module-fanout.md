@@ -1,28 +1,29 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-29 — gap predicates and dynamic reasons also
-> receive the backend; runtime factories stage surfaces in `_generatedFiles`
-> (every runtime surface included) and forward them through the ai-module
-> layer-1 helper over one generated tree, which every staged entry's delivery
-> requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
-> the ai-module devenv module writes the treefmt excludes; Copilot stages its
-> standalone context, named instructions and copied skills on devenv, declares
-> an agents gap and keeps both old ledgers, and Claude every surface including
-> HM `.claude.json` with both legacy ledgers; the root-option provenance guard
-> exempts the ai-module layer-1 forwarding helper for its forwarded options;
-> option declarations supply policy surfaces and keyed withdrawal; runtime
-> declarations supply normalized policy gaps and the warning suite generates
-> coverage for every runtime, surface and backend; a record's `optionNamespaces`
-> places launcher and pool options, and `ai.copilot` is github.com Copilot with
-> its pools under `ai.copilot.github`; an undelivered surface warns once per
-> runtime and backend, set at the root, the runtime pool or its normalized
-> option, and record gaps are `path`, `each`, `when` and `reason` only;
-> ai-module owns the delivered-path inventory and backend lowering; `ai.proxy`
-> selects a registered proxy instance, its fields copied down to each capable
-> runtime by priority; Claude's CLIProxyAPI lowering suppresses its inherited
-> API-key descriptor through the installed launcher; `ai.jail` folds field by
-> field and jails the finished launcher in place at the install seam on Linux,
-> warning elsewhere.
+> **Last verified:** 2026-10-29 — `surfaceSupport.settings.fields` limits
+> resolved normalized settings; unlisted fields warn per field; gap predicates
+> and dynamic reasons also receive the backend; runtime factories stage surfaces
+> in `_generatedFiles` (every runtime surface included) and forward them through
+> the ai-module layer-1 helper over one generated tree, which every staged
+> entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
+> `internal` and the ai-module devenv module writes the treefmt excludes;
+> Copilot stages its standalone context, named instructions and copied skills on
+> devenv, declares an agents gap and keeps both old ledgers, and Claude every
+> surface including HM `.claude.json` with both legacy ledgers; the root-option
+> provenance guard exempts the ai-module layer-1 forwarding helper for its
+> forwarded options; option declarations supply policy surfaces and keyed
+> withdrawal; runtime declarations supply normalized policy gaps and the warning
+> suite generates coverage for every runtime, surface and backend; a record's
+> `optionNamespaces` places launcher and pool options, and `ai.copilot` is
+> github.com Copilot with its pools under `ai.copilot.github`; an undelivered
+> surface warns once per runtime and backend, set at the root, the runtime pool
+> or its normalized option, and record gaps are `path`, `each`, `when` and
+> `reason` only; ai-module owns the delivered-path inventory and backend
+> lowering; `ai.proxy` selects a registered proxy instance, its fields copied
+> down to each capable runtime by priority; Claude's CLIProxyAPI lowering
+> suppresses its inherited API-key descriptor through the installed launcher;
+> `ai.jail` folds field by field and jails the finished launcher in place at the
+> install seam on Linux, warning elsewhere.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -633,10 +634,19 @@ fanout surfaces. Its keys declare root options and populate the read-only
 internal `sharedSurfaces` list. A keyed root option uses `keyedOption` metadata
 so delivery policy derives its keyed withdrawal list from the same declarations.
 Every runtime's `surfaceSupport` maps a surface name to
-`{backends?; reason?; gaps?;}`. Presence defaults to both backends;
-`backends = []` consumes nothing and declares no normalized runtime option. A
-non-empty backend list keeps both backend option trees, even where delivery is
-unavailable. Omitted surfaces warn with the generic reason.
+`{backends?; fields?; gaps?; reason?;}`. For `settings`, `fields` lists the
+normalized settings it consumes; names must exist in `normalizedSettingsType`,
+and a `fields` declaration requires nonempty backends. Settings gaps may only
+name listed fields, including conditional gaps with `when`; a gap on an unlisted
+field would duplicate its default warning. An omitted field warns by default,
+even when the runtime consumes other settings. Only listed fields resolve from
+the root and runtime pools; unlisted normalized fields default to null. This
+breaks out-of-tree records that declare `surfaceSupport.settings` without
+`fields` (including `{}`): they must declare `fields` for every normalized
+setting they consume. Presence defaults to both backends; `backends = []`
+consumes nothing and declares no normalized runtime option. A non-empty backend
+list keeps both backend option trees, even where delivery is unavailable.
+Omitted surfaces warn with the generic reason.
 
 `app/decompose.nix` derives warnings from those declarations, including for
 third-party `mkRuntime` records. A surface the backend does not deliver warns
@@ -645,13 +655,15 @@ pool or on its public `normalized` option, with the record's reason; the line
 names the first input set in that order (runtime pool, root, normalized) and
 never tracks where a value came from. The normalized option defaults to the fold
 of the other two, so it is checked only when both are empty, and `findFirst`
-never forces it once an earlier input warns. Silencing it takes a visible record
-edit with a reason, never a stub writer. A gap is one field a delivered surface
-drops: a nonempty `path`, a reason and an optional `when` predicate. With `each`
-it checks every keyed entry, root or runtime pool; without, the portable root
-field. Predicates and dynamic reasons receive the backend, the runtime cfg and
-the entry's name, path and value. Keyed runtime replacements and tombstones
-withdraw inherited entries before warnings.
+never forces it once an earlier input warns. `settings` instead warns once per
+unsupported non-null field, naming the first input that sets it, in the same
+order; declaring `settings` without `fields` does not consume any field.
+Silencing it takes a visible record edit with a reason, never a stub writer. A
+gap is one field a delivered surface drops: a nonempty `path`, a reason and an
+optional `when` predicate. With `each` it checks every keyed entry, root or
+runtime pool; without, the portable root field. Predicates and dynamic reasons
+receive the backend, the runtime cfg and the entry's name, path and value. Keyed
+runtime replacements and tombstones withdraw inherited entries before warnings.
 
 `checks/ai-warnings` generates populated, empty and disabled probes from the
 real runtime records, the evaluated shared-surface registry and both backends.

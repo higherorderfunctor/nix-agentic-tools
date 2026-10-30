@@ -90,10 +90,12 @@ would mean choosing a model, or writing it into every model's record. Both
 change what the user asked for. So the factory declares
 `surfaceSupport.settings.backends = []`, and an unsupported pool declares no
 per-runtime option. The root `ai.settings.reasoningEffort` warns for Kiro
-because its persisted effort is per-model, with no lossless target for a shared
-scalar. Use `ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort` for
-the native per-model value, or Kiro's session-only `--effort` flag when
-persistence is not wanted.
+because Kiro persists settings such as effort only per model in
+`chat.modelDefaults`, so normalized settings have no lossless target. For
+reasoning effort, use
+`ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort` for the native
+per-model value, or Kiro's session-only `--effort` flag when persistence is not
+wanted.
 
 ### Unknown complete keys warn
 

@@ -25,6 +25,25 @@ in {
         && evaluated.config.ai.skills == {}
     );
 
+    factory-sharedOptions-settings-nullable = mkTest "sharedOptions-settings-nullable" (
+      let
+        evaluated = lib.evalModules {modules = [ai.sharedOptions];};
+        fields = builtins.removeAttrs (evaluated.options.ai.settings.type.getSubOptions []) ["_module"];
+        fieldNames = (import ../../lib/ai/ai-common.nix {inherit lib;}).normalizedSettingsFields;
+        nullOrName = (lib.types.nullOr lib.types.str).name;
+      in
+        fields
+        != {}
+        && lib.all (field: let
+          option = fields.${field};
+        in
+          option.default
+          == null
+          && option.type.name == nullOrName
+          && evaluated.config.ai.settings.${field} == null)
+        fieldNames
+    );
+
     factory-sharedOptions-reasoning-effort-is-portable-intersection = mkTest "sharedOptions-reasoning-effort-is-portable-intersection" (
       let
         accepts = value:

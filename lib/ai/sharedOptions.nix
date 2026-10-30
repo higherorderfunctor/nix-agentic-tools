@@ -303,8 +303,9 @@
       description = ''
         Typed settings whose values preserve the same meaning across multiple
         AI runtimes. Each `ai.<runtime>.settings` field narrows this root
-        default when non-null; Kiro declares none, because it persists effort
-        only per model; a shared request warns because Kiro cannot consume it.
+        default when non-null. Runtime records list consumed fields explicitly;
+        an unlisted non-null field warns for that runtime. Kiro declares none
+        because it persists effort only per model.
         The current `reasoningEffort` field lowers to
         Claude `effortLevel`, Codex `model_reasoning_effort` and Kimchi
         `defaultThinkingLevel`; the enum is their exact persisted semantic
