@@ -38,8 +38,10 @@
 #                                    # reason explains unavailable delivery. gaps
 #                                    # declare fields a delivered surface drops:
 #                                    # {path; each?; reason; when?;}. path is
-#                                    # relative to the portable root, or with
-#                                    # each to every keyed root/runtime entry.
+#                                    # relative to each input; the first input
+#                                    # holding it (runtime pool, root, normalized)
+#                                    # warns once, or with each every keyed
+#                                    # root/runtime entry.
 #                                    # when receives cfg and the entry's
 #                                    # name/path/value; reason may use those too.
 #                                    # Omitted surfaces always warn from the shared
