@@ -1,29 +1,9 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-29 — `surfaceSupport.settings.fields` limits
-> resolved normalized settings; unlisted fields warn per field; gap predicates
-> and dynamic reasons also receive the backend; runtime factories stage surfaces
-> in `_generatedFiles` (every runtime surface included) and forward them through
-> the ai-module layer-1 helper over one generated tree, which every staged
-> entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
-> `internal` and the ai-module devenv module writes the treefmt excludes;
-> Copilot stages its standalone context, named instructions and copied skills on
-> devenv, declares an agents gap and keeps both old ledgers, and Claude every
-> surface including HM `.claude.json` with both legacy ledgers; the root-option
-> provenance guard exempts the ai-module layer-1 forwarding helper for its
-> forwarded options; option declarations supply policy surfaces and keyed
-> withdrawal; runtime declarations supply normalized policy gaps and the warning
-> suite generates coverage for every runtime, surface and backend; a record's
-> `optionNamespaces` places launcher and pool options, and `ai.copilot` is
-> github.com Copilot with its pools under `ai.copilot.github`; an undelivered
-> surface warns once per runtime and backend, set at the root, the runtime pool
-> or its normalized option, and record gaps are `path`, `each`, `when` and
-> `reason` only; ai-module owns the delivered-path inventory and backend
-> lowering; `ai.settings.inference` selects a registered proxy instance, its
-> fields copied down to each capable runtime by priority; Claude's CLIProxyAPI
-> lowering suppresses its inherited API-key descriptor through the installed
-> launcher; `ai.jail` folds field by field and jails the finished launcher in
-> place at the install seam on Linux, warning elsewhere.
+> **Last verified:** 2026-10-30 — non-`each` gaps inspect runtime pool, root and
+> normalized inputs in order and warn once for the first input holding the
+> requested field. Root copy-down names the runtime pool; keyed-entry gaps
+> retain their existing selection.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -662,9 +642,12 @@ order; declaring `settings` without `fields` does not consume any field.
 Silencing it takes a visible record edit with a reason, never a stub writer. A
 gap is one field a delivered surface drops: a nonempty `path`, a reason and an
 optional `when` predicate. With `each` it checks every keyed entry, root or
-runtime pool; without, the portable root field. Predicates and dynamic reasons
-receive the backend, the runtime cfg and the entry's name, path and value. Keyed
-runtime replacements and tombstones withdraw inherited entries before warnings.
+runtime pool; without, it warns once for the first input with a nonempty field
+at `path`, in runtime pool, root, normalized order. Root values copied into the
+runtime pool name that pool, matching surface warnings without tracking origin.
+Predicates and dynamic reasons receive the backend, the runtime cfg and the
+entry's name, path and value. Keyed runtime replacements and tombstones withdraw
+inherited entries before warnings.
 
 The `normalized.settings` fold supplies per-field defaults: defining only
 `reasoningEffort` preserves the resolved `inference` endpoint.
@@ -675,10 +658,12 @@ It covers every unavailable surface, declared-but-unavailable runtime option,
 and static record gap, plus root and runtime pool set together to pin the one
 line and a value set only on the normalized option; every supported cell gets a
 control against the whole-surface unsupported warning. Samples must exist for
-each shared surface and static gap path. Conditional and keyed-entry gaps retain
-explicit runtime/path cases, whose exhaustiveness assertion names any uncovered
-record gap. Expected normalized reasons come from the records, including dynamic
-reasons.
+each shared surface and static gap path. A fixture's dropped inference URL also
+probes root copy-down, runtime-only, combined and normalized-only requests, with
+empty, unrelated-field and disabled controls on both backends. Conditional and
+keyed-entry gaps retain explicit runtime/path cases, whose exhaustiveness
+assertion names any uncovered record gap. Expected normalized reasons come from
+the records, including dynamic reasons.
 
 Policy rows derive normalized absence and static gaps from the records alongside
 physical delivery and native diagnostics; they no longer choose normalized

@@ -318,6 +318,91 @@
     (lib.filter (gap: !(conditional gap)) (cell.support.gaps or [])))
   (lib.filter delivered surfaceCells);
   gapCases = missingCases ++ staticCases;
+  # Kimchi's only static gap, PermissionRequest, is not a native hook option.
+  # A fixture exposes a dropped field in a pool with root copy-down instead.
+  staticGapInputsPass = let
+    record = harness.aiBase.app.mkRuntime {
+      inherit pkgs;
+      name = "testapp";
+      surfaceSupport.settings = {
+        fields = ["inference" "reasoningEffort"];
+        gaps = [
+          {
+            path = ["inference" "url"];
+            reason = "testapp drops the inference URL.";
+          }
+        ];
+      };
+    };
+    surface = "settings";
+    gap = builtins.head record.surfaceSupport.${surface}.gaps;
+    rootPath = ["ai" surface "inference"];
+    poolPath = ["ai" record.name surface "inference"];
+    normalizedPath = ["ai" record.name "normalized" surface "inference"];
+    rootInput = lib.setAttrByPath rootPath (settingSample "inference");
+    poolInput = lib.setAttrByPath poolPath (settingSample "inference");
+    inputs =
+      map (path: {
+        config = lib.setAttrByPath path (
+          if path == normalizedPath
+          then resolvedSettingSample "inference"
+          else settingSample "inference"
+        );
+        warningPath =
+          if path == normalizedPath
+          then normalizedPath ++ ["url"]
+          else poolPath ++ ["url"];
+      }) [rootPath poolPath normalizedPath]
+      ++ [
+        {
+          config = lib.recursiveUpdate rootInput poolInput;
+          warningPath = poolPath ++ ["url"];
+        }
+        {
+          config = lib.recursiveUpdate rootInput {
+            ai.${record.name}.${surface} = {
+              inference = {
+                key = lib.mkForce null;
+                url = lib.mkForce null;
+              };
+              reasoningEffort = "high";
+            };
+          };
+          warningPath = rootPath ++ ["url"];
+        }
+      ];
+  in
+    lib.all (mode: let
+      evaluate = enabled: config:
+        (lib.evalModules {
+          modules = [
+            harness.aiBase.sharedOptions
+            (
+              if mode == "hm"
+              then harness.hmStubs
+              else harness.devenvStubs
+            )
+            (harness.aiBase.app.${mode + "Transform"} record)
+            {config = lib.recursiveUpdate config {ai.${record.name}.enable = enabled;};}
+          ];
+        }).config.warnings;
+    in
+      evaluate true {}
+      == []
+      && evaluate true {ai.${record.name}.${surface}.reasoningEffort = "high";} == []
+      && lib.all (input:
+        evaluate true input.config
+        == [
+          (expectedMessage {
+            inherit mode;
+            inherit (gap) reason;
+            path = input.warningPath;
+            runtime = record.name;
+          })
+        ]
+        && evaluate false input.config == [])
+      inputs)
+    policy.modes;
   conditionalGaps = lib.concatMap (cell:
     map (gap: cell // {inherit gap;})
     (lib.filter conditional (cell.support.gaps or [])))
@@ -651,6 +736,7 @@ in {
       && lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
       && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
+      && lib.assertMsg staticGapInputsPass "static gaps warn once for root, runtime pool, combined and normalized inputs, with empty and disabled controls"
       && declarationsCovered
       && conditionalCovered
       && lib.assertMsg portableEventSilent "Claude delivers the portable PermissionRequest event"
