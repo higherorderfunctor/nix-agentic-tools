@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai devenvStubs factoryProxyServer hmStubs mkProxyTestRecord mkTest;
-  inherit (import ../../lib/testing/normalized-settings-probes.nix {inherit lib;}) requestFields settingSample settingsFields;
+  inherit (import ../../lib/testing/normalized-settings-probes.nix {inherit lib;}) requestFields resolvedSettingSample settingSample settingsFields;
   sharedRequests = {
     agents.probe = {
       description = "probe";
@@ -22,10 +22,6 @@
     mcpServers.probe = {
       command = "probe";
       headers.Authorization = "probe";
-    };
-    proxy = {
-      key = (import ../../lib/redact {inherit lib;}).file "/run/secrets/ai-proxy-key";
-      url = "http://127.0.0.1:8317";
     };
     rules.probe.text = "probe";
     settings = lib.genAttrs settingsFields settingSample;
@@ -456,7 +452,7 @@ in {
           lib.all (pools: let
             poolPath = ["testapp"] ++ pools;
             normalizedPath = poolPath ++ ["normalized" "settings" field];
-            normalized = lib.setAttrByPath normalizedPath (settingSample field);
+            normalized = lib.setAttrByPath normalizedPath (resolvedSettingSample field);
             runtimePath = poolPath ++ ["settings" field];
             runtime = lib.setAttrByPath runtimePath (settingSample field);
             partialWarnings = backend: request: (evaluateSupport backend (partialRecord pools) request true).config.warnings;
@@ -472,7 +468,7 @@ in {
               supported = (evaluateSupport backend (supportedRecord pools) root true).config;
             in
               lib.attrByPath normalizedPath null supported.ai
-              == settingSample field
+              == resolvedSettingSample field
               && supported.warnings == []
               && lib.all (request: lib.getAttrFromPath normalizedPath (evaluate request).ai == null) [root runtime]
               && warnings root == [(expected backend "ai.settings.${field}" fieldReason)]

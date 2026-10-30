@@ -1,9 +1,9 @@
-# Codex's half of `ai.proxy` (lib/ai/proxy): one provider table per endpoint,
+# Codex's half of `ai.settings.inference` (lib/ai/inference): one provider table per endpoint,
 # delivered where each backend can deliver it. Only the CLIProxyAPI lowering
 # exists; it also lowers an external `url` + `key`.
 #
 # ── Where the provider goes ───────────────────────────────────────────
-# Home Manager writes `[model_providers.ai-proxy]` and `model_provider` into
+# Home Manager writes `[model_providers.ai-inference]` and `model_provider` into
 # user config.toml. devenv cannot: Codex strips `model_provider` and
 # `model_providers` from every project layer (PROJECT_LOCAL_CONFIG_DENYLIST,
 # mirrored as `projectIgnoredKeys`), so its launcher passes them as `-c`
@@ -35,18 +35,18 @@
   lib,
   pkgs,
 }: let
-  keyHelper = import ../../../lib/ai/proxy/key-helper.nix {inherit lib pkgs;};
-  proxyLib = import ../../../lib/ai/proxy {inherit lib;};
+  keyHelper = import ../../../lib/ai/inference/key-helper.nix {inherit lib pkgs;};
+  inferenceLib = import ../../../lib/ai/inference {inherit lib;};
   ids = {
-    devenv = "ai-proxy-devenv";
-    hm = "ai-proxy";
+    devenv = "ai-inference-devenv";
+    hm = "ai-inference";
   };
 
   # `name` is required: Codex refuses to load a provider without one.
   providerFor = id: endpoint: let
     helper = keyHelper {
       inherit (endpoint) key;
-      option = "ai.codex.proxy.key";
+      option = "ai.codex.settings.inference.key";
     };
   in {
     auth.command = lib.getExe helper;
@@ -58,15 +58,15 @@
 
   # A lowering returns `settings` for both backends and, optionally,
   # `hmSettings` for user config.toml and `sessionFlags` for devenv's launcher.
-  lowerings.cliproxyapi = {resolvedProxy}: {
+  lowerings.cliproxyapi = {resolvedInference}: {
     hmSettings = {
       model_provider = ids.hm;
-      model_providers.${ids.hm} = providerFor ids.hm resolvedProxy;
+      model_providers.${ids.hm} = providerFor ids.hm resolvedInference;
     };
     # devenv's renderer: the session flags for one endpoint.
     sessionFlags = [
       "-c"
-      "model_providers.${ids.devenv}=${inlineToml (providerFor ids.devenv resolvedProxy)}"
+      "model_providers.${ids.devenv}=${inlineToml (providerFor ids.devenv resolvedInference)}"
       "-c"
       "model_provider=${ids.devenv}"
     ];
@@ -75,17 +75,17 @@
     # availability_nux.
     settings.tui.model_availability_nux."gpt-6.1-sol" = 4;
   };
-  proxyLowering = proxyLib.forRuntime "codex" lowerings;
+  inferenceLowering = inferenceLib.forRuntime "codex" lowerings;
 in {
-  inherit (proxyLowering) assertions;
+  inherit (inferenceLowering) assertions;
 
   # makeWrapper arguments for devenv's launcher.
-  launcherFlags = resolvedProxy:
-    lib.concatMap (flag: ["--add-flag" (lib.escapeShellArg flag)]) ((proxyLowering.lower {inherit resolvedProxy;}).sessionFlags or []);
+  launcherFlags = resolvedInference:
+    lib.concatMap (flag: ["--add-flag" (lib.escapeShellArg flag)]) ((inferenceLowering.lower {inherit resolvedInference;}).sessionFlags or []);
 
   # Native settings for a selected proxy, at default priority.
-  settings = isHm: resolvedProxy: let
-    lowered = proxyLowering.lower {inherit resolvedProxy;};
+  settings = isHm: resolvedInference: let
+    lowered = inferenceLowering.lower {inherit resolvedInference;};
   in
     lib.mapAttrsRecursive (_: lib.mkDefault) (lib.recursiveUpdate (lowered.settings or {})
       (lib.optionalAttrs isHm (lowered.hmSettings or {})));

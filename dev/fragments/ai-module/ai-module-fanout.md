@@ -19,11 +19,11 @@
 > surface warns once per runtime and backend, set at the root, the runtime pool
 > or its normalized option, and record gaps are `path`, `each`, `when` and
 > `reason` only; ai-module owns the delivered-path inventory and backend
-> lowering; `ai.proxy` selects a registered proxy instance, its fields copied
-> down to each capable runtime by priority; Claude's CLIProxyAPI lowering
-> suppresses its inherited API-key descriptor through the installed launcher;
-> `ai.jail` folds field by field and jails the finished launcher in place at the
-> install seam on Linux, warning elsewhere.
+> lowering; `ai.settings.inference` selects a registered proxy instance, its
+> fields copied down to each capable runtime by priority; Claude's CLIProxyAPI
+> lowering suppresses its inherited API-key descriptor through the installed
+> launcher; `ai.jail` folds field by field and jails the finished launcher in
+> place at the install seam on Linux, warning elsewhere.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -602,13 +602,14 @@ non-empty list for `fileMatch` content.
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
 
-- `ai.proxy` — a selection (`instance` of a registered proxy instance, with
-  `clientKey` when it declares clients, or an external CPA `url` + `key`)
-  pointing harnesses at a proxy. A runtime that declares `proxy` gets
-  `ai.<runtime>.proxy`, whose fields default to the root's set fields
-  (`mkDefault`) except the other form's once it switches forms, and consumes the
-  resolved `normalized.proxy` through the selected backend's lowering; Claude
-  and Codex do. See the `ai-proxy` fragment.
+- `ai.settings.inference` — a selection (`instance` of a registered proxy
+  instance, with `clientKey` when it declares clients, or an external CPA
+  `url` + `key`) pointing harnesses at a proxy. A runtime that lists `inference`
+  in `surfaceSupport.settings.fields` consumes
+  `ai.<runtime>.settings.inference`, whose fields default to the root's set
+  fields (`mkDefault`) except the other form's once it switches forms, and
+  consumes the resolved `normalized.settings.inference` through the selected
+  backend's lowering; Claude and Codex do. See the `ai-inference` fragment.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
@@ -656,7 +657,7 @@ names the first input set in that order (runtime pool, root, normalized) and
 never tracks where a value came from. The normalized option defaults to the fold
 of the other two, so it is checked only when both are empty, and `findFirst`
 never forces it once an earlier input warns. `settings` instead warns once per
-unsupported non-null field, naming the first input that sets it, in the same
+unsupported populated field, naming the first input that sets it, in the same
 order; declaring `settings` without `fields` does not consume any field.
 Silencing it takes a visible record edit with a reason, never a stub writer. A
 gap is one field a delivered surface drops: a nonempty `path`, a reason and an
@@ -664,6 +665,9 @@ optional `when` predicate. With `each` it checks every keyed entry, root or
 runtime pool; without, the portable root field. Predicates and dynamic reasons
 receive the backend, the runtime cfg and the entry's name, path and value. Keyed
 runtime replacements and tombstones withdraw inherited entries before warnings.
+
+The `normalized.settings` fold supplies per-field defaults: defining only
+`reasoningEffort` preserves the resolved `inference` endpoint.
 
 `checks/ai-warnings` generates populated, empty and disabled probes from the
 real runtime records, the evaluated shared-surface registry and both backends.

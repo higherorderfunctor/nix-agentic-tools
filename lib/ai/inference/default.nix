@@ -1,6 +1,6 @@
 # A Harness selects a registered proxy instance (with a named client when the
 # instance declares clients), or an external CPA origin. Proxy owners register
-# instances in `ai.internal.proxyInstances`; the selected instance's backend
+# instances in `ai.internal.inferenceInstances`; the selected instance's backend
 # picks the one lowering a runtime runs.
 {lib}: let
   inherit (lib) mkOption types;
@@ -81,7 +81,7 @@
     }) (problems registry path selection);
 in {
   inherit assertionsFor;
-  # `ai.<runtime>.proxy` definitions copying each set root field at default
+  # `ai.<runtime>.settings.inference` definitions copying each set root field at default
   # priority, so a runtime value wins field by field. An unset root field adds
   # no definition, so a runtime's own default-priority value meets no
   # conflict. A copy is withdrawn once the runtime selects the other form (an
@@ -110,12 +110,12 @@ in {
     assertions = resolved:
       lib.optional (resolved != null && !(lowerings ? ${resolved.backend})) {
         assertion = false;
-        message = "ai.${runtime}.proxy selects a `${resolved.backend}` proxy instance, which ${runtime} cannot use; it supports ${lib.concatStringsSep ", " (builtins.attrNames lowerings)}.";
+        message = "ai.${runtime}.settings.inference selects a `${resolved.backend}` proxy instance, which ${runtime} cannot use; it supports ${lib.concatStringsSep ", " (builtins.attrNames lowerings)}.";
       };
-    lower = {resolvedProxy, ...} @ request:
-      if resolvedProxy == null
+    lower = {resolvedInference, ...} @ request:
+      if resolvedInference == null
       then {}
-      else (lowerings.${resolvedProxy.backend} or (_: {})) request;
+      else (lowerings.${resolvedInference.backend} or (_: {})) request;
   };
   registryOption = mkOption {
     type = types.attrsOf (types.submodule {
@@ -143,7 +143,7 @@ in {
     default = {};
     internal = true;
     visible = false;
-    description = "Proxy instances by name, added by their owners, who claim each name in `ai.claims.proxy-instance`.";
+    description = "Proxy instances by name, added by their owners, who claim each name in `ai.claims.inference-instance`.";
   };
   # The instance's `backend` and `url`, plus the selected client's attributes
   # when the instance declares clients; null for a selection `problems`
@@ -171,27 +171,26 @@ in {
     else if selection.clientKey != null && clients ? ${selection.clientKey}
     then clients.${selection.clientKey} // endpoint
     else null;
-  resolvedType = types.nullOr (types.submodule {
-    freeformType = types.attrsOf types.raw;
-    options = {
-      backend = mkOption {
-        type = types.str;
-        description = "The selected instance's backend, whose lowering the runtime runs.";
+  resolvedOption = mkOption {
+    default = null;
+    description = "Resolved inference endpoint selected by this runtime, or null when no endpoint is selected.";
+    type = types.nullOr (types.submodule {
+      freeformType = types.attrsOf types.raw;
+      options = {
+        backend = mkOption {
+          type = types.str;
+          description = "The selected instance's backend, whose lowering the runtime runs.";
+        };
+        url = mkOption {
+          type = types.strMatching urlPattern;
+          description = "Proxy origin without a path.";
+        };
       };
-      url = mkOption {
-        type = types.strMatching urlPattern;
-        description = "Proxy origin without a path.";
-      };
-    };
-  });
-  rootOption = mkOption {
-    type = types.submodule {options = selectionOptions;};
-    default = {};
-    description = "Point a Harness (Claude Code or Codex CLI) at a proxy instance with `instance` (+ `clientKey` when it declares clients), or at external CPA with `url` + `key`. Each set field copies down to `ai.<runtime>.proxy` at default priority, so a runtime value wins field by field; a runtime selecting the other form drops the root's fields of that form. Instance routes select named upstream credentials; no Harness publishes keys or rules.";
+    });
   };
   # A runtime selection with the root fields copied in: checked whole when it
   # selects, otherwise only the fields the runtime changed, so an opt-out
-  # ignores what it inherits. An unchanged copy is asserted at `ai.proxy`.
+  # ignores what it inherits. An unchanged copy is asserted at `ai.settings.inference`.
   runtimeAssertionsFor = registry: path: root: selection: let
     own = lib.mapAttrs (field: value:
       if value == root.${field}
@@ -204,5 +203,13 @@ in {
       then selection
       else own
     ));
-  runtimeOptions = selectionOptions;
+  selectionOption = {root ? false}:
+    mkOption {
+      type = types.submodule {options = selectionOptions;};
+      default = {};
+      description =
+        if root
+        then "Select a proxy instance with `instance` (+ `clientKey` when it declares clients), or external CPA with `url` + `key`. Each set field copies down to `ai.<runtime>.settings.inference` at default priority, so a runtime value wins field by field; a runtime selecting the other form drops the root's fields of that form. Instance routes select named upstream credentials; no runtime publishes keys or rules."
+        else "Narrow `ai.settings.inference` field by field for this runtime; see `ai.<runtime>.settings` for inheritance and opt-out behavior.";
+    };
 }

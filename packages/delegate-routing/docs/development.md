@@ -188,14 +188,14 @@ helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
 direct read. `zai-usage claude|codex` selects the route whose GLM pool it reads;
 this repository attaches it to both runtimes as a usage technique.
 
-Usage follows generic `ai.<runtime>.proxy` selection. A selected local instance
-with a file management-key reference supplies metadata automatically. With no
-proxy or no management metadata, helpers use their direct login or
-`ZAI_API_KEY_FILE`. Once metadata is supplied, missing accounts, ambiguous z.ai
-keys, malformed responses and request failures are errors; stale local logins
-are not consulted. The backend never drains the usage queue. z.ai discovery
-reads secret-bearing configuration in memory, matches hostname `api.z.ai` and
-requires one distinct key across both supported transports.
+Usage follows generic `ai.<runtime>.settings.inference` selection. A selected
+local instance with a file management-key reference supplies metadata
+automatically. With no proxy or no management metadata, helpers use their direct
+login or `ZAI_API_KEY_FILE`. Once metadata is supplied, missing accounts,
+ambiguous z.ai keys, malformed responses and request failures are errors; stale
+local logins are not consulted. The backend never drains the usage queue. z.ai
+discovery reads secret-bearing configuration in memory, matches hostname
+`api.z.ai` and requires one distinct key across both supported transports.
 
 When a host manages the proxy and a project delivers routing, add the matching
 runtime pairs in `devenv.local.nix` (use `ai.codex.environmentVariables` for

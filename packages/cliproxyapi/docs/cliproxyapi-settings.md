@@ -31,14 +31,14 @@ where CLIProxyAPI writes its OAuth logins. The launcher renders the settings to
 `config.json` at each start and the run script, inside `stateDir` so the `.env`
 and `logs/` CLIProxyAPI resolves against its working directory are its own,
 execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
-reach only that copy and are lost at restart. `ai.proxy.instance` points the
-harnesses at an instance by name.
+reach only that copy and are lost at restart. `ai.settings.inference.instance`
+points the harnesses at an instance by name.
 
 `credentials` and `clientKeys` declare upstream credentials and client access
 once on the Instance. Harnesses select
-`proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
-four-client example, required OAuth vendor/account selection and devenv secret
-references and the overlapping subscription/API-key recipe using
+`settings.inference = {instance = "main"; clientKey = "claude-personal";}`.
+Shape, a four-client example, required OAuth vendor/account selection and devenv
+secret references and the overlapping subscription/API-key recipe using
 `apiKey.priority = -1` are in `cliproxyapi-providers.md`. Priority applies to
 every API served by the credential; OAuth priority belongs to CPA's login file
 metadata and cannot be set through `oauth`.

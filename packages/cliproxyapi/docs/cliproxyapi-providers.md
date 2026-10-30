@@ -1,12 +1,12 @@
-## ai.proxy providers: CLIProxyAPI upstream credentials
+## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
 > **Last verified:** 2026-10-29 — OAuth upstream credentials require vendor and
 > a secret account email; named API-key credentials can select the built-in z.ai
 > vendor defaults and a priority.
 
 How a harness selects an instance and its client key is in
-`dev/fragments/ai-proxy/ai-proxy.md`; this covers the upstream credentials an
-instance's client routes reach.
+`dev/fragments/ai-inference/ai-inference.md`; this covers the upstream
+credentials an instance's client routes reach.
 
 `ai.cliproxyapi.instances.<n>.credentials.<name>` declares exactly one of
 `oauth` or `apiKey`. OAuth requires `vendor` (CPA's provider name, such as
@@ -52,14 +52,14 @@ API-key credential names use letters, digits, `.`, `_` and `-`, starting with a
 letter or digit, so Go and Nix normalize their compatibility-provider identities
 alike.
 
-`normalized.proxy.credentials` is `[{name; models;}]` in client route order.
-Claude turns declared API-key models into `/model` picker rows; Codex discovers
-CPA's catalog without per-credential `-p` profiles
-(`dev/fragments/ai-proxy/ai-proxy-runtimes.md`). Route list order is preserved
-in generated rules and picker rows; it does not define CPA priority or fallback.
-`apiKey.priority` is an optional integer, omitted from CPA config when unset;
-CPA defaults it to 0. Higher values win among available credentials for the
-requested model; credentials in cooldown are skipped. For an overlapping
+`normalized.settings.inference.credentials` is `[{name; models;}]` in client
+route order. Claude turns declared API-key models into `/model` picker rows;
+Codex discovers CPA's catalog without per-credential `-p` profiles
+(`dev/fragments/ai-inference/ai-inference-runtimes.md`). Route list order is
+preserved in generated rules and picker rows; it does not define CPA priority or
+fallback. `apiKey.priority` is an optional integer, omitted from CPA config when
+unset; CPA defaults it to 0. Higher values win among available credentials for
+the requested model; credentials in cooldown are skipped. For an overlapping
 subscription login and API key, allow both in the client's routes and set
 `credentials.claude-api-personal.apiKey.priority = -1` to prefer the
 default-priority OAuth login and use the API key when that login is unavailable.
@@ -130,11 +130,11 @@ in {
   };
   ai.claude = {
     enable = true;
-    proxy = {instance = "main"; clientKey = "claude-personal";};
+    settings.inference = {instance = "main"; clientKey = "claude-personal";};
   };
   ai.codex = {
     enable = true;
-    proxy = {instance = "main"; clientKey = "codex-personal";};
+    settings.inference = {instance = "main"; clientKey = "codex-personal";};
   };
 }
 ```
@@ -142,5 +142,5 @@ in {
 For devenv, `redact.file "/run/user/<uid>/secrets/<name>"` can read a secret
 sops-nix already decrypted through Home Manager. Substitute your UID and secret
 name. The service launcher resolves upstream keys at start; the shared
-`lib/ai/proxy/key-helper.nix` resolves the selected client key when a harness
-asks. Values remain outside generated store files and evaluation output.
+`lib/ai/inference/key-helper.nix` resolves the selected client key when a
+harness asks. Values remain outside generated store files and evaluation output.

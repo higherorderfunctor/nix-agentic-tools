@@ -1,4 +1,4 @@
-# `ai.proxy` core contracts (lib/ai/proxy): selection validation and
+# `ai.settings.inference` core contracts (lib/ai/inference): selection validation and
 # resolution, the field-wise copy-down, and the instance registry.
 {
   lib,
@@ -12,7 +12,7 @@
   redact = import ../../lib/redact {inherit lib;};
   # The key a selected CLIProxyAPI instance accepts: one reference on both
   # sides, in the instance's access list and in the selection.
-  instanceKey = redact.file "/run/secrets/ai-proxy-key";
+  instanceKey = redact.file "/run/secrets/ai-inference-key";
   instance = port: {
     inherit port;
     clientKeys.main = {
@@ -42,7 +42,7 @@
   record = aiBase.app.mkRuntime {
     inherit pkgs;
     name = "testapp";
-    surfaceSupport.proxy = {};
+    surfaceSupport.settings.fields = ["inference"];
   };
   evalAppWith = modules: backend: config:
     (
@@ -65,11 +65,11 @@
       })
     ];
     ai = {
-      internal.proxyInstances.second = {
+      internal.inferenceInstances.second = {
         backend = "relay";
         url = "http://127.0.0.1:8500";
       };
-      relay.claims.proxy-instance = ["second"];
+      relay.claims.inference-instance = ["second"];
     };
   };
 
@@ -102,7 +102,7 @@
   fixture = {
     claude = {
       enable = true;
-      proxy = {
+      settings.inference = {
         instance = "clients";
         clientKey = "personal";
       };
@@ -123,7 +123,7 @@
     };
     codex = {
       enable = true;
-      proxy = {
+      settings.inference = {
         instance = "clients";
         clientKey = "work";
       };
@@ -143,7 +143,7 @@
   instanceChange = change: {cliproxyapi.instances.clients = change;};
 in {
   checks = {
-    module-ai-proxy-z-ai-credential = mkTest "ai-proxy-z-ai-credential" (let
+    module-ai-inference-z-ai-credential = mkTest "ai-inference-z-ai-credential" (let
       facts = import ../../lib/extracted/facts.nix {inherit lib;};
       vendor = facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "zAi";
       problems = lib.concatMap (backend: let
@@ -228,7 +228,7 @@ in {
               toolAliases.ToolSearch = "ToolSearch_";
             };
           "picker catalog retained" =
-            result.config.ai.claude.normalized.proxy.credentials
+            result.config.ai.claude.normalized.settings.inference.credentials
             == [
               {
                 name = "personal";
@@ -251,7 +251,7 @@ in {
       if problems == []
       then true
       else throw (lib.concatStringsSep "\n" problems));
-    module-ai-proxy-instance-clients = mkTest "ai-proxy-instance-clients" (let
+    module-ai-inference-instance-clients = mkTest "ai-inference-instance-clients" (let
       problems = lib.concatMap (backend: let
         result = evaluate backend {};
         settings = rendered result;
@@ -263,7 +263,7 @@ in {
           })
           apiKey.models;
         byUrl = evaluate backend {
-          claude.proxy = {
+          claude.settings.inference = {
             instance = null;
             clientKey = null;
             key = clientKey "external";
@@ -272,7 +272,7 @@ in {
           codex.enable = false;
           cliproxyapi.instances.clients.clientKeys = lib.mkForce {};
         };
-        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-proxy") null (result.config.home.packages or result.config.packages);
+        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-inference") null (result.config.home.packages or result.config.packages);
         pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
@@ -320,9 +320,9 @@ in {
                 disable-codex-cloaking = true;
               }
             ];
-          "key derived from client" = result.config.ai.claude.normalized.proxy.key == clientKey "personal" && result.config.ai.codex.normalized.proxy.key == clientKey "work";
+          "key derived from client" = result.config.ai.claude.normalized.settings.inference.key == clientKey "personal" && result.config.ai.codex.normalized.settings.inference.key == clientKey "work";
           "models derive from client routes" =
-            result.config.ai.claude.normalized.proxy.credentials
+            result.config.ai.claude.normalized.settings.inference.credentials
             == [
               {
                 name = "personal";
@@ -355,12 +355,12 @@ in {
                 base-urls = ["https://chat.example/v1"];
               }
             ];
-          "external adds no keys or rules" = !((rendered byUrl) ? access) && byUrl.config.ai.claude.normalized.proxy.key == clientKey "external";
+          "external adds no keys or rules" = !((rendered byUrl) ? access) && byUrl.config.ai.claude.normalized.settings.inference.key == clientKey "external";
           "secret references stay out of config" = !(lib.hasInfix "_redact" result.config.ai.services.cliproxyapi-clients.files.config.content);
           "unknown credential" = refused backend "unknown upstream credential `missing`" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "missing")];});
-          "unknown client key" = refused backend "clientKey names `missing`" {claude.proxy.clientKey = "missing";};
-          "instance needs client key" = refused backend "instance needs `clientKey`" {claude.proxy.clientKey = null;};
-          "instance refuses direct key" = refused backend "Instance selections use `clientKey`" {claude.proxy.key = clientKey "direct";};
+          "unknown client key" = refused backend "clientKey names `missing`" {claude.settings.inference.clientKey = "missing";};
+          "instance needs client key" = refused backend "instance needs `clientKey`" {claude.settings.inference.clientKey = null;};
+          "instance refuses direct key" = refused backend "Instance selections use `clientKey`" {claude.settings.inference.key = clientKey "direct";};
           "ambiguous API needs choice" = refused backend "needs api because it does not serve exactly one API" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "zai")];});
           "unserved API" = refused backend "does not serve API `chat`" (instanceChange {
             clientKeys.work.routes = lib.mkForce [
@@ -483,16 +483,16 @@ in {
 
     # The authentication key requires a redact reference at both scopes;
     # cleartext and the retired credential branches cannot enter normalization.
-    module-ai-proxy-redacted-key = mkTest "ai-proxy-redacted-key" (
+    module-ai-inference-redacted-key = mkTest "ai-inference-redacted-key" (
       lib.all (backend: let
         rejected = config:
-          !(builtins.tryEval (builtins.deepSeq (evalApp backend config).config.ai.testapp.normalized.proxy true)).success;
+          !(builtins.tryEval (builtins.deepSeq (evalApp backend config).config.ai.testapp.normalized.settings.inference true)).success;
         invalid = ["literal-client-key" {file = "/run/secrets/key";} {_redact.file = "${builtins.storeDir}/key";}];
         url = "http://127.0.0.1:8317";
       in
         lib.all (key:
-          rejected {ai.proxy = {inherit key url;};}
-          && rejected {ai.testapp.proxy = {inherit key url;};})
+          rejected {ai.settings.inference = {inherit key url;};}
+          && rejected {ai.testapp.settings.inference = {inherit key url;};})
         invalid)
       ["devenv" "hm"]
     );
@@ -500,24 +500,24 @@ in {
     # A key without a url and a url without a key each fail with the option
     # path; a valid `url` form passes on both backends. A url carrying a path
     # fails, since every runtime appends its own.
-    module-ai-proxy-root-selection-validation = mkTest "ai-proxy-root-selection-validation" (
-      failsWith ["ai.proxy.url needs `key`"] (evalHm {ai.proxy.url = "http://127.0.0.1:8317";})
-      && failsWith ["ai.proxy.key is set without `url`"] (evalHm {ai.proxy.key = redact.file "/run/secrets/ai-proxy-key";})
-      && failsWith ["ai.proxy.url must be the proxy origin only"] (evalHm {
-        ai.proxy = {
-          key = redact.file "/run/secrets/ai-proxy-key";
+    module-ai-inference-root-selection-validation = mkTest "ai-inference-root-selection-validation" (
+      failsWith ["ai.settings.inference.url needs `key`"] (evalHm {ai.settings.inference.url = "http://127.0.0.1:8317";})
+      && failsWith ["ai.settings.inference.key is set without `url`"] (evalHm {ai.settings.inference.key = redact.file "/run/secrets/ai-inference-key";})
+      && failsWith ["ai.settings.inference.url must be the proxy origin only"] (evalHm {
+        ai.settings.inference = {
+          key = redact.file "/run/secrets/ai-inference-key";
           url = "http://127.0.0.1:8317/v1";
         };
       })
       && failedMessages (evalHm {
-        ai.proxy = {
-          key = redact.file "/run/secrets/ai-proxy-key";
+        ai.settings.inference = {
+          key = redact.file "/run/secrets/ai-inference-key";
           url = "http://[::1]:8317";
         };
       })
       == []
       && failedMessages (evalDevenv {
-        ai.proxy = {
+        ai.settings.inference = {
           key = redact.command "${pkgs.hello}/bin/hello";
           url = "http://localhost:8317";
         };
@@ -526,23 +526,23 @@ in {
       # An Instance selection requires a named client key and refuses a URL
       # alongside it, a missing Instance or a disabled Instance.
       && lib.all (evaluate: let
-        select = proxy: evaluate {ai = instances // {inherit proxy;};};
+        select = inference: evaluate {ai = instances // {settings.inference = inference;};};
       in
         failedMessages (select {
           instance = "main";
           clientKey = "main";
         })
         == []
-        && failsWith ["ai.proxy.url and ai.proxy.instance both select a proxy"] (select {
+        && failsWith ["ai.settings.inference.url and ai.settings.inference.instance both select a proxy"] (select {
           instance = "main";
           clientKey = "main";
           url = "http://127.0.0.1:8317";
         })
-        && failsWith ["ai.proxy.instance names `missing`, which no proxy owner registers; registered instances: alt, main, off."] (select {
+        && failsWith ["ai.settings.inference.instance names `missing`, which no proxy owner registers; registered instances: alt, main, off."] (select {
           instance = "missing";
           clientKey = "main";
         })
-        && failsWith ["ai.proxy.instance names `ai.cliproxyapi.instances.off`, which is disabled."] (select {
+        && failsWith ["ai.settings.inference.instance names `ai.cliproxyapi.instances.off`, which is disabled."] (select {
           instance = "off";
           clientKey = "main";
         })) [evalDevenv evalHm]
@@ -557,17 +557,17 @@ in {
     # runtime's own invalid selection fails with its own option
     # path, even while the runtime is disabled. A url with a path set on the
     # normalized option directly is refused too.
-    module-ai-proxy-runtime-override = mkTest "ai-proxy-runtime-override" (
+    module-ai-inference-runtime-override = mkTest "ai-inference-runtime-override" (
       lib.all (backend: let
-        # The endpoint alone; module-ai-proxy-instance-clients covers named credentials.
+        # The endpoint alone; module-ai-inference-instance-clients covers named credentials.
         resolved = config: let
-          proxy = (evalApp backend config).config.ai.testapp.normalized.proxy;
+          inference = (evalApp backend config).config.ai.testapp.normalized.settings.inference;
         in
-          if proxy == null
+          if inference == null
           then null
-          else removeAttrs proxy ["backend" "credentials"];
+          else removeAttrs inference ["backend" "credentials"];
         root = {
-          key = redact.file "/run/secrets/ai-proxy-key";
+          key = redact.file "/run/secrets/ai-inference-key";
           url = "http://127.0.0.1:8317";
         };
         work = {
@@ -581,55 +581,55 @@ in {
         withInstances = ai: {ai = instances // ai;};
         keyOnly = {
           ai = {
-            proxy = root;
-            testapp.proxy.key = work.key;
+            settings.inference = root;
+            testapp.settings.inference.key = work.key;
           };
         };
         switchedToInstance = withInstances {
-          proxy = root;
-          testapp.proxy = mainSelection;
+          settings.inference = root;
+          testapp.settings.inference = mainSelection;
         };
         switchedToUrl = withInstances {
-          proxy = mainSelection;
-          testapp.proxy = work;
+          settings.inference = mainSelection;
+          testapp.settings.inference = work;
         };
         optedOut = withInstances {
-          proxy = mainSelection;
-          testapp.proxy.instance = null;
+          settings.inference = mainSelection;
+          testapp.settings.inference.instance = null;
         };
         # A profile module's default-priority runtime selection, with no root
         # selection whose unset fields could conflict with it.
         profileDefault =
           evalAppWith [
-            {ai.testapp.proxy = lib.mapAttrs (_: lib.mkDefault) mainSelection;}
+            {ai.testapp.settings.inference = lib.mapAttrs (_: lib.mkDefault) mainSelection;}
           ]
           backend
           {ai = instances;};
       in
         resolved {}
         == null
-        && resolved {ai.proxy = root;} == root
-        && (evalApp backend {ai.proxy = root;}).config.ai.testapp.normalized.proxy.backend == "cliproxyapi"
+        && resolved {ai.settings.inference = root;} == root
+        && (evalApp backend {ai.settings.inference = root;}).config.ai.testapp.normalized.settings.inference.backend == "cliproxyapi"
         && resolved {
           ai = {
-            proxy = root;
-            testapp.proxy = work;
+            settings.inference = root;
+            testapp.settings.inference = work;
           };
         }
         == work
-        && resolved {ai.testapp.proxy = work;} == work
+        && resolved {ai.testapp.settings.inference = work;} == work
         && resolved keyOnly == root // {inherit (work) key;}
         && failedMessages (evalApp backend keyOnly) == []
         # An instance resolves to its loopback origin at either scope; a
         # runtime instance replaces the root one.
-        && resolved (withInstances {proxy = mainSelection;})
+        && resolved (withInstances {settings.inference = mainSelection;})
         == {
           key = instanceKey;
           url = "http://127.0.0.1:8400";
         }
         && resolved (withInstances {
-          proxy = mainSelection;
-          testapp.proxy.instance = "alt";
+          settings.inference = mainSelection;
+          testapp.settings.inference.instance = "alt";
         })
         == {
           key = instanceKey;
@@ -646,28 +646,28 @@ in {
         && failedMessages (evalApp backend switchedToInstance) == []
         && resolved switchedToUrl == work
         && failedMessages (evalApp backend switchedToUrl) == []
-        && failsWith ["ai.testapp.proxy.url and ai.testapp.proxy.instance both select a proxy"] (evalApp backend (withInstances {
-          proxy = root;
-          testapp.proxy = mainSelection // root;
+        && failsWith ["ai.testapp.settings.inference.url and ai.testapp.settings.inference.instance both select a proxy"] (evalApp backend (withInstances {
+          settings.inference = root;
+          testapp.settings.inference = mainSelection // root;
         }))
         && resolved optedOut == null
-        && removeAttrs profileDefault.config.ai.testapp.normalized.proxy ["backend" "credentials"]
+        && removeAttrs profileDefault.config.ai.testapp.normalized.settings.inference ["backend" "credentials"]
         == {
           key = instanceKey;
           url = "http://127.0.0.1:8400";
         }
         && failedMessages profileDefault == []
         && failedMessages (evalApp backend optedOut) == []
-        && failsWith ["ai.testapp.proxy.instance names `missing`, which no proxy owner registers"] (evalApp backend (withInstances {
-          proxy = mainSelection;
-          testapp.proxy.instance = "missing";
+        && failsWith ["ai.testapp.settings.inference.instance names `missing`, which no proxy owner registers"] (evalApp backend (withInstances {
+          settings.inference = mainSelection;
+          testapp.settings.inference.instance = "missing";
         }))
-        && failsWith ["ai.testapp.proxy.key is set without `url`"] (evalApp backend {ai.testapp.proxy.key = work.key;})
-        && failsWith ["ai.testapp.proxy.url needs `key`"] (evalApp backend {
-          ai.testapp.proxy.url = "http://127.0.0.1:8318";
+        && failsWith ["ai.testapp.settings.inference.key is set without `url`"] (evalApp backend {ai.testapp.settings.inference.key = work.key;})
+        && failsWith ["ai.testapp.settings.inference.url needs `key`"] (evalApp backend {
+          ai.testapp.settings.inference.url = "http://127.0.0.1:8318";
         })
         && !(builtins.tryEval (builtins.deepSeq (resolved {
-            ai.testapp.normalized.proxy = lib.mkForce (root
+            ai.testapp.normalized.settings.inference = lib.mkForce (root
               // {
                 backend = "cliproxyapi";
                 url = "http://127.0.0.1:8317/v1";
@@ -685,27 +685,27 @@ in {
     # refuse it by name and run no CLIProxyAPI lowering. Given a test-only
     # Claude lowering, that backend gets only what its lowering sets: no
     # CLIProxyAPI settings and no launcher flags.
-    module-ai-proxy-registry = mkTest "ai-proxy-registry" (
+    module-ai-inference-registry = mkTest "ai-inference-registry" (
       lib.all (backend: let
         evaluate = evalAppWith [secondOwner] backend;
         second.instance = "second";
-        withClientKey = evaluate {ai.proxy = second // {clientKey = "main";};};
+        withClientKey = evaluate {ai.settings.inference = second // {clientKey = "main";};};
         switched = evaluate {
           ai =
             instances
             // {
-              proxy = {
+              settings.inference = {
                 clientKey = "main";
                 instance = "main";
               };
-              testapp.proxy = second;
+              testapp.settings.inference = second;
             };
         };
-        resolvedProxy = (evaluate {ai.proxy = second;}).config.ai.testapp.normalized.proxy;
-        claudeProxy = (import ../../packages/claude-code/lib/proxy.nix {inherit lib pkgs;}).withLowerings {
-          relay = {resolvedProxy, ...}: {settings.env.HTTPS_PROXY = resolvedProxy.url;};
+        resolvedInference = (evaluate {ai.settings.inference = second;}).config.ai.testapp.normalized.settings.inference;
+        claudeInference = (import ../../packages/claude-code/lib/inference.nix {inherit lib pkgs;}).withLowerings {
+          relay = {resolvedInference, ...}: {settings.env.HTTPS_PROXY = resolvedInference.url;};
         };
-        codexProxy = import ../../packages/chatgpt-codex/lib/proxy.nix {
+        codexInference = import ../../packages/chatgpt-codex/lib/inference.nix {
           inherit lib pkgs;
           inlineToml = import ../../packages/chatgpt-codex/lib/inlineToml.nix {inherit lib;};
         };
@@ -718,7 +718,7 @@ in {
                   default = {};
                 };
               }
-              {config = claudeProxy.config {inherit backend resolvedProxy;};}
+              {config = claudeInference.config {inherit backend resolvedInference;};}
             ];
           }).config.ai.claude.native.settings;
         # Real Claude and Codex modules selecting the second owner's instance.
@@ -726,25 +726,25 @@ in {
           ai = {
             claude.enable = true;
             codex.enable = true;
-            proxy = second;
+            settings.inference = second;
           };
         };
-        unsupported = runtime: "ai.${runtime}.proxy selects a `relay` proxy instance, which ${runtime} cannot use; it supports cliproxyapi.";
+        unsupported = runtime: "ai.${runtime}.settings.inference selects a `relay` proxy instance, which ${runtime} cannot use; it supports cliproxyapi.";
       in
-        resolvedProxy
+        resolvedInference
         == {
           backend = "relay";
           url = "http://127.0.0.1:8500";
         }
-        && failedMessages (evaluate {ai.proxy = second;}) == []
-        && failsWith ["ai.proxy.clientKey is set, but `ai.relay.instances.second` declares no clients."] withClientKey
-        && withClientKey.config.ai.testapp.normalized.proxy == null
-        && switched.config.ai.testapp.normalized.proxy == resolvedProxy
+        && failedMessages (evaluate {ai.settings.inference = second;}) == []
+        && failsWith ["ai.settings.inference.clientKey is set, but `ai.relay.instances.second` declares no clients."] withClientKey
+        && withClientKey.config.ai.testapp.normalized.settings.inference == null
+        && switched.config.ai.testapp.normalized.settings.inference == resolvedInference
         && failedMessages switched == []
         && relaySettings == {env.HTTPS_PROXY = "http://127.0.0.1:8500";}
-        && claudeProxy.launcherFlags {inherit backend resolvedProxy;} == []
-        && codexProxy.launcherFlags resolvedProxy == []
-        && failsWith ["ai.claims.proxy-instance.main: claimed by cliproxyapi and relay"] (evaluate {ai = instances // {relay.claims.proxy-instance = ["main"];};})
+        && claudeInference.launcherFlags {inherit backend resolvedInference;} == []
+        && codexInference.launcherFlags resolvedInference == []
+        && failsWith ["ai.claims.inference-instance.main: claimed by cliproxyapi and relay"] (evaluate {ai = instances // {relay.claims.inference-instance = ["main"];};})
         && failsWith [(unsupported "claude")] runtimes
         && failsWith [(unsupported "codex")] runtimes
         && runtimes.config.ai.claude.native.settings.apiKeyHelper == null

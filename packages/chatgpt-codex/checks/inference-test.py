@@ -1,5 +1,5 @@
 # cspell:ignore urandom
-"""Offline ai.proxy contract: the pinned Codex sends every request to the
+"""Offline ai.settings.inference contract: the pinned Codex sends every request to the
 selected proxy with the selected client key, through Home Manager's user
 config.toml and devenv's launcher. Mock proxies listen on loopback inside the
 build sandbox."""
@@ -143,7 +143,7 @@ def resolved(form, key):
 secret = "secret-" + os.urandom(16).hex() + " ' \" \\ $HOME $(touch injected) `touch injected`\nnext"
 helper_cases = 0
 for form, config in cases["configs"].items():
-    provider = tomllib.loads(Path(config).read_text())["model_providers"]["ai-proxy"]
+    provider = tomllib.loads(Path(config).read_text())["model_providers"]["ai-inference"]
     helper = provider["auth"]["command"]
     key_path.write_text(secret + "\n\n")
     environment = dict(os.environ, CODEX_PROXY_TEST_STATUS="0", CODEX_PROXY_TEST_VALUE=secret + "\n\n")
@@ -157,7 +157,7 @@ for form, config in cases["configs"].items():
         key_path.unlink()
     result = subprocess.run([helper], env=environment, capture_output=True, text=True)
     assert result.returncode != 0 and result.stdout == "", (form, "failed reference succeeded")
-    assert "ai.codex.proxy.key:" in result.stderr and secret not in result.stderr, form
+    assert "ai.codex.settings.inference.key:" in result.stderr and secret not in result.stderr, form
     helper_cases += 1
 print(f"verified {helper_cases} Codex helper cases: file, command, concat, multiline bytes and failures")
 
@@ -181,8 +181,8 @@ expect(
 )
 legacy = tmp / "legacy.toml"
 legacy.write_text(
-    'model_provider = "ai-proxy"\n[model_providers.ai-proxy]\n'
-    'name = "ai-proxy"\nbase_url = "http://127.0.0.1:8317/v1"\n'
+    'model_provider = "ai-inference"\n[model_providers.ai-inference]\n'
+    'name = "ai-inference"\nbase_url = "http://127.0.0.1:8317/v1"\n'
     'wire_api = "responses"\nexperimental_bearer_token = "sk-user-legacy"\n'
 )
 expect(
