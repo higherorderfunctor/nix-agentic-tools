@@ -708,6 +708,15 @@ class QueryTests(unittest.TestCase):
         self.db.execute("DELETE FROM captures WHERE id!='rated'")
         self.assertEqual(query.calculator_text([query.query(self.db, "sess_root", "tree")]), "Calculator: rates.json fitted 2026-10-30")
 
+    def test_report_keeps_the_last_nanosecond_before_midnight_on_its_day_and_escapes_model_names(self):
+        self.local_days()
+        self.estimable("late", .01, chars=40, model="bad\n\x1b[31m")
+        midnight = int(datetime.fromisoformat("2026-10-31T00:00:00-07:00").timestamp()) * 10**9
+        self.db.execute("UPDATE captures SET started_utc_ns=? WHERE id='late'", (midnight - 1,))
+        store = report.store_report(self.db)
+        self.assertEqual([day["day"] for day in store["captures"]["days"]], ["2026-10-30"])
+        self.assertTrue(query.calculator_text([store]).endswith("no rates: bad\\n\\x1b[31m; no context window: bad\\n\\x1b[31m"))
+
     def test_credit_units_partial_turns_and_disk_overlap_ambiguity(self):
         self.session("sess_root")
         self.session("sess_child", {"parentSessionId": "root"})

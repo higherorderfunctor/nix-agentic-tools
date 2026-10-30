@@ -46,7 +46,8 @@ CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:convers
     WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
 # Group keys over the chosen CTE. DAY is a call's local start day, in the process time zone (TZ), as report.py's --help names it.
-DAY = "date({}.started_utc_ns/1e9,'unixepoch','localtime')"
+# Integer division: /1e9 rounds a call in the last microsecond before midnight into the next day.
+DAY = "date({}.started_utc_ns/1000000000,'unixepoch','localtime')"
 MODEL = "json_extract(chosen.metadata_json,'$.model')"
 # A call's run identity over captures c: its root conversation, else its own. The exec exit summary draws one block per value.
 RUN_ROOT = """coalesce(nullif(json_extract(c.metadata_json,'$."kiro:root_conversation_id"'),''),
@@ -609,7 +610,7 @@ def calculator_text(reports):
     gaps = [f"{label}: {', '.join(names)}" for label, names in (
         ("no rates", [model for model in models if model not in rates]),
         ("no context window", [model for model in models if model not in windows])) if names]
-    return "; ".join([f"Calculator: rates.json fitted {', '.join(dates)}", *gaps])
+    return value("; ".join([f"Calculator: rates.json fitted {', '.join(dates)}", *gaps]))
 
 
 def main():
