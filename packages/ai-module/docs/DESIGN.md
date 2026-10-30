@@ -288,15 +288,19 @@ environment, never argv. The launcher atomically creates a 0700 directory at
 the declared environment is applied, so a declared `XDG_RUNTIME_DIR` or `TMPDIR`
 picks it as it does for the daemon. An existing directory must be owned by the
 current user and must not be a symlink; other inputs fail before chmod or
-writes. The runtime root must already exist. jq replaces every placeholder
-string with its secret as a JSON string, writes a 0600 temporary file, renames
-it to `<file key>.json` and exports `variable` with that path. Content and
-secrets are both known at evaluation, so the launcher refuses to build when a
-placeholder has no secret, a secret has no placeholder, or a `variable` repeats
-another file's or an environment name. Declared environment names and file
-variables cannot start with `_ai_`, the launcher's private namespace. JSON is
-the one format: YAML 1.2 readers take it as is. A daemon's own writes to the
-file are lost at the next start.
+writes. The runtime root must already exist. `lib/services.nix` owns
+`runtimeDirectoryPath` for root selection and `runtimeDirectoryName` for names
+under that root, shared with Airlock's certificate publication and client trust;
+`prepareRuntimeDirectory` applies the same owned, non-symlink 0700 directory
+rule to their directories. jq replaces every placeholder string with its secret
+as a JSON string, writes a 0600 temporary file, renames it to `<file key>.json`
+and exports `variable` with that path. Content and secrets are both known at
+evaluation, so the launcher refuses to build when a placeholder has no secret, a
+secret has no placeholder, or a `variable` repeats another file's or an
+environment name. Declared environment names and file variables cannot start
+with `_ai_`, the launcher's private namespace. JSON is the one format: YAML 1.2
+readers take it as is. A daemon's own writes to the file are lost at the next
+start.
 
 A `redact.types.secretFile` value, in `environment` or a file's `secrets`, is
 delivered as a path (`dev/fragments/redact/redact.md`, Secret files). The

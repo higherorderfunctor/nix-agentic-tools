@@ -198,6 +198,19 @@ in {
           inputs)
         ["devenv" "hm"]
     );
+    factory-mkRuntime-proxy-trust-capability = mkTest "mkRuntime-proxy-trust-capability" (
+      let
+        accepts = surfaceSupport:
+          (builtins.tryEval (ai.app.mkRuntime {
+            inherit pkgs surfaceSupport;
+            name = "probe";
+          })).success;
+      in
+        accepts {proxy.trust = true;}
+        && accepts {proxy.trust = false;}
+        && !(accepts {proxy.trust = "yes";})
+        && !(accepts {shell.trust = true;})
+    );
     # ── mkRuntime tests ───────────────────────────────────────────────
     # The per-backend seam is retired: delivery is ONE record-level `config`,
     # and a backend spec takes only installPackage, migrationConfig and
