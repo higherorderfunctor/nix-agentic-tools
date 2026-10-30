@@ -1,3 +1,5 @@
+<!-- cspell:words rrggbb -->
+
 # Kiro usage calibration evidence
 
 This collector records selected Kiro application request and response bodies in
@@ -350,6 +352,45 @@ status, and signals are preserved. Tracked chat runs as a child of the summary
 supervisor, retaining the terminal descriptors with its own process ID. Explicit
 help, version, login, and administrative commands skip the summary, including
 after recognized global options. Other commands have no automatic Kiro summary.
+
+`ai.kiro.cli.usageTracking.summary` styles that summary: the module writes it to
+a JSON file and passes it to the runtime's `cli --summary-theme FILE`. Every key
+is optional, and with no theme the summary stays plain text:
+
+- `border`: `none` (default), `ascii`, `double`, `heavy`, `rounded` or `single`
+  draws one box around the summary; the conversation table's dash rule becomes a
+  junction line such as `├──┤`.
+- `color`: `auto` (default) styles only when standard error is a terminal and
+  `NO_COLOR` is unset or empty; `always` or `never` force it.
+- `icons`: `true` prefixes the headline with Nerd Font U+F080 and replaces `⚠`
+  with U+F071.
+- `styles`: element name to style spec. Elements: `border`, `cached` (Cached
+  column), `credits`, `estimate` (every cell carrying `~`, so Cache hit always),
+  `header`, `headline`, `label` (conversation row labels), `model`, `muted` (`—`
+  cells), `number`, `rule` (the unboxed dash rule), `total` (the Total row,
+  under each cell's own style) and `warning` (the `⚠` line). With color on,
+  unset elements keep the defaults: bold `header`, `headline` and `total`, dim
+  `estimate` and `muted`, yellow `warning`; `""` clears one.
+
+A spec is space-separated tokens: `bold`, `dim`, `italic`, `reverse`,
+`underline`, a palette color (`black`, `red`, `green`, `yellow`, `blue`,
+`magenta`, `cyan`, `white`, or `bright-` before one), `#rrggbb` for a 24-bit
+foreground, and `on-` before a color or `#rrggbb` for a background. Palette
+colors follow the terminal's own scheme. An unknown key, value, element or token
+makes the summary report itself unavailable, naming it. Widths come from the
+plain text, so styles never shift the columns. The Nix option
+`ai.kiro.cli.usageTracking.summary` writes this file:
+
+```nix
+ai.kiro.cli.usageTracking.summary = {
+  border = "rounded";
+  icons = true;
+  styles = {
+    border = "bright-black";
+    total = "bold #ffaf00";
+  };
+};
+```
 
 These are full root-linked session totals and can include earlier work from a
 resumed session. Explicit root conversation IDs include related captures without

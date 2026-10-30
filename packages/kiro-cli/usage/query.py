@@ -11,6 +11,7 @@ import sys
 import credit_discount
 from disk_index import LINKS, session_id
 from display import RULE, table, tables, value
+import summary_theme
 
 
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
@@ -466,12 +467,13 @@ def plural(count, noun):
     return f"{count:,} {noun}{'s' if count != 1 else ''}"
 
 
-def render_summary(report, caveats=()):
-    """The exit summary: headline, model and conversation tables; one caveat line only when totals are suspect."""
+def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
+    """The exit summary: headline, model and conversation tables; one caveat line only when totals are suspect.
+    invocation_summary passes its --summary-theme; the default PLAIN theme renders unstyled text without a border."""
     captures = report["captures"]
     n, credits = captures["observations"], captures["metrics"]["credits"]
-    lines = [f"Kiro usage · {report['session'][:len('sess_') + 8]} · {report['scope']} · {plural(n, 'request')}"
-             f" · {value(credits_text(credits['observed_sum']))} credits"]
+    headline = (f"Kiro usage · {report['session'][:len('sess_') + 8]} · {report['scope']} · {plural(n, 'request')}"
+                f" · {value(credits_text(credits['observed_sum']))} credits")
     show_discount = shows_discount(captures)
     def row(label, source):
         hit, discount = hit_rate(source).get("percentage"), source["credit_discount"]["percentage"]
@@ -485,22 +487,37 @@ def render_summary(report, caveats=()):
     def order(model):
         total = model["metrics"]["credits"]["observed_sum"]
         return total is None, -(total or 0), model["requested_model"] is None, model["requested_model"] or ""
-    pools = captures["pools"]
-    if captures["available"]:
-        columns = ["Requests", "Credits", "In", "Out", "Cached", "Cache hit", *(["Discount"] if show_discount else [])]
-        conversations = [row(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
-                         if label != "Unknown" or pools[pool]["observations"]]
-        models, groups = tables([(["Model", *columns], [row(model["requested_model"], model) for model in sorted(captures["models"], key=order)]),
-                                (["Conversation", *columns], [*conversations, RULE, row("Total", captures)])], range(1, len(columns) + 1))
-        lines += ["", models, "", groups]
+    columns = ["Requests", "Credits", "In", "Out", "Cached", "Cache hit", *(["Discount"] if show_discount else [])]
+    available, pools = captures["available"], captures.get("pools")
+    conversations = [row(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
+                     if available and (label != "Unknown" or pools[pool]["observations"])]
+    models = [row(model["requested_model"], model) for model in sorted(captures["models"], key=order)] if available else []
     unknown, metered = credits["unknown"], captures.get("multiple_metering_events")
     duplicates = len(captures.get("duplicate_upstream_request_ids", []))
-    caveats = [*([] if captures["available"] else ["capture unavailable"]),
+    caveats = [*([] if available else ["capture unavailable"]),
                *([f"credits unknown for {unknown:,}/{plural(n, 'request')}"] if unknown else []),
                *([f"{captures['incomplete']:,} incomplete"] if captures.get("incomplete") else []),
                *([plural(duplicates, "duplicate request ID")] if duplicates else []),
                *([plural(metered, "multi-metered call")] if metered else []), *caveats]
-    return "\n".join(lines + (["⚠ " + "; ".join(caveats)] if caveats else []))
+    def lines(paint):
+        def cell(block, number, column, text):
+            # Block 1 ends [rule, Total]; ~ cells are estimates whatever their column.
+            if column is None or number == 0:
+                return paint(("rule" if column is None else "header",), text)
+            element = (("model", "label")[block] if column == 0 else "muted" if text == "—" else "estimate" if text.startswith("~")
+                       else {2: "credits", 5: "cached"}.get(column, "number"))
+            return paint(("total", element) if block == 1 and number == len(conversations) + 2 else (element,), text)
+        blocks = tables([(["Model", *columns], models), (["Conversation", *columns], [*conversations, RULE, row("Total", captures)])],
+                         range(1, len(columns) + 1), cell) if available else []
+        return [paint(("headline",), theme["icons"]["headline"] + headline),
+                *(line for block in blocks for line in ["", *block.split("\n")]),
+                *([paint(("warning",), theme["icons"]["warning"] + "; ".join(caveats))] if caveats else [])]
+    styled = lines(summary_theme.painter(theme))
+    if not theme["border"]:
+        return "\n".join(styled)
+    # The conversation table's rule sits after the headline, a blank, the model table, a blank and its own header and rows.
+    rule = 5 + len(models) + len(conversations) if available else None
+    return "\n".join(summary_theme.box(theme, lines(summary_theme.painter(summary_theme.PLAIN)), styled, {rule}))
 
 
 def main():

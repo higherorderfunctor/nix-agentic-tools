@@ -172,10 +172,11 @@ def settle_captures(path, invocation):
         return False  # invocation_summary reports the same failure.
 
 
-def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settled=True):
-    """Read only exact marker matches; the exit path settles them first."""
+def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settled=True, theme=None):
+    """Read only exact marker matches; the exit path settles them first. theme is the --summary-theme JSON path."""
     from capture import retained_bytes
     from query import query, render_summary
+    import summary_theme
     try:
         with read_only(path) as db:
             retained = retained_bytes(db)
@@ -194,11 +195,12 @@ def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settl
             # invocation, not one session, so only the last block carries them.
             caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, _, state in rows) else []),
                        *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
+            theme = summary_theme.load(theme)  # after the payload warning, which a refused theme must not hide
             for session in sessions:
                 report = query(db, session, "tree")
                 report["disk"]["refreshed"] = disk_refreshed
-                print("\n" + render_summary(report, caveats if session == sessions[-1] else ()), file=sys.stderr)
-    except (OSError, ValueError, sqlite3.Error) as error:
+                print("\n" + render_summary(report, caveats if session == sessions[-1] else (), theme), file=sys.stderr)
+    except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
         print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
 
 
@@ -228,7 +230,7 @@ def wait_command(command, arguments, environment):
             signal.signal(number, handler)
 
 
-def exec_command(path, port, warn_bytes, arguments):
+def exec_command(path, port, warn_bytes, arguments, theme=None):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -295,7 +297,7 @@ def exec_command(path, port, warn_bytes, arguments):
                     # unsettled wait never reports a clean refresh.
                     settled = settle_captures(path, invocation)
                     refreshed = refresh_disk_index(path, started) and settled
-                    invocation_summary(path, invocation, warn_bytes, disk_refreshed=refreshed, settled=settled)
+                    invocation_summary(path, invocation, warn_bytes, disk_refreshed=refreshed, settled=settled, theme=theme)
                     sys.stderr.flush()
                 except (OSError, ValueError):
                     # Only a failed summary sink is silenced. Redirect its fd so
@@ -320,7 +322,7 @@ def exec_command(path, port, warn_bytes, arguments):
         raise CommandError(f"cannot execute {command}: {error.strerror}; check the executable path and permissions") from error
 
 
-def cli(path, arguments, port, warn_bytes):
+def cli(path, arguments, port, warn_bytes, theme=None):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -329,7 +331,7 @@ def cli(path, arguments, port, warn_bytes):
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
     if command == "exec":
-        return exec_command(path, port, warn_bytes, tail)
+        return exec_command(path, port, warn_bytes, tail, theme)
     if command == "session" and tail:
         invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
     elif command == "index":
@@ -352,7 +354,8 @@ def main():
         child.add_argument("--port", type=int, required=True)
         if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
             child.add_argument("--warn-bytes", type=int, required=True)
-        if mode == "cli":
+        if mode == "cli":  # read by the exec summary only
+            child.add_argument("--summary-theme")
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":
             child.add_argument("--mitmdump", required=True)
@@ -361,7 +364,7 @@ def main():
     try:
         path = state_directory(args.state_dir)
         if args.mode == "cli":
-            return cli(path, args.arguments, args.port, args.warn_bytes)
+            return cli(path, args.arguments, args.port, args.warn_bytes, args.summary_theme)
         elif args.mode == "service":
             service(args, path)
         else:
