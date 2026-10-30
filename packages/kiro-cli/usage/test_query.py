@@ -333,7 +333,8 @@ class QueryTests(unittest.TestCase):
                         (context, json.dumps({"output_text_chars": chars}), ident))
 
     def test_estimates_fill_only_missing_counters_and_mark_coverage(self):
-        miss, hit = ((slope * 3.0 + .5034) / 603 for slope in (74, 20))  # full miss / full hit at 30,000 tokens
+        # Full miss / full hit at 30,000 tokens and no output, on the discount curves rates.json's opus entry migrated.
+        miss, hit = ((slope * 3.0 + .5034) / 603 for slope in (74, 20))
         self.estimable("miss", miss)
         self.estimable("hit", hit, conversation="child")
         self.db.execute("""UPDATE captures SET metadata_json=json_set(metadata_json,'$."kiro:root_conversation_id"','root') WHERE id='hit'""")
@@ -358,8 +359,10 @@ class QueryTests(unittest.TestCase):
         self.assertRegex(output, r"other-model\s+1\s+—\s+—\s+—\s+—\s+—")
 
     def test_estimated_fit_noise_is_not_a_cache_hit(self):
-        # Full-miss price with 5 chars: the fit leaves ~29 cached tokens, below 1% of input.
-        self.estimable("noise", (74 * 3.0 + .5034) / 603, chars=5)
+        # Full-miss price of 29,999 input tokens less 29 tokens' discount: below 1% of input.
+        rates = query.credit_discount.RATES["claude-opus-5.5"]
+        miss = rates["miss_input"] * 29999 + rates["output"] + rates["fixed_per_call"]
+        self.estimable("noise", miss - 29 * (rates["miss_input"] - rates["hit_input"]), chars=5)
         report = query.query(self.db, "sess_root")
         self.assertGreater(report["captures"]["estimates"]["cache_read_tokens"]["observed_sum"], 0)
         self.assertEqual(report["captures"]["estimates"]["cache_hit_rate"]["hits"], 0)
@@ -367,7 +370,8 @@ class QueryTests(unittest.TestCase):
     def test_estimates_respect_the_calls_exact_counters(self):
         estimate = query.credit_discount.estimate
         # Full-hit price on an exact 1,200-token input: cached is that input, never the ~29,999 guess.
-        hit = 20 / 603 / 1e4 * 1200 + query.credit_discount.OUTPUT_RATE * 1 + .5034 / 603
+        rates = query.credit_discount.RATES["claude-opus-5.5"]
+        hit = rates["hit_input"] * 1200 + rates["output"] + rates["fixed_per_call"]
         self.assertEqual(estimate("claude-opus-5.5", 3.0, hit, 4, input=1200)["cache_read_tokens"], 1200)
         self.assertEqual(estimate("claude-opus-5.5", 3.0, 1.0, 4, input=1200)["cache_read_tokens"], 0)
         guess = estimate("claude-opus-5.5", 3.0, hit, 4, output=2000)

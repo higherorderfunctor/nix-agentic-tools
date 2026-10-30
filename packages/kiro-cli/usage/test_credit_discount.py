@@ -64,6 +64,18 @@ class DiscountTests(unittest.TestCase):
         self.assertLess(discount.classify({**facts, "credits": baseline + 2 * discount.EPSILON})["raw_discount_score"], 0)
 
 
+class ModelFactsTests(unittest.TestCase):
+    def test_windows_come_from_the_snapshot_without_routers(self):
+        self.assertIn("auto", discount.FACTS["models"])
+        self.assertNotIn("auto", discount.WINDOWS)
+        self.assertEqual(discount.WINDOWS["claude-sonnet-4.5"], 200_000)
+        self.assertIsNone(discount.estimate("auto", 3.0, 1, 8))
+
+    def test_windowed_model_without_rates_has_no_cache_split(self):
+        self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, 1, 8),  # listed, never probed
+                         {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None})
+
+
 class DiscountQueryTests(unittest.TestCase):
     def setUp(self):
         self.fixture = test_query.QueryTests()

@@ -118,15 +118,10 @@ visible; unsupported cases stay unavailable. The compared initial calls retained
 identical delivered hooks/context, but this small run establishes neither
 percentile accuracy nor a transferable cache-hit model. Exact counters always
 win per call; a `~` cell adds estimates for calls that lack the exact counter,
-with (known/all) coverage. A call with a reported context percentage and a model
-with a known window (`claude-opus-5.5`: 1,000,000 tokens) estimates total tokens
-as that share of the window, output as one token per four output characters
-(text, tool-call arguments, and reasoning, counted as the response streams so
-omitted payload copies do not lower it, with the terminal response used for a
-kind that streamed no deltas), and input as the difference. Only models with
-fitted credit rates (`claude-opus-5.5`) and reported credits and a known or
-estimated output also estimate cached tokens, from the full-miss and full-hit
-curves below, clamped to the estimated input. Other calls stay unavailable. Hit
+with (known/all) coverage. Estimates need a reported context percentage and a
+model with a known window; cached tokens also need reported credits and the
+model's fitted rates in `usage/rates.json`. Other calls stay unavailable;
+[Token estimates](../usage/README.md#token-estimates) has the formulas. Hit
 percentage is the share of requests with cached tokens among requests with a
 cached value; an estimated split counts as a hit only at 1% of input or more,
 with partial coverage shown. If no captured conversation identity is available,
@@ -274,30 +269,50 @@ drop the most recent captures, but it cannot corrupt the database.
 
 ## Run the calibration experiment
 
-From a checkout, preview the paid experiment without calling Kiro:
+From a checkout, preview the paid experiment without calling Kiro, then run it:
 
 ```console
-python3 packages/kiro-cli/usage/calibration.py
-python3 packages/kiro-cli/usage/calibration.py --run
+python3 packages/kiro-cli/usage/calibration.py probe --models claude-sonnet-4.5,claude-haiku-4.5
+python3 packages/kiro-cli/usage/calibration.py probe --models claude-sonnet-4.5,claude-haiku-4.5 --run
 ```
 
-The explicit `--run` executes ten sequential non-interactive invocations using
-`claude-opus-5.5` at low effort: repeated medium input, input and output size
-variations, a three-turn conversation resumed by session ID, and a final repeat
-after more than six quiet minutes. These are experiment labels; a cold cache is
-not established. A unique run prefix reduces reuse from earlier experiments, but
-global context remains uncontrolled. Compare captured request hashes offline
+`--models` takes ids from `usage/models.json` (default `claude-opus-5.5`);
+routers and unlisted ids are refused. `--run` makes ten sequential
+non-interactive calls per model at low effort: a medium prompt and its warm
+repeat, a short and a long prompt, a short and a long reply, a three-turn
+conversation resumed by session ID, and a final repeat after more than six quiet
+minutes. Models interleave within each step, so every warm repeat follows its
+own cold call and the quiet wait is paid once. A model whose first call exits
+non-zero, such as one refusing `--effort low`, is recorded under
+`dropped_models` and the others continue.
+
+Each prompt family has its own agent file whose prompt starts with the user
+prompt's nonce, because the agent prompt leads every request: with one shared
+agent small calls hit its cached prefix, and with one shared output family
+`claude-haiku-5.5`'s long reply hit the prefix the short one had just written
+(0.0041 against 0.0067 credits). The labels are not verified cache states and
+global context remains uncontrolled; compare captured request hashes offline
 before interpreting cache differences. CLI invocation counts can differ from
 provider request counts.
 
 The script requires an existing collector database and checks complete retained
 captures with credits and context usage after every invocation. Missing or
 incomplete evidence stops the experiment without retrying paid calls.
-`--db /absolute/path/usage.sqlite3` selects a non-default database for these
-read-only checks; it must match the installed collector's state directory.
+`probe --db /absolute/path/usage.sqlite3` selects a non-default database for
+these read-only checks; it must match the installed collector's state directory.
 `--timeout 180` sets the per-command timeout. The script prints its private
 temporary workspace and manifest path, retains bounded logs and prompt fixtures
-outside the workspace, and records workspace changes. Keep those artifacts for
-offline attribution. Its final session-index step is nonfatal and prints a
-separate retry command if needed. Tests use fake executables and make no
-provider calls.
+outside the workspace, and records workspace changes and the `kiro-cli` version.
+Keep those artifacts for offline attribution. Its final session-index step is
+nonfatal and prints a separate retry command if needed. Tests use fake
+executables and make no provider calls.
+
+Refresh `usage/models.json` from the free model listing with
+`python3 packages/kiro-cli/usage/calibration.py models`.
+
+Findings of 2026-10-29 (`kiro-cli` 2.35.2, low effort):
+
+- The four probed models' `medium_delayed` repeats billed exactly their cold
+  credits, consistent with the cache expiring within six quiet minutes. In
+  interactive sessions every full miss followed at least 222 seconds idle,
+  consistent with a ~5 minute TTL.
