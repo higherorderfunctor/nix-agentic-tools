@@ -260,7 +260,7 @@ chunk rows short of `observed_chunks` describe replay completeness.
 Reports fill counters a call lacks with `~` estimates; reported counters always
 win per call, and a group mixing both sums exact and estimated values with
 (known/all) coverage. For a call with a reported context percentage `p` and a
-model with a known window `W` (`claude-opus-5.5`: 1,000,000 tokens):
+model with a known window `W`:
 
 - total `I = p/100 * W`, which includes output tokens once;
 - output `O = chars/4`, where chars counts `output_text` plus streamed
@@ -272,26 +272,36 @@ model with a known window `W` (`claude-opus-5.5`: 1,000,000 tokens):
   `reasoning_text` content), so neither source is counted twice;
 - input `I - O`.
 
+Windows come from `models.json`, a committed snapshot of the free
+`kiro-cli chat --list-models --format json` listing (context window and rate
+multiplier per model, plus the `kiro-cli --version` that printed it). Router ids
+(`auto`) are listed but get no window, since their real model is unknown;
+unlisted names such as `simple-task` have none either. Refresh the snapshot from
+a checkout with `python3 packages/kiro-cli/usage/calibration.py models`.
+
 When a call reports exact output or input but not every counter, those exact
 values replace `O` or `I - O` below, so an estimated cached split never exceeds
 the call's exact input.
 
-Cached tokens need reported credits, a known or estimated `O`, and fitted rates
-(`claude-opus-5.5` only):
-`cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`. The
-full-miss rate `a = 74/603/(W/100)` (12.272e-6 credits per token), full-hit rate
-`b = 20/603/(W/100)` (3.317e-6), and fixed cost `c = 0.5034/603` (0.000835)
-reuse the discount curves below; `o = 270e-6` is the fitted output rate. The
-full-hit curve's own intercept (0.5970/603) is not used. Other models get no
-cache estimate, and calls without a context percentage or a known window stay
-unavailable. An estimated split counts as a hit only when cached reaches 1% of
-input, which keeps fit noise (tens of tokens on the 1–5 character calibration
-calls) out of the hit percentage. The collector counts tool and reasoning
-characters live, by the same rule, into `summary_json` `tool_chars` and
-`reasoning_chars`, so omitted payload copies do not lower `O`. Captures
-finalized before those counts existed, and interrupted captures, which have no
-summary, fall back to counting retained events; an omitted copy there still
-lowers `O`.
+Cached tokens need reported credits, a known or estimated `O`, and the model's
+`rates.json` entry (`claude-opus-5.5` only, carried over from the full-miss and
+full-hit slopes and miss intercept of the discount curves below, with a fitted
+270e-6 output rate):
+`cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`, with
+full-miss and full-hit input rates `a` (`miss_input`) and `b` (`hit_input`),
+output rate `o` (`output`) and fixed cost `c` (`fixed_per_call`). Models with a
+window but no rates get total, input and output estimates and no cache split;
+calls without a context percentage or a known window stay unavailable.
+Digit-heavy text reads too few tokens (390 where chars/4 reads 173), and hidden
+thinking that context % counts but no streamed characters show is priced as
+input, so both understate cached. An estimated split counts as a hit only when
+cached reaches 1% of input, which keeps fit noise (tens of tokens on the 1–5
+character calibration calls) out of the hit percentage. The collector counts
+tool and reasoning characters live, by the same rule, into `summary_json`
+`tool_chars` and `reasoning_chars`, so omitted payload copies do not lower `O`.
+Captures finalized before those counts existed, and interrupted captures, which
+have no summary, fall back to counting retained events; an omitted copy there
+still lowers `O`.
 
 ## Experimental credit-discount diagnostic
 

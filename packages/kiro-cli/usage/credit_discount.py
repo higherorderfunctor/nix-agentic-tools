@@ -1,6 +1,8 @@
 """Experimental credit-price fits: a discount diagnostic and ~token/cache estimates; never exact counters."""
 
+import json
 import math
+from pathlib import Path
 
 PROFILE = "opus-5.5-low-text1to5-context-v1"
 EPSILON = 1e-6  # Numerical credit tolerance, not a statistical confidence interval.
@@ -11,11 +13,15 @@ ASSUMPTIONS = (
     "Context is reported percent; no context-window or token conversion.",
     "Credit discounts can reflect billing/routing; they do not prove cache hits.",
 )
-# Fitted curves: credits*SCALE = slope*context% + intercept, for full cache misses and full hits.
+PROFILE_MODEL = "claude-opus-5.5"
+# The profile's curves: credits*SCALE = slope*context% + intercept, for full cache misses and full hits. Frozen
+# with PROFILE; rates.json's entry for PROFILE_MODEL started from them, and refits there leave the profile alone.
 SCALE, MISS, HIT = 603, (74, .5034), (20, .5970)
-OUTPUT_RATE = 270e-6  # Fitted credits per output token.
-WINDOWS = {"claude-opus-5.5": 1_000_000}  # Context-window tokens; context% converts only for these.
-FITTED = {"claude-opus-5.5"}  # Models whose credit rates above were fitted.
+MODELS_PATH, RATES_PATH = (Path(__file__).with_name(name) for name in ("models.json", "rates.json"))
+FACTS = json.loads(MODELS_PATH.read_text())  # `calibration.py models` snapshots kiro-cli chat --list-models.
+ROUTERS = {"auto"}  # Listed, but routes to an unknown real model, so its context% has no fixed window.
+WINDOWS = {model: facts["context_window_tokens"] for model, facts in FACTS["models"].items() if model not in ROUTERS}
+RATES = json.loads(RATES_PATH.read_text())  # Fitted credits per token and per call, per model.
 
 
 def finite(number):
@@ -29,7 +35,7 @@ def count(value):
 def preflight(facts):
     """Reject scalar mismatches before callers inspect retained event evidence."""
     checks = (
-        (facts.get("model") in FITTED, "unsupported_model"),
+        (facts.get("model") == PROFILE_MODEL, "unsupported_model"),
         (facts.get("effort") == "low", "unsupported_effort"),
         (facts.get("complete") is True, "incomplete_capture"),
         (count(facts.get("chars")) and 1 <= facts["chars"] <= 5, "unsupported_output_length"),
@@ -93,7 +99,7 @@ def add(report, result, capture_id):
 def estimate(model, context, credits, chars, output=None, input=None):
     """~Tokens for one call: total from context% and window, output ~chars/4, cached from credits.
 
-    Per-token rates are the miss/hit slopes over the window; the miss intercept is the fixed cost.
+    Rates are the model's fitted credits per miss/hit input token and output token, plus a fixed cost per call.
     Exact output/input of the same call replace their guesses, so cached never exceeds exact input.
     Unknown parts are None: no window means nothing; no fitted rates, credits or output means no cache split.
     """
@@ -106,8 +112,9 @@ def estimate(model, context, credits, chars, output=None, input=None):
     if not count(input):
         input = max(total - output, 0) if output is not None else None
     result = {"total_tokens": total, "input_tokens": input, "output_tokens": output, "cache_read_tokens": None}
-    if input is not None and output is not None and model in FITTED and finite(credits):
-        miss, hit = (slope / SCALE / (window / 100) for slope in (MISS[0], HIT[0]))
-        cached = (miss * input + OUTPUT_RATE * output + MISS[1] / SCALE - credits) / (miss - hit)
+    rates = RATES.get(model)
+    if input is not None and output is not None and rates and finite(credits):
+        miss = rates["fixed_per_call"] + rates["miss_input"] * input + rates["output"] * output  # full-miss price
+        cached = (miss - credits) / (rates["miss_input"] - rates["hit_input"])
         result["cache_read_tokens"] = round(min(max(cached, 0), input))
     return result

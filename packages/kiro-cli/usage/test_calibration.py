@@ -28,6 +28,14 @@ if pathlib.Path(sys.argv[0]).name == "kiro-usage":
     os.execvp(args[1], args[1:])
 if args[:2] == ["agent", "validate"]:
     sys.exit(0)
+if args == ["--version"]:
+    print("kiro-cli 9.9.9")
+    sys.exit(0)
+if "--list-models" in args:
+    print(json.dumps({"models": [{"model_id": "auto", "model_name": "auto", "context_window_tokens": 1000000, "rate_multiplier": 1.0},
+                                 {"model_id": "m-1", "model_name": "m-1", "context_window_tokens": 200000, "rate_multiplier": 0.4}],
+                      "default_model": "auto"}))
+    sys.exit(0)
 current = json.loads(state.read_text()) if state.exists() else []
 if "--list-sessions" in args:
     print(json.dumps([{"cwd": os.getcwd(), "sessions": [{"sessionId": value} for value in current], "complete": True}]))
@@ -42,7 +50,7 @@ if mode in ("term", "hup"):
 if mode == "timeout":
     subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
     time.sleep(20)
-if mode == "fail":
+if mode == "fail" or mode == "reject:" + args[args.index("--model") + 1]:
     sys.exit(7)
 if "--resume-id" in args:
     session = args[args.index("--resume-id") + 1]
@@ -79,8 +87,8 @@ class CalibrationTests(unittest.TestCase):
                             "CALIBRATION_STATE": str(self.root / "sessions.json"),
                             "CALIBRATION_DB": str(self.db_path)}
 
-    def execute(self, mode="normal", run=True):
-        arguments = ["calibration", "--db", str(self.db_path), "--timeout", "0.6"]
+    def execute(self, mode="normal", run=True, models=None, command="probe"):
+        arguments = ["calibration", command, "--db", str(self.db_path), "--timeout", "0.6"] + (["--models", models] if models else [])
         if run:
             arguments.append("--run")
         output = io.StringIO()
@@ -96,7 +104,7 @@ class CalibrationTests(unittest.TestCase):
                 os.umask(old_umask)
         text = output.getvalue()
         if not run:
-            return status, None, []
+            return status, text, []
         marker = "Artifacts and workspace retained at: "
         run_root = Path(next(line[len(marker):] for line in text.splitlines() if line.startswith(marker)))
         self.addCleanup(shutil.rmtree, run_root)
@@ -125,11 +133,66 @@ class CalibrationTests(unittest.TestCase):
         self.assertTrue(all(call["status"] == "complete" and call["capture_count"] == 1
                             and call["workspace_changes"] == [] for call in manifest["calls"]))
         self.assertEqual(manifest["index_exit_code"], 0)
+        self.assertEqual(manifest["kiro_cli_version"], "9.9.9")
+        agents = [call[call.index("--agent") + 1] for call in calls]
+        prompt = lambda agent: json.loads((root / f"workspace/.kiro/agents/{agent}.json").read_text())["prompt"]
+        self.assertEqual(len({prompt(agent) for agent in agents}), 6)
+        # A shared output family let output_long hit the prefix output_short had just written.
+        self.assertNotEqual(agents[4], agents[5])
+        self.assertNotEqual(calls[4][-1].splitlines()[0], calls[5][-1].splitlines()[0])
+        self.assertEqual({agents[index] for index in (0, 1, 9)}, {"usage-calibration-claude-opus-5.5-medium"})
+        self.assertEqual({agents[index] for index in (6, 7, 8)}, {"usage-calibration-claude-opus-5.5-conversation"})
+        self.assertEqual(len({agents[index] for index in (2, 3, 4)}), 3)
+        self.assertEqual(len(list((root / "results").glob("*.agent-validation.*"))), 12)  # stdout and stderr of six
         self.assertLess(sum(path.stat().st_size for path in root.rglob("*") if path.is_file()), 1_000_000)
         self.assertTrue(all(path.stat().st_mode & 0o077 == 0 for path in root.rglob("*")))
 
+    def test_models_interleave_per_step_with_one_delay(self):
+        status, (manifest, root, output), calls = self.execute(models="claude-opus-5.5,claude-haiku-4.5")
+        self.assertEqual((status, len(calls)), (0, 20))
+        self.assertIn("20 CLI invocations", output)
+        self.assertEqual(output.count("Waiting"), 1)
+        order = [(call[call.index("--model") + 1], record["label"]) for call, record in zip(calls, manifest["calls"])]
+        opus, haiku = "claude-opus-5.5", "claude-haiku-4.5"
+        self.assertEqual(order[:6], [(opus, "medium_cold"), (opus, "medium_warm"), (haiku, "medium_cold"),
+                                     (haiku, "medium_warm"), (opus, "size_short"), (haiku, "size_short")])
+        self.assertEqual(order[-2:], [(opus, "medium_delayed"), (haiku, "medium_delayed")])
+        self.assertTrue(all(call[call.index("--agent") + 1].startswith(f"usage-calibration-{model}-")
+                            for call, (model, _) in zip(calls, order)))
+        self.assertTrue((root / "workspace/.kiro/agents/usage-calibration-claude-haiku-4.5-medium.json").exists())
+        self.assertNotEqual(calls[0][-1], calls[2][-1])  # per-model nonces
+        resumes = [call[call.index("--resume-id") + 1] for call in calls if "--resume-id" in call]
+        self.assertEqual(resumes, ["sess_13", "sess_14", "sess_13", "sess_14"])
+
+    def test_model_refusing_its_first_call_is_dropped_and_the_rest_continue(self):
+        status, (manifest, _, output), calls = self.execute("reject:claude-haiku-4.5", models="claude-opus-5.5,claude-haiku-4.5")
+        self.assertEqual((status, len(calls)), (0, 11))
+        self.assertIn("claude-haiku-4.5", manifest["dropped_models"])
+        self.assertEqual(sum(record["model"] == "claude-haiku-4.5" for record in manifest["calls"]), 1)
+        self.assertIn("Dropped claude-haiku-4.5", output)
+        (self.root / "sessions.json.calls").unlink()
+        status, (manifest, _, _), calls = self.execute("reject:claude-opus-5.5")
+        self.assertEqual((status, len(calls)), (1, 1))
+        self.assertIn("every model failed", manifest["error"])
+
+    def test_unknown_and_router_models_are_refused_before_any_call(self):
+        for model in ("auto", "simple-task", "claude-opus-5.5,typo"):
+            with self.subTest(model=model), self.assertRaises(SystemExit), \
+                    contextlib.redirect_stderr(io.StringIO()), \
+                    patch.object(calibration.subprocess, "Popen", side_effect=AssertionError("CLI called")):
+                self.execute(run=False, models=model)
+
+    def test_models_refresh_snapshots_the_listing_sorted(self):
+        target = self.root / "models.json"
+        with patch.dict(os.environ, self.environment), patch.object(calibration.discount, "MODELS_PATH", target), \
+                patch.object(sys, "argv", ["calibration", "models"]):
+            self.assertEqual(calibration.main(), 0)
+        self.assertEqual(target.read_text(), json.dumps({"kiro_cli_version": "9.9.9", "models": {
+            "auto": {"context_window_tokens": 1000000, "rate_multiplier": 1.0},
+            "m-1": {"context_window_tokens": 200000, "rate_multiplier": 0.4}}}, indent=2, sort_keys=True) + "\n")
+
     def test_run_seed_changes_prefix(self):
-        self.assertNotEqual(calibration.prompts("one")[0][1], calibration.prompts("two")[0][1])
+        self.assertNotEqual(calibration.prompts("one")["medium_cold"], calibration.prompts("two")["medium_cold"])
 
     def test_missing_or_incomplete_capture_stops_after_first_call(self):
         for mode in ("no-captures", "incomplete"):
@@ -157,7 +220,7 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual((status, len(calls)), (1, 1))
         self.assertIn("timed out", manifest["calls"][0]["error"])
         self.assertLess(len(manifest["calls"][0]["error"]), 100)
-        self.assertIn("partial output", (root / "results/medium_cold.stdout.log").read_text())
+        self.assertIn("partial output", (root / "results/claude-opus-5.5.medium_cold.stdout.log").read_text())
 
     def test_success_does_not_wait_for_descendant_holding_output(self):
         started = time.monotonic()
@@ -179,7 +242,7 @@ class CalibrationTests(unittest.TestCase):
                 self.assertEqual((status, len(calls)), (1, 1))
                 self.assertEqual(manifest["calls"][0]["status"], "failed")
                 self.assertIn("received signal", manifest["error"])
-                self.assertIn("partial output", (root / "results/medium_cold.stdout.log").read_text())
+                self.assertIn("partial output", (root / "results/claude-opus-5.5.medium_cold.stdout.log").read_text())
 
     def test_logs_keep_bounded_head_and_tail(self):
         code = "import sys;sys.stdout.write('HEAD'+('x'*100000)+'TAIL')"
