@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import re
 import unittest
 
 import credit_discount as discount
@@ -118,7 +119,9 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertIn("~62.5% (8/10)", output)
         self.assertIn("not observed cache hits", output)
         output = query.render_summary(report)
-        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~70%\s+~62%\n")
+        self.assertRegex(output, r"Cache hit  Discount\nclaude-opus-5.5\s+10\s+1.35\s+~146K\s+~183\s+~55.6K\s+~70%\s+~62%\n")
+        for label, discount in (("Main", "50"), ("Sub/WF", "75"), ("Total", "62")):
+            self.assertRegex(output, rf"\n{re.escape(label)}\s+\d+\s+[\d.]+\s+\S+\s+\S+\s+\S+\s+~\d+%\s+~{discount}%\n?")
         self.assertNotIn("not observed cache hits", output)
         self.db.execute("UPDATE captures SET cache_read_tokens=0,input_tokens=100,output_tokens=2")
         updated = query.query(self.db, "sess_root", "tree")["captures"]
@@ -156,7 +159,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertIn("Discount %", output)
         self.assertIn("Profile anomalies: 1", output)
         self.assertRegex(output, r"claude-opus-5.5\s+1\s.*\s1.000000\s+—\n")  # Discount % stays unavailable
-        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+1\s+1.00\s+~18.0K\s+~0%\s+—\n")
+        self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+1\s+1.00\s+~18.0K\s+~1\s+~0\s+~0%\s+—\n")
 
     def test_retained_terminal_and_reasoning_proof_are_required(self):
         ident = self.add(FIXTURE[0], extra_output={"type": "reasoning", "summary": []})

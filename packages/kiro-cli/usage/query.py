@@ -10,7 +10,7 @@ import sys
 
 import credit_discount
 from disk_index import LINKS, session_id
-from display import table, value
+from display import RULE, table, tables, value
 
 
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
@@ -467,17 +467,19 @@ def plural(count, noun):
 
 
 def render_summary(report, caveats=()):
-    """The exit summary: headline, model table and pool line; one caveat line only when totals are suspect."""
+    """The exit summary: headline, model and conversation tables; one caveat line only when totals are suspect."""
     captures = report["captures"]
     n, credits = captures["observations"], captures["metrics"]["credits"]
     lines = [f"Kiro usage · {report['session'][:len('sess_') + 8]} · {report['scope']} · {plural(n, 'request')}"
              f" · {value(credits_text(credits['observed_sum']))} credits"]
     show_discount = shows_discount(captures)
-    def row(model):
-        item, estimated = counter_item(model, "total_tokens")
-        hit, discount = hit_rate(model).get("percentage"), model["credit_discount"]["percentage"]
-        return [model["requested_model"], model["observations"], credits_text(model["metrics"]["credits"]["observed_sum"]),
-                None if item["observed_sum"] is None else "~" * estimated + tokens_text(item["observed_sum"]),
+    def row(label, source):
+        hit, discount = hit_rate(source).get("percentage"), source["credit_discount"]["percentage"]
+        def tokens(name):
+            item, estimated = counter_item(source, name)
+            return None if item["observed_sum"] is None else "~" * estimated + tokens_text(item["observed_sum"])
+        return [label, source["observations"], credits_text(source["metrics"]["credits"]["observed_sum"]),
+                *(tokens(name) for name in ("input_tokens", "output_tokens", "cache_read_tokens")),
                 None if hit is None else f"~{hit:.0f}%",
                 *([None if discount is None else f"~{discount:.0f}%"] if show_discount else [])]
     def order(model):
@@ -485,11 +487,12 @@ def render_summary(report, caveats=()):
         return total is None, -(total or 0), model["requested_model"] is None, model["requested_model"] or ""
     pools = captures["pools"]
     if captures["available"]:
-        columns = ["Model", "Requests", "Credits", "Tokens", "Cache hit", *(["Discount"] if show_discount else [])]
-        lines += ["", table(columns, [row(model) for model in sorted(captures["models"], key=order)], range(1, len(columns))), "",
-                  "    ".join(f"{label}  {pool['observations']:,} req · {value(credits_text(pool['metrics']['credits']['observed_sum']))} cr"
-                             for label, pool in (("Main conversation", pools["root_conversation"]), ("Subagents/workflows", pools["other_linked_conversations"]),
-                                                 ("Unknown", pools["unknown"])) if label != "Unknown" or pool["observations"])]
+        columns = ["Requests", "Credits", "In", "Out", "Cached", "Cache hit", *(["Discount"] if show_discount else [])]
+        conversations = [row(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
+                         if label != "Unknown" or pools[pool]["observations"]]
+        models, groups = tables([(["Model", *columns], [row(model["requested_model"], model) for model in sorted(captures["models"], key=order)]),
+                                (["Conversation", *columns], [*conversations, RULE, row("Total", captures)])], range(1, len(columns) + 1))
+        lines += ["", models, "", groups]
     unknown, metered = credits["unknown"], captures.get("multiple_metering_events")
     duplicates = len(captures.get("duplicate_upstream_request_ids", []))
     caveats = [*([] if captures["available"] else ["capture unavailable"]),

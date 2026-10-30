@@ -87,7 +87,7 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual(output.getvalue().count("Kiro usage · sess_root · tree · 2 requests"), 1)
             self.assertNotIn("sess_other", output.getvalue())
             self.assertNotIn("Kiro usage · sess_child", output.getvalue())
-            self.assertIn("Subagents/workflows  2 req", output.getvalue())
+            self.assertRegex(output.getvalue(), r"Sub/WF\s+2\s")
             self.assertNotIn("Unknown", output.getvalue())
 
     @staticmethod

@@ -67,13 +67,13 @@ launcher is also supported: the identical proxy and CA environment passes its
 conflict checks. No second collector starts.
 
 After `kiro-usage exec kiro-cli` or `kiro-usage exec kiro-cli-chat` exits, the
-tool prints model totals and a pooled credit/token summary to standard error.
-Kiro inherits the terminal's input and output directly; the summary leaves
-standard output, exit status, and signals intact. Tracked chat runs as a child
-of the summary supervisor, with its own process ID and the same terminal
-descriptors. Explicit help, version, login, and administrative commands skip the
-summary, including when recognized global options precede them. Other commands
-run without a Kiro summary.
+tool prints model and conversation tables (requests, credits, input, output and
+cached tokens, cache hit) to standard error. Kiro inherits the terminal's input
+and output directly; the summary leaves standard output, exit status, and
+signals intact. Tracked chat runs as a child of the summary supervisor, with its
+own process ID and the same terminal descriptors. Explicit help, version, login,
+and administrative commands skip the summary, including when recognized global
+options precede them. Other commands run without a Kiro summary.
 
 A local proxy marker identifies captures from this invocation, and their
 recorded conversation identities select the sessions to report. The tool does
