@@ -80,9 +80,9 @@ duplicate fields, non-loopback addresses, and other arguments except
 An `ai.airlock.instances.<name>` entry runs `airlock-<name>` on its loopback
 port (default 8318) through `ai.services`, on Home Manager and devenv alike.
 Selecting it defaults both `HTTP_PROXY` and `HTTPS_PROXY` to that listener for
-supported runtimes. HTTPS uses CONNECT, preserving credentials and TLS. Plain
-HTTP requests through Airlock currently fail; HTTP forwarding comes in a later
-stack change.
+supported runtimes. HTTPS uses CONNECT, preserving credentials; opaque tunnels
+preserve TLS. Plain HTTP requests through Airlock currently fail; HTTP
+forwarding comes in a later stack change.
 
 ```nix
 ai.airlock.instances.main = {};
@@ -116,10 +116,28 @@ config, in the service's private runtime directory
 (`$XDG_RUNTIME_DIR/ai-service-airlock-<name>`). Airlock creates or validates it
 before listening, a restart reuses it, and a new runtime directory, for example
 after logout, gets a new CA; running clients must be relaunched to load it.
-Nothing installs trust: a client must trust that `ca.pem` itself.
 
-The CA key is readable by same-user processes; isolating the service under a
-separate uid is future work.
+On Linux, when a runtime selects an intercepting instance and enables `ai.jail`
+(or its runtime jail), the shared selection lowering masks `ca.key` as an empty
+read-only file, leaving `ca.pem` readable. The jail resolves the path at launch
+with the service's own runtime-directory helper. Without the jail, same-user
+processes can read the key; isolating the service under a separate uid is future
+work.
+
+An intercepting instance registers an optional trust helper on the shared
+network proxy entry. Claude's managed launcher sets `NODE_EXTRA_CA_CERTS` to
+that CA before startup; if the calling environment already names an extra-CA
+file, the helper creates a private bundle containing it followed by the instance
+CA. Start the service before launching Claude: a missing CA stops the launch
+with an instruction to start it. Opaque instances change no CA trust. The helper
+and service must see the same `XDG_RUNTIME_DIR` or fallback `TMPDIR` to find the
+same runtime CA.
+
+An explicit `ai.claude.native.settings.env.NODE_EXTRA_CA_CERTS` wins and is
+passed at startup instead of the instance's bundle. Setting Claude's package to
+null disables its managed launcher and warns that trust must be set manually.
+Other runtimes selecting an intercepting instance warn that TLS will fail
+without separately configured trust. No system trust store is changed.
 
 ## Selective TLS interception
 
@@ -233,5 +251,7 @@ points.
 registration, interception settings, selection defaults and overrides, and
 Claude settings delivery. `checks.airlock-instance-runtime` starts each
 backend's generated service launcher, requests `/health` at a configured
-nondefault port and checks the runtime CA's reuse across restarts. Rust protocol
+nondefault port and checks the runtime CA's reuse across restarts. It also
+starts a mock Claude through the generated launcher to check CA delivery, native
+and inherited extra-CA values, and refusal when the CA is missing. Rust protocol
 tests run through the Nix package's `doCheck`.
