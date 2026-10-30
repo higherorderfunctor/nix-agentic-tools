@@ -91,6 +91,11 @@ in {
             default = true;
             description = "Whether the instance runs; selecting a disabled instance fails evaluation.";
           };
+          trust = lib.mkOption {
+            type = lib.types.nullOr lib.types.package;
+            default = null;
+            description = "For a TLS-intercepting instance: an executable taking one inherited PEM bundle argument (empty for none) and printing the extra-CA file path. The launcher exports that path before using exec to start the client directly. It fails if the instance CA is unavailable. Its optional passthru.jailPermissions function contributes jail.nix permissions when the selected runtime is jailed.";
+          };
         };
     });
     default = {};
@@ -98,5 +103,13 @@ in {
     visible = false;
     description = "Network proxy instances registered by owners, who claim each name in `ai.claims.proxy-instance`. Separate from inference instances.";
   };
+  # Trust follows an effective protocol origin, not a selector whose protocols
+  # were overridden or opted out. The runtime may also replace normalized values.
+  resolveTrust = registry: selection: protocols: let
+    entry = selected registry selection;
+  in
+    if (protocols.https != null && protocols.https == (entry.https or null)) || (protocols.https == null && protocols.http != null && protocols.http == (entry.http or null))
+    then entry.trust or null
+    else null;
   resolvedType = lib.types.submodule {options = protocolOptions;};
 }

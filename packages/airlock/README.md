@@ -117,11 +117,58 @@ runtime directory (`$XDG_RUNTIME_DIR/ai-service-airlock-<name>`). The service
 runs `airlock ca init` on it before `serve --ca-directory` starts, so `ca.pem`
 exists before any client reads it. A restart reuses the CA, and a new runtime
 directory, for example after logout, gets a new one; running clients must be
-relaunched to load it. Nothing installs trust: a client must trust that `ca.pem`
-itself.
+relaunched to load it.
 
-The CA key is readable by same-user processes; isolating the service under a
-separate uid is future work.
+On Linux, when a runtime selects an intercepting instance and enables `ai.jail`
+(or its runtime jail), the shared selection lowering masks `ca.key` as an empty
+read-only file, leaving `ca.pem` readable. This applies to every jailed runtime
+that selects the instance, even without CA trust delivery or with a native CA
+override. The jail resolves the path at launch with the service's own
+runtime-directory helper and refuses launch with a named error if the key is
+missing or inaccessible. Start the service with the same `XDG_RUNTIME_DIR` or
+fallback `TMPDIR` first, and allow the jailed launcher to access the private
+directory so it can check and mask the key. The mask covers only the selected
+key path resolved at launch, not keys in other runtime directories or keys
+created after launch. Relaunch clients after recreating a runtime directory. The
+mask blocks direct file reads; it does not isolate same-user IPC such as the
+user systemd manager, which can start processes outside the jail. Without the
+jail, same-user processes can read the key directly; isolating the service under
+a separate uid is future work.
+
+The CA has no name constraints: Claude and its Node/Bun child processes trust it
+for any hostname. Airlock reuses the CA across destination changes; name
+constraints would require regenerating it when those destinations change. The
+key mask limits direct key reads within the jail, with the boundaries above.
+
+An intercepting instance registers an optional trust helper on the shared
+network proxy entry. Claude's managed launcher sets `NODE_EXTRA_CA_CERTS` before
+startup. With no inherited extra-CA file it uses the published instance
+certificate directly. Otherwise the helper composes the inherited file followed
+by the instance CA, writes a temporary file and atomically renames it to
+`<sha256 of inputs>.pem` in a 0700 `ai-service-airlock-trust` directory under
+`XDG_RUNTIME_DIR`, or `ai-service-<uid>-airlock-trust` under the `TMPDIR`/`/tmp`
+fallback. Services and clients share runtime-root selection and directory
+naming. Identical inputs reuse the file across concurrent and later launches.
+Bundles are not deleted per launch: their number is bounded by distinct input CA
+contents, and they live on the runtime tmpfs until it is cleared. When using a
+`TMPDIR` or `/tmp` fallback instead, they follow that directory's lifetime.
+
+The service publishes only `ca.pem` in a sibling `.trust` directory, with the
+service runtime directory's ownership rules; the client reads only that copy.
+The launcher execs the real command directly, preserving its exit status,
+signals and inherited file descriptors. Start the service before launching
+Claude: a missing CA stops the launch with an instruction to start it. Opaque
+instances change no CA trust. The helper and service must see the same
+`XDG_RUNTIME_DIR` or fallback `TMPDIR` to find the same runtime CA.
+
+A native `ai.claude.native.settings.env.NODE_EXTRA_CA_CERTS` supplies the
+extra-CA file instead of the ambient value; the helper appends Airlock's CA to
+either one. When the managed launcher delivers trust, that native key is omitted
+from the generated settings env so Claude cannot replace the composed startup
+value. Setting Claude's package to null disables its managed launcher and warns
+that trust must be set manually. Other runtimes selecting an intercepting
+instance warn that TLS will fail without separately configured trust. No system
+trust store is changed.
 
 ## Selective TLS interception
 
@@ -244,5 +291,15 @@ points.
 registration, interception settings, selection defaults and overrides, and
 Claude settings delivery. `checks.airlock-instance-runtime` starts each
 backend's generated service launcher, requests `/health` at a configured
-nondefault port and checks the runtime CA's reuse across restarts. Rust protocol
-tests run through the Nix package's `doCheck`.
+nondefault port and checks the runtime CA's reuse across restarts. It also
+starts a mock Claude through the generated launcher to check CA delivery, native
+and inherited extra-CA values, and refusal when the CA is missing. In CI the
+jail mask is checked structurally, and missing-key launch refusals run before
+bubblewrap; the CI build sandbox cannot run the real jail. Build
+`checks.airlock-instance-jail-live` and run its `bin/airlock-instance-jail-live`
+by hand on Linux to check the real service key is hidden, its certificate stays
+readable, and Claude's trust helper runs inside the jail. That live run has no
+structural fallback. Claude uses its installed jailed launcher, including with a
+native CA override; the Codex-profile probe substitutes a test command and does
+not exercise Codex's installed launcher. Rust protocol tests run through the Nix
+package's `doCheck`.

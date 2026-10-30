@@ -7,12 +7,16 @@
 backend: {
   config,
   lib,
+  pkgs,
   ...
 }: let
+  caDirectory = "ca";
   # The CA directory, beside the rendered config in the runtime directory.
-  caPath = ''"''${AIRLOCK_CONFIG%/*}/ca"'';
+  caPath = ''"''${AIRLOCK_CONFIG%/*}/${caDirectory}"'';
   instances = import ../../ai-module/lib/instances.nix {inherit lib;};
   intercepting = instance: instance.settings.interception != null;
+  owner = "airlock";
+  trust = import ../lib/trust.nix {inherit caDirectory lib pkgs;};
   withoutNulls = lib.filterAttrs (_: value: value != null);
 in {
   imports = [
@@ -22,16 +26,13 @@ in {
       arguments = instance:
         ''serve --config "$AIRLOCK_CONFIG"''
         + lib.optionalString (intercepting instance) " --ca-directory ${caPath}";
-      inherit backend;
+      inherit backend owner;
       defaultPort = 8318;
       derived = {instance, ...}: {listen = "127.0.0.1:${toString instance.port}";};
-      owner = "airlock";
       packagePath = "airlock";
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "airlock";
-      # `serve` only loads a CA, so `ca init` creates it before `serve` starts.
-      preStart = instance:
-        lib.optionalString (intercepting instance)
-        "${lib.getExe instance.package} ca init ${caPath}";
+      # `serve` only loads a CA; publishing runs `ca init` first, which creates it.
+      preStart = instance: lib.optionalString (intercepting instance) (trust.publish instance.package);
       # Keep plain instances' config hashes stable: adding null fields would
       # change their service launchers and restart them on upgrade.
       render = settings: {
@@ -75,10 +76,14 @@ in {
   config.ai = {
     airlock.claims.proxy-instance = builtins.attrNames config.ai.airlock.instances;
     internal.proxyInstances =
-      lib.mapAttrs (_: instance: {
+      lib.mapAttrs (name: instance: {
         inherit (instance) enable;
         http = instances.origin instance;
         https = instances.origin instance;
+        trust =
+          if instance.settings.interception == null
+          then null
+          else trust.helper (instances.serviceName owner name);
       })
       config.ai.airlock.instances;
   };
