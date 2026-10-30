@@ -289,5 +289,214 @@ class CalibrationTests(unittest.TestCase):
         self.assertFalse(missing.exists())
 
 
+def bill(rates, input, output, cached=0):
+    """Credits the synthetic captures are priced at, independent of the code under test."""
+    return (rates["fixed_per_call"] + rates["miss_input"] * (input - cached) + rates["hit_input"] * cached
+            + rates["output"] * output)
+
+
+class Captures(unittest.TestCase):
+    """A private collector database that fit reads manifests' captures from."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.db_path = self.root / "usage.sqlite3"
+        with contextlib.closing(sqlite3.connect(self.db_path)) as db:
+            db.executescript(SCHEMA)
+        self.calls = []
+
+    def capture(self, model, label, context, credits, chars, status="complete", output=None):
+        ident = f"{model}.{label}.{len(self.calls)}"  # a label may repeat across pooled manifests
+        with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+            db.execute("INSERT INTO captures (id,started_utc_ns,metadata_json,state,issues_json,request_gzip,dropped_bytes,"
+                       "credits,context_usage_percentage,output_tokens,summary_json) VALUES (?,0,'{}','complete','[]',?,0,?,?,?,?)",
+                       (ident, b"retained", credits, context, output,
+                        json.dumps({"output_text_chars": chars, "tool_chars": 0, "reasoning_chars": 0})))
+        self.calls.append({"label": label, "model": model, "status": status, "capture_count": 1, "captures": [{"id": ident}]})
+
+
+class FitTests(Captures):
+    """Fits read synthetic captures priced at known rates."""
+
+    def fitted(self):
+        db = calibration.open_evidence(self.db_path)
+        self.addCleanup(db.close)
+        return {model: calibration.fit_model(model, [calls], "v", "low")
+                for model, calls in calibration.fit_calls(db, {"calls": self.calls}).items()}
+
+    def priced(self, model, rates, label, input, output, hit=0, chars=5):
+        """One capture priced at rates, its context the tokens over model's window and its output exact."""
+        credits = bill(rates, input, output, hit * input)
+        self.capture(model, label, (input + output) / calibration.discount.WINDOWS[model] * 100, credits, chars,
+                     output=output)
+
+    def synthetic(self, model, share, warm_hits=True, long_output=None, short_hit=0, delayed_hit=0):
+        """Calls billed exactly at opus rates times share; the output pair differs only in output.
+
+        long_output is output_long's exact output_tokens, billed in place of its 691 chars' estimate and added to its
+        context, so the pair's input stays equal."""
+        rates = {name: calibration.discount.RATES["claude-opus-5.5"][name] * share for name in calibration.RATE_NAMES}
+        window = calibration.discount.WINDOWS[model]
+        added = (long_output or round(691 / 4)) - round(9 / 4)  # output_long's output over output_short's
+        for label, context, chars, hit in (("medium_cold", 8.0, 5, 0), ("medium_warm", 8.0, 5, 1 if warm_hits else 0),
+                                           ("size_short", 3.0, 5, short_hit), ("size_long", 20.0, 5, 0),
+                                           ("output_short", 2.0, 9, .9), ("output_long", 2.0 + added / window * 100, 691, .9), ("medium_delayed", 8.0, 5, delayed_hit)):
+            output = long_output if label == "output_long" else None
+            tokens = calibration.discount.estimate(model, context, None, chars, output)
+            credits = bill(rates, tokens["input_tokens"], tokens["output_tokens"], hit * tokens["input_tokens"])
+            self.capture(model, label, context, credits, chars, output=output)
+        return rates
+
+    def fit(self, write=False, splits=()):
+        """Runs `fit` on self.calls, cut into one manifest per split index."""
+        bounds, manifests = (0, *splits, len(self.calls)), []
+        for index, (start, end) in enumerate(zip(bounds, bounds[1:])):
+            manifests.append(self.root / f"manifest-{index}.json")
+            manifests[-1].write_text(json.dumps({"effort": "low", "kiro_cli_version": "9.9.9",
+                                                 "calls": self.calls[start:end]}))
+        rates = self.root / "rates.json"
+        rates.write_text(calibration.discount.RATES_PATH.read_text())
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["calibration", "fit", "--db", str(self.db_path), *map(str, manifests)] + ["--write"] * write), \
+                patch.object(calibration.discount, "RATES_PATH", rates), contextlib.redirect_stdout(output):
+            self.assertEqual(calibration.main(), 0)
+        return output.getvalue(), json.loads(rates.read_text())
+
+    def test_write_replaces_accepted_entries_whole_and_refuses_the_rest(self):
+        """haiku-4.5's earlier entry loses a key the fit does not solve."""
+        rates = self.synthetic("claude-haiku-4.5", .2)
+        self.synthetic("claude-sonnet-4.5", .65, warm_hits=False)
+        with patch.dict(calibration.discount.RATES, {"claude-haiku-4.5": {
+                **calibration.discount.RATES["claude-haiku-4.5"], "stale": 1}}):
+            output, written = self.fit(write=True)
+        self.assertIn("no hit observed", output)
+        self.assertIn("Wrote 1 model(s)", output)
+        for model in ("claude-opus-5.5", "claude-sonnet-4.5"):  # unfitted, and refused: both keep their entries
+            self.assertEqual(written[model], calibration.discount.RATES[model])
+        haiku = written["claude-haiku-4.5"]
+        self.assertEqual(haiku.keys(), {*calibration.RATE_NAMES, "provenance"})
+        for name in calibration.RATE_NAMES:
+            self.assertAlmostEqual(haiku[name] / rates[name], 1, places=6)
+        self.assertEqual({key: haiku["provenance"][key] for key in ("calls", "effort", "kiro_cli_version", "manifests")},
+                         {"calls": 6, "effort": "low", "kiro_cli_version": "9.9.9",
+                          "manifests": [str(self.root / "manifest-0.json")]})
+        self.assertLess(haiku["provenance"]["max_residual"], 1e-9)
+        self.assertRegex(output, r"claude-haiku-4.5\s.*\s1\s+6\s+\S+\s+fit\n")  # ratio 1: share .2 is 0.4/2.0
+
+    def test_exact_output_counters_replace_the_chars_estimate(self):
+        """Billed on 400 exact output tokens, not the 691 chars' estimate; a chars-only fit would skew output and fixed."""
+        rates = self.synthetic("claude-haiku-4.5", .2, long_output=400)
+        result = self.fitted()["claude-haiku-4.5"]
+        for name in calibration.RATE_NAMES:
+            self.assertAlmostEqual(result["rates"][name] / rates[name], 1, places=6)
+
+    def test_a_repeat_counts_as_a_hit_only_below_the_hit_limit(self):
+        """Half of medium_delayed hit joins the hit mean at the miss and hit midpoint; 6% hit bills 97% of its cold
+        call, as claude-haiku-5.5's expired one did, and is no hit."""
+        for delayed_hit, calls, hit in ((.5, 7, lambda rates: (rates["hit_input"] * 3 + rates["miss_input"]) / 4),
+                                        (.06, 6, lambda rates: rates["hit_input"])):
+            with self.subTest(delayed_hit=delayed_hit):
+                self.calls = []
+                with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+                    db.execute("DELETE FROM captures")
+                rates = self.synthetic("claude-haiku-4.5", .2, delayed_hit=delayed_hit)
+                result = self.fitted()["claude-haiku-4.5"]
+                self.assertEqual(result["provenance"]["calls"], calls)
+                self.assertAlmostEqual(result["rates"]["hit_input"] / hit(rates), 1, places=6)
+
+    def test_a_repeat_is_priced_on_its_own_counters(self):
+        """medium_warm on 200 more input and 20 output tokens than medium_cold's 15,999 and 1, as claude-haiku-5.5's
+        repeats varied in output: differencing the credits would read the extra tokens as a lower discount."""
+        rates = self.synthetic("claude-haiku-4.5", .2)
+        warm = next(call for call in self.calls if call["label"] == "medium_warm")
+        self.calls.remove(warm)
+        self.priced("claude-haiku-4.5", rates, "medium_warm", 16_199, 20, hit=1)
+        result = self.fitted()["claude-haiku-4.5"]
+        self.assertAlmostEqual(result["rates"]["hit_input"] / rates["hit_input"], 1, places=6)
+
+    def test_output_pair_billing_its_long_reply_lower_refuses_that_model(self):
+        """claude-haiku-5.5's output_long rode output_short's cached prefix: 0.0041 credits against 0.0067."""
+        self.synthetic("claude-haiku-4.5", .2)
+        self.synthetic("claude-sonnet-4.5", .2)
+        with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+            db.execute("UPDATE captures SET credits=(SELECT credits * .0041 / .0067 FROM captures "
+                       "WHERE id LIKE 'claude-haiku-4.5.output_short.%') WHERE id LIKE 'claude-haiku-4.5.output_long.%'")
+        results = self.fitted()
+        self.assertEqual(results["claude-haiku-4.5"], {"refused": "output pair implies a non-positive output rate"})
+        self.assertNotIn("refused", results["claude-sonnet-4.5"])
+
+    def test_identical_output_pair_refuses_that_model_and_fits_the_rest(self):
+        """output_long totalling output_short's tokens leaves no difference to divide by; other models still fit."""
+        self.synthetic("claude-haiku-4.5", .2)
+        self.synthetic("claude-sonnet-4.5", .2)
+        for call in self.calls:
+            if call["model"] == "claude-haiku-4.5" and call["label"] == "output_long":
+                with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+                    db.execute("UPDATE captures SET context_usage_percentage=2.0, summary_json=? WHERE id=?",
+                               (json.dumps({"output_text_chars": 9, "tool_chars": 0, "reasoning_chars": 0}), call["captures"][0]["id"]))
+        results = self.fitted()
+        self.assertEqual(results["claude-haiku-4.5"], {"refused": "output pair has no token difference"})
+        self.assertNotIn("refused", results["claude-sonnet-4.5"])
+
+    def test_missing_output_call_refuses_the_fit(self):
+        self.synthetic("claude-haiku-4.5", .2)
+        self.calls = [call for call in self.calls if call["label"] != "output_long"]
+        output, written = self.fit(write=True)
+        self.assertIn("needs output_long, output_short and three cold calls", output)
+        self.assertIn("Wrote 0 model(s)", output)
+        self.assertEqual(written, calibration.discount.RATES)
+
+    def test_cold_call_off_the_miss_line_refuses_the_fit(self):
+        """size_short billed 10% of its input as hits stays within 2.4%; 30% hits (8.7%) or a 50% surcharge (8.3%)
+        leave a cold call more than 5% off the line, so the model is refused."""
+        for short_hit, refused in ((0, None), (.1, None), (.3, "cold calls disagree"), (-.5, "cold calls disagree")):
+            with self.subTest(short_hit=short_hit):
+                self.calls = []
+                with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+                    db.execute("DELETE FROM captures")
+                self.synthetic("claude-haiku-4.5", .2, short_hit=short_hit)
+                self.assertEqual(self.fitted()["claude-haiku-4.5"].get("refused"), refused)
+
+    def test_least_squares_spans_every_cold_call(self):
+        """Errors of +1, -2 and +1 share of size_short's credits on evenly spaced inputs cancel, so the rates return."""
+        model, rates = "claude-sonnet-5.5", calibration.discount.RATES["claude-sonnet-5.5"]
+        error = .01 * bill(rates, 9_000, 1)
+        for label, input, offset in (("size_short", 9_000, error), ("medium_cold", 16_000, -2 * error),
+                                     ("size_long", 23_000, error)):
+            self.capture(model, label, (input + 1) / calibration.discount.WINDOWS[model] * 100,
+                         bill(rates, input, 1) + offset, 5, output=1)
+        for label, input, output, hit in (("medium_warm", 16_000, 1, 1), ("output_long", 7_000, 400, .9),
+                                          ("output_short", 7_000, 2, .9)):
+            self.priced(model, rates, label, input, output, hit)
+        result = self.fitted()[model]
+        self.assertNotIn("refused", result)
+        for name in ("fixed_per_call", "miss_input", "output"):  # hit_input carries medium_cold's own error
+            self.assertAlmostEqual(result["rates"][name] / rates[name], 1, places=6)
+        self.assertEqual(result["provenance"]["calls"], 6)
+
+    def test_pooled_output_pairs_average_their_rates(self):
+        """A second probe's pair at twice the output rate over 798 tokens: the mean of the two rates (1.5x), not
+        their pooled credits over pooled tokens (1.82x)."""
+        rates = self.synthetic("claude-haiku-4.5", .2)
+        split = len(self.calls)
+        double = {**rates, "output": 2 * rates["output"]}
+        for label, output in (("output_short", 2), ("output_long", 800)):
+            self.priced("claude-haiku-4.5", double, label, 7_000, output)
+        _, written = self.fit(write=True, splits=(split,))
+        self.assertAlmostEqual(written["claude-haiku-4.5"]["output"] / rates["output"], 1.5, places=6)
+
+    def test_cold_calls_of_one_size_refuse_that_model_and_fit_the_rest(self):
+        """size_short and size_long at medium_cold's context leave no slope to regress."""
+        self.synthetic("claude-haiku-4.5", .2)
+        self.synthetic("claude-sonnet-4.5", .2)
+        with contextlib.closing(sqlite3.connect(self.db_path)) as db, db:
+            db.execute("UPDATE captures SET context_usage_percentage=8.0 WHERE id LIKE 'claude-haiku-4.5.size_%'")
+        results = self.fitted()
+        self.assertEqual(results["claude-haiku-4.5"], {"refused": "cold calls share one input size"})
+        self.assertNotIn("refused", results["claude-sonnet-4.5"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,7 +21,7 @@ MODELS_PATH, RATES_PATH = (Path(__file__).with_name(name) for name in ("models.j
 FACTS = json.loads(MODELS_PATH.read_text())  # `calibration.py models` snapshots kiro-cli chat --list-models.
 ROUTERS = {"auto"}  # Listed, but routes to an unknown real model, so its context% has no fixed window.
 WINDOWS = {model: facts["context_window_tokens"] for model, facts in FACTS["models"].items() if model not in ROUTERS}
-RATES = json.loads(RATES_PATH.read_text())  # Fitted credits per token and per call, per model.
+RATES = json.loads(RATES_PATH.read_text())  # Fitted credits per token and per call; `calibration.py fit --write`.
 
 
 def finite(number):

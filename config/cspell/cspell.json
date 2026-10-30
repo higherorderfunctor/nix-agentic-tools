@@ -31,6 +31,7 @@
     "packages/delegate-routing/docs/delegates/vendor-prompts/**",
     "packages/delegate-routing/probes/delegates/**",
     "packages/kimchi/egress-report.json",
+    "packages/kiro-cli/usage/rates.json",
     "result"
   ],
   "language": "en",

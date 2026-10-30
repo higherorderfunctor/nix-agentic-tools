@@ -284,9 +284,8 @@ values replace `O` or `I - O` below, so an estimated cached split never exceeds
 the call's exact input.
 
 Cached tokens need reported credits, a known or estimated `O`, and the model's
-`rates.json` entry (`claude-opus-5.5` only, carried over from the full-miss and
-full-hit slopes and miss intercept of the discount curves below, with a fitted
-270e-6 output rate):
+`rates.json` entry from `calibration.py fit --write` (see
+[Run the calibration experiment](../docs/usage-tracking.md#run-the-calibration-experiment)):
 `cached = clamp((a*(I-O) + o*O + c - credits) / (a - b), 0, I - O)`, with
 full-miss and full-hit input rates `a` (`miss_input`) and `b` (`hit_input`),
 output rate `o` (`output`) and fixed cost `c` (`fixed_per_call`). Models with a
