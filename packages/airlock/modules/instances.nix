@@ -7,9 +7,13 @@
 backend: {
   config,
   lib,
+  pkgs,
   ...
 }: let
+  caDirectory = "ca";
   instances = import ../../ai-module/lib/instances.nix {inherit lib;};
+  owner = "airlock";
+  trust = import ../lib/trust.nix {inherit lib pkgs;};
   withoutNulls = lib.filterAttrs (_: value: value != null);
 in {
   imports = [
@@ -18,11 +22,10 @@ in {
       # the private runtime directory, so it lives as long as that directory.
       arguments = instance:
         ''serve --config "$AIRLOCK_CONFIG"''
-        + lib.optionalString (instance.settings.interception != null) " --ca-directory \"\${AIRLOCK_CONFIG%/*}/ca\"";
-      inherit backend;
+        + lib.optionalString (instance.settings.interception != null) " --ca-directory \"\${AIRLOCK_CONFIG%/*}/${caDirectory}\"";
+      inherit backend owner;
       defaultPort = 8318;
       derived = {instance, ...}: {listen = "127.0.0.1:${toString instance.port}";};
-      owner = "airlock";
       packagePath = "airlock";
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "airlock";
       # Unset options are left out, so a plain instance's file holds only `listen`.
@@ -67,10 +70,18 @@ in {
   config.ai = {
     airlock.claims.proxy-instance = builtins.attrNames config.ai.airlock.instances;
     internal.proxyInstances =
-      lib.mapAttrs (_: instance: {
+      lib.mapAttrs (name: instance: {
         inherit (instance) enable;
         http = instances.origin instance;
         https = instances.origin instance;
+        trust =
+          if instance.settings.interception == null
+          then null
+          else
+            trust {
+              inherit caDirectory;
+              service = instances.serviceName owner name;
+            };
       })
       config.ai.airlock.instances;
   };

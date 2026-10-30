@@ -107,6 +107,11 @@ in {
             default = true;
             description = "Whether the instance runs; selecting a disabled instance fails evaluation.";
           };
+          trust = lib.mkOption {
+            type = lib.types.nullOr lib.types.package;
+            default = null;
+            description = "For a TLS-intercepting instance: an executable printing the path of its PEM trust bundle, appending its CA to the optional inherited bundle argument. It fails if the instance CA is unavailable.";
+          };
         };
     });
     default = {};
@@ -114,5 +119,13 @@ in {
     visible = false;
     description = "Network proxy instances registered by owners, who claim each name in `ai.claims.proxy-instance`. Separate from inference instances.";
   };
+  # Trust follows an effective protocol origin, not a selector whose protocols
+  # were overridden or opted out. The runtime may also replace normalized values.
+  resolveTrust = registry: selection: protocols: let
+    entry = selected registry selection;
+  in
+    if lib.any (field: protocols.${field} != null && protocols.${field} == (entry.${field} or null)) fields
+    then entry.trust or null
+    else null;
   resolvedType = lib.types.submodule {options = protocolOptions;};
 }

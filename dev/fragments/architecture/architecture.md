@@ -91,26 +91,28 @@ hoc machinery beside an existing abstraction.
   `packages/chatgpt-codex/lib/inference.nix`.
 - **PROPOSAL (not yet vetted): network proxy is a shared surface.**
   `ai.proxy = {instance; http; https;}` selects the network proxy for a
-  process's HTTP and HTTPS traffic. Owners register `{enable; http; https;}` in
-  `ai.internal.proxyInstances` and claim names in `ai.claims.proxy-instance`,
-  independently of inference. Explicit root or runtime protocol fields,
-  including null, win only for that protocol. An unset field uses its instance
-  value first, then an explicitly defined sibling when no instance is selected.
-  Airlock registers both protocols at the same loopback origin; plain HTTP
-  currently fails until a later stack change adds forwarding. One generic
-  lowering names `HTTP_PROXY` and `HTTPS_PROXY`; runtimes choose delivery only.
-  Definition priority distinguishes explicit fields from defaults to avoid
-  circular sibling fallback; instance-derived values never fill a sibling. The
-  root selector and explicit protocol fields copy to `ai.<runtime>.proxy` at
-  default priority. Root sibling fallback also copies when no instance is
-  selected at runtime scope. Runtime overrides are field by field and explicit
-  null blocks the corresponding variable. Prefer a runtime settings file that
-  honors the value, then an environment wrapper default the user's environment
-  can override, then a CLI flag. Native user values win; unsupported runtimes
-  warn through `surfaceSupport`. Unknown or disabled instances fail with the
-  option and registered names. See `lib/ai/proxy.nix`,
-  `lib/ai/sharedOptions.nix`, `lib/ai/app/mkBackendTransform.nix` and
-  `dev/fragments/ai-proxy/ai-proxy.md`.
+  process's HTTP and HTTPS traffic. Owners register
+  `{enable; http; https; trust;}` in `ai.internal.proxyInstances` and claim
+  names in `ai.claims.proxy-instance`, independently of inference. Explicit root
+  or runtime protocol fields, including null, win only for that protocol. An
+  unset field uses its instance value first, then an explicitly defined sibling
+  when no instance is selected. Airlock registers both protocols at the same
+  loopback origin; plain HTTP currently fails until a later stack change adds
+  forwarding. An optional registry trust helper supplies CA trust through
+  Claude's launcher; other runtimes warn by name (retention and precedence:
+  `dev/fragments/ai-proxy/ai-proxy.md`). One generic lowering names `HTTP_PROXY`
+  and `HTTPS_PROXY`; runtimes choose delivery only. Definition priority
+  distinguishes explicit fields from defaults to avoid circular sibling
+  fallback; instance-derived values never fill a sibling. The root selector and
+  explicit protocol fields copy to `ai.<runtime>.proxy` at default priority.
+  Root sibling fallback also copies when no instance is selected at runtime
+  scope. Runtime overrides are field by field and explicit null blocks the
+  corresponding variable. Prefer a runtime settings file that honors the value,
+  then an environment wrapper default the user's environment can override, then
+  a CLI flag. Native user values win; unsupported runtimes warn through
+  `surfaceSupport`. Unknown or disabled instances fail with the option and
+  registered names. See `lib/ai/proxy.nix`, `lib/ai/sharedOptions.nix`,
+  `lib/ai/app/mkBackendTransform.nix` and `dev/fragments/ai-proxy/ai-proxy.md`.
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;

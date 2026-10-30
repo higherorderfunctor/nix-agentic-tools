@@ -603,6 +603,14 @@
     mergedRules = normalizedPool "rules" {};
     mergedServers = normalizedPool "mcpServers" {};
     mergedSkills = normalizedPool "skills" {};
+    proxyTrust =
+      proxyLib.resolveTrust config.ai.internal.proxyInstances
+      (
+        if supportsPool "proxy"
+        then poolCfg.proxy
+        else config.ai.proxy
+      )
+      (normalizedPool "proxy" config.ai.proxy);
     resolvedJail = normalizedPool "jail" null;
     resolvedSettings = normalizedPool "settings" {};
     resolvedShell = normalizedPool "shell" null;
@@ -707,7 +715,15 @@
       }
     else package;
   rawInstalledPackages = lib.optional (launcherPackage != null) (jailPackage (installPackageFn callbackArgs));
-  transformWarnings = deliveryWarnings ++ jailWarnings;
+  transformWarnings =
+    deliveryWarnings
+    ++ jailWarnings
+    ++ lib.optional (cfg.enable && appRecord.name != "claude" && callbackArgs.proxyTrust != null)
+    "${lib.showOption (
+      if supportsPool "proxy"
+      then proxyPath
+      else ["ai" "proxy"]
+    )} selects a TLS-intercepting network proxy for ${appRecord.name}, which does not deliver its CA; routing TLS through the intercepting proxy will fail unless you configure trust yourself.";
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
