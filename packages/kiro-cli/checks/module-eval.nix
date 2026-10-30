@@ -532,7 +532,7 @@ in {
           == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.cli.package."]
       );
 
-      # Kiro persists effort only inside per-model `chat.modelDefaults` records,
+      # Kiro persists settings such as effort only per model in `chat.modelDefaults`,
       # so it has no lossless target for the normalized settings pool, and an
       # unsupported pool has no per-runtime option. Claude is the identical-shape
       # positive control, so an unrelated harness failure cannot make the

@@ -16,7 +16,7 @@
   namespaces = import ./optionNamespaces.nix {inherit lib;};
   declarations = appRecord.surfaceSupport or {};
   supported = surface: (declarations.${surface}.backends or []) != [];
-  defaultReason = "${runtime}'s surfaceSupport does not consume this shared surface.";
+  reasons = import ./supportReasons.nix runtime;
   # A runtime unit's path relative to `ai.<runtime>`, inside its namespace.
   runtimePath = surface: namespaces.pool appRecord surface ++ [surface];
   root = surface: {
@@ -57,16 +57,30 @@
       (message (entry.path ++ gap.path) reason);
   in
     lib.concatMap warnings candidates;
-  # An undelivered surface warns once, naming the most specific input set.
-  # findFirst stops at that input, so a later one (the normalized fold) is
-  # never forced once an earlier one already warns.
+  # Settings warn per field when undelivered or unlisted; other undelivered
+  # surfaces warn once. Each warning names the most specific input set.
+  # findFirst leaves later inputs (the normalized fold) unforced.
   surfaceWarnings = surface: let
     declaration = declarations.${surface} or {};
+    delivered = builtins.elem backend (declaration.backends or []);
     inert = lib.findFirst (unit: present unit.path unit.value) null (units surface);
   in
-    if builtins.elem backend (declaration.backends or [])
-    then lib.concatMap (gapWarnings surface) (declaration.gaps or [])
-    else lib.optional (inert != null) (message inert.path (declaration.reason or defaultReason));
+    (
+      if surface == "settings"
+      then
+        lib.concatMap (field: let
+          requested = lib.findFirst (unit: lib.attrByPath [field] null unit.value != null) null (units surface);
+          reason =
+            if delivered
+            then reasons.settingsField
+            else declaration.reason or reasons.surface;
+        in
+          lib.optional (!(delivered && builtins.elem field (declaration.fields or [])) && requested != null)
+          (message (requested.path ++ [field]) reason))
+        (builtins.attrNames (config.ai.settings or {}))
+      else lib.optional (!delivered && inert != null) (message inert.path (declaration.reason or reasons.surface))
+    )
+    ++ lib.optionals delivered (lib.concatMap (gapWarnings surface) (declaration.gaps or []));
 in {
   warnings = lib.concatMap surfaceWarnings sharedSurfaces;
 }
