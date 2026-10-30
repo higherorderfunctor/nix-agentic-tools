@@ -42,13 +42,13 @@
   launcherFlags = import ./launcher-flags.nix;
   sessionSettingKeys = ["check_for_update_on_startup"];
   codexPackage = cfg: cfg.package.launcherPackage or cfg.package;
-  codexProxy = import ./proxy.nix {inherit inlineToml lib pkgs;};
+  codexInference = import ./inference.nix {inherit inlineToml lib pkgs;};
   inlineToml = import ./inlineToml.nix {inherit lib;};
   codexInstallPackage = {
     backend,
     cfg,
     launcherEnvironment,
-    resolvedProxy,
+    resolvedSettings,
     ...
   } @ args: let
     hookTrust = hookTrustFor args;
@@ -69,9 +69,9 @@
           lib.concatMap (flag: ["--add-flag" flag]) launcherFlags.sessionConfig
           ++ ["--add-flag" (lib.escapeShellArg override)])
         sessionOverrides
-        # devenv's ai.proxy selection: project config cannot carry a
-        # provider, so it travels as session flags (./proxy.nix).
-        ++ codexProxy.launcherFlags resolvedProxy
+        # devenv's ai.settings.inference selection: project config cannot carry a
+        # provider, so it travels as session flags (./inference.nix).
+        ++ codexInference.launcherFlags resolvedSettings.inference
       );
       name = "chatgpt-codex-wrapped";
       inherit package;
@@ -1087,9 +1087,8 @@ in
       hooks = {};
       jail = {};
       mcpServers = {};
-      proxy = {};
       rules = {};
-      settings.fields = ["reasoningEffort"];
+      settings.fields = ["inference" "reasoningEffort"];
       shell = {};
       skills = {};
     };
@@ -1319,7 +1318,6 @@ in
       nativeAgents,
       options,
       rawAgents,
-      resolvedProxy,
       resolvedSettings,
       topHooks,
       ...
@@ -1420,9 +1418,9 @@ in
             (lib.mkIf (cfg.projectDocMaxBytes != codexProjectDocMaxBytes) {
               project_doc_max_bytes = lib.mkDefault cfg.projectDocMaxBytes;
             })
-            # ai.proxy (./proxy.nix): Home Manager selects the provider in
+            # ai.settings.inference (./inference.nix): Home Manager selects the provider in
             # user config.toml; devenv's launcher selects its own.
-            (codexProxy.settings isHm resolvedProxy)
+            (codexInference.settings isHm resolvedSettings.inference)
           ];
           # `pinDaemonToPackage` is Home Manager-only (see its option), so this
           # must not force `options.ai.codex.pinDaemonToPackage` under devenv,
@@ -1436,14 +1434,14 @@ in
               "ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."
             )
             # devenv carries the provider only as launcher flags.
-            ++ lib.optional (!isHm && cfg.package == null && codexProxy.launcherFlags resolvedProxy != [])
-            "ai.codex.proxy is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it.");
+            ++ lib.optional (!isHm && cfg.package == null && codexInference.launcherFlags resolvedSettings.inference != [])
+            "ai.codex.settings.inference is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it.");
           assertions =
             mkAgentAssertions {inherit nativeAgents rawAgents;}
             ++ mkExecpolicyAssertions cfg.execpolicyRules
             ++ mkOAuthClientSecretAssertions (oauthSecretTables {inherit cfg mergedServers;})
             ++ mkSkillNameAssertions mergedSkills
-            ++ codexProxy.assertions resolvedProxy
+            ++ codexInference.assertions resolvedSettings.inference
             ++ [
               {
                 assertion = mergedServers == {} || !hasNativeMcpServers;

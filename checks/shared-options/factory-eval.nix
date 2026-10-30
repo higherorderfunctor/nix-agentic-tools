@@ -37,10 +37,13 @@ in {
         && lib.all (field: let
           option = fields.${field};
         in
-          option.default
-          == null
-          && option.type.name == nullOrName
-          && evaluated.config.ai.settings.${field} == null)
+          if field == "inference"
+          then option.default == {} && lib.all (value: value == null) (builtins.attrValues evaluated.config.ai.settings.inference)
+          else
+            option.default
+            == null
+            && option.type.name == nullOrName
+            && evaluated.config.ai.settings.${field} == null)
         fieldNames
     );
 

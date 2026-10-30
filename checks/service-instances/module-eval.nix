@@ -812,7 +812,7 @@ in {
           ai = {
             claude = {
               enable = true;
-              proxy = runtime "a";
+              settings.inference = runtime "a";
             };
             cliproxyapi.instances.main = {
               credentials = {
@@ -842,7 +842,7 @@ in {
             };
             codex = {
               enable = true;
-              proxy = runtime "b";
+              settings.inference = runtime "b";
             };
           };
           name = "runtime-providers";
@@ -857,7 +857,7 @@ in {
           upstreams = ["zai:28427:/v1/messages?beta=true" "other:28428:/v1/chat/completions"];
           verify = config: ''
             test "$(${pkgs.bash}/bin/bash -c ${lib.escapeShellArg (claudeSettings {inherit config;}).apiKeyHelper})" = key-a
-            test "$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-proxy.auth.command})" = key-b
+            test "$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-inference.auth.command})" = key-b
             echo "ok: Claude's key helper resolves key-a, Codex's key-b"
           '';
         };
