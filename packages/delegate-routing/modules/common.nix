@@ -58,7 +58,7 @@
   redact = import ../../../lib/redact {inherit lib;};
   usageFor = runtime: let
     # The runtime's selection already carries the root fields it inherits.
-    selection = config.ai.${runtime}.proxy or {instance = null;};
+    selection = config.ai.${runtime}.settings.inference or {instance = null;};
     instances = lib.attrByPath ["ai" "cliproxyapi" "instances"] {} config;
     selected =
       if selection.instance == null
@@ -67,7 +67,7 @@
         (import ../../ai-module/lib/instances.nix {inherit lib;}).select {
           inherit instances;
           name = selection.instance;
-          option = "ai.${runtime}.proxy.instance";
+          option = "ai.${runtime}.settings.inference.instance";
           owner = "cliproxyapi";
         };
     key =

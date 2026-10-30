@@ -104,7 +104,7 @@
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
 # trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
 # every `merged*` pool, `rawAgents` and `nativeAgents` (a native-agent
-# runtime's raw files and native records), `resolvedJail`, `resolvedProxy`,
+# runtime's raw files and native records), `resolvedJail`,
 # `resolvedSettings`, `resolvedShell`, `mergedContext`,
 # `launcherEnvironment` and `topHooks`;
 # every callback takes `...`, so a

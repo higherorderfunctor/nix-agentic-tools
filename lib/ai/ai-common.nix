@@ -6,6 +6,7 @@
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
   fragments = import ../fragments.nix {inherit lib;};
+  inferenceLib = import ./inference {inherit lib;};
   contentType = enableDefault:
     aiTypes.optionalTextSource {
       description = "Markdown content";
@@ -248,17 +249,20 @@
           text = readContent rule;
         })))
     rules;
-  normalizedSettingsType = lib.types.submodule {
-    options.reasoningEffort = lib.mkOption {
-      type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
-      default = null;
-      description = ''
-        Portable reasoning effort across runtimes that persist the same
-        semantic values. Runtime-specific values belong in
-        `ai.<runtime>.native.settings`.
-      '';
+  settingsType = inference:
+    lib.types.submodule {
+      options.inference = inference;
+      options.reasoningEffort = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
+        default = null;
+        description = ''
+          Portable reasoning effort across runtimes that persist the same
+          semantic values. Runtime-specific values belong in
+          `ai.<runtime>.native.settings`.
+        '';
+      };
     };
-  };
+  normalizedSettingsType = settingsType (inferenceLib.selectionOption {});
 in {
   # ── Markdown content records ───────────────────────────────────────
   # Context and rules share one text-source record. The type resolves source
@@ -345,11 +349,14 @@ in {
 
   # Closed normalized settings shared by the root and every runtime whose
   # app record supports the `settings` pool. Each runtime declares consumed
-  # fields separately in surfaceSupport.settings.fields. Every field must be
-  # nullOr with default null so an unset field neither warns nor overrides.
+  # fields separately in surfaceSupport.settings.fields. Scalar fields default
+  # to null; structured selections default to all-null fields, so an unset
+  # setting neither warns nor overrides. Resolved inference is an endpoint.
   # Native settings live in each factory's separate `native.settings` option.
   normalizedSettingsFields = builtins.attrNames (builtins.removeAttrs (normalizedSettingsType.getSubOptions []) ["_module"]);
   inherit normalizedSettingsType;
+  resolvedSettingsType = settingsType inferenceLib.resolvedOption;
+  rootSettingsType = settingsType (inferenceLib.selectionOption {root = true;});
 
   # Recursively filter null values from an attrset (for typed settings
   # with freeformType where defaults are null). Also removes empty

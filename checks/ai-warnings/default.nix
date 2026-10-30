@@ -54,15 +54,11 @@
         effect = "allow";
       }
     ];
-    proxy = {
-      key = (import ../../lib/redact {inherit lib;}).file "/run/secrets/ai-proxy-key";
-      url = "http://127.0.0.1:8317";
-    };
     rules.probe.text = "probe";
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
   };
-  inherit (settingsProbes) requestFields settingSample settingsFields;
+  inherit (settingsProbes) requestFields resolvedSettingSample settingSample settingsFields;
   # Every absent or inert primary row gets a populated request and an empty
   # control through the actual factory. Unsupported runtime options use root.
   gaps = lib.filter (row: row.primitive == "notApplicable" || row ? deliveryGap) policy.rows;
@@ -299,7 +295,16 @@
       # Root and runtime pool both set still warn once, naming the runtime pool.
       ++ map (case: case // {extra = lib.setAttrByPath (["ai" case.surface] ++ lib.optional (case.field != null) case.field) case.value;}) runtimeCases
       # A value set only on the public normalized option warns too.
-      ++ map (case: case // {path = lib.init (optionPaths.pool case.runtime case.surface) ++ ["normalized" case.surface] ++ lib.optional (case.field != null) case.field;}) runtimeCases);
+      ++ map (case:
+        case
+        // {
+          path = lib.init (optionPaths.pool case.runtime case.surface) ++ ["normalized" case.surface] ++ lib.optional (case.field != null) case.field;
+          value =
+            if case.field != null
+            then resolvedSettingSample case.field
+            else case.value;
+        })
+      runtimeCases);
   conditional = gap: gap ? when || (gap.each or false);
   staticCases = lib.concatMap (cell:
     map (gap:
@@ -370,7 +375,10 @@
   # Pin support before evaluating writers that require their settings fields.
   settingsFieldsSilent = let
     # Pin existing delivery independently of the declaration being tested.
-    expectedConsumers.reasoningEffort = ["claude" "codex" "kimchi"];
+    expectedConsumers = {
+      inference = ["claude" "codex"];
+      reasoningEffort = ["claude" "codex" "kimchi"];
+    };
   in
     lib.all (case: let
       enabled = harness.setEnable case.runtime true;
