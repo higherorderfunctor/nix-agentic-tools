@@ -81,9 +81,9 @@ duplicate fields, non-loopback addresses, and other arguments except
 An `ai.airlock.instances.<name>` entry runs `airlock-<name>` on its loopback
 port (default 8318) through `ai.services`, on Home Manager and devenv alike.
 Selecting it defaults both `HTTP_PROXY` and `HTTPS_PROXY` to that listener for
-supported runtimes. HTTPS uses CONNECT, preserving credentials and TLS. Plain
-HTTP requests through Airlock currently fail; HTTP forwarding comes in a later
-stack change.
+supported runtimes. HTTPS uses CONNECT, preserving credentials; opaque tunnels
+preserve TLS. Plain HTTP requests through Airlock currently fail; HTTP
+forwarding comes in a later stack change.
 
 ```nix
 ai.airlock.instances.main = {};
@@ -117,10 +117,35 @@ config, in the service's private runtime directory
 (`$XDG_RUNTIME_DIR/ai-service-airlock-<name>`). Airlock creates or validates it
 before listening, a restart reuses it, and a new runtime directory, for example
 after logout, gets a new CA; running clients must be relaunched to load it.
-Nothing installs trust: a client must trust that `ca.pem` itself.
 
-The CA key is readable by same-user processes; isolating the service under a
-separate uid is future work.
+On Linux, when a runtime selects an intercepting instance and enables `ai.jail`
+(or its runtime jail), the shared selection lowering masks `ca.key` as an empty
+read-only file, leaving `ca.pem` readable. This applies to every jailed runtime
+that selects the instance, even without CA trust delivery or with a native CA
+override. The jail resolves the path at launch with the service's own
+runtime-directory helper and refuses launch with a named error if the key is
+missing. Start the service with the same `XDG_RUNTIME_DIR` or fallback `TMPDIR`
+first. The mask covers only the selected key path resolved at launch, not keys
+in other runtime directories or keys created after launch. Relaunch clients
+after recreating a runtime directory. The mask blocks direct file reads; it does
+not isolate same-user IPC such as the user systemd manager, which can start
+processes outside the jail. Without the jail, same-user processes can read the
+key directly; isolating the service under a separate uid is future work.
+
+An intercepting instance registers an optional trust helper on the shared
+network proxy entry. Claude's managed launcher sets `NODE_EXTRA_CA_CERTS` to
+that CA before startup; if the calling environment already names an extra-CA
+file, the helper creates a private bundle containing it followed by the instance
+CA. Start the service before launching Claude: a missing CA stops the launch
+with an instruction to start it. Opaque instances change no CA trust. The helper
+and service must see the same `XDG_RUNTIME_DIR` or fallback `TMPDIR` to find the
+same runtime CA.
+
+An explicit `ai.claude.native.settings.env.NODE_EXTRA_CA_CERTS` wins and is
+passed at startup instead of the instance's bundle. Setting Claude's package to
+null disables its managed launcher and warns that trust must be set manually.
+Other runtimes selecting an intercepting instance warn that TLS will fail
+without separately configured trust. No system trust store is changed.
 
 ## Selective TLS interception
 
@@ -240,5 +265,15 @@ points.
 registration, interception settings, selection defaults and overrides, and
 Claude settings delivery. `checks.airlock-instance-runtime` starts each
 backend's generated service launcher, requests `/health` at a configured
-nondefault port and checks the runtime CA's reuse across restarts. Rust protocol
-tests run through the Nix package's `doCheck`.
+nondefault port and checks the runtime CA's reuse across restarts. It also
+starts a mock Claude through the generated launcher to check CA delivery, native
+and inherited extra-CA values, and refusal when the CA is missing. In CI the
+jail mask is checked structurally, and missing-key launch refusals run before
+bubblewrap; the CI build sandbox cannot run the real jail. Build
+`checks.airlock-instance-jail-live` and run its `bin/airlock-instance-jail-live`
+by hand on Linux to check the real service key is hidden, its certificate stays
+readable, and Claude's trust helper runs inside the jail. That live run has no
+structural fallback. Claude uses its installed jailed launcher, including with a
+native CA override; the Codex-profile probe substitutes a test command and does
+not exercise Codex's installed launcher. Rust protocol tests run through the Nix
+package's `doCheck`.
