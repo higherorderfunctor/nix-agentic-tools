@@ -582,17 +582,17 @@ fn init_accepts_modes_stricter_than_0700_and_0600() {
     assert_eq!(reused.expect("reuse stricter modes"), material.certificate);
 }
 
-/// `ca init` with `AIRLOCK_HOME` set to `home` and an `XDG_RUNTIME_DIR` it
-/// must not use.
-fn init_in_home(root: &TempDir, home: &Path) -> Output {
+/// `ca <subcommand>` with `AIRLOCK_HOME` set to `home` and an
+/// `XDG_RUNTIME_DIR` it must not use.
+fn ca_in_home(root: &TempDir, home: &Path, subcommand: &str) -> Output {
     let runtime = root.path().join("xdg");
     fs::create_dir_all(&runtime).expect("create unused runtime directory");
     let output = command()
-        .args(["ca", "init"])
+        .args(["ca", subcommand])
         .env("AIRLOCK_HOME", home)
         .env("XDG_RUNTIME_DIR", &runtime)
         .output()
-        .expect("run Airlock CA init");
+        .expect("run Airlock CA");
     assert_eq!(
         entries(&runtime),
         0,
@@ -617,7 +617,7 @@ fn refused_ancestor(output: &Output, directory: &Path) -> Option<PathBuf> {
 /// replaceable directory: a build sandbox or a shared /tmp can hold the root.
 fn assert_home_accepted(root: &TempDir, home: &Path, canonical_home: &Path) {
     let directory = canonical_home.join("runtime/default");
-    let output = init_in_home(root, home);
+    let output = ca_in_home(root, home, "init");
     match replaceable_ancestor(root.path()) {
         None => {
             assert!(output.status.success(), "{output:?}");
@@ -662,7 +662,7 @@ fn airlock_home_refuses_an_ancestor_others_can_write_before_creating_anything() 
         .join("home");
     for writable in [0o770, 0o707, 0o1777] {
         set_mode(&shared, writable);
-        let output = init_in_home(&root, &home);
+        let output = ca_in_home(&root, &home, "init");
         assert!(!output.status.success(), "{writable:o}: {output:?}");
         assert_eq!(
             refused_ancestor(&output, &canonical_home.join("runtime/default")),
@@ -695,7 +695,7 @@ fn airlock_home_refuses_a_symlinked_ancestor_that_resolves_into_a_shared_directo
     std::os::unix::fs::symlink(&private, &link).expect("link the private directory");
     let canonical_shared = fs::canonicalize(&shared).expect("canonical shared directory");
 
-    let output = init_in_home(&root, &link.join("home"));
+    let output = ca_in_home(&root, &link.join("home"), "init");
     assert!(!output.status.success(), "{output:?}");
     assert_eq!(
         refused_ancestor(
@@ -727,13 +727,60 @@ fn airlock_home_creates_and_reports_its_canonical_runtime_directory() {
     assert_home_accepted(&root, &link.join("home"), &canonical_home);
 }
 
+// Client trust reads the CA through this path, so a walk or canonical form it
+// skipped would let a client trust a CA that init refuses to create.
+#[test]
+fn ca_directory_resolves_and_refuses_as_init_does_without_creating_anything() {
+    let root = trusted_root();
+    let output = in_runtime(root.path())
+        .args(["ca", "directory", "--instance", "work"])
+        .output()
+        .expect("run Airlock CA directory");
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        format!("{}\n", root.path().join("airlock/work").display())
+    );
+    assert_eq!(entries(root.path()), 0, "CA directory created a directory");
+
+    let (shared, private) = shared_with_private(&root);
+    let link = root.path().join("link");
+    std::os::unix::fs::symlink(&private, &link).expect("link the private directory");
+    let canonical_shared = fs::canonicalize(&shared).expect("canonical shared directory");
+    let directory = canonical_shared.join("private/home/runtime/default");
+    set_mode(&shared, 0o770);
+    let output = ca_in_home(&root, &link.join("home"), "directory");
+    assert!(!output.status.success(), "{output:?}");
+    assert_eq!(
+        refused_ancestor(&output, &directory),
+        Some(canonical_shared.clone()),
+        "{output:?}"
+    );
+
+    set_mode(&shared, 0o700);
+    let output = ca_in_home(&root, &link.join("home"), "directory");
+    match replaceable_ancestor(root.path()) {
+        None => assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            format!("{}\n", directory.display()),
+            "{output:?}"
+        ),
+        Some(replaceable) => assert_eq!(
+            refused_ancestor(&output, &directory),
+            Some(replaceable),
+            "{output:?}"
+        ),
+    }
+    assert_eq!(entries(&private), 0, "CA directory created a directory");
+}
+
 // Created one by one, `missing/..` would climb above the checked directory
 // into one nothing checked.
 #[test]
 fn airlock_home_refuses_a_parent_component_below_a_missing_directory() {
     let root = private_root();
     let home = root.path().join("missing/../home");
-    let output = init_in_home(&root, &home);
+    let output = ca_in_home(&root, &home, "init");
     assert!(!output.status.success(), "{output:?}");
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("`..` follows a missing directory"),

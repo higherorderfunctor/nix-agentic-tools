@@ -63,7 +63,10 @@ pub(super) fn open_existing(
 /// it. `XDG_RUNTIME_DIR` is the user's own, so its path is used as given; an
 /// `AIRLOCK_HOME` path is canonicalized once, so a symlink swapped later cannot
 /// redirect it, and every directory on it is checked.
-fn resolve(base: &RuntimeBase, instance: &Instance) -> Result<(PathBuf, PathBuf), String> {
+pub(super) fn resolve(
+    base: &RuntimeBase,
+    instance: &Instance,
+) -> Result<(PathBuf, PathBuf), String> {
     let (root, path) = base.directory(instance);
     match base {
         RuntimeBase::Xdg(_) => Ok((root.clone(), path)),

@@ -49,6 +49,13 @@ pub fn init(base: &RuntimeBase, instance: &Instance) -> Result<PathBuf, String> 
     Ok(certificate_path)
 }
 
+/// `instance`'s CA directory under `base` as `init` resolves and checks it,
+/// whether or not it exists yet; nothing is created. Client trust reads the
+/// CA through this path, so it refuses what `init` refuses.
+pub fn directory(base: &RuntimeBase, instance: &Instance) -> Result<PathBuf, String> {
+    directory::resolve(base, instance).map(|(_, path)| path)
+}
+
 fn path_error(path: &Path, error: impl Into<io::Error>) -> String {
     format!("{}: {}", path.display(), error.into())
 }
