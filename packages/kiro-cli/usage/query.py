@@ -3,6 +3,7 @@
 import argparse
 from contextlib import closing
 import json
+import math
 from pathlib import Path
 import re
 import sqlite3
@@ -17,7 +18,6 @@ import summary_theme
 DIMENSIONS = ("credits", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
 COUNTERS = (*DIMENSIONS, "total_tokens")
 ESTIMATED = ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")
-HIT_SHARE = .01  # Estimated cached tokens must reach this share of input to count as a hit.
 # Output characters beyond output_text that still bill as output tokens. The collector counts them live into
 # summary_json tool_chars/reasoning_chars; this fallback re-derives them from retained events for rows without
 # those keys: captures finalized before the live counts, and interrupted captures, which have no summary.
@@ -55,11 +55,14 @@ def metric(total=None, known=0, observations=0):
             "unknown": observations - known}
 
 
+def hit_share(cached, input, evaluable, observations, error=0):
+    """Cache hit: cached / input tokens over the calls with both; error is cached's standard error, None if unknown."""
+    return {"cached": cached or 0, "input": input or 0, "evaluable": evaluable, "unknown": observations - evaluable,
+            "error": error, "percentage": 100 * cached / input if input else None}
+
+
 def cache_hit_rate(row):
-    evaluable = row["cache_evaluable"]
-    hits = row["cache_hits"] or 0
-    return {"hits": hits, "evaluable": evaluable, "unknown": row["n"] - evaluable,
-            "percentage": 100 * hits / evaluable if evaluable else None}
+    return hit_share(row["cache_cached"], row["cache_input"], row["cache_evaluable"], row["n"])
 
 
 def query(db, session, scope="session"):
@@ -164,7 +167,7 @@ def query(db, session, scope="session"):
                 "metrics": {name: metric() for name in COUNTERS}}
     captures["pools"] = {
         pool: {"observations": 0, "metrics": {name: metric() for name in COUNTERS},
-               "cache_hit_rate": {"hits": 0, "evaluable": 0, "unknown": 0, "percentage": None}, "estimates": {}}
+               "cache_hit_rate": hit_share(0, 0, 0, 0), "estimates": {}}
         for pool in ("other_linked_conversations", "root_conversation", "unknown")}
     if "captures" not in tables:
         captures["unavailable_reason"] = "No capture source has initialized this database."
@@ -200,8 +203,9 @@ def query(db, session, scope="session"):
         sums = ",".join(f"sum({name}) AS {name},count({name}) AS {name}_known" for name in DIMENSIONS)
         sums += """,sum(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN input_tokens+output_tokens END) AS total_tokens,
             count(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN 1 END) AS total_tokens_known,
-            count(cache_read_tokens) AS cache_evaluable,
-            sum(CASE WHEN cache_read_tokens>0 THEN 1 ELSE 0 END) AS cache_hits"""
+            count(CASE WHEN cache_read_tokens IS NOT NULL AND input_tokens IS NOT NULL THEN 1 END) AS cache_evaluable,
+            sum(CASE WHEN input_tokens IS NOT NULL THEN cache_read_tokens END) AS cache_cached,
+            sum(CASE WHEN cache_read_tokens IS NOT NULL THEN input_tokens END) AS cache_input"""
         total = db.execute(chosen + f"SELECT count(*) AS n,{sums},sum(CASE WHEN state!='complete' OR state IS NULL OR completion_seen!=1 OR completion_seen IS NULL THEN 1 ELSE 0 END) AS incomplete FROM chosen", parameters).fetchone()
         captures["observations"] = total["n"]
         captures["incomplete"] = total["incomplete"] or 0
@@ -268,7 +272,7 @@ def call_reports(db, report, chosen, parameters):
     for source in sources:
         source["credit_discount"] = credit_discount.aggregate()
         tallies[id(source)] = {"estimated": dict.fromkeys(ESTIMATED, 0), "sums": dict.fromkeys(ESTIMATED, 0),
-                               "known": dict.fromkeys(ESTIMATED, 0), "hits": 0}
+                               "known": dict.fromkeys(ESTIMATED, 0), "cached": 0, "input": 0, "evaluable": 0, "error": 0}
     if chosen is None:
         return
     models = {source["requested_model"]: source for source in captures["models"]}
@@ -328,20 +332,24 @@ def call_reports(db, report, chosen, parameters):
                     tally["sums"][name] += values[name]
                     tally["known"][name] += 1
                     tally["estimated"][name] += name in estimated
-            cached = values["cache_read_tokens"] or 0
-            # An estimated split counts as a hit only above fit noise (tens of tokens on 1-5 char calls).
-            tally["hits"] += (cached > 0 and cached >= HIT_SHARE * values["input_tokens"]
-                              if "cache_read_tokens" in estimated else cached > 0)
+            if values["cache_read_tokens"] is not None and values["input_tokens"] is not None:
+                tally["cached"] += values["cache_read_tokens"]
+                tally["input"] += values["input_tokens"]
+                tally["evaluable"] += 1
+                # Independent calls' errors add in quadrature; one estimate without a fitted credit_error leaves the
+                # group's unknown. Every estimated cached value has an input, so this is also Cached's error.
+                error = values["cache_read_error"]
+                tally["error"] = None if tally["error"] is None or error is None else math.hypot(tally["error"], error)
     for source in sources:
         tally, n = tallies[id(source)], source["observations"]
         # Only groups with at least one estimated call get ~cells; exact-only groups keep their observed sums.
         for name in ESTIMATED:
             if tally["estimated"][name]:
                 source["estimates"][name] = metric(tally["sums"][name], tally["known"][name], n)
-        if tally["estimated"]["cache_read_tokens"]:
-            evaluable = tally["known"]["cache_read_tokens"]
-            source["estimates"]["cache_hit_rate"] = {"hits": tally["hits"], "evaluable": evaluable, "unknown": n - evaluable,
-                                                     "percentage": 100 * tally["hits"] / evaluable}
+        # An estimate of either side (exact cached over estimated input too) makes the share an estimate.
+        if tally["estimated"]["cache_read_tokens"] or tally["estimated"]["input_tokens"]:
+            source["estimates"]["cache_hit_rate"] = hit_share(tally["cached"], tally["input"], tally["evaluable"], n,
+                                                              tally["error"])
 
 
 def call_counters(row, model):
@@ -355,7 +363,9 @@ def call_counters(row, model):
     exact["total_tokens"] = (exact["input_tokens"] + exact["output_tokens"]
                              if exact["input_tokens"] is not None and exact["output_tokens"] is not None else None)
     values = {name: exact[name] if exact[name] is not None else guess.get(name) for name in ESTIMATED}
-    return values, {name for name in ESTIMATED if exact[name] is None and values[name] is not None}
+    estimated = {name for name in ESTIMATED if exact[name] is None and values[name] is not None}
+    values["cache_read_error"] = guess.get("cache_read_error") if "cache_read_tokens" in estimated else 0
+    return values, estimated
 
 
 def counter_item(source, name):
@@ -366,6 +376,24 @@ def counter_item(source, name):
 
 def hit_rate(source):
     return source.get("estimates", {}).get("cache_hit_rate") or source.get("cache_hit_rate", {})
+
+
+def error_text(error, cached):
+    """" ±N%": a group's cached standard error as a whole-percent share of the cell's cached tokens, Cached's own
+    total or Cache hit's paired with input; "" below 1% or unknown."""
+    share = error is not None and cached and error / cached
+    return f" ±{share:.0%}" if share and share >= .01 else ""
+
+
+def estimate_text(source, name, text, total):
+    """An estimated cell: "~" and its text, and Cached's ± as a share of its own total."""
+    return "~" + text + (error_text(hit_rate(source).get("error"), total) if name == "cache_read_tokens" else "")
+
+
+def hit_text(rate, digits):
+    """"~N%" Cache hit with its ±, or None without a share."""
+    hit = rate.get("percentage")
+    return None if hit is None else f"~{hit:.{digits}f}%{error_text(rate['error'], rate['cached'])}"
 
 
 def shows_discount(captures):
@@ -382,15 +410,14 @@ def capture_tables(captures):
             return None
         text = f"{total:,.6f}" if name == "credits" else value(total)
         if estimated:
-            text = "~" + text
+            text = estimate_text(source, name, text, total)
         if item["unknown"]:
             text += f" ({item['known']}/{item['known'] + item['unknown']})"
         return text
     show_discount = shows_discount(captures)
     def row(label, source):
         rate = hit_rate(source)
-        hit = rate.get("percentage")
-        hit = f"~{hit:.1f}%" if hit is not None else None
+        hit = hit_text(rate, 1)
         if hit is not None and rate["unknown"]:
             hit += f" ({rate['evaluable']}/{source['observations']})"
         discount = source["credit_discount"]
@@ -412,7 +439,7 @@ def capture_tables(captures):
 CAPTURE_NOTES = (
     "Partial cells: sum (known/all requests); ~ adds estimates where a call lacks the exact counter; — unavailable.",
     "~Tokens: total = context % of the model window; output ≈ chars / the model's fitted chars per token, else 4 (text, tool arguments, reasoning); cached fitted from credits.",
-    "Hit % = requests with cached tokens (reported, or ~estimated at 1% of input or more) / requests with a cached value.",
+    "Hit % = cached / input tokens over requests with both (reported, or ~estimated). ± = the ~cached standard error as a share of the cell: each model's fitted credit_error × credits / (miss - hit rate), independent calls in quadrature, omitted below 1% or unknown; the input/output split's error is not modeled.",
     "Root conversation carries the selected ID; Other linked holds workflow steps and subagents and may include helpers/forks. Disk credits are excluded.",
 )
 
@@ -476,13 +503,16 @@ def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
                 f" · {value(credits_text(credits['observed_sum']))} credits")
     show_discount = shows_discount(captures)
     def row(label, source):
-        hit, discount = hit_rate(source).get("percentage"), source["credit_discount"]["percentage"]
+        discount = source["credit_discount"]["percentage"]
         def tokens(name):
             item, estimated = counter_item(source, name)
-            return None if item["observed_sum"] is None else "~" * estimated + tokens_text(item["observed_sum"])
+            total = item["observed_sum"]
+            if total is None:
+                return None
+            return estimate_text(source, name, tokens_text(total), total) if estimated else tokens_text(total)
         return [label, source["observations"], credits_text(source["metrics"]["credits"]["observed_sum"]),
                 *(tokens(name) for name in ("input_tokens", "output_tokens", "cache_read_tokens")),
-                None if hit is None else f"~{hit:.0f}%",
+                hit_text(hit_rate(source), 0),
                 *([None if discount is None else f"~{discount:.0f}%"] if show_discount else [])]
     def order(model):
         total = model["metrics"]["credits"]["observed_sum"]

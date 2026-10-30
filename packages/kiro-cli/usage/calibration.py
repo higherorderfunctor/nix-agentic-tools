@@ -287,7 +287,7 @@ def fit_model(model, runs, version, effort):
     residual = max(map(off, colds))
     errors = [*map(off, colds + checked),
               *(abs(hit.credits - discount.price(rates, hit.input, hit.output, hit.input)) / hit.credits for *_, hit in hits)]
-    rates["credit_error"] = math.sqrt(statistics.fmean(error * error for error in errors))
+    rates["credit_error"] = math.sqrt(statistics.fmean(error * error for error in errors))  # estimate()'s ± per call
     reference, multipliers = discount.RATES[discount.PROFILE_MODEL], discount.FACTS["models"]
     share = multipliers[model]["rate_multiplier"] / multipliers[discount.PROFILE_MODEL]["rate_multiplier"]
     result = {"provenance": {"calls": len(errors) + 2 * len(pairs), "date": date.today().isoformat(), "effort": effort,

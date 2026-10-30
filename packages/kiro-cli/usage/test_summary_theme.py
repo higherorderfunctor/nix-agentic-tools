@@ -5,6 +5,7 @@ import json
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import query
 import summary_theme
@@ -90,6 +91,22 @@ class ThemeTests(unittest.TestCase):
                 self.assertEqual(lines[rule + 1][0], tee)  # the plain dash rule, one line down below the top edge
                 self.assertTrue(lines[1].startswith(vertical + " \uf080 Kiro usage"))
                 self.assertTrue(lines[-2].startswith(vertical + " \uf071 credits unknown"))
+
+    def test_estimated_error_cells_keep_alignment_in_a_box(self):
+        """± is part of an estimated Cached or Cache hit cell's text, so colored and bordered rows stay aligned."""
+        fixture = test_query.QueryTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        rates = {**query.credit_discount.RATES["claude-opus-5.5"], "credit_error": .1}
+        with patch.dict(query.credit_discount.RATES, {"claude-opus-5.5": rates}):
+            fixture.estimable("one", query.credit_discount.price(rates, 30000, 0, 30000))
+            report = query.query(fixture.db, "sess_root")
+        never = query.render_summary(report, (), load({"border": "rounded", "color": "never"}))
+        always = query.render_summary(report, (), load({"border": "rounded", "color": "always"}))
+        self.assertEqual(SGR.sub("", always), never)
+        self.assertEqual(len({len(line) for line in never.splitlines()}), 1)
+        self.assertRegex(never, r"│ Total\s+1\s+\S+\s+~30.0K\s+~0\s+~30.0K ±\d+%\s+~100% ±\d+%\s+│")
+        self.assertIn("\x1b[2m~30.0K ±", always)  # one estimate style over the whole cell
 
 
 if __name__ == "__main__":
