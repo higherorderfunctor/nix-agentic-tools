@@ -53,8 +53,8 @@
     # headers, so a lower-scope credential cannot accompany the reference
     # resolved by apiKeyHelper, and inherited Bedrock, Vertex or Foundry
     # switches, which would send model traffic past the proxy. Without a
-    # proxy, nonessential traffic and the autoupdater reach api.anthropic.com
-    # and downloads.claude.ai directly; the quiet defaults stop both.
+    # proxy, nonessential traffic reaches api.anthropic.com directly; the
+    # proxy-scoped quiet default stops it.
     settings =
       {
         apiKeyHelper = lib.escapeShellArg (lib.getExe helper);
@@ -68,7 +68,6 @@
           CLAUDE_CODE_USE_BEDROCK = "";
           CLAUDE_CODE_USE_FOUNDRY = "";
           CLAUDE_CODE_USE_VERTEX = "";
-          DISABLE_AUTOUPDATER = "1";
         };
       }
       // lib.optionalAttrs (backend == "hm" && rows != []) {modelPicker.options = rows;};

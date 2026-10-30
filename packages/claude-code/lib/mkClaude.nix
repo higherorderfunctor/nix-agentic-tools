@@ -619,6 +619,9 @@ in
         (lib.mkIf (resolvedSettings.reasoningEffort != null) {
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
+        (lib.mkIf (cfg.package != null) {
+          ai.claude.native.settings.env.DISABLE_AUTOUPDATER = lib.mkDefault "1";
+        })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
         (claudeProxy.config {inherit backend resolvedProxy;})
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
@@ -654,10 +657,11 @@ in
         }
         # Settings are configuration, so Nix owns the whole file and links it
         # read-only on both backends: an in-app change such as `/tui` does not
-        # persist, by design. `$schema` gives editors validation and completion
-        # of that file; it rides outside `native.settings` so the
-        # unrecognized-key guard never sees it, and it is added only to a
-        # non-empty document so it never makes an empty declaration write one.
+        # persist, by design. A managed package always carries the updater
+        # default, so the document is written; with nothing to say (an
+        # unmanaged package and no settings) none is, so it cannot shadow a
+        # project's own file. `$schema` gives editors validation and rides
+        # outside `native.settings`, so the unrecognized-key guard never sees it.
         (lib.mkIf (settingsDocument != {}) {
           ai.claude._generatedFiles.".claude/settings.json" = staged "settings" "json" {
             value = {"$schema" = "https://json.schemastore.org/claude-code-settings.json";} // settingsDocument;

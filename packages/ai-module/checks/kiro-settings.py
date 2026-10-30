@@ -130,7 +130,11 @@ with tempfile.TemporaryDirectory() as temporary:
             replacement.chmod(0o600)
             replacement.replace(cli)
             activate("plain")
-            assert json.loads(cli.read_text()) == {"chat.enableTangentMode": True}
+            expected_cli = {"chat.enableTangentMode": True}
+            # The updater setting is user-global, so only Home Manager writes it.
+            if backend == "hm":
+                expected_cli["app.disableAutoupdates"] = True
+            assert json.loads(cli.read_text()) == expected_cli
             assert feed.read_bytes() == b'{"lastFeedCheck":1}\n'
             assert sum(path.read_bytes() == b'{"chat.defaultModel":"in-app"}' for path in state.parent.glob("*.bak")) == 1
             # Renderer runs only in apply, after the provider writes its secret.

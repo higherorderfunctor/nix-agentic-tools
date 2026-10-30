@@ -36,9 +36,11 @@
   # The flags live in launcher-flags.nix, which extraction reconciliation also
   # reads, so it fails if upstream drops one from the root command. devenv's
   # launcher also carries the trust of the project hooks it generates
-  # (`hookTrustFor`), as a session flag: Codex reads hook trust only from user
-  # config and session flags, and devenv never writes the user's config.
+  # (`hookTrustFor`) and the effective `check_for_update_on_startup`, as session
+  # flags: Codex reads hook trust only from user config and session flags, and
+  # project config only in trusted projects.
   launcherFlags = import ./launcher-flags.nix;
+  sessionSettingKeys = ["check_for_update_on_startup"];
   codexPackage = cfg: cfg.package.launcherPackage or cfg.package;
   codexProxy = import ./proxy.nix {inherit inlineToml lib pkgs;};
   inlineToml = import ./inlineToml.nix {inherit lib;};
@@ -51,6 +53,9 @@
   } @ args: let
     hookTrust = hookTrustFor args;
     package = codexPackage cfg;
+    sessionOverrides =
+      lib.concatMap (key: lib.optional (cfg.native.settings.${key} != null) "${key}=${inlineToml cfg.native.settings.${key}}") sessionSettingKeys
+      ++ lib.optional (hookTrust != {}) (hookTrustOverride hookTrust);
   in
     lib.ai.mkLauncher pkgs {
       environmentVariables = launcherEnvironment;
@@ -60,10 +65,10 @@
         ++ lib.optional cfg.trustProjectForSession (
           "--run " + lib.escapeShellArg ''set -- -c "$(${pkgs.python3}/bin/python3 -c ${lib.escapeShellArg ''import json, os; print("projects={" + json.dumps(os.environ["DEVENV_ROOT"], ensure_ascii=False) + '={trust_level="trusted"}}')''})" "$@"''
         )
-        ++ lib.optionals (hookTrust != {}) (
-          lib.concatMap (flag: ["--add-flag" flag]) launcherFlags.hookTrust
-          ++ ["--add-flag" (lib.escapeShellArg (hookTrustOverride hookTrust))]
-        )
+        ++ lib.concatMap (override:
+          lib.concatMap (flag: ["--add-flag" flag]) launcherFlags.sessionConfig
+          ++ ["--add-flag" (lib.escapeShellArg override)])
+        sessionOverrides
         # devenv's ai.proxy selection: project config cannot carry a
         # provider, so it travels as session flags (./proxy.nix).
         ++ codexProxy.launcherFlags resolvedProxy
@@ -444,6 +449,11 @@
         type = lib.types.nullOr (lib.types.enum ["auto_review" "user"]);
         default = null;
         description = "Who reviews eligible interactive approval requests; this does not change the sandbox boundary.";
+      };
+      check_for_update_on_startup = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Check for Codex updates at startup. The managed default is false, delivered in user config on Home Manager and as a launcher session flag on devenv, without requiring project trust. With package = null, devenv keeps explicit values in the trust-gated project config. Explicit true wins; null omits the managed value and defers to Codex or a lower config scope.";
       };
       default_permissions = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -1168,9 +1178,11 @@ in
           Codex config.toml settings. Common stable keys are typed; unknown
           TOML-compatible keys are accepted as a native escape hatch. Both
           backends deliver the file as a read-only store symlink: Home Manager
-          always owns user `config.toml`, and devenv writes the trusted
-          project's `.codex/config.toml` when something is declared and
-          rejects keys Codex ignores at project scope. Codex refuses to save
+          always owns user `config.toml`, and devenv writes the project's
+          `.codex/config.toml` only when a project-scope setting remains
+          (settings the managed launcher carries are excluded). Normal project
+          trust applies to that file. Devenv rejects
+          keys Codex ignores at project scope. Codex refuses to save
           an in-app change (`/model`, `/experimental`, `codex mcp add`, the
           trust prompt) into a Nix-owned file, so declare those here. Model and
           reasoning effort are omitted unless declared, leaving Codex's lower
@@ -1346,7 +1358,9 @@ in
       # generates, beside any `hooks.state` declared for other hooks (see
       # `hookTrustFor`); devenv's launcher carries its own.
       hookTrust = hookTrustFor args;
-      settings = lib.recursiveUpdate (aiCommon.filterNulls (permissionSettings
+      # devenv: Codex skips untrusted project config; codexInstallPackage
+      # carries sessionSettingKeys through the managed launcher's --config.
+      settings = lib.recursiveUpdate (aiCommon.filterNulls ((removeAttrs permissionSettings (lib.optionals (!isHm && cfg.package != null) sessionSettingKeys))
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         })) (lib.optionalAttrs (isHm && hookTrust != {}) {hooks.state = hookTrust;});
@@ -1392,6 +1406,8 @@ in
         }
         {
           ai.codex.native.settings = lib.mkMerge [
+            # The Nix-installed CLI should not check for its own replacement.
+            (lib.mkIf (cfg.package != null) {check_for_update_on_startup = lib.mkDefault false;})
             (lib.mkIf (resolvedSettings.reasoningEffort != null) {
               model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
             })
@@ -1545,8 +1561,8 @@ in
           # declaration; chatgpt-codex-readonly-config holds that. Ordinary
           # leaves, not a whole-content default, so a consumer extending the
           # document keeps the generated siblings. Home Manager always owns the
-          # user file; devenv writes the project file only when something is
-          # declared.
+          # user file; devenv writes project config only when something remains
+          # after session settings are removed.
           ai.codex._generatedFiles.${configFile} = lib.mkIf (isHm || settings != {}) {
             content.value = settings;
             format = "toml";

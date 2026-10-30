@@ -1,6 +1,6 @@
 ## Kiro feature availability and client settings
 
-> **Last verified:** 2026-10-15 — rollout state retains every manifest field
+> **Last verified:** 2026-10-30 — rollout state retains every manifest field
 > except description; coverage rejects unknown fields and requires both public
 > and internal treatment to be 100% before preserving the stock package.
 
@@ -85,8 +85,9 @@ preserving forward compatibility there. `cli.allowUnrecognizedSettings`
 suppresses intentional spelling warnings without bypassing devenv's workspace
 guard; entries that become known warn as stale. Path syntax and literal dotted
 key examples are in [settings-shape.md](settings-shape.md). Inspection uses the
-registry and workspace facts plus the existing `telemetry.enabled` typed option;
-it does not infer a nested schema for object-valued settings.
+registry and workspace facts plus the known key `app.disableAutoupdates` and the
+typed `telemetry.enabled` option; it does not infer a nested schema for
+object-valued settings.
 
 ### The scope boundary comes from the pinned client
 

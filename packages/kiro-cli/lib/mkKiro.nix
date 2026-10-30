@@ -950,10 +950,11 @@
   kiroSettingKeys = lib.unique (kiroFact "settingKeys" ++ workspaceOverridableSettings);
 
   flattenKiroSettings = aiCommon.flattenDotKeysUntil kiroSettingKeys;
+  flatNativeSettings = cfg: flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings);
 
-  # The extracted lists omit this existing typed global setting. These are
+  # The extracted lists omit these Rust-side global settings. These are
   # complete literal file keys; object-valued settings remain opaque below them.
-  knownNativeSettingKeys = lib.unique (kiroSettingKeys ++ ["telemetry.enabled"]);
+  knownNativeSettingKeys = lib.unique (kiroSettingKeys ++ ["app.disableAutoupdates" "telemetry.enabled"]);
   nativeSettingsKnown = openKeys.fromPaths {
     names = knownNativeSettingKeys;
     paths = [];
@@ -969,7 +970,7 @@
   # `flattenKiroSettings` stops at a known key, so the written key is now the
   # setting key and the two agree.
   nativeSettingKeys = cfg:
-    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings));
+    builtins.attrNames (flatNativeSettings cfg);
 
   # devenv-ONLY. Never add this to `mkAssertions`: under Home Manager these same
   # keys are correct, and asserting there would reject a working config.
@@ -1118,7 +1119,12 @@
     wrapKiroPackage {
       inherit (cfg.cli) extraPackages trustedMcpTools usageTracking useFhsSandbox v3;
       package = resolvePackage cfg;
-      environmentVariables = launcherEnvironment;
+      # A false global setting must also release the package's environment guard.
+      environmentVariables =
+        lib.optionalAttrs (((flatNativeSettings cfg)."app.disableAutoupdates" or null) == false) {
+          KIRO_NO_AUTO_UPDATE = "0";
+        }
+        // launcherEnvironment;
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
       secretOptionPaths =
         lib.foldl' (acc: entry:
@@ -1360,15 +1366,17 @@ in
             that file up and restores the declaration, so in-app changes do not
             persist.
 
-            Known keys are typed; unknown complete file keys produce a spelling
+            Selected known keys are typed; unknown complete file keys produce a spelling
             warning on both backends and pass through on Home Manager. Inspection uses the extracted
-            setting registry and workspace list, plus the existing typed telemetry
-            key, and stops below each complete key's value. The lists are not a
+            setting registry and workspace list, plus the known key
+            `app.disableAutoupdates` and the typed `telemetry.enabled` key, and stops below each complete key's value. The lists are not a
             complete schema. Under devenv every key outside the workspace
-            allowlist is refused, including two of the typed options above
-            (`chat.enableWorkflows`, `telemetry.enabled`). Those are global-only
+            allowlist is refused, including `app.disableAutoupdates`,
+            `chat.enableWorkflows` and `telemetry.enabled`. Those are global-only
             settings; the type accepts them because Home Manager writes the file
-            where they work.
+            where they work. Home Manager defaults `app.disableAutoupdates` to
+            true when Nix installs Kiro; an explicit false releases the package
+            environment guard too.
 
             Nested Nix lowers to kiro's flat dotted keys, and it stops at a
             COMPLETE key rather than flattening all the way, so an object-valued
@@ -1713,7 +1721,7 @@ in
         templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
         inherit (kiroSecrets) urlSecretEnv;
       };
-      flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings);
+      flatSettings = flatNativeSettings cfg;
       permissionRules = mkPermissionRules cfg;
       steeringEmitters = mkSteeringEmitters {
         inherit cfg mergedContext hasMergedContext mergedRules;
@@ -1722,6 +1730,9 @@ in
     in
       lib.mkMerge ([
           (featureImplications backend cfg)
+          (lib.mkIf (isHm && cfg.cli.package != null) {
+            ai.kiro.cli.native.settings.app.disableAutoupdates = lib.mkDefault true;
+          })
           (kiroToolPolicy {inherit backend cfg mergedServers;})
           (lib.optionalAttrs (!isHm && options ? enterShell) {
             enterShell = lib.concatStrings (lib.mapAttrsToList (name: setting:

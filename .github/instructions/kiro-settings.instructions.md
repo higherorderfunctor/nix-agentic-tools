@@ -7,7 +7,7 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-15 — the TUI source is decoded statically from each
+> **Last verified:** 2026-10-30 — the TUI source is decoded statically from each
 > release; runtime surfaceSupport declarations own normalized backend reach and
 > nested delivery diagnostics. Unknown complete settings keys warn; Home Manager
 > permits them, while devenv refuses every key outside the workspace allowlist.
@@ -101,8 +101,8 @@ The generic `lib/open-keys` inspector checks the flattened file as one struct
 level. Every dotted key stays one literal name, and each known value is opaque:
 `chat.modelDefaults` accepts arbitrary model names and fields without treating
 them as setting keys. The known names come from `kiroSettingKeys`, plus the
-existing typed `telemetry.enabled` option that neither extracted list names.
-These facts are not a complete nested schema.
+known key `app.disableAutoupdates` and the typed `telemetry.enabled` option that
+neither extracted list names. These facts are not a complete nested schema.
 
 An unknown key such as `chat.defautModel` warns with a suggestion for
 `chat.defaultModel` on Home Manager and devenv. Home Manager writes it

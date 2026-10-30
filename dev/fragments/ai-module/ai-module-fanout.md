@@ -1,6 +1,6 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-26 — gap predicates and dynamic reasons also
+> **Last verified:** 2026-10-30 — gap predicates and dynamic reasons also
 > receive the backend; runtime factories stage surfaces in `_generatedFiles`
 > (every runtime surface included) and forward them through the ai-module
 > layer-1 helper over one generated tree, which every staged entry's delivery
@@ -284,11 +284,18 @@ The ai module fans out TWO kinds of configuration:
   defaults to supply them. Normalized reasoning effort lowers to
   `model_reasoning_effort` at default priority; explicit native values override
   it. Both backends deliver `config.toml` as a read-only store symlink: Home
-  Manager always owns `${configDir}/config.toml`, and devenv writes the trusted
-  project's `.codex/config.toml` when something is declared. Every Codex config
-  writer writes a temporary beside the link's target, so an in-app save
-  (`/model`, `/experimental`, `codex mcp add`, the trust prompt, `/hooks`) fails
-  with "failed to persist config" and the link survives;
+  Manager always owns `${configDir}/config.toml`, and devenv writes the
+  project's `.codex/config.toml` when project settings are declared. The CLI
+  update check defaults off when Nix installs Codex; an explicit
+  `native.settings.check_for_update_on_startup = true` wins and `null` omits the
+  override. Home Manager writes it in user config; devenv's managed launcher
+  passes the effective merged value through `--config` flags, so untrusted
+  projects receive it too. For managed packages, devenv excludes this key from
+  the project file; with `package = null`, devenv has no launcher and keeps an
+  explicit value in the trust-gated project file. Every Codex config writer
+  writes a temporary beside the link's target, so an in-app save (`/model`,
+  `/experimental`, `codex mcp add`, the trust prompt, `/hooks`) fails with
+  "failed to persist config" and the link survives;
   `chatgpt-codex-readonly-config` holds that against the pinned binary. Devenv
   rejects provider, profile, notification, response-metadata, realtime-endpoint
   and telemetry keys that Codex ignores at project scope. MCP configuration is

@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest setEnable;
-  inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDaemonDefault;
+  inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDefaults;
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
   # Runtimes whose record declares settings support.
   settingsHarnessNames = builtins.filter (name: (optionPaths.records.${name}.surfaceSupport.settings.backends or []) != []) harnessNames;
@@ -396,7 +396,7 @@ in {
       in
         ((claudeSettings hm).effortLevel or null)
         == "medium"
-        && hmCodexSettings hm == withHmDaemonDefault {}
+        && hmCodexSettings hm == withHmDefaults {}
         && ((claudeSettings devenv).effortLevel or null) == "medium"
         && !(devenv.config.ai.codex.files ? ".codex/config.toml")
     );

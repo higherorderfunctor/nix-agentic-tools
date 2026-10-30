@@ -631,6 +631,19 @@
 
     ## Configuration
 
+    ### Update checks
+
+    Nix-installed harnesses default update checks off. To opt back in, use
+    Claude's `ai.claude.native.settings.env.DISABLE_AUTOUPDATER = "0"`
+    (with a proxy, also clear `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`),
+    Codex's `ai.codex.native.settings.check_for_update_on_startup = true`,
+    Copilot CLI's `COPILOT_AUTO_UPDATE=true`, or Kiro's Home Manager setting
+    `ai.kiro.cli.native.settings.app.disableAutoupdates = false`.
+    Kiro on devenv or as a standalone package uses `KIRO_NO_AUTO_UPDATE=0`;
+    release any global `app.disableAutoupdates` setting too. Its terminal
+    component reads only that global setting, which devenv cannot own.
+    `package = null` adds no Claude, Codex or Kiro settings default.
+
     <details>
     <summary><strong>Unified ai.* Module</strong></summary>
 
@@ -1051,10 +1064,17 @@
 
     Settings are Nix's alone. Both backends deliver `config.toml` as a read-only
     store symlink: Home Manager always owns the user file under
-    `ai.codex.configDir`, and devenv writes the trusted project's
-    `.codex/config.toml` when something is declared. Codex refuses to save an in-app
+    `ai.codex.configDir`, and devenv writes the project's
+    `.codex/config.toml` when settings other than launcher-carried ones are declared. Codex refuses to save an in-app
     change into it (`/model`, `/experimental` and `codex mcp add` fail with "failed
     to persist config"), so declare those settings under `ai.codex.native.settings`.
+    The CLI update check defaults off when Nix installs Codex. Home Manager writes
+    it in user config; devenv's managed launcher passes the effective merged setting
+    through `--config` flags, so it applies even in untrusted projects. An explicit
+    `ai.codex.native.settings.check_for_update_on_startup = true` wins; `null`
+    omits the override. For managed packages, devenv excludes this key from
+    `.codex/config.toml`. With `package = null`, devenv has no launcher and keeps an
+    explicit value in the trust-gated project file.
 
     Project trust lives in that file too. With Home Manager, declare each clone you
     trust:

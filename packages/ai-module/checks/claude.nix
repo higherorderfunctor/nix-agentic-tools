@@ -22,15 +22,20 @@
     {second = false;}
     {}
   ];
-  fixture = map (settings: let
+  fixture = map (flags: let
     evaluate = enable:
       (harness.evalHmWithSpecialArgs {lib = dagLib;} {
         ai = {
           claude = {
             inherit enable;
-            # The flags alone: installMethod is a string leaf, read in module-eval.
-            native.installMethod = null;
-            native.unpinLaunchEffort = lib.mkForce settings;
+            native = {
+              # The flags alone: installMethod is a string leaf, read in module-eval.
+              installMethod = null;
+              # Drop the updater default so settings.json is not written and
+              # apply here tracks only the .claude.json flag map.
+              settings = lib.mkForce {};
+              unpinLaunchEffort = lib.mkForce flags;
+            };
           };
           gitSshConfigWorkaround = false;
         };
@@ -50,9 +55,9 @@
       mode = config.home.activation.ai-claude-config-mode.text or "";
     };
   in
-    assert if settings == {}
+    assert if flags == {}
     then !(enabled.ai.files ? ".claude.json")
-    else enabled.ai.files.".claude.json".method == "rw" && enabled.ai.files.".claude.json".content.value == settings;
+    else enabled.ai.files.".claude.json".method == "rw" && enabled.ai.files.".claude.json".content.value == flags;
     assert lib.all (config: config.ai.claude.legacyLedgers == [legacy] && builtins.elem legacy config.ai.legacyLedgers) [enabled disabled never];
     assert !(disabled.ai.files ? ".claude.json") && !(devenv.ai.files ? ".claude.json");
     assert !(disabled.home.activation ? ai-claude-config-mode) && !(devenv.tasks ? "ai:claude-config-mode");
@@ -63,12 +68,12 @@
     # An empty flag map has no plan: prune retires prior flags without apply.
     assert disabled.home.activation ? ai-files-prune && !(disabled.home.activation ? ai-files-apply);
     assert enabled.home.activation ? ai-files-prune;
-    assert if settings == {}
+    assert if flags == {}
     then !(enabled.home.activation ? ai-files-apply)
     else builtins.elem "ai-files-ready" enabled.home.activation.ai-files-apply.before; {
-      inherit settings;
       disabled = generate disabled;
       enabled = generate enabled;
+      settings = flags;
     })
   declarations;
   fixtureJson = builtins.toJSON {

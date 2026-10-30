@@ -1,6 +1,8 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-17 — MCP header exports resolve redact references
+<!-- cspell:ignore figterm -->
+
+> **Last verified:** 2026-10-30 — MCP header exports resolve redact references
 > at launch and abort on failure; URL references resolve at activation. KAS
 > 0.66.43 (Kiro 2.32.0) ships no image module, so the drift check loads ONNX
 > alone. The package-bound KAS and argv dispatch contracts below are otherwise
@@ -107,6 +109,30 @@ that CLI release's fetched input, never from the user's unpacked cache. Fresh
 launches and launches with an older cache therefore use the same selected store
 tree. Darwin's launcher still receives its app-bundle argv0, and its raw chat
 sibling inherits these exports. Linux FHS and direct payloads share them.
+
+Home Manager defaults `ai.kiro.cli.native.settings.app.disableAutoupdates` to
+`true` in the global settings file it already owns when `cli.package` is
+non-null. With `cli.package = null`, no updater default is added. Set it to
+`false` to re-enable checks; the managed launcher also releases the package's
+environment guard. An explicit `cli.environmentVariables.KIRO_NO_AUTO_UPDATE`
+still wins. The global setting covers `kiro-cli-term` (figterm), which does not
+read `KIRO_NO_AUTO_UPDATE`. Devenv cannot write this global-only setting, so any
+terminal update policy there comes from the user's global settings.
+
+Both package launchers default `KIRO_NO_AUTO_UPDATE=1`. On devenv or with the
+package alone, set it to `0`, `false`, `off`, `no` (case-insensitive), or empty
+to re-enable checks. The guard exports private `NAT_KIRO_AUTO_UPDATE=on` and
+unsets `KIRO_NO_AUTO_UPDATE`. On Linux, the inner chat wrapper preserves that
+opt-in and clears the private marker before starting chat, so child launchers
+apply their own defaults; direct `kiro-cli-chat` calls also clear it. On Darwin,
+bundle discovery bypasses the chat wrapper, so the marker remains set after an
+opt-in. This only makes nested launchers keep the opt-in. Any global
+`app.disableAutoupdates = true` must also be released. This handles
+presence-based consumers too. The binary's exact update-path semantics remain
+unverified: isolated `--version` and unauthenticated probes reached only version
+output or the authentication prompt. The stub-based
+`kiro-autoupdate-wrapper-chain` check tests the Linux wrapper composition
+without running Kiro.
 
 `lib/kas.nix` extracts the complete runtime through `extract/embedded-kas.py`.
 The extractor first selects the target CPU slice of a universal Mach-O (the

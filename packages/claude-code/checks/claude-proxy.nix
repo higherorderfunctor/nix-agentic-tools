@@ -45,7 +45,6 @@
   quiet = settings:
     settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
     == "1"
-    && settings.env.DISABLE_AUTOUPDATER == "1"
     && settings.disableClaudeAiConnectors;
 in {
   checks = lib.mergeAttrsList [
@@ -60,14 +59,16 @@ in {
         && settings.env.ANTHROPIC_AUTH_TOKEN == "")
       (map (settingsFor eval) (builtins.attrValues keys))))
 
-    # The quiet defaults and the proxy-derived leaves yield to a consumer's
-    # value; nothing selected writes nothing, and a selection no longer warns
-    # that Claude ignores ai.proxy.
+    # The quiet defaults and proxy-derived leaves yield to a consumer's
+    # value. A selection no longer warns that Claude ignores ai.proxy.
     (perBackend "precedence" (eval: let
       overridden = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
         ai.claude.native.settings = {
           disableClaudeAiConnectors = false;
-          env.DISABLE_AUTOUPDATER = "0";
+          env = {
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "";
+            DISABLE_AUTOUPDATER = "0";
+          };
         };
       })));
       userBase = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
@@ -79,6 +80,7 @@ in {
     in
       overridden.env.DISABLE_AUTOUPDATER
       == "0"
+      && overridden.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC == ""
       && !overridden.disableClaudeAiConnectors
       && userBase.env.ANTHROPIC_BASE_URL == "http://127.0.0.1:9999"
       && userBase.env.ANTHROPIC_AUTH_TOKEN == ""
@@ -86,7 +88,9 @@ in {
       && (withoutPackage.config.home.packages or withoutPackage.config.packages) == []
       && builtins.any (lib.hasInfix "only the managed launcher suppresses") withoutPackage.config.warnings
       && !((claudeSettings unselected).env or {} ? ANTHROPIC_BASE_URL)
-      && !((claudeSettings unselected).env or {} ? DISABLE_AUTOUPDATER)
+      && (claudeSettings unselected).env.DISABLE_AUTOUPDATER == "1"
+      && (claudeSettings selected).env.DISABLE_AUTOUPDATER == "1"
+      && !((claudeSettings withoutPackage).env ? DISABLE_AUTOUPDATER)
       && !((claudeSettings unselected) ? disableClaudeAiConnectors)
       && !(builtins.any (lib.hasInfix "does not deliver it to claude") selected.config.warnings)))
 

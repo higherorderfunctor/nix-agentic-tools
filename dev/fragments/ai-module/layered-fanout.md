@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-26 — shared AGENTS.md uses readable
+> **Last verified:** 2026-10-30 — shared AGENTS.md uses readable
 > `.agents/rules/` child indexes, preserves runtime audiences and retains
 > structured index metadata; Copilot writes named rules and unnamed context
 > independently under `.github/`; non-AI owners use the same layer-1 helper;
@@ -148,13 +148,16 @@ rather than a second path field: a runtime names exactly the groups it moves.
   Nix-owned read-only links rather than reconciled documents, and an in-app
   change such as `/tui` does not persist. Every settings contribution goes
   through `ai.claude.native.settings`, so one entry carries the whole document.
-  Claude's user-global `.claude.json` is the exception: it holds OAuth tokens
-  and runtime state, so it uses `rw` on Home Manager only. It carries the unpin
-  flags and `installMethod`; with no flags and a null `installMethod` no
-  document is staged, and the engine still retires previous keys. The legacy
-  JSON ledger is declared while disabled too. `activation.claude-config-mode`
-  runs after `materialized`, even with no flags, stripping group and other
-  access from regular files while Claude is enabled.
+  With a Nix-installed package that document is always written on both backends,
+  because it carries the updater default; with `package = null` and nothing
+  declared, none is written. The devenv `.mcp.json` still requires a non-empty
+  server declaration. Claude's user-global `.claude.json` is the exception: it
+  holds OAuth tokens and runtime state, so it uses `rw` on Home Manager only. It
+  carries the unpin flags and `installMethod`; with no flags and a null
+  `installMethod` no document is staged, and the engine still retires previous
+  keys. The legacy JSON ledger is declared while disabled too.
+  `activation.claude-config-mode` runs after `materialized`, even with no flags,
+  stripping group and other access from regular files while Claude is enabled.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -192,16 +195,18 @@ rather than a second path field: a runtime names exactly the groups it moves.
   0444 copy alike. A copy is still the right method: the next activation or
   shell entry backs the in-app file up and restores the declaration, while a
   symlink would block Home Manager's link check or be skipped by devenv. Home
-  Manager always claims both user-global files (`{}` and an empty server map);
-  devenv claims a project file only when something is declared. `mcp.json` is
-  0400 with a URL secret, otherwise 0444. Engine apply waits for the secrets
-  point whenever the plan contains a renderer: HM includes `sops-nix`, and
-  devenv uses registered `secretNodes`. The renderer exports its backend root
-  and keeps devenv's project-root anchor for relative secret readers. Hooks
-  state `method = "ro"` because the v3 scan keeps only `isFile()` entries; the
-  engine retires them at N→0. Hooks, settings and steering ledgers are ungated
-  upgrade declarations. Permissions remain HM-only because Kiro never reads them
-  from project `.kiro/`.
+  Manager always claims both user-global files, including the updater default
+  when Nix installs the package and an empty server map when none is declared.
+  With `package = null`, it adds no updater default; devenv claims a project
+  file only when something is declared. `mcp.json` is 0400 with a URL secret,
+  otherwise 0444. Engine apply waits for the secrets point whenever the plan
+  contains a renderer: HM includes `sops-nix`, and devenv uses registered
+  `secretNodes`. The renderer exports its backend root and keeps devenv's
+  project-root anchor for relative secret readers. Hooks state `method = "ro"`
+  because the v3 scan keeps only `isFile()` entries; the engine retires them at
+  N→0. Hooks, settings and steering ledgers are ungated upgrade declarations.
+  Permissions remain HM-only because Kiro never reads them from project
+  `.kiro/`.
 - **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
   (`paths:`) loader passes `includeExternal: false` at Project scope, with no
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into

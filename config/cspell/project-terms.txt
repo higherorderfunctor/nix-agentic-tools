@@ -1,5 +1,6 @@
 apikey
 AUTOUPDATER
+AUTOUPDATES
 AWSLAMBDA
 bindingset
 Boehm

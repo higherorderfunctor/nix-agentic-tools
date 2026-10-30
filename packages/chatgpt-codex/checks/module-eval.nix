@@ -36,7 +36,7 @@
     lib.filter (target: lib.hasPrefix ".codex/rules/" target.path) (engineTargets evaluated);
   execpolicyRule = evaluated: name: targetAt evaluated ".codex/rules/${name}";
   execpolicyInput = evaluated: name: markdownInput evaluated ".codex/rules/${name}";
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexGlobalFlags hmCodexSettings withHmDaemonDefault;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexGlobalFlags hmCodexSettings withHmDefaults;
 in {
   checks = {
     # ── Codex package/factory enable vertical ───────────────────────
@@ -49,6 +49,40 @@ in {
         && !devenv.config.ai.codex.enable
         && hm.config.home.packages == []
         && devenv.config.packages == []
+    );
+
+    module-codex-update-check-default-overridable = mkTest "codex-update-check-default-overridable" (
+      lib.all (
+        eval: let
+          evaluate = settings: package:
+            eval {
+              ai.codex = {
+                enable = true;
+                inherit package;
+                native.settings = settings;
+              };
+            };
+          native = evaluated: evaluated.config.ai.codex.native.settings;
+          settings = evaluated: evaluated.config.ai.codex.files.".codex/config.toml".content.value or {};
+          default = evaluate {} aiStubs.chatgpt-codex;
+          overridden = evaluate {check_for_update_on_startup = true;} aiStubs.chatgpt-codex;
+          nullSetting = evaluate {check_for_update_on_startup = null;} aiStubs.chatgpt-codex;
+          unmanaged = evaluate {} null;
+          unmanagedExplicit = value: evaluate {check_for_update_on_startup = value;} null;
+        in
+          (native default).check_for_update_on_startup
+          == false
+          && (native overridden).check_for_update_on_startup == true
+          && (native nullSetting).check_for_update_on_startup == null
+          && (native unmanaged).check_for_update_on_startup == null
+          && lib.all (evaluated:
+            if evaluated.config ? home
+            then (hmCodexSettings evaluated).check_for_update_on_startup == (native evaluated).check_for_update_on_startup
+            else !(evaluated.config.ai.codex.files ? ".codex/config.toml")) [default overridden]
+          && !((settings nullSetting) ? check_for_update_on_startup)
+          && !((settings unmanaged) ? check_for_update_on_startup)
+          && lib.all (value: (settings (unmanagedExplicit value)).check_for_update_on_startup == value) [false true]
+      ) [evalDevenv evalHm]
     );
 
     # Both backends always install a launcher for the document preflight.
@@ -492,7 +526,7 @@ in {
         devenv = evalDevenv {ai.codex.enable = true;};
       in
         hmCodexSettings hm
-        == withHmDaemonDefault {}
+        == withHmDefaults {}
         && !(devenv.config.ai.codex.files ? ".codex/config.toml")
         && !(devenv.config.files ? ".codex/config.toml")
     );
@@ -528,6 +562,7 @@ in {
           enable = true;
           native.settings = {
             # Null beats Home Manager's mkDefault, as it does every default.
+            check_for_update_on_startup = null;
             features.daemon_auto_start = null;
           };
         };
@@ -756,7 +791,7 @@ in {
         devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.value;
       in
         hmCodexSettings hm
-        == withHmDaemonDefault expected
+        == withHmDefaults expected
         && devenvSettings == expected
     );
 
@@ -794,7 +829,7 @@ in {
           };
       in
         withoutBackendRoots hmSettings
-        == withHmDaemonDefault (withoutBackendRoots devenvSettings)
+        == withHmDefaults (withoutBackendRoots devenvSettings)
         && hmSettings.approval_policy.granular.rules
         && !hmSettings.approval_policy.granular.request_permissions
         && hmSettings.sandbox_mode == "workspace-write"
@@ -914,7 +949,7 @@ in {
           };
       in
         withoutBackendRoots hmSettings
-        == withHmDaemonDefault (withoutBackendRoots devenvSettings)
+        == withHmDefaults (withoutBackendRoots devenvSettings)
         && hmSettings.default_permissions == "project-edit"
         && hmSettings.permissions.project-edit.filesystem.":minimal" == "read"
         && hmSettings.permissions.project-edit.filesystem.":workspace_roots"."**/*.env" == "deny"
@@ -2037,6 +2072,7 @@ in {
         };
       };
       assert lib.all (assertion: assertion.assertion) hm.config.assertions;
+      # hooks.state travels only in session flags on devenv.
       assert !(devenv.config.ai.codex.files ? ".codex/config.toml");
       assert builtins.length devenvStateFailures == 1;
       assert hasLiteral "hooks.state has no effect in project" (lib.head devenvStateFailures).message;
