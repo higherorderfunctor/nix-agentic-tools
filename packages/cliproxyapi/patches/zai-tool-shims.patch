@@ -250,7 +250,7 @@ index e8b08d35..1d758e32 100644
 +			}
  		}
  		lines := bytes.Split(data, []byte("\n"))
- 		for i, line := range lines {
+ 		var eventBuf bytes.Buffer
 @@ -385,7 +392,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  	} else {
  		messageID := claudeMessageIDFromResponse(data)
