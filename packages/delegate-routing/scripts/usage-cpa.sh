@@ -24,7 +24,7 @@ usage_project() {
         | todateiso8601
       end;
     def window($seconds; $used; $reset; $status):
-      if ($used | type) != "number" then error("usage percent") else
+      if ($used | type) != "number" or ($used | isfinite | not) then error("usage percent") else
         {usedPercent: $used, remainingPercent: (100 - $used),
          # z.ai omits the reset time of a window that has not started yet.
          resetsAt: (if $reset == null and $used == 0 then null else ($reset | utc) end),
@@ -103,7 +103,7 @@ usage_project() {
             | if (.status | type) != "string" then error("opencode status") else . end
             | (.windowSeconds // (if $name == "rolling" then 18000
                 elif $name == "weekly" then 604800 else (.resetsAt | calendar_month) end)) as $seconds
-            | if ($seconds | type) != "number" or $seconds <= 0 then error("opencode duration") else . end
+            | if ($seconds | type) != "number" or ($seconds | isfinite | not) or $seconds <= 0 then error("opencode duration") else . end
             | named_window($seconds; null; .percent; .resetsAt; .status)) | from_entries)}
       else
         if .code != 200 then error("z.ai envelope") else . end
