@@ -69,19 +69,24 @@ def column(header, name):
     return labels.index(name)
 
 
+# The pinned limit cell forms, as inline tokens with empty text dropped: a
+# bold amount, or bold Unlimited with the limited-time note. Anything else in
+# the cell (a second amount, a footnote) is refused rather than ignored.
+UNLIMITED_NOTE = [("html_inline", "<br />"), ("html_inline", "<small>"), ("text", "limited time"), ("html_inline", "</small>")]
+
+
 def limit(cell):
-    children = cell.children
-    opens = [index for index, child in enumerate(children) if child.type == "strong_open"]
-    if len(opens) != 1 or children[opens[0] + 2].type != "strong_close":
+    shape = [(child.type, child.content) for child in cell.children if child.type != "text" or child.content]
+    if len(shape) < 3 or [kind for kind, _ in shape[:3]] != ["strong_open", "text", "strong_close"]:
         raise ValueError(f"OpenCode Go monthly limit cell changed shape: {cell.content}")
     # The strong span is already decoded to one string; no parser reads a
     # currency amount out of it.
-    value = children[opens[0] + 1].content
-    if value == "Unlimited":
+    value, note = shape[1][1], shape[3:]
+    if value == "Unlimited" and note == UNLIMITED_NOTE:
         return "unlimited"
     match = re.fullmatch(r"\$([0-9]+)(\.[0-9]+)?", value)
-    if match is None:
-        raise ValueError(f"OpenCode Go monthly limit is not a dollar amount: {value}")
+    if match is None or note:
+        raise ValueError(f"OpenCode Go monthly limit cell changed shape: {cell.content}")
     return float(match[0][1:]) if match[2] else int(match[1])
 
 
@@ -172,8 +177,6 @@ def extract(catalog, page):
         model_column, limit_column = column(header, "Model"), column(header, "Monthly limit")
         limits = {}
         for row in rows:
-            if len(row) != len(header):
-                raise ValueError(f"OpenCode Go limit row changed shape: {row[0].content}")
             name = base_name(row[model_column].content)
             if name not in names:
                 raise ValueError(f"OpenCode Go limit row maps to no model ID: {row[model_column].content}")
