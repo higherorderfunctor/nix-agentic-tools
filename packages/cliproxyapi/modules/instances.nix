@@ -222,6 +222,18 @@ in {
               message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.models or apiKey.apis.${api}.models; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
             }) (builtins.attrNames (providersLib.served apiKey)))
           (providersLib.apiKeys instance))
+          # A vendor that refuses some models refuses them on every served API,
+          # whether its defaults or a definition put them there.
+          ++ lib.concatLists (lib.mapAttrsToList (credentialName: credential: let
+              vendor = providersLib.vendors.${credential.vendor};
+              refused = lib.filter vendor.refuses (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api)) (builtins.attrNames (providersLib.served credential.apiKey)));
+            in [
+              {
+                assertion = refused == [];
+                message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}: vendor `${credential.vendor}` refuses models ${lib.concatMapStringsSep ", " (model: "`${model}`") (lib.unique refused)}. ${vendor.refusal}";
+              }
+            ])
+            (lib.filterAttrs (_: credential: credential.vendor != null && credential.apiKey != null && providersLib.vendors.${credential.vendor} ? refuses) instance.credentials))
           ++ lib.concatLists (lib.mapAttrsToList (clientName: client:
             map (choice: let
               result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;
