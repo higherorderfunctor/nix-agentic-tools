@@ -119,8 +119,7 @@ only: `access.api-keys[]`, `access.key-allowlist[].api-key`,
 per upstream family the group and key `proxy-url`, `headers.<name>` and
 `api-key`. A proxy URL or a header that holds no credential still takes a
 reference (`redact.file` or `redact.command`), since the type cannot tell which
-values carry one. Upstream credentials' `apiKey.headers` render into the group
-`headers`, so they take references too.
+values carry one.
 
 `server.tls.key`, the TLS private key file, is a `secretFile` node: it takes a
 reference, which the service launcher writes to a 0600 file that the rendered

@@ -40,16 +40,6 @@
   # shared-URL check in ../modules/instances.nix compare the same string.
   baseUrlType = types.strMatching "https?://[!-~]+";
 
-  # CPA marks every upstream header secret (extract/annotations.json), and
-  # applies a group's headers to each of its keys (internal/config/config_v8.go,
-  # sharedKeyFields), so one map renders on every block it reaches.
-  headersOption = scope:
-    mkOption {
-      type = types.attrsOf redact.types.redacted;
-      default = {};
-      description = "Extra upstream request headers ${scope}, each value a redact reference. CPA resolves `$CPA-SESSION-ID` to its session identifier and `$<Client-Header>` to that client request header, omitting the header when the value is absent.";
-    };
-
   apiKeyType = types.submodule {
     options = {
       apis = mkOption {
@@ -62,7 +52,6 @@
                     type = baseUrlType;
                     description = "The upstream base URL for this API.";
                   };
-                  headers = headersOption "for this API, over the credential's `headers`";
                   models = mkOption {
                     type = types.nullOr (types.nonEmptyListOf types.str);
                     default = null;
@@ -84,7 +73,6 @@
         default = false;
         description = "Remove redundant approval fields from exec_command and shell_command function calls returned through the chat API. Explicit escalation requests keep their justification.";
       };
-      headers = headersOption "on every served API";
       key = mkOption {
         type = redact.types.redacted;
         description = "The upstream key, as a redact reference.";
@@ -115,9 +103,7 @@
 
   # One upstream credential's blocks: { <family> = [block]; }.
   blocks = name: provider:
-    lib.mapAttrs' (api: value: let
-      headers = provider.headers // value.headers;
-    in
+    lib.mapAttrs' (api: value:
       lib.nameValuePair apis.${api}.family [
         ({
             inherit name;
@@ -125,7 +111,6 @@
             keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
             models = map (model: {name = model;}) (lib.defaultTo [] (modelsOf provider api));
           }
-          // lib.optionalAttrs (headers != {}) {inherit headers;}
           // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;}
           // lib.optionalAttrs (api == "anthropic" && provider.toolAliases != {}) {tool-aliases = provider.toolAliases;}
           // lib.optionalAttrs (api == "chat" && provider.codexShellArgCleanup) {codex-shell-arg-cleanup = true;})
