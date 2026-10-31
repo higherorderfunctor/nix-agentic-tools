@@ -88,7 +88,7 @@
   manual = target: ''
     ### ${target}
 
-    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}") (selected target)}
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}${lib.optionalString (family.pool or "" != "") ": ${family.pool}"}") (selected target)}
 
     ${techniqueBlock target true}
     Not a candidate for auto-selection; use only when the user names it.

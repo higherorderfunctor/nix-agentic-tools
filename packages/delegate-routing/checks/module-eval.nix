@@ -615,6 +615,14 @@
       && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
       && !(lib.hasInfix "| Pool " unplanned)
       && passes (goSelected "go-plus")
+      # A manual-only target's Go families carry the same pool hint; the
+      # formatter wraps list items onto indented lines.
+      && lib.hasInfix "go-kimi-k3 (opencode-go) `kimi-k3`: go-plus: $60 of list-price use empties the monthly pool" (lib.replaceStrings ["\n  "] [" "] (skill {
+        ai.programs.delegate-routing = {
+          opencodeGo.plan = "go-plus";
+          runtimes.kimchi.models = [{vendors = ["opencode-go"];}];
+        };
+      }))
       # A selected preset and another family, of any vendor, matching the
       # same Go catalog model on one runtime fail; on different runtimes, or
       # with no preset selected, they pass.
