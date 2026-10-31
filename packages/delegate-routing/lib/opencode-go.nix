@@ -221,13 +221,17 @@
       } of list-price use empties the monthly pool"
     );
 
-  # Catalog ids that several families selected on one runtime match, whatever
-  # their vendors: the skill would show two rows for one id.
+  # Catalog ids that a selected preset and any other family selected on the
+  # same runtime both match: the skill would show two rows for one id.
+  # Family names are unique across vendors, so the shipped names identify the
+  # presets, and a custom opencode-go family counts as another family.
   overlaps = selected:
     lib.concatMap (id: let
-      owners = map (family: "${family.vendor}.${family.name}") (lib.filter (family: matchesId family id) selected);
+      matching = lib.filter (family: matchesId family id) selected;
+      owners = map (family: "${family.vendor}.${family.name}") matching;
     in
-      lib.optional (lib.length owners > 1) "${id} (${lib.concatStringsSep ", " owners})")
+      lib.optional (lib.length owners > 1 && lib.any (family: families ? ${family.name}) matching)
+      "${id} (${lib.concatStringsSep ", " owners})")
     catalog;
 
   # One line under the skill's tables whenever a Go family renders.
