@@ -1061,6 +1061,8 @@
       "permissions.allow[]": { "type": "string" },
       "permissions.ask": { "type": "array" },
       "permissions.ask[]": { "type": "string" },
+      "permissions.blockReadsExemptPaths": { "type": "array" },
+      "permissions.blockReadsExemptPaths[]": { "type": "string" },
       "permissions.blockReadsOutsideWorkingDirectories": { "type": "boolean" },
       "permissions.blockWritesOutsideWorkingDirectories": { "type": "boolean" },
       "permissions.defaultMode": {
