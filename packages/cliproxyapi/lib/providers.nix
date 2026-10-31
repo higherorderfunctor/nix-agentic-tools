@@ -99,9 +99,9 @@
   # shared-URL check in ../modules/instances.nix compare the same string.
   baseUrlType = types.strMatching "https?://[!-~]+";
   # CPA trims model names before registering them
-  # (sdk/cliproxy/service_models.go); printable edges make that trim a no-op,
-  # so a vendor's refusal sees the name CPA serves.
-  modelType = types.strMatching "[!-~]([ -~]*[!-~])?" // {description = "model name of printable ASCII, without leading or trailing spaces";};
+  # (sdk/cliproxy/service_models.go); printable-ASCII edges make that trim a
+  # no-op, so a vendor's refusal sees the name CPA serves. The interior is free.
+  modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
   apiKeyType = types.submodule {
     options = {
