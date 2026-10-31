@@ -25,6 +25,8 @@
   selected = target: select families models.${target};
   targets = family: builtins.filter (target: builtins.elem family (selected target)) runtimes;
   candidates = selection.candidates families models runtimes;
+  opencodeGo = import ./opencode-go.nix {inherit lib;};
+  goRendered = lib.any (family: family.vendor == opencodeGo.vendor) (candidates ++ lib.concatMap selected manualExternalDelegates);
   entryRenderer = import ./render-entries.nix {inherit lib;};
   routingText = entryRenderer.routing false routing;
   workflowText = entryRenderer.workflows false workflows;
@@ -220,7 +222,7 @@
     ${phrase "Manual delegate note" {}}
   '';
   blocks = {
-    families = lib.concatMapStringsSep "\n" tier tiers;
+    families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n" + phrase "Provisional families" {});
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
     pools = poolsText;
     routing = routingText;

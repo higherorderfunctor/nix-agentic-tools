@@ -926,40 +926,53 @@
             };
           };
         };
+      kimi = {
+        match = "kimi-k3*";
+        tier = "strong";
+      };
+      overlapping = families: models:
+        change {
+          ai.programs.delegate-routing = {
+            inherit families;
+            runtimes.claude.models = [{vendors = ["opencode-go"];}] ++ models;
+          };
+        };
+      # Independent expected prose rejects a wrong or omitted note; phrase
+      # overrides reject a renderer that still reads hard-coded catalog prose.
+      note = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
+      withNote = override:
+        readSkill (change {
+          ai.programs.delegate-routing = {
+            runtimes.claude.models = [{vendors = ["opencode-go"];}];
+            skill.phrases."Provisional families" = override;
+          };
+        }) "claude";
       planned = readSkill (goSelected "go-plus") "claude";
       unplanned = readSkill (goSelected null) "claude";
     in
-      # Presets render only when selected; Pool remains a column with empty cells without a plan.
+      # Presets and their note render only when selected; Pool is always a column.
       !(lib.hasInfix "(opencode-go)" claude)
       && lib.hasInfix "| Pool " claude
+      && !(hasProse note claude)
       && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
+      && hasProse note planned
+      && lib.hasInfix "CUSTOM GO NOTE" (withNote {text = "CUSTOM GO NOTE";})
+      && !(hasProse note (withNote {text = "CUSTOM GO NOTE";}))
+      && !(hasProse note (withNote {enable = false;}))
       && lib.hasInfix "| Pool " planned
       && lib.hasInfix "go-plus: $60 of list-price use empties the monthly pool" planned
       && lib.hasInfix "go-plus: unlimited" planned
       && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
       && lib.hasInfix "| Pool " unplanned
       && hasProse "| | claude:" unplanned
-      # A hand-written family matching a preset's catalog model fails only
-      # when one runtime selects both.
       && passes (goSelected "go-plus")
-      && failsWith (change {
-        ai.programs.delegate-routing = {
-          families.example.kimi = {
-            match = "kimi-k3*";
-            tier = "strong";
-          };
-          runtimes.claude.models = [
-            {vendors = ["opencode-go"];}
-            {families = ["kimi"];}
-          ];
-        };
-      }) "kimi-k3 (opencode-go.go-kimi-k3, example.kimi)"
+      # Two families selected on one runtime that match the same Go catalog
+      # model fail, whatever their vendors; on different runtimes they pass.
+      && lib.all (failsWith (overlapping {example.kimi = kimi;} [{families = ["kimi"];}])) ["kimi-k3 (" "example.kimi" "opencode-go.go-kimi-k3"]
+      && failsWith (overlapping {opencode-go.mine = kimi;} []) "opencode-go.mine"
       && passes (change {
         ai.programs.delegate-routing = {
-          families.example.kimi = {
-            match = "kimi-k3*";
-            tier = "strong";
-          };
+          families.example.kimi = kimi;
           runtimes = {
             claude.models = [{families = ["kimi"];}];
             codex.models = [{vendors = ["opencode-go"];}];

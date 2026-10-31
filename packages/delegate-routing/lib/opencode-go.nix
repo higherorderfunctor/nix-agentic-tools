@@ -221,17 +221,13 @@
       } of list-price use empties the monthly pool"
     );
 
-  # Catalog ids that one runtime's selection matches from both a preset and
-  # another vendor's family: the skill would show two rows for one id.
-  overlaps = selected: let
-    split = lib.partition (family: family.vendor == vendor) selected;
-    names = list: id: map (family: "${family.vendor}.${family.name}") (lib.filter (family: matchesId family id) list);
-  in
+  # Catalog ids that several families selected on one runtime match, whatever
+  # their vendors: the skill would show two rows for one id.
+  overlaps = selected:
     lib.concatMap (id: let
-      presets = names split.right id;
-      others = names split.wrong id;
+      owners = map (family: "${family.vendor}.${family.name}") (lib.filter (family: matchesId family id) selected);
     in
-      lib.optional (presets != [] && others != []) "${id} (${lib.concatStringsSep ", " (presets ++ others)})")
+      lib.optional (lib.length owners > 1) "${id} (${lib.concatStringsSep ", " owners})")
     catalog;
 
   # Catalog ids no preset matches, ids several presets match, and presets

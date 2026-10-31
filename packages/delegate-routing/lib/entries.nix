@@ -104,6 +104,7 @@ in {
       "Pool reader missing" = {text = "none";};
       "Pool unmeasured" = {text = "unknown";};
       "Pool window" = {text = "configured: {limit} {unit} per month, resets day {resetDay}; current use unknown";};
+      "Provisional families" = {text = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";};
       "Technique table heading" = {text = "### {harness} techniques";};
     };
   };
