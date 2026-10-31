@@ -259,13 +259,13 @@ class QueryTests(unittest.TestCase):
         output = query.render_summary(report)
         self.assertEqual(output, "\n".join([
             "Kiro usage · sess_root · tree · 1,001 requests · 500.00 credits", "",
-            "Model            Requests  Credits     In  Out  Cached  Cache hit",
-            "requested-model     1,001   500.00  10.0K    —       —          —", "",
-            "Conversation     Requests  Credits     In  Out  Cached  Cache hit",
-            "Main                    1        —      —    —       —          —",
-            "Sub/WF              1,000   500.00  10.0K    —       —          —",
-            "-" * 65,
-            "Total               1,001   500.00  10.0K    —       —          —",
+            "Model            Requests  Credits                 In  Out  Cached  Cache hit",
+            "requested-model     1,001   500.00  10.0K (1000/1001)    —       —          —", "",
+            "Conversation     Requests  Credits                 In  Out  Cached  Cache hit",
+            "Main                    1        —                  —    —       —          —",
+            "Sub/WF              1,000   500.00              10.0K    —       —          —",
+            "-" * 77,
+            "Total               1,001   500.00  10.0K (1000/1001)    —       —          —",
             "⚠ credits unknown for 1/1,001 requests; 1 incomplete"]))
         self.db.execute("DELETE FROM captures")
         self.captured("zero", conversation="root", credits=0, tokens=0)
@@ -292,7 +292,7 @@ class QueryTests(unittest.TestCase):
         self.assertIn(query.capture_tables(report["captures"]), output)
         self.assertIn("1,010 (2/3)", output)
         self.assertIn("Other linked holds workflow steps and subagents and may include helpers/forks", output)
-        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10\s+50\s+~5%\n")
+        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10 \(2/3\)\s+50 \(2/3\)\s+~5% \(2/3\)\n")
 
     def test_report_labels_only_explicit_estimates_and_missing_capture(self):
         report = query.query(self.db, "sess_root", "tree")
@@ -387,7 +387,7 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(models["other-model"]["estimates"], {})
         self.assertEqual(report["captures"]["metrics"]["input_tokens"], query.metric(100, 1, 4))
         self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~5\s+~30.0K\s+~50%\n")
-        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K\s+~5\s+~30.0K\s+~50%$")
+        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K \(3/4\)\s+~5 \(3/4\)\s+~30.0K \(3/4\)\s+~50% \(3/4\)$")
         output = query.render(report)
         self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~49.9% \(3/4\)")
         self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
@@ -427,6 +427,66 @@ class QueryTests(unittest.TestCase):
         self.assertNotIn("±", query.render(mixed).split("Pool")[1].splitlines()[1])  # Total row
         self.assertEqual([query.error_text(error, 1000) for error in (9.9, 10)], ["", " ±1%"])
 
+    def test_compact_tables_show_the_coverage_of_partial_cells(self):
+        """Two calls, one estimable and one not: every compact cell with a missing contribution says so, like the full
+        report, on the exit summary and the store report alike; a cell with every contribution stays bare."""
+        self.estimable("rated", .01, chars=40)
+        self.captured("unknown", conversation="root", credits=.01, tokens=None, metadata={"model": "unknown-model"})
+        cell = r"~\S+ \(1/2\)"
+        row = rf"\s+2\s+0.02\s+{cell}\s+{cell}\s+{cell}\s+~\d+% \(1/2\)"
+        summary = query.render_summary(query.query(self.db, "sess_root"))
+        store = report.render(report.store_report(self.db))
+        self.assertRegex(summary, rf"\nMain{row}\n")
+        self.assertRegex(summary, rf"\nTotal{row}(\n|$)")
+        self.assertRegex(store, rf"\nTotal{row}(\n|$)")
+        self.assertRegex(store, rf"\nunknown-model\s+1\s+0.01\s+—\s+—\s+—\s+—")
+        self.assertNotRegex(summary, r"\nclaude-opus-5.5\s+1\s+[\d.]+\s+~\S+ \(")
+
+    def test_report_survives_a_capture_committed_between_its_queries(self):
+        """Totals, groups and per-call estimates read one snapshot: a capture committed after the groups and before
+        the per-call query is in none of them, rather than in a call with no group."""
+        path = Path(tempfile.mkdtemp()) / "race.sqlite3"
+        self.addCleanup(lambda: [path.with_name(path.name + s).unlink(missing_ok=True) for s in ("", "-wal", "-shm")])
+        writer = sqlite3.connect(path)
+        self.addCleanup(writer.close)
+        writer.executescript(capture.SCHEMA)
+        writer.execute("PRAGMA journal_mode=WAL")
+        arrivals = []
+
+        def add(ident, stamp):
+            writer.execute("""INSERT INTO captures(id,started_utc_ns,metadata_json,response_json,credits,
+                           context_usage_percentage,summary_json,state,completion_seen,issues_json) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                           (ident, stamp, json.dumps({"model": "claude-opus-5.5"}), "{}", .1, 3.0,
+                            '{"output_text_chars":40}', "complete", 1, "[]"))
+            writer.commit()
+
+        add("first", 1793404800000000000)
+
+        class Reader(sqlite3.Connection):
+            def execute(self, sql, parameters=()):
+                if "SELECT c.id,c.metadata_json,c.credits" in sql and not arrivals:
+                    arrivals.append(add("arriving", 1793491200000000000))
+                return super().execute(sql, parameters)
+
+        reader = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, factory=Reader)
+        self.addCleanup(reader.close)
+        result = report.store_report(reader)
+        self.assertEqual(len(arrivals), 1)
+        self.assertEqual(result["captures"]["observations"], 1)
+        self.assertEqual([day["observations"] for day in result["captures"]["days"]], [1])
+        self.assertFalse(reader.in_transaction)
+        self.assertEqual(report.store_report(reader)["captures"]["observations"], 2)  # the next report sees it
+
+    def test_snapshot_joins_an_open_transaction_and_leaves_none_behind(self):
+        with query.snapshot(self.db):
+            self.assertTrue(self.db.in_transaction)
+        self.assertFalse(self.db.in_transaction)
+        self.db.execute("BEGIN")
+        with query.snapshot(self.db):
+            with query.snapshot(self.db):
+                pass
+        self.assertTrue(self.db.in_transaction)  # the caller's transaction is the caller's to end
+
     def test_cached_error_is_a_share_of_its_own_total(self):
         """An exact 30,000 cached tokens on a call with no input joins Cached's 60,000 but not Cache hit's pairs, so
         the estimated hit's one error is half the share of Cached it is of Cache hit."""
@@ -444,7 +504,7 @@ class QueryTests(unittest.TestCase):
         self.assertRegex(query.render(report), rf"Total\s+2\s+.*~60,000 {cached}\s+~100.0% {paired} \(1/2\)\s")
         summary = query.render_summary(report)
         for label in ("claude-opus-5.5", "Main", "Total"):
-            self.assertRegex(summary, rf"\n{label}\s+2\s+.*~60.0K {cached}\s+~100% {paired}(\n|$)")
+            self.assertRegex(summary, rf"\n{label}\s+2\s+.*~60.0K {cached}\s+~100% {paired} \(1/2\)(\n|$)")
 
     def test_exact_cached_over_estimated_input_is_an_estimated_share(self):
         self.estimable("partial", .1)

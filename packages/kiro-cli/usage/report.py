@@ -13,7 +13,7 @@ import summary_theme
 
 
 def day(text):
-    """A YYYY-MM-DD bound, normalized; refuses any other form, e.g. 2026-10 or 20261030."""
+    """A YYYY-MM-DD bound, normalized."""
     return datetime.strptime(text, "%Y-%m-%d").date().isoformat()
 
 
@@ -23,8 +23,9 @@ def store_report(db, since=None, until=None):
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='captures'").fetchone():
         raise ValueError("no capture source has initialized this database")
     bounded, bounds = query.window(since, until)
-    captures, groups = query.aggregate(db, query.chosen_calls(bounded), bounds,
-                                       {"days": (query.DAY.format("chosen"), ()), "models": (query.MODEL, ())})
+    with query.snapshot(db):
+        captures, groups = query.aggregate(db, query.chosen_calls(bounded), bounds,
+                                           {"days": (query.DAY.format("chosen"), ()), "models": (query.MODEL, ())})
     captures["days"] = [{"day": key, **source} for key, source in groups["days"].items()]
     captures["models"] = [{"requested_model": model, **source} for model, source in groups["models"].items()]
     return {"since": since, "until": until, "captures": captures}

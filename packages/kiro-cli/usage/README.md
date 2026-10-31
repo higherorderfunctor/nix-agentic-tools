@@ -442,25 +442,28 @@ may also include helpers or forks. Requests, credits, and tokens are grouped by
 model and pool rather than listing individual delegates. Exact counters are used
 when observed; cells that add estimates for calls lacking the exact counter
 carry `~`, and missing values show an em dash (see
-[Token estimates](#token-estimates)). Cache hit is cached ÷ input tokens over
-requests with both. Estimated Cached and Cache hit cells, in both summary tables
-and the full report, carry `±N%`: the cached standard error as a whole-percent
-share of that cell's cached tokens, omitted below 1% or when unknown. The full
-report (`kiro-usage session` or `query`) keeps the Root conversation, Other
-linked, and Unknown pool tables and the partial-coverage markers. A run with no
-captures, such as a resumed session exited without a turn, prints one line
-saying so that points to `kiro-usage report --session ID`; captures without a
-conversation identity mean an explicit unavailable summary. Before reporting,
-the outer launch incrementally indexes `~/.kiro/sessions` if present, using the
-existing database and checkpoints. The summary reads none of it; the refresh
-keeps `kiro-usage session` and `report --session` current. It reads the
-`session.json` of sessions whose `session.json` or `messages.jsonl` changed
-since the launch, and messages only for those linked to captures (less one
-second for coarse file timestamps) and never prunes; already indexed sessions
-still link their new descendants. The explicit `index` command is the full
-capture-scoped pass: it prunes `disk_*` rows for sessions no longer linked to
-captures and runs `VACUUM` plus a WAL checkpoint when free pages remain. Lineage
-comes from `parentSessionId`, `rootSessionId`, `rootConversationId`, and
+[Token estimates](#token-estimates)). A token cell that some requests lack ends
+with `(known/all)`, and a Cache hit cell with `(evaluable/all)`, as in the full
+report; the same tables in `kiro-usage report` carry them too. Cache hit is
+cached ÷ input tokens over requests with both. Estimated Cached and Cache hit
+cells, in both summary tables and the full report, carry `±N%`: the cached
+standard error as a whole-percent share of that cell's cached tokens, omitted
+below 1% or when unknown. The full report (`kiro-usage session` or `query`)
+keeps the Root conversation, Other linked, and Unknown pool tables and the
+partial-coverage markers. A run with no captures, such as a resumed session
+exited without a turn, prints one line saying so that points to
+`kiro-usage report --session ID`; captures without a conversation identity mean
+an explicit unavailable summary. Before reporting, the outer launch
+incrementally indexes `~/.kiro/sessions` if present, using the existing database
+and checkpoints. The summary reads none of it; the refresh keeps
+`kiro-usage session` and `report --session` current. It reads the `session.json`
+of sessions whose `session.json` or `messages.jsonl` changed since the launch,
+and messages only for those linked to captures (less one second for coarse file
+timestamps) and never prunes; already indexed sessions still link their new
+descendants. The explicit `index` command is the full capture-scoped pass: it
+prunes `disk_*` rows for sessions no longer linked to captures and runs `VACUUM`
+plus a WAL checkpoint when free pages remain. Lineage comes from
+`parentSessionId`, `rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
 `workflowId` and `nodeId` are retained as identifiers. Index failures warn
 without replacing the child exit status, and disk observations may then be

@@ -1,6 +1,7 @@
 """Private, independent Kiro calibration evidence store; no provider calls."""
 
 import argparse
+from contextlib import contextmanager
 import fcntl
 import gzip
 import hashlib
@@ -45,6 +46,19 @@ CREATE TABLE IF NOT EXISTS events (
  PRIMARY KEY(capture_id, seq)
 );
 """
+
+
+@contextmanager
+def snapshot(db):
+    """One read transaction, so a capture committing on another connection cannot split a read; inside one, a no-op."""
+    if db.in_transaction:
+        yield
+        return
+    db.execute("BEGIN")
+    try:
+        yield
+    finally:
+        db.rollback()
 
 
 def open_database(path):

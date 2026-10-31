@@ -11,6 +11,7 @@ import sqlite3
 import sys
 
 import credit_discount
+from capture import snapshot
 from disk_index import LINKS, session_id
 from display import RULE, table, tables, value
 import summary_theme
@@ -45,7 +46,7 @@ EXTRA_OUTPUT_CHARS = """(SELECT sum(chars) FROM (
 CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
     WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
-# Group keys over the chosen CTE. DAY is a call's local start day, in the process time zone (TZ), as report.py's --help names it.
+# Group keys over the chosen CTE. DAY is a call's local start day, in the process time zone (TZ).
 # Integer division: /1e9 rounds a call in the last microsecond before midnight into the next day.
 DAY = "date({}.started_utc_ns/1000000000,'unixepoch','localtime')"
 MODEL = "json_extract(chosen.metadata_json,'$.model')"
@@ -103,7 +104,7 @@ def chosen_calls(where):
 
 def aggregate(db, chosen, parameters, partitions):
     """(total, groups): the chosen calls' total, and per partition name their groups by its (key SQL over chosen,
-    key parameters); observed sums, then call_reports' per-call ~estimates. The session report and report.py share it."""
+    key parameters); observed sums, then call_reports' per-call ~estimates."""
     total = db.execute(chosen + f"SELECT count(*) AS n,{SUMS},sum(CASE WHEN state!='complete' OR state IS NULL OR completion_seen!=1 OR completion_seen IS NULL THEN 1 ELSE 0 END) AS incomplete FROM chosen", parameters).fetchone()
     captures = {**group(total), "incomplete": total["incomplete"] or 0}
     groups = {name: {row["group_key"]: group(row) for row in db.execute(
@@ -124,7 +125,7 @@ def aggregate(db, chosen, parameters, partitions):
 
 def session_captures(db, session, chosen=None, parameters=()):
     """A captures section around session's ID: the chosen calls' total, requested-model groups and conversation
-    pools, or an unavailable empty one without chosen. The session report and a run's exit summary share it."""
+    pools, or an unavailable empty one without chosen."""
     captures = {"available": chosen is not None, **group(None),
                 "pools": {pool: group(None) for pool in ("other_linked_conversations", "root_conversation", "unknown")}}
     if chosen is None:
@@ -143,8 +144,9 @@ def run_report(db, invocation, session):
     whose RUN_ROOT is session, with or without sess_. Earlier runs, other roots and disk observations stay out."""
     db.row_factory = sqlite3.Row
     chosen = chosen_calls(f"json_extract(c.metadata_json,'$.invocation')=? AND {RUN_ROOT} IN (?,?)")
-    return {"session": session, "scope": "this run",
-            "captures": session_captures(db, session, chosen, (invocation, session, session.removeprefix("sess_")))}
+    with snapshot(db):
+        return {"session": session, "scope": "this run",
+                "captures": session_captures(db, session, chosen, (invocation, session, session.removeprefix("sess_")))}
 
 
 def query(db, session, scope="session", since=None, until=None):
@@ -153,155 +155,156 @@ def query(db, session, scope="session", since=None, until=None):
     if scope not in ("session", "tree"):
         raise ValueError("scope must be session or tree")
     db.row_factory = sqlite3.Row
-    db.create_function("session_name", 1, lambda path: Path(path).name, deterministic=True)
-    tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    disk_available = {"disk_sessions", "disk_sources", "disk_records", "disk_request_ids"} <= tables
-    selected = {session}
-    paths = []
-    if disk_available:
-        rows = db.execute(f"""
-            WITH RECURSIVE chosen(path, identifiers_json) AS (
-              SELECT path,identifiers_json FROM disk_sessions WHERE session_name(path)=?
-              UNION
-              SELECT d.path,d.identifiers_json FROM disk_sessions d JOIN chosen p
-              ON ?='tree' AND EXISTS(SELECT 1 FROM json_each(d.identifiers_json) j
-                WHERE j.key IN ({",".join("?" for _ in LINKS)})
-                AND j.value IN (session_name(p.path),substr(session_name(p.path),6)))
-            ) SELECT path FROM chosen
-        """, (session, scope, *LINKS))
-        for row in rows:
-            paths.append(row[0])
-            selected.add(Path(row[0]).name)
-        # A messages file can exist before session.json is saved.
-        for row in db.execute("SELECT DISTINCT session_path FROM disk_sources WHERE session_name(session_path)=?", (session,)):
-            if row[0] not in paths:
-                paths.append(row[0])
-    aliases = sorted(selected | {value.removeprefix("sess_") for value in selected})
-    placeholders = ",".join("?" for _ in aliases)
-    path_marks = ",".join("?" for _ in paths) or "NULL"
-    warnings = [*FOOTER_WARNINGS, "Context percentages are observations; ~token values derived from them are estimates."]
-    report = {"session": session, "scope": scope, "sessions": sorted(selected),
-              "attribution": {"own_vs_delegate": "unavailable", "tree_identity": "explicit " + "/".join(LINKS) + " only"},
-              "warnings": warnings}
-    disk = {"available": disk_available, "turns": 0,
-            "metrics": {name: metric() for name in DIMENSIONS}, "model_scope": "session-current"}
-    disk["metadata_omission_tracking"] = "disk_session_omissions" in tables
-    disk["metadata_omitted_sessions"] = (db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0]
-                                          if disk["metadata_omission_tracking"] else None)
-    if disk["metadata_omitted_sessions"]:
-        warnings.append("Some session metadata was omitted from the disk index; descendant discovery may be incomplete because omitted ancestry is unknown.")
-    if not disk_available:
-        disk["unavailable_reason"] = "Index session files into this calibration database first."
-    if disk_available:
-        disk["omitted_records"] = None
-        disk["omission_tracking"] = "disk_omissions" in tables
-        if disk["omission_tracking"]:
-            disk["omitted_records"] = db.execute(f"""
-                SELECT count(*) FROM disk_omissions o JOIN disk_sources s ON s.path=o.source_path
-                WHERE s.session_path IN ({path_marks})
-            """, paths).fetchone()[0]
-            if disk["omitted_records"]:
-                warnings.append("Some selected disk records were omitted; their usage coverage is unknown and disk totals may be incomplete.")
-        else:
-            warnings.append("This disk index has no omission tracking; omitted-record coverage is unavailable.")
-        totals = db.execute(f"""
-            SELECT count(*) AS n,
-              (SELECT sum(j.value ->> '$.usage') FROM disk_records r
-                JOIN disk_sources s ON s.path=r.source_path, json_each(r.usage_json) j
-                WHERE s.session_path IN ({path_marks}) AND r.kind='usage_summary'
-                AND j.value ->> '$.unit'='credit'
-                AND typeof(j.value ->> '$.usage') IN ('integer','real')) AS credits,
-              sum(CASE WHEN json_array_length(r.usage_json)>0 AND NOT EXISTS(
-                SELECT 1 FROM json_each(r.usage_json) j WHERE
-                coalesce(j.value ->> '$.unit','')!='credit' OR
-                typeof(j.value ->> '$.usage') NOT IN ('integer','real')) THEN 1 ELSE 0 END) AS known
-            FROM disk_records r JOIN disk_sources s ON s.path=r.source_path
-            WHERE s.session_path IN ({path_marks}) AND r.kind='usage_summary'
-        """, paths + paths).fetchone()
-        disk["turns"] = totals["n"]
-        disk["metrics"] = {name: metric(observations=totals["n"]) for name in DIMENSIONS}
-        disk["metrics"]["credits"] = metric(totals["credits"], totals["known"] or 0, totals["n"])
-        disk["credit_count_unit"] = "turns with every summary entry numeric and unit=credit"
-        disk["credit_sum_scope"] = "Observed credit entries, including partial turns; additive cost is unverified."
-        disk["duplicate_request_ids"] = [dict(row) for row in db.execute(f"""
-            SELECT request_id,count(*) AS occurrences FROM disk_request_ids i
-            JOIN disk_sources s ON s.path=i.source_path WHERE s.session_path IN ({path_marks})
-            GROUP BY request_id HAVING count(*)>1
-        """, paths)]
-        disk["turns_without_request_ids"] = db.execute(f"""
-            SELECT count(*) FROM disk_records r JOIN disk_sources s ON s.path=r.source_path
-            WHERE s.session_path IN ({path_marks}) AND r.kind='usage_summary' AND NOT EXISTS(
-              SELECT 1 FROM disk_request_ids i WHERE i.source_path=r.source_path AND i.byte_offset=r.byte_offset)
-        """, paths).fetchone()[0]
-        if disk["duplicate_request_ids"] or scope == "tree":
-            warnings.append("Disk turn credits may overlap across delegate turns or duplicate request IDs; the observed sum is not an exact additive tree cost.")
-        if disk["turns_without_request_ids"]:
-            warnings.append("Some disk turns lack request IDs; cross-turn overlap cannot be checked for them.")
-        disk["context_observations"] = db.execute(f"""
-            SELECT count(context_percentage) FROM disk_records r JOIN disk_sources s ON s.path=r.source_path
-            WHERE s.session_path IN ({path_marks}) AND r.kind='contextUsage'
-        """, paths).fetchone()[0]
-        disk["models"] = [dict(row) for row in db.execute(f"""
-            SELECT model_id,count(*) AS sessions FROM disk_sessions WHERE path IN ({path_marks}) GROUP BY model_id
-        """, paths)]
-    report["disk"] = disk
-    captures = session_captures(db, session)
-    if "captures" not in tables:
-        captures["unavailable_reason"] = "No capture source has initialized this database."
-    if "captures" in tables:
-        globally_mapped = "0"
-        if {"disk_request_ids", "disk_sources"} <= tables:
-            globally_mapped = """EXISTS (SELECT 1 FROM disk_request_ids i
-                JOIN disk_sources s ON s.path=i.source_path
-                WHERE i.request_id IN (json_extract(c.response_json,'$.upstream_request_id'),
-                  json_extract(c.response_json,'$.request_id')))"""
-        captures["global_unattributed_observations"] = db.execute(f"""
-            SELECT count(*) FROM captures c WHERE
-              nullif(json_extract(c.metadata_json,'$."kiro:conversation_id"'),'') IS NULL
-              AND nullif(json_extract(c.metadata_json,'$."kiro:root_conversation_id"'),'') IS NULL
-              AND NOT ({globally_mapped})
-        """).fetchone()[0]
-        if captures["global_unattributed_observations"]:
-            warnings.append("The global capture store contains observations without a conversation identity, root-conversation lineage, or disk request-ID attribution; their relationship to this session is unknown and they are excluded from session totals.")
-        joins = ""
-        parameters = list(aliases)
-        if scope == "tree":
-            joins = f"OR json_extract(c.metadata_json,'$.\"kiro:root_conversation_id\"') IN ({placeholders})"
-            parameters += aliases
+    with snapshot(db):
+        db.create_function("session_name", 1, lambda path: Path(path).name, deterministic=True)
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        disk_available = {"disk_sessions", "disk_sources", "disk_records", "disk_request_ids"} <= tables
+        selected = {session}
+        paths = []
         if disk_available:
-            joins += f""" OR EXISTS (SELECT 1 FROM disk_request_ids i JOIN disk_sources s ON s.path=i.source_path
-                WHERE s.session_path IN ({path_marks}) AND i.request_id IN (
-                  json_extract(c.response_json,'$.upstream_request_id'),json_extract(c.response_json,'$.request_id')))"""
-            parameters += paths
-        bounded, bounds = window(since, until)
-        chosen = chosen_calls(f"""(json_extract(c.metadata_json,'$.\"kiro:conversation_id\"') IN ({placeholders}) {joins}) AND {bounded}""")
-        parameters += bounds
-        captures.update(session_captures(db, session, chosen, parameters))
+            rows = db.execute(f"""
+                WITH RECURSIVE chosen(path, identifiers_json) AS (
+                  SELECT path,identifiers_json FROM disk_sessions WHERE session_name(path)=?
+                  UNION
+                  SELECT d.path,d.identifiers_json FROM disk_sessions d JOIN chosen p
+                  ON ?='tree' AND EXISTS(SELECT 1 FROM json_each(d.identifiers_json) j
+                    WHERE j.key IN ({",".join("?" for _ in LINKS)})
+                    AND j.value IN (session_name(p.path),substr(session_name(p.path),6)))
+                ) SELECT path FROM chosen
+            """, (session, scope, *LINKS))
+            for row in rows:
+                paths.append(row[0])
+                selected.add(Path(row[0]).name)
+            # A messages file can exist before session.json is saved.
+            for row in db.execute("SELECT DISTINCT session_path FROM disk_sources WHERE session_name(session_path)=?", (session,)):
+                if row[0] not in paths:
+                    paths.append(row[0])
+        aliases = sorted(selected | {value.removeprefix("sess_") for value in selected})
+        placeholders = ",".join("?" for _ in aliases)
+        path_marks = ",".join("?" for _ in paths) or "NULL"
+        warnings = [*FOOTER_WARNINGS, "Context percentages are observations; ~token values derived from them are estimates."]
+        report = {"session": session, "scope": scope, "sessions": sorted(selected),
+                  "attribution": {"own_vs_delegate": "unavailable", "tree_identity": "explicit " + "/".join(LINKS) + " only"},
+                  "warnings": warnings}
+        disk = {"available": disk_available, "turns": 0,
+                "metrics": {name: metric() for name in DIMENSIONS}, "model_scope": "session-current"}
+        disk["metadata_omission_tracking"] = "disk_session_omissions" in tables
+        disk["metadata_omitted_sessions"] = (db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0]
+                                              if disk["metadata_omission_tracking"] else None)
+        if disk["metadata_omitted_sessions"]:
+            warnings.append("Some session metadata was omitted from the disk index; descendant discovery may be incomplete because omitted ancestry is unknown.")
+        if not disk_available:
+            disk["unavailable_reason"] = "Index session files into this calibration database first."
+        if disk_available:
+            disk["omitted_records"] = None
+            disk["omission_tracking"] = "disk_omissions" in tables
+            if disk["omission_tracking"]:
+                disk["omitted_records"] = db.execute(f"""
+                    SELECT count(*) FROM disk_omissions o JOIN disk_sources s ON s.path=o.source_path
+                    WHERE s.session_path IN ({path_marks})
+                """, paths).fetchone()[0]
+                if disk["omitted_records"]:
+                    warnings.append("Some selected disk records were omitted; their usage coverage is unknown and disk totals may be incomplete.")
+            else:
+                warnings.append("This disk index has no omission tracking; omitted-record coverage is unavailable.")
+            totals = db.execute(f"""
+                SELECT count(*) AS n,
+                  (SELECT sum(j.value ->> '$.usage') FROM disk_records r
+                    JOIN disk_sources s ON s.path=r.source_path, json_each(r.usage_json) j
+                    WHERE s.session_path IN ({path_marks}) AND r.kind='usage_summary'
+                    AND j.value ->> '$.unit'='credit'
+                    AND typeof(j.value ->> '$.usage') IN ('integer','real')) AS credits,
+                  sum(CASE WHEN json_array_length(r.usage_json)>0 AND NOT EXISTS(
+                    SELECT 1 FROM json_each(r.usage_json) j WHERE
+                    coalesce(j.value ->> '$.unit','')!='credit' OR
+                    typeof(j.value ->> '$.usage') NOT IN ('integer','real')) THEN 1 ELSE 0 END) AS known
+                FROM disk_records r JOIN disk_sources s ON s.path=r.source_path
+                WHERE s.session_path IN ({path_marks}) AND r.kind='usage_summary'
+            """, paths + paths).fetchone()
+            disk["turns"] = totals["n"]
+            disk["metrics"] = {name: metric(observations=totals["n"]) for name in DIMENSIONS}
+            disk["metrics"]["credits"] = metric(totals["credits"], totals["known"] or 0, totals["n"])
+            disk["credit_count_unit"] = "turns with every summary entry numeric and unit=credit"
+            disk["credit_sum_scope"] = "Observed credit entries, including partial turns; additive cost is unverified."
+            disk["duplicate_request_ids"] = [dict(row) for row in db.execute(f"""
+                SELECT request_id,count(*) AS occurrences FROM disk_request_ids i
+                JOIN disk_sources s ON s.path=i.source_path WHERE s.session_path IN ({path_marks})
+                GROUP BY request_id HAVING count(*)>1
+            """, paths)]
+            disk["turns_without_request_ids"] = db.execute(f"""
+                SELECT count(*) FROM disk_records r JOIN disk_sources s ON s.path=r.source_path
+                WHERE s.session_path IN ({path_marks}) AND r.kind='usage_summary' AND NOT EXISTS(
+                  SELECT 1 FROM disk_request_ids i WHERE i.source_path=r.source_path AND i.byte_offset=r.byte_offset)
+            """, paths).fetchone()[0]
+            if disk["duplicate_request_ids"] or scope == "tree":
+                warnings.append("Disk turn credits may overlap across delegate turns or duplicate request IDs; the observed sum is not an exact additive tree cost.")
+            if disk["turns_without_request_ids"]:
+                warnings.append("Some disk turns lack request IDs; cross-turn overlap cannot be checked for them.")
+            disk["context_observations"] = db.execute(f"""
+                SELECT count(context_percentage) FROM disk_records r JOIN disk_sources s ON s.path=r.source_path
+                WHERE s.session_path IN ({path_marks}) AND r.kind='contextUsage'
+            """, paths).fetchone()[0]
+            disk["models"] = [dict(row) for row in db.execute(f"""
+                SELECT model_id,count(*) AS sessions FROM disk_sessions WHERE path IN ({path_marks}) GROUP BY model_id
+            """, paths)]
+        report["disk"] = disk
+        captures = session_captures(db, session)
+        if "captures" not in tables:
+            captures["unavailable_reason"] = "No capture source has initialized this database."
+        if "captures" in tables:
+            globally_mapped = "0"
+            if {"disk_request_ids", "disk_sources"} <= tables:
+                globally_mapped = """EXISTS (SELECT 1 FROM disk_request_ids i
+                    JOIN disk_sources s ON s.path=i.source_path
+                    WHERE i.request_id IN (json_extract(c.response_json,'$.upstream_request_id'),
+                      json_extract(c.response_json,'$.request_id')))"""
+            captures["global_unattributed_observations"] = db.execute(f"""
+                SELECT count(*) FROM captures c WHERE
+                  nullif(json_extract(c.metadata_json,'$."kiro:conversation_id"'),'') IS NULL
+                  AND nullif(json_extract(c.metadata_json,'$."kiro:root_conversation_id"'),'') IS NULL
+                  AND NOT ({globally_mapped})
+            """).fetchone()[0]
+            if captures["global_unattributed_observations"]:
+                warnings.append("The global capture store contains observations without a conversation identity, root-conversation lineage, or disk request-ID attribution; their relationship to this session is unknown and they are excluded from session totals.")
+            joins = ""
+            parameters = list(aliases)
+            if scope == "tree":
+                joins = f"OR json_extract(c.metadata_json,'$.\"kiro:root_conversation_id\"') IN ({placeholders})"
+                parameters += aliases
+            if disk_available:
+                joins += f""" OR EXISTS (SELECT 1 FROM disk_request_ids i JOIN disk_sources s ON s.path=i.source_path
+                    WHERE s.session_path IN ({path_marks}) AND i.request_id IN (
+                      json_extract(c.response_json,'$.upstream_request_id'),json_extract(c.response_json,'$.request_id')))"""
+                parameters += paths
+            bounded, bounds = window(since, until)
+            chosen = chosen_calls(f"""(json_extract(c.metadata_json,'$.\"kiro:conversation_id\"') IN ({placeholders}) {joins}) AND {bounded}""")
+            parameters += bounds
+            captures.update(session_captures(db, session, chosen, parameters))
+            if scope == "tree":
+                report["sessions"] = sorted(selected | {
+                    session_id(name)
+                    for row in db.execute(chosen + "SELECT DISTINCT json_extract(metadata_json,'$.\"kiro:conversation_id\"') FROM chosen", parameters)
+                    if isinstance(name := row[0], str) and re.fullmatch(r"(?:sess_)?[A-Za-z0-9_-]+", name)})
+            captures["association"] = "Explicit conversation ID or upstream request ID recorded for the selected session(s)."
+            captures["terminal_states"] = [dict(row) for row in db.execute(chosen + """
+                SELECT state,terminal,count(*) AS observations
+                FROM chosen GROUP BY state,terminal
+            """, parameters)]
+            captures["identity_coverage"] = dict(db.execute(chosen + """
+                SELECT sum(CASE WHEN json_extract(metadata_json,'$."kiro:conversation_id"') IS NOT NULL THEN 1 ELSE 0 END) AS conversation_id_present,
+                  sum(CASE WHEN coalesce(json_extract(response_json,'$.upstream_request_id'),json_extract(response_json,'$.request_id')) IS NOT NULL THEN 1 ELSE 0 END) AS upstream_request_id_present FROM chosen
+            """, parameters).fetchone())
+            if captures["duplicate_upstream_request_ids"]:
+                warnings.append("Duplicate upstream request IDs make capture totals ambiguous; every capture remains counted.")
+            if captures["multiple_metering_events"]:
+                warnings.append(f"{captures['multiple_metering_events']} selected call(s) carried more than one meteringEvent; their credits keep the last value, which may not be the call's total charge.")
         if scope == "tree":
-            report["sessions"] = sorted(selected | {
-                session_id(name)
-                for row in db.execute(chosen + "SELECT DISTINCT json_extract(metadata_json,'$.\"kiro:conversation_id\"') FROM chosen", parameters)
-                if isinstance(name := row[0], str) and re.fullmatch(r"(?:sess_)?[A-Za-z0-9_-]+", name)})
-        captures["association"] = "Explicit conversation ID or upstream request ID recorded for the selected session(s)."
-        captures["terminal_states"] = [dict(row) for row in db.execute(chosen + """
-            SELECT state,terminal,count(*) AS observations
-            FROM chosen GROUP BY state,terminal
-        """, parameters)]
-        captures["identity_coverage"] = dict(db.execute(chosen + """
-            SELECT sum(CASE WHEN json_extract(metadata_json,'$."kiro:conversation_id"') IS NOT NULL THEN 1 ELSE 0 END) AS conversation_id_present,
-              sum(CASE WHEN coalesce(json_extract(response_json,'$.upstream_request_id'),json_extract(response_json,'$.request_id')) IS NOT NULL THEN 1 ELSE 0 END) AS upstream_request_id_present FROM chosen
-        """, parameters).fetchone())
-        if captures["duplicate_upstream_request_ids"]:
-            warnings.append("Duplicate upstream request IDs make capture totals ambiguous; every capture remains counted.")
-        if captures["multiple_metering_events"]:
-            warnings.append(f"{captures['multiple_metering_events']} selected call(s) carried more than one meteringEvent; their credits keep the last value, which may not be the call's total charge.")
-    if scope == "tree":
-        warnings.append("Root-linked lineage may include forks as well as subagents; it is not proof of caller role.")
-    report["attribution"]["pool_rule"] = "Root conversation matches the selected session ID (with or without sess_); Other linked conversations have a different recorded conversation ID; Unknown has no recorded conversation ID. This partition does not identify main versus delegate roles."
-    if scope == "tree":
-        report["attribution"]["tree_identity"] = "Explicit " + "/".join(LINKS) + " or captured root_conversation_id only"
-    report["captures"] = captures
-    return report
+            warnings.append("Root-linked lineage may include forks as well as subagents; it is not proof of caller role.")
+        report["attribution"]["pool_rule"] = "Root conversation matches the selected session ID (with or without sess_); Other linked conversations have a different recorded conversation ID; Unknown has no recorded conversation ID. This partition does not identify main versus delegate roles."
+        if scope == "tree":
+            report["attribution"]["tree_identity"] = "Explicit " + "/".join(LINKS) + " or captured root_conversation_id only"
+        report["captures"] = captures
+        return report
 
 
 def call_reports(db, chosen, parameters, total, partitions):
@@ -425,6 +428,18 @@ def estimate_text(source, name, text, total):
     return "~" + text + (error_text(hit_rate(source).get("error"), total) if name == "cache_read_tokens" else "")
 
 
+def counted(item, text):
+    """text with the (known/all) coverage of a metric that some calls lacked."""
+    return text + (f" ({item['known']}/{item['known'] + item['unknown']})" if item["unknown"] else "")
+
+
+def hit_cell(source, digits):
+    """Cache hit text with its (evaluable/all) coverage when some calls could not be evaluated, or None without a share."""
+    rate = hit_rate(source)
+    text = hit_text(rate, digits)
+    return text if text is None or not rate["unknown"] else f"{text} ({rate['evaluable']}/{source['observations']})"
+
+
 def hit_text(rate, digits):
     """"~N%" Cache hit with its ±, or None without a share."""
     hit = rate.get("percentage")
@@ -446,21 +461,15 @@ def capture_tables(captures):
         text = f"{total:,.6f}" if name == "credits" else value(total)
         if estimated:
             text = estimate_text(source, name, text, total)
-        if item["unknown"]:
-            text += f" ({item['known']}/{item['known'] + item['unknown']})"
-        return text
+        return counted(item, text)
     show_discount = shows_discount(captures)
     def row(label, source):
-        rate = hit_rate(source)
-        hit = hit_text(rate, 1)
-        if hit is not None and rate["unknown"]:
-            hit += f" ({rate['evaluable']}/{source['observations']})"
         discount = source["credit_discount"]
         percentage = discount["percentage"]
         discount_cell = f"~{percentage:.1f}% ({discount['eligible']}/{discount['requests']})" if percentage is not None else None
         return [label, source["observations"] if captures["available"] else None,
                 *(counter(source, name) for name in ("total_tokens", "input_tokens", "output_tokens", "cache_read_tokens")),
-                hit, counter(source, "credits"), *([discount_cell] if show_discount else [])]
+                hit_cell(source, 1), counter(source, "credits"), *([discount_cell] if show_discount else [])]
     columns = ["Model", "Requests", "Total tokens", "Input", "Output", "Cached", "Hit %", "Credits", *(["Discount %"] if show_discount else [])]
     model_rows = [row(model["requested_model"], model) for model in captures.get("models", [])]
     pool_rows = [row("Total", captures)]
@@ -538,8 +547,8 @@ def by_credits(models):
 
 
 def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN):
-    """The exit-summary look render_summary and report.py share: a headline for title, one table per (header, label
-    element, [(label, group)], Total row) block with shared columns, and one caveat line only when totals are suspect."""
+    """The shared exit summary: a headline, one table per (header, label element, [(label, group)], show total) block,
+    and a caveat line only when totals are suspect."""
     n, credits = captures["observations"], captures["metrics"]["credits"]
     headline = f"Kiro usage · {title} · {plural(n, 'request')} · {value(credits_text(credits['observed_sum']))} credits"
     show_discount = shows_discount(captures)
@@ -550,10 +559,11 @@ def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN)
             total = item["observed_sum"]
             if total is None:
                 return None
-            return estimate_text(source, name, tokens_text(total), total) if estimated else tokens_text(total)
+            text = estimate_text(source, name, tokens_text(total), total) if estimated else tokens_text(total)
+            return counted(item, text)
         return [label, source["observations"], credits_text(source["metrics"]["credits"]["observed_sum"]),
                 *(tokens(name) for name in ("input_tokens", "output_tokens", "cache_read_tokens")),
-                hit_text(hit_rate(source), 0),
+                hit_cell(source, 0),
                 *([None if discount is None else f"~{discount:.0f}%"] if show_discount else [])]
     columns = ["Requests", "Credits", "In", "Out", "Cached", "Cache hit", *(["Discount"] if show_discount else [])]
     rows = [[*(row(label, source) for label, source in groups), *([RULE, row("Total", captures)] if total else [])]
@@ -590,8 +600,7 @@ def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN)
 
 
 def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
-    """One session or run report's exit summary: a model table and a conversation table with a Total row.
-    invocation_summary and report.py pass their --summary-theme; the default PLAIN theme renders unstyled text without a border."""
+    """One session or run report's exit summary: a model table and a conversation table with a Total row."""
     captures = report["captures"]
     available, pools = captures["available"], captures["pools"]
     conversations = [(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
