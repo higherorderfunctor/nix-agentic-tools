@@ -65,10 +65,9 @@ on either line. Under that topology:
 - Never use a bare `git sync` or `git sync --pull`. Fetch the configured remote,
   then move the guarded selection onto the remote-tracking ref. Do not move
   local `main`.
-- Never repair with a bare `git restack`, recursive `git hide -r`, or an
-  unchecked `children()` subtree. Those operations can reach commits or branches
-  owned by another worktree. Stop and ask the user when the guarded operation
-  cannot finish without such a repair.
+- Follow the [restack scope and worktree stop rule](#rewriting) before repairing
+  abandoned commits. Never use recursive `git hide -r` or an unchecked
+  `children()` subtree.
 - Run `git test fix` with `--strategy working-copy --jobs 1 --no-cache`. Cached
   results from a worktree-strategy run can otherwise turn the fix into a
   successful no-op.
@@ -140,6 +139,7 @@ git config 'branchless.revsets.alias.d' 'draft()'
 | `branchless.core.mainBranch`               | `master`       | Main branch name                                |
 | `branchless.next.interactive`              | `false`        | Interactive ambiguity resolution                |
 | `branchless.navigation.autoSwitchBranches` | `true`         | Auto-switch to branch on target                 |
+| `branchless.restack.defaultRevset`         | `draft()`      | Bare restack selection (patched build only)     |
 | `branchless.restack.preserveTimestamps`    | `false`        | Keep authored timestamp                         |
 | `branchless.restack.warnAbandoned`         | `true`         | Warn about abandoned children                   |
 | `branchless.smartlog.defaultRevset`        | _(complex)_    | Default smartlog query                          |
@@ -330,7 +330,7 @@ git amend --reparent      # amend without rebasing children (for formatters)
 
 **Gotcha:** `git amend` skips pre-commit hooks (arxanas/git-branchless#1275).
 Use `git commit --amend` + `git restack <pre-amend-hash>` if hooks are needed
-(see `git restack` below for when to use `git move` instead).
+(see `git restack` below for selection and branch-repair scope).
 
 ### Rewriting
 
@@ -384,21 +384,34 @@ git split --discard       # remove extracted changes entirely
 **`git restack`** — Fix abandoned commits after rewrites.
 
 ```bash
-git restack               # every abandoned commit in draft(): every worktree's stacks
+git restack               # only with the patched build and defaultRevset set
 git restack <hash>        # rebase only the abandoned descendants of <hash>
 ```
 
-Pass the abandoned (pre-rewrite) hash. `git restack 'stack()'` is not a safe
-scope: after amending a stack's first commit, its abandoned descendants are no
-longer in `stack()`, so the restack silently does nothing.
+For an explicit repair, pass the abandoned (pre-rewrite) hash. Explicit
+`git restack 'stack()'` can miss abandoned descendants after amending the stack
+root because the old root is no longer in `stack()`.
 
-The hash limits the commits restack rebases, not the branches it moves. After
-rebasing, it moves **every** branch in the repository that still points at a
-rewritten commit, including one that another worktree has checked out. A build
-with the checked-out-branch guard panics at that point; upstream moves the
-branch under that worktree. When `git sl` shows another worktree's branch or
-detached HEAD on a `rewritten as` commit, stop and ask the user to repair that
-line from its own worktree.
+This repository's patched build reads `branchless.restack.defaultRevset` when no
+revset is supplied. The full preset sets the
+[own-stack selection](#selecting-your-own-stack) with `origin/main` as its base;
+Home Manager and devenv expose it as
+`git.branchless.settings.restack.defaultRevset`. Bare restack adds obsolete
+draft predecessors whose newest rewrite is in that selection, recovering
+abandoned descendants after a root amend. Explicit revsets replace the default
+without predecessor expansion. With the key set, both forms limit branch repair
+to selected commits and their abandoned descendants; an empty selection moves
+nothing. Inspect worktrees stacked on your own line before rewriting.
+
+Unless you run the patched build with `branchless.restack.defaultRevset` set,
+never run a bare `git restack`; explicit restack still moves stale branches
+repo-wide. If another worktree owns a descendant or stale branch that would
+move, stop and ask for repair from that worktree. Upstream ignores the key;
+leaving it unset preserves upstream behavior and the `draft()` default. An
+unresolvable configured default (for example, missing `origin/main`) exits
+non-zero before restacking commits or moving branches. The error names the key
+and resolution error and explains that a revset can be passed explicitly.
+Invalid explicit revsets remain errors.
 
 After a `git rebase` (a split, an autosquash), pass `--update-refs` to the
 rebase instead. Git then moves every branch inside the rebased range itself, and
@@ -1000,11 +1013,9 @@ task. Pass its explicit pre-rewrite hash:
 git restack -f <abandoned-hash>  # force the public check only for this scoped repair
 ```
 
-Never omit that hash: bare `git restack -f` repairs abandoned commits across all
-worktrees. The hash scopes rebasing, but restack still repairs stale branch refs
-repository-wide (see **git restack** above). If another worktree owns a
-descendant or a branch on a rewritten commit, stop and ask for that line to be
-repaired from its own worktree.
+Pass the hash to make this forced repair independent of the configured default.
+Follow the [restack scope and worktree stop rule](#rewriting) before running
+this repair.
 
 See arxanas/git-branchless#988 for background on unexpected public status.
 
@@ -1050,9 +1061,9 @@ lineage.
 ### Don't forget `git restack` after stock git amend
 
 If you use `git commit --amend` instead of `git amend`, descendants are
-abandoned. Run `git restack <pre-amend-hash>` to fix, or the scoped `git move`
-under `git restack` when another worktree has a stale branch. Better: always use
-`git amend` which auto-restacks.
+abandoned. Repair them with `git restack <pre-amend-hash>`, following the
+[restack scope and worktree stop rule](#rewriting). `git amend` auto-restacks
+descendants.
 
 ### Don't ignore abandoned commit warnings
 

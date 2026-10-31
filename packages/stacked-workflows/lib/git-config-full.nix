@@ -14,7 +14,12 @@ in
     branchless = {
       navigation.autoSwitchBranches = true;
       next.interactive = true;
-      restack.preserveTimestamps = true;
+      restack = {
+        # Select HEAD's own stack past origin/main, excluding sibling stacks
+        # even while local main is stale. See "Selecting your own stack".
+        defaultRevset = "descendants(roots((stack() & ::HEAD) - ::origin/main)) - ::origin/main";
+        preserveTimestamps = true;
+      };
       smartlog.defaultRevset = "(@ % main()) | stack() | descendants(@) | @";
       # `jobs` is a memory bound, not a CPU tuning knob, and it is only
       # a live question because `strategy = worktree` below makes fan-out

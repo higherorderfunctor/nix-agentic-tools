@@ -13,6 +13,10 @@
       "note": "Only this repository's build reads this key: its protect-checked-out-branches patch adds it. Upstream git-branchless ignores it."
     },
     "branchless.mainBranch": { "type": "string" },
+    "branchless.restack.defaultRevset": {
+      "defaultDescription": "unset, which uses upstream draft(). An unresolved configured default exits with an error before restacking commits or moving branches; pass a revset explicitly to override it. Invalid explicit revsets remain errors.",
+      "note": "Only this repository's build reads this key: its restack-scope patch adds it. Upstream git-branchless ignores it. Explicit revsets replace this default."
+    },
     "branchless.revsets.alias.<name>": {
       "description": "Revset aliases: `<name>` becomes callable as `<name>()` in any revset. `$1` is replaced with the first argument, `$2` with the second, and so on. A name that matches a builtin revset function is never used, because builtins are looked up first."
     },

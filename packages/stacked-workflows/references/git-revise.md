@@ -364,10 +364,9 @@ messages use the exact full subject of the target commit.
 **Known issue:** git-revise does not call `post-rewrite` hooks, so
 git-branchless cannot track the rewrite. After using git-revise, both old and
 new commits appear in `git sl`. `git restack` cannot clean that up: with no
-recorded rewrite it finds nothing to do, and a bare `git restack` spans every
-worktree's stacks anyway. git-revise moves only the checked-out branch. Move any
-other branch in the rewritten range yourself, then hide the old commits with
-`git hide --no-delete-branches` (the stack-fix skill's Path C does both).
+recorded rewrite it finds nothing to do. git-revise moves only the checked-out
+branch. Move any other branch in the rewritten range yourself, then hide the old
+commits with `git hide --no-delete-branches`.
 
 For operations where git-branchless has native equivalents, prefer those:
 

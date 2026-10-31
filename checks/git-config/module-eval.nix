@@ -197,6 +197,20 @@ in {
         })
     );
 
+    # Both backends expose the patched restack key as an optional string and
+    # lower a configured revset without enabling or replacing a Git alias.
+    module-git-branchless-restack-default-revset = mkTest "git-branchless-restack-default-revset" (
+      let
+        accepts = render: value: evaluates (render {git.branchless.settings.restack.defaultRevset = value;});
+        configured = {git.branchless.settings.restack.defaultRevset = "@";};
+        expected = {branchless.restack.defaultRevset = "@";};
+      in
+        hmSettings configured
+        == expected
+        && devenvSettings configured == expected
+        && lib.all (render: !(accepts render false) && !(accepts render 1)) [hmSettings devenvSettings]
+    );
+
     # scopedSync lowers to git's alias.sync on both backends, at the priority
     # it is defined at.
     module-git-branchless-scoped-sync = mkTest "git-branchless-scoped-sync" (

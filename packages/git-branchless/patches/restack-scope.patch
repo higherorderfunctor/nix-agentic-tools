@@ -1,0 +1,495 @@
+diff --git a/git-branchless/src/commands/restack.rs b/git-branchless/src/commands/restack.rs
+--- a/git-branchless/src/commands/restack.rs
++++ b/git-branchless/src/commands/restack.rs
+@@ -69,7 +69,7 @@
+ use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
+ use git_branchless_revset::resolve_commits;
+ use git_branchless_smartlog::smartlog;
+-use lib::core::config::get_restack_preserve_timestamps;
++use lib::core::config::{get_restack_default_revset, get_restack_preserve_timestamps};
+ use lib::core::dag::{CommitSet, Dag, union_all};
+ use lib::core::effects::Effects;
+ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
+@@ -78,7 +78,7 @@
+     MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions, RepoPool, RepoResource,
+     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
+ };
+-use lib::git::{GitRunInfo, NonZeroOid, Repo};
++use lib::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+
+ #[instrument(skip(commits))]
+ fn restack_commits(
+@@ -90,20 +90,13 @@
+     event_log_db: &EventLogDb,
+     event_cursor: EventCursor,
+     git_run_info: &GitRunInfo,
+-    commits: Option<impl IntoIterator<Item = NonZeroOid>>,
++    commits: impl IntoIterator<Item = NonZeroOid>,
+     reparent: bool,
+     build_options: BuildRebasePlanOptions,
+     execute_options: &ExecuteRebasePlanOptions,
+     merge_conflict_remediation: MergeConflictRemediation,
+ ) -> EyreExitOr<()> {
+     let repo = repo_pool.try_create()?;
+-    let commit_set: CommitSet = match commits {
+-        Some(commits) => commits.into_iter().collect(),
+-        None => dag.query_obsolete_commits(),
+-    };
+-    // Don't use `sort_commit_set` since the set of obsolete commits may be very
+-    // large and we'll be throwing away most of them.
+-    let commits = dag.commit_set_to_vec(&commit_set)?;
+
+     struct RebaseInfo {
+         dest_oid: NonZeroOid,
+@@ -220,6 +213,7 @@
+     git_run_info: &GitRunInfo,
+     event_log_db: &EventLogDb,
+     options: &ExecuteRebasePlanOptions,
++    branch_targets: Option<&HashSet<NonZeroOid>>,
+ ) -> EyreExitOr<()> {
+     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
+
+@@ -236,6 +230,9 @@
+             }
+         };
+
++        if branch_targets.is_some_and(|targets| !targets.contains(&branch_target)) {
++            continue;
++        }
+         if let Some(new_oid) = find_rewrite_target(
+             &event_replayer,
+             event_replayer.make_default_cursor(),
+@@ -263,6 +260,32 @@
+     Ok(Ok(()))
+ }
+
++/// Add obsolete draft commits whose newest rewrite is in the selection.
++#[instrument]
++fn expand_restack_selection(
++    dag: &Dag,
++    event_replayer: &EventReplayer,
++    event_cursor: EventCursor,
++    selection: CommitSet,
++) -> eyre::Result<CommitSet> {
++    let mut selection: HashSet<NonZeroOid> =
++        dag.commit_set_to_vec(&selection)?.into_iter().collect();
++    // Include hidden rewrite intermediates, but never add public predecessors.
++    let obsolete_draft = dag
++        .query_obsolete_commits()
++        .difference(dag.query_public_commits_slow()?);
++    for oid in dag.commit_set_to_vec(&obsolete_draft)? {
++        if let Some(MaybeZeroOid::NonZero(target)) =
++            find_rewrite_target(event_replayer, event_cursor, oid)
++        {
++            if selection.contains(&target) {
++                selection.insert(oid);
++            }
++        }
++    }
++    Ok(selection.into_iter().collect())
++}
++
+ /// Restack all abandoned commits.
+ ///
+ /// Returns an exit code (0 denotes successful exit).
+@@ -292,22 +315,60 @@
+         &references_snapshot,
+     )?;
+
+-    let commit_sets =
+-        match resolve_commits(effects, &repo, &mut dag, &revsets, resolve_revset_options) {
+-            Ok(commit_sets) => commit_sets,
+-            Err(err) => {
+-                err.describe(effects)?;
+-                return Ok(Err(ExitCode(1)));
+-            }
+-        };
+-    let commits: Option<HashSet<NonZeroOid>> = if commit_sets.is_empty() {
+-        None
++    let configured_default = get_restack_default_revset(&repo)?;
++    let scoped = configured_default.is_some();
++    let use_default = revsets.is_empty();
++    let revsets = if use_default {
++        vec![Revset(
++            configured_default.unwrap_or_else(|| "draft()".to_string()),
++        )]
+     } else {
++        revsets
++    };
++    let commit_sets = match resolve_commits(
++        effects,
++        &repo,
++        &mut dag,
++        &revsets,
++        resolve_revset_options,
++    ) {
++        Ok(commit_sets) => commit_sets,
++        Err(err) if use_default && scoped => {
++            writeln!(
++                effects.get_error_stream(),
++                "Error: could not resolve branchless.restack.defaultRevset: {err}; pass a revset explicitly to git restack."
++            )?;
++            return Ok(Err(ExitCode(1)));
++        }
++        Err(err) => {
++            err.describe(effects)?;
++            return Ok(Err(ExitCode(1)));
++        }
++    };
++    let selection = union_all(&commit_sets);
++    let selection = if scoped && use_default {
++        expand_restack_selection(&dag, &event_replayer, event_cursor, selection)?
++    } else {
++        selection
++    };
++    let commits = dag.commit_set_to_vec(&selection)?;
++    let branch_targets = if scoped {
++        let mut abandoned_children = Vec::new();
++        for &oid in &commits {
++            if let Some((_, children)) =
++                find_abandoned_children(&dag, &event_replayer, event_cursor, oid)?
++            {
++                abandoned_children.extend(children);
++            }
++        }
++        let descendants = dag.query_descendants(abandoned_children.into_iter().collect())?;
+         Some(
+-            dag.commit_set_to_vec(&union_all(&commit_sets))?
++            dag.commit_set_to_vec(&selection.union(&descendants))?
+                 .into_iter()
+                 .collect(),
+         )
++    } else {
++        None
+     };
+
+     let MoveOptions {
+@@ -367,6 +428,7 @@
+         git_run_info,
+         &event_log_db,
+         &execute_options,
++        branch_targets.as_ref(),
+     )?);
+
+     smartlog(effects, git_run_info, Default::default())
+diff --git a/git-branchless/tests/test_restack.rs b/git-branchless/tests/test_restack.rs
+--- a/git-branchless/tests/test_restack.rs
++++ b/git-branchless/tests/test_restack.rs
+@@ -1,4 +1,6 @@
+-use lib::testing::{GitInitOptions, GitRunOptions, make_git, remove_rebase_lines};
++use lib::testing::{
++    Git, GitInitOptions, GitRunOptions, make_git, make_git_worktree, remove_rebase_lines,
++};
+
+ #[test]
+ fn test_restack_amended_commit() -> eyre::Result<()> {
+@@ -646,3 +648,275 @@
+
+     Ok(())
+ }
++
++#[test]
++fn test_restack_default_revset() -> eyre::Result<()> {
++    // Two abandoned sibling stacks distinguish the configured selection, an
++    // explicit override, and the unset draft() default.
++    for (default, explicit, expected) in [
++        (Some("first"), false, [true, false]),
++        (Some("first"), true, [false, true]),
++        (Some("invalid("), true, [false, true]),
++        (Some("none()"), false, [false, false]),
++        (None, false, [true, true]),
++    ] {
++        let git = make_git()?;
++        git.init_repo()?;
++        let mut originals = Vec::new();
++        let mut replacements = Vec::new();
++        for name in ["first", "second"] {
++            git.run(&["checkout", "--detach", "master"])?;
++            let original_oid = git.commit_file(name, 1)?;
++            git.commit_file(&format!("{name}-child"), 2)?;
++            git.run(&["checkout", &original_oid.to_string()])?;
++            git.run(&["commit", "--amend", "-m", &format!("amended {name}")])?;
++            originals.push(original_oid.to_string());
++            replacements.push(git.get_repo()?.get_head_info()?.oid.unwrap());
++        }
++        if let Some(default) = default {
++            let default = if default == "first" {
++                originals[0].as_str()
++            } else {
++                default
++            };
++            git.run(&["config", "branchless.restack.defaultRevset", default])?;
++        }
++        let args = if explicit {
++            vec![originals[1].as_str()]
++        } else {
++            vec![]
++        };
++        git.branchless("restack", &args)?;
++        for (replacement, should_restack) in replacements.iter().zip(expected) {
++            let (descendants, _) = git.branchless(
++                "query",
++                &[
++                    "--raw",
++                    &format!("descendants({replacement}) - {replacement}"),
++                ],
++            )?;
++            assert_eq!(
++                descendants.lines().count(),
++                usize::from(should_restack),
++                "default={default:?}, explicit={explicit}, replacement={replacement}",
++            );
++        }
++    }
++    Ok(())
++}
++
++const CURRENT_STACK_DEFAULT_REVSET: &str =
++    "descendants(roots((stack() & ::HEAD) - ::origin/main)) - ::origin/main";
++
++fn resolve_restack_test_ref(git: &Git, name: &str) -> eyre::Result<String> {
++    let (stdout, _) = git.run(&["rev-parse", name])?;
++    Ok(stdout.trim().to_owned())
++}
++
++fn make_restack_test_stack(git: &Git, prefix: &str) -> eyre::Result<Vec<String>> {
++    let mut commits = Vec::new();
++    for (index, suffix) in ["root", "middle", "tip"].into_iter().enumerate() {
++        let name = format!("{prefix}-{suffix}");
++        let oid = git.commit_file(&name, index.try_into()?)?;
++        git.run(&["branch", &name])?;
++        commits.push(oid.to_string());
++    }
++    Ok(commits)
++}
++
++#[test]
++fn test_restack_current_stack_default_in_linked_worktrees() -> eyre::Result<()> {
++    for amended_index in [0, 1] {
++        // Both worktrees have abandoned descendants and stale branches beyond a
++        // stale local main. Only the current stack's predecessors should be added.
++        let git = make_git()?;
++        git.init_repo()?;
++        git.run(&["branch", "-m", "master", "main"])?;
++        git.run(&["config", "branchless.core.mainBranch", "main"])?;
++        let stale_main = resolve_restack_test_ref(&git, "main")?;
++        git.detach_head()?;
++        let base = git.commit_file("remote-base", 1)?.to_string();
++        git.run(&["update-ref", "refs/remotes/origin/main", &base])?;
++        git.run(&[
++            "config",
++            "branchless.restack.defaultRevset",
++            CURRENT_STACK_DEFAULT_REVSET,
++        ])?;
++
++        let own_wrapper = make_git_worktree(&git, "own")?;
++        let own = &own_wrapper.worktree;
++        let sibling_wrapper = make_git_worktree(&git, "sibling")?;
++        let sibling = &sibling_wrapper.worktree;
++        let own_originals = make_restack_test_stack(own, "own")?;
++        let sibling_originals = make_restack_test_stack(sibling, "sibling")?;
++        sibling.run(&["checkout", "--detach", &sibling_originals[0]])?;
++        sibling.run(&["commit", "--amend", "-m", "amended sibling root"])?;
++        let sibling_replacement = resolve_restack_test_ref(sibling, "HEAD")?;
++
++        own.run(&["checkout", "--detach", &own_originals[amended_index]])?;
++        // Recover the amended root or middle commit through both rewrites.
++        let amended_suffix = ["root", "middle"][amended_index];
++        for iteration in ["once", "twice"] {
++            let message = format!("amended own {amended_suffix} {iteration}");
++            own.run(&["commit", "--amend", "-m", &message])?;
++        }
++        let own_replacement = resolve_restack_test_ref(own, "HEAD")?;
++        own.branchless("restack", &[])?;
++        let mut parent = base.clone();
++        for (index, suffix) in ["root", "middle", "tip"].into_iter().enumerate() {
++            let branch = format!("own-{suffix}");
++            let oid = resolve_restack_test_ref(own, &branch)?;
++            if index < amended_index {
++                assert_eq!(oid, own_originals[index]);
++            } else {
++                assert_ne!(oid, own_originals[index]);
++            }
++            if index == amended_index {
++                assert_eq!(oid, own_replacement);
++            }
++            assert_eq!(
++                resolve_restack_test_ref(own, &format!("{branch}^"))?,
++                parent
++            );
++            parent = oid;
++            assert_eq!(
++                resolve_restack_test_ref(sibling, &format!("sibling-{suffix}"))?,
++                sibling_originals[index],
++                "sibling branch must stay unchanged",
++            );
++            assert_eq!(
++                resolve_restack_test_ref(sibling, &format!("sibling-{suffix}^"))?,
++                if index == 0 {
++                    &base
++                } else {
++                    &sibling_originals[index - 1]
++                }
++                .as_str(),
++                "sibling ancestry must stay unchanged",
++            );
++        }
++        assert_eq!(resolve_restack_test_ref(own, "HEAD")?, own_replacement);
++        assert_eq!(
++            resolve_restack_test_ref(sibling, "HEAD")?,
++            sibling_replacement
++        );
++        let (descendants, _) = own.branchless(
++            "query",
++            &[
++                "--raw",
++                &format!("descendants({sibling_replacement}) - {sibling_replacement}"),
++            ],
++        )?;
++        assert!(
++            descendants.is_empty(),
++            "sibling descendants must stay abandoned: {descendants}"
++        );
++        assert_eq!(resolve_restack_test_ref(own, "main")?, stale_main);
++        assert_eq!(resolve_restack_test_ref(own, "origin/main")?, base);
++    }
++    Ok(())
++}
++
++#[test]
++fn test_restack_unresolvable_default_and_explicit_revset_fail_closed() -> eyre::Result<()> {
++    let git = make_git()?;
++    git.init_repo()?;
++    git.detach_head()?;
++    let originals = make_restack_test_stack(&git, "own")?;
++    git.run(&["checkout", "--detach", &originals[0]])?;
++    git.run(&["commit", "--amend", "-m", "amended own root"])?;
++    let replacement = resolve_restack_test_ref(&git, "HEAD")?;
++    git.run(&[
++        "config",
++        "branchless.restack.defaultRevset",
++        CURRENT_STACK_DEFAULT_REVSET,
++    ])?;
++
++    for explicit in [true, false] {
++        let args = if explicit {
++            vec![CURRENT_STACK_DEFAULT_REVSET]
++        } else {
++            vec![]
++        };
++        let (stdout, stderr) = git.branchless_with_options(
++            "restack",
++            &args,
++            &GitRunOptions {
++                expected_exit_code: 1,
++                ..Default::default()
++            },
++        )?;
++        assert!(
++            stdout.is_empty(),
++            "restack must stop before doing work: {stdout}"
++        );
++        let stderr = stderr.replace(CURRENT_STACK_DEFAULT_REVSET, "<default>");
++        if explicit {
++            insta::assert_snapshot!(stderr, @"
++            Evaluation error for expression '<default>': no commit, branch, or reference with the name 'origin/main' could be found
++            ");
++        } else {
++            insta::assert_snapshot!(stderr, @r#"
++            Error: could not resolve branchless.restack.defaultRevset: evaluation error in "<default>": no commit, branch, or reference with the name 'origin/main' could be found; pass a revset explicitly to git restack.
++            "#);
++        }
++        for (suffix, original) in ["root", "middle", "tip"].into_iter().zip(&originals) {
++            assert_eq!(
++                resolve_restack_test_ref(&git, &format!("own-{suffix}"))?,
++                *original
++            );
++        }
++        assert_eq!(resolve_restack_test_ref(&git, "HEAD")?, replacement);
++        let (descendants, _) = git.branchless(
++            "query",
++            &[
++                "--raw",
++                &format!("descendants({replacement}) - {replacement}"),
++            ],
++        )?;
++        assert!(
++            descendants.is_empty(),
++            "commits must stay abandoned: {descendants}"
++        );
++    }
++    Ok(())
++}
++
++#[test]
++fn test_restack_explicit_branch_repair_requires_configured_default() -> eyre::Result<()> {
++    for (default, explicit, expected) in [
++        (None, "first", [true, true]),
++        (None, "none()", [true, true]),
++        (Some("none()"), "first", [true, false]),
++        (Some("none()"), "none()", [false, false]),
++    ] {
++        let git = make_git()?;
++        git.init_repo()?;
++        let mut originals = Vec::new();
++        let mut replacements = Vec::new();
++        for name in ["first", "second"] {
++            git.run(&["checkout", "--detach", "master"])?;
++            originals.push(git.commit_file(name, 1)?.to_string());
++            git.run(&["branch", name])?;
++            git.run(&["commit", "--amend", "-m", &format!("amended {name}")])?;
++            replacements.push(resolve_restack_test_ref(&git, "HEAD")?);
++        }
++        if let Some(default) = default {
++            git.run(&["config", "branchless.restack.defaultRevset", default])?;
++        }
++        git.branchless("restack", &[explicit])?;
++        for (index, name) in ["first", "second"].into_iter().enumerate() {
++            let expected_oid = if expected[index] {
++                &replacements[index]
++            } else {
++                &originals[index]
++            };
++            assert_eq!(
++                &resolve_restack_test_ref(&git, name)?,
++                expected_oid,
++                "default={default:?}, explicit={explicit}, branch={name}",
++            );
++        }
++    }
++    Ok(())
++}
+diff --git a/git-branchless-lib/src/core/config.rs b/git-branchless-lib/src/core/config.rs
+--- a/git-branchless-lib/src/core/config.rs
++++ b/git-branchless-lib/src/core/config.rs
+@@ -228,6 +228,14 @@
+         .get_or("branchless.core.protectCheckedOutBranches", true)
+ }
+
++/// The configured revset for bare restack; setting it also limits explicit restack's branch repair to the selection.
++/// An unresolvable configured default stops before restacking commits or moving branches; pass a revset explicitly to override it.
++#[instrument]
++pub fn get_restack_default_revset(repo: &Repo) -> eyre::Result<Option<String>> {
++    repo.get_readonly_config()?
++        .get::<String, _>("branchless.restack.defaultRevset")
++}
++
+ /// If `true`, when restacking a commit, do not update its timestamp to the
+ /// current time.
+ #[instrument]
+diff --git a/git-branchless-opts/src/lib.rs b/git-branchless-opts/src/lib.rs
+--- a/git-branchless-opts/src/lib.rs
++++ b/git-branchless-opts/src/lib.rs
+@@ -622,8 +622,10 @@
+     /// Fix up commits abandoned by a previous rewrite operation.
+     Restack {
+         /// The IDs of the abandoned commits whose descendants should be
+-        /// restacked. If not provided, all abandoned commits are restacked.
+-        #[clap(value_parser, default_value = "draft()")]
++        /// restacked. Defaults to branchless.restack.defaultRevset (draft()
++        /// when unset). An unresolvable configured default is an error; pass a
++        /// revset explicitly to override it.
++        #[clap(value_parser)]
+         revsets: Vec<Revset>,
+
+         /// Options for resolving revset expressions.

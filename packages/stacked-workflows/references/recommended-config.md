@@ -73,6 +73,8 @@ These improve the development experience.
   defaultRevset = "(@ % main()) | stack() | descendants(@) | @"
 
 [branchless "restack"]
+  # Bare restack selects HEAD's own stack past origin/main (patched build only)
+  defaultRevset = "descendants(roots((stack() & ::HEAD) - ::origin/main)) - ::origin/main"
   # Keep original author timestamps during restack
   preserveTimestamps = true
 
@@ -96,6 +98,12 @@ These improve the development experience.
   # this value in both directions.
   jobs = 1
 ```
+
+Replace `origin/main` with your upstream ref if needed. See the
+[restack reference](git-branchless.md#rewriting) for configured selection,
+branch-repair scope and the worktree stop rule before using this setting. An
+unresolvable configured default exits with an error before restacking commits or
+moving branches; pass a revset explicitly to override it.
 
 ### git-revise
 
@@ -162,6 +170,7 @@ Convenience settings that some users prefer.
 | `branchless.commitMetadata.relativeTime`         | bool   | `true`                                                   | Show relative timestamps in smartlog                   |
 | `branchless.navigation.autoSwitchBranches`       | bool   | `true`                                                   | Auto-switch branch on navigate                         |
 | `branchless.next.interactive`                    | bool   | `false`                                                  | Interactive prompt on ambiguous next                   |
+| `branchless.restack.defaultRevset`               | string | `draft()`                                                | Bare restack selection (patched build only)            |
 | `branchless.restack.preserveTimestamps`          | bool   | `false`                                                  | Keep author timestamps during restack                  |
 | `branchless.restack.warnAbandoned`               | bool   | `true`                                                   | Warn when commits become abandoned                     |
 | `branchless.revsets.alias.<name>`                | string | —                                                        | Custom revset aliases                                  |
