@@ -1,8 +1,8 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-29 — CPA 8.0.41 custom YAML decoders are probed
-> through yaml.v3; z.ai documentation uses the shared `webDocsLib.mkSnapshot`
-> updater and validates candidate pages.
+> **Last verified:** 2026-10-30 — CPA 8.0.41 custom YAML decoders are probed
+> through yaml.v3; z.ai documentation and the OpenCode Go catalog and plan page
+> use the shared `webDocsLib.mkSnapshot` updater and validate candidates.
 
 ## Why reflection also needs the v8 tables
 
@@ -29,10 +29,30 @@ are checked separately: identical URLs may repeat, conflicting values fail. All
 three tiers must be present, so a changed or unclassified tier fails. These
 facts do not alter harness environment variables.
 
+`packages/docs/cliproxyapi-opencode-go-docs/package.nix` pins OpenCode Go's
+public model catalog (`models.json`) and its Go page (`go.md`) in one snapshot,
+so one update PR carries a change to either. The catalog stamps every model's
+`created` with the fetch time, so the source's `normalize` filter (jq: drop
+`created`, sort models by id and keys) runs before content hashing; a raw pin
+would change on every sweep. `normalize` is the only mkSnapshot addition:
+per-source, stdin to stdout, in both the build and the updater. The page is
+fetched with the snapshot's Markdown `Accept` header and arrives as MDX source,
+not HTML. `extract/opencode-go.py` copies each catalog entry without `created`
+into `opencodeGo.models` and reads `opencodeGo.monthlyLimits.<plan>.<id>`
+(dollars, or `"unlimited"`) from the `go-pricing` plan tabs. Those tab slots are
+HTML blocks whose indented tables CommonMark reads as code, so each slot body is
+parsed again as Markdown and the tags go through `html.parser`. Rows map to IDs
+through the page's own endpoint table (catalog `name`s differ from the page's
+display names); a trailing qualifier such as a token band or peak window is
+stripped, and a model's rows must agree. An unclassified tab group, a row with
+no ID, a catalog model missing from a plan, or a documented model the catalog
+lacks fails, except the dated `DOCUMENTED_ONLY` set, which fails once stale.
+`checks/opencode-go.py` holds the refusal fixtures.
+
 To regenerate facts from the current pins, run
 `nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.
-`cliproxyapi-extracted` joins the config and vendor extraction and checks their
-shared committed facts through `mkOwnerCheck`.
+`cliproxyapi-extracted` joins the config and both vendor extractions and checks
+their shared committed facts through `mkOwnerCheck`.
 
 `v8Paths` contains relocated paths, not a schema. Fields already at their v8
 paths, such as `routing.*` and `models.*`, have no relocation entry. Upstream
