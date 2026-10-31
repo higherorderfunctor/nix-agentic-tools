@@ -184,10 +184,11 @@ shows a Pool column between Effort (delegate) and Launch, with an empty cell for
 a family without pool guidance, alongside each launch’s registered pool label.
 Set `opencodeGo.pool = "<pool>"` to bind every generated preset to that
 registered pool on each runtime that selects the `opencode-go` vendor. If one
-runtime selects several families, of any vendors, that match the same servable
-Go catalog id, such as a hand-written `deepseek-v*-flash*` beside
-`go-deepseek-v4.1-flash`, evaluation fails and names the id and the families.
-Selecting them on different runtimes is allowed. The
+runtime selects a preset and another family of any vendor, a custom
+`opencode-go` one included, that match the same servable Go catalog id, such as
+a hand-written `deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`, evaluation
+fails and names the id and the families. Selecting them on different runtimes is
+allowed, and families that overlap with no preset selected are not checked. The
 `delegate-routing-opencode-go-presets` check fails when a servable catalog id
 matches no preset or several, or a preset matches no catalog id.
 
