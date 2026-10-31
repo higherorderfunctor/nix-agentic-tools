@@ -20,7 +20,7 @@ import zlib
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from capture import Collector, EventStream, SSE, digest, open_database, request_details
+from capture import DECODE_LIMIT, Collector, EventStream, SSE, digest, open_database, request_details
 from mitm_addon import UsageCapture
 
 
@@ -110,6 +110,24 @@ class CaptureTests(unittest.TestCase):
         chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
         self.assertEqual(b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks), encoded)
         self.assertEqual(b"".join(gzip.decompress(c["application_gzip"]) for c in chunks), body)
+
+    def test_gzip_chunk_past_the_decode_limit_keeps_its_partial_output(self):
+        encoded = gzip.compress(bytes(2 * DECODE_LIMIT))
+        db, row = self.run_capture([encoded[:-8], encoded[-8:]], "gzip")
+        self.assertIn("decode_error", json.loads(row["issues_json"]))
+        self.assertIsNone(row["response_sha256"])
+        chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
+        self.assertEqual(b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks), encoded)
+        self.assertEqual(gzip.decompress(chunks[0]["application_gzip"]), bytes(DECODE_LIMIT + 1))
+        self.assertIsNone(chunks[1]["application_gzip"])
+
+    def test_identity_chunk_past_the_decode_limit_keeps_its_output_and_decodes_nothing_after(self):
+        db, row = self.run_capture([bytes(DECODE_LIMIT + 1), b"after"], "identity")
+        self.assertIn("decode_error", json.loads(row["issues_json"]))
+        self.assertIsNone(row["response_sha256"])
+        chunks = db.execute("SELECT * FROM chunks ORDER BY seq").fetchall()
+        self.assertEqual(gzip.decompress(chunks[0]["application_gzip"]), bytes(DECODE_LIMIT + 1))
+        self.assertIsNone(chunks[1]["application_gzip"])
 
     def test_credit_envelope_in_sse_and_json_response(self):
         writer = Collector(self.path)
