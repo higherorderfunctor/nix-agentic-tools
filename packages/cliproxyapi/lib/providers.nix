@@ -16,9 +16,12 @@
         messages = "anthropic";
         responses = "responses";
       };
-      # The operator's Claude OAuth owns Claude models: the defaults leave
-      # them out, and ../modules/instances.nix refuses any a definition adds.
-      refuses = model: lib.hasPrefix "claude-" (lib.toLower model);
+      # Subscriptions the operator already routes through CPA serve these
+      # families: Claude OAuth (claude-*), z.ai, shipped here as
+      # `vendor = "z-ai"` (glm-*), and Codex OAuth (gpt-*). OpenCode would only
+      # duplicate them, so the defaults leave them out and
+      # ../modules/instances.nix refuses any a definition adds.
+      refuses = model: lib.any (prefix: lib.hasPrefix prefix (lib.toLower model)) ["claude-" "glm-" "gpt-"];
       catalog = lib.filterAttrs (id: _: !(refuses id)) (fact "opencodeGo").models;
       placed = lib.mapAttrsToList (id: entry: let
         natives = builtins.attrNames entry.api;
@@ -57,7 +60,7 @@
       });
       codexShellArgCleanup = false;
       models = null;
-      refusal = "OpenCode Go may not serve Claude models; the Claude OAuth credential owns them.";
+      refusal = "OpenCode Go may not serve claude-*, glm-* or gpt-* models; the Claude OAuth, z.ai and Codex OAuth credentials serve them.";
       inherit refuses;
       toolAliases = {};
     };
@@ -214,7 +217,7 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without Claude models, which it refuses. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without claude-*, glm-* or gpt-* models, which it refuses. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {
