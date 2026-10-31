@@ -82,8 +82,8 @@ Built-in `vendor = "z-ai"` defaults
 repairing measured tool-name and empty-justification failures. Explicit
 `toolAliases = {};` and `codexShellArgCleanup = false;` disable those defaults;
 other vendors omit both settings unless requested. `vendor = "opencode-go"`
-places each OpenCode Go model on its native API and refuses Claude models
-(`cliproxyapi-settings.md`, Instances).
+places each OpenCode Go model on its native API and refuses `claude-*`, `glm-*`
+and `gpt-*` models (`cliproxyapi-settings.md`, Instances).
 
 ```nix
 {inputs, ...}: let
