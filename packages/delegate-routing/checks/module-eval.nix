@@ -587,41 +587,43 @@
             };
           };
         };
+      kimi = {
+        match = "kimi-k3*";
+        tier = "strong";
+      };
+      overlapping = families: models:
+        change {
+          ai.programs.delegate-routing = {
+            inherit families;
+            runtimes.claude.models = [{vendors = ["opencode-go"];}] ++ models;
+          };
+        };
+      inherit (import ../lib/opencode-go.nix {inherit lib;}) note;
       planned = readSkill (goSelected "go-plus") "claude";
       unplanned = readSkill (goSelected null) "claude";
     in
-      # Presets ship but render only when selected; the default skill has no Pool column.
+      # Presets ship but render only when selected; the default skill has no
+      # Pool column and no provisional note.
       !(lib.hasInfix "(opencode-go)" claude)
       && !(lib.hasInfix "| Pool " claude)
-      && lib.hasInfix "go-glm (opencode-go)" planned
+      && !(hasProse note claude)
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
+      && hasProse note planned
       && lib.hasInfix "| Pool " planned
-      && lib.hasInfix "go-plus: $180 (glm-5.2), $120 (glm-5.3) of list-price use empties the monthly pool" planned
+      && lib.hasInfix "go-plus: $60 of list-price use empties the monthly pool" planned
       && lib.hasInfix "go-plus: unlimited" planned
-      && lib.hasInfix "go-glm (opencode-go)" unplanned
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
       && !(lib.hasInfix "| Pool " unplanned)
-      # A hand-written family matching a preset's catalog model fails only
-      # when one runtime selects both.
       && passes (goSelected "go-plus")
-      && failsWith (change {
-        ai.programs.delegate-routing = {
-          families.example.glm = {
-            match = "glm-[0-9]*.[0-9]";
-            tier = "strong";
-          };
-          runtimes.claude.models = [
-            {vendors = ["opencode-go"];}
-            {families = ["glm"];}
-          ];
-        };
-      }) "glm-5.3 (opencode-go.go-glm, example.glm)"
+      # Two families selected on one runtime that match the same Go catalog
+      # model fail, whatever their vendors; on different runtimes they pass.
+      && lib.all (failsWith (overlapping {example.kimi = kimi;} [{families = ["kimi"];}])) ["kimi-k3 (" "example.kimi" "opencode-go.go-kimi-k3"]
+      && failsWith (overlapping {opencode-go.mine = kimi;} []) "opencode-go.mine"
       && passes (change {
         ai.programs.delegate-routing = {
-          families.example.glm = {
-            match = "glm-[0-9]*.[0-9]";
-            tier = "strong";
-          };
+          families.example.kimi = kimi;
           runtimes = {
-            claude.models = [{families = ["glm"];}];
+            claude.models = [{families = ["kimi"];}];
             codex.models = [{vendors = ["opencode-go"];}];
           };
         };
