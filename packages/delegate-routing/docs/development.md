@@ -104,12 +104,14 @@ like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
 field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
 fact: the list-price dollars that empty the account's monthly pool, so a lower
 limit weighs more. The skill shows a Pool column only when a selected family
-carries pool text. If one runtime selects several families, of any vendors, that
-match the same servable Go catalog id, such as a hand-written
-`deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`, evaluation fails and names
-the id and the families. Selecting them on different runtimes is allowed. The
-`delegate-routing-opencode-go-presets` check fails when a servable catalog id
-matches no preset or several, or a preset matches no catalog id.
+carries pool text. If one runtime selects a preset and another family of any
+vendor, a custom `opencode-go` one included, that match the same servable Go
+catalog id, such as a hand-written `deepseek-v*-flash*` beside
+`go-deepseek-v4.1-flash`, evaluation fails and names the id and the families.
+Selecting them on different runtimes is allowed, and families that overlap with
+no preset selected are not checked. The `delegate-routing-opencode-go-presets`
+check fails when a servable catalog id matches no preset or several, or a preset
+matches no catalog id.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
