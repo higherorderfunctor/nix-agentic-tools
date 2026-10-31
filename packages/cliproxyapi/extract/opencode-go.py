@@ -41,10 +41,6 @@ class Tags(HTMLParser):
         self.events.append(("end", tag, {}))
 
 
-def parser():
-    return MarkdownIt("commonmark").enable("table")
-
-
 def tables(tokens):
     """Each table as (header cells, body rows), cells as inline tokens."""
     found = []
@@ -112,7 +108,7 @@ def extract(catalog, page):
     if not models:
         raise ValueError("OpenCode Go catalog is empty")
 
-    markdown = parser()
+    markdown = MarkdownIt("commonmark").enable("table")
     group = slot = None
     slots = {}
     for token in markdown.parse(page):
@@ -142,7 +138,11 @@ def extract(catalog, page):
                     if set(slots[group]) != PLANS:
                         raise ValueError(f"OpenCode Go plan tab group {group} lacks a plan")
                     group = None
-        elif token.type == "code_block" and slot is not None and group in LIMIT_GROUPS:
+        elif slot is not None and group in LIMIT_GROUPS:
+            # A slot body is indented, so CommonMark reads it as code; any
+            # other token is content outside the parsed body.
+            if token.type != "code_block":
+                raise ValueError(f"OpenCode Go plan slot {slot} holds unparsed {token.type}")
             slots[group][slot].extend(tables(markdown.parse(token.content)))
     if group is not None:
         raise ValueError("OpenCode Go plan tabs never closed")
@@ -187,8 +187,8 @@ def extract(catalog, page):
                 raise ValueError(f"OpenCode Go model {model} has conflicting {plan} monthly limits")
         if set(limits) != set(models):
             raise ValueError(f"OpenCode Go {plan} limits do not cover the catalog: {sorted(set(models) ^ set(limits))}")
-        monthly[plan] = dict(sorted(limits.items()))
-    return {"models": dict(sorted(models.items())), "monthlyLimits": monthly}
+        monthly[plan] = limits
+    return {"models": models, "monthlyLimits": monthly}
 
 
 if __name__ == "__main__":
