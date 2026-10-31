@@ -1,6 +1,6 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-24 — 933 config nodes, including the patched
+> **Last verified:** 2026-10-30 — 933 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
 > `lib/extracted/options.nix`, with refinements and module assertions on the
 > allowlist; the clean render passes native v8 validation and loads through CPA
@@ -10,8 +10,9 @@
 > a secret file, and derives named client keys' `access.api-keys` and
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
-> official documentation. Named API-key credentials accept an optional integer
-> priority, omitted when unset.
+> official documentation; `vendor = "opencode-go"` places each pinned OpenCode
+> Go catalog model on its native API and refuses Claude models. Named API-key
+> credentials accept an optional integer priority, omitted when unset.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -73,6 +74,21 @@ credential-scoped, and explicit `toolAliases = {};` and
 `codexShellArgCleanup = false;` disable them. Other vendors omit both fields
 unless requested. Validation and wire behavior are documented in
 `cliproxyapi-key-allowlist.md`.
+
+For `vendor = "opencode-go"` the credential likewise needs only its key. The
+defaults come from the `opencodeGo` fact (`cliproxyapi-extraction.md`): each
+catalog model goes in `apis.<api>.models` of its one native API, `messages` on
+`anthropic`, `chat-completions` on `chat`, `responses` on `responses`, and
+Gemini's `generate-content`, which has no API here, on `chat`. CPA translates
+every other protocol. Base URLs are the catalog's per API; the Anthropic one
+drops its trailing `/v1`, which CPA's claude executor appends. Claude models are
+left out of the defaults, and a credential of this vendor that serves a
+`claude-*` model on any API fails evaluation: the Claude OAuth credential owns
+them. `toolAliases` and `codexShellArgCleanup` stay off. An API override
+replaces that API's whole default, so restate its `base-url`; the flake's
+`lib.cliproxyapi.providers.vendors.opencode-go.apis` holds the defaults to start
+from. Go asks clients for a session header to improve routing and caching; CPA
+forwards Claude Code's own on the Anthropic API, while chat sends none.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The
 existing per-client-key model list carries model IDs for picker rows, without
