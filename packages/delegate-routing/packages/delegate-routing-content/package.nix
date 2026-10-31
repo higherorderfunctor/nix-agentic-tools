@@ -22,6 +22,7 @@
   usageScripts = {
     claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq] [../../scripts/claude-usage.sh];
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3] [../../scripts/codex-usage.sh];
+    opencode-usage = mkUsageScript "opencode-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/opencode-usage.sh];
     zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/zai-usage.sh];
   };
   rawDefaults = import ../../lib/defaults.nix {
