@@ -1,20 +1,27 @@
 """Synthetic staged and sealed capture stores; readers, seal, base chains and payload accounting."""
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager, redirect_stderr
 import gzip
+import io
 import json
 from pathlib import Path
+import queue
 import sqlite3
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
+import calibration
 import capture
 import codec
 from codec import Chunk, Event
+from mitm_addon import GENERATE
 import query
+import report
 import store
-from test_capture import aws_event, completed, event
+from test_capture import EVENTSTREAM, aws_event, completed, event
 from test_codec import split, staged
 
 SSE = {"content_type": "text/event-stream"}
@@ -46,6 +53,29 @@ class StoreTests(unittest.TestCase):
         self.db.executemany("INSERT INTO events VALUES (?,?,?,?,?,?,?,?)", [(ident, e.seq, e.chunk_seq, e.utc_ns, e.mono_ns, e.name, zipped(e.frame), e.data) for e in rows[1]])
         self.db.commit()
         return ident
+
+    def pending(self, *identifiers):
+        self.db.executemany("INSERT INTO pending_seals VALUES (?)", [(ident,) for ident in identifiers])
+        self.db.commit()
+
+    def collect(self, writer, parts=(DELTA + event(completed()),), response=SSE, body=b'{"metadata":{"kiro:conversation_id":"sess_report"}}', **metadata):
+        """One finished capture of this run's invocation through the collector."""
+        ident = writer.begin({"host": "runtime.kiro.dev", "invocation": "a" * 32, **metadata}, body)
+        writer.headers(ident, response)
+        for part in parts:
+            writer.chunk(ident, part)
+        writer.finish(ident)
+        return ident
+
+    def drained(self, writer):
+        """Close writer once its sealer emptied pending_seals, backlog included, which close alone would skip."""
+        deadline = time.monotonic() + 5
+        while self.db.execute("SELECT 1 FROM pending_seals").fetchone() and time.monotonic() < deadline:
+            time.sleep(.01)
+        writer.close()
+
+    def sealed(self):
+        return {ident for (ident,) in self.db.execute("SELECT capture_id FROM capture_facts")}
 
     def read(self, ident, db=None):
         db = db or self.db
@@ -209,6 +239,150 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(self.read(ident), before)
         self.assertEqual(self.read(ident)[:2], before[:2])
         self.assertNotEqual(self.read(ident)[2], before[2])
+
+    def test_a_v1_store_upgrades_and_seals_only_new_captures(self):
+        self.db.executescript("DROP TABLE pending_seals; DROP TABLE sealed_requests; DROP TABLE sealed_responses; DROP TABLE capture_facts;"
+                              "UPDATE capture_meta SET version=1;")
+        old = self.stage("old", staged(split(DELTA, 5)))
+        before = self.read(old)
+        writer = capture.Collector(self.path)
+        new = self.collect(writer)
+        writer.close()
+        self.assertEqual([version for (version,) in self.db.execute("SELECT version FROM capture_meta")], [2])
+        self.assertEqual(self.read(old), before)
+        self.assertEqual((self.sealed(), self.db.execute("SELECT 1 FROM pending_seals").fetchone()), ({new}, None))
+        self.assertEqual(writer.stored_bytes, store.payload_bytes(self.db))
+        self.db.execute("UPDATE capture_meta SET version=3")
+        self.db.commit()
+        with self.assertRaisesRegex(ValueError, "unsupported capture schema version"):
+            capture.Collector(self.path)
+
+    def test_the_collector_seals_its_backlog_after_its_lock_and_before_its_flock(self):
+        crashed = self.stage("crashed", staged(split(DELTA, 5)))
+        self.db.execute("UPDATE captures SET state='recording'")  # restart marks it interrupted, then seals it
+        self.pending(crashed)
+        before = self.read(crashed)
+        original = store.Sealer.close
+
+        def probed(sealer):
+            with self.assertRaises(BlockingIOError):
+                capture.lock_beside(self.path, ".capture.lock")
+            original(sealer)
+        # A seal before self.lock existed would fail in _count and print its failure line.
+        with patch.object(store.Sealer, "close", probed), redirect_stderr(io.StringIO()) as stderr:
+            writer = capture.Collector(self.path)
+            self.drained(writer)
+        self.assertEqual((stderr.getvalue(), self.sealed()), ("", {crashed}))
+        self.assertEqual(self.read(crashed)[:2], before[:2])
+        self.assertEqual(writer.stored_bytes, store.payload_bytes(self.db))
+        restarted = capture.Collector(self.path)
+        restarted.close()
+        self.assertEqual(restarted.stored_bytes, writer.stored_bytes)
+
+    def test_close_seals_this_runs_captures_and_leaves_the_backlog_pending(self):
+        backlog = [self.stage(str(index), started=index) for index in range(200)]
+        self.pending(*backlog, self.stage("new", started=200))
+        original, calls, deltas, sealing = store.seal, [], [], threading.Event()
+
+        def gated(db, ident, cache):
+            calls.append(ident)
+            sealing.set()
+            sealer.stop.wait(2)  # close arrives during the first seal
+            return original(db, ident, cache)
+        with patch.object(store, "seal", gated):
+            sealer = store.Sealer(self.path, deltas.append)
+            for ident in backlog:
+                sealer.put(ident, backlog=True)
+            sealer.put("new")
+            self.assertTrue(sealing.wait(2))
+            sealer.close()
+        self.assertEqual((calls, self.sealed(), len(deltas)), (["0", "new"], {"0", "new"}, 2))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM pending_seals").fetchone()[0], 199)
+
+    def test_a_store_locked_at_open_is_retried_and_the_capture_sealed(self):
+        self.pending(self.stage("late"))
+        sealed, attempts, original = queue.Queue(), [], store.open_database
+
+        def flaky(path):
+            attempts.append(path)
+            if len(attempts) == 1:
+                raise sqlite3.OperationalError("database is locked")
+            return original(path)
+        with patch.object(store, "open_database", flaky), patch.object(store.Sealer, "RETRIES", (.01, .01)), \
+                redirect_stderr(io.StringIO()) as stderr:
+            sealer = store.Sealer(self.path, sealed.put)
+            sealer.put("late")
+            sealed.get(timeout=5)
+            sealer.close()
+        self.assertEqual((len(attempts), stderr.getvalue(), self.sealed()), (2, "", {"late"}))
+
+    def test_a_busy_store_is_retried_and_close_interrupts_the_backoff(self):
+        self.pending(self.stage("retried"), self.stage("abandoned"))
+        blocker, original, failures, sealed = self.connect(), store.seal, queue.Queue(), queue.Queue()
+
+        def short(path):
+            db = capture.open_database(path)
+            db.execute("PRAGMA busy_timeout=10")
+            return db
+
+        def observed(db, ident, cache):
+            try:
+                return original(db, ident, cache)
+            except sqlite3.OperationalError:
+                failures.put(ident)
+                raise
+        blocker.execute("BEGIN IMMEDIATE")
+        with patch.object(store, "open_database", short), patch.object(store, "seal", observed), \
+                patch.object(store.Sealer, "RETRIES", (.2, 60)), redirect_stderr(io.StringIO()) as stderr:
+            sealer = store.Sealer(self.path, sealed.put)
+            sealer.put("retried")
+            self.assertEqual(failures.get(timeout=5), "retried")
+            blocker.commit()
+            sealed.get(timeout=5)  # the retry committed
+            blocker.execute("BEGIN IMMEDIATE")
+            sealer.put("abandoned")
+            self.assertEqual([failures.get(timeout=5) for _ in range(2)], ["abandoned"] * 2)  # now waiting 60 s
+            started = time.monotonic()
+            sealer.close()
+            self.assertLess(time.monotonic() - started, 2)
+        blocker.rollback()
+        self.assertEqual(self.sealed(), {"retried"})
+        self.assertEqual([ident for (ident,) in self.db.execute("SELECT capture_id FROM pending_seals")], ["abandoned"])
+        self.assertEqual(stderr.getvalue(), "Kiro capture: sealing abandoned failed (OperationalError); staged payloads kept\n")
+
+    def reports(self, first):
+        """Every report and calibration read over the store; capture evidence and fits over the complete first capture."""
+        with closing(sqlite3.connect(self.path)) as db:
+            session, tree = query.query(db, "sess_report"), query.query(db, "sess_report", "tree")
+            started = db.execute("SELECT started_utc_ns FROM captures WHERE id=?", (first,)).fetchone()[0]
+            manifest = {"calls": [{"status": "complete", "capture_count": 1, "captures": [{"id": first}], "label": "call", "model": "claude-opus-5.5"}]}
+            return (session, tree, query.render(session), query.render_summary(tree), query.run_report(db, "a" * 32, "sess_report"),
+                    report.store_report(db), calibration.capture_evidence(db, "sess_report", started, started), calibration.fit_calls(db, manifest))
+
+    def test_reports_read_alike_before_and_after_the_collector_seals(self):
+        delta = lambda kind, text: event({"type": kind, "delta": text})
+        text_only = {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "only"}]}],
+                                                                "usage": {**completed()["response"]["usage"], "kiro:context_usage_percentage": 1.8}}}
+        with patch.object(store.Sealer, "put"), redirect_stderr(io.StringIO()):  # both runs leave every capture staged and pending
+            writer = capture.Collector(self.path)
+            first = self.collect(writer, [delta("response.output_text.delta", "a"), delta("response.function_call_arguments.delta", "{}"),
+                                          delta("response.reasoning_text.delta", "why"), event(completed())])
+            self.collect(writer, [event(text_only)],  # reaches the credit-discount payload facts
+                         body=b'{"model":"claude-opus-5.5","reasoning":{"effort":"low"},"metadata":{"kiro:conversation_id":"sess_report"}}')
+            self.collect(writer, [aws_event("assistantResponseEvent", {"content": "hi"}), aws_event("meteringEvent", {"usage": .5, "unit": "credit"})],
+                         {"content_type": EVENTSTREAM}, b'{"conversationState":{"conversationId":"sess_report"}}', target=GENERATE)
+            interrupted = self.collect(writer, [json.dumps(completed()["response"]).encode()], {"content_type": "application/json"})
+            writer.close()
+            self.db.execute("UPDATE captures SET state='recording' WHERE id=?", (interrupted,))  # a crash before its finalize committed
+            self.db.commit()
+            writer = capture.Collector(self.path, max_bytes=4096)  # marks it interrupted
+            self.collect(writer, [delta("response.output_text.delta", "x" * 8192), event(completed())],
+                         body=b'{"metadata":{"kiro:conversation_id":"sess_report"},"padding":"' + b"x" * 8192 + b'"}')  # both copies refused
+            writer.close()
+        before = self.reports(first)
+        self.drained(capture.Collector(self.path))
+        self.assertEqual(len(self.sealed()), 5)
+        self.assertEqual(self.reports(first), before)
 
 
 if __name__ == "__main__":

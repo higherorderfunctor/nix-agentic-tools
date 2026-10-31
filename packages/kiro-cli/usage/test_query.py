@@ -1,7 +1,9 @@
 """Synthetic calibration queries; no provider, home-directory or log reads."""
 # cspell:words tzset
 
+from contextlib import closing
 from datetime import datetime
+import functools
 import io
 import json
 import math
@@ -20,13 +22,45 @@ import capture
 import disk_index
 import query
 import report
+import store
 
 # Output tokens estimate() reads from opus chars, at rates.json's fitted chars_per_token.
 opus_tokens = lambda chars: round(chars / query.credit_discount.RATES["claude-opus-5.5"]["chars_per_token"])
 
 
-class QueryTests(unittest.TestCase):
+class SealedReports:
+    """Every report a test reads is read again from a copy of its store with every finished capture sealed, in a
+    sealed subTest, and must be equal; a store without the staged tables has nothing to seal and is not copied."""
+    REPORTS = ((query, "query"), (query, "run_report"), (report, "store_report"))
+
     def setUp(self):
+        super().setUp()
+        for module, name in self.REPORTS:
+            patcher = patch.object(module, name, functools.partial(self.compared, name, getattr(module, name)))
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def compared(self, name, read, db, *args, **options):
+        # Imaged before the read, which may see a capture another connection commits while it runs. A backup would
+        # wait on the test's open write transaction, and a WAL file's image deserializes read-only unless marked
+        # rollback-journal.
+        image = bytearray(db.serialize()) if {"chunks", "events", "sealed_responses"} <= store.tables(db) else None
+        result = read(db, *args, **options)
+        if image:
+            image[18:20] = b"\x01\x01"
+            with closing(sqlite3.connect(":memory:")) as sealed, self.subTest(sealed=name):
+                sealed.deserialize(image)
+                sealed.executescript("DELETE FROM capture_meta; INSERT INTO capture_meta VALUES (2);")
+                cache = store.RequestCache()
+                for (ident,) in sealed.execute("SELECT id FROM captures WHERE state!='recording' ORDER BY started_utc_ns,id").fetchall():
+                    store.seal(sealed, ident, cache)
+                self.assertEqual(read(sealed, *args, **options), result)
+        return result
+
+
+class QueryTests(SealedReports, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
         self.db = sqlite3.connect(":memory:")
         self.addCleanup(self.db.close)
         self.db.executescript(capture.SCHEMA + disk_index.SCHEMA)
@@ -642,7 +676,7 @@ class QueryTests(unittest.TestCase):
         self.db.commit()
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "synthetic.sqlite"
-            with sqlite3.connect(path) as target:
+            with closing(sqlite3.connect(path)) as target:
                 self.db.backup(target)
             command = [sys.executable, query.__file__, "--db", str(path), "--session", "sess_root"]
             structured = subprocess.run([*command, "--json"], capture_output=True, text=True)
@@ -682,7 +716,7 @@ class QueryTests(unittest.TestCase):
     def report_db(self, temporary):
         self.db.commit()
         path = Path(temporary) / "synthetic.sqlite"
-        with sqlite3.connect(path) as target:
+        with closing(sqlite3.connect(path)) as target:
             self.db.backup(target)
         return path
 

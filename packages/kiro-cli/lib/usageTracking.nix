@@ -17,8 +17,22 @@
     lib.optionals (theme != {}) ["--summary-theme" (toString (pkgs.writeText "kiro-usage-summary-theme.json" (builtins.toJSON theme)))];
   # The tool's `exec` and `report` commands print the exit summary.
   toolArgs = cfg: ["--port" (toString cfg.port)] ++ warnArgs cfg ++ stateArgs cfg ++ summaryArgs cfg;
+  # toPythonApplication sets pythonModule = false; the interpreter mitmdump runs on is its Python dependencies'.
+  pythonOf = drv:
+    if lib.isDerivation (drv.pythonModule or null)
+    then drv.pythonModule
+    else lib.findFirst lib.isDerivation null (map (dep: dep.pythonModule or null) (drv.dependencies or []));
+  # A mitmproxy with no evaluable interpreter, such as a non-Python override, adds no entry.
+  pythons = lib.filterAttrs (_: python: python != null) {
+    inherit (pkgs) python3;
+    mitmproxy = pythonOf pkgs.mitmproxy;
+  };
+  pythonRequirement = {
+    assertion = lib.all (python: lib.versionAtLeast python.version "3.14") (lib.attrValues pythons);
+    message = "Kiro usage tracking needs Python 3.14 or newer for the standard-library compression.zstd module (${lib.concatStringsSep ", " (lib.mapAttrsToList (name: python: "${name} runs on ${python.version}") pythons)}). Use a nixpkgs whose python3 is 3.14 or newer.";
+  };
 in {
-  inherit summaryTheme toolArgs;
+  inherit pythonRequirement summaryTheme toolArgs;
   options = {
     enable = lib.mkEnableOption "private local Kiro usage capture through a loopback TLS proxy";
     dataDirectory = lib.mkOption {
@@ -29,7 +43,7 @@ in {
     payloadWarnBytes = lib.mkOption {
       type = lib.types.ints.positive;
       default = 1073741824;
-      description = "Compressed payload bytes past which usage capture warns. Payloads are always retained; once the retained compressed payload bytes exceed this, the collector logs one warning per run and each tracked exec summary repeats it with retirement guidance. SQLite metadata and WAL are not counted.";
+      description = "Compressed payload bytes past which usage capture warns: sealed captures' compressed blobs, the gzip copies of captures not yet sealed, and usage summaries. Payloads are always retained; once they exceed this, the collector logs one warning per run and each tracked exec summary repeats it with retirement guidance. SQLite metadata and WAL are not counted.";
     };
     port = lib.mkOption {
       type = lib.types.port;
@@ -77,6 +91,7 @@ in {
         assertion = lib.intersectLists proxyNames (builtins.attrNames environment) == [];
         message = "ai.kiro.cli.usageTracking owns HTTP(S)/ALL/NO_PROXY (both cases) and NODE_EXTRA_CA_CERTS; remove conflicting ai.environmentVariables / ai.kiro.cli.environmentVariables entries, or opt out of ai.proxy with ai.kiro.proxy = {http = null; https = null;}.";
       }
+      pythonRequirement
     ];
   service = cfg: {
     command =

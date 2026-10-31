@@ -1,17 +1,20 @@
 """Sanitized numeric calibration and offline evidence-gating regressions."""
 
+import gzip
 import json
 from pathlib import Path
 import re
 import unittest
 from unittest.mock import patch
 
+from capture import digest
 import credit_discount as discount
 import test_query
 import query
 
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures/credit-discount.json").read_text())
+RETAINED = gzip.compress(b"retained")  # a real gzip payload, so the sealed subTest can read and seal it
 
 
 class DiscountTests(unittest.TestCase):
@@ -118,15 +121,15 @@ class DiscountQueryTests(unittest.TestCase):
         ident = facts["label"]
         self.fixture.captured(ident, conversation=conversation, credits=facts["credits"], tokens=None,
                               metadata={"model": facts["model"], "effort": facts["effort"], "kiro:root_conversation_id": "root"})
-        self.db.execute("UPDATE captures SET request_gzip=?,context_usage_percentage=?,transport_ended=1,dropped_bytes=0,dropped_chunks=0,summary_json=? WHERE id=?",
-                        (b"retained", facts["context"], json.dumps({"output_text_chars": facts["chars"], "terminal": "response.completed", "output_count_source": "terminal_output"}), ident))
+        self.db.execute("UPDATE captures SET request_gzip=?,request_sha256=?,context_usage_percentage=?,transport_ended=1,dropped_bytes=0,dropped_chunks=0,summary_json=? WHERE id=?",
+                        (RETAINED, digest(b"retained"), facts["context"], json.dumps({"output_text_chars": facts["chars"], "terminal": "response.completed", "output_count_source": "terminal_output"}), ident))
         output = [{"type": "message", "content": [{"type": "output_text", "text": "x" * facts["chars"]}]}]
         if extra_output:
             output.append(extra_output)
         terminal = {"type": "response.completed", "response": {"output": output}}
         self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,0,'response.completed',?,?)",
-                        (ident, b"retained", json.dumps(terminal)))
-        self.db.execute("INSERT INTO chunks(capture_id,seq,application_gzip) VALUES (?,0,?)", (ident, b"retained"))
+                        (ident, RETAINED, json.dumps(terminal)))
+        self.db.execute("INSERT INTO chunks(capture_id,seq,application_gzip) VALUES (?,0,?)", (ident, RETAINED))
         return ident
 
     def test_scalar_exclusions_never_query_event_proof(self):
@@ -142,7 +145,7 @@ class DiscountQueryTests(unittest.TestCase):
         ident = self.add(FIXTURE[0])
         self.db.execute("DELETE FROM chunks")
         self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
-        self.db.execute("INSERT INTO chunks(capture_id,seq,application_gzip) VALUES (?,0,?)", (ident, b"retained"))
+        self.db.execute("INSERT INTO chunks(capture_id,seq,application_gzip) VALUES (?,0,?)", (ident, RETAINED))
         self.db.execute("UPDATE captures SET summary_json=?", (json.dumps({"output_text_chars": 5, "terminal": "response.completed", "output_count_source": "deltas"}),))
         self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_or_ambiguous_terminal": 1})
 
@@ -176,7 +179,7 @@ class DiscountQueryTests(unittest.TestCase):
         ident = self.add(FIXTURE[0])
         second = {"type": "response.completed", "response": {"output": [{"type": "reasoning", "summary": []}]}}
         self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,1,'response.completed',?,?)",
-                        (ident, b"retained", json.dumps(second)))
+                        (ident, RETAINED, json.dumps(second)))
         captures = query.query(self.db, "sess_root")["captures"]
         self.assertEqual(captures["credit_discount"]["exclusion_reasons"], {"missing_or_ambiguous_terminal": 1})
         self.assertEqual(captures["metrics"]["credits"]["observed_sum"], FIXTURE[0]["credits"])
@@ -212,7 +215,7 @@ class DiscountQueryTests(unittest.TestCase):
         self.db.execute("DELETE FROM chunks")
         ident = self.add(FIXTURE[0])
         self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,1,'response.reasoning.delta',?,?)",
-                        (ident, b"retained", '{"type":"response.reasoning.delta"}'))
+                        (ident, RETAINED, '{"type":"response.reasoning.delta"}'))
         report = query.query(self.db, "sess_root")
         self.assertEqual(report["captures"]["credit_discount"]["eligible"], 0)
         self.assertNotIn("Discount", query.render_summary(report))

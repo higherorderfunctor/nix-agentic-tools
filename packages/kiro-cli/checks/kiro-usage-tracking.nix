@@ -57,6 +57,8 @@
     }
     && lib.elem "--summary-theme" (usage.toolArgs ev.config.ai.kiro.cli.usageTracking);
   rejected = change: lib.any (a: !a.assertion) (harness.evalDevenv (lib.recursiveUpdate configuration change)).config.assertions;
+  # An interpreter without compression.zstd fails evaluation, whichever of the two carries it.
+  rejectedWith = pkgs': lib.any (a: !a.assertion && lib.hasInfix "compression.zstd" a.message) (harness.evalDevenvWithSpecialArgs {pkgs = pkgs';} configuration).config.assertions;
   directWrapper = v3:
     (import ../lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage {
       inherit package v3;
@@ -78,6 +80,8 @@ in {
       && !(disabled.config.env ? HTTPS_PROXY)
       && rejected {ai.kiro.cli.package = null;}
       && rejected {ai.kiro.cli.v3 = false;}
+      && rejectedWith (testPkgs // {mitmproxy = pkgs.python313Packages.mitmproxy;})
+      && rejectedWith (testPkgs // {python3 = pkgs.python313;})
       && !(builtins.tryEval (directWrapper false).drvPath).success
       && (builtins.tryEval (directWrapper true).drvPath).success
       && rejected {ai.environmentVariables.HTTPS_PROXY = "http://another:1234";}

@@ -18,7 +18,9 @@ is unencrypted. Protect backups and unpack output accordingly.
 
 Use an existing, explicitly configured mitmproxy installation and certificate
 trust setup. The addon does not install a CA, alter proxy environment variables,
-or configure Kiro itself:
+or configure Kiro itself. Usage tracking needs Python 3.14 or newer, for the
+standard-library `compression.zstd` module; the Nix module and the managed
+wrapper fail evaluation when `pkgs.python3` or mitmproxy's interpreter is older:
 
 ```bash
 export KIRO_USAGE_DB="$HOME/.local/state/kiro-usage/capture.sqlite3"
@@ -27,19 +29,20 @@ mitmdump -s /absolute/path/to/usage/mitm_addon.py --listen-host 127.0.0.1 --list
 ```
 
 `KIRO_USAGE_DB` is required. `KIRO_USAGE_WARN_BYTES` defaults to 1 GiB of
-retained payload evidence, counting request BLOBs, entity and application
-chunks, event frames and parsed event JSON, and retained usage summaries.
-Payloads are always retained: past the threshold the running collector logs one
-warning line to standard error and keeps capturing, and captures are not marked
-incomplete for it. Each tracked `kiro-usage exec` summary repeats the warning
-with the store's size while it stays above the threshold. Existing evidence is
-never rolled over or deleted. On restart the retained bytes are counted again.
-This counts payloads, not the SQLite file size: indexes, metadata, page
-overhead, and accumulated records also consume disk. Temporary SQLite journal
-space is additional. Stopping capture and deleting an intentionally retired
-private database are operator decisions: stop the service, then archive or
-delete `usage.sqlite3` with its `-wal` and `-shm` files; the next start creates
-a new store.
+retained payload evidence, counting sealed compressed payloads, staged payloads
+awaiting their seal (request BLOBs, entity and application chunks, event frames
+and parsed event JSON), and retained usage summaries. Payloads are always
+retained: past the threshold the running collector logs one warning line to
+standard error and keeps capturing, and captures are not marked incomplete for
+it. Each tracked `kiro-usage exec` summary repeats the warning with the store's
+size while it stays above the threshold. Existing evidence is never rolled over
+or deleted. On restart the retained bytes are counted again. This counts
+payloads, not the SQLite file size: indexes, metadata, page overhead, and
+accumulated records also consume disk. Temporary SQLite journal space is
+additional. Stopping capture and deleting an intentionally retired private
+database are operator decisions: stop the service, then archive or delete
+`usage.sqlite3` with its `-wal` and `-shm` files; the next start creates a new
+store.
 
 Only hosts equal to `kiro.dev` or ending in `.kiro.dev` are considered.
 Lookalikes such as `not-kiro.dev` are excluded. Two calls are selected: the
@@ -83,9 +86,10 @@ and marks existing recording rows incomplete when the database remains writable.
 Otherwise they remain recording, never complete. Existing response streams
 continue returning unchanged bytes; further selected requests receive a local
 HTTP 503 until the collector restarts. If the database cannot be opened or
-initialization fails, the addon stays installed, logs a startup failure, and
-refuses selected requests with HTTP 503 until configuration is fixed and the
-collector restarts. Other traffic remains outside capture.
+initialization fails, including on a Python without `compression.zstd`, the
+addon stays installed, logs a startup failure, and refuses selected requests
+with HTTP 503 until configuration is fixed and the collector restarts. Other
+traffic remains outside capture.
 
 Connections use SQLite WAL with `synchronous=NORMAL` and a 30-second busy
 timeout. An ordinary commit does not fsync; the commit that triggers an
@@ -155,7 +159,30 @@ its parsers do not rebuild exactly. A seal verifies every row before deleting
 the staged copies and stores the report's payload facts as evaluated over them.
 Readers in `store.py` and `query.py` return identical data and reports for
 staged and sealed captures, and payload accounting counts both forms. A seal
-requires schema version 2, which the collector does not yet write.
+requires schema version 2.
+
+The collector stages each capture as below, and records it in `pending_seals` in
+the transaction that creates its row. Once the worker finalizes the capture, a
+sealer thread with its own connection seals it, outside the worker's write
+transactions. A busy store is retried up to five times with a backoff of 1 to 16
+seconds; any other failure logs one line and keeps the staged payloads. Stopping
+the collector finishes the current seal and seals this run's captures; the next
+start seals what a stop, crash or failure left pending. Rows staged at version 1
+are never queued and stay staged. The sealer shares the interpreter lock with
+the response callbacks: its zstd work releases it, its row derivation does not.
+On a synthetic store of worst-case captures (8,397 events and a 2.4 MB response
+each, the live maximum being 8,399 events, with requests up to 10 MB), a seal
+took 0.65 s at the median. While it ran, a 16 KiB chunk's parse started up to 13
+ms late (p99 5.4 ms, against 0.2 ms idle) and took at most 8.7 ms.
+
+The collector writes `capture_meta` version 2, upgrading a version 1 store in
+place on start and refusing any other version. Version 2 is one way: an older
+collector refuses the store, and its addon then answers every selected Kiro
+request with HTTP 503, so a rollback across the upgrade blocks Kiro traffic
+through the proxy, not only capture. Older report code reads the store without
+checking the version and misclassifies credit discount evidence for sealed
+captures. To roll back, retire the store as for the payload threshold, or roll
+forward again; there is no downgrade.
 
 - `captures.request_gzip` preserves the complete decompressed application
   request bytes. Its full SHA-256 is over those exact bytes. Component hashes
@@ -471,7 +498,7 @@ and messages only for those linked to captures (less one second for coarse file
 timestamps) and never prunes; already indexed sessions still link their new
 descendants. The explicit `index` command is the full capture-scoped pass: it
 prunes `disk_*` rows for sessions no longer linked to captures and runs `VACUUM`
-plus a WAL checkpoint when free pages remain. Lineage comes from
+plus a WAL checkpoint when its prune deleted rows. Lineage comes from
 `parentSessionId`, `rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
 `workflowId` and `nodeId` are retained as identifiers. Index failures warn

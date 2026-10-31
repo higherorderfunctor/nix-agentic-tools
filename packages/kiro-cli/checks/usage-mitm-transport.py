@@ -22,6 +22,7 @@ import time
 def run(mitmdump, addon):
     sys.path.insert(0, str(addon.parent))
     from test_capture import EVENTSTREAM, aws_event  # the suite's CRC32 event-stream encoder
+    import store
     request_body = json.dumps({"model": "synthetic-model", "metadata": {"kiro:conversation_id": "sess_synthetic"}}).encode()
     output = "é🙂"
     delta = {"type": "response.output_text.delta", "delta": output}
@@ -162,6 +163,14 @@ def run(mitmdump, addon):
         assert "Traceback" not in logs and "Addon error" not in logs, logs
         with sqlite3.connect(database) as db:
             db.row_factory = sqlite3.Row
+
+            def sealed(ident):
+                """(request, chunks, events) of a capture the collector sealed at shutdown, with no staged copy left."""
+                staged = db.execute("SELECT (SELECT COUNT(*) FROM capture_facts WHERE capture_id=?),(SELECT COUNT(*) FROM chunks WHERE capture_id=?)"
+                                    "+(SELECT COUNT(*) FROM events WHERE capture_id=?),(SELECT request_gzip IS NULL FROM captures WHERE id=?)", (ident,) * 4).fetchone()
+                assert tuple(staged) == (1, 0, 1), tuple(staged)
+                return store.request_body(db, ident), *store.response_rows(db, ident)
+
             rows = {json.loads(row["metadata_json"])["path"]: row for row in db.execute("SELECT * FROM captures")}
             assert sorted(rows) == ["/", "/v1/responses"], [dict(row) for row in rows.values()]
             assert db.execute("SELECT COUNT(*) FROM captures").fetchone()[0] == 2  # one row per selected call, no duplicates, GetUsageLimits skipped
@@ -169,35 +178,34 @@ def run(mitmdump, addon):
             assert row["state"] == "complete", dict(row)
             assert row["credits"] == .25 and row["context_usage_percentage"] == 12.3
             assert row["input_tokens"] is None and row["output_tokens"] is None
-            assert gzip.decompress(row["request_gzip"]) == request_body
+            request, chunks, events = sealed(row["id"])
+            assert request == request_body
             assert row["request_sha256"] == hashlib.sha256(request_body).hexdigest()
             assert row["response_sha256"] == hashlib.sha256(body).hexdigest()
             assert json.loads(row["metadata_json"])["invocation"] == "a" * 32 and "target" not in json.loads(row["metadata_json"])
             metadata = row["metadata_json"] + row["response_json"]
             assert "private-" not in metadata, metadata
             assert "synthetic-upstream-request" in metadata
-            chunks = db.execute("SELECT * FROM chunks WHERE capture_id=? ORDER BY seq", (row["id"],)).fetchall()
-            assert b"".join(gzip.decompress(c["entity_gzip"]) for c in chunks) == routes["/v1/responses", None][4]
-            assert b"".join(gzip.decompress(c["application_gzip"]) for c in chunks) == body
-            assert db.execute("SELECT COUNT(*) FROM events WHERE capture_id=?", (row["id"],)).fetchone()[0] == 2
+            assert b"".join(c.entity for c in chunks) == routes["/v1/responses", None][4]
+            assert b"".join(c.application for c in chunks) == body
+            assert len(events) == 2
             summary = json.loads(row["summary_json"])
             assert summary["output_text_chars"] == 2 and summary["output_text_bytes"] == 6
             row = rows["/"]
             assert (row["state"], json.loads(row["issues_json"])) == ("complete", []), dict(row)
             assert (row["credits"], row["context_usage_percentage"]) == (.5, 7.5), dict(row)
             assert (row["input_tokens"], row["output_tokens"], row["cache_read_tokens"], row["cache_write_tokens"]) == (95, 4, 80, 5), dict(row)
-            assert gzip.decompress(row["request_gzip"]) == stream_request
+            request, chunks, events = sealed(row["id"])
+            assert request == stream_request
             assert row["response_sha256"] == hashlib.sha256(b"".join(frames)).hexdigest()
             metadata = json.loads(row["metadata_json"])
             assert (metadata["invocation"], metadata["target"], metadata["kiro:conversation_id"], metadata["model"]) == ("a" * 32, generate, "sess_stream", "synthetic-model"), metadata
-            chunks = db.execute("SELECT * FROM chunks WHERE capture_id=? ORDER BY seq", (row["id"],)).fetchall()
-            assert b"".join(gzip.decompress(c["application_gzip"]) for c in chunks) == b"".join(frames)
-            events = db.execute("SELECT event_name,frame_gzip FROM events WHERE capture_id=? ORDER BY seq", (row["id"],)).fetchall()
-            assert [e["event_name"] for e in events] == ["meteringEvent", "contextUsageEvent", "assistantResponseEvent", "metadataEvent"], [e["event_name"] for e in events]
-            assert [gzip.decompress(e["frame_gzip"]) for e in events] == frames
+            assert b"".join(c.application for c in chunks) == b"".join(frames)
+            assert [e.name for e in events] == ["meteringEvent", "contextUsageEvent", "assistantResponseEvent", "metadataEvent"], [e.name for e in events]
+            assert [e.frame for e in events] == frames
             summary = json.loads(row["summary_json"])
             assert (summary["terminal"], summary["metering_events"], summary["output_text_chars"]) == ("END_TURN", 1, 2), summary
-    print("PASS real mitmdump: loopback only; addon startup/shutdown; immediate first byte; exact gzip request/response; complete SSE evidence; usage NULL for unknown token counts; GenerateAssistantResponse selected by x-amz-target on POST / with complete event-stream evidence (credits, context, tokens); GetUsageLimits on POST / passed through uncaptured")
+    print("PASS real mitmdump: loopback only; addon startup/shutdown; immediate first byte; exact gzip request/response sealed at shutdown; complete SSE evidence; usage NULL for unknown token counts; GenerateAssistantResponse selected by x-amz-target on POST / with complete event-stream evidence (credits, context, tokens); GetUsageLimits on POST / passed through uncaptured")
 
 
 def main():

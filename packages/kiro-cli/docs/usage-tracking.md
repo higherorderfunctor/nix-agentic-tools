@@ -260,12 +260,13 @@ reach their root this way, and tree queries follow the same links. Unlinked
 sessions whose files all predate the earliest capture are skipped without
 reading; Kiro rewrites `session.json` when a session resumes. Children written
 before tracking began are therefore not indexed. The explicit command prunes
-disk rows for sessions no longer in scope and then runs `VACUUM`, so the file
-shrinks. `VACUUM` holds the write lock while it rewrites the file, so a running
-collector waits on its busy timeout meanwhile; after pruning this takes well
-under a second, but run it between Kiro sessions on a large capture store. A
-second explicit index waits for a running one; a tracked launch's exit scan
-skips while it runs.
+disk rows for sessions no longer in scope and, when that deleted rows, runs
+`VACUUM` plus a WAL checkpoint, so the file shrinks. Pages freed by sealing are
+reused by later captures rather than vacuumed. `VACUUM` holds the write lock
+while it rewrites the file, so a running collector waits on its busy timeout
+meanwhile; after pruning this takes well under a second, but run it between Kiro
+sessions on a large capture store. A second explicit index waits for a running
+one; a tracked launch's exit scan skips while it runs.
 
 Malformed or unreadable session metadata does not stop other sessions from
 indexing. Its omission is recorded, stale metadata is retired, and a successful
@@ -280,7 +281,17 @@ summary prints a one-line warning with the store's size while it stays above.
 Capture never deletes old captures. To retire a store, stop the `kiro-usage`
 service, then archive or delete `usage.sqlite3` with its `-wal` and `-shm`
 files; the next start creates a new one. The threshold counts payloads only:
-metadata, session indexes, SQLite pages, and WAL files need additional space.
+sealed captures' compressed blobs, the gzip copies of captures not yet sealed,
+and usage summaries. Metadata, session indexes, SQLite pages, and WAL files need
+additional space.
+
+The collector seals each capture once it finishes, on its own thread, into a
+compact form the reports and `kiro-usage unpack` read as before; captures
+recorded by an older collector stay unsealed. The collector upgrades the store
+to schema version 2 on start, which an older collector refuses: rolling Home
+Manager back across this change makes the proxy answer every selected Kiro
+request with HTTP 503. To roll back, retire the store as above, or roll forward
+again.
 
 The collector parses every response byte as it arrives, so credits, context,
 token counters, output character counts, and completion survive when it has to
