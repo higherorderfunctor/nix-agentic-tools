@@ -28,6 +28,8 @@
         (row (map (_: "---") columns))
       ]
       ++ map row rows);
+  # The Pool column appears only when a candidate carries pool guidance.
+  pooled = lib.any (family: family.pool or "" != "") candidates;
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
   tier = name: let
     members = builtins.filter (family: family.tier == name) candidates;
@@ -35,17 +37,21 @@
     lib.optionalString (members != []) ''
       ### ${name}
 
-      ${table ["Family" "Use for" "Avoid for" "Effort (delegate)" "Reach"] (map (family: [
+      ${table (["Family" "Use for" "Avoid for" "Effort (delegate)"] ++ lib.optional pooled "Pool" ++ ["Reach"]) (map (family:
+        [
           (familyLabel family)
           family.useFor
           family.avoidFor
           family.effort
+        ]
+        ++ lib.optional pooled (family.pool or "")
+        ++ [
           (lib.concatMapStringsSep "; " (target:
             if target == runtime
             then "native"
             else "via ${target} external") (targets family))
         ])
-        members)}
+      members)}
     '';
   techniqueBlock = target: externalOnly: let
     nodes = lib.filterAttrs (_: node:
