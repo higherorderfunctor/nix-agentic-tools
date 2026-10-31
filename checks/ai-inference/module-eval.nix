@@ -299,6 +299,16 @@ in {
           };
         };
         refusedClaude = failsWith ["credentials.go: vendor `opencode-go` refuses models `claude-haiku-5-5`" "Claude OAuth credential owns them"];
+        # CPA trims model names, so a padded Claude id is refused at the type.
+        rejectsPadded = model:
+          !(builtins.tryEval (builtins.deepSeq
+            (go {
+              apis.anthropic = {
+                base-url = urls.anthropic;
+                models = [model];
+              };
+            }).config.ai.cliproxyapi.instances.clients.credentials
+            true)).success;
         checks = {
           "accepted" = failedMessages result == [];
           "per-API base URLs" = (block "claude").base-url == urls.anthropic && (block "openai-compatibility").base-url == urls.chat && (block "codex").base-url == urls.responses;
@@ -323,6 +333,8 @@ in {
             };
             models = ["claude-haiku-5-5"];
           });
+          "Claude id with leading space refused" = rejectsPadded " claude-haiku-5-5";
+          "Claude id with no-break space refused" = rejectsPadded "claude-haiku-5-5 ";
           "z.ai shims off" = !((block "claude") ? tool-aliases) && !((block "openai-compatibility") ? codex-shell-arg-cleanup);
           "picker lists the routed API's models" =
             result.config.ai.claude.normalized.settings.inference.credentials
