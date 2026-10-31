@@ -96,14 +96,18 @@ with tempfile.TemporaryDirectory() as directory:
             assert (proxy.scheme, proxy.hostname, proxy.port) == ("http", "127.0.0.1", 18091), body
             assert proxy.username.startswith("kiro-usage-") and len(proxy.username) == len("kiro-usage-") + 32, body
             assert proxy.password == "" and body["ca"] == str(state / "ca/mitmproxy-ca-cert.pem"), body
-            assert result.stderr.count("Kiro usage summary unavailable:") == 1, result.stderr
-            assert "no captured conversation identity for this invocation" in result.stderr, result.stderr
+            # Only this run's call: neither the unmarked capture above nor the previous iteration's run joins it.
+            assert result.stderr.count("Kiro usage · sess_auto_ind · this run · 1 request · 0.50 credits") == 1, result.stderr
             assert not body["bypass"], body
             assert body["argv"] == ["--v3", "chat", "synthetic spaced argument", "--", "--v3"], body
             indexed = subprocess.run([tool, "session", "sess_auto_index", "--json"], env=environment, text=True, capture_output=True)
             assert indexed.returncode == 0, indexed.stderr
             disk = json.loads(indexed.stdout)["disk"]
             assert disk["turns"] == 1 and disk["metrics"]["credits"]["observed_sum"] == .75, disk
+        result = subprocess.run([tool, "exec", "--", "kiro-cli", "chat"], env=environment | {"PATH": str(Path(package) / "bin") + os.pathsep + environment.get("PATH", "")}, text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert result.stderr.count("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.") == 1, result.stderr
+        assert "Kiro usage ·" not in result.stderr, result.stderr
         (state / "ca/mitmproxy-ca-cert.pem").unlink()
         result = launch("kiro-cli")
         assert result.returncode != 0, result

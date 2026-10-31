@@ -1,18 +1,25 @@
 """Synthetic calibration queries; no provider, home-directory or log reads."""
+# cspell:words tzset
 
+from datetime import datetime
+import io
 import json
 import math
+import os
 from pathlib import Path
+import re
 import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
 import capture
 import disk_index
 import query
+import report
 
 # Output tokens estimate() reads from opus chars, at rates.json's fitted chars_per_token.
 opus_tokens = lambda chars: round(chars / query.credit_discount.RATES["claude-opus-5.5"]["chars_per_token"])
@@ -252,13 +259,13 @@ class QueryTests(unittest.TestCase):
         output = query.render_summary(report)
         self.assertEqual(output, "\n".join([
             "Kiro usage · sess_root · tree · 1,001 requests · 500.00 credits", "",
-            "Model            Requests  Credits     In  Out  Cached  Cache hit",
-            "requested-model     1,001   500.00  10.0K    —       —          —", "",
-            "Conversation     Requests  Credits     In  Out  Cached  Cache hit",
-            "Main                    1        —      —    —       —          —",
-            "Sub/WF              1,000   500.00  10.0K    —       —          —",
-            "-" * 65,
-            "Total               1,001   500.00  10.0K    —       —          —",
+            "Model            Requests  Credits                 In  Out  Cached  Cache hit",
+            "requested-model     1,001   500.00  10.0K (1000/1001)    —       —          —", "",
+            "Conversation     Requests  Credits                 In  Out  Cached  Cache hit",
+            "Main                    1        —                  —    —       —          —",
+            "Sub/WF              1,000   500.00              10.0K    —       —          —",
+            "-" * 77,
+            "Total               1,001   500.00  10.0K (1000/1001)    —       —          —",
             "⚠ credits unknown for 1/1,001 requests; 1 incomplete"]))
         self.db.execute("DELETE FROM captures")
         self.captured("zero", conversation="root", credits=0, tokens=0)
@@ -285,7 +292,7 @@ class QueryTests(unittest.TestCase):
         self.assertIn(query.capture_tables(report["captures"]), output)
         self.assertIn("1,010 (2/3)", output)
         self.assertIn("Other linked holds workflow steps and subagents and may include helpers/forks", output)
-        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10\s+50\s+~5%\n")
+        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10 \(2/3\)\s+50 \(2/3\)\s+~5% \(2/3\)\n")
 
     def test_report_labels_only_explicit_estimates_and_missing_capture(self):
         report = query.query(self.db, "sess_root", "tree")
@@ -318,6 +325,26 @@ class QueryTests(unittest.TestCase):
         self.db.execute("UPDATE captures SET credits=1 WHERE id='c'")
         self.assertNotIn("⚠", query.render_summary(query.query(self.db, root, "tree")))
         self.assertTrue(query.render_summary(query.query(self.db, root, "tree"), ["x", "y"]).endswith("\n⚠ x; y"))
+
+    def test_run_report_counts_only_the_invocations_calls_per_root(self):
+        run, earlier = {"invocation": "a" * 32}, {"invocation": "b" * 32}
+        self.session("sess_root")  # its disk credits and request ID would join the tree report, never a run
+        self.captured("main", conversation="sess_root", credits=1, metadata=run)
+        self.captured("helper", conversation="sess_helper", credits=2, metadata={**run, "kiro:root_conversation_id": "root"})
+        self.captured("unpriced", conversation="sess_root", credits=None, metadata=run)
+        self.captured("fork", conversation="sess_fork", credits=4, metadata=run)
+        self.captured("before", conversation="sess_root", credits=8, metadata=earlier)
+        self.captured("unmarked", conversation="sess_root", credits=16)
+        self.captured("disk-mapped", request="request-sess_root", credits=32, metadata=run)
+        self.assertEqual(query.query(self.db, "sess_root", "tree")["captures"]["observations"], 6)
+        report = query.run_report(self.db, "a" * 32, "sess_root")
+        pools = report["captures"]["pools"]
+        self.assertEqual([pools[pool]["observations"] for pool in ("root_conversation", "other_linked_conversations", "unknown")], [2, 1, 0])
+        lines = query.render_summary(report).splitlines()
+        self.assertEqual(lines[0], "Kiro usage · sess_root · this run · 3 requests · 3.00 credits")
+        self.assertEqual(lines[-1], "⚠ credits unknown for 1/3 requests")
+        self.assertEqual(query.render_summary(query.run_report(self.db, "a" * 32, "sess_fork")).splitlines()[0],
+                         "Kiro usage · sess_fork · this run · 1 request · 4.00 credits")
 
     def test_summary_tables_share_column_widths_and_total_row_closes_the_second(self):
         for ident, conversation, tokens in (("a", "root", 5), ("b", "child", 123_456_789)):
@@ -360,7 +387,7 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(models["other-model"]["estimates"], {})
         self.assertEqual(report["captures"]["metrics"]["input_tokens"], query.metric(100, 1, 4))
         self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~5\s+~30.0K\s+~50%\n")
-        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K\s+~5\s+~30.0K\s+~50%$")
+        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K \(3/4\)\s+~5 \(3/4\)\s+~30.0K \(3/4\)\s+~50% \(3/4\)$")
         output = query.render(report)
         self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~49.9% \(3/4\)")
         self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
@@ -400,6 +427,66 @@ class QueryTests(unittest.TestCase):
         self.assertNotIn("±", query.render(mixed).split("Pool")[1].splitlines()[1])  # Total row
         self.assertEqual([query.error_text(error, 1000) for error in (9.9, 10)], ["", " ±1%"])
 
+    def test_compact_tables_show_the_coverage_of_partial_cells(self):
+        """Two calls, one estimable and one not: every compact cell with a missing contribution says so, like the full
+        report, on the exit summary and the store report alike; a cell with every contribution stays bare."""
+        self.estimable("rated", .01, chars=40)
+        self.captured("unknown", conversation="root", credits=.01, tokens=None, metadata={"model": "unknown-model"})
+        cell = r"~\S+ \(1/2\)"
+        row = rf"\s+2\s+0.02\s+{cell}\s+{cell}\s+{cell}\s+~\d+% \(1/2\)"
+        summary = query.render_summary(query.query(self.db, "sess_root"))
+        store = report.render(report.store_report(self.db))
+        self.assertRegex(summary, rf"\nMain{row}\n")
+        self.assertRegex(summary, rf"\nTotal{row}(\n|$)")
+        self.assertRegex(store, rf"\nTotal{row}(\n|$)")
+        self.assertRegex(store, rf"\nunknown-model\s+1\s+0.01\s+—\s+—\s+—\s+—")
+        self.assertNotRegex(summary, r"\nclaude-opus-5.5\s+1\s+[\d.]+\s+~\S+ \(")
+
+    def test_report_survives_a_capture_committed_between_its_queries(self):
+        """Totals, groups and per-call estimates read one snapshot: a capture committed after the groups and before
+        the per-call query is in none of them, rather than in a call with no group."""
+        path = Path(tempfile.mkdtemp()) / "race.sqlite3"
+        self.addCleanup(lambda: [path.with_name(path.name + s).unlink(missing_ok=True) for s in ("", "-wal", "-shm")])
+        writer = sqlite3.connect(path)
+        self.addCleanup(writer.close)
+        writer.executescript(capture.SCHEMA)
+        writer.execute("PRAGMA journal_mode=WAL")
+        arrivals = []
+
+        def add(ident, stamp):
+            writer.execute("""INSERT INTO captures(id,started_utc_ns,metadata_json,response_json,credits,
+                           context_usage_percentage,summary_json,state,completion_seen,issues_json) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                           (ident, stamp, json.dumps({"model": "claude-opus-5.5"}), "{}", .1, 3.0,
+                            '{"output_text_chars":40}', "complete", 1, "[]"))
+            writer.commit()
+
+        add("first", 1793404800000000000)
+
+        class Reader(sqlite3.Connection):
+            def execute(self, sql, parameters=()):
+                if "SELECT c.id,c.metadata_json,c.credits" in sql and not arrivals:
+                    arrivals.append(add("arriving", 1793491200000000000))
+                return super().execute(sql, parameters)
+
+        reader = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, factory=Reader)
+        self.addCleanup(reader.close)
+        result = report.store_report(reader)
+        self.assertEqual(len(arrivals), 1)
+        self.assertEqual(result["captures"]["observations"], 1)
+        self.assertEqual([day["observations"] for day in result["captures"]["days"]], [1])
+        self.assertFalse(reader.in_transaction)
+        self.assertEqual(report.store_report(reader)["captures"]["observations"], 2)  # the next report sees it
+
+    def test_snapshot_joins_an_open_transaction_and_leaves_none_behind(self):
+        with query.snapshot(self.db):
+            self.assertTrue(self.db.in_transaction)
+        self.assertFalse(self.db.in_transaction)
+        self.db.execute("BEGIN")
+        with query.snapshot(self.db):
+            with query.snapshot(self.db):
+                pass
+        self.assertTrue(self.db.in_transaction)  # the caller's transaction is the caller's to end
+
     def test_cached_error_is_a_share_of_its_own_total(self):
         """An exact 30,000 cached tokens on a call with no input joins Cached's 60,000 but not Cache hit's pairs, so
         the estimated hit's one error is half the share of Cached it is of Cache hit."""
@@ -417,7 +504,7 @@ class QueryTests(unittest.TestCase):
         self.assertRegex(query.render(report), rf"Total\s+2\s+.*~60,000 {cached}\s+~100.0% {paired} \(1/2\)\s")
         summary = query.render_summary(report)
         for label in ("claude-opus-5.5", "Main", "Total"):
-            self.assertRegex(summary, rf"\n{label}\s+2\s+.*~60.0K {cached}\s+~100% {paired}(\n|$)")
+            self.assertRegex(summary, rf"\n{label}\s+2\s+.*~60.0K {cached}\s+~100% {paired} \(1/2\)(\n|$)")
 
     def test_exact_cached_over_estimated_input_is_an_estimated_share(self):
         self.estimable("partial", .1)
@@ -579,6 +666,117 @@ class QueryTests(unittest.TestCase):
                                      "--session", "sess_root"], capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
             self.assertFalse(missing.exists())
+
+    def local_days(self):
+        """Pin a POSIX zone, so local days differ from UTC ones without zoneinfo; report.py children inherit it."""
+        patcher = patch.dict(os.environ, {"TZ": "MST7"})
+        patcher.start()
+        self.addCleanup(time.tzset)
+        self.addCleanup(patcher.stop)
+        time.tzset()
+
+    def started(self, ident, utc):
+        nanoseconds = int(datetime.fromisoformat(utc).timestamp()) * 10**9
+        self.db.execute("UPDATE captures SET started_utc_ns=? WHERE id=?", (nanoseconds, ident))
+
+    def report_db(self, temporary):
+        self.db.commit()
+        path = Path(temporary) / "synthetic.sqlite"
+        with sqlite3.connect(path) as target:
+            self.db.backup(target)
+        return path
+
+    def test_report_groups_every_capture_by_local_day_and_model_with_the_session_estimates(self):
+        self.local_days()
+        self.estimable("rated", .01, chars=40)
+        self.estimable("unrated", .02, chars=40, model="claude-opus-4.5", conversation=None)  # window, no rates entry; unattributed
+        self.estimable("windowless", None, chars=40, model="requested-model")  # neither; credits unknown
+        for ident, utc in (("rated", "2026-10-29T18:00:00+00:00"), ("unrated", "2026-10-30T03:00:00+00:00"),
+                           ("windowless", "2026-10-30T18:00:00+00:00")):
+            self.started(ident, utc)
+        store = report.store_report(self.db)
+        captures = store["captures"]
+        # 03:00 UTC on the 30th is the 29th at UTC-7.
+        self.assertEqual([(day["day"], day["observations"]) for day in captures["days"]], [("2026-10-29", 2), ("2026-10-30", 1)])
+        self.assertEqual(captures["observations"], 3)
+        models = {model["requested_model"]: model for model in captures["models"]}
+        self.assertEqual(models["claude-opus-4.5"]["estimates"]["input_tokens"]["known"], 1)
+        self.assertNotIn("cache_read_tokens", models["claude-opus-4.5"]["estimates"])  # no rates entry, so no cache split
+        self.assertEqual(models["requested-model"]["estimates"], {})  # no window, so no ~tokens
+        tree = {model["requested_model"]: model for model in query.query(self.db, "sess_root", "tree")["captures"]["models"]}
+        self.assertEqual(models["claude-opus-5.5"]["estimates"], tree["claude-opus-5.5"]["estimates"])  # one per-call estimate path
+        self.assertNotIn("claude-opus-4.5", tree)  # the session report excludes the unattributed call
+        self.assertEqual(query.calculator_text([store]), "Calculator: rates.json fitted 2026-10-30; no rates: claude-opus-4.5, requested-model; no context window: requested-model")
+        text = report.render(store)
+        self.assertTrue(text.startswith("Kiro usage · all captures · 3 requests · 0.03 credits\n\nDay "), text)
+        self.assertRegex(text, r"\n2026-10-29\s+2\s+0.03\s+~")
+        self.assertRegex(text, r"\n2026-10-30\s+1\s+—\s+—\s+—\s+—\s+—\n")
+        self.assertRegex(text, r"\nModel\s+Requests\s+Credits\s+In\s+Out\s+Cached\s+Cache hit\nclaude-opus-4.5\s+1\s+0.02\s+~")
+        self.assertEqual(len(re.findall(r"\nTotal\s+3\s+0.03\s+~", text)), 2)
+        self.assertTrue(text.endswith("\n⚠ credits unknown for 1/3 requests"))
+        self.assertEqual([day["day"] for day in report.store_report(self.db, since="2026-10-30")["captures"]["days"]], ["2026-10-30"])
+        bounded = report.store_report(self.db, "2026-10-29", "2026-10-29")
+        self.assertEqual((bounded["captures"]["observations"], [model["requested_model"] for model in bounded["captures"]["models"]]),
+                         (2, ["claude-opus-4.5", "claude-opus-5.5"]))
+        self.assertTrue(report.render(bounded).startswith("Kiro usage · all captures · 2026-10-29 – 2026-10-29 · 2 requests"))
+        with tempfile.TemporaryDirectory() as temporary:
+            path, theme = self.report_db(temporary), Path(temporary) / "theme.json"
+            theme.write_text(json.dumps({"border": "ascii"}))
+            command = [sys.executable, report.__file__, "--db", str(path)]
+            for arguments, rendered in (([], report.render(store)), (["--summary-theme", str(theme)], report.render(store, query.summary_theme.load(theme, io.StringIO())))):
+                result = subprocess.run([*command, *arguments], capture_output=True, text=True)
+                self.assertEqual((result.returncode, result.stderr), (0, ""))
+                self.assertEqual(result.stdout, rendered + "\n" + query.calculator_text([store]) + "\n")
+            # Both Total rows' rules become junction lines inside the box.
+            self.assertEqual(sum(line.startswith("++") or line.startswith("+-") for line in result.stdout.splitlines()), 4)
+            structured = subprocess.run([*command, "--json", "--until", "2026-10-29"], capture_output=True, text=True)
+            self.assertEqual(json.loads(structured.stdout)["captures"]["observations"], 2)
+            for refused in (["--since", "20261030"], ["--until", "2026-10"]):
+                result = subprocess.run([*command, *refused], capture_output=True, text=True)
+                self.assertEqual((result.returncode, result.stdout), (2, ""))
+            self.assertIn("MST", subprocess.run([*command, "--help"], capture_output=True, text=True).stdout)
+            empty = Path(temporary) / "empty.sqlite"
+            sqlite3.connect(empty).close()
+            result = subprocess.run([sys.executable, report.__file__, "--db", str(empty)], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (1, "cannot query calibration database: no capture source has initialized this database\n"))
+
+    def test_report_sessions_replay_each_tree_exit_summary_in_the_window(self):
+        self.local_days()
+        self.estimable("rated", .01, chars=40)
+        self.estimable("unrated", .02, chars=40, model="claude-opus-4.5", conversation="child")
+        self.db.execute("""UPDATE captures SET metadata_json=json_set(metadata_json,'$."kiro:root_conversation_id"','root') WHERE id='unrated'""")
+        self.estimable("fork", .03, chars=40, model="requested-model", conversation="fork")  # a second root, e.g. after /chat fork
+        for ident, utc in (("rated", "2026-10-29T18:00:00+00:00"), ("unrated", "2026-10-30T18:00:00+00:00"), ("fork", "2026-10-30T19:00:00+00:00")):
+            self.started(ident, utc)
+        reports = [query.query(self.db, session, "tree") for session in ("sess_root", "sess_fork")]
+        windowed = query.query(self.db, "sess_root", "tree", since="2026-10-30")
+        self.assertEqual([model["requested_model"] for model in windowed["captures"]["models"]], ["claude-opus-4.5"])
+        self.assertEqual(query.query(self.db, "sess_root", "tree", until="2026-10-29")["captures"]["observations"], 1)
+        with tempfile.TemporaryDirectory() as temporary:
+            command = [sys.executable, report.__file__, "--db", str(self.report_db(temporary)), "--session", "sess_root"]
+            result = subprocess.run([*command, "--session", "sess_fork"], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (0, ""))
+            self.assertEqual(result.stdout, "\n\n".join(map(query.render_summary, reports)) + "\n" + query.calculator_text(reports) + "\n")
+            self.assertIn("Kiro usage · sess_root · tree · 2 requests", result.stdout)
+            self.assertIn("\n\nKiro usage · sess_fork · tree · 1 request", result.stdout)
+            self.assertTrue(result.stdout.endswith("; no rates: claude-opus-4.5, requested-model; no context window: requested-model\n"))
+            result = subprocess.run([*command, "--since", "2026-10-30"], capture_output=True, text=True)
+            self.assertEqual(result.stdout, query.render_summary(windowed) + "\n" + query.calculator_text([windowed]) + "\n")
+            structured = subprocess.run([*command, "--session", "sess_fork", "--json"], capture_output=True, text=True)
+            self.assertEqual([item["session"] for item in json.loads(structured.stdout)], ["sess_root", "sess_fork"])
+            result = subprocess.run([*command, "--session", "fork"], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr), (1, "cannot query calibration database: --session must be a sess_UUID identifier\n"))
+        self.db.execute("DELETE FROM captures WHERE id!='rated'")
+        self.assertEqual(query.calculator_text([query.query(self.db, "sess_root", "tree")]), "Calculator: rates.json fitted 2026-10-30")
+
+    def test_report_keeps_the_last_nanosecond_before_midnight_on_its_day_and_escapes_model_names(self):
+        self.local_days()
+        self.estimable("late", .01, chars=40, model="bad\n\x1b[31m")
+        midnight = int(datetime.fromisoformat("2026-10-31T00:00:00-07:00").timestamp()) * 10**9
+        self.db.execute("UPDATE captures SET started_utc_ns=? WHERE id='late'", (midnight - 1,))
+        store = report.store_report(self.db)
+        self.assertEqual([day["day"] for day in store["captures"]["days"]], ["2026-10-30"])
+        self.assertTrue(query.calculator_text([store]).endswith("no rates: bad\\n\\x1b[31m; no context window: bad\\n\\x1b[31m"))
 
     def test_credit_units_partial_turns_and_disk_overlap_ambiguity(self):
         self.session("sess_root")

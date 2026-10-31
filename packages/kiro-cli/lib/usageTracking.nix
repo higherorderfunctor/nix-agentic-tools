@@ -15,7 +15,7 @@
     theme = summaryTheme cfg;
   in
     lib.optionals (theme != {}) ["--summary-theme" (toString (pkgs.writeText "kiro-usage-summary-theme.json" (builtins.toJSON theme)))];
-  # The tool runs `kiro-usage exec`, the only command that prints the exit summary.
+  # The tool's `exec` and `report` commands print the exit summary.
   toolArgs = cfg: ["--port" (toString cfg.port)] ++ warnArgs cfg ++ stateArgs cfg ++ summaryArgs cfg;
 in {
   inherit summaryTheme toolArgs;
@@ -45,7 +45,7 @@ in {
       color = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum ["always" "auto" "never"]);
         default = null;
-        description = "Exit summary styling: auto styles only when standard error is a terminal and NO_COLOR is unset or empty. Null keeps the runtime default, auto.";
+        description = "Exit summary styling: auto styles only when its stream (standard error after exec, standard output for report) is a terminal and NO_COLOR is unset or empty. Null keeps the runtime default, auto.";
       };
       icons = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;

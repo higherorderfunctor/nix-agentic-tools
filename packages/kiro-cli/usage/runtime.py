@@ -23,6 +23,10 @@ PROXY_NAMES = (
 )
 
 
+USAGE = ("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json]"
+         "|report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--session ID ...] [--json]|list|replay ID}")
+
+
 class CommandError(Exception):
     """A ready collector could not execute the selected command."""
 
@@ -109,13 +113,14 @@ def service(args, path):
 
 
 def refresh_disk_index(path, since):
-    """Read only sessions changed since the launch (UTC ns); others are only stat-checked."""
+    """Read only sessions changed since the launch (UTC ns); others are only stat-checked. The run's exit summary
+    reads no disk data: this keeps kiro-usage session and report --session, which do, current after a launch."""
     from capture import lock_beside, open_database
     from disk_index import INDEX_LOCK, REFRESH_LOCK, index_tree
     try:
         sessions = Path.home() / ".kiro/sessions"
         if not sessions.exists():
-            return False
+            return
         with closing(open_database(path / "usage.sqlite3")) as db:
             lock = lock_beside(path / "usage.sqlite3", INDEX_LOCK, shared=True)
             try:
@@ -126,31 +131,27 @@ def refresh_disk_index(path, since):
                     os.close(queue)
             finally:
                 os.close(lock)
-        return True
     except BlockingIOError:
         print("Warning: a full Kiro session index is running; disk observations were not refreshed (rerun kiro-usage index if it began before Kiro exited).", file=sys.stderr)
-        return False
     except (OSError, ValueError, sqlite3.Error) as error:
         print(f"Warning: automatic Kiro session indexing failed: {error}; disk observations may be stale.", file=sys.stderr)
-        return False
 
 
 SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to persist this invocation.
 
 
 def invocation_captures(db, invocation, timeout):
-    """(rows, settled): this invocation's marker rows, and whether they went quiet and finished before the deadline."""
+    """(rows, settled): this invocation's (RUN_ROOT, state) marker rows, and whether they went quiet and finished
+    before the deadline."""
+    from query import RUN_ROOT
     deadline = time.monotonic() + timeout
     previous_rows, settled = None, time.monotonic()
     while True:
-        rows = db.execute("""
-            SELECT json_extract(metadata_json,'$."kiro:root_conversation_id"'),
-              json_extract(metadata_json,'$."kiro:conversation_id"'), state
-            FROM captures WHERE json_extract(metadata_json,'$.invocation')=?
-        """, (invocation,)).fetchall()
+        rows = db.execute(f"SELECT {RUN_ROOT},state FROM captures c WHERE json_extract(c.metadata_json,'$.invocation')=?",
+                          (invocation,)).fetchall()
         if rows != previous_rows:
             previous_rows, settled = rows, time.monotonic()
-        if rows and all(state != "recording" for _, _, state in rows) and time.monotonic() - settled >= .1:
+        if rows and all(state != "recording" for _, state in rows) and time.monotonic() - settled >= .1:
             return rows, True
         if time.monotonic() >= deadline:
             return rows, False
@@ -172,10 +173,11 @@ def settle_captures(path, invocation):
         return False  # invocation_summary reports the same failure.
 
 
-def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settled=True, theme=None):
-    """Read only exact marker matches; the exit path settles them first. theme is the --summary-theme JSON path."""
+def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
+    """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
+    earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
     from capture import retained_bytes
-    from query import query, render_summary
+    from query import render_summary, run_report
     import summary_theme
     try:
         with read_only(path) as db:
@@ -185,21 +187,22 @@ def invocation_summary(path, invocation, warn_bytes, disk_refreshed=False, settl
                 print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "
                       f"stop the kiro-usage service, then archive or delete {path / 'usage.sqlite3'} and its -wal/-shm files to start a new store.", file=sys.stderr)
             rows = invocation_captures(db, invocation, 0)[0]
-            identities = [root or conversation for root, conversation, _ in rows]
+            if not rows:  # e.g. resumed and exited without a turn
+                print("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
+                return
+            identities = [name for name, _ in rows]
             sessions = sorted({name if name.startswith("sess_") else "sess_" + name
-                               for name in identities if isinstance(name, str) and name})
+                               for name in identities if isinstance(name, str)})
             if not sessions:
                 print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
                 return
             # The exit path's wait outcome counts even if a call finished after it timed out. These describe the
             # invocation, not one session, so only the last block carries them.
-            caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, _, state in rows) else []),
+            caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, state in rows) else []),
                        *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
             theme = summary_theme.load(theme)  # after the payload warning, which a refused theme must not hide
             for session in sessions:
-                report = query(db, session, "tree")
-                report["disk"]["refreshed"] = disk_refreshed
-                print("\n" + render_summary(report, caveats if session == sessions[-1] else (), theme), file=sys.stderr)
+                print("\n" + render_summary(run_report(db, invocation, session), caveats if session == sessions[-1] else (), theme), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
         print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
 
@@ -293,11 +296,10 @@ def exec_command(path, port, warn_bytes, arguments, theme=None):
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
                 try:
-                    # Refresh scopes from persisted captures, so settle them first; an
-                    # unsettled wait never reports a clean refresh.
+                    # Refresh scopes from persisted captures, so settle them first.
                     settled = settle_captures(path, invocation)
-                    refreshed = refresh_disk_index(path, started) and settled
-                    invocation_summary(path, invocation, warn_bytes, disk_refreshed=refreshed, settled=settled, theme=theme)
+                    refresh_disk_index(path, started)
+                    invocation_summary(path, invocation, warn_bytes, settled=settled, theme=theme)
                     sys.stderr.flush()
                 except (OSError, ValueError):
                     # Only a failed summary sink is silenced. Redirect its fd so
@@ -326,7 +328,7 @@ def cli(path, arguments, port, warn_bytes, theme=None):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
-        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree]|list|replay ID}")
+        raise ValueError(USAGE)
     command, *tail = arguments
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
@@ -334,12 +336,15 @@ def cli(path, arguments, port, warn_bytes, theme=None):
         return exec_command(path, port, warn_bytes, tail, theme)
     if command == "session" and tail:
         invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
+    elif command == "report":
+        # The report alone renders the exit summary's look outside exec; the full session report has no styles.
+        invocation = [str(script / "report.py"), *db_args, *tail, *(["--summary-theme", str(theme)] if theme else [])]
     elif command == "index":
         invocation = [str(script / "disk_index.py"), *db_args, *tail]
     elif command in ("list", "replay"):
         invocation = [str(script / "capture.py"), *db_args, command, *tail]
     else:
-        raise ValueError("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree]|list|replay ID}")
+        raise ValueError(USAGE)
     os.umask(0o077)
     private_directory(path, create=True)
     os.execv(sys.executable, [sys.executable, *invocation])
@@ -354,7 +359,7 @@ def main():
         child.add_argument("--port", type=int, required=True)
         if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
             child.add_argument("--warn-bytes", type=int, required=True)
-        if mode == "cli":  # read by the exec summary only
+        if mode == "cli":  # read by the exec summary and report only
             child.add_argument("--summary-theme")
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":

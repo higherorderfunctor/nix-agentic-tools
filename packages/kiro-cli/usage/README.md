@@ -349,23 +349,41 @@ the full session JSON report or capture JSON lines. Unknown counters display as
 an em dash; observed zeroes remain zero. Session reports keep disk and capture
 sums separate and show coverage; warnings use standard error. The indexer also
 accepts `--json` for its source, record, and omission counts.
+`report.py --db DB` instead prints every capture in the store, attributed or
+not, in the exit summary's look below: a day table and a model table, each with
+requests, credits, input, output, cached, cache hit and a Total row, every
+~estimate recomputed per call from the current `rates.json` and `models.json` as
+the session report does. Days are the local calendar day of each call's start,
+in the process time zone that `--help` names; `--since DAY` and `--until DAY`
+(`YYYY-MM-DD`) bound them inclusively. `--session ID`, repeatable for the
+several roots a session switch or fork leaves, instead shows each named session
+tree, every run included, in the exit summary's look at the current rates, its
+calls limited to the same bounds. Text goes to standard output, styled by
+`--summary-theme FILE` with `color` `auto` testing standard output. Its last
+line, absent from the exit summary, names the calculator: `rates.json`'s
+provenance fit dates, then the reported models with no rates entry (no cache
+split) or no context window (no ~tokens), when any. `--json` writes the store
+report, or the list of session reports, instead. `kiro-usage report` passes the
+configured theme.
 
 The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
-commands also print a short summary to standard error after Kiro exits: per root
-session, a headline with its request count and credits, a model table of
-requests, credits to two decimals, rounded input, output and cached token counts
-and cache-hit share sorted by credits, and a conversation table splitting the
-main conversation from subagents and workflows. One `⚠` line appears only when
-totals are suspect: capture unavailable, unknown credits, incomplete or
-unfinished calls, calls without a conversation identity, duplicate request IDs,
-or calls with several metering events. `kiro-usage session` keeps the full
-report. A local proxy marker links the invocation's captures to their recorded
-session identities. Kiro uses inherited terminal input and output directly; no
-screen parsing or process-ID guess selects the session. Standard output, exit
-status, and signals are preserved. Tracked chat runs as a child of the summary
-supervisor, retaining the terminal descriptors with its own process ID. Explicit
-help, version, login, and administrative commands skip the summary, including
-after recognized global options. Other commands have no automatic Kiro summary.
+commands also print a short summary of what that run captured to standard error
+after Kiro exits: per root session the run touched, a headline with its request
+count and credits, a model table of requests, credits to two decimals, rounded
+input, output and cached token counts and cache-hit share sorted by credits, and
+a conversation table splitting the main conversation from subagents and
+workflows. One `⚠` line appears only when totals are suspect: capture
+unavailable, unknown credits, incomplete or unfinished calls, calls without a
+conversation identity, duplicate request IDs, or calls with several metering
+events. `kiro-usage session` keeps the full report, and
+`kiro-usage report --session ID` the whole session's summary. A local proxy
+marker links the invocation's captures to their recorded session identities.
+Kiro uses inherited terminal input and output directly; no screen parsing or
+process-ID guess selects the session. Standard output, exit status, and signals
+are preserved. Tracked chat runs as a child of the summary supervisor, retaining
+the terminal descriptors with its own process ID. Explicit help, version, login,
+and administrative commands skip the summary, including after recognized global
+options. Other commands have no automatic Kiro summary.
 
 `ai.kiro.cli.usageTracking.summary` styles that summary: the module writes it to
 a JSON file and passes it to the runtime's `cli --summary-theme FILE`. Every key
@@ -406,36 +424,46 @@ ai.kiro.cli.usageTracking.summary = {
 };
 ```
 
-These are full root-linked session totals and can include earlier work from a
-resumed session. Explicit root conversation IDs include related captures without
-requiring an on-disk index. Root-linked lineage may include forks as well as
-subagents. Captured requests and credits are counted once; disk credits never
-enter the total. The exit summary has a model table and a conversation table
-with the same columns, where In includes Cached. Its Main row is the pool whose
-conversation ID matches the selected root ID; Sub/WF is every other linked
-conversation; Total closes the table below a rule; an Unknown row, for calls
-lacking a conversation ID, appears only when nonzero. The partition does not
-prove caller roles: workflow steps and subagents carry their own conversation
-IDs and land in other linked conversations, which may also include helpers or
-forks. Requests, credits, and tokens are grouped by model and pool rather than
-listing individual delegates. Exact counters are used when observed; cells that
-add estimates for calls lacking the exact counter carry `~`, and missing values
-show an em dash (see [Token estimates](#token-estimates)). Cache hit is cached ÷
-input tokens over requests with both. Estimated Cached and Cache hit cells, in
-both summary tables and the full report, carry `±N%`: the cached standard error
-as a whole-percent share of that cell's cached tokens, omitted below 1% or when
-unknown. The full report (`kiro-usage session` or `query`) keeps the Root
-conversation, Other linked, and Unknown pool tables and the partial-coverage
-markers. No captured conversation identity means an explicit unavailable
-summary. Before reporting, the outer launch incrementally indexes
-`~/.kiro/sessions` if present, using the existing database and checkpoints. It
-reads the `session.json` of sessions whose `session.json` or `messages.jsonl`
-changed since the launch, and messages only for those linked to captures (less
-one second for coarse file timestamps) and never prunes; already indexed
-sessions still link their new descendants. The explicit `index` command is the
-full capture-scoped pass: it prunes `disk_*` rows for sessions no longer linked
-to captures and runs `VACUUM` plus a WAL checkpoint when free pages remain.
-Lineage comes from `parentSessionId`, `rootSessionId`, `rootConversationId`, and
+These are run totals, not session totals: switching or forking a session with
+`/chat` inside one run touches several roots, so each block counts only this
+invocation's marked captures whose root conversation ID, else own conversation
+ID, names its root, without an on-disk index. Earlier runs of a resumed session,
+other runs and disk request-ID matches stay out;
+`kiro-usage report --session ID` replays a whole session tree. Root-linked
+lineage may include forks as well as subagents. Captured requests and credits
+are counted once; disk credits never enter the total. The exit summary has a
+model table and a conversation table with the same columns, where In includes
+Cached. Its Main row is the pool whose conversation ID matches the selected root
+ID; Sub/WF is every other linked conversation; Total closes the table below a
+rule; an Unknown row, for calls lacking a conversation ID, appears only when
+nonzero. The partition does not prove caller roles: workflow steps and subagents
+carry their own conversation IDs and land in other linked conversations, which
+may also include helpers or forks. Requests, credits, and tokens are grouped by
+model and pool rather than listing individual delegates. Exact counters are used
+when observed; cells that add estimates for calls lacking the exact counter
+carry `~`, and missing values show an em dash (see
+[Token estimates](#token-estimates)). A token cell that some requests lack ends
+with `(known/all)`, and a Cache hit cell with `(evaluable/all)`, as in the full
+report; the same tables in `kiro-usage report` carry them too. Cache hit is
+cached ÷ input tokens over requests with both. Estimated Cached and Cache hit
+cells, in both summary tables and the full report, carry `±N%`: the cached
+standard error as a whole-percent share of that cell's cached tokens, omitted
+below 1% or when unknown. The full report (`kiro-usage session` or `query`)
+keeps the Root conversation, Other linked, and Unknown pool tables and the
+partial-coverage markers. A run with no captures, such as a resumed session
+exited without a turn, prints one line saying so that points to
+`kiro-usage report --session ID`; captures without a conversation identity mean
+an explicit unavailable summary. Before reporting, the outer launch
+incrementally indexes `~/.kiro/sessions` if present, using the existing database
+and checkpoints. The summary reads none of it; the refresh keeps
+`kiro-usage session` and `report --session` current. It reads the `session.json`
+of sessions whose `session.json` or `messages.jsonl` changed since the launch,
+and messages only for those linked to captures (less one second for coarse file
+timestamps) and never prunes; already indexed sessions still link their new
+descendants. The explicit `index` command is the full capture-scoped pass: it
+prunes `disk_*` rows for sessions no longer linked to captures and runs `VACUUM`
+plus a WAL checkpoint when free pages remain. Lineage comes from
+`parentSessionId`, `rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
 `workflowId` and `nodeId` are retained as identifiers. Index failures warn
 without replacing the child exit status, and disk observations may then be
@@ -446,9 +474,8 @@ waits at most two seconds for this launch's captured calls to finish and stay
 unchanged for 0.1 s. That quiet period is a heuristic, not a writer
 acknowledgement: a call started within a moment of Kiro exiting can persist
 after it. A timed-out wait flags unfinished calls in the summary, even if they
-finish during the refresh, and reports disk observations as not refreshed.
-Nested `kiro-usage exec` launches reuse the parent's marker; only the outer
-launch prints the summary.
+finish during the refresh. Nested `kiro-usage exec` launches reuse the parent's
+marker; only the outer launch prints the summary.
 
 Replay writes private response bytes to standard output. Incomplete captures
 produce a warning; a missing requested payload, including a chunk omitted from
