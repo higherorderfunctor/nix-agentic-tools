@@ -317,7 +317,7 @@ in {
           overlaps = opencodeGo.overlaps (select portable.families models.${target});
         in {
           assertion = !(sourceEnabled runtime) || overlaps == [];
-          message = "ai.programs.delegate-routing.runtimes.${target}.models selects an opencode-go preset and another family for the same OpenCode Go model: ${lib.concatStringsSep "; " overlaps}. Select one of them, or narrow a family's match.";
+          message = "ai.programs.delegate-routing.runtimes.${target}.models selects several families matching the same OpenCode Go catalog model: ${lib.concatStringsSep "; " overlaps}. Select one of them per runtime, or narrow a family's match.";
         })
         (requiredTargets runtime)
         ++ map (selector: {
