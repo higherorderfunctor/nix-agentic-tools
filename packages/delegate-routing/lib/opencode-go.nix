@@ -246,6 +246,6 @@
     ++ map (id: "catalog model `${id}` matches several presets: ${lib.concatStringsSep ", " (owners id)}") (lib.filter (id: lib.length (owners id) > 1) catalog)
     ++ lib.mapAttrsToList (name: _: "preset `${name}` matches no catalog model") (lib.filterAttrs (_: family: matches family == []) families);
 in {
-  inherit catalog drift families note overlaps poolHint vendor;
+  inherit drift families note overlaps poolHint vendor;
   plans = builtins.attrNames fact.monthlyLimits;
 }
