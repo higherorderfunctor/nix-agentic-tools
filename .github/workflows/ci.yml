@@ -790,6 +790,21 @@ jobs:
           nix-eval-jobs: ${{ steps.evaluator.outputs.command }}
           runner-map: x86_64-linux=ubuntu-latest
 
+      # Hestia's matrix logs a failed drain and still exits 0 with
+      # manifest-version 0, so without this the workers fail later at
+      # prefetch with a 404 that names no cause.
+      - name: Require the registered derivation closures
+        env:
+          ANY_JOBS: ${{ steps.matrix.outputs.any-jobs }}
+          MANIFEST_VERSION: ${{ steps.matrix.outputs.manifest-version }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          if [[ "$ANY_JOBS" == true && "$MANIFEST_VERSION" == 0 ]]; then
+            echo "::error::hestia committed no manifest for the uncached derivation closures; see the 'hestia matrix:' line above for the drain failure. Re-run all jobs."
+            exit 1
+          fi
+
       # The evaluated attrs must be exactly the public checks, and every
       # uncached derivation must be in exactly one row. The second evaluation
       # runs after the matrix evaluator exited. The matrix goes through a
