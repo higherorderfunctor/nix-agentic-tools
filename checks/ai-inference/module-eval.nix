@@ -220,13 +220,11 @@ in {
                 anthropic = null;
                 chat = {
                   base-url = "https://chat.example/v4";
-                  headers = {};
                   models = null;
                 };
                 responses = null;
               };
               codexShellArgCleanup = true;
-              headers = {};
               key = clientKey "override";
               models = ["custom-model"];
               priority = null;
@@ -281,7 +279,7 @@ in {
         pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
-        # One credential whose APIs serve different models and headers; the
+        # One credential whose APIs serve different models; the
         # personal client routes to its chat API.
         split = apiKeyChange:
           evaluate backend (instanceChange {
@@ -294,14 +292,9 @@ in {
                   };
                   chat = {
                     base-url = "https://split.example/v1";
-                    headers = {
-                      X-Session = clientKey "chat-session";
-                      X-Shared = clientKey "chat-shared";
-                    };
                     models = ["split-chat"];
                   };
                 };
-                headers.X-Shared = clientKey "shared";
                 key = clientKey "split";
               }
               apiKeyChange;
@@ -375,7 +368,7 @@ in {
                 inherit (apiKey) models;
               }
             ];
-          "per-API models and headers accepted" = failedMessages splitResult == [];
+          "per-API models accepted" = failedMessages splitResult == [];
           "per-API models replace credential models" = (splitBlock "claude").models == [{name = "split-anthropic";}] && (splitBlock "openai-compatibility").models == [{name = "split-chat";}];
           "API without models falls back to credential models" =
             failedMessages fallback
@@ -403,16 +396,6 @@ in {
                 models = ["split-chat"];
               }
             ];
-          "credential headers on every block, API headers over them" =
-            (splitBlock "claude").headers
-            == {X-Shared = clientKey "shared";}
-            && (splitBlock "openai-compatibility").headers
-            == {
-              X-Session = clientKey "chat-session";
-              X-Shared = clientKey "chat-shared";
-            };
-          "header placeholders stay out of config" = !(lib.hasInfix "/run/secrets/cpa-chat-session-key" splitResult.config.ai.services.cliproxyapi-clients.files.config.content);
-          "literal header refused" = rejectsType (instanceChange {credentials.zai.apiKey.headers.X-Session = "$CPA-SESSION-ID";});
           "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
           "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
           "Claude devenv picker follows routes" = backend == "hm" || (pickerFile != null && builtins.fromJSON (builtins.readFile (lib.head pickerFile)) == {modelPicker.options = rows;});
