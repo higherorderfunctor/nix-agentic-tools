@@ -3,12 +3,71 @@
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
-  vendors.z-ai =
-    (facts.get (facts.load {dir = ../extracted;}).aggregate "zAi")
-    // {
-      codexShellArgCleanup = true;
-      toolAliases.ToolSearch = "ToolSearch_";
+  fact = facts.get (facts.load {dir = ../extracted;}).aggregate;
+  vendors = {
+    # OpenCode Go serves each catalog model on one native API. Each lands on
+    # that API only, so CPA translates every other protocol itself.
+    opencode-go = let
+      # Gemini's generate-content has no API here; OpenCode serves every Go
+      # text model on chat completions too, so it goes on chat.
+      apiOf = {
+        chat-completions = "chat";
+        generate-content = "chat";
+        messages = "anthropic";
+        responses = "responses";
+      };
+      # The operator's Claude OAuth owns Claude models: the defaults leave
+      # them out, and ../modules/instances.nix refuses any a definition adds.
+      refuses = model: lib.hasPrefix "claude-" (lib.toLower model);
+      catalog = lib.filterAttrs (id: _: !(refuses id)) (fact "opencodeGo").models;
+      placed = lib.mapAttrsToList (id: entry: let
+        natives = builtins.attrNames entry.api;
+        native = lib.head natives;
+      in
+        if lib.length natives != 1
+        then throw "cliproxyapi opencode-go: catalog model `${id}` has ${toString (lib.length natives)} native APIs; expected exactly one."
+        else if !(apiOf ? ${native})
+        then throw "cliproxyapi opencode-go: catalog model `${id}` has unknown native API `${native}`."
+        else {
+          inherit id native;
+          api = apiOf.${native};
+          inherit (entry.api.${native}) base_url;
+        })
+      catalog;
+      onApi = api: lib.filter (model: model.api == api) placed;
+      # The base URL comes from the API's own native models; the exception's
+      # URL is another protocol's. CPA's claude executor appends
+      # /v1/messages, the codex executor /responses, openai-compatibility
+      # /chat/completions.
+      baseUrl = api: let
+        urls = lib.unique (map (model: model.base_url) (lib.filter (model: model.native != "generate-content") (onApi api)));
+        url = lib.head urls;
+      in
+        if lib.length urls != 1
+        then throw "cliproxyapi opencode-go: API `${api}` has base URLs ${builtins.toJSON urls} in the catalog; expected exactly one."
+        else if api != "anthropic"
+        then url
+        else if lib.hasSuffix "/v1" url
+        then lib.removeSuffix "/v1" url
+        else throw "cliproxyapi opencode-go: messages base URL `${url}` does not end in /v1, which CPA's claude executor appends.";
+    in {
+      apis = lib.genAttrs (lib.unique (map (model: model.api) placed)) (api: {
+        base-url = baseUrl api;
+        models = map (model: model.id) (onApi api);
+      });
+      codexShellArgCleanup = false;
+      models = null;
+      refusal = "OpenCode Go may not serve Claude models; the Claude OAuth credential owns them.";
+      inherit refuses;
+      toolAliases = {};
     };
+    z-ai =
+      fact "zAi"
+      // {
+        codexShellArgCleanup = true;
+        toolAliases.ToolSearch = "ToolSearch_";
+      };
+  };
 
   # CPA's OpenAICompatibleProviderKey preserves one exact name and one prefix.
   # Provider names are ASCII (../modules/instances.nix), so toLower agrees.
@@ -151,7 +210,7 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without Claude models, which it refuses. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {
@@ -223,6 +282,6 @@
       rule = rule choice.credential credential.apiKey api;
     };
 in {
-  inherit apiKeys apis clientKeyType credentialType modelsOf route rule served;
+  inherit apiKeys apis clientKeyType credentialType modelsOf route rule served vendors;
   lower = providers: lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList blocks providers);
 }
