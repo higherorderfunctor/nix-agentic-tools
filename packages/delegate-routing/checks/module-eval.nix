@@ -898,6 +898,8 @@
       && lib.hasInfix "| Pool " text
       && lib.hasInfix "go-plus: unlimited" text
       && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `kimi-k3`, else `claude -p` with full model id the highest id matching `kimi-k3` (pool go-budget); via codex: `codex exec` with slug the highest id matching `kimi-k3` (pool go-budget)" text
+      # The manual launch keeps its registered pool and monetary guidance.
+      && hasProse "- go-kimi-k3 (opencode-go) `kimi-k3`: `kiro-cli chat` with model_id the highest id matching `kimi-k3` (pool go-budget): go-plus:" text
       && passes overridden
       && overridden.config.ai.programs.delegate-routing.families.opencode-go.go-kimi-k3.pools.claude == null
       && poolFailsWith (change {ai.programs.delegate-routing = settings // {pools = {};};})
@@ -940,6 +942,14 @@
       # Independent expected prose rejects a wrong or omitted note; phrase
       # overrides reject a renderer that still reads hard-coded catalog prose.
       note = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
+      withManualHint = override:
+        skill {
+          ai.programs.delegate-routing = {
+            opencodeGo.plan = "go-plus";
+            runtimes.kimchi.models = [{vendors = ["opencode-go"];}];
+            skill.phrases."Manual pool hint" = override;
+          };
+        };
       withNote = override:
         readSkill (change {
           ai.programs.delegate-routing = {
@@ -966,6 +976,11 @@
       && lib.hasInfix "| Pool " unplanned
       && hasProse "| | claude:" unplanned
       && passes (goSelected "go-plus")
+      # Manual-only families keep their hint after main's concrete launch route;
+      # phrase overrides reject a renderer that appends hard-coded hint text.
+      && hasProse "go-kimi-k3 (opencode-go) `kimi-k3`: `kimchi -p` with `--list-models` id the highest id matching `kimi-k3`: go-plus: $60 of list-price use empties the monthly pool" (withManualHint {})
+      && lib.hasInfix "CUSTOM MANUAL HINT" (withManualHint {text = "CUSTOM MANUAL HINT";})
+      && !(hasProse ": go-plus: $60 of list-price use empties the monthly pool" (withManualHint {enable = false;}))
       # A selected preset and another family, of any vendor, matching the
       # same Go catalog model on one runtime fail; on different runtimes, or
       # with no preset selected, they pass.
