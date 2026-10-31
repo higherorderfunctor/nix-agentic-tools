@@ -12,7 +12,7 @@ reasoning, identifiers, and other user data. Keep the database outside source
 checkouts, synchronization folders, and shared storage. The parent directory
 must belong to the current user with mode `0700`; the database is created with
 mode `0600`. Existing permissive paths and symlinks are rejected. The database
-is unencrypted. Protect backups and replay output accordingly.
+is unencrypted. Protect backups and unpack output accordingly.
 
 ## Run the addon
 
@@ -74,7 +74,7 @@ batch before taking the write lock; that batch stays charged until it commits,
 plus one compressed copy of it in flight. A full queue logs a warning, omits
 that payload copy, and records `request_payload_omitted` or
 `response_payload_omitted` with the dropped byte/item counters. Omissions leave
-usage complete; replay of the omitted bytes fails. Per-capture parser state
+usage complete; unpacking the omitted bytes fails. Per-capture parser state
 keeps its own limits below. At most 256 captures can be active; exceeding that
 limit rejects only the new request with HTTP 503. An invalid selected request
 content encoding receives HTTP 400. Both refusals leave the collector available
@@ -95,7 +95,7 @@ the most recent commits but cannot corrupt the database: a recent capture can
 revert to `recording`, which restart marks `interrupted_capture`, or disappear.
 Payload BLOBs use gzip level 6: level 9 cost 1.8 times the CPU for 0.3% smaller
 synthetic requests, and level 1 grew them 16%. Decompression is the same for
-every level, so older BLOBs replay unchanged. Stream parsing happens in the
+every level, so older BLOBs decode unchanged. Stream parsing happens in the
 callback; the worker changes parser state only at finalization, after taking the
 write lock, so transient contention waits without replaying stream events.
 Offline indexing parses outside write transactions and commits batches of at
@@ -146,6 +146,16 @@ warning only during a full pass. Exit refreshes then queue on a third,
 `<db>.refresh.lock`, taken exclusively and waiting: `index_messages` reads a
 source's offset before its write transaction, so two concurrent refreshes of one
 session would insert the same records.
+
+`store.seal` replaces a finished capture's staged payloads (`request_gzip`,
+`chunks`, `events`) with `sealed_requests`, `sealed_responses` and
+`capture_facts`. A request is zstd-compressed against the previous request of
+its conversation; a response keeps its entity bytes and a recipe for the rows
+its parsers do not rebuild exactly. A seal verifies every row before deleting
+the staged copies and stores the report's payload facts as evaluated over them.
+Readers in `store.py` and `query.py` return identical data and reports for
+staged and sealed captures, and payload accounting counts both forms. A seal
+requires schema version 2, which the collector does not yet write.
 
 - `captures.request_gzip` preserves the complete decompressed application
   request bytes. Its full SHA-256 is over those exact bytes. Component hashes
@@ -253,7 +263,7 @@ describe response callbacks; dropped counters include refused request and
 response payload items. Omitted event/summary evidence is also signaled in
 `issues_json`. A full observed response hash can exist even when storage is
 incomplete. `state` describes usage; payload omission flags, nullable BLOBs, and
-chunk rows short of `observed_chunks` describe replay completeness.
+chunk rows short of `observed_chunks` describe payload completeness.
 
 ## Token estimates
 
@@ -331,7 +341,7 @@ exclusion/anomaly counts. Structured `credit_discount` objects retain the
 profile, assumptions, reasons, and numeric diagnostics per total, model, and
 conversation group. No context-window assumption or extrapolation is applied.
 
-## Offline inspection and replay
+## Offline inspection and unpack
 
 These commands use only Python's standard library and open the database
 read-only:
@@ -339,8 +349,7 @@ read-only:
 ```bash
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 list
 python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 list --json
-python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 replay CAPTURE_ID
-python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 replay CAPTURE_ID --entity
+python /absolute/path/to/usage/capture.py --db /private/capture.sqlite3 unpack CAPTURE_ID transport
 ```
 
 Session queries (`query.py --db DB --session sess_ID`) and capture lists show
@@ -477,13 +486,19 @@ after it. A timed-out wait flags unfinished calls in the summary, even if they
 finish during the refresh. Nested `kiro-usage exec` launches reuse the parent's
 marker; only the outer launch prints the summary.
 
-Replay writes private response bytes to standard output. Incomplete captures
-produce a warning; a missing requested payload, including a chunk omitted from
-the queue or a capture interrupted before its chunk count was recorded, exits
-with an error. Replay of available partial bytes can precede that error, so
-callers must check the exit status. Request evidence can be read with
-`gzip.decompress` on `captures.request_gzip` through a read-only SQLite
-connection.
+`unpack` writes one capture's private payloads to standard output, reading
+staged and sealed captures alike in one read snapshot. `request` writes the
+exact request bytes, `transport` the response entity bytes as received, and
+`decoded` the response after content decoding. `chunks` and `events` write one
+JSON object per stored row with its sequence numbers and timestamps, BLOB
+columns as base64 and `data_json` as its exact text. Incomplete captures produce
+a warning. An omitted request exits 1. `transport` and `decoded` exit 1 when a
+response chunk is missing, including one omitted from the queue or a capture
+interrupted before its chunk count was recorded, and can write the available
+partial bytes before that error; `chunks` and `events` write the rows that exist
+and exit 0. A payload that fails its hash, the recorded response hash
+(`decoded`, checked after writing) or the sealed digest exits 2, so callers must
+check the exit status.
 
 Persisted session `usage_summary.requestIds` can join the captured upstream
 request IDs to turns; `metadata_json["kiro:conversation_id"]` can join the
@@ -505,7 +520,7 @@ read real transcripts, databases, logs, captured payloads, or credentials.
 Fake-flow contracts validate the addon boundary and streaming behavior. The
 `kiro-usage-mitm-transport` Nix check also runs the pinned mitmproxy against a
 loopback fake upstream, checking immediate first-byte delivery, exact compressed
-payloads and SQLite replay for an SSE `/v1/responses` call and an AWS
+payloads and stored SQLite rows for an SSE `/v1/responses` call and an AWS
 event-stream GenerateAssistantResponse RPC call (`POST /` with its
 `x-amz-target`), including the latter's credits, context, token columns and
 stored events, and that a `POST /` with another target is not captured. Live

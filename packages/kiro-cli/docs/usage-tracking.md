@@ -42,7 +42,7 @@ through uncaptured; other destinations pass through without TLS interception.
 This initial host scope follows the observed runtime endpoint and does not claim
 complete coverage of every Kiro region or API. See
 [the collector notes](../usage/README.md) for storage, decoding, omission
-counters, and offline replay details.
+counters, and offline unpack details.
 
 ## Start and stop
 
@@ -214,7 +214,7 @@ kiro-usage report
 kiro-usage report --since 2026-10-01 --until 2026-10-31
 kiro-usage report --session sess_example --session sess_fork
 kiro-usage list
-kiro-usage replay CAPTURE_ID
+kiro-usage unpack CAPTURE_ID transport
 ```
 
 Session and list queries print plain text tables by default. Session reports
@@ -237,8 +237,9 @@ when there are any. `--json` writes the structured report instead.
 Scripts that previously parsed session JSON or list JSON lines must now pass
 `--json`: `kiro-usage session sess_example --json` preserves the full report,
 and `kiro-usage list --json` preserves one full JSON object per capture.
-`kiro-usage index --sessions DIR --json` returns index counts. Replay continues
-to write original response bytes; it has no table or JSON mode.
+`kiro-usage index --sessions DIR --json` returns index counts. `unpack` writes
+original request or response bytes (`request`, `transport` or `decoded`), or
+JSON lines for its `chunks` and `events` modes; it has no table mode.
 
 Tracked `exec` launches refresh the default local session tree automatically; no
 separate index command is needed for that workflow. Use the explicit
@@ -248,8 +249,8 @@ the same separate SQLite database. Session queries use the last completed index
 without refreshing it. A session query reports attributed requests and usage,
 with session-only or descendant-tree scope; incomplete joins remain visible. It
 does not guess an attribution where the captured protocol and local index do not
-establish one. Replay writes private payloads to standard output, so choose its
-destination deliberately.
+establish one. `unpack` writes private payloads to standard output, so choose
+its destination deliberately.
 
 The index covers only sessions linked to captures: a session whose ID is a
 captured conversation or root conversation ID, or whose `session.json` names an
@@ -284,7 +285,7 @@ metadata, session indexes, SQLite pages, and WAL files need additional space.
 The collector parses every response byte as it arrives, so credits, context,
 token counters, output character counts, and completion survive when it has to
 skip storing a payload copy; such calls carry `request_payload_omitted` or
-`response_payload_omitted` and cannot be replayed in full. Its write queue holds
+`response_payload_omitted` and cannot be unpacked in full. Its write queue holds
 up to 40 MiB: one request at the 32 MiB API limit plus 8 MiB of streaming
 headroom. Parsing runs in the proxy's response callback, so a large or densely
 structured chunk delays that chunk's delivery while it is decoded; only the

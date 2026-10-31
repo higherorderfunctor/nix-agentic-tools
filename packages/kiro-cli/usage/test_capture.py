@@ -1,5 +1,6 @@
 """Synthetic offline contracts; no mitmproxy dependency, CLI launches or real data."""
 
+import base64
 import contextlib
 import functools
 import gzip
@@ -9,6 +10,7 @@ import os
 from pathlib import Path
 import runtime
 import sqlite3
+import store
 import struct
 import subprocess
 import sys
@@ -82,6 +84,16 @@ class CaptureTests(unittest.TestCase):
         self.addCleanup(db.close)
         row = db.execute("SELECT * FROM captures WHERE id=?", (ident,)).fetchone()
         return db, row
+
+    def unpack(self, ident, mode):
+        return subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "unpack", ident, mode], capture_output=True)
+
+    def seal(self, ident):
+        with contextlib.closing(open_database(self.path)) as db:
+            db.execute("UPDATE capture_meta SET version=2")
+            db.commit()
+            store.seal(db, ident)
+            self.assertIsNotNone(db.execute("SELECT 1 FROM capture_facts WHERE capture_id=?", (ident,)).fetchone())
 
     def test_unicode_all_split_boundaries_and_final_counts(self):
         body = event({"type": "response.output_text.delta", "delta": "é🙂"}) + event(completed())
@@ -301,8 +313,9 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(json.loads(row["metadata_json"])["kiro:conversation_id"], "sess_fake")
         self.assertIsNone(row["request_gzip"])
         self.assertEqual(db.execute("SELECT count(*) FROM chunks").fetchone()[0], 0)
-        replay = subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "replay", row["id"]], capture_output=True)
-        self.assertEqual((replay.returncode, replay.stdout), (1, b""))
+        for mode, message in (("request", b"request payload unavailable\n"), ("decoded", b"requested payload bytes unavailable (capture is incomplete)\n")):
+            unpacked = self.unpack(row["id"], mode)
+            self.assertEqual((unpacked.returncode, unpacked.stdout, unpacked.stderr), (1, b"", message))
 
     def test_refused_payloads_keep_delta_counts(self):
         # No terminal output list: every count comes from deltas the queue never stored.
@@ -357,13 +370,37 @@ class CaptureTests(unittest.TestCase):
         batches = [[item[-1] for item in batch] for batch in iter(writer._batch, [])]
         self.assertEqual(batches, [[3 << 20], [3 << 20], [32 << 20], [1, 1]])
 
-    def test_replay_refuses_a_chunk_gap(self):
+    def test_unpack_refuses_a_chunk_gap(self):
         parts = [event({"type": "response.output_text.delta", "delta": "a"}), event({"type": "response.output_text.delta", "delta": "b"}), event(completed())]
         db, row = self.run_capture(parts)
         db.execute("DELETE FROM chunks WHERE seq=1")
         db.commit()
-        replay = subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "replay", row["id"]], capture_output=True)
-        self.assertEqual((replay.returncode, replay.stdout), (1, parts[0]))
+        for sealed in (False, True):
+            if sealed:
+                self.seal(row["id"])
+            with self.subTest(sealed=sealed):
+                unpacked = self.unpack(row["id"], "transport")
+                self.assertEqual((unpacked.returncode, unpacked.stdout), (1, parts[0]))
+
+    def test_unpack_decoded_refuses_bytes_that_fail_the_response_hash(self):
+        db, row = self.run_capture([event(completed())])
+        db.execute("UPDATE captures SET response_sha256=? WHERE id=?", ("0" * 64, row["id"]))
+        db.commit()
+        for sealed in (False, True):
+            if sealed:
+                self.seal(row["id"])
+            with self.subTest(sealed=sealed):
+                unpacked = self.unpack(row["id"], "decoded")
+                self.assertEqual((unpacked.returncode, unpacked.stderr), (2, b"capture payload failed verification: response hash mismatch\n"))
+
+    def test_unpack_exits_2_on_corrupt_staged_gzip(self):
+        for mode, table, column in (("request", "captures", "request_gzip"), ("chunks", "chunks", "entity_gzip"), ("events", "events", "frame_gzip")):
+            with self.subTest(mode):
+                db, row = self.run_capture([event(completed())])
+                db.execute(f"UPDATE {table} SET {column}=?", (b"not gzip",))
+                db.commit()
+                unpacked = self.unpack(row["id"], mode)
+                self.assertEqual((unpacked.returncode, unpacked.stderr), (2, b"capture payload failed verification: corrupt staged payload\n"))
 
     def test_request_at_the_api_limit_is_retained(self):
         body = b'{"input":"' + b"x" * (32 * 1024 * 1024 - 12) + b'"}'
@@ -759,11 +796,32 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(listed, [{key: row[key] for key in
                                   ("id", "state", "observed_bytes", "dropped_bytes", "credits", "context_usage_percentage", "issues_json")}])
 
-    def test_offline_replay_cli(self):
+    def test_offline_unpack_cli_reads_staged_and_sealed_captures_alike(self):
         body = event(completed())
-        _, row = self.run_capture([body])
-        result = subprocess.run([sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "replay", row["id"]], capture_output=True, check=True)
-        self.assertEqual(result.stdout, body)
+        encoded = gzip.compress(body)
+        db, row = self.run_capture([encoded[:9], encoded[9:]], "gzip")
+        blob = lambda name, value: base64.b64decode(value) if name in ("application", "entity", "frame") and value is not None else value
+        outputs = []
+        for sealed in (False, True):
+            if sealed:
+                self.seal(row["id"])
+            with self.subTest(sealed=sealed):
+                unpacked = {mode: self.unpack(row["id"], mode) for mode in ("request", "transport", "decoded", "chunks", "events")}
+                self.assertEqual({mode: (result.returncode, result.stderr) for mode, result in unpacked.items()}, dict.fromkeys(unpacked, (0, b"")))
+                self.assertEqual(digest(unpacked["request"].stdout), row["request_sha256"])
+                self.assertEqual((unpacked["transport"].stdout, unpacked["decoded"].stdout), (encoded, body))
+                chunks, events = store.response_rows(db, row["id"])
+                for mode, names, rows in (("chunks", ("seq", "utc_ns", "mono_ns", "entity", "application"), chunks),
+                                          ("events", ("seq", "chunk_seq", "utc_ns", "mono_ns", "event_name", "frame", "data_json"), events)):
+                    lines = [json.loads(line) for line in unpacked[mode].stdout.splitlines()]
+                    self.assertTrue(lines)
+                    self.assertEqual([tuple(blob(name, line[name]) for name in names) for line in lines], [tuple(item) for item in rows])
+                outputs.append({mode: result.stdout for mode, result in unpacked.items()})
+        self.assertEqual(outputs[0], outputs[1])
+        db.execute("UPDATE captures SET request_sha256=?", ("0" * 64,))
+        db.commit()
+        unpacked = self.unpack(row["id"], "request")
+        self.assertEqual((unpacked.returncode, unpacked.stdout, unpacked.stderr), (2, b"", b"capture payload failed verification: request hash mismatch\n"))
 
     def test_addon_boundary_privacy_and_immediate_pass_through(self):
         addon = UsageCapture()

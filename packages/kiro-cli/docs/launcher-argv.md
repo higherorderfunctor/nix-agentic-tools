@@ -649,7 +649,7 @@ configured `cli.v3` injection belongs only to `kiro-cli`. These exports remain
 outside the FHS package and are inherited across it, like the existing static
 environment. The disabled path keeps the existing wrapper behavior. The same
 wrapper package installs `kiro-usage` for explicit indexing, session queries,
-and replay. Its `exec` command reuses the same readiness and environment
+and unpacking. Its `exec` command reuses the same readiness and environment
 preparation for a PATH-selected command, explicitly replaces inherited
 conflicts, and composes with the managed wrapper. Named `kiro-cli` commands
 receive an idempotent `--v3`; generic commands keep their arguments. See

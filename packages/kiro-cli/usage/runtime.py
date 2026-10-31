@@ -24,7 +24,7 @@ PROXY_NAMES = (
 
 
 USAGE = ("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json]"
-         "|report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--session ID ...] [--json]|list|replay ID}")
+         "|report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--session ID ...] [--json]|list|unpack ID MODE}")
 
 
 class CommandError(Exception):
@@ -176,12 +176,12 @@ def settle_captures(path, invocation):
 def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
     """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
     earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
-    from capture import retained_bytes
     from query import render_summary, run_report
+    from store import payload_bytes
     import summary_theme
     try:
         with read_only(path) as db:
-            retained = retained_bytes(db)
+            retained = payload_bytes(db)
             if retained > warn_bytes:
                 # Capture never stops for size; this is the operator's only prompt to retire the store.
                 print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "
@@ -341,7 +341,7 @@ def cli(path, arguments, port, warn_bytes, theme=None):
         invocation = [str(script / "report.py"), *db_args, *tail, *(["--summary-theme", str(theme)] if theme else [])]
     elif command == "index":
         invocation = [str(script / "disk_index.py"), *db_args, *tail]
-    elif command in ("list", "replay"):
+    elif command in ("list", "unpack"):
         invocation = [str(script / "capture.py"), *db_args, command, *tail]
     else:
         raise ValueError(USAGE)
