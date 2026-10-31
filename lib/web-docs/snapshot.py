@@ -140,7 +140,12 @@ def snapshot(config, output, snapshot_date, fetch_page=fetch):
             raise ValueError("documentation indexes contain no pages")
     else:
         for source in config["sources"]:
-            write_page(output, source["path"], fetch_page(source["url"]))
+            body = fetch_page(source["url"])
+            if source.get("normalize"):
+                body = subprocess.run([source["normalize"]], input=body, stdout=subprocess.PIPE, check=True).stdout
+                if not body:
+                    raise ValueError(f"empty normalized response for {source['url']}")
+            write_page(output, source["path"], body)
     # Owner-generated dated attribution is deliberately outside content identity.
     digest = content_hash(output)
     write_generated(config, output, snapshot_date)
