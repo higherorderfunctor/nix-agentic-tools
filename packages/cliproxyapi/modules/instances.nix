@@ -213,10 +213,13 @@ in {
             message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}: declare exactly one of oauth or apiKey.";
           })
           instance.credentials
+          # nonEmptyListOf checks definitions, so a list of only `mkIf false`
+          # elements merges to [] past it and would render `models: []`; the
+          # resolved list is checked here.
           ++ lib.concatLists (lib.mapAttrsToList (credentialName: apiKey:
             map (api: {
-              assertion = providersLib.modelsOf apiKey api != null;
-              message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.models or apiKey.apis.${api}.models.";
+              assertion = !(lib.elem (providersLib.modelsOf apiKey api) [null []]);
+              message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.models or apiKey.apis.${api}.models; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
             }) (builtins.attrNames (providersLib.served apiKey)))
           (providersLib.apiKeys instance))
           ++ lib.concatLists (lib.mapAttrsToList (clientName: client:
