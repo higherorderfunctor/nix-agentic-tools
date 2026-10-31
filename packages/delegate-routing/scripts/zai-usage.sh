@@ -13,7 +13,7 @@ if usage_cpa zai "$1"; then exit 0; fi
 delegate_usage_key=$(<"$ZAI_API_KEY_FILE")
 # The key travels over stdin so it never reaches argv or output.
 delegate_usage_body=$(printf 'Authorization: Bearer %s\n' "$delegate_usage_key" |
-  curl --fail --silent --show-error --max-time 25 \
+  curl -q --fail --silent --show-error --max-time 25 \
     -H @- -H 'Accept-Language: en-US,en' \
     "${ZAI_API_BASE:-https://api.z.ai}/api/monitor/usage/quota/limit")
 usage_zai <<<"$delegate_usage_body"
