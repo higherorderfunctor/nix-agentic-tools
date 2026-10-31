@@ -98,6 +98,10 @@
   # Printable ASCII makes CPA's Unicode TrimSpace a no-op, so the rule and
   # shared-URL check in ../modules/instances.nix compare the same string.
   baseUrlType = types.strMatching "https?://[!-~]+";
+  # CPA trims model names before registering them
+  # (sdk/cliproxy/service_models.go); printable edges make that trim a no-op,
+  # so a vendor's refusal sees the name CPA serves.
+  modelType = types.strMatching "[!-~]([ -~]*[!-~])?" // {description = "model name of printable ASCII, without leading or trailing spaces";};
 
   apiKeyType = types.submodule {
     options = {
@@ -112,7 +116,7 @@
                     description = "The upstream base URL for this API.";
                   };
                   models = mkOption {
-                    type = types.nullOr (types.nonEmptyListOf types.str);
+                    type = types.nullOr (types.nonEmptyListOf modelType);
                     default = null;
                     example = ["glm-5.3"];
                     description = "Models served on this API, replacing the credential's `models`.";
@@ -137,7 +141,7 @@
         description = "The upstream key, as a redact reference.";
       };
       models = mkOption {
-        type = types.nullOr (types.nonEmptyListOf types.str);
+        type = types.nullOr (types.nonEmptyListOf modelType);
         default = null;
         example = ["glm-5.3"];
         description = "Models served on each API that sets no `models` of its own. Every served API needs one of the two.";
