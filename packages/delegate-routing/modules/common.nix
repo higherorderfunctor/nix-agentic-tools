@@ -15,6 +15,7 @@
   tierNames = vocabulary.tiers;
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
+  opencodeGo = import ../lib/opencode-go.nix {inherit lib;};
   inherit (familyFunctions) select;
   entryDefaults = import ../lib/entries.nix {inherit lib;};
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
@@ -164,6 +165,11 @@ in {
               type = lib.types.str;
               description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
             };
+            pool = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "Subscription pool guidance, such as how much use empties the pool. OpenCode Go presets fill it from opencodeGo.plan.";
+            };
             tier = lib.mkOption {
               type = lib.types.enum tierNames;
               description = "Capability tier.";
@@ -177,6 +183,12 @@ in {
         }));
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
+      };
+      opencodeGo.plan = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum opencodeGo.plans);
+        default = null;
+        example = "go-plus";
+        description = "Your OpenCode Go plan. The opencode-go preset families then show that plan's documented monthly limit per model; null shows none.";
       };
       reminder = lib.mkOption {
         type = aiTypes.optionalTextSource {
@@ -232,7 +244,14 @@ in {
         ) (usageEnvironment runtime))))
       {
         programs.delegate-routing = {
-          families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
+          families = lib.mkMerge [
+            (lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families)
+            (lib.mkIf (portable.opencodeGo.plan != null) {
+              ${opencodeGo.vendor} =
+                lib.mapAttrs (name: _: {pool = lib.mkDefault (opencodeGo.poolHint portable.opencodeGo.plan portable.families.${opencodeGo.vendor}.${name}.match);})
+                opencodeGo.families;
+            })
+          ];
           routing = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.routing;
           workflows = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.workflows;
         };
@@ -292,6 +311,13 @@ in {
         ++ map (target: {
           assertion = !(sourceEnabled runtime) || select portable.families models.${target} != [];
           message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
+        })
+        (requiredTargets runtime)
+        ++ map (target: let
+          overlaps = opencodeGo.overlaps (select portable.families models.${target});
+        in {
+          assertion = !(sourceEnabled runtime) || overlaps == [];
+          message = "ai.programs.delegate-routing.runtimes.${target}.models selects an opencode-go preset and another family for the same OpenCode Go model: ${lib.concatStringsSep "; " overlaps}. Select one of them, or narrow a family's match.";
         })
         (requiredTargets runtime)
         ++ map (selector: {
