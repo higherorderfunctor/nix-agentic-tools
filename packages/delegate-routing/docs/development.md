@@ -2,8 +2,9 @@
 
 > **Last verified:** 2026-11-03 — routing ships an always-on "Pool drain" entry,
 > the usage helpers share one schema with UTC reset times, portable pools
-> resolve usage readers and label family reaches on both backends, and
-> proxy-accounted-usage reads a Manager+ accounted monthly budget.
+> resolve usage readers and label family reaches on both backends,
+> proxy-accounted-usage reads a Manager+ accounted monthly budget, and OpenCode
+> Go joins z.ai as an API-key pool found by base URL.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -227,17 +228,21 @@ delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
 helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
-direct read. `zai-usage claude|codex` selects the route whose GLM pool it reads;
-consumers attach it to a runtime through that runtime's usage techniques.
+direct read. `zai-usage claude|codex` and `opencode-usage claude|codex` select
+the route whose GLM or OpenCode Go pool they read; consumers attach them to a
+runtime through that runtime's usage techniques. `opencode-usage` reads the
+undocumented `GET https://opencode.ai/zen/go/v1/usage`, the request OpenCode's
+open-source client makes, and prints Go's `rolling`, `weekly` and `monthly`
+windows through the shared schema with UTC reset times.
 
 Usage helpers print one JSON document per account with `pool`, `account`
 (`auth_index`, `name`, `plan`), `windows`, `balances` and `bonuses`. Each window
 has `usedPercent`, `remainingPercent`, a UTC RFC 3339 `resetsAt`, `status` and
-`windowSeconds`; names derive from the duration (`5h`, `7d`, otherwise
-`<seconds>s`, with `:<model>` for scoped windows); missing windows are absent,
-and balances and bonuses are arrays. Codex reset credits carry expiry dates when
-available; if the extra proxy request fails, the helper still reports their
-count.
+`windowSeconds`; names derive from the duration (`5h`, `7d`, `monthly` for 28–31
+days, otherwise `<seconds>s`, with `:<model>` for scoped windows); missing
+windows are absent, and balances and bonuses are arrays. Codex reset credits
+carry expiry dates when available; if the extra proxy request fails, the helper
+still reports their count.
 
 ### Proxy accounted usage
 
@@ -303,11 +308,14 @@ package.
 Usage follows generic `ai.<runtime>.settings.inference` selection. A selected
 local instance with a file management-key reference supplies metadata
 automatically. With no proxy or no management metadata, helpers use their direct
-login or `ZAI_API_KEY_FILE`. Once metadata is supplied, missing accounts,
-ambiguous z.ai keys, malformed responses and request failures are errors; stale
-local logins are not consulted. The backend never drains the usage queue. z.ai
-discovery reads secret-bearing configuration in memory, matches hostname
-`api.z.ai` and requires one distinct key across both supported transports.
+login, `ZAI_API_KEY_FILE` or `OPENCODE_API_KEY_FILE`. Once metadata is supplied,
+missing accounts, ambiguous API keys, malformed responses and request failures
+are errors; stale local logins are not consulted. The backend never drains the
+usage queue. API-key discovery reads secret-bearing configuration in memory
+across the claude, codex and openai-compatibility transports and requires one
+distinct key. z.ai matches hostname `api.z.ai`; OpenCode Go matches hostname
+`opencode.ai` under base path `/inference/go`, so it finds the key whichever
+native API a credential declares and ignores other OpenCode surfaces.
 
 When a host manages the proxy and a project delivers routing, add the matching
 runtime pairs in `devenv.local.nix` (use `ai.codex.environmentVariables` for

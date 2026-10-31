@@ -71,14 +71,23 @@ ANALYTICS = {"generated_at_ms": 1,
                               "cost": 5.0}],
              "summary": {"total_calls": 27, "total_cost": 5.0}}
 
+OPENCODE = {"usage": {
+    "rolling": {"status": "ok", "percent": 12.5, "resetsAt": "2030-03-17T17:46:40.000Z"},
+    "weekly": {"status": "rate-limited", "percent": 100, "resetsAt": "2030-03-17T17:46:40Z"},
+    "monthly": {"status": "ok", "percent": 40, "resetsAt": "2030-03-17T19:46:40+02:00"}}}
+ROUTES = ("claude", "codex")
+
 class UsageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name)
         self.helpers = {}
-        header = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
-        for vendor in ["claude", "codex", "zai"]:
+        header = f"#!{shutil.which('bash')}
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+"
+        for vendor in ["claude", "codex", "opencode", "zai"]:
             helper = self.home / f"{vendor}-usage"
             helper.write_text(header + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
             helper.chmod(0o755)
@@ -92,7 +101,7 @@ class UsageTests(unittest.TestCase):
         self.files = [self.account("claude", "a"), self.account("codex", "b")]
         self.configs = {"claude": [], "openai-compatibility": []}
         self.requests = []
-        self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "zai": ZAI})
+        self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zai": ZAI})
         self.resets = copy.deepcopy(CODEX_RESETS)
         self.reset_failure = None
         self.management_status = 200
@@ -141,7 +150,8 @@ class UsageTests(unittest.TestCase):
                         if owner.reset_failure == "malformed":
                             response = {}
                     else:
-                        vendor = "zai" if "api.z.ai" in body["url"] else "claude" if "anthropic.com" in body["url"] else "codex"
+                        vendor = ("zai" if "api.z.ai" in body["url"] else "opencode" if "opencode.ai" in body["url"]
+                                  else "claude" if "anthropic.com" in body["url"] else "codex")
                         response = owner.envelope or {"status_code": 200, "body": json.dumps(owner.usage[vendor])}
                 else:
                     self.send_error(404)
@@ -170,12 +180,13 @@ class UsageTests(unittest.TestCase):
 
     def run_helper(self, vendor, cpa=True, route=None, **overrides):
         env = self.env.copy()
-        route = route or ("claude" if vendor == "zai" else vendor)
+        routed = vendor in ("opencode", "zai")
+        route = route or ("claude" if routed else vendor)
         if cpa:
             env.update({f"DELEGATE_USAGE_CPA_{route.upper()}_URL": self.url,
                         f"DELEGATE_USAGE_CPA_{route.upper()}_MANAGEMENT_KEY_FILE": str(self.key)})
         env.update(overrides)
-        result = subprocess.run([self.helpers[vendor]] + ([route] if vendor == "zai" else []), env=env, text=True, capture_output=True, timeout=10)
+        result = subprocess.run([self.helpers[vendor]] + ([route] if routed else []), env=env, text=True, capture_output=True, timeout=10)
         self.assertNotIn(SECRET, result.stdout + result.stderr)
         if result.returncode == 0:
             # Every successful transport must emit exactly the schema the drain rule reads.
@@ -199,7 +210,7 @@ class UsageTests(unittest.TestCase):
             self.assertEqual(set(window), {"usedPercent", "remainingPercent", "resetsAt", "status", "windowSeconds"})
             self.assertIsInstance(window["windowSeconds"], (int, float))
             seconds = window["windowSeconds"]
-            self.assertEqual(name.split(":", 1)[0], {18000: "5h", 604800: "7d"}.get(seconds, f"{seconds}s"))
+            self.assertEqual(name.split(":", 1)[0], {18000: "5h", 604800: "7d"}.get(seconds, "monthly" if 2419200 <= seconds <= 2678400 else f"{seconds}s"))
             if vendor == "claude":
                 self.assertEqual(seconds, 18000 if name == "5h" else 604800)
             self.assertIsInstance(window["usedPercent"], (int, float))
@@ -677,7 +688,9 @@ os.execv({real!r}, [{real!r}] + sys.argv[1:])
             executable.chmod(0o755)
         self.configs["claude"] = [{"base-url": "https://api.z.ai/api/anthropic", "keys": [
             {"api-key": "upstream-private-key", "auth_index": "z1"}]}]
-        for vendor in ["codex", "zai"]:
+        self.configs["codex"] = [{"base-url": "https://opencode.ai/inference/go/openai/v1", "keys": [
+            {"api-key": "upstream-private-key", "auth_index": "o1"}]}]
+        for vendor in ["codex", "opencode", "zai"]:
             result = self.run_helper(vendor, PATH=str(binary) + os.pathsep + self.env["PATH"])
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertNotIn("upstream-private-key", result.stdout + result.stderr)
@@ -875,6 +888,111 @@ print({json.dumps(json.dumps(CLAUDE))})
                 value = json.loads(result.stdout)
                 self.assertEqual(value["windows"]["7d"]["usedPercent"], 37)
                 self.assertEqual(value["bonuses"], [{"kind": "rate_limit_reset", "count": 2, "expiresAt": None}])
+
+
+    def test_opencode_transports_and_projection(self):
+        def group(key, index, base):
+            return {"base-url": base, "keys": [{"api-key": key, "auth_index": index}]}
+        go = "https://opencode.ai/inference/go"
+        # One Go key on every transport, plus keys that only look like Go.
+        self.configs = {"claude": [group("upstream-private-key", "g1", go + "/anthropic"),
+                                   group("zen-private-key", "zen", "https://opencode.ai/zen/v1")],
+                        "codex": [group("upstream-private-key", "g2", go + "/openai/v1")],
+                        "openai-compatibility": [group("upstream-private-key", "g3", go + "/openai/v1"),
+                                                 group("other-private-key", "evil", "https://opencode.ai.evil.test/inference/go/openai/v1"),
+                                                 group("prefix-private-key", "gox", "https://opencode.ai/inference/gox/v1")]}
+        for route in ROUTES:
+            with self.subTest(route=route):
+                self.requests.clear()
+                result = self.run_helper("opencode", route=route)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stderr, "")
+                windows = json.loads(result.stdout)["windows"]
+                self.assertEqual(windows, {
+                    "5h": {"status": "ok", "usedPercent": 12.5, "remainingPercent": 87.5, "resetsAt": RESET, "windowSeconds": 18000},
+                    "7d": {"status": "rate-limited", "usedPercent": 100, "remainingPercent": 0, "resetsAt": RESET, "windowSeconds": 604800},
+                    "monthly": {"status": "ok", "usedPercent": 40, "remainingPercent": 60, "resetsAt": RESET, "windowSeconds": 2419200}})
+                self.assertEqual([path for _, path, _, _ in self.requests[:3]],
+                                 [f"/v8/management/config/api-keys/{surface}" for surface in ["claude", "codex", "openai-compatibility"]])
+                call = self.requests[-1][3]
+                self.assertEqual(call["auth_index"], "g1")
+                self.assertEqual(call["url"], "https://opencode.ai/zen/go/v1/usage")
+                self.assertEqual(call["header"]["Authorization"], "Bearer $TOKEN$")
+        # Only the Go surface counts: a key elsewhere on opencode.ai is not ambiguity.
+        for groups in [[], [group("upstream-private-key", "g1", go + "/anthropic"), group("different-private-key", "g2", go + "/openai/v1")],
+                       [group("upstream-private-key", "g1", "https://opencode.ai/zen/v1")]]:
+            self.configs = {"claude": groups}
+            result = self.run_helper("opencode")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("exactly one distinct key", result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertNotIn("private-key", result.stderr)
+        self.configs = {"claude": [group("upstream-private-key", "g1", go + "/anthropic")]}
+        for envelope in [{"status_code": 403, "body": "private-response-body"},
+                         {"status_code": 200, "body": json.dumps({"usage": {"rolling": OPENCODE["usage"]["rolling"]}})},
+                         {"status_code": 200, "body": json.dumps({"usage": dict(OPENCODE["usage"], weekly={"status": "ok", "percent": "1", "resetsAt": "2030-03-17T17:46:40Z"})})},
+                         {"status_code": 200, "body": json.dumps({"usage": dict(OPENCODE["usage"], weekly={"status": 1, "percent": 1, "resetsAt": "2030-03-17T17:46:40Z"})})},
+                         {"status_code": 200, "body": "private-response-body"}]:
+            with self.subTest(envelope=envelope["body"][:40]):
+                self.envelope = envelope
+                result = self.run_helper("opencode")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("vendor HTTP 403" if envelope["status_code"] == 403 else "invalid vendor usage", result.stderr)
+                self.assertNotIn("private-response-body", result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_opencode_durations_and_calendar_months(self):
+        self.configs["claude"] = [{"base-url": "https://opencode.ai/inference/go/anthropic",
+                                    "keys": [{"api-key": "duration-fixture", "auth_index": "g1"}]}]
+        usage = self.usage["opencode"]["usage"]
+        for reset, days in [("2030-03-01T00:00:00Z", 28), ("2032-03-01T00:00:00Z", 29),
+                            ("2030-05-01T00:00:00Z", 30), ("2030-02-01T00:00:00Z", 31),
+                            ("2030-01-01T00:00:00Z", 31), ("2030-03-31T00:00:00Z", 31),
+                            ("2030-03-01T01:00:00+01:00", 28)]:
+            with self.subTest(reset=reset):
+                usage["monthly"]["resetsAt"] = reset
+                result = self.run_helper("opencode")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["windows"]["monthly"]["windowSeconds"], days * 86400)
+        # Vendor durations and statuses take precedence over fallback names and values.
+        for seconds, name in [(120, "120s"), (18000, "5h"), (604800, "7d"), (2592000, "monthly")]:
+            with self.subTest(seconds=seconds):
+                for window in usage.values():
+                    window.update(windowSeconds=seconds, status="paused")
+                result = self.run_helper("opencode")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                windows = json.loads(result.stdout)["windows"]
+                self.assertEqual(set(windows), {name})
+                self.assertEqual(windows[name]["windowSeconds"], seconds)
+                self.assertEqual(windows[name]["status"], "paused")
+
+    def test_direct_opencode_and_route(self):
+        executable = self.home / "bin/curl"
+        executable.parent.mkdir()
+        executable.write_text(f"#!{sys.executable}\n" + f'''import sys
+assert "Authorization: Bearer direct-opencode-key" in sys.stdin.read()
+assert "direct-opencode-key" not in " ".join(sys.argv)
+assert sys.argv[-1] == "https://opencode.ai/zen/go/v1/usage"
+print({json.dumps(json.dumps(OPENCODE))})
+''')
+        executable.chmod(0o755)
+        self.key.write_text("direct-opencode-key")
+        path = str(executable.parent) + os.pathsep + self.env["PATH"]
+        result = self.run_helper("opencode", cpa=False, OPENCODE_API_KEY_FILE=str(self.key), PATH=path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["windows"]["monthly"]["remainingPercent"], 60)
+        self.assertNotIn("direct-opencode-key", result.stdout + result.stderr)
+        executable.write_text(f"#!{sys.executable}\nprint('private-response-body')\n")
+        result = self.run_helper("opencode", cpa=False, OPENCODE_API_KEY_FILE=str(self.key), PATH=path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "opencode-usage: invalid OpenCode Go usage response\n")
+        result = self.run_helper("opencode", cpa=False, PATH=path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("OPENCODE_API_KEY_FILE", result.stderr)
+        result = subprocess.run([self.helpers["opencode"]], env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("expected route", result.stderr)
 
     def test_partial_configuration(self):
         for env in [
