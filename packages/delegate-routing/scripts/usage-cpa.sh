@@ -190,7 +190,7 @@ try:
         windows[name] = {"status": meter["status"], "usedPercent": percent,
                          "remainingPercent": 100 - percent,
                          "resetsAt": reset.strftime("%Y-%m-%d %H:%M:%S %Z")}
-    print(json.dumps({"windows": windows}, indent=2))
+    print(json.dumps({"windows": windows}, allow_nan=False, indent=2))
 except (AttributeError, KeyError, TypeError, ValueError):
     sys.exit(1)
 ' 2>/dev/null
