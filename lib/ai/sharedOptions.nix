@@ -246,7 +246,7 @@
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
-    proxy = proxyLib.options config.ai.proxy options.ai.proxy;
+    proxy = proxyLib.options config.ai.internal.proxyInstances config.ai.proxy options.ai.proxy;
     rules = keyedOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
@@ -514,6 +514,7 @@ in {
           description = "This flake's package tree (`ai.*`) for the module's pkgs: `ai.internal.roots.ai`.";
         };
         inferenceInstances = inferenceLib.registryOption;
+        proxyInstances = proxyLib.registryOption;
         # Every root a module site reads (`ai`, `docs`, `*-content`).
         roots = lib.mkOption {
           type = lib.types.raw;
@@ -581,7 +582,7 @@ in {
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
-    (lib.optionalAttrs hasAssertions {assertions = proxyValidationAssertions;})
+    (lib.optionalAttrs hasAssertions {assertions = proxyValidationAssertions ++ proxyLib.assertionsFor config.ai.internal.proxyInstances ["ai" "proxy"] config.ai.proxy;})
     # `ai.settings.inference`'s root selection; mkBackendTransform.nix asserts each
     # runtime's own.
     (lib.optionalAttrs hasAssertions {assertions = inferenceLib.assertionsFor config.ai.internal.inferenceInstances ["ai" "settings" "inference"] config.ai.settings.inference;})
