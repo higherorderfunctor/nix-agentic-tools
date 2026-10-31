@@ -254,6 +254,93 @@ in {
       if problems == []
       then true
       else throw (lib.concatStringsSep "\n" problems));
+    module-ai-inference-opencode-go-credential = mkTest "ai-inference-opencode-go-credential" (let
+      facts = import ../../lib/extracted/facts.nix {inherit lib;};
+      catalog = (facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "opencodeGo").models;
+      vendor = (import ../../packages/cliproxyapi/lib/providers.nix {inherit lib;}).vendors.opencode-go;
+      urls = {
+        anthropic = "https://opencode.ai/inference/go/anthropic";
+        chat = "https://opencode.ai/inference/go/openai/v1";
+        responses = "https://opencode.ai/inference/go/openai/v1";
+      };
+      problems = lib.concatMap (backend: let
+        go = apiKey:
+          evaluate backend (instanceChange {
+            credentials.go = {
+              vendor = "opencode-go";
+              apiKey = {key = clientKey "opencode-go";} // apiKey;
+            };
+            clientKeys = {
+              personal.routes = lib.mkForce [
+                {
+                  api = "anthropic";
+                  credential = "go";
+                }
+              ];
+              work.routes = lib.mkForce [
+                {
+                  api = "chat";
+                  credential = "go";
+                }
+              ];
+            };
+          });
+        result = go {};
+        blocksOf = evaluated: family: lib.filter (entry: entry.name == "go") (rendered evaluated).api-keys.${family};
+        modelsIn = evaluated: family: lib.concatMap (block: map (model: model.name) block.models) (blocksOf evaluated family);
+        block = family: lib.head (blocksOf result family);
+        overridden = go {
+          apis = {
+            chat = {
+              base-url = "https://go.example/v1";
+              models = ["glm-5.3"];
+            };
+            responses = null;
+          };
+        };
+        refusedClaude = failsWith ["credentials.go: vendor `opencode-go` refuses models `claude-haiku-5-5`" "Claude OAuth credential owns them"];
+        checks = {
+          "accepted" = failedMessages result == [];
+          "per-API base URLs" = (block "claude").base-url == urls.anthropic && (block "openai-compatibility").base-url == urls.chat && (block "codex").base-url == urls.responses;
+          "native placement" =
+            lib.all (model: lib.elem model (modelsIn result "claude")) ["minimax-m3" "qwen3.8-max"]
+            && lib.all (model: lib.elem model (modelsIn result "openai-compatibility")) ["glm-5.3" "kimi-k3"]
+            && lib.all (model: lib.elem model (modelsIn result "codex")) ["gpt-6-luna" "grok-4.7"]
+            && !(lib.elem "glm-5.3" (modelsIn result "claude" ++ modelsIn result "codex"));
+          "generate-content on chat" = catalog.gemini-4-argon.api ? generate-content && lib.elem "gemini-4-argon" (modelsIn result "openai-compatibility");
+          "every other catalog model placed once" = lib.sort lib.lessThan (lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"]) == builtins.filter (id: !(vendor.refuses id)) (builtins.attrNames catalog);
+          "default leaves Claude out" = catalog ? claude-haiku-5-5 && vendor.refuses "claude-haiku-5-5" && !(lib.any (lib.hasPrefix "claude-") (lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"]));
+          "Claude added to an API refused" = refusedClaude (go {
+            apis.anthropic = {
+              base-url = urls.anthropic;
+              models = ["claude-haiku-5-5" "qwen3.8-max"];
+            };
+          });
+          "Claude through credential models refused" = refusedClaude (go {
+            apis.responses = {
+              base-url = urls.responses;
+              models = null;
+            };
+            models = ["claude-haiku-5-5"];
+          });
+          "z.ai shims off" = !((block "claude") ? tool-aliases) && !((block "openai-compatibility") ? codex-shell-arg-cleanup);
+          "picker lists the routed API's models" =
+            result.config.ai.claude.normalized.settings.inference.credentials
+            == [
+              {
+                name = "go";
+                inherit (vendor.apis.anthropic) models;
+              }
+            ];
+          "API override" = failedMessages overridden == [] && (lib.head (blocksOf overridden "openai-compatibility")).base-url == "https://go.example/v1" && modelsIn overridden "openai-compatibility" == ["glm-5.3"];
+          "API removed" = blocksOf overridden "codex" == [] && (lib.head (blocksOf overridden "claude")).base-url == urls.anthropic;
+        };
+      in
+        map (name: "${backend}: ${name}") (builtins.attrNames (lib.filterAttrs (_: ok: !ok) checks))) ["devenv" "hm"];
+    in
+      if problems == []
+      then true
+      else throw (lib.concatStringsSep "\n" problems));
     module-ai-inference-instance-clients = mkTest "ai-inference-instance-clients" (let
       problems = lib.concatMap (backend: let
         result = evaluate backend {};
