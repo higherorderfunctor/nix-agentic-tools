@@ -101,6 +101,7 @@ in {
       "Launch route" = {text = "`{technique}` with {modelArg} {model}";};
       "Manual delegate heading" = {text = "### {harness}";};
       "Manual delegate note" = {text = "Not a candidate for auto-selection; use only when the user names it.";};
+      "Manual pool hint" = {text = "; {pool}";};
       "Model pattern" = {text = "the highest id matching `{match}`";};
       "Native reach" = {text = "{harness}: {launch}{pool}";};
       "Pool binding" = {text = " (pool {pool})";};

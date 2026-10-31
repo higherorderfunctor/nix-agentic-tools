@@ -126,12 +126,12 @@ still appears only when a delegate technique has a command.
 `skill.phrases` are templates used inside generated blocks: `"Native reach"` and
 `"External reach"` (`{harness}`, `{launch}`, `{pool}`), `"Launch route"`
 (`{technique}`, `{modelArg}`, `{model}`), `"Model pattern"` (`{match}`),
-`"Pool binding"` (`{pool}`), `"Pool window"` (`{limit}`, `{unit}`,
-`{resetDay}`), `"Family table heading"` (`{tier}`), `"Technique table heading"`
-and `"Manual delegate heading"` (`{harness}`). `"Launch fallback"`,
-`"Manual delegate note"`, `"Pool measured"`, `"Pool unmeasured"` and
-`"Pool reader missing"` take none. A disabled phrase renders nothing; a phrase
-the renderer reads but cannot find fails naming it.
+`"Pool binding"` and `"Manual pool hint"` (`{pool}`), `"Pool window"`
+(`{limit}`, `{unit}`, `{resetDay}`), `"Family table heading"` (`{tier}`),
+`"Technique table heading"` and `"Manual delegate heading"` (`{harness}`).
+`"Launch fallback"`, `"Manual delegate note"`, `"Pool measured"`,
+`"Pool unmeasured"` and `"Pool reader missing"` take none. A disabled phrase
+renders nothing; a phrase the renderer reads but cannot find fails naming it.
 
 Shipped entries and columns carry `after` edges to every predecessor, so
 disabling any one keeps the rest in order. For example, this replaces one

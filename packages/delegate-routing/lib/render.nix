@@ -218,7 +218,7 @@
   manual = target: ''
     ${phrase "Manual delegate heading" {harness = target;}}
 
-    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}") (selected target)}
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}${lib.optionalString (family.pool or "" != "") (phrase "Manual pool hint" {inherit (family) pool;})}") (selected target)}
 
     ${techniqueBlock target true}
     ${phrase "Manual delegate note" {}}
