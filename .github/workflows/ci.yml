@@ -801,7 +801,7 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           if [[ "$ANY_JOBS" == true && "$MANIFEST_VERSION" == 0 ]]; then
-            echo "::error::hestia committed no manifest for the uncached derivation closures; see the 'hestia matrix:' line above for the drain failure. Re-run all jobs."
+            echo "::error::hestia reported manifest-version 0 for checks that still need their derivation closures: the drain failed or timed out (see the 'hestia matrix:' line above). Re-run all jobs."
             exit 1
           fi
 

@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-10-30 — at most four check bundles share the evaluator
 > manifest version and prefetch every installable before building with
-> `--keep-going`; `checks-eval` fails when its drain committed no version.
+> `--keep-going`; `checks-eval` fails when it has jobs but no manifest version.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -142,13 +142,16 @@ prefetch prepares them. Prefetch accepts the concatenated `<drvPath>^*`
 arguments from all groups in a bundle; the manifest version covers the whole
 evaluation. Each worker builds with `--keep-going` so a failing group does not
 prevent the other groups from building. Only `checks-eval` registers those
-closures. Hestia's matrix treats a failed registration or drain as non-fatal and
-reports `manifest-version` 0, so `checks-eval` fails when there are jobs and no
-version: otherwise every worker would start against the missing PR manifest and
-fail its prefetch with a 404. When GitHub evicts a pack holding one, the
-worker's prefetch fails with `error decoding response body`, the hestia daemon
-log in the job's post step shows `pack … is not in the cache (evicted?)`, and
-re-running the failed worker hits the same stale manifest every time. Re-run all
-jobs so `checks-eval` registers the closures again; the worker's error
-annotation says so. Fork PRs skip that matrix, since a read-only cache cannot
-register the closures the workers need.
+closures. Hestia's matrix treats a failed registration, drain or drain timeout
+as non-fatal and reports `manifest-version` 0, so `checks-eval` fails when the
+plan has jobs and the version is 0. Without that, the workers start against a
+manifest that lacks their closures and fail at prefetch with a 404. A successful
+drain reports 0 only when every registered path was filtered as
+upstream-published, which a plan with jobs cannot produce. When GitHub evicts a
+pack holding one, the worker's prefetch fails with
+`error decoding response body`, the hestia daemon log in the job's post step
+shows `pack … is not in the cache (evicted?)`, and re-running the failed worker
+hits the same stale manifest every time. Re-run all jobs so `checks-eval`
+registers the closures again; the worker's error annotation says so. Fork PRs
+skip that matrix, since a read-only cache cannot register the closures the
+workers need.
