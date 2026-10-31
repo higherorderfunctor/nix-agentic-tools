@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-10-30 — OAuth upstream credentials require vendor and
 > a secret account email; named API-key credentials can select the built-in z.ai
-> vendor defaults and a priority, serve per-API models and send secret headers.
+> vendor defaults and a priority, and serve per-API models.
 
 How a harness selects an instance and its client key is in
 `dev/fragments/ai-inference/ai-inference.md`; this covers the upstream
@@ -46,13 +46,7 @@ provider, `kind = "apikey"`, and exact `base-urls`.
 
 `apis.<api>.models` replaces `models` for that API's block, so one key can serve
 a different catalog per API; every served API needs one of the two, or
-evaluation fails. `headers` adds upstream request headers to every served API's
-block, and `apis.<api>.headers` adds or replaces names for that API. CPA marks
-every upstream header secret, so each value is a redact reference. It copies a
-group's headers to each of its keys (`internal/config/config_v8.go`,
-`sharedKeyFields`) and resolves `$CPA-SESSION-ID` to its session identifier and
-`$<Client-Header>` to that client request header, dropping a header whose source
-is absent (`internal/util/header_helpers.go`, `extractCustomHeaders`).
+evaluation fails.
 
 CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
 for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
