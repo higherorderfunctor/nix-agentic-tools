@@ -1,9 +1,9 @@
 {
-  "version": "1.25.0",
+  "version": "1.25.1",
   "extraction": {
     "kimchiSource": {
-      "hash": "sha256-Qsxd4RC0dT/2VuNt9Z0fPGyRwjQ2/jmRWUUhLZ5REAg=",
-      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.25.0.tar.gz"
+      "hash": "sha256-U2mnTJ6lObphpuJp48iHuJPNW1RCBxqr1l9KjK2wjLo=",
+      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.25.1.tar.gz"
     },
     "piAgentCorePackage": {
       "hash": "sha256-ysVosz0AfYCaH/1o87QiCjys0DRQDZJ2i6m4ygSNS8c=",
@@ -38,5 +38,5 @@
   },
   "goFloor": "1.25.5",
   "vendorHash": "sha256-m9D9IP6kY/aOPENuSFU2o9dDaPM3kxZilIqycilfsoA=",
-  "pnpmDepsHash": "sha256-8GeocP7KUOucAmWqfacCIfSu5Oj38Ee3GYCJNZUiGtA="
+  "pnpmDepsHash": "sha256-gXCGeLufEdCdSPdbPeJl8rb1Ot0cvuIVrxLg7D0tXpM="
 }
