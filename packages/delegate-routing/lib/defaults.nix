@@ -3,7 +3,7 @@
   claudeUsageScript,
   codexUsageScript,
 }: {
-  families = import ./families.nix;
+  families = import ./families.nix // {opencode-go = (import ./opencode-go.nix {inherit lib;}).families;};
   models = {
     claude = [
       {
