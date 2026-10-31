@@ -1,4 +1,5 @@
 """Exercise real curl transport against a local CPA management fixture."""
+# cspell:ignore curlrc
 
 import http.server
 import json
@@ -267,6 +268,7 @@ print({json.dumps(json.dumps(ZAI))})
                          {"status_code": 200, "body": json.dumps({"usage": {"rolling": OPENCODE["usage"]["rolling"]}})},
                          {"status_code": 200, "body": json.dumps({"usage": dict(OPENCODE["usage"], weekly={"status": "ok", "percent": "1", "resetsAt": "2030-03-17T17:46:40Z"})})},
                          {"status_code": 200, "body": json.dumps({"usage": dict(OPENCODE["usage"], weekly={"status": "paused", "percent": 1, "resetsAt": "2030-03-17T17:46:40Z"})})},
+                         {"status_code": 200, "body": json.dumps({"usage": dict(OPENCODE["usage"], weekly={"status": "ok", "percent": 1e999, "resetsAt": "2030-03-17T17:46:40Z"})}).replace("Infinity", "1e999")},
                          {"status_code": 200, "body": "private-response-body"}]:
             with self.subTest(envelope=envelope["body"][:40]):
                 self.envelope = envelope
@@ -298,6 +300,24 @@ print({json.dumps(json.dumps(OPENCODE))})
         result = subprocess.run([self.helpers["opencode"]], env=self.env, text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("expected route", result.stderr)
+
+    def test_direct_transports_ignore_curlrc(self):
+        # A user curlrc that turns on verbose and adds a local URL would print the
+        # request headers; -q must keep curl from reading it. The refused proxy
+        # keeps the real vendor URLs offline.
+        (self.home / ".curlrc").write_text(f"verbose\nurl = \"{self.url}/curlrc-probe\"\n")
+        (self.home / ".claude").mkdir()
+        (self.home / ".claude/.credentials.json").write_text(json.dumps({"claudeAiOauth": {"accessToken": "direct-private-key"}}))
+        self.key.write_text("direct-private-key")
+        offline = {"https_proxy": "http://127.0.0.1:1", "HTTPS_PROXY": "http://127.0.0.1:1", "CURL_HOME": str(self.home)}
+        for vendor, extra in [("claude", {}), ("opencode", {"OPENCODE_API_KEY_FILE": str(self.key)}),
+                              ("zai", {"ZAI_API_KEY_FILE": str(self.key)})]:
+            with self.subTest(vendor=vendor):
+                self.requests.clear()
+                result = self.run_helper(vendor, cpa=False, **offline, **extra)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("direct-private-key", result.stdout + result.stderr)
+                self.assertEqual(self.requests, [])
 
     def test_partial_configuration(self):
         for env in [
