@@ -51,6 +51,8 @@
         (row (map (_: "---") shown))
       ]
       ++ map (item: row (map (filler: filler item) fillers)) items);
+  # The Pool column appears only when a candidate carries pool guidance.
+  pooled = lib.any (family: family.pool or "" != "") candidates;
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
   # The id a launch route names for one harness: the family's current example
   # id for that target, or — for a family with no example there, as package
@@ -173,12 +175,13 @@
     lib.optionalString (members != []) ''
       ${phrase "Family table heading" {tier = name;}}
 
-      ${table "families" skill.columns.families {
+      ${table "families" (lib.removeAttrs skill.columns.families (lib.optional (!pooled) "Pool")) {
           "Avoid for" = family: family.avoidFor;
           "Effort (delegate)" = family: family.effort;
           Family = familyLabel;
           Launch = family: lib.concatMapStringsSep "; " (reach family) (targets family);
           Orchestration = family: family.orchestration or "";
+          Pool = family: family.pool or "";
           "Use for" = family: family.useFor;
         }
         members}

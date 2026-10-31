@@ -7,8 +7,8 @@
 > PR goes ready), the usage helpers share one schema with UTC reset times,
 > portable pools resolve usage readers and label family reaches on both
 > backends, proxy-accounted-usage reads a Manager+ accounted monthly budget, and
-> the always-on stub names the source for steering its rules, and OpenCode Go
-> joins z.ai as an API-key pool found by base URL.
+> the always-on stub names the source for steering its rules; OpenCode Go joins
+> z.ai as an API-key pool found by base URL, with opt-in Go preset families.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -165,6 +165,28 @@ package families without concrete model versions or Kimchi-served vendors, so a
 launch route without a generated agent file instructs the reader to take the
 highest id matching the pattern. Consumers selecting Kimchi models declare the
 corresponding vendor families in their delegate-routing configuration.
+
+`lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
+catalog that CPA's `opencode-go` vendor serves. They come from per-model
+research, and every tier is provisional. Each family is named `go-` plus the
+exact Go id, except `go-glm` (GLM-5.2 and 5.3) and `go-muse-spark-contributor`
+(Muse Spark 1.2 and 1.3), which the research found share a role. The `go-`
+prefix keeps them apart from hand-written `glm` or `kimi-k3` families. Presets
+render only when a runtime selects them, for example
+`models = [{vendors = ["opencode-go"];}]`; a tier-only selector picks them up
+like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
+field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
+fact: the list-price dollars that empty the account's monthly pool, so a lower
+limit weighs more. The skill shows a Pool column only when a selected family
+carries pool text, alongside each reach’s registered pool label. Set
+`opencodeGo.pool = "<pool>"` to bind every generated preset to that registered
+pool on each runtime that selects the `opencode-go` vendor. If one runtime
+selects a preset and another vendor's family that both match the same Go catalog
+id, such as a hand-written `deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`,
+evaluation fails and names the id and both families. Selecting them on different
+runtimes is allowed. The `delegate-routing-opencode-go-presets` check fails when
+a servable catalog id (Claude ids excluded, as the vendor refuses them) matches
+no preset or several, or a preset matches no catalog id.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,

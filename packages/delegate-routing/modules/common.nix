@@ -15,6 +15,7 @@
   tierNames = vocabulary.tiers;
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
+  opencodeGo = import ../lib/opencode-go.nix {inherit lib;};
   inherit (familyFunctions) select;
   entryDefaults = import ../lib/entries.nix {inherit lib;};
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
@@ -192,6 +193,16 @@ in {
               default = "";
               description = "Orchestration suitability shown in the family table, such as \"default orchestrator\" or \"reserved for hard work\"; empty shows nothing.";
             };
+            pool = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "Subscription pool guidance, such as how much use empties the pool. OpenCode Go presets fill it from opencodeGo.plan.";
+            };
+            opencodeGo.pool = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor.";
+            };
             pools = lib.mkOption {
               type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
               default = {};
@@ -210,6 +221,17 @@ in {
         }));
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
+      };
+      opencodeGo.plan = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum opencodeGo.plans);
+        default = null;
+        example = "go-plus";
+        description = "Your OpenCode Go plan. The opencode-go preset families then show that plan's documented monthly limit per model; null shows none.";
+      };
+      opencodeGo.pool = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor.";
       };
       pools = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
@@ -347,7 +369,26 @@ in {
         }))
       {
         programs.delegate-routing = {
-          families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
+          families = lib.mkMerge [
+            (lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families)
+            (lib.mkIf (portable.opencodeGo.plan != null) {
+              ${opencodeGo.vendor} =
+                lib.mapAttrs (name: _: {pool = lib.mkDefault (opencodeGo.poolHint portable.opencodeGo.plan portable.families.${opencodeGo.vendor}.${name}.match);})
+                opencodeGo.families;
+            })
+            (lib.mkIf (portable.opencodeGo.pool != null) {
+              ${opencodeGo.vendor} =
+                lib.mapAttrs (_: _: {
+                  pools =
+                    lib.genAttrs (lib.filter (runtime:
+                      lib.any (family: family.vendor == opencodeGo.vendor)
+                      (select portable.families models.${runtime}))
+                    supportedRuntimes)
+                    (_: lib.mkDefault portable.opencodeGo.pool);
+                })
+                opencodeGo.families;
+            })
+          ];
           routing = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.routing;
           skill = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.skill;
           workflows = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.workflows;
@@ -439,6 +480,13 @@ in {
         ++ map (target: {
           assertion = !(sourceEnabled runtime) || select portable.families models.${target} != [];
           message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
+        })
+        (requiredTargets runtime)
+        ++ map (target: let
+          overlaps = opencodeGo.overlaps (select portable.families models.${target});
+        in {
+          assertion = !(sourceEnabled runtime) || overlaps == [];
+          message = "ai.programs.delegate-routing.runtimes.${target}.models selects an opencode-go preset and another family for the same OpenCode Go model: ${lib.concatStringsSep "; " overlaps}. Select one of them, or narrow a family's match.";
         })
         (requiredTargets runtime)
         ++ map (selector: {
