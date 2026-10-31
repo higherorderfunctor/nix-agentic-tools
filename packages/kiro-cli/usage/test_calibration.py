@@ -89,7 +89,9 @@ class CalibrationTests(unittest.TestCase):
                             "CALIBRATION_DB": str(self.db_path)}
 
     def execute(self, mode="normal", run=True, models=None, command="probe", extra=()):
-        arguments = ["calibration", command, "--db", str(self.db_path), "--timeout", "0.6", *extra] + (["--models", models] if models else [])
+        # A real subprocess limit: short only where the fake CLI hangs, so a loaded runner cannot time out a healthy call.
+        timeout = "0.6" if mode == "timeout" else "30"
+        arguments = ["calibration", command, "--db", str(self.db_path), "--timeout", timeout, *extra] + (["--models", models] if models else [])
         if run:
             arguments.append("--run")
         output = io.StringIO()
