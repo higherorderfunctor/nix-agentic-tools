@@ -14,7 +14,7 @@ if usage_cpa opencode "$1"; then exit 0; fi
 delegate_usage_key=$(<"$OPENCODE_API_KEY_FILE")
 # The key travels over stdin so it never reaches argv or output.
 delegate_usage_body=$(printf 'Authorization: Bearer %s\n' "$delegate_usage_key" |
-  curl --fail --silent --show-error --max-time 25 \
+  curl -q --fail --silent --show-error --max-time 25 \
     -H @- -H 'Accept: application/json' "$delegate_usage_opencode_url")
 unset delegate_usage_key
 usage_opencode <<<"$delegate_usage_body" || {
