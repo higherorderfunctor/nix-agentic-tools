@@ -317,6 +317,7 @@ mergetool
 metacharacter
 microvm
 microvms
+mimo
 minishlab
 misordered
 mitmdump
