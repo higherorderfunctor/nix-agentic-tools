@@ -98,9 +98,15 @@
             reviewers'.
           '';
         };
-        techniques.zai-usage = {
-          command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} claude";
-          kind = "usage";
+        techniques = {
+          opencode-usage = {
+            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.opencode-usage} claude";
+            kind = "usage";
+          };
+          zai-usage = {
+            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} claude";
+            kind = "usage";
+          };
         };
       };
       codex = {
@@ -108,9 +114,15 @@
           {vendors = ["openai"];}
           {families = ["glm" "glm-flash"];}
         ];
-        techniques.zai-usage = {
-          command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} codex";
-          kind = "usage";
+        techniques = {
+          opencode-usage = {
+            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.opencode-usage} codex";
+            kind = "usage";
+          };
+          zai-usage = {
+            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} codex";
+            kind = "usage";
+          };
         };
       };
       kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
