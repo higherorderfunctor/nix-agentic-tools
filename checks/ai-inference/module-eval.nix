@@ -388,21 +388,7 @@ in {
               key = clientKey "split";
             };
           });
-          "API with emptied models refused" = refused backend "credentials.split.apiKey serves API `chat` without models" (instanceChange {
-            credentials.split.apiKey = {
-              apis = {
-                anthropic = {
-                  base-url = "https://split.example/anthropic";
-                  models = ["split-anthropic"];
-                };
-                chat = {
-                  base-url = "https://split.example/v1";
-                  models = [(lib.mkIf false "split-chat")];
-                };
-              };
-              key = clientKey "split";
-            };
-          });
+          "API with emptied models refused" = failsWith ["credentials.split.apiKey serves API `chat` without models"] (split {apis.chat.models = [(lib.mkIf false "split-chat")];});
           "picker lists the routed API's models" =
             splitResult.config.ai.claude.normalized.settings.inference.credentials
             == [
