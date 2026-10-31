@@ -52,7 +52,7 @@ in {
   };
   skill = {
     columns = {
-      families = columns ["Family" "Orchestration" "Use for" "Avoid for" "Effort (delegate)" "Launch"];
+      families = columns ["Family" "Orchestration" "Use for" "Avoid for" "Effort (delegate)" "Pool" "Launch"];
       pools = columns ["Name" "Reader" "Measure" "Description"];
       techniques = columns ["Technique" "Kind" "Pins model" "Pins effort" "Modes" "Runs own subagents" "Notes" "Command"];
     };

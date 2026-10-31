@@ -179,6 +179,7 @@
           Family = familyLabel;
           Launch = family: lib.concatMapStringsSep "; " (reach family) (targets family);
           Orchestration = family: family.orchestration or "";
+          Pool = family: family.pool or "";
           "Use for" = family: family.useFor;
         }
         members}
