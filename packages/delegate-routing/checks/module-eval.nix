@@ -615,8 +615,9 @@
       && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
       && !(lib.hasInfix "| Pool " unplanned)
       && passes (goSelected "go-plus")
-      # Two families selected on one runtime that match the same Go catalog
-      # model fail, whatever their vendors; on different runtimes they pass.
+      # A selected preset and another family, of any vendor, matching the
+      # same Go catalog model on one runtime fail; on different runtimes, or
+      # with no preset selected, they pass.
       && lib.all (failsWith (overlapping {example.kimi = kimi;} [{families = ["kimi"];}])) ["kimi-k3 (" "example.kimi" "opencode-go.go-kimi-k3"]
       && failsWith (overlapping {opencode-go.mine = kimi;} []) "opencode-go.mine"
       && passes (change {
@@ -626,6 +627,15 @@
             claude.models = [{families = ["kimi"];}];
             codex.models = [{vendors = ["opencode-go"];}];
           };
+        };
+      })
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families = {
+            example.kimi = kimi;
+            other.kimi-exact = kimi // {match = "kimi-k3";};
+          };
+          runtimes.claude.models = [{families = ["kimi" "kimi-exact"];}];
         };
       }));
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
