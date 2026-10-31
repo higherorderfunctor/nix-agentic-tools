@@ -1,6 +1,14 @@
 # shellcheck shell=bash
 readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
 readonly delegate_usage_claude_beta='oauth-2025-04-20'
+readonly delegate_usage_opencode_url='https://opencode.ai/zen/go/v1/usage'
+readonly delegate_usage_zai_url='https://api.z.ai/api/monitor/usage/quota/limit'
+# API-key vendors: the upstream hostname and base-URL path prefix that identify
+# their key among CPA's configured credentials, whatever transport carries it.
+declare -rA delegate_usage_api_keys=(
+  [opencode]='opencode.ai /inference/go'
+  [zai]='api.z.ai'
+)
 readonly delegate_usage_claude_projection='{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
 
 usage_cpa_error() {
@@ -55,14 +63,18 @@ usage_cpa() {
   if [[ -z $delegate_usage_cpa_url || -z $delegate_usage_cpa_key_file ]]; then
     usage_cpa_error 'requires both URL and management-key file in the matching runtime pair'
   fi
-  if [[ $vendor == zai ]]; then
+  if [[ -n ${delegate_usage_api_keys[$vendor]-} ]]; then
     # These responses contain upstream keys. Project them in memory only.
-    local claude_config openai_config
-    claude_config=$(usage_cpa_request GET config/api-keys/claude "" v8/management) || exit 1
-    openai_config=$(usage_cpa_request GET config/api-keys/openai-compatibility "" v8/management) || exit 1
-    accounts=$(printf '%s\n%s' "$claude_config" "$openai_config" | python3 -c '
+    local configs='' surface host prefix
+    read -r host prefix <<<"${delegate_usage_api_keys[$vendor]}"
+    for surface in claude codex openai-compatibility; do
+      configs+=$(usage_cpa_request GET "config/api-keys/$surface" "" v8/management) || exit 1
+      configs+=$'\n'
+    done
+    accounts=$(printf '%s' "$configs" | python3 -c '
 import json, sys
 from urllib.parse import urlsplit
+host, prefix = sys.argv[1:3]
 try:
     decoder = json.JSONDecoder()
     raw = sys.stdin.read()
@@ -73,7 +85,9 @@ try:
         if not isinstance(groups, list):
             raise ValueError()
         for group in groups:
-            if urlsplit(group.get("base-url", "")).hostname != "api.z.ai":
+            base = urlsplit(group.get("base-url", ""))
+            path = base.path.rstrip("/")
+            if base.hostname != host or not (path == prefix or path.startswith(prefix + "/")):
                 continue
             for key in group.get("keys", []):
                 if key.get("api-key") and key.get("auth_index"):
@@ -83,8 +97,9 @@ try:
     print(json.dumps([{"auth_index": next(iter(candidates.values()))}]))
 except (AttributeError, TypeError, ValueError):
     sys.exit(3)
-') || usage_cpa_error 'z.ai requires exactly one distinct key with an auth index on api.z.ai'
-    unset claude_config openai_config
+' "$host" "$prefix") ||
+      usage_cpa_error "$vendor requires exactly one distinct key with an auth index on $host$prefix"
+    unset configs
   else
     files=$(usage_cpa_request GET auth-files) || exit 1
     accounts=$(jq -ce --arg vendor "$vendor" '
@@ -95,15 +110,18 @@ except (AttributeError, TypeError, ValueError):
   fi
   while IFS= read -r account; do
     request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
-      --arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" '{
+      --arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" \
+      --arg opencode_url "$delegate_usage_opencode_url" --arg zai_url "$delegate_usage_zai_url" '{
       auth_index: $account.auth_index,
       method: "GET",
       url: (if $vendor == "claude" then $claude_url
             elif $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
-            else "https://api.z.ai/api/monitor/usage/quota/limit" end),
+            elif $vendor == "opencode" then $opencode_url
+            else $zai_url end),
       header: ({Authorization: "Bearer $TOKEN$", "Content-Type": "application/json"} +
         if $vendor == "claude" then {"anthropic-beta": $claude_beta}
         elif $vendor == "zai" then {"Accept-Language": "en-US,en"}
+        elif $vendor == "opencode" then {Accept: "application/json"}
         else {"User-Agent": "codex-tui"} +
           if ($account.id_token.chatgpt_account_id // "") != ""
           then {"Chatgpt-Account-Id": $account.id_token.chatgpt_account_id} else {} end end)
@@ -117,8 +135,8 @@ except (AttributeError, TypeError, ValueError):
       usage_cpa_error "vendor HTTP $vendor_status"
     fi
     body=$(jq -r '.body' <<<"$envelope")
-    if [[ $vendor == zai ]]; then
-      usage_zai <<<"$body" || usage_cpa_error 'invalid z.ai usage response'
+    if [[ -n ${delegate_usage_api_keys[$vendor]-} ]]; then
+      "usage_$vendor" <<<"$body" || usage_cpa_error "invalid $vendor usage response"
       continue
     fi
     if ! result=$(jq -ce --arg vendor "$vendor" --argjson account "$account" '
@@ -152,5 +170,28 @@ usage_zai() {
   | if $windows == [] then error("z.ai response has no usage windows") else
       {level: .data.level, windows: ($windows | from_entries)}
     end
+' 2>/dev/null
+}
+
+# Go's three pool windows. resetsAt is an ISO timestamp, so Python parses it.
+usage_opencode() {
+  python3 -c '
+import json, sys
+from datetime import datetime
+try:
+    usage = json.load(sys.stdin)["usage"]
+    windows = {}
+    for name in ["rolling", "weekly", "monthly"]:
+        meter = usage[name]
+        percent = meter["percent"]
+        if meter["status"] not in ("ok", "rate-limited") or isinstance(percent, bool) or not isinstance(percent, (int, float)):
+            raise ValueError()
+        reset = datetime.fromisoformat(meter["resetsAt"].replace("Z", "+00:00")).astimezone()
+        windows[name] = {"status": meter["status"], "usedPercent": percent,
+                         "remainingPercent": 100 - percent,
+                         "resetsAt": reset.strftime("%Y-%m-%d %H:%M:%S %Z")}
+    print(json.dumps({"windows": windows}, allow_nan=False, indent=2))
+except (AttributeError, KeyError, TypeError, ValueError):
+    sys.exit(1)
 ' 2>/dev/null
 }
