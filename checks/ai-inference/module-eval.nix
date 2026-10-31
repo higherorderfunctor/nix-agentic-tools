@@ -293,12 +293,13 @@ in {
           apis = {
             chat = {
               base-url = "https://go.example/v1";
-              models = ["glm-5.3"];
+              models = ["kimi-k3"];
             };
             responses = null;
           };
         };
-        refusedClaude = failsWith ["credentials.go: vendor `opencode-go` refuses models `claude-haiku-5-5`" "Claude OAuth credential owns them"];
+        refusedModel = model: failsWith ["credentials.go: vendor `opencode-go` refuses models `${model}`" "Claude OAuth, z.ai and Codex OAuth credentials serve them"];
+        allPlaced = lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"];
         # CPA trims model names, so a padded Claude id is refused at the type.
         rejectsPadded = model:
           !(builtins.tryEval (builtins.deepSeq
@@ -314,24 +315,38 @@ in {
           "per-API base URLs" = (block "claude").base-url == urls.anthropic && (block "openai-compatibility").base-url == urls.chat && (block "codex").base-url == urls.responses;
           "native placement" =
             lib.all (model: lib.elem model (modelsIn result "claude")) ["minimax-m3" "qwen3.8-max"]
-            && lib.all (model: lib.elem model (modelsIn result "openai-compatibility")) ["glm-5.3" "kimi-k3"]
-            && lib.all (model: lib.elem model (modelsIn result "codex")) ["gpt-6-luna" "grok-4.7"]
-            && !(lib.elem "glm-5.3" (modelsIn result "claude" ++ modelsIn result "codex"));
+            && lib.all (model: lib.elem model (modelsIn result "openai-compatibility")) ["deepseek-v4-pro" "kimi-k3"]
+            && lib.all (model: lib.elem model (modelsIn result "codex")) ["grok-4.7" "muse-spark-1.3-contributor"]
+            && !(lib.elem "kimi-k3" (modelsIn result "claude" ++ modelsIn result "codex"));
           "generate-content on chat" = catalog.gemini-4-argon.api ? generate-content && lib.elem "gemini-4-argon" (modelsIn result "openai-compatibility");
-          "every other catalog model placed once" = lib.sort lib.lessThan (lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"]) == builtins.filter (id: !(vendor.refuses id)) (builtins.attrNames catalog);
-          "default leaves Claude out" = catalog ? claude-haiku-5-5 && vendor.refuses "claude-haiku-5-5" && !(lib.any (lib.hasPrefix "claude-") (lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"]));
-          "Claude added to an API refused" = refusedClaude (go {
+          "every other catalog model placed once" = lib.sort lib.lessThan allPlaced == builtins.filter (id: !(vendor.refuses id)) (builtins.attrNames catalog);
+          "defaults leave refused families out" =
+            lib.all (id: catalog ? ${id} && vendor.refuses id && !(lib.elem id allPlaced)) ["claude-haiku-5-5" "glm-5.3" "gpt-6-luna"]
+            && !(lib.any (id: lib.any (prefix: lib.hasPrefix prefix id) ["claude-" "glm-" "gpt-"]) allPlaced);
+          "Claude added to an API refused" = refusedModel "claude-haiku-5-5" (go {
             apis.anthropic = {
               base-url = urls.anthropic;
               models = ["claude-haiku-5-5" "qwen3.8-max"];
             };
           });
-          "Claude through credential models refused" = refusedClaude (go {
+          "Claude through credential models refused" = refusedModel "claude-haiku-5-5" (go {
             apis.responses = {
               base-url = urls.responses;
               models = null;
             };
             models = ["claude-haiku-5-5"];
+          });
+          "GLM added to an API refused" = refusedModel "glm-5.3" (go {
+            apis.chat = {
+              base-url = urls.chat;
+              models = ["glm-5.3" "kimi-k3"];
+            };
+          });
+          "GPT added to an API refused" = refusedModel "gpt-6-luna" (go {
+            apis.responses = {
+              base-url = urls.responses;
+              models = ["gpt-6-luna" "grok-4.7"];
+            };
           });
           "Claude id with leading space refused" = rejectsPadded " claude-haiku-5-5";
           "Claude id with no-break space refused" = rejectsPadded "claude-haiku-5-5 ";
@@ -353,7 +368,7 @@ in {
                 inherit (vendor.apis.anthropic) models;
               }
             ];
-          "API override" = failedMessages overridden == [] && (lib.head (blocksOf overridden "openai-compatibility")).base-url == "https://go.example/v1" && modelsIn overridden "openai-compatibility" == ["glm-5.3"];
+          "API override" = failedMessages overridden == [] && (lib.head (blocksOf overridden "openai-compatibility")).base-url == "https://go.example/v1" && modelsIn overridden "openai-compatibility" == ["kimi-k3"];
           "API removed" = blocksOf overridden "codex" == [] && (lib.head (blocksOf overridden "claude")).base-url == urls.anthropic;
         };
       in
