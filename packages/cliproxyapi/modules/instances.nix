@@ -58,17 +58,18 @@ backend: {
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
   # Every instance is a selectable proxy (lib/ai/inference); a selected client
-  # carries its key and its routed credentials, with declared API-key models,
-  # in route order. The claim keeps the name unique across proxy owners.
+  # carries its key and its routed credentials, with the API-key models of each
+  # route's resolved API, in route order. The claim keeps the name unique
+  # across proxy owners.
   inferenceInstances =
-    lib.mapAttrs (_: instance: {
+    lib.mapAttrs (name: instance: {
       backend = "cliproxyapi";
       clients =
-        lib.mapAttrs (_: client: {
+        lib.mapAttrs (clientName: client: {
           inherit (client) key;
           credentials = map (route: {
             name = route.credential;
-            models = instance.credentials.${route.credential}.apiKey.models or [];
+            models = (providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" route).models or [];
           }) (builtins.filter (route: builtins.hasAttr route.credential instance.credentials) client.routes);
         })
         instance.clientKeys;
@@ -212,6 +213,12 @@ in {
             message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}: declare exactly one of oauth or apiKey.";
           })
           instance.credentials
+          ++ lib.concatLists (lib.mapAttrsToList (credentialName: apiKey:
+            map (api: {
+              assertion = providersLib.modelsOf apiKey api != null;
+              message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.models or apiKey.apis.${api}.models.";
+            }) (builtins.attrNames (providersLib.served apiKey)))
+          (providersLib.apiKeys instance))
           ++ lib.concatLists (lib.mapAttrsToList (clientName: client:
             map (choice: let
               result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;
