@@ -53,6 +53,8 @@
       ++ map (item: row (map (filler: filler item) fillers)) items);
   # The Pool column appears only when a candidate carries pool guidance.
   pooled = lib.any (family: family.pool or "" != "") candidates;
+  opencodeGo = import ./opencode-go.nix {inherit lib;};
+  goRendered = lib.any (family: family.vendor == opencodeGo.vendor) (candidates ++ lib.concatMap selected manualExternalDelegates);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
   # The id a launch route names for one harness: the family's current example
   # id for that target, or — for a family with no example there, as package
@@ -224,6 +226,7 @@
   blocks = {
     families = lib.concatMapStringsSep "\n" tier tiers;
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
+    opencodeGo = lib.optionalString goRendered opencodeGo.vendor;
     pools = poolsText;
     routing = routingText;
     techniques = lib.concatStringsSep "\n" ([(techniqueBlock runtime false)] ++ map (target: techniqueBlock target true) extras);

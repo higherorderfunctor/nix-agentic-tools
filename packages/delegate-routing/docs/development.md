@@ -110,11 +110,13 @@ Every heading and sentence is an entry, a column or a phrase under `skill`, at
 runtime key replaces the portable key atomically.
 
 `skill.entries` is the ordered body: Routing, Common workflows, Delegate sizing,
-Pools, Family tables, Technique availability, Technique tables and Manual-only
-external delegates. Entry text may use `{routing}`, `{workflows}`, `{pools}`,
-`{families}`, `{techniques}` and `{manual}`, each filled with its generated
-block. An entry whose placeholder block renders nothing, such as Pools with no
-pools declared, is omitted.
+Pools, Family tables, OpenCode Go note, Technique availability, Technique tables
+and Manual-only external delegates. Entry text may use `{routing}`,
+`{workflows}`, `{pools}`, `{families}`, `{opencodeGo}`, `{techniques}` and
+`{manual}`, each filled with its generated block; `{opencodeGo}` is the
+`opencode-go` vendor name when one of its families renders, else empty. An entry
+whose placeholder block renders nothing, such as Pools with no pools declared,
+is omitted.
 
 `skill.columns.<families|pools|techniques>` set header text, order and presence
 keyed by column. A disabled column drops its header and cells; an enabled key
@@ -167,12 +169,14 @@ highest id matching the pattern. Consumers selecting Kimchi models declare the
 corresponding vendor families in their delegate-routing configuration.
 
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
-catalog that CPA's `opencode-go` vendor serves. They come from per-model
-research, and every tier is provisional. Each family is named `go-` plus the
-exact Go id, except `go-glm` (GLM-5.2 and 5.3) and `go-muse-spark-contributor`
-(Muse Spark 1.2 and 1.3), which the research found share a role. The `go-`
-prefix keeps them apart from hand-written `glm` or `kimi-k3` families. Presets
-render only when a runtime selects them, for example
+catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
+(`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
+get no preset. They come from per-model research, and every tier is provisional:
+whenever an `opencode-go` family renders, one line under the tables says so.
+Each family is named `go-` plus the exact Go id, except
+`go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research found
+share a role. The `go-` prefix keeps them apart from hand-written families such
+as `kimi-k3`. Presets render only when a runtime selects them, for example
 `models = [{vendors = ["opencode-go"];}]`; a tier-only selector picks them up
 like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
 field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
@@ -181,12 +185,12 @@ limit weighs more. The skill shows a Pool column only when a selected family
 carries pool text, alongside each reach’s registered pool label. Set
 `opencodeGo.pool = "<pool>"` to bind every generated preset to that registered
 pool on each runtime that selects the `opencode-go` vendor. If one runtime
-selects a preset and another vendor's family that both match the same Go catalog
-id, such as a hand-written `deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`,
-evaluation fails and names the id and both families. Selecting them on different
-runtimes is allowed. The `delegate-routing-opencode-go-presets` check fails when
-a servable catalog id (Claude ids excluded, as the vendor refuses them) matches
-no preset or several, or a preset matches no catalog id.
+selects several families, of any vendors, that match the same servable Go
+catalog id, such as a hand-written `deepseek-v*-flash*` beside
+`go-deepseek-v4.1-flash`, evaluation fails and names the id and the families.
+Selecting them on different runtimes is allowed. The
+`delegate-routing-opencode-go-presets` check fails when a servable catalog id
+matches no preset or several, or a preset matches no catalog id.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,

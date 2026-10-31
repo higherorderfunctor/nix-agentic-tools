@@ -78,34 +78,6 @@
       tier = "strong";
       useFor = "hard terminal and coding tasks; multimodal document analysis; large-context reasoning with checks";
     };
-    go-glm = {
-      avoidFor = "image input; sole judging; unattended cumulative edits; trusting full-window accuracy";
-      effort = "5.2: high or max; 5.3: low, high or max; low for bounded 5.3 work, max for hard work";
-      match = "glm-[0-9]*.[0-9]";
-      tier = "strong";
-      useFor = "code, terminal tasks and investigations with executable tests and independent review";
-    };
-    "go-glm-5.3-flash" = {
-      avoidFor = "sole critical reviewer; trusting million-token accuracy; PDF input through Go (unverified)";
-      effort = "low, high or max (omitted means max); max matches the independent coding result";
-      match = "glm-5.3-flash";
-      tier = "strong";
-      useFor = "economical coding agents and bounded implementation; image or video tasks with result checks";
-    };
-    "go-gpt-5.6-luna" = {
-      avoidFor = "hard autonomous terminal work at low effort; sole final judge";
-      effort = "medium for simple scoped work, high for coding; xhigh or max only when measured gains pay";
-      match = "gpt-5.6-luna";
-      tier = "small";
-      useFor = "bounded implementation with explicit tests; high-volume scoped tasks";
-    };
-    go-gpt-6-luna = {
-      avoidFor = "sole factual authority or final judge; hard terminal tasks; long reads";
-      effort = "medium default, high for quality, max only after task evals; no ultra";
-      match = "gpt-6-luna";
-      tier = "mid";
-      useFor = "bounded coding and analytics with clear checks; extraction, classification and routing";
-    };
     "go-grok-4.7" = {
       avoidFor = "cheap mechanical work; xhigh by default; relying on full-window recall";
       effort = "high (vendor default); xhigh only for named hard tasks, at high token use";
@@ -249,17 +221,13 @@
       } of list-price use empties the monthly pool"
     );
 
-  # Catalog ids that one runtime's selection matches from both a preset and
-  # another vendor's family: the skill would show two rows for one id.
-  overlaps = selected: let
-    split = lib.partition (family: family.vendor == vendor) selected;
-    names = list: id: map (family: "${family.vendor}.${family.name}") (lib.filter (family: matchesId family id) list);
-  in
+  # Catalog ids that several families selected on one runtime match, whatever
+  # their vendors: the skill would show two rows for one id.
+  overlaps = selected:
     lib.concatMap (id: let
-      presets = names split.right id;
-      others = names split.wrong id;
+      owners = map (family: "${family.vendor}.${family.name}") (lib.filter (family: matchesId family id) selected);
     in
-      lib.optional (presets != [] && others != []) "${id} (${lib.concatStringsSep ", " (presets ++ others)})")
+      lib.optional (lib.length owners > 1) "${id} (${lib.concatStringsSep ", " owners})")
     catalog;
 
   # Catalog ids no preset matches, ids several presets match, and presets
