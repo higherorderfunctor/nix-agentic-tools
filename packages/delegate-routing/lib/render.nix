@@ -31,6 +31,8 @@
       ++ map row rows);
   # The Pool column appears only when a candidate carries pool guidance.
   pooled = lib.any (family: family.pool or "" != "") candidates;
+  opencodeGo = import ./opencode-go.nix {inherit lib;};
+  goRendered = lib.any (family: family.vendor == opencodeGo.vendor) (candidates ++ lib.concatMap selected manualExternalDelegates);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
   poolSuffix = family: target: let
     pool = selection.poolFor family target;
@@ -150,7 +152,7 @@ in ''
   Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`).
 
   ${poolsText}${lib.concatMapStringsSep "\n" tier tiers}
-  Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
+  ${lib.optionalString goRendered "${opencodeGo.note}\n\n"}Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
 
   ${techniqueBlock runtime false}
   ${lib.concatMapStringsSep "\n" (target: techniqueBlock target true) extras}
