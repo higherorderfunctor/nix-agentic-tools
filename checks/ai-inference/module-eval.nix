@@ -335,6 +335,15 @@ in {
           });
           "Claude id with leading space refused" = rejectsPadded " claude-haiku-5-5";
           "Claude id with no-break space refused" = rejectsPadded "claude-haiku-5-5 ";
+          "interior Unicode model name accepted" = let
+            unicode = go {
+              apis.chat = {
+                base-url = urls.chat;
+                models = ["qwen-中文-v1"];
+              };
+            };
+          in
+            failedMessages unicode == [] && modelsIn unicode "openai-compatibility" == ["qwen-中文-v1"];
           "z.ai shims off" = !((block "claude") ? tool-aliases) && !((block "openai-compatibility") ? codex-shell-arg-cleanup);
           "picker lists the routed API's models" =
             result.config.ai.claude.normalized.settings.inference.credentials
