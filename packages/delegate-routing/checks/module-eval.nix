@@ -696,6 +696,114 @@
         };
       }) "family names must be unique across vendors"
     );
+    "module-delegate-routing-${name}-opencode-go-pool" = mkTest "delegate-routing-${name}-opencode-go-pool" (let
+      expectedBindings = lib.genAttrs ["claude" "codex" "kiro"] (_: "go-budget");
+      settings = {
+        opencodeGo = {
+          plan = "go-plus";
+          pool = "go-budget";
+        };
+        pools.go-budget.window = {
+          limit = 100;
+          resetDay = 1;
+          unit = "credits";
+        };
+        runtimes = {
+          claude.models = [{vendors = ["opencode-go"];}];
+          codex.models = [{families = ["go-kimi-k3"];}];
+          kiro.models = [
+            {
+              vendors = ["opencode-go"];
+              families = ["go-kimi-k3"];
+            }
+          ];
+        };
+      };
+      bound = change {ai.programs.delegate-routing = settings;};
+      text = readSkill bound "claude";
+      overridden = change {
+        ai.programs.delegate-routing =
+          settings
+          // {
+            families.opencode-go.go-kimi-k3.pools.claude = null;
+          };
+      };
+    in
+      passes bound
+      && lib.all (family: family.pools == expectedBindings)
+      (builtins.attrValues bound.config.ai.programs.delegate-routing.families.opencode-go)
+      && lib.hasInfix "## Pools" text
+      && lib.hasInfix "| Pool " text
+      && lib.hasInfix "go-plus: unlimited" text
+      && lib.hasInfix "native (go-budget); via codex external (go-budget)" text
+      && lib.hasInfix "- go-kimi-k3 (opencode-go) `kimi-k3` (go-budget): go-plus:" text
+      && passes overridden
+      && overridden.config.ai.programs.delegate-routing.families.opencode-go.go-kimi-k3.pools.claude == null
+      && poolFailsWith (change {ai.programs.delegate-routing = settings // {pools = {};};})
+      "unknown pool `go-budget`"
+      && lib.all (family: family.pools == expectedBindings)
+      (builtins.attrValues
+        (change {
+          ai.programs.delegate-routing =
+            settings
+            // {
+              opencodeGo = {
+                plan = null;
+                pool = "go-budget";
+              };
+            };
+        }).config.ai.programs.delegate-routing.families.opencode-go));
+    "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let
+      goSelected = plan:
+        change {
+          ai.programs.delegate-routing = {
+            opencodeGo = {inherit plan;};
+            runtimes.claude = {
+              extraRuntimes = [];
+              manualExternalDelegates = [];
+              models = [{vendors = ["opencode-go"];}];
+            };
+          };
+        };
+      planned = readSkill (goSelected "go-plus") "claude";
+      unplanned = readSkill (goSelected null) "claude";
+    in
+      # Presets ship but render only when selected; the default skill has no Pool column.
+      !(lib.hasInfix "(opencode-go)" claude)
+      && !(lib.hasInfix "| Pool " claude)
+      && lib.hasInfix "go-glm (opencode-go)" planned
+      && lib.hasInfix "| Pool " planned
+      && lib.hasInfix "go-plus: $180 (glm-5.2), $120 (glm-5.3) of list-price use empties the monthly pool" planned
+      && lib.hasInfix "go-plus: unlimited" planned
+      && lib.hasInfix "go-glm (opencode-go)" unplanned
+      && !(lib.hasInfix "| Pool " unplanned)
+      # A hand-written family matching a preset's catalog model fails only
+      # when one runtime selects both.
+      && passes (goSelected "go-plus")
+      && failsWith (change {
+        ai.programs.delegate-routing = {
+          families.example.glm = {
+            match = "glm-[0-9]*.[0-9]";
+            tier = "strong";
+          };
+          runtimes.claude.models = [
+            {vendors = ["opencode-go"];}
+            {families = ["glm"];}
+          ];
+        };
+      }) "glm-5.3 (opencode-go.go-glm, example.glm)"
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families.example.glm = {
+            match = "glm-[0-9]*.[0-9]";
+            tier = "strong";
+          };
+          runtimes = {
+            claude.models = [{families = ["glm"];}];
+            codex.models = [{vendors = ["opencode-go"];}];
+          };
+        };
+      }));
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
       failsWith (invalidNode {
         kind = "subagent";
