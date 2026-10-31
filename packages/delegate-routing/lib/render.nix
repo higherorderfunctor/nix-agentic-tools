@@ -135,7 +135,7 @@
   manual = target: ''
     ### ${target}
 
-    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}${poolSuffix family target}") (selected target)}
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}${poolSuffix family target}${lib.optionalString (family.pool or "" != "") ": ${family.pool}"}") (selected target)}
 
     ${techniqueBlock target true}
     Not a candidate for auto-selection; use only when the user names it.
