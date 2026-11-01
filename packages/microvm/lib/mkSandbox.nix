@@ -1,4 +1,4 @@
-# cspell:ignore chardev dports vcpu virtio vcpu vcpus virtserialport
+# cspell:ignore chardev dports virtio vcpu vcpus virtserialport
 {
   inputs,
   lib,
