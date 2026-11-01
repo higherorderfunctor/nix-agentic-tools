@@ -61,6 +61,10 @@
       models = map (model: model.id) (onApi api);
     });
     codexShellArgCleanup = false;
+    # Go refuses a request without a session ID (HTTP 400 MissingSessionID);
+    # CPA expands `$CPA-SESSION-ID` in credential headers to its own session
+    # identifier (internal/util/header_helpers.go).
+    headers.x-opencode-session = "$CPA-SESSION-ID";
     models = null;
     refusal = "OpenCode Go may not serve claude-*, glm-* or gpt-* models; the Claude OAuth, z.ai and Codex OAuth credentials serve them.";
     inherit refuses;
@@ -171,8 +175,10 @@
   # which ../modules/instances.nix refuses.
   modelsOf = provider: api: lib.defaultTo provider.models provider.apis.${api}.models;
 
-  # One upstream credential's blocks: { <family> = [block]; }.
-  blocks = name: provider:
+  # One upstream credential's blocks: { <family> = [block]; }. `headers` are
+  # its vendor's, already references; CPA applies a group's headers to each
+  # of its keys (internal/config/config_v8.go, sharedKeyFields).
+  blocks = headers: name: provider:
     lib.mapAttrs' (api: value:
       lib.nameValuePair apis.${api}.family [
         ({
@@ -181,6 +187,7 @@
             keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
             models = map (model: {name = model;}) (lib.defaultTo [] (modelsOf provider api));
           }
+          // lib.optionalAttrs (headers != {}) {inherit headers;}
           // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;}
           // lib.optionalAttrs (api == "anthropic" && provider.toolAliases != {}) {tool-aliases = provider.toolAliases;}
           // lib.optionalAttrs (api == "chat" && provider.codexShellArgCleanup) {codex-shell-arg-cleanup = true;})
@@ -221,7 +228,7 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without claude-*, glm-* or gpt-* models, which it refuses. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without claude-*, glm-* or gpt-* models, which it refuses, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {
@@ -292,7 +299,28 @@
       models = lib.defaultTo [] (modelsOf credential.apiKey api);
       rule = rule choice.credential credential.apiKey api;
     };
+  # CPA marks every upstream header secret (extract/annotations.json), so a
+  # vendor header's literal value reaches the config through a command
+  # reference that prints it at each start. The value is a literal, so a
+  # `$` in it is not an expansion (SC2016).
+  literalHeader = pkgs: value:
+    redact.command (lib.getExe (import ../../../lib/strict-shell-application.nix pkgs {
+      name = "cliproxyapi-header";
+      text = ''
+        # shellcheck disable=SC2016
+        printf '%s' ${lib.escapeShellArg value}
+      '';
+    }));
 in {
-  inherit apiKeys apis clientKeyType credentialType modelsOf opencodeGo route rule served vendors;
-  lower = providers: lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList blocks providers);
+  inherit apiKeys apis clientKeyType credentialType literalHeader modelsOf opencodeGo route rule served vendors;
+  lower = pkgs: credentials:
+    lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:
+      blocks (lib.mapAttrs (_: literalHeader pkgs) (
+        if credential.vendor == null
+        then {}
+        else vendors.${credential.vendor}.headers or {}
+      ))
+      name
+      credential.apiKey)
+    (lib.filterAttrs (_: credential: credential.apiKey != null) credentials));
 }
