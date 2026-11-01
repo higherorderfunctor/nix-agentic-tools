@@ -32,6 +32,14 @@
   packagesFixture = mkGuestScript "sandbox-packages-fixture" ''
     git --version | grep -Fx 'git version ${pkgs.git.version}'
     rg --version | head -n 1 | grep -Fx 'ripgrep ${pkgs.ripgrep.version}'
+    # Simulate a harness shell that resets PATH to the guest system profile.
+    ${lib.getExe pkgs.bash} -c '
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      export PATH=/run/current-system/sw/bin
+      git --version
+      rg --version
+    '
     echo SANDBOX_PACKAGES_OK
   '';
   packagesPackage = factory {
@@ -105,7 +113,7 @@ in {
             a = args;
             b = args;
           };
-          rejected = result: builtins.any (a: !a.assertion && a.message == "ai.sandboxes: each outName must be unique.") result.config.assertions;
+          rejected = result: builtins.any (a: !a.assertion && lib.hasPrefix "ai.claims.command.sandbox-hello:" a.message) result.config.assertions;
         in
           rejected (evalHm duplicate) && rejected (evalDevenv duplicate)
       );
@@ -125,6 +133,7 @@ in {
         && (builtins.head guest.microvm.shares).mountPoint == "/nix/.ro-store"
         && (builtins.head guest.microvm.shares).proto == "9p"
         && (builtins.head guest.microvm.shares).readOnly
+        && lib.all (package: builtins.elem package packagesPackage.guest.config.environment.systemPackages) [pkgs.git pkgs.ripgrep]
         && guest.systemd.services.sandbox.serviceConfig.User == "sandbox"
         && builtins.elem "virtserialport,chardev=status,name=sandbox.status" guest.microvm.qemu.extraArgs
         && builtins.elem "qemu_fw_cfg" guest.boot.kernelModules

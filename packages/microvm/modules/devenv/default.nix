@@ -1,8 +1,4 @@
-{
-  config,
-  pkgs,
-  ...
-}: {
+{config, ...}: {
   imports = [../common.nix];
-  packages = map (config.ai.internal.mkSandbox pkgs) (builtins.attrValues config.ai.sandboxes);
+  packages = config.ai.internal.sandboxPackages;
 }

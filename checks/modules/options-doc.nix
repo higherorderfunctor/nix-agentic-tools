@@ -80,6 +80,7 @@
         "ai.codex.proxy"
         "ai.codex.rules"
         "ai.codex.rulesDir"
+        "ai.codex.sandbox"
         "ai.codex.services"
         "ai.codex.settings"
         "ai.codex.shell"

@@ -9,16 +9,73 @@ applyTo: "packages/microvm/**"
 
 <!-- cspell:ignore ACPI chardev sysfs virtio -->
 
-> **Last verified:** 2026-10-12 — the launcher forwards guest completion through
-> a root-only virtio serial port.
+> **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
+> routes.
 
-The public `lib.ai.mkSandbox pkgs {exe; outName;}` factory owns the guest
-definition and standalone launcher. The shared host option `ai.sandboxes` has
-only those fields, with `outName` defaulting to its attribute name. Backend
-modules differ only in the package installation sink. The repository binds the
-factory into `ai.internal.mkSandbox`, declared alongside the other shared
-internal bindings in `sharedOptions.nix`, so backend imports need no consumer
-`inputs` special argument. An empty map never forces a guest or the factory.
+`ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
+runtimes. Home Manager and devenv expose the same options and install
+`claude-sandbox` and `codex-sandbox` into their respective package profiles:
+
+```nix
+{pkgs, ...}: {
+  ai.claude.enable = true;
+  ai.codex.enable = true;
+  ai.sandbox = {
+    enable = true;
+    extraPackages = [pkgs.fd pkgs.ripgrep];
+    vm = {memory = 8192; vcpus = 4;};
+  };
+  ai.codex.sandbox.vm.memory = 4096;
+}
+```
+
+`enable` defaults to false, `extraPackages` to `[]`, and `vm.memory`/`vm.vcpus`
+to 4096 MiB/two CPUs. Every runtime in `lib/ai/runtimes.nix` mirrors the whole
+option tree at `ai.<runtime>.sandbox`. Only defined root leaves supply runtime
+option defaults, following the peer-default pattern in `ai.proxy`. Runtime
+definitions, including `mkDefault`, replace each whole option: a list (and any
+future attribute-set option) is replaced rather than merged with the root. Other
+leaves keep their root values. Nothing flows up. Kiro's new root tree is
+separate from its existing `ai.kiro.cli.sandbox` setting.
+
+The guest-route table selects the plain `ai.claude.package` or
+`ai.codex.package`, before host launcher environment and jail wrapping. Enabling
+a sandbox with a null package fails evaluation. Kiro, Kimchi and Copilot have no
+guest route yet: an enabled runtime with resolved `sandbox.enable = true` warns
+once; set `ai.<runtime>.sandbox.enable = false` to opt out. Untouched defaults
+never warn. Sandbox commands claim their names through `ai.claims`.
+
+`extraPackages` and Git from the module's package set enter both the executable
+PATH and the guest system profile, so child shells resetting PATH to
+`/run/current-system/sw/bin` still find them. This phase supplies no repository,
+doors, identities or Git settings. Never log a harness into a provider inside
+the VM; VM-only CPA client keys will supply authentication in a later phase.
+
+The public standalone factory also accepts packages and sizing:
+
+```nix
+inputs.nix-agentic-tools.lib.ai.mkSandbox pkgs {
+  exe = lib.getExe pkgs.hello;
+  memory = 4096;
+  outName = "sandbox-hello";
+  packages = [pkgs.git pkgs.ripgrep];
+  vcpus = 2;
+}
+```
+
+The factory defaults remain 1024 MiB, one CPU and no extra packages. Memory must
+be at least 128 MiB and CPUs at least one. It returns a package with
+`bin/<outName>` and owns the guest definition and launcher. `exe` must be an
+absolute executable path (usually `lib.getExe package`); its string context
+keeps the package in the closure. `outName` must be a single executable name.
+The pinned microvm source is bound through `ai.internal.mkSandbox`; consumers
+need no extra module arguments.
+
+`ai.sandboxes.<name> = {exe; outName?;}` remains for one release. A non-empty
+value warns to migrate runtime guests to `ai.sandbox`, or standalone guests to
+`lib.ai.mkSandbox`. Its default `outName` is the attribute name. Collisions
+between legacy entries or with runtime sandbox commands fail through the same
+claims registry. An empty configuration installs no sandbox and forces no guest.
 
 The guest shares the host's store at `/nix/.ro-store`, not `/nix/store`:
 upstream mounts the latter as an overlay with tmpfs upper and work directories
