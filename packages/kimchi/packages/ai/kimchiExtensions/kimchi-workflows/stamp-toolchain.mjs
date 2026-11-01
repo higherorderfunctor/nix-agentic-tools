@@ -86,19 +86,22 @@ if (mode === "check-pnpm") {
   const suppliedSpecs = JSON.parse(
     fs.readFileSync(path.join(supplied, "toolchain.json"), "utf8"),
   );
+  const specs = { [manifest.name]: `file:${target}/package.tgz` };
+  manifest.peerDependencies ??= {};
   for (const [key, name] of Object.entries(names)) {
     if (key.startsWith("pi") || key === "typebox") {
       const destination = path.join(target, "node_modules", name);
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       fs.symlinkSync(path.join(supplied, "node_modules", name), destination);
       // Physical verification needs PI; the harness still supplies virtual modules.
-      manifest.dependencies[name] = suppliedSpecs[name];
+      delete manifest.dependencies[name];
+      manifest.peerDependencies[name] = "*";
+      specs[name] = suppliedSpecs[name];
+    } else {
+      specs[name] = manifest.dependencies[name];
     }
   }
   write(target, manifest);
-  const specs = { [manifest.name]: `file:${target}/package.tgz` };
-  for (const name of Object.values(names))
-    specs[name] = manifest.dependencies[name];
   fs.writeFileSync(
     path.join(target, "toolchain.json"),
     JSON.stringify(specs, null, 2) + "\n",
