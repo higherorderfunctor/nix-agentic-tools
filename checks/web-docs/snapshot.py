@@ -125,6 +125,18 @@ class DocumentationSnapshot(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "required documentation indexes"):
             snapshot.snapshot(config, self.root / "missing", "2099-01-01", captured_fetch(kimchi_tree))
 
+    def test_source_normalize_runs_before_content_identity(self):
+        normalize = self.root / "normalize"
+        # Drops the first line, as a catalog normalizer drops its fetch stamp.
+        normalize.write_text(f"#!{sys.executable}\nimport sys\nsys.stdout.write(sys.stdin.read().partition(chr(10))[2])\n")
+        normalize.chmod(0o755)
+        config = {"name": "normalized", "contentHash": "", "sources": [{"path": "catalog.json", "url": "https://example.com/catalog", "normalize": str(normalize)}]}
+        digests = [snapshot.snapshot(config, self.root / f"normalized-{stamp}", "2099-01-01", lambda _, stamp=stamp: f"created {stamp}\nstable".encode()) for stamp in (1, 2)]
+        self.assertEqual(digests[0], digests[1])
+        self.assertEqual((self.root / "normalized-1/catalog.json").read_bytes(), b"stable")
+        with self.assertRaisesRegex(ValueError, "empty normalized"):
+            snapshot.snapshot(config, self.root / "empty", "2099-01-01", lambda _: b"only one line")
+
     def test_explicit_destination_cannot_escape_or_overwrite(self):
         self.root.joinpath("snapshot").mkdir()
         for path in ("../models.md", "/models.md", ""):

@@ -15,11 +15,21 @@ in {
     sources ? [],
     validate ? "",
   }: let
+    # A source's `normalize` filters its fetched bytes (stdin to stdout)
+    # before hashing, for an endpoint that stamps volatile fields per request.
+    normalizeSource = source:
+      source
+      // lib.optionalAttrs (source ? normalize) {
+        normalize = lib.getExe (strictScript {
+          name = "${name}-normalize-${lib.strings.sanitizeDerivationName source.path}";
+          text = source.normalize;
+        });
+      };
     config = pkgs.writeText "${name}-snapshot.json" (builtins.toJSON (
       {inherit contentHash generated name;}
       // (
         if index == null
-        then {inherit sources;}
+        then {sources = map normalizeSource sources;}
         else {inherit index;}
       )
       // lib.optionalAttrs (validate != "") {
