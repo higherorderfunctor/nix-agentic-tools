@@ -40,6 +40,8 @@
       inputs.microvm.nixosModules.microvm
       {
         boot.kernelModules = ["qemu_fw_cfg" "virtio_console"];
+        # A child shell resetting PATH still finds tools in the system profile.
+        environment.systemPackages = packages;
         fileSystems."/nix/.rw-store" = {
           fsType = "tmpfs";
           neededForBoot = true;

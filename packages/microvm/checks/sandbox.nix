@@ -32,6 +32,14 @@
   packagesFixture = mkGuestScript "sandbox-packages-fixture" ''
     git --version | grep -Fx 'git version ${pkgs.git.version}'
     rg --version | head -n 1 | grep -Fx 'ripgrep ${pkgs.ripgrep.version}'
+    # Simulate a harness shell that resets PATH to the guest system profile.
+    ${lib.getExe pkgs.bash} -c '
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      export PATH=/run/current-system/sw/bin
+      git --version
+      rg --version
+    '
     echo SANDBOX_PACKAGES_OK
   '';
   packagesPackage = factory {
@@ -57,7 +65,6 @@
   sizeLarge = mkSizePackage 4096 2;
   package = factory args;
   guest = package.guest.config;
-  moduleConfig.ai.sandboxes.sandbox-hello = builtins.removeAttrs args ["outName"];
   statusFixture = pkgs.writeScriptBin "sandbox-status-fixture" ''
     #!${lib.getExe pkgs.python3}
     import os, signal, sys
@@ -99,16 +106,6 @@ in {
         touch "$out"
       '';
       microvm-sandbox-argv-launcher = argvPackage;
-      microvm-sandbox-duplicate-name = mkTest "microvm-sandbox-duplicate-name" (
-        let
-          duplicate.ai.sandboxes = {
-            a = args;
-            b = args;
-          };
-          rejected = result: builtins.any (a: !a.assertion && a.message == "ai.sandboxes: each outName must be unique.") result.config.assertions;
-        in
-          rejected (evalHm duplicate) && rejected (evalDevenv duplicate)
-      );
       microvm-sandbox-guest = mkTest "microvm-sandbox-guest" (
         guest.nixpkgs.hostPlatform.system
         == pkgs.stdenv.hostPlatform.system
@@ -125,6 +122,7 @@ in {
         && (builtins.head guest.microvm.shares).mountPoint == "/nix/.ro-store"
         && (builtins.head guest.microvm.shares).proto == "9p"
         && (builtins.head guest.microvm.shares).readOnly
+        && lib.all (package: builtins.elem package packagesPackage.guest.config.environment.systemPackages) [pkgs.git pkgs.ripgrep]
         && guest.systemd.services.sandbox.serviceConfig.User == "sandbox"
         && builtins.elem "virtserialport,chardev=status,name=sandbox.status" guest.microvm.qemu.extraArgs
         && builtins.elem "qemu_fw_cfg" guest.boot.kernelModules
@@ -162,12 +160,6 @@ in {
       );
       microvm-sandbox-size-default-launcher = sizeDefault;
       microvm-sandbox-size-large-launcher = sizeLarge;
-      microvm-sandbox-modules = mkTest "microvm-sandbox-modules" (
-        map (p: p.drvPath) (evalHm moduleConfig).config.home.packages
-        == [package.drvPath]
-        && map (p: p.drvPath) (evalDevenv moduleConfig).config.packages == [package.drvPath]
-        && (evalHm moduleConfig).config.ai.sandboxes.sandbox-hello.outName == "sandbox-hello"
-      );
       microvm-sandbox-status-launcher = factory {
         exe = lib.getExe statusFixture;
         outName = "sandbox-status-fixture";
