@@ -470,6 +470,7 @@ in {
         programParity "delegate-routing" {
           enable = "boolean";
           families = "attribute set of attribute set of (submodule)";
+          opencodeGo.plan = ''null or one of "go", "go-plus", "go-teams"'';
           reminder = "submodule";
           routing = "attribute set of (submodule)";
           workflows = "attribute set of (submodule)";
