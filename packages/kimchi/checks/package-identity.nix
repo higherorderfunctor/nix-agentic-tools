@@ -17,6 +17,7 @@
         {
           name = "package.json";
           path = pkgs.writeText "identity-package.json" (builtins.toJSON {
+            dependencies.typebox = "*";
             name = "@kimchi-dev/kimchi-workflows";
             pi.extensions = ["./index.js"];
           });
@@ -83,6 +84,19 @@ in {
       cp identity-source/dist/core/package-manager.js "''${manager%.js}.identity-only.js"
       node ${./package-identity.mjs} "''${manager%.js}.identity-only.js" ${layout}
       node ${./package-identity.mjs} "$manager" ${layout}
+      loader=node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js
+      cp ${kimchi.extractionSources.pi}/dist/core/resource-loader.js "''${loader%.js}.pristine.js"
+      if node ${./extension-package-warnings.mjs} "''${loader%.js}.pristine.js" ${layout} > warnings-pristine.log 2>&1; then
+        echo 'unpatched PI unexpectedly drops shadowed package warnings; reassess the patch' >&2
+        exit 1
+      fi
+      grep -q 'only final packages may warn' warnings-pristine.log
+      cp ${kimchi.extractionSources.pi}/dist/core/resource-loader.js identity-source/dist/core/
+      chmod u+w identity-source/dist/core/resource-loader.js
+      patch -d identity-source -p1 --fuzz=0 < ${../packages/ai/kimchi/extension-package-warnings.patch}
+      cp identity-source/dist/core/resource-loader.js "''${loader%.js}.warnings-only.js"
+      node ${./extension-package-warnings.mjs} "''${loader%.js}.warnings-only.js" ${layout}
+      node ${./extension-package-warnings.mjs} "$loader" ${layout}
       runHook postBuild
     '';
     installPhase = ''
