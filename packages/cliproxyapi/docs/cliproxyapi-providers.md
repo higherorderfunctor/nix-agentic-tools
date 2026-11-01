@@ -83,7 +83,10 @@ repairing measured tool-name and empty-justification failures. Explicit
 `toolAliases = {};` and `codexShellArgCleanup = false;` disable those defaults;
 other vendors omit both settings unless requested. `vendor = "opencode-go"`
 places each OpenCode Go model on its native API and refuses `claude-*`, `glm-*`
-and `gpt-*` models (`cliproxyapi-settings.md`, Instances).
+and `gpt-*` models (`cliproxyapi-settings.md`, Instances). Its blocks send
+`x-opencode-session = "$CPA-SESSION-ID"`, which Go requires and CPA expands to
+its session identifier; the header type is secret, so the literal reaches the
+config through a store command reference.
 
 ```nix
 {inputs, ...}: let
