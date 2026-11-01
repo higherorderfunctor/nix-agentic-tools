@@ -1,3 +1,6 @@
 {
-  imports = [./checks/sandbox.nix];
+  imports = [
+    ./checks/runtime-sandbox.nix
+    ./checks/sandbox.nix
+  ];
 }
