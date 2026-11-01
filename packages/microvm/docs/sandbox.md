@@ -1,9 +1,10 @@
 # MicroVM sandbox implementation
 
-<!-- cspell:ignore ACPI chardev sysfs virtio -->
+<!-- cspell:ignore ACPI chardev sysfs vcpus virtio -->
 
 > **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
-> routes.
+> routes; seeded-history copies, read-only mounts, and committed-work
+> recovery through virtio serial ports.
 
 `ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
 runtimes. Home Manager and devenv expose the same options and install
@@ -92,6 +93,51 @@ has no infrastructure diagnostic.
 The runner executes inside that directory, and the wrapper's exit trap removes
 it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
+
+The factory accepts
+`{exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`. With
+`repo = true`, launch from a Git checkout (including a linked worktree or an
+unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
+committed HEAD, preserving its branch name or detached state. Uncommitted host
+changes are excluded. Shallow and partial repositories are refused; supported
+object formats are SHA-1 and SHA-256. Git joins the guest system profile and
+executable PATH only in this mode. This factory parameter does not add a module
+option.
+
+The launcher builds an isolated bare seed repository with templates disabled and
+the host's explicit object format. Only the chosen push remote's tracking refs
+become seed branches; the checkout's HEAD becomes `refs/sandbox/head`. Remote
+selection is `branch.<name>.pushRemote`, `remote.pushDefault`,
+`branch.<name>.remote`, then `origin`. An unborn checkout gets an empty seed.
+The launcher copies only the history reachable from the seeded refs into the
+seed's own pack (`pack-objects --revs --stdout` piped into `index-pack`), so
+stashes, other branches and amended-away commits stay on the host. The seed is
+the only repository share: a read-only 9p export at `/mnt/seed` whose relative
+source resolves in the per-launch runtime directory. Host config, hooks, refs,
+other objects and worktree metadata are never exported. The guest clones the
+seed with `--shared --no-checkout`; its system Git config trusts only the seed
+mount path. The whole host Nix store is also readable in the guest.
+
+The launcher writes nothing into the host repository: it holds no refs, locks or
+temporary pack files there, so host GC and maintenance run freely during a
+session. A host object that disappears while the copy runs fails the launch with
+a retry diagnostic.
+
+On graceful service completion, the guest exports committed work through a
+separate virtio bundle port. It includes local refs and detached HEAD and
+excludes only the immutable seeded commits, which the seed holds. Changes to
+`origin/*` inside the guest cannot introduce unknown bundle prerequisites. The
+host verifies the bundle against the seed, validates its pack in an isolated
+temporary repository, and makes it self-contained before saving it at
+`$XDG_STATE_HOME/ai-sandbox/bundles/<token>.bundle` (default state root:
+`~/.local/state`) and printing a fetch command. Saved bundles remain recoverable
+after the seed is removed and host maintenance prunes the original commits. An
+export over 1024 MiB is discarded with a diagnostic rather than saved. Empty
+exports need no recovery. Export or verification failures are reported
+separately from guest completion; nonempty failed exports are retained as
+`<token>.failed.bundle`. Recovery covers committed work on graceful completion
+only. Forced VM shutdown, host termination, and uncommitted files are not
+recoverable through this path.
 
 The user-facing contract and host preparation are documented in
 `packages/microvm/modules/README.md`. The owner checks cover empty imports,
