@@ -109,6 +109,18 @@ class SummaryTests(unittest.TestCase):
                 self.assertEqual("archive or delete " + str(root / "usage.sqlite3") in output.getvalue(), warned)
                 self.assertIn("Kiro usage · sess_selected", output.getvalue())
 
+    def test_service_flag_sets_or_clears_retention_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            for flag, expected in ((["--payload-retention-days", "7"], "7"), ([], None)):
+                with self.subTest(expected=expected), patch.dict(os.environ, {"KIRO_USAGE_RETENTION_DAYS": "30"}, clear=True), \
+                        patch.object(sys, "argv", ["runtime.py", "service", "--state-dir", str(state), "--port", "19001",
+                                                    "--warn-bytes", "1", "--mitmdump", "/mitmdump", "--addon", "/addon", *flag]), \
+                        patch.object(runtime.os, "execv") as execute:
+                    runtime.main()
+                    execute.assert_called_once()
+                    self.assertEqual(os.environ.get("KIRO_USAGE_RETENTION_DAYS"), expected)
+
     def test_root_lineage_is_selected_once_without_disk(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

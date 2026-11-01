@@ -21,7 +21,9 @@ class UsageCapture:
         self.active, self.collector, self.failed = {}, None, True
         self.invocations = {}
         try:
-            self.collector = Collector(os.environ["KIRO_USAGE_DB"], warn_bytes=int(os.environ.get("KIRO_USAGE_WARN_BYTES", WARN_BYTES)))
+            retention = os.environ.get("KIRO_USAGE_RETENTION_DAYS")
+            self.collector = Collector(os.environ["KIRO_USAGE_DB"], warn_bytes=int(os.environ.get("KIRO_USAGE_WARN_BYTES", WARN_BYTES)),
+                                       retention_days=int(retention) if retention is not None else None)
         except (ImportError, KeyError, OSError, RuntimeError, TypeError, ValueError, sqlite3.Error):  # ImportError: no compression.zstd before Python 3.14
             print("Kiro usage capture startup failed: selected requests will be refused; fix capture configuration and restart", file=sys.stderr)
         else:

@@ -7,6 +7,7 @@ import queue
 import sqlite3
 import sys
 import threading
+import time
 import zlib
 
 from capture import content_encoding, digest, framing_kind, open_database, packed, snapshot
@@ -32,11 +33,18 @@ def tables(db):
     return {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
 
-def request_body(db, capture_id):
+def request_body(db, capture_id, cache=None):
     """The exact request bytes, or None when the request was omitted.
 
     ValueError when the payload and its hash disagree, a base is missing, or the bytes fail request_sha256. Walks the
-    base chain iteratively: a conversation's chain is as long as the conversation."""
+    base chain iteratively: a conversation's chain is as long as the conversation. A matching cache entry supplies the
+    root without decompression, then still proves it against request_sha256."""
+    if cache is not None:
+        body, row = cache.get(capture_id), db.execute(
+            "SELECT request_sha256,request_gzip IS NOT NULL OR EXISTS(SELECT 1 FROM sealed_requests s WHERE s.capture_id=c.id) FROM captures c WHERE c.id=?",
+            (capture_id,)).fetchone()
+        if row and row[0] and row[1] and body is not None and digest(body) == row[0]:
+            return body
     with snapshot(db):
         sealed = "sealed_requests" in tables(db)
         columns = "c.request_gzip,c.request_sha256," + ("s.base_id,s.body_zstd FROM captures c LEFT JOIN sealed_requests s ON s.capture_id=c.id"
@@ -130,6 +138,47 @@ def _staged(db, capture_id):
     return None if row is None or row[0] else (*row[1:], payload_bytes(db, capture_id))
 
 
+RETENTION_BATCH = 100
+
+
+def expire(db, before_ns, cache=None):
+    """Delete one oldest sealed batch's payloads; (payload-byte delta, captures expired)."""
+    import codec
+    if db.in_transaction:
+        raise ValueError("expire needs a connection outside a transaction")
+    if [row[0] for row in db.execute("SELECT version FROM capture_meta")] != [2]:
+        raise ValueError("expire requires capture schema version 2")
+    with snapshot(db):
+        captures = [row[0] for row in db.execute(
+            "SELECT c.id FROM captures c JOIN capture_facts f ON f.capture_id=c.id JOIN sealed_responses r ON r.capture_id=c.id "
+            "WHERE c.started_utc_ns<? ORDER BY c.started_utc_ns,c.id LIMIT ?", (before_ns, RETENTION_BATCH))]
+        if not captures:
+            return 0, 0
+        names, dependents = ",".join("?" * len(captures)), []
+        for (dependent,) in db.execute(
+            f"SELECT capture_id FROM sealed_requests WHERE base_id IN ({names}) AND capture_id NOT IN ({names}) ORDER BY capture_id",
+            (*captures, *captures)):
+            body = request_body(db, dependent, cache)
+            blob = codec.compress_request(body, None)
+            if codec.decompress_request(blob, None) != body:
+                raise ValueError("expire mismatch")
+            dependents.append((dependent, blob))
+        touched = (*captures, *(dependent for dependent, _ in dependents))
+        before = sum(payload_bytes(db, ident) for ident in touched)
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        # The Sealer is the only writer of sealed tables while Collector holds .capture.lock, so no write recheck.
+        db.executemany("UPDATE sealed_requests SET base_id=NULL,body_zstd=? WHERE capture_id=?", [(blob, ident) for ident, blob in dependents])
+        db.executemany("DELETE FROM sealed_requests WHERE capture_id=?", [(ident,) for ident in captures])
+        db.executemany("DELETE FROM sealed_responses WHERE capture_id=?", [(ident,) for ident in captures])
+        after = sum(payload_bytes(db, ident) for ident in touched)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+    return after - before, len(captures)
+
+
 def seal(db, capture_id, cache=None):
     """Replace a finished capture's staged payloads with codec blobs and its query.FACTS row; the payload-byte delta.
 
@@ -152,7 +201,8 @@ def seal(db, capture_id, cache=None):
             # The latest earlier request of the same conversation; the strict order keeps the base graph acyclic.
             base_id = (db.execute("""SELECT b.id FROM captures c JOIN captures b
                 ON json_extract(b.metadata_json,'$."kiro:conversation_id"')=nullif(json_extract(c.metadata_json,'$."kiro:conversation_id"'),'')
-                WHERE c.id=? AND b.request_sha256 IS NOT NULL AND (b.started_utc_ns,b.id)<(c.started_utc_ns,c.id)
+                WHERE c.id=? AND (b.request_gzip IS NOT NULL OR EXISTS(SELECT 1 FROM sealed_requests sr WHERE sr.capture_id=b.id))
+                    AND (b.started_utc_ns,b.id)<(c.started_utc_ns,c.id)
                 ORDER BY b.started_utc_ns DESC,b.id DESC LIMIT 1""", (capture_id,)).fetchone() or (None,))[0]
             base = None if base_id is None else (cache and cache.get(base_id)) or request_body(db, base_id)
             if base is not None and len(base) < codec.MIN_BASE:
@@ -190,17 +240,23 @@ def seal(db, capture_id, cache=None):
 
 
 class Sealer:
-    """Seals each capture put to it on its own thread and connection, off the proxy callbacks and the capture writer.
+    """Seals captures and expires retained payloads on its own connection, off the proxy callbacks and capture writer.
 
-    on_sealed receives each seal's payload-byte delta. A busy store is retried in this run with backoff; a capture
-    that fails otherwise, or that close skips as backlog, stays in pending_seals for the next start."""
+    on_delta receives each seal or retention batch payload-byte delta. A busy seal is retried in this run with backoff;
+    a capture that fails otherwise, or that close skips as backlog, stays in pending_seals for the next start. A failed
+    retention batch keeps its payloads and waits for the next daily run."""
 
     RETRIES = (1, 2, 4, 8, 16)  # seconds before each retry after sqlite3.OperationalError, as a busy store raises past its timeout
+    DAY = 24 * 60 * 60
 
-    def __init__(self, path, on_sealed):
+    def __init__(self, path, on_delta, retention_days=None, backlog=()):
         import codec  # needs compression.zstd: a Python before 3.14 fails the collector's start here, not every seal
-        self.path, self.on_sealed = path, on_sealed
+        if retention_days is not None and (type(retention_days) is not int or retention_days <= 0):
+            raise ValueError("payload retention days must be positive")
+        self.path, self.on_delta, self.retention_days = path, on_delta, retention_days
         self.queue, self.stop = queue.Queue(), threading.Event()
+        for ident in backlog:
+            self.put(ident, backlog=True)
         self.thread = threading.Thread(target=self._run, name="kiro-capture-seal", daemon=True)
         self.thread.start()
 
@@ -209,27 +265,52 @@ class Sealer:
         self.queue.put((capture_id, backlog))
 
     def close(self):
-        """Finish the seal in progress and seal every capture put since start; backlog captures not reached stay pending."""
+        """Finish the work in progress and seal every capture put since start; backlog captures not reached stay pending."""
         self.stop.set()
         self.queue.put(None)
         self.thread.join()
 
     def _run(self):
         self.db, cache = None, RequestCache()
+        next_retention = time.monotonic()
         try:
-            for capture_id, backlog in iter(self.queue.get, None):
+            while True:
+                if self.retention_days is None:
+                    item = self.queue.get()
+                else:
+                    try:
+                        item = self.queue.get(timeout=max(0, next_retention - time.monotonic()))
+                    except queue.Empty:
+                        expired = self._expire(cache)
+                        next_retention = time.monotonic() + (0 if expired == RETENTION_BATCH else self.DAY)
+                        continue
+                if item is None:
+                    break
+                capture_id, backlog = item
                 if not (backlog and self.stop.is_set()):
                     self._seal(cache, capture_id)
         finally:
             if self.db is not None:
                 self.db.close()
 
+    def _expire(self, cache):
+        try:
+            if self.db is None:
+                self.db = open_database(self.path)
+            delta, captures = expire(self.db, time.time_ns() - self.retention_days * self.DAY * 10**9, cache)
+            if captures:
+                self.on_delta(delta)
+            return captures
+        except Exception as error:
+            print(f"Kiro capture: retention batch failed ({type(error).__name__}); payloads kept", file=sys.stderr)
+            return 0
+
     def _seal(self, cache, capture_id):
         for delay in (*self.RETRIES, None):
             try:
                 if self.db is None:  # opened here so a locked store is retried like a busy seal, not fatal to the thread
                     self.db = open_database(self.path)
-                return self.on_sealed(seal(self.db, capture_id, cache))
+                return self.on_delta(seal(self.db, capture_id, cache))
             except sqlite3.OperationalError as error:
                 failure = error
                 if delay is None or self.stop.wait(delay):  # close interrupts the backoff

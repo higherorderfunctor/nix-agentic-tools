@@ -24,25 +24,40 @@ wrapper fail evaluation when `pkgs.python3` or mitmproxy's interpreter is older:
 
 ```bash
 export KIRO_USAGE_DB="$HOME/.local/state/kiro-usage/capture.sqlite3"
-export KIRO_USAGE_WARN_BYTES=1073741824
+export KIRO_USAGE_WARN_BYTES=5368709120
+# Optional: without KIRO_USAGE_RETENTION_DAYS, a manual mitmdump run keeps payloads forever.
+export KIRO_USAGE_RETENTION_DAYS=90
 mitmdump -s /absolute/path/to/usage/mitm_addon.py --listen-host 127.0.0.1 --listen-port 8080 --set flow_detail=0
 ```
 
-`KIRO_USAGE_DB` is required. `KIRO_USAGE_WARN_BYTES` defaults to 1 GiB of
+`KIRO_USAGE_DB` is required. `KIRO_USAGE_WARN_BYTES` defaults to 5 GiB of
 retained payload evidence, counting sealed compressed payloads, staged payloads
 awaiting their seal (request BLOBs, entity and application chunks, event frames
-and parsed event JSON), and retained usage summaries. Payloads are always
-retained: past the threshold the running collector logs one warning line to
-standard error and keeps capturing, and captures are not marked incomplete for
-it. Each tracked `kiro-usage exec` summary repeats the warning with the store's
-size while it stays above the threshold. Existing evidence is never rolled over
-or deleted. On restart the retained bytes are counted again. This counts
+and parsed event JSON), and retained usage summaries. Past the threshold the
+running collector logs one warning line to standard error and keeps capturing,
+and captures are not marked incomplete for it. Each tracked `kiro-usage exec`
+summary repeats the warning with the store's size while it stays above the
+threshold. On restart the retained bytes are counted again. This counts
 payloads, not the SQLite file size: indexes, metadata, page overhead, and
 accumulated records also consume disk. Temporary SQLite journal space is
 additional. Stopping capture and deleting an intentionally retired private
 database are operator decisions: stop the service, then archive or delete
 `usage.sqlite3` with its `-wal` and `-shm` files; the next start creates a new
 store.
+
+When `KIRO_USAGE_RETENTION_DAYS` is a positive integer, the sealer deletes the
+sealed request and response blobs of captures older than that many days. It runs
+only while its sealing queue is idle, first after the startup backlog, about
+every 24 hours, and immediately again after a full 100-capture batch. A kept
+request that depended on an expired base is rewritten as an independent,
+verified blob in the same transaction. Retention keeps every capture row, query
+fact, scalar, hash, and usage summary, so reports and calibration reads do not
+change; `unpack` exits 1 for an expired capture. A failed batch logs one line
+and waits for the next daily run while capture and sealing continue. Startup
+queues every capture an older collector left unsealed as backlog, and runs
+`VACUUM` plus a WAL checkpoint when more than half the database pages are free,
+so a migrated store shrinks at the first start after its backlog is sealed; a
+busy database is reported and startup continues.
 
 Only hosts equal to `kiro.dev` or ending in `.kiro.dev` are considered.
 Lookalikes such as `not-kiro.dev` are excluded. Two calls are selected: the
@@ -514,18 +529,19 @@ finish during the refresh. Nested `kiro-usage exec` launches reuse the parent's
 marker; only the outer launch prints the summary.
 
 `unpack` writes one capture's private payloads to standard output, reading
-staged and sealed captures alike in one read snapshot. `request` writes the
-exact request bytes, `transport` the response entity bytes as received, and
-`decoded` the response after content decoding. `chunks` and `events` write one
-JSON object per stored row with its sequence numbers and timestamps, BLOB
-columns as base64 and `data_json` as its exact text. Incomplete captures produce
-a warning. An omitted request exits 1. `transport` and `decoded` exit 1 when a
-response chunk is missing, including one omitted from the queue or a capture
-interrupted before its chunk count was recorded, and can write the available
-partial bytes before that error; `chunks` and `events` write the rows that exist
-and exit 0. A payload that fails its hash, the recorded response hash
-(`decoded`, checked after writing) or the sealed digest exits 2, so callers must
-check the exit status.
+staged and unexpired sealed captures alike in one read snapshot; retention has
+already deleted the payloads of an expired sealed capture, for which it exits 1
+before writing anything. `request` writes the exact request bytes, `transport`
+the response entity bytes as received, and `decoded` the response after content
+decoding. `chunks` and `events` write one JSON object per stored row with its
+sequence numbers and timestamps, BLOB columns as base64 and `data_json` as its
+exact text. Incomplete captures produce a warning. An omitted request exits 1.
+`transport` and `decoded` exit 1 when a response chunk is missing, including one
+omitted from the queue or a capture interrupted before its chunk count was
+recorded, and can write the available partial bytes before that error; `chunks`
+and `events` write the rows that exist and exit 0. A payload that fails its
+hash, the recorded response hash (`decoded`, checked after writing) or the
+sealed digest exits 2, so callers must check the exit status.
 
 Persisted session `usage_summary.requestIds` can join the captured upstream
 request IDs to turns; `metadata_json["kiro:conversation_id"]` can join the

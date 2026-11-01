@@ -100,6 +100,10 @@ def service(args, path):
         os.environ.pop(name, None)
     os.environ["KIRO_USAGE_DB"] = str(path / "usage.sqlite3")
     os.environ["KIRO_USAGE_WARN_BYTES"] = str(args.warn_bytes)
+    if args.payload_retention_days is not None:
+        os.environ["KIRO_USAGE_RETENTION_DAYS"] = str(args.payload_retention_days)
+    else:
+        os.environ.pop("KIRO_USAGE_RETENTION_DAYS", None)
     os.execv(args.mitmdump, [
         args.mitmdump,
         "--listen-host", "127.0.0.1", "--listen-port", str(args.port),
@@ -365,6 +369,7 @@ def main():
         if mode == "service":
             child.add_argument("--mitmdump", required=True)
             child.add_argument("--addon", required=True)
+            child.add_argument("--payload-retention-days", type=int)
     args = parser.parse_args()
     try:
         path = state_directory(args.state_dir)

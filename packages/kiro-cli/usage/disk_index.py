@@ -21,7 +21,7 @@ from pathlib import Path
 import sqlite3
 import sys
 
-from capture import decoded_json, lock_beside, open_database
+from capture import compact, decoded_json, lock_beside, open_database
 
 
 DRAIN_CHUNK = 64 * 1024
@@ -385,8 +385,7 @@ def main():
             if index_tree(db, args.sessions):
                 # Pruned pages only leave the file after VACUUM and a WAL checkpoint; pages
                 # freed by anything else, such as sealing, are left for later captures to reuse.
-                db.execute("VACUUM")
-                db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                compact(db)
             sources = db.execute("SELECT count(*) FROM disk_sources").fetchone()[0]
             records = db.execute("SELECT count(*) FROM disk_records").fetchone()[0]
             omitted = db.execute("SELECT (SELECT count(*) FROM disk_omissions) + (SELECT count(*) FROM disk_session_omissions)").fetchone()[0]

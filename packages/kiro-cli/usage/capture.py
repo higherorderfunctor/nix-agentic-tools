@@ -119,6 +119,13 @@ def lock_beside(path, suffix, blocking=False, shared=False):
     return fd
 
 
+def compact(db):
+    db.execute("VACUUM")
+    # A reader's snapshot blocks the checkpoint without raising: its first column reads 1, and the WAL keeps its size.
+    if db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]:
+        raise sqlite3.OperationalError("wal checkpoint blocked by a reader")
+
+
 def decoded_json(data):
     """Bound nesting consistently across Python JSON implementations."""
     value = json.loads(data)
@@ -378,7 +385,7 @@ def framing_kind(response, rpc):
 # Synthetic 1 and 32 MiB requests: level 9 costs 1.8x level 6's CPU for 0.3% smaller BLOBs; level 1 is 3x
 # faster but 16% larger, reaching the payload warning sooner. Small chunks compress alike at every level.
 GZIP_LEVEL = 6
-WARN_BYTES = 1024 * 1024 * 1024  # Retained payload bytes past which the collector and exit summary warn.
+WARN_BYTES = 5 * 1024 ** 3  # Retained payload bytes past which the collector and exit summary warn.
 # Payload copies the queue may refuse while parsing still sees every byte; usage stays complete without them.
 OMISSIONS = {"request_payload_omitted", "response_payload_omitted"}
 # Streamed /v1/responses tool-argument and reasoning parts; a kind with any of these ignores its terminal copy.
@@ -580,7 +587,7 @@ class Collector:
     BATCH_ITEMS, BATCH_BYTES = 512, 4 * 1024 * 1024  # per write transaction: bounds lock hold and in-flight copies
 
     # Queue budget: one request at the 32 MiB API limit plus 8 MiB of streaming headroom.
-    def __init__(self, path, max_bytes=40 * 1024 * 1024, warn_bytes=WARN_BYTES):
+    def __init__(self, path, max_bytes=40 * 1024 * 1024, warn_bytes=WARN_BYTES, retention_days=None):
         if min(max_bytes, warn_bytes) <= 0:
             raise ValueError("capture queue budget and payload warning must be positive")
         self.path = path
@@ -605,12 +612,20 @@ class Collector:
         # Version 2 seals new captures, which an older collector cannot read; it refuses the store instead.
         db.execute("UPDATE capture_meta SET version=2" if versions else "INSERT INTO capture_meta VALUES (2)")
         db.execute("UPDATE captures SET state='incomplete',transport_ended=0,issues_json='[\"interrupted_capture\"]' WHERE state='recording'")
+        # Migration: captures a v1 collector, or a v2 one before this queue, staged are sealed as backlog.
+        db.execute("INSERT OR IGNORE INTO pending_seals SELECT id FROM captures c WHERE NOT EXISTS(SELECT 1 FROM capture_facts f WHERE f.capture_id=c.id)")
         db.commit()
         import store
         self.stored_bytes = store.payload_bytes(db)
         # Start order seals each request's base before the requests built on it, so the sealer's request cache finds it.
         backlog = [ident for (ident,) in db.execute(
             "SELECT p.capture_id FROM pending_seals p JOIN captures c ON c.id=p.capture_id WHERE c.state!='recording' ORDER BY c.started_utc_ns,c.id")]
+        freelist, pages = (db.execute(pragma).fetchone()[0] for pragma in ("PRAGMA freelist_count", "PRAGMA page_count"))
+        try:
+            if freelist > pages / 2:
+                compact(db)
+        except sqlite3.OperationalError:  # another connection holding the store must not make selected Kiro requests 503
+            print("Kiro capture: startup vacuum failed (OperationalError); capture continues", file=sys.stderr)
         db.close()
         self.queue = queue.Queue()  # bounded by max_bytes in _put
         self.lock = threading.Lock()
@@ -620,17 +635,15 @@ class Collector:
         self.failure = None
         self.stopping = False
         try:  # created after self.lock, which its callback takes
-            self.sealer = store.Sealer(path, self._count)
+            self.sealer = store.Sealer(path, self._count, retention_days, backlog)
         except BaseException:
             os.close(self.writer_lock)
             raise
         self.thread = threading.Thread(target=self._worker, name="kiro-capture", daemon=True)
         self.thread.start()
-        for ident in backlog:
-            self.sealer.put(ident, backlog=True)
 
     def _retain(self, *payloads):
-        """Payloads are always retained; the worker counts each copy it writes."""
+        """Payloads are retained through the retention window; the worker counts each copy it writes."""
         self._count(sum(len(p) if isinstance(p, bytes) else len(p.encode()) for p in payloads if p is not None))
 
     def _count(self, delta):
@@ -940,6 +953,10 @@ def main():
             capture = db.execute("SELECT state,observed_chunks,response_sha256 FROM captures WHERE id=?", (args.id,)).fetchone()
             if capture is None:
                 parser.error("unknown capture id")
+            if {"capture_facts", "sealed_responses"} <= store.tables(db) and db.execute(
+                    "SELECT EXISTS(SELECT 1 FROM capture_facts WHERE capture_id=?) AND "
+                    "NOT EXISTS(SELECT 1 FROM sealed_responses WHERE capture_id=?)", (args.id, args.id)).fetchone()[0]:
+                parser.exit(1, "capture payloads expired by retention\n")
             if capture[0] != "complete":
                 print("warning: unpacking incomplete evidence", file=sys.stderr)
             try:
