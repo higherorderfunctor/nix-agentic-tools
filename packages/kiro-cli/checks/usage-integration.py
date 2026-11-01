@@ -55,7 +55,8 @@ with tempfile.TemporaryDirectory() as directory:
         result = launch("kiro-cli-chat", arguments=["chat", "--v3", "synthetic"])
         assert result.returncode == 0, result.stderr
         assert (state.stat().st_mode & 0o777) == 0o700
-        assert json.loads((state / "service.json").read_text())["warn_bytes"] == "1073741824"
+        recorded = json.loads((state / "service.json").read_text())
+        assert (recorded["payload_retention_days"], recorded["warn_bytes"]) == ("90", "5368709120")
         result = launch("kiro-cli", environment | {"HTTPS_PROXY": "http://invalid.invalid:1"})
         assert result.returncode != 0 and "inherited HTTPS_PROXY conflicts" in result.stderr
         result = launch("kiro-cli", environment | {"NO_PROXY": "*"})

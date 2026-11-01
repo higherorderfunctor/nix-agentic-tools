@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import capture
 import runtime
 import sqlite3
 import store
@@ -404,6 +405,32 @@ class CaptureTests(unittest.TestCase):
                 unpacked = self.unpack(row["id"], "decoded")
                 self.assertEqual((unpacked.returncode, unpacked.stderr), (2, b"capture payload failed verification: response hash mismatch\n"))
 
+    def test_unpack_reads_unmigrated_store_without_sealed_tables(self):
+        with self.deferred():
+            db, row = self.run_capture([event(completed())])
+        for table in ("capture_facts", "sealed_requests", "sealed_responses"):
+            db.execute(f"DROP TABLE {table}")
+        db.execute("UPDATE capture_meta SET version=1")
+        db.commit()
+        for mode in ("request", "transport", "decoded", "chunks", "events"):
+            with self.subTest(mode=mode):
+                unpacked = self.unpack(row["id"], mode)
+                self.assertEqual(unpacked.returncode, 0, unpacked.stderr)
+                self.assertTrue(unpacked.stdout)
+
+    def test_unpack_expires_before_reading_any_payload_mode(self):
+        with self.deferred():
+            db, row = self.run_capture([event(completed())])
+        self.seal(row["id"])
+        db.execute("UPDATE captures SET started_utc_ns=0 WHERE id=?", (row["id"],))
+        db.commit()
+        store.expire(db, time.time_ns() + 1)
+        for mode in ("request", "transport", "decoded", "chunks", "events"):
+            with self.subTest(mode=mode):
+                unpacked = self.unpack(row["id"], mode)
+                self.assertEqual((unpacked.returncode, unpacked.stdout, unpacked.stderr),
+                                 (1, b"", b"capture payloads expired by retention\n"))
+
     def test_unpack_exits_2_on_corrupt_staged_gzip(self):
         for mode, table, column in (("request", "captures", "request_gzip"), ("chunks", "chunks", "entity_gzip"), ("events", "events", "frame_gzip")):
             with self.subTest(mode), self.deferred():
@@ -442,6 +469,44 @@ class CaptureTests(unittest.TestCase):
             writer.finish(ident)
             writer.close()
         self.assertLessEqual(len(self.payloads(ident)[1]), 64 * 1024 // 512)
+
+    def make_free_pages(self):
+        with contextlib.closing(open_database(self.path)) as db:
+            db.execute("CREATE TABLE filler(payload BLOB)")
+            db.executemany("INSERT INTO filler VALUES (?)", [(bytes(8192),)] * 512)
+            db.commit()
+            db.execute("DROP TABLE filler")
+            db.commit()
+
+    def test_startup_compacts_above_half_free_and_not_below(self):
+        self.make_free_pages()
+        with contextlib.closing(open_database(self.path)) as db:
+            freelist, pages = (db.execute(pragma).fetchone()[0] for pragma in ("PRAGMA freelist_count", "PRAGMA page_count"))
+        self.assertGreater(freelist, pages / 2)
+        Collector(self.path).close()
+        with contextlib.closing(open_database(self.path)) as db:
+            freelist, pages = (db.execute(pragma).fetchone()[0] for pragma in ("PRAGMA freelist_count", "PRAGMA page_count"))
+        self.assertLessEqual(freelist, pages / 2)
+        with patch.object(capture, "compact") as compact:
+            Collector(self.path).close()
+        compact.assert_not_called()
+
+    def test_compact_raises_when_a_reader_blocks_the_checkpoint(self):
+        self.make_free_pages()
+        with contextlib.closing(sqlite3.connect(self.path, timeout=0)) as db, contextlib.closing(sqlite3.connect(self.path)) as reader:
+            reader.execute("BEGIN")
+            reader.execute("SELECT count(*) FROM sqlite_master").fetchone()  # its snapshot blocks the checkpoint
+            with self.assertRaisesRegex(sqlite3.OperationalError, "wal checkpoint blocked by a reader"):
+                capture.compact(db)
+
+    def test_an_operational_error_from_startup_vacuum_does_not_stop_capture(self):
+        self.make_free_pages()
+        with patch.object(capture, "compact", side_effect=sqlite3.OperationalError("database is locked")):
+            with contextlib.redirect_stderr(io.StringIO()) as stderr:
+                writer = Collector(self.path)
+        self.assertEqual(stderr.getvalue(), "Kiro capture: startup vacuum failed (OperationalError); capture continues\n")
+        self.assertIsNone(writer.failure)
+        writer.close()
 
     def test_commits_skip_fsync_under_wal(self):
         with contextlib.closing(open_database(self.path)) as db:
@@ -773,6 +838,16 @@ class CaptureTests(unittest.TestCase):
         restarted = Collector(self.path)
         self.assertEqual(restarted.stored_bytes, retained)
         restarted.close()
+
+    def test_addon_receives_absent_or_configured_retention_days(self):
+        addon = UsageCapture()
+        for environment, expected in (({"KIRO_USAGE_RETENTION_DAYS": "7"}, 7), ({}, None)):
+            with self.subTest(expected=expected), patch.dict(os.environ, {"KIRO_USAGE_DB": str(self.path), **environment}, clear=True), \
+                    patch("mitm_addon.Collector") as collector:
+                addon.load(None)
+            collector.assert_called_once()
+            self.assertEqual(collector.call_args.kwargs["retention_days"], expected)
+            addon.done()
 
     def test_startup_failure_keeps_addon_installed_and_refuses_selected_requests(self):
         addon = UsageCapture()

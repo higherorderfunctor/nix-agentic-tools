@@ -240,18 +240,27 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(self.read(ident)[:2], before[:2])
         self.assertNotEqual(self.read(ident)[2], before[2])
 
-    def test_a_v1_store_upgrades_and_seals_only_new_captures(self):
+    def test_start_queues_every_unsealed_capture_of_an_older_collector(self):
         self.db.executescript("DROP TABLE pending_seals; DROP TABLE sealed_requests; DROP TABLE sealed_responses; DROP TABLE capture_facts;"
                               "UPDATE capture_meta SET version=1;")
         old = self.stage("old", staged(split(DELTA, 5)))
         before = self.read(old)
-        writer = capture.Collector(self.path)
-        new = self.collect(writer)
-        writer.close()
+        with patch.object(store.Sealer, "put"):
+            capture.Collector(self.path).close()
         self.assertEqual([version for (version,) in self.db.execute("SELECT version FROM capture_meta")], [2])
+        self.assertEqual([row[0] for row in self.db.execute("SELECT capture_id FROM pending_seals")], [old])
         self.assertEqual(self.read(old), before)
-        self.assertEqual((self.sealed(), self.db.execute("SELECT 1 FROM pending_seals").fetchone()), ({new}, None))
+        writer = capture.Collector(self.path)
+        self.drained(writer)
+        self.assertEqual(self.sealed(), {old})
+        self.assertEqual(self.read(old)[:2], before[:2])
         self.assertEqual(writer.stored_bytes, store.payload_bytes(self.db))
+        legacy = self.stage("legacy", staged(split(DELTA, 5)), started=1)  # a v2 store a pre-queue collector staged
+        self.db.execute("DELETE FROM pending_seals")
+        self.db.commit()
+        writer = capture.Collector(self.path)
+        self.drained(writer)
+        self.assertEqual(self.sealed(), {old, legacy})
         self.db.execute("UPDATE capture_meta SET version=3")
         self.db.commit()
         with self.assertRaisesRegex(ValueError, "unsupported capture schema version"):
@@ -350,6 +359,90 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([ident for (ident,) in self.db.execute("SELECT capture_id FROM pending_seals")], ["abandoned"])
         self.assertEqual(stderr.getvalue(), "Kiro capture: sealing abandoned failed (OperationalError); staged payloads kept\n")
 
+    def test_expire_keeps_every_fact_and_report_and_rebases_a_kept_dependent(self):
+        session, old_body = "sess_00000000-0000-0000-0000-000000000000", b'{"history":[' + b"x" * 96
+        kept_body = old_body + b"],\"next\":true}"
+        identity = {"kiro:conversation_id": session}
+        self.stage("unsealed", staged(split(DELTA, 5)), metadata=identity, started=-1)
+        self.stage("old", staged(split(DELTA, 5)), metadata=identity, body=old_body, started=0)
+        self.stage("kept", staged(split(DELTA, 6)), metadata=identity, body=kept_body, started=1)
+        store.seal(self.db, "old")
+        store.seal(self.db, "kept")
+        captures = list(self.db.execute("SELECT * FROM captures ORDER BY id"))
+        facts = list(self.db.execute("SELECT * FROM capture_facts ORDER BY capture_id"))
+        rendering = (query.render(query.query(self.db, session)), report.store_report(self.db))
+        total = store.payload_bytes(self.db)
+        delta, expired = store.expire(self.db, 1)
+        self.assertEqual((expired, self.sealed()), (1, {"kept", "old"}))
+        self.assertEqual([tuple(row) for row in self.db.execute("SELECT * FROM captures ORDER BY id")], [tuple(row) for row in captures])
+        self.assertEqual(list(self.db.execute("SELECT * FROM capture_facts ORDER BY capture_id")), facts)
+        self.assertEqual((query.render(query.query(self.db, session)), report.store_report(self.db)), rendering)
+        self.assertEqual(dict(self.db.execute("SELECT capture_id,base_id FROM sealed_requests")), {"kept": None})
+        self.assertEqual(store.request_body(self.db, "kept"), kept_body)
+        self.assertEqual(total + delta, store.payload_bytes(self.db))
+        self.stage("later", staged(split(DELTA, 7)), metadata=identity, body=kept_body + b"x", started=2)
+        store.seal(self.db, "later")
+        self.assertEqual(self.db.execute("SELECT base_id FROM sealed_requests WHERE capture_id='later'").fetchone()[0], "kept")
+
+    def test_the_sealer_expires_only_with_retention_and_accounts_its_delta(self):
+        old = self.stage("old", staged(split(DELTA, 5)))
+        store.seal(self.db, old)
+        before = store.payload_bytes(self.db)
+        with patch.object(store, "expire") as expire:
+            store.Sealer(self.path, lambda delta: None).close()
+            expire.assert_not_called()
+        writer = capture.Collector(self.path, retention_days=1)
+        deadline = time.monotonic() + 5
+        while self.db.execute("SELECT 1 FROM sealed_responses").fetchone() and time.monotonic() < deadline:
+            time.sleep(.01)
+        writer.close()
+        self.assertEqual(writer.stored_bytes, store.payload_bytes(self.db))
+        self.assertLess(writer.stored_bytes, before)
+        self.assertEqual(list(self.db.execute("SELECT capture_id FROM sealed_responses")), [])
+        self.assertEqual(self.sealed(), {old})
+
+    def test_startup_backlog_is_sealed_before_retention(self):
+        order, expired = [], threading.Event()
+        def seal(sealer, cache, ident):
+            order.append(ident)
+        def expire(sealer, cache):
+            order.append("expire")
+            expired.set()
+            return 0
+        with patch.object(store.Sealer, "_seal", seal), patch.object(store.Sealer, "_expire", expire):
+            sealer = store.Sealer(self.path, lambda delta: None, 1, ["first", "second"])
+            self.assertTrue(expired.wait(2))
+            sealer.close()
+        self.assertEqual(order, ["first", "second", "expire"])
+
+    def test_a_full_retention_batch_runs_again_while_idle(self):
+        calls = threading.Event()
+        def full_batch(*args, **keywords):
+            if expire.call_count >= 2:
+                calls.set()
+            return -1, store.RETENTION_BATCH
+
+        with patch.object(store, "expire", side_effect=full_batch) as expire:
+            sealer = store.Sealer(self.path, lambda delta: None, 1)
+            self.assertTrue(calls.wait(2))
+            sealer.close()
+        self.assertGreaterEqual(expire.call_count, 2)
+
+    def test_a_failed_retention_batch_prints_once_and_waits_for_the_daily_run(self):
+        calls = threading.Event()
+
+        def failed(*arguments, **keywords):
+            calls.set()
+            raise ValueError("synthetic")
+
+        with patch.object(store, "expire", side_effect=failed) as expire, redirect_stderr(io.StringIO()) as stderr:
+            sealer = store.Sealer(self.path, lambda delta: None, 1)
+            self.assertTrue(calls.wait(2))
+            time.sleep(.2)
+            sealer.close()
+        self.assertEqual(expire.call_count, 1)
+        self.assertEqual(stderr.getvalue(), "Kiro capture: retention batch failed (ValueError); payloads kept\n")
+
     def reports(self, first):
         """Every report and calibration read over the store; capture evidence and fits over the complete first capture."""
         with closing(sqlite3.connect(self.path)) as db:
@@ -359,7 +452,7 @@ class StoreTests(unittest.TestCase):
             return (session, tree, query.render(session), query.render_summary(tree), query.run_report(db, "a" * 32, "sess_report"),
                     report.store_report(db), calibration.capture_evidence(db, "sess_report", started, started), calibration.fit_calls(db, manifest))
 
-    def test_reports_read_alike_before_and_after_the_collector_seals(self):
+    def test_reports_read_alike_before_and_after_sealing_and_expiry(self):
         delta = lambda kind, text: event({"type": kind, "delta": text})
         text_only = {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "only"}]}],
                                                                 "usage": {**completed()["response"]["usage"], "kiro:context_usage_percentage": 1.8}}}
@@ -382,6 +475,8 @@ class StoreTests(unittest.TestCase):
         before = self.reports(first)
         self.drained(capture.Collector(self.path))
         self.assertEqual(len(self.sealed()), 5)
+        self.assertEqual(self.reports(first), before)
+        store.expire(self.db, time.time_ns() + 1)
         self.assertEqual(self.reports(first), before)
 
 

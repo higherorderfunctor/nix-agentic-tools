@@ -16,7 +16,8 @@ ai.kiro = {
       enable = true;
       # Optional absolute directory. Null uses the runtime XDG state root.
       dataDirectory = null;
-      payloadWarnBytes = 1073741824;
+      payloadRetentionDays = 90;
+      payloadWarnBytes = 5368709120;
       port = 18089;
     };
   };
@@ -262,7 +263,8 @@ reading; Kiro rewrites `session.json` when a session resumes. Children written
 before tracking began are therefore not indexed. The explicit command prunes
 disk rows for sessions no longer in scope and, when that deleted rows, runs
 `VACUUM` plus a WAL checkpoint, so the file shrinks. Pages freed by sealing are
-reused by later captures rather than vacuumed. `VACUUM` holds the write lock
+normally reused by later captures; the collector compacts the database at
+startup when free pages exceed half the database. `VACUUM` holds the write lock
 while it rewrites the file, so a running collector waits on its busy timeout
 meanwhile; after pruning this takes well under a second, but run it between Kiro
 sessions on a large capture store. A second explicit index waits for a running
@@ -274,24 +276,41 @@ re-index after repair clears the omission. Reports show global session metadata
 omissions because unknown ancestry may hide descendants. Index summaries count
 both record and session metadata omissions.
 
-Payloads are always retained. `payloadWarnBytes` (default 1 GiB of compressed
-payload bytes) is a warning, not a cap: past it the collector logs one warning
-line to its service journal and keeps capturing, and every tracked `exec` exit
-summary prints a one-line warning with the store's size while it stays above.
-Capture never deletes old captures. To retire a store, stop the `kiro-usage`
-service, then archive or delete `usage.sqlite3` with its `-wal` and `-shm`
-files; the next start creates a new one. The threshold counts payloads only:
-sealed captures' compressed blobs, the gzip copies of captures not yet sealed,
-and usage summaries. Metadata, session indexes, SQLite pages, and WAL files need
-additional space.
+`payloadRetentionDays` (default 90; null keeps payloads forever) deletes only
+the sealed request and response blobs of captures older than the window.
+Unsealed captures are never expired. The sealer runs retention only while
+idle—after the startup backlog, about every 24 hours, and immediately again
+after a full batch of 100. A kept dependent request is first rewritten and
+verified as independent, then its expired base is deleted in the same
+transaction. Capture rows, facts, scalars, hashes, and usage summaries stay, so
+reports, session reports, and calibration reads are unchanged;
+`kiro-usage unpack` names expiry and exits 1 for an expired capture. A failing
+batch logs one journal line without payload text and waits for the next daily
+run; it never stops sealing or capture. A manual `mitmdump -s` run without
+`KIRO_USAGE_RETENTION_DAYS` keeps payloads forever.
+
+`payloadWarnBytes` (default 5 GiB of compressed payload bytes) is a warning, not
+a cap: past it the collector logs one warning line to its service journal and
+keeps capturing, and every tracked `exec` exit summary prints a one-line warning
+with the store's size while it stays above. Capture never deletes capture rows.
+To retire a store, stop the `kiro-usage` service, then archive or delete
+`usage.sqlite3` with its `-wal` and `-shm` files; the next start creates a new
+one. The threshold counts payloads only: sealed captures' compressed blobs, the
+gzip copies of captures not yet sealed, and usage summaries. Metadata, session
+indexes, SQLite pages, and WAL files need additional space.
 
 The collector seals each capture once it finishes, on its own thread, into a
-compact form the reports and `kiro-usage unpack` read as before; captures
-recorded by an older collector stay unsealed. The collector upgrades the store
-to schema version 2 on start, which an older collector refuses: rolling Home
+compact form the reports and `kiro-usage unpack` read as before. Each start also
+queues every capture an older collector left unsealed; the sealer works through
+that backlog in the background, close may leave the rest, and the next start
+resumes it, with no separate operator step. The collector upgrades the store to
+schema version 2 on start, which an older collector refuses: rolling Home
 Manager back across this change makes the proxy answer every selected Kiro
 request with HTTP 503. To roll back, retire the store as above, or roll forward
-again.
+again. Before its worker and sealer start, it runs `VACUUM` plus a WAL
+checkpoint when free pages exceed half the database, so a migrated store shrinks
+at the first start after its backlog is sealed; if another connection holds the
+store, that failure logs one line and startup continues.
 
 The collector parses every response byte as it arrives, so credits, context,
 token counters, output character counts, and completion survive when it has to
