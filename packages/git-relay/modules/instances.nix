@@ -17,9 +17,16 @@ backend: {
     options = {
       credentials = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
-          options.sshKeyFile = lib.mkOption {
-            type = redact.types.secretFile;
-            description = "The push key as a redact reference; ai.services delivers its path in a 0600 runtime file.";
+          options = {
+            forges = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              description = "The upstream hosts this credential may forward to. Every push re-reads the current config, so removing a host revokes pushes to it without deleting the key or the repository.";
+            };
+            sshKeyFile = lib.mkOption {
+              type = redact.types.secretFile;
+              description = "The push key as a redact reference; ai.services delivers its path in a 0600 runtime file.";
+            };
           };
         });
         default = {};
@@ -65,6 +72,18 @@ backend: {
           fails.
         '';
       };
+      sessions = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = ''
+          Whether this instance serves only per-session repositories under
+          `stateDir/repositories/sessions`, created by `git-relay session
+          open` while its caller holds `flock` on `stateDir/locks/<token>`; a
+          session is served without a daemon restart. Such an instance serves
+          no static repositories. `null` (the default) and `false` keep
+          serving the static `repositories`.
+        '';
+      };
     };
     # Define each built-in leaf at default priority so another host does not
     # discard the built-ins, and a consumer can replace one host's pins.
@@ -95,11 +114,22 @@ in {
     inherit (instance) settings;
     option = "ai.git-relay.instances.${instanceName}.settings";
   in
-    lib.mapAttrsToList (host: _: {
+    lib.optional (settings.sessions == true) {
+      assertion = settings.repositories == {};
+      message = "${option}.sessions: a session-only instance serves no repositories; keep static repositories on another instance.";
+    }
+    ++ lib.mapAttrsToList (host: _: {
       assertion = builtins.match upstream.hostPattern host != null;
       message = "${option}.forges.${host}: a forge host must be a DNS name or IPv4 address, since it names a pin file.";
     })
     settings.forges
+    ++ lib.concatLists (lib.mapAttrsToList (credential: entry:
+      lib.imap0 (index: host: {
+        assertion = builtins.match upstream.hostPattern host != null;
+        message = "${option}.credentials.${credential}.forges.${toString index}: a forge host must be a DNS name or IPv4 address, to match an upstream host.";
+      })
+      entry.forges)
+    settings.credentials)
     ++ lib.concatLists (lib.mapAttrsToList (name: repository: let
         host = upstream.host repository.upstream;
         location = "${option}.repositories.${name}";
@@ -119,6 +149,14 @@ in {
         {
           assertion = host == null || (builtins.hasAttr host settings.forges && builtins.match "[[:space:]]*" settings.forges.${host}.hostKeys == null);
           message = "${location}.upstream: the upstream host must have pins in ${option}.forges.\"${toString host}\".hostKeys.";
+        }
+        {
+          assertion =
+            host
+            == null
+            || !builtins.hasAttr repository.credential settings.credentials
+            || builtins.elem host settings.credentials.${repository.credential}.forges;
+          message = "${location}.upstream: the upstream host must be listed in ${option}.credentials.${repository.credential}.forges, which every push re-reads.";
         }
       ])
       settings.repositories))
