@@ -2,33 +2,63 @@
 
 # MicroVM sandboxes
 
-`ai.sandboxes.<name>` installs a console launcher for one package executable in
-a fresh NixOS QEMU guest. This is a Linux-only primitive for hosts with usable
+`ai.sandbox` installs `<runtime>-sandbox` console launchers for enabled Claude
+and Codex runtimes in fresh NixOS QEMU guests. This requires Linux and usable
 KVM, with the guest architecture matching the host package set. Importing the
-modules leaves `ai.sandboxes = {}` and installs no sandbox.
+modules installs no sandbox until enabled.
 
 For Home Manager, import this flake's `homeManagerModules.default` and declare:
 
 ```nix
-{lib, pkgs, ...}: {
-  ai.sandboxes.sandbox-hello = {
-    exe = lib.getExe pkgs.hello;
+{pkgs, ...}: {
+  ai.claude.enable = true;
+  ai.codex.enable = true;
+  ai.sandbox = {
+    enable = true;
+    extraPackages = [pkgs.fd pkgs.ripgrep];
+    vm = {memory = 8192; vcpus = 4;};
   };
+  ai.codex.sandbox.vm.memory = 4096;
 }
 ```
 
 For devenv, import this flake's `devenvModules.nix-agentic-tools` and use the
-same declaration. The Home Manager sink adds wrappers to `home.packages`; devenv
-adds them to `packages`. Run `sandbox-hello` to boot the guest and print Hello's
-output. `outName` optionally overrides the wrapper name, which otherwise
-defaults to the attribute name.
+same declaration. Home Manager adds launchers to `home.packages`; devenv adds
+them to `packages`. Run `claude-sandbox` or `codex-sandbox` to boot the guest.
 
-The plain factory takes the caller's package set and the same two fields:
+`enable` defaults to false, `extraPackages` to `[]`, and `vm.memory`/`vm.vcpus`
+to 4096 MiB/two CPUs. Every runtime mirrors this tree at `ai.<runtime>.sandbox`.
+Explicitly defined root leaves supply runtime option defaults. A runtime
+definition, including `lib.mkDefault`, replaces the whole inherited option:
+lists are replaced, never appended. Other leaves retain their root values;
+runtime values never flow up. Set `ai.<runtime>.sandbox.enable = false` to opt
+out. Kiro's mirror is separate from `ai.kiro.cli.sandbox`.
+
+Guest routes use the plain configured `ai.claude.package` and
+`ai.codex.package`, before host launcher wrapping; null packages refuse sandbox
+evaluation. Enabled Kiro, Kimchi and Copilot runtimes with
+`sandbox.enable = true` warn because they have no guest route yet. Untouched
+defaults never warn. Extra packages and Git enter the guest system profile and
+executable PATH so child shells can find them.
+
+`ai.sandboxes.<name>` remains for one release as a deprecated standalone surface
+and warns when non-empty. Migrate runtime guests to `ai.sandbox`, or use the
+factory below for a standalone guest. A legacy declaration such as
+`ai.sandboxes.sandbox-hello.exe = lib.getExe pkgs.hello` still installs
+`sandbox-hello`; its optional `outName` overrides the attribute name. Command
+names are exclusive through `ai.claims`, including collisions with runtime
+launchers.
+
+The standalone factory takes the caller's package set, required `exe` and
+`outName`, and optional packages and sizing:
 
 ```nix
 inputs.nix-agentic-tools.lib.ai.mkSandbox pkgs {
   exe = lib.getExe pkgs.hello;
+  memory = 4096;
   outName = "sandbox-hello";
+  packages = [pkgs.git pkgs.ripgrep];
+  vcpus = 2;
 }
 ```
 
@@ -37,7 +67,10 @@ microvm.nix comes from this flake's pinned input; consumers need no separate
 microvm input or module arguments. `exe` must be an absolute executable path;
 use `lib.getExe' pkg "name"` to select a binary explicitly. Its Nix string
 context keeps the package in the launcher closure. `outName` must be a single
-name, not a path. Additional factory fields are rejected.
+name, not a path. The factory defaults to `memory = 1024`, `vcpus = 1` and
+`packages = []`; memory must be an integer of at least 128 MiB, CPUs a positive
+integer, and packages a list of derivations. Packages enter both the guest
+system profile and executable PATH.
 
 Run without arguments to invoke the executable without arguments. To pass guest
 arguments, put `--` first: `sandbox-hello -- --version`. The launcher removes
@@ -58,8 +91,9 @@ launch. The launcher reports a clear error when `/dev/kvm` access is missing.
 ## Guest boundaries and console limits
 
 The guest runs the selected `exe` as the unprivileged `sandbox` user, with
-serial input and output. It has one virtual CPU, 1 GiB RAM, no network
-interface, and no host home or project mount. The only host share is the entire
+serial input and output. RAM and virtual CPUs follow `ai.sandbox.vm` (or the
+runtime override), or the standalone factory sizing. It has no network interface
+and no host home or project mount. The only host share is the entire
 `/nix/store`, served read-only over 9p. Treat that store as visible to the
 guest: it can contain more than the selected executable's closure.
 
