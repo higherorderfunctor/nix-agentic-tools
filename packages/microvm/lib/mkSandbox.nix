@@ -1,11 +1,28 @@
-# cspell:ignore chardev dports vcpu virtio virtserialport
+# cspell:ignore chardev dports guestfwd netdev networkd romfile slirp vcpu virtio virtserialport
 {
   inputs,
   lib,
 }: pkgs: {
+  doors ? [],
   exe,
   outName,
 }: let
+  # Doors: one restricted user-mode NIC; each door is a guestfwd whose host
+  # command QEMU runs with the guest TCP connection on stdin and stdout.
+  doorAddress = "10.0.2.100";
+  doorMac = "02:00:00:00:d0:01";
+  validDoor = door:
+    builtins.isAttrs door
+    && builtins.attrNames door == ["command" "port"]
+    && builtins.isInt door.port
+    && door.port >= 1
+    && door.port <= 65535
+    && builtins.isString door.command
+    && builtins.match "/[a-zA-Z0-9._+/-]+" door.command != null;
+  doorNetdev = lib.concatStringsSep "," (
+    ["user" "id=doors" "restrict=on" "net=10.0.2.0/24"]
+    ++ map (door: "guestfwd=tcp:${doorAddress}:${toString door.port}-cmd:${door.command}") doors
+  );
   validName = name: builtins.isString name && builtins.match "[a-zA-Z0-9][a-zA-Z0-9._+-]*" name != null;
   guestCommand = import ../../../lib/strict-shell-application.nix pkgs {
     name = "sandbox-exec";
@@ -45,16 +62,23 @@
           hypervisor = "qemu";
           interfaces = [];
           mem = 1024;
-          qemu.extraArgs = [
-            "-fw_cfg"
-            "name=opt/sandbox.argv,file=argv"
-            "-device"
-            "virtio-serial-pci"
-            "-chardev"
-            "file,id=status,path=status"
-            "-device"
-            "virtserialport,chardev=status,name=sandbox.status"
-          ];
+          qemu.extraArgs =
+            [
+              "-fw_cfg"
+              "name=opt/sandbox.argv,file=argv"
+              "-device"
+              "virtio-serial-pci"
+              "-chardev"
+              "file,id=status,path=status"
+              "-device"
+              "virtserialport,chardev=status,name=sandbox.status"
+            ]
+            ++ lib.optionals (doors != []) [
+              "-netdev"
+              doorNetdev
+              "-device"
+              "virtio-net-pci,netdev=doors,mac=${doorMac},romfile="
+            ];
           shares = [
             {
               mountPoint = "/nix/.ro-store";
@@ -69,16 +93,36 @@
           vcpu = 1;
           writableStoreOverlay = "/nix/.rw-store";
         };
-        networking.hostName = "sandbox";
+        networking = lib.mkMerge [
+          {hostName = "sandbox";}
+          (lib.mkIf (doors != []) {
+            useDHCP = false;
+            useNetworkd = true;
+          })
+        ];
         nixpkgs.hostPlatform = pkgs.stdenv.hostPlatform;
         services.udev.extraRules = ''
           SUBSYSTEM=="virtio-ports", ATTR{name}=="sandbox.status", OWNER="root", GROUP="root", MODE="0600"
         '';
         system.stateVersion = "26.05";
+        systemd.network.networks = lib.mkIf (doors != []) {
+          "10-doors" = {
+            address = ["10.0.2.15/24"];
+            # A default route sends stray traffic into slirp, where restrict=on
+            # must drop it, instead of failing early in the guest.
+            gateway = ["10.0.2.2"];
+            linkConfig.RequiredForOnline = "routable";
+            matchConfig.MACAddress = doorMac;
+            networkConfig.LinkLocalAddressing = "no";
+          };
+        };
         systemd.services = {
           sandbox = {
-            after = ["dev-virtio\\x2dports-sandbox.status.device" "systemd-modules-load.service" "systemd-user-sessions.service"];
+            after =
+              ["dev-virtio\\x2dports-sandbox.status.device" "systemd-modules-load.service" "systemd-user-sessions.service"]
+              ++ lib.optional (doors != []) "network-online.target";
             requires = ["dev-virtio\\x2dports-sandbox.status.device"];
+            wants = lib.optional (doors != []) "network-online.target";
             serviceConfig = {
               ExecStart = lib.getExe guestCommand;
               ExecStartPre = "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.argv/raw /run/sandbox/argv";
@@ -113,6 +157,8 @@ in
   assert lib.assertMsg pkgs.stdenv.hostPlatform.isLinux "mkSandbox requires a Linux host package set";
   assert lib.assertMsg (builtins.isString exe && lib.hasPrefix "/" exe) "mkSandbox.exe must be an absolute executable path";
   assert lib.assertMsg (validName outName) "mkSandbox.outName must be a single executable name";
+  assert lib.assertMsg (builtins.isList doors && builtins.all validDoor doors) "mkSandbox.doors entries must be {port; command;} with a TCP port and an absolute command path of letters, digits and ._+/-";
+  assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) doors)) == builtins.length doors) "mkSandbox.doors ports must be unique";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
       text = ''
