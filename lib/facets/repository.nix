@@ -27,6 +27,8 @@
         # `generatedLib pkgs`: the builder generated files are formatted in.
         generatedLib = import ../generated.nix {inherit lib;};
         packageLib = import ../packaging.nix // import ../toolchains.nix {inherit inputs;};
+        # `strictShellApplication pkgs {name; text;}`: a script in the house strict mode.
+        strictShellApplication = import ../strict-shell-application.nix;
         traceSource = import ../traceSource.nix {inherit lib;};
       };
     };
