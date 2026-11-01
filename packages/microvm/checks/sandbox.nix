@@ -24,6 +24,41 @@
   factory = self.lib.ai.mkSandbox pkgs;
   package = factory args;
   guest = package.guest.config;
+  # Reports the guest clone; the first argument names, relative to the clone, a
+  # host-only uncommitted file that must
+  # be absent. The source is read from the clone's alternates so the stub check
+  # and a real guest probe the same share.
+  repoProbe = import ../../../lib/strict-shell-application.nix pkgs {
+    name = "sandbox-repo-probe";
+    runtimeInputs = [pkgs.coreutils pkgs.git];
+    text = ''
+      export GIT_PAGER=cat
+      src="$(dirname "$(< .git/objects/info/alternates)")"
+      echo "REPO_PWD=$PWD"
+      echo "REPO_SRC=$src"
+      echo "REPO_HEAD=$(git rev-parse HEAD)"
+      git log -1 --format='REPO_LOG=%H %s'
+      echo "REPO_STATUS_LINES=$(git status --porcelain | wc -l)"
+      if [[ -e $1 ]]; then echo REPO_HOST_ONLY=present; else echo REPO_HOST_ONLY=absent; fi
+      echo "REPO_DU_GIT_KIB=$(du -sk .git | cut -f1)"
+      echo "REPO_DU_TREE_KIB=$(du -sk --exclude=.git . | cut -f1)"
+      if touch "$src/sandbox-write" 2>/dev/null || mkdir "$src/objects/sandbox-write" 2>/dev/null; then
+        echo REPO_WRITE=allowed
+      else
+        echo REPO_WRITE=denied
+      fi
+      grep -F " $src " /proc/mounts | sed 's/^/REPO_MOUNT=/' || :
+      start=$EPOCHREALTIME
+      git -c safe.directory='*' clone --quiet --shared --no-checkout "$src" "''${TMPDIR:-/tmp}/second-clone"
+      git -C "''${TMPDIR:-/tmp}/second-clone" -c advice.detachedHead=false checkout --quiet --detach "$(git rev-parse HEAD)"
+      echo "REPO_SECOND_CLONE_SECONDS=$(echo "$EPOCHREALTIME - $start" | ${pkgs.bc}/bin/bc)"
+    '';
+  };
+  repoPackage = factory {
+    exe = lib.getExe repoProbe;
+    outName = "sandbox-repo-probe";
+    repo = true;
+  };
   moduleConfig.ai.sandboxes.sandbox-hello = builtins.removeAttrs args ["outName"];
   statusFixture = pkgs.writeScriptBin "sandbox-status-fixture" ''
     #!${lib.getExe pkgs.python3}
@@ -103,8 +138,9 @@ in {
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
         builtins.attrNames (builtins.functionArgs factory)
-        == ["exe" "outName"]
+        == ["exe" "outName" "repo"]
         && !(builtins.tryEval (factory (args // {exe = "hello";}))).success
+        && !(builtins.tryEval (factory (args // {repo = "yes";}))).success
         && !(builtins.tryEval (factory (args // {outName = "../hello";}))).success
       );
       microvm-sandbox-launcher = package;
@@ -114,6 +150,31 @@ in {
         && map (p: p.drvPath) (evalDevenv moduleConfig).config.packages == [package.drvPath]
         && (evalHm moduleConfig).config.ai.sandboxes.sandbox-hello.outName == "sandbox-hello"
       );
+      microvm-sandbox-repo = pkgs.runCommand "microvm-sandbox-repo" {nativeBuildInputs = [pkgs.git];} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${lib.getExe pkgs.python3} ${./repo.py} \
+          ${lib.getExe repoPackage} \
+          ${repoPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
+          ${repoPackage.guest.config.systemd.services.sandbox.serviceConfig.ExecStart} \
+          ${lib.getExe pkgs.python3}
+        touch "$out"
+      '';
+      microvm-sandbox-repo-guest = mkTest "microvm-sandbox-repo-guest" (
+        let
+          g = repoPackage.guest.config;
+          share = lib.last g.microvm.shares;
+        in
+          share.source
+          == "repo"
+          && share.mountPoint == "/mnt/repo"
+          && share.readOnly
+          && builtins.elem "ro" g.fileSystems."/mnt/repo".options
+          && builtins.elem "name=opt/sandbox.repo-head,file=repo-head" g.microvm.qemu.extraArgs
+          && g.systemd.services.sandbox.unitConfig.RequiresMountsFor == "/mnt/repo"
+          && builtins.length guest.microvm.shares == 1
+      );
+      microvm-sandbox-repo-launcher = repoPackage;
       microvm-sandbox-status-launcher = factory {
         exe = lib.getExe statusFixture;
         outName = "sandbox-status-fixture";

@@ -60,6 +60,19 @@ The runner executes inside that directory, and the wrapper's exit trap removes
 it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
 
+Spike: the factory's `repo = true` parameter (no module option) shares the
+launch directory's Git repository. Shares are baked into the runner, so the
+repository share has the relative source `repo`; QEMU resolves it against the
+runner's working directory, the runtime directory, where the launcher links
+`repo` to `git rev-parse --git-common-dir`. QEMU's 9p backend follows that
+symlink for the export root. A linked worktree therefore shares the common
+directory, and its HEAD commit travels through `-fw_cfg` like `argv`. Before
+executing the process the guest runs `git clone --shared --no-checkout` from the
+read-only `/mnt/repo`, checks out that commit detached in `/home/sandbox/repo`
+and starts there. Objects stay on the share through alternates; uncommitted host
+changes are absent. The share exposes the whole common directory, including its
+config, hooks and every branch's objects.
+
 The user-facing contract and host preparation are documented in
 `packages/microvm/modules/README.md`. The owner checks cover empty imports,
 installation parity, factory validation, and guest boundaries. Real guest boot
