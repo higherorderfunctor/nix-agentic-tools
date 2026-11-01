@@ -1,0 +1,21 @@
+The trust bootstrap loads user packages before project packages can shadow them.
+Collect package warnings only in reload's final pass, which already recomputes
+them from the selected extension paths. Preserve other preloaded warnings.
+
+diff --git a/dist/core/resource-loader.js b/dist/core/resource-loader.js
+--- a/dist/core/resource-loader.js
++++ b/dist/core/resource-loader.js
+@@ -503,13 +503,7 @@
+         // Built-in extensions wait for the final pass: project settings can disable them, and a loaded
+         // extension cannot be unloaded.
+         const extensionPaths = (this.noExtensions ? cliEnabledExtensions : this.mergePaths(cliEnabledExtensions, enabledExtensions)).filter((path) => !path.startsWith(BUILTIN_PATH_PREFIX));
+-        const metadataByPath = new Map([...resolvedPaths.extensions, ...cliExtensionPaths.extensions].map((resource) => [
+-            resource.path,
+-            resource.metadata,
+-        ]));
+-        const packageWarnings = collectExtensionPackageWarnings(extensionPaths, metadataByPath);
+         const extensionsResult = await loadExtensionsCached(extensionPaths, this.cwd, this.eventBus);
+-        mergeExtensionWarnings(extensionsResult, packageWarnings);
+         if (!options.includeInlineFactories) {
+             return extensionsResult;
+         }

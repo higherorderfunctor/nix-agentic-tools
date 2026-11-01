@@ -195,6 +195,14 @@ it("closes production preparation and verification over the store, ignoring user
       ),
     );
     expect(framework.kimchiWorkflows.toolchain).toEqual(distribution.toolchain);
+    for (const name of [
+      "@earendil-works/pi-coding-agent",
+      "@earendil-works/pi-tui",
+      "typebox",
+    ]) {
+      expect(framework.dependencies).not.toHaveProperty(name);
+      expect(framework.peerDependencies[name]).toBe("*");
+    }
     await writeFile(
       path.join(directory, "entry.ts"),
       `

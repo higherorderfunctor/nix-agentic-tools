@@ -36,18 +36,20 @@ unpacks archives into its temporary writable store, so its unconditional bin
 chmod never operates on a read-only Nix store inode. Directory specs can retain
 those inodes on Darwin even with `package-import-method=copy`; that ineffective
 pin is removed. The generated `toolchain.json` supplies all seven managed
-archive specs from the same graph. Development dependencies and peer metadata
-become unnecessary after the resolved graph is closed; optional dependencies
-absent on the host platform are omitted. Native execution still uses Kimchi's
-virtual modules through jiti; the physical PI graph supplies project
-verification. The toolchain build reverse-checks every applicable
-`patchedDependencies` hunk against freshly unpacked archive content with zero
-fuzz; equal versions cannot conceal lost patches. Build-time checks compare
-supplied versions with Kimchi's manifest and the framework's peer/tooling
-ranges, and stamp distribution versions from those same supplied directories.
-The framework compiles and runs its focused checks against that PI toolchain.
-Upstream's wildcard PI peers accept the newer host; its old development pins are
-fixture selections, not compatibility ranges.
+archive specs from the same graph. The framework declares PI, pi-tui and typebox
+as `"*"` peers supplied by Kimchi; project verification supplies them through
+the generated project's development dependencies. Copied dependency packages
+omit development dependencies and peer metadata after the resolved graph is
+closed; optional dependencies absent on the host platform are omitted. Native
+execution still uses Kimchi's virtual modules through jiti; the physical PI
+graph supplies project verification. The toolchain build reverse-checks every
+applicable `patchedDependencies` hunk against freshly unpacked archive content
+with zero fuzz; equal versions cannot conceal lost patches. Build-time checks
+compare supplied versions with Kimchi's manifest and the framework's
+peer/tooling ranges, and stamp distribution versions from those same supplied
+directories. The framework compiles and runs its focused checks against that PI
+toolchain. Upstream's wildcard PI peers accept the newer host; its old
+development pins are fixture selections, not compatibility ranges.
 
 The installed package includes `package.json` with `pi.extensions`, `src/`,
 `dist/`, `bin/`, docs and examples. The installer checks extension entries exist

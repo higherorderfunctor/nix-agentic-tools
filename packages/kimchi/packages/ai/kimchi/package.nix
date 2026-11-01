@@ -66,7 +66,7 @@
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       old_pi_patch_hash=$(sha256sum ${lib.escapeShellArg piPatchPath} | cut -d ' ' -f 1)
-      cat ${./package-identity.patch} >> ${lib.escapeShellArg piPatchPath}
+      cat ${./extension-package-warnings.patch} ${./package-identity.patch} >> ${lib.escapeShellArg piPatchPath}
       new_pi_patch_hash=$(sha256sum ${lib.escapeShellArg piPatchPath} | cut -d ' ' -f 1)
       substituteInPlace pnpm-lock.yaml \
         --replace-fail "$old_pi_patch_hash" "$new_pi_patch_hash"
