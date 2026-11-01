@@ -2028,6 +2028,12 @@
       "template": "Client-facing compatibility settings apply to both OAuth and API-key routes.",
       "type": "object"
     },
+    "client.claude": { "type": "object" },
+    "client.claude.show-codex-commentary": {
+      "description": "ShowCodexCommentary mirrors public Codex progress into visible Claude text.\nDefault false preserves the existing hidden-commentary behavior.",
+      "template": "Show public Codex commentary as visible Claude text, retaining phase markers\nfor replay. Genuine reasoning summaries remain thinking blocks.\nDefault false preserves existing behavior for clients such as TTS consumers.",
+      "type": "bool"
+    },
     "client.codex": { "type": "object" },
     "client.codex.enable-apply-patch": {
       "description": "EnableApplyPatch advertises freeform apply_patch only for supported models.\nDefault false clears the capability regardless of template metadata.",
