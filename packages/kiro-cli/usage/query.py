@@ -71,8 +71,11 @@ FACTS = {"extra_chars": EXTRA_OUTPUT_CHARS,
           WHERE coalesce(json_extract(part.value,'$.type'),'')!='output_text'
           OR coalesce(json_type(part.value,'$.text'),'')!='text')))"""}
 CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
-    WHEN json_extract({metadata},'$."kiro:conversation_id"') IN (?,?) THEN 'root_conversation'
+    WHEN json_extract({metadata},'$."kiro:conversation_id"') IN ({roots}) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
+CONVERSATION_POOLS = ("other_linked_conversations", "root_conversation", "unknown")
+STORE_CONVERSATION_POOL = CONVERSATION_POOL.format(
+    metadata="chosen.metadata_json", roots="""json_extract(chosen.metadata_json,'$."kiro:root_conversation_id"')""")
 # Group keys over the chosen CTE. DAY is a call's local start day, in the process time zone (TZ).
 # Integer division: /1e9 rounds a call in the last microsecond before midnight into the next day.
 DAY = "date({}.started_utc_ns/1000000000,'unixepoch','localtime')"
@@ -113,7 +116,7 @@ def group(row):
     n = row["n"] if row else 0
     return {"observations": n, "metrics": {name: metric(row[name], row[name + "_known"], n) if row else metric() for name in COUNTERS},
             "cache_hit_rate": cache_hit_rate(row) if row else hit_share(0, 0, 0, 0), "estimates": {},
-            "credit_discount": credit_discount.aggregate()}
+            "credit_discount": credit_discount.aggregate(), "tokens_missing": 0}
 
 
 def window(since=None, until=None):
@@ -154,12 +157,12 @@ def session_captures(db, session, chosen=None, parameters=()):
     """A captures section around session's ID: the chosen calls' total, requested-model groups and conversation
     pools, or an unavailable empty one without chosen."""
     captures = {"available": chosen is not None, **group(None),
-                "pools": {pool: group(None) for pool in ("other_linked_conversations", "root_conversation", "unknown")}}
+                "pools": {pool: group(None) for pool in CONVERSATION_POOLS}}
     if chosen is None:
         return captures
     total, groups = aggregate(db, chosen, parameters, {
         "models": (MODEL, ()),
-        "pools": (CONVERSATION_POOL.format(metadata="chosen.metadata_json"), (session, session.removeprefix("sess_")))})
+        "pools": (CONVERSATION_POOL.format(metadata="chosen.metadata_json", roots="?,?"), (session, session.removeprefix("sess_")))})
     captures.update(total)
     captures["models"] = [{"requested_model": model, **source} for model, source in groups["models"].items()]
     captures["pools"].update(groups["pools"])
@@ -377,6 +380,7 @@ def call_reports(db, chosen, parameters, total, partitions):
         for source in (total, *(groups[row[f"key_{index}"]] for index, (*_, groups) in enumerate(partitions))):
             credit_discount.add(source["credit_discount"], result, row["id"])
             tally = tallies[id(source)]
+            source["tokens_missing"] += values["input_tokens"] is None or values["output_tokens"] is None
             for name in ESTIMATED:
                 if values[name] is not None:
                     tally["sums"][name] += values[name]
@@ -558,9 +562,12 @@ def by_credits(models):
     return [(model["requested_model"], model) for model in sorted(models, key=order)]
 
 
-def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN):
-    """The shared exit summary: a headline, one table per (header, label element, [(label, group)], show total) block,
-    and a caveat line only when totals are suspect."""
+def summary_text(title, captures, caveats=(), theme=summary_theme.PLAIN):
+    """Store, session and run summaries: headline, model and conversation tables, then caveats."""
+    pools = captures["pools"]
+    conversations = [(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
+                     if label != "Unknown" or pools[pool]["observations"]]
+    blocks = [("Model", "model", by_credits(captures["models"]), False), ("Conversation", "label", conversations, True)] if captures.get("available", True) else []
     n, credits = captures["observations"], captures["metrics"]["credits"]
     headline = f"Kiro usage · {title} · {plural(n, 'request')} · {value(credits_text(credits['observed_sum']))} credits"
     show_discount = shows_discount(captures)
@@ -571,19 +578,20 @@ def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN)
             total = item["observed_sum"]
             if total is None:
                 return None
-            text = estimate_text(source, name, tokens_text(total), total) if estimated else tokens_text(total)
-            return counted(item, text)
+            return estimate_text(source, name, tokens_text(total), total) if estimated else tokens_text(total)
         return [label, source["observations"], credits_text(source["metrics"]["credits"]["observed_sum"]),
                 *(tokens(name) for name in ("input_tokens", "output_tokens", "cache_read_tokens")),
-                hit_cell(source, 0),
+                hit_text(hit_rate(source), 0),
                 *([None if discount is None else f"~{discount:.0f}%"] if show_discount else [])]
     columns = ["Requests", "Credits", "In", "Out", "Cached", "Cache hit", *(["Discount"] if show_discount else [])]
     rows = [[*(row(label, source) for label, source in groups), *([RULE, row("Total", captures)] if total else [])]
             for _, _, groups, total in blocks]
     unknown, metered = credits["unknown"], captures.get("multiple_metering_events")
     duplicates = len(captures.get("duplicate_upstream_request_ids", []))
+    missing_tokens = captures["tokens_missing"]
     caveats = [*([f"credits unknown for {unknown:,}/{plural(n, 'request')}"] if unknown else []),
                *([f"{captures['incomplete']:,} incomplete"] if captures.get("incomplete") else []),
+               *([f"tokens missing for {missing_tokens:,}"] if missing_tokens else []),
                *([plural(duplicates, "duplicate request ID")] if duplicates else []),
                *([plural(metered, "multi-metered call")] if metered else []), *caveats]
     def lines(paint):
@@ -614,12 +622,8 @@ def summary_text(title, captures, blocks, caveats=(), theme=summary_theme.PLAIN)
 def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
     """One session or run report's exit summary: a model table and a conversation table with a Total row."""
     captures = report["captures"]
-    available, pools = captures["available"], captures["pools"]
-    conversations = [(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
-                     if label != "Unknown" or pools[pool]["observations"]]
-    blocks = [("Model", "model", by_credits(captures["models"]), False), ("Conversation", "label", conversations, True)] if available else []
-    return summary_text(f"{report['session'][:len('sess_') + 8]} · {report['scope']}", captures, blocks,
-                        [*([] if available else ["capture unavailable"]), *caveats], theme)
+    return summary_text(f"{report['session'][:len('sess_') + 8]} · {report['scope']}", captures,
+                        [*([] if captures["available"] else ["capture unavailable"]), *caveats], theme)
 
 
 def calculator_text(reports):

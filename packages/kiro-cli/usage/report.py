@@ -1,4 +1,4 @@
-"""Report captured usage at the current rates: every capture by local day and model, or named session trees, every run included, in the exit summary's look."""
+"""Report captured usage at the current rates: every capture by model and conversation, or named session trees, every run included, in the exit summary's look."""
 
 import argparse
 from contextlib import closing
@@ -18,25 +18,25 @@ def day(text):
 
 
 def store_report(db, since=None, until=None):
-    """Every capture, attributed or not, whose local start day falls within the inclusive bounds: total, days, models."""
+    """Every capture, attributed or not, whose local start day falls within the inclusive bounds: total, days, models and conversation pools."""
     db.row_factory = sqlite3.Row
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='captures'").fetchone():
         raise ValueError("no capture source has initialized this database")
     bounded, bounds = query.window(since, until)
     with query.snapshot(db):
         captures, groups = query.aggregate(db, query.chosen_calls(bounded), bounds,
-                                           {"days": (query.DAY.format("chosen"), ()), "models": (query.MODEL, ())})
+                                           {"days": (query.DAY.format("chosen"), ()), "models": (query.MODEL, ()),
+                                            "pools": (query.STORE_CONVERSATION_POOL, ())})
     captures["days"] = [{"day": key, **source} for key, source in groups["days"].items()]
     captures["models"] = [{"requested_model": model, **source} for model, source in groups["models"].items()]
+    captures["pools"] = {pool: groups["pools"].get(pool, query.group(None))
+                         for pool in query.CONVERSATION_POOLS}
     return {"since": since, "until": until, "captures": captures}
 
 
 def render(report, theme=summary_theme.PLAIN):
-    """The store report in the exit summary's look: a day table and a model table, each with a Total row."""
     captures, since, until = report["captures"], report["since"], report["until"]
-    days = [(source["day"], source) for source in captures["days"]]
-    return query.summary_text("all captures" + (f" · {since or '…'} – {until or '…'}" if since or until else ""), captures,
-                              [("Day", "label", days, True), ("Model", "model", query.by_credits(captures["models"]), True)], (), theme)
+    return query.summary_text("all captures" + (f" · {since or '…'} – {until or '…'}" if since or until else ""), captures, theme=theme)
 
 
 def main():
