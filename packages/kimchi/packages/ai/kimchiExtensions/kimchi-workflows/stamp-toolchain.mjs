@@ -20,6 +20,8 @@ const names = {
   typescript: "typescript",
   vitest: "vitest",
 };
+// Kimchi supplies these to extensions; the framework supplies the rest.
+const hostSupplied = (key) => key.startsWith("pi") || key === "typebox";
 
 if (mode === "check-pnpm") {
   const manifest = JSON.parse(fs.readFileSync(target, "utf8"));
@@ -43,8 +45,7 @@ if (mode === "check-pnpm") {
   const semver = require("semver");
   const versions = {};
   for (const [key, name] of Object.entries(names)) {
-    const root =
-      key.startsWith("pi") || key === "typebox" ? supplied : directory;
+    const root = hostSupplied(key) ? supplied : directory;
     if (root === supplied) {
       const destination = path.join(directory, "node_modules", name);
       fs.unlinkSync(destination);
@@ -66,10 +67,7 @@ if (mode === "check-pnpm") {
       );
     }
     versions[key] = version;
-    const section =
-      key.startsWith("pi") || key === "typebox"
-        ? "devDependencies"
-        : "dependencies";
+    const section = hostSupplied(key) ? "devDependencies" : "dependencies";
     manifest[section][name] = version;
   }
   assert(
@@ -87,14 +85,14 @@ if (mode === "check-pnpm") {
     fs.readFileSync(path.join(supplied, "toolchain.json"), "utf8"),
   );
   const specs = { [manifest.name]: `file:${target}/package.tgz` };
-  manifest.peerDependencies ??= {};
+  // install-runtime.mjs dropped peer metadata and skipped these virtual packages.
+  manifest.peerDependencies = {};
   for (const [key, name] of Object.entries(names)) {
-    if (key.startsWith("pi") || key === "typebox") {
+    if (hostSupplied(key)) {
       const destination = path.join(target, "node_modules", name);
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       fs.symlinkSync(path.join(supplied, "node_modules", name), destination);
       // Physical verification needs PI; the harness still supplies virtual modules.
-      delete manifest.dependencies[name];
       manifest.peerDependencies[name] = "*";
       specs[name] = suppliedSpecs[name];
     } else {
