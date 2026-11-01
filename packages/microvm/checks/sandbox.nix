@@ -1,4 +1,4 @@
-# cspell:ignore chardev dports virtio virtserialport
+# cspell:ignore chardev dports virtio vcpu vcpus virtserialport
 {
   harness,
   lib,
@@ -22,6 +22,39 @@
     outName = "sandbox-argv-fixture";
   };
   factory = self.lib.ai.mkSandbox pkgs;
+  # Guest-side assertions: each fixture exits non-zero when the guest disagrees.
+  # They need KVM, so they are launchers to run, not sandboxed builds.
+  mkGuestScript = name: text:
+    import ../../../lib/strict-shell-application.nix pkgs {
+      inherit name text;
+      runtimeInputs = [pkgs.coreutils pkgs.gnugrep];
+    };
+  packagesFixture = mkGuestScript "sandbox-packages-fixture" ''
+    git --version | grep -Fx 'git version ${pkgs.git.version}'
+    rg --version | head -n 1 | grep -Fx 'ripgrep ${pkgs.ripgrep.version}'
+    echo SANDBOX_PACKAGES_OK
+  '';
+  packagesPackage = factory {
+    exe = lib.getExe packagesFixture;
+    outName = "sandbox-packages-fixture";
+    packages = [pkgs.git pkgs.ripgrep];
+  };
+  sizeFixture = mkGuestScript "sandbox-size-fixture" ''
+    [[ $(nproc) == "$1" ]]
+    mem_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
+    # MemTotal excludes kernel reservations: accept 75%-100% of the request.
+    (( mem_kb * 1024 <= $2 * 1048576 && mem_kb * 1024 >= $2 * 1048576 * 3 / 4 ))
+    echo "SANDBOX_SIZE_OK nproc=$(nproc) MemTotal_kB=$mem_kb"
+  '';
+  mkSizePackage = memory: vcpus:
+    factory {
+      exe = lib.getExe sizeFixture;
+      outName = "sandbox-size-${toString memory}-${toString vcpus}";
+      inherit memory vcpus;
+      packages = [pkgs.gawk];
+    };
+  sizeDefault = mkSizePackage 1024 1;
+  sizeLarge = mkSizePackage 4096 2;
   package = factory args;
   guest = package.guest.config;
   moduleConfig.ai.sandboxes.sandbox-hello = builtins.removeAttrs args ["outName"];
@@ -103,11 +136,32 @@ in {
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
         builtins.attrNames (builtins.functionArgs factory)
-        == ["exe" "outName"]
+        == ["exe" "memory" "outName" "packages" "vcpus"]
+        && (builtins.functionArgs factory).memory
+        && (builtins.functionArgs factory).packages
+        && (builtins.functionArgs factory).vcpus
+        && !(builtins.functionArgs factory).exe
+        && !(builtins.tryEval (factory (args // {memory = 0;}))).success
+        && !(builtins.tryEval (factory (args // {vcpus = 0;}))).success
         && !(builtins.tryEval (factory (args // {exe = "hello";}))).success
         && !(builtins.tryEval (factory (args // {outName = "../hello";}))).success
       );
       microvm-sandbox-launcher = package;
+      microvm-sandbox-packages-launcher = packagesPackage;
+      microvm-sandbox-size = mkTest "microvm-sandbox-size" (
+        let
+          big = sizeLarge.guest.config;
+          small = sizeDefault.guest.config;
+        in
+          guest.microvm.mem
+          == 1024
+          && guest.microvm.vcpu == 1
+          && small.microvm.mem == 1024
+          && big.microvm.mem == 4096
+          && big.microvm.vcpu == 2
+      );
+      microvm-sandbox-size-default-launcher = sizeDefault;
+      microvm-sandbox-size-large-launcher = sizeLarge;
       microvm-sandbox-modules = mkTest "microvm-sandbox-modules" (
         map (p: p.drvPath) (evalHm moduleConfig).config.home.packages
         == [package.drvPath]
