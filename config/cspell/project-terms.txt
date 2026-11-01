@@ -557,6 +557,7 @@ upgrader
 uppercased
 usebruno
 userns
+vcpus
 virtualisation
 vllm
 wbits
