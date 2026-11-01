@@ -115,16 +115,17 @@ hybrid package. Preserve namespace neighbors and replace package leaves whole.
 Package recipes receive `pkgs` through native `callPackage` scopes built by
 `buildOverlay`. Shared helpers arrive as `scopeArgs` from
 `lib/facets/repository.nix` (`extractedLib`, `fragmentsLib`, `generatedLib`,
-`gitToolExtraction`, `packageLib`, `repoPath`, `traceSource`, `webDocsLib`). The
-extraction builders take `{pkgs}`; owner checks receive them as module arguments
-as well. Recipes should not encode a relative route back to the repository root.
-That `pkgs` is this flake's nixpkgs (`natSets`) for every output, the exported
-overlay and the module defaults; a consumer's `final` reaches a recipe only
-through the overlay's fallback (unsupported system, cross, non-default libc) or
-when the consumer sets `follows`. No consumer config reaches `natSets`; the
-receiver's own nixpkgs decides unfree (`checkedBy`). Toolchain input libraries
-construct their compilers over the package set supplied to the recipe. The
-overlay-pattern fragment has the full build-versus-export shape.
+`gitToolExtraction`, `packageLib`, `repoPath`, `strictShellApplication`,
+`traceSource`, `webDocsLib`). The extraction builders take `{pkgs}`; owner
+checks receive them as module arguments as well. Recipes should not encode a
+relative route back to the repository root. That `pkgs` is this flake's nixpkgs
+(`natSets`) for every output, the exported overlay and the module defaults; a
+consumer's `final` reaches a recipe only through the overlay's fallback
+(unsupported system, cross, non-default libc) or when the consumer sets
+`follows`. No consumer config reaches `natSets`; the receiver's own nixpkgs
+decides unfree (`checkedBy`). Toolchain input libraries construct their
+compilers over the package set supplied to the recipe. The overlay-pattern
+fragment has the full build-versus-export shape.
 
 `lib/default.nix` contributes public helpers, using native module options with
 raw leaf values. Functions retain their `functionArgs`; option declarations,
