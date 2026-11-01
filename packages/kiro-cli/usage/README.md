@@ -310,9 +310,9 @@ chunk rows short of `observed_chunks` describe payload completeness.
 ## Token estimates
 
 Reports fill counters a call lacks with `~` estimates; reported counters always
-win per call, and a group mixing both sums exact and estimated values with
-(known/all) coverage. For a call with a reported context percentage `p` and a
-model with a known window `W`:
+win per call, and a group mixing both sums exact and estimated values. Detailed
+`session` reports also show its (known/all) coverage. For a call with a reported
+context percentage `p` and a model with a known window `W`:
 
 - total `I = p/100 * W`, which includes output tokens once;
 - output `O = chars / chars_per_token`, the model's fitted ratio in `rates.json`
@@ -401,21 +401,24 @@ an em dash; observed zeroes remain zero. Session reports keep disk and capture
 sums separate and show coverage; warnings use standard error. The indexer also
 accepts `--json` for its source, record, and omission counts.
 `report.py --db DB` instead prints every capture in the store, attributed or
-not, in the exit summary's look below: a day table and a model table, each with
-requests, credits, input, output, cached, cache hit and a Total row, every
+not, in the exit summary's look below: a model table ordered by credits, then a
+conversation table with Main, Sub/WF, Unknown when nonzero, and a closing Total
+row. Both show requests, credits, input, output, cached and cache hit, every
 ~estimate recomputed per call from the current `rates.json` and `models.json` as
-the session report does. Days are the local calendar day of each call's start,
-in the process time zone that `--help` names; `--since DAY` and `--until DAY`
-(`YYYY-MM-DD`) bound them inclusively. `--session ID`, repeatable for the
-several roots a session switch or fork leaves, instead shows each named session
-tree, every run included, in the exit summary's look at the current rates, its
-calls limited to the same bounds. Text goes to standard output, styled by
-`--summary-theme FILE` with `color` `auto` testing standard output. Its last
-line, absent from the exit summary, names the calculator: `rates.json`'s
-provenance fit dates, then the reported models with no rates entry (no cache
-split) or no context window (no ~tokens), when any. `--json` writes the store
-report, or the list of session reports, instead. `kiro-usage report` passes the
-configured theme.
+the session report does. Main means the recorded conversation ID equals its
+recorded root conversation ID; Unknown lacks a conversation ID; all other calls
+are Sub/WF. `--since DAY` and `--until DAY` (`YYYY-MM-DD`) inclusively bound
+each call's local start day, in the process time zone that `--help` names. JSON
+retains the day groups and adds the conversation pools. `--session ID`,
+repeatable for the several roots a session switch or fork leaves, instead shows
+each named session tree, every run included, in the exit summary's look at the
+current rates, its calls limited to the same bounds. Text goes to standard
+output, styled by `--summary-theme FILE` with `color` `auto` testing standard
+output. Its last line, absent from the exit summary, names the calculator:
+`rates.json`'s provenance fit dates, then the reported models with no rates
+entry (no cache split) or no context window (no ~tokens), when any. `--json`
+writes the store report, or the list of session reports, instead.
+`kiro-usage report` passes the configured theme.
 
 The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
 commands also print a short summary of what that run captured to standard error
@@ -493,16 +496,16 @@ may also include helpers or forks. Requests, credits, and tokens are grouped by
 model and pool rather than listing individual delegates. Exact counters are used
 when observed; cells that add estimates for calls lacking the exact counter
 carry `~`, and missing values show an em dash (see
-[Token estimates](#token-estimates)). A token cell that some requests lack ends
-with `(known/all)`, and a Cache hit cell with `(evaluable/all)`, as in the full
-report; the same tables in `kiro-usage report` carry them too. Cache hit is
-cached ÷ input tokens over requests with both. Estimated Cached and Cache hit
-cells, in both summary tables and the full report, carry `±N%`: the cached
-standard error as a whole-percent share of that cell's cached tokens, omitted
-below 1% or when unknown. The full report (`kiro-usage session` or `query`)
-keeps the Root conversation, Other linked, and Unknown pool tables and the
-partial-coverage markers. A run with no captures, such as a resumed session
-exited without a turn, prints one line saying so that points to
+[Token estimates](#token-estimates)). Summary cells omit coverage marks,
+including in `kiro-usage report` and `report --session`; the caveat line adds
+`tokens missing for N` when N requests lack input or output counts after
+estimates. Cache hit is cached ÷ input tokens over requests with both. Estimated
+Cached and Cache hit cells, in both summary tables and the full report, carry
+`±N%`: the cached standard error as a whole-percent share of that cell's cached
+tokens, omitted below 1% or when unknown. The full report (`kiro-usage session`
+or `query`) keeps the Root conversation, Other linked, and Unknown pool tables
+and the partial-coverage markers. A run with no captures, such as a resumed
+session exited without a turn, prints one line saying so that points to
 `kiro-usage report --session ID`; captures without a conversation identity mean
 an explicit unavailable summary. Before reporting, the outer launch
 incrementally indexes `~/.kiro/sessions` if present, using the existing database

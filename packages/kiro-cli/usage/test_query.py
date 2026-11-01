@@ -252,7 +252,7 @@ class QueryTests(SealedReports, unittest.TestCase):
         summary = query.render_summary(report)
         self.assertEqual([line.split()[:3] for line in summary.splitlines()[6:12]],
                          [["Main", "2", "0.00"], ["Sub/WF", "1", "2.00"], ["Unknown", "1", "3.00"], ["-" * 62], ["Total", "4", "5.00"], ["⚠", "credits", "unknown"]])
-        self.assertTrue(summary.endswith("\n⚠ credits unknown for 1/4 requests"))
+        self.assertTrue(summary.endswith("\n⚠ credits unknown for 1/4 requests; tokens missing for 4"))
         self.assertIn("does not identify main versus delegate roles", report["attribution"]["pool_rule"])
 
     def test_tree_membership_paths_overlap_without_counting_capture_twice(self):
@@ -269,7 +269,7 @@ class QueryTests(SealedReports, unittest.TestCase):
                          [{"request_id": "request-sess_child", "captures": 2}])
         self.assertTrue(any("ambiguous" in warning for warning in report["warnings"]))
         self.assertNotIn("200.00", query.render_summary(report))
-        self.assertTrue(query.render_summary(report).endswith("\n⚠ 1 duplicate request ID"))
+        self.assertTrue(query.render_summary(report).endswith("\n⚠ tokens missing for 2; 1 duplicate request ID"))
         self.captured("request-only", request="request-sess_root", credits=4)
         self.captured("no-identity", credits=99)
         report = query.query(self.db, "sess_root", "tree")
@@ -291,23 +291,19 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertRegex(output, r"Total\s+1,001\s+—\s+10,000 \(1000/1001\)\s+—\s+—\s+—\s+500.000000 \(1000/1001\)")
         self.assertRegex(output, r"Root conversation\s+1\s+—\s+—\s+—\s+—\s+—\s+—")
         output = query.render_summary(report)
-        self.assertEqual(output, "\n".join([
-            "Kiro usage · sess_root · tree · 1,001 requests · 500.00 credits", "",
-            "Model            Requests  Credits                 In  Out  Cached  Cache hit",
-            "requested-model     1,001   500.00  10.0K (1000/1001)    —       —          —", "",
-            "Conversation     Requests  Credits                 In  Out  Cached  Cache hit",
-            "Main                    1        —                  —    —       —          —",
-            "Sub/WF              1,000   500.00              10.0K    —       —          —",
-            "-" * 77,
-            "Total               1,001   500.00  10.0K (1000/1001)    —       —          —",
-            "⚠ credits unknown for 1/1,001 requests; 1 incomplete"]))
+        self.assertTrue(output.startswith("Kiro usage · sess_root · tree · 1,001 requests · 500.00 credits\n"))
+        self.assertRegex(output, r"\nrequested-model\s+1,001\s+500.00\s+10.0K\s+—\s+—\s+—\n")
+        self.assertRegex(output, r"\nTotal\s+1,001\s+500.00\s+10.0K\s+—\s+—\s+—\n")
+        self.assertNotRegex(output, r"\(\d+/\d+\)")
+        self.assertTrue(output.endswith("⚠ credits unknown for 1/1,001 requests; 1 incomplete; tokens missing for 1,001"))
         self.db.execute("DELETE FROM captures")
         self.captured("zero", conversation="root", credits=0, tokens=0)
+        self.db.execute("UPDATE captures SET output_tokens=0 WHERE id='zero'")
         output = query.render(query.query(self.db, "sess_root", "tree"))
-        self.assertRegex(output, r"Total\s+1\s+—\s+0\s+—\s+—\s+—\s+0.000000")
+        self.assertRegex(output, r"Total\s+1\s+0\s+0\s+0\s+—\s+—\s+0.000000")
         output = query.render_summary(query.query(self.db, "sess_root", "tree"))
         self.assertIn("· 1 request · 0.00 credits", output)
-        self.assertRegex(output, r"requested-model\s+1\s+0.00\s+0\s+—\s+—\s+—\n")
+        self.assertRegex(output, r"requested-model\s+1\s+0.00\s+0\s+0\s+—\s+—\n")
         self.assertNotIn("⚠", output)
         self.assertNotIn("Unknown", output)
 
@@ -326,7 +322,7 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertIn(query.capture_tables(report["captures"]), output)
         self.assertIn("1,010 (2/3)", output)
         self.assertIn("Other linked holds workflow steps and subagents and may include helpers/forks", output)
-        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10 \(2/3\)\s+50 \(2/3\)\s+~5% \(2/3\)\n")
+        self.assertRegex(query.render_summary(report), r"requested-model\s+3\s+3.00\s+1.0K\s+10\s+50\s+~5%\n")
 
     def test_report_labels_only_explicit_estimates_and_missing_capture(self):
         report = query.query(self.db, "sess_root", "tree")
@@ -355,10 +351,10 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertEqual([line.split()[0] for line in lines[3:7]], ["costly", "also-cheap", "cheap", "unpriced"])
         self.assertEqual([line.split()[:3] for line in lines[8:13]],
                          [["Conversation", "Requests", "Credits"], ["Main", "4", "2.02"], ["Sub/WF", "1", "0.50"], ["-" * 59], ["Total", "5", "2.52"]])
-        self.assertEqual(lines[13], "⚠ credits unknown for 1/5 requests")
+        self.assertEqual(lines[13], "⚠ credits unknown for 1/5 requests; tokens missing for 5")
         self.db.execute("UPDATE captures SET credits=1 WHERE id='c'")
-        self.assertNotIn("⚠", query.render_summary(query.query(self.db, root, "tree")))
-        self.assertTrue(query.render_summary(query.query(self.db, root, "tree"), ["x", "y"]).endswith("\n⚠ x; y"))
+        self.assertNotIn("credits unknown", query.render_summary(query.query(self.db, root, "tree")))
+        self.assertTrue(query.render_summary(query.query(self.db, root, "tree"), ["x", "y"]).endswith("\n⚠ tokens missing for 5; x; y"))
 
     def test_run_report_counts_only_the_invocations_calls_per_root(self):
         run, earlier = {"invocation": "a" * 32}, {"invocation": "b" * 32}
@@ -376,7 +372,7 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertEqual([pools[pool]["observations"] for pool in ("root_conversation", "other_linked_conversations", "unknown")], [2, 1, 0])
         lines = query.render_summary(report).splitlines()
         self.assertEqual(lines[0], "Kiro usage · sess_root · this run · 3 requests · 3.00 credits")
-        self.assertEqual(lines[-1], "⚠ credits unknown for 1/3 requests")
+        self.assertEqual(lines[-1], "⚠ credits unknown for 1/3 requests; tokens missing for 3")
         self.assertEqual(query.render_summary(query.run_report(self.db, "a" * 32, "sess_fork")).splitlines()[0],
                          "Kiro usage · sess_fork · this run · 1 request · 4.00 credits")
 
@@ -421,7 +417,7 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertEqual(models["other-model"]["estimates"], {})
         self.assertEqual(report["captures"]["metrics"]["input_tokens"], query.metric(100, 1, 4))
         self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+3\s+0.\d\d\s+~60.1K\s+~5\s+~30.0K\s+~50%\n")
-        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K \(3/4\)\s+~5 \(3/4\)\s+~30.0K \(3/4\)\s+~50% \(3/4\)$")
+        self.assertRegex(query.render_summary(report), r"\nTotal\s+4\s+0.67\s+~60.1K\s+~5\s+~30.0K\s+~50%\n⚠ tokens missing for 1$")
         output = query.render(report)
         self.assertRegex(output, r"Total\s+4\s+~60,105 \(3/4\)\s+~60,100 \(3/4\)\s+~5 \(3/4\)\s+~30,000 \(3/4\)\s+~49.9% \(3/4\)")
         self.assertRegex(output, r"Other linked\s+1\s+~30,000\s+~30,000\s+~0\s+~30,000\s+~100.0%")
@@ -461,20 +457,26 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertNotIn("±", query.render(mixed).split("Pool")[1].splitlines()[1])  # Total row
         self.assertEqual([query.error_text(error, 1000) for error in (9.9, 10)], ["", " ±1%"])
 
-    def test_compact_tables_show_the_coverage_of_partial_cells(self):
-        """Two calls, one estimable and one not: every compact cell with a missing contribution says so, like the full
-        report, on the exit summary and the store report alike; a cell with every contribution stays bare."""
+    def test_summary_tables_omit_coverage_and_note_missing_tokens(self):
+        """Session, run and store summaries move missing token coverage to the caveat; full tables keep it."""
         self.estimable("rated", .01, chars=40)
         self.captured("unknown", conversation="root", credits=.01, tokens=None, metadata={"model": "unknown-model"})
-        cell = r"~\S+ \(1/2\)"
-        row = rf"\s+2\s+0.02\s+{cell}\s+{cell}\s+{cell}\s+~\d+% \(1/2\)"
+        cell = r"~\S+"
+        row = rf"\s+2\s+0.02\s+{cell}\s+{cell}\s+{cell}\s+~\d+%"
         summary = query.render_summary(query.query(self.db, "sess_root"))
         store = report.render(report.store_report(self.db))
         self.assertRegex(summary, rf"\nMain{row}\n")
         self.assertRegex(summary, rf"\nTotal{row}(\n|$)")
         self.assertRegex(store, rf"\nTotal{row}(\n|$)")
         self.assertRegex(store, rf"\nunknown-model\s+1\s+0.01\s+—\s+—\s+—\s+—")
-        self.assertNotRegex(summary, r"\nclaude-opus-5.5\s+1\s+[\d.]+\s+~\S+ \(")
+        for text in (summary, store):
+            self.assertNotRegex(text, r"\(\d+/\d+\)")
+            self.assertTrue(text.endswith("⚠ tokens missing for 1"))
+        self.assertIn("(1/2)", query.capture_tables(query.query(self.db, "sess_root")["captures"]))
+        self.db.execute("UPDATE captures SET metadata_json=json_set(metadata_json,'$.invocation','run')")
+        self.assertNotRegex(query.render_summary(query.run_report(self.db, "run", "sess_root")), r"\(\d+/\d+\)")
+        self.db.execute("DELETE FROM captures WHERE id='unknown'")
+        self.assertNotIn("tokens missing", report.render(report.store_report(self.db)))
 
     def test_report_survives_a_capture_committed_between_its_queries(self):
         """Totals, groups and per-call estimates read one snapshot: a capture committed after the groups and before
@@ -538,7 +540,7 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertRegex(query.render(report), rf"Total\s+2\s+.*~60,000 {cached}\s+~100.0% {paired} \(1/2\)\s")
         summary = query.render_summary(report)
         for label in ("claude-opus-5.5", "Main", "Total"):
-            self.assertRegex(summary, rf"\n{label}\s+2\s+.*~60.0K {cached}\s+~100% {paired} \(1/2\)(\n|$)")
+            self.assertRegex(summary, rf"\n{label}\s+2\s+.*~60.0K {cached}\s+~100% {paired}(\n|$)")
 
     def test_exact_cached_over_estimated_input_is_an_estimated_share(self):
         self.estimable("partial", .1)
@@ -720,7 +722,7 @@ class QueryTests(SealedReports, unittest.TestCase):
             self.db.backup(target)
         return path
 
-    def test_report_groups_every_capture_by_local_day_and_model_with_the_session_estimates(self):
+    def test_report_models_and_conversations_keep_local_day_bounds_and_session_estimates(self):
         self.local_days()
         self.estimable("rated", .01, chars=40)
         self.estimable("unrated", .02, chars=40, model="claude-opus-4.5", conversation=None)  # window, no rates entry; unattributed
@@ -742,12 +744,14 @@ class QueryTests(SealedReports, unittest.TestCase):
         self.assertNotIn("claude-opus-4.5", tree)  # the session report excludes the unattributed call
         self.assertEqual(query.calculator_text([store]), "Calculator: rates.json fitted 2026-10-30; no rates: claude-opus-4.5, requested-model; no context window: requested-model")
         text = report.render(store)
-        self.assertTrue(text.startswith("Kiro usage · all captures · 3 requests · 0.03 credits\n\nDay "), text)
-        self.assertRegex(text, r"\n2026-10-29\s+2\s+0.03\s+~")
-        self.assertRegex(text, r"\n2026-10-30\s+1\s+—\s+—\s+—\s+—\s+—\n")
+        self.assertTrue(text.startswith("Kiro usage · all captures · 3 requests · 0.03 credits\n\nModel "), text)
+        self.assertNotIn("\nDay ", text)
+        self.assertRegex(text, r"\nConversation\s+Requests.*\nMain\s+0.*\nSub/WF\s+2.*\nUnknown\s+1")
+        self.assertEqual({pool: source["observations"] for pool, source in captures["pools"].items()},
+                         {"other_linked_conversations": 2, "root_conversation": 0, "unknown": 1})
         self.assertRegex(text, r"\nModel\s+Requests\s+Credits\s+In\s+Out\s+Cached\s+Cache hit\nclaude-opus-4.5\s+1\s+0.02\s+~")
-        self.assertEqual(len(re.findall(r"\nTotal\s+3\s+0.03\s+~", text)), 2)
-        self.assertTrue(text.endswith("\n⚠ credits unknown for 1/3 requests"))
+        self.assertEqual(len(re.findall(r"\nTotal\s+3\s+0.03\s+~", text)), 1)
+        self.assertTrue(text.endswith("\n⚠ credits unknown for 1/3 requests; tokens missing for 1"))
         self.assertEqual([day["day"] for day in report.store_report(self.db, since="2026-10-30")["captures"]["days"]], ["2026-10-30"])
         bounded = report.store_report(self.db, "2026-10-29", "2026-10-29")
         self.assertEqual((bounded["captures"]["observations"], [model["requested_model"] for model in bounded["captures"]["models"]]),
@@ -761,10 +765,12 @@ class QueryTests(SealedReports, unittest.TestCase):
                 result = subprocess.run([*command, *arguments], capture_output=True, text=True)
                 self.assertEqual((result.returncode, result.stderr), (0, ""))
                 self.assertEqual(result.stdout, rendered + "\n" + query.calculator_text([store]) + "\n")
-            # Both Total rows' rules become junction lines inside the box.
-            self.assertEqual(sum(line.startswith("++") or line.startswith("+-") for line in result.stdout.splitlines()), 4)
+            # The Conversation Total rule becomes a junction line inside the box.
+            self.assertEqual(sum(line.startswith("++") or line.startswith("+-") for line in result.stdout.splitlines()), 3)
             structured = subprocess.run([*command, "--json", "--until", "2026-10-29"], capture_output=True, text=True)
-            self.assertEqual(json.loads(structured.stdout)["captures"]["observations"], 2)
+            structured_captures = json.loads(structured.stdout)["captures"]
+            self.assertEqual(structured_captures["observations"], 2)
+            self.assertEqual(structured_captures["pools"], bounded["captures"]["pools"])
             for refused in (["--since", "20261030"], ["--until", "2026-10"]):
                 result = subprocess.run([*command, *refused], capture_output=True, text=True)
                 self.assertEqual((result.returncode, result.stdout), (2, ""))
@@ -773,6 +779,40 @@ class QueryTests(SealedReports, unittest.TestCase):
             sqlite3.connect(empty).close()
             result = subprocess.run([sys.executable, report.__file__, "--db", str(empty)], capture_output=True, text=True)
             self.assertEqual((result.returncode, result.stderr), (1, "cannot query calibration database: no capture source has initialized this database\n"))
+
+    def test_store_pools_use_recorded_root_identity_for_responses_and_rpc(self):
+        for ident, conversation, root, path in (
+                ("child", "child", "root", "/v1/responses"),
+                ("empty", "", "root", "/v1/responses"),
+                ("main", "root", "root", "/v1/responses"),
+                ("missing", None, "root", "/v1/responses"),
+                ("no-root", "root", None, "/v1/responses"),
+                ("rpc", "root", "root", "/rpc")):
+            self.captured(ident, conversation=conversation,
+                          metadata={"kiro:root_conversation_id": root, "path": path})
+        captures = report.store_report(self.db)["captures"]
+        self.assertEqual({pool: source["observations"] for pool, source in captures["pools"].items()},
+                         {"other_linked_conversations": 2, "root_conversation": 2, "unknown": 2})
+        self.assertEqual(sum(source["metrics"]["credits"]["observed_sum"] for source in captures["pools"].values()),
+                         captures["metrics"]["credits"]["observed_sum"])
+        self.db.execute("DELETE FROM captures WHERE id IN ('empty','missing')")
+        self.assertNotIn("Unknown", report.render(report.store_report(self.db)))
+        self.db.execute("DELETE FROM captures")
+        empty = report.store_report(self.db)
+        self.assertEqual([source["observations"] for source in empty["captures"]["pools"].values()], [0, 0, 0])
+        self.assertRegex(report.render(empty), r"\nMain\s+0.*\nSub/WF\s+0")
+        self.assertNotIn("tokens missing", report.render(empty))
+
+    def test_summary_counts_requests_missing_either_token_counter_once(self):
+        for ident in ("input-only", "neither", "output-only"):
+            self.captured(ident, conversation="root", tokens=None if ident != "input-only" else 10)
+        self.db.execute("UPDATE captures SET output_tokens=5 WHERE id='output-only'")
+        self.assertTrue(report.render(report.store_report(self.db)).endswith("⚠ tokens missing for 3"))
+        self.estimable("context-only", .01)
+        self.db.execute("UPDATE captures SET summary_json=NULL WHERE id='context-only'")
+        self.assertTrue(report.render(report.store_report(self.db)).endswith("⚠ tokens missing for 4"))
+        self.db.execute("UPDATE captures SET input_tokens=0,output_tokens=0")
+        self.assertNotIn("tokens missing", report.render(report.store_report(self.db)))
 
     def test_report_sessions_replay_each_tree_exit_summary_in_the_window(self):
         self.local_days()

@@ -41,7 +41,7 @@ class SummaryTests(unittest.TestCase):
                 runtime.invocation_summary(root, "a" * 32, 1 << 30)
             self.assertIn("Kiro usage · sess_selected · this run · 1 request", output.getvalue())
             self.assertNotIn("sess_other", output.getvalue())
-            self.assertIn("\n⚠ credits unknown for 1/1 request; 1 incomplete; calls with no conversation identity excluded\n", output.getvalue())
+            self.assertIn("\n⚠ credits unknown for 1/1 request; 1 incomplete; tokens missing for 1; calls with no conversation identity excluded\n", output.getvalue())
 
     def test_run_counts_only_its_own_captures_per_root(self):
         # One run that switched or forked: two roots, each also captured by an earlier run that must stay out.

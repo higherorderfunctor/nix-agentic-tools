@@ -124,36 +124,40 @@ exclusions remain visible; unsupported cases stay unavailable. The compared
 initial calls retained identical delivered hooks/context, but this small run
 establishes neither percentile accuracy nor a transferable cache-hit model.
 Exact counters always win per call; a `~` cell adds estimates for calls that
-lack the exact counter, with (known/all) coverage. Estimates need a reported
-context percentage and a model with a known window; cached tokens also need
-reported credits and the model's fitted rates in `usage/rates.json`. Other calls
-stay unavailable; [Token estimates](../usage/README.md#token-estimates) has the
-formulas. Cache hit is the share of input tokens that were cached, cached ÷
-input over the requests with both (exact, or estimated where the call lacks the
-counter), with partial coverage shown. Estimated Cached and Cache hit cells
-carry `±N%`: the estimated cached tokens' standard error as a whole-percent
-share of the cell, omitted below 1% or when a model lacks a fitted credit error.
-A run with no captured calls, such as a session resumed and exited without a
-turn, prints one line saying so that points to `kiro-usage report --session ID`.
-If this run's calls carry no conversation identity, the tool reports that the
-summary is unavailable. On exit the tool first waits up to two seconds for this
-launch's captured calls to finish and stay unchanged for 0.1 s, since the disk
-scan below is scoped by them. The quiet period is a heuristic: a call started
-just before Kiro exits can still land later. After a timed-out wait, unfinished
-calls stay flagged as incomplete coverage. It then automatically refreshes the
-local disk index from `~/.kiro/sessions` when that directory exists. The summary
-reads no disk data; the refresh keeps `kiro-usage session` and
-`report --session`, which do, current. This exit scan reads the `session.json`
-of sessions changed since the launch, indexes the messages only of those linked
-to captures, and never prunes. Index failures warn and leave the child exit
-status intact; disk observations may then be stale. An explicit
-`kiro-usage index` holds a lock beside the database for its whole pass; the exit
-scan then skips with a one-line warning that disk observations were not
-refreshed instead of interleaving. Exit scans of concurrent launches do not skip
-each other; they queue on a second lock and run one at a time, since two scans
-of one session would index the same records. Rerun the index if that pass began
-before Kiro exited. Nested `kiro-usage exec` launches share the parent's marker
-and produce one summary when the outer launch exits.
+lack the exact counter. Summary cells omit coverage marks; the caveat line adds
+`tokens missing for N` when N requests lack input or output counts after
+estimates. The detailed `session` report keeps (known/all) coverage. Estimates
+need a reported context percentage and a model with a known window; cached
+tokens also need reported credits and the model's fitted rates in
+`usage/rates.json`. Other calls stay unavailable;
+[Token estimates](../usage/README.md#token-estimates) has the formulas. Cache
+hit is the share of input tokens that were cached, cached ÷ input over the
+requests with both (exact, or estimated where the call lacks the counter). The
+detailed `session` report shows partial coverage for Cache hit. Estimated Cached
+and Cache hit cells carry `±N%`: the estimated cached tokens' standard error as
+a whole-percent share of the cell, omitted below 1% or when a model lacks a
+fitted credit error. A run with no captured calls, such as a session resumed and
+exited without a turn, prints one line saying so that points to
+`kiro-usage report --session ID`. If this run's calls carry no conversation
+identity, the tool reports that the summary is unavailable. On exit the tool
+first waits up to two seconds for this launch's captured calls to finish and
+stay unchanged for 0.1 s, since the disk scan below is scoped by them. The quiet
+period is a heuristic: a call started just before Kiro exits can still land
+later. After a timed-out wait, unfinished calls stay flagged as incomplete
+coverage. It then automatically refreshes the local disk index from
+`~/.kiro/sessions` when that directory exists. The summary reads no disk data;
+the refresh keeps `kiro-usage session` and `report --session`, which do,
+current. This exit scan reads the `session.json` of sessions changed since the
+launch, indexes the messages only of those linked to captures, and never prunes.
+Index failures warn and leave the child exit status intact; disk observations
+may then be stale. An explicit `kiro-usage index` holds a lock beside the
+database for its whole pass; the exit scan then skips with a one-line warning
+that disk observations were not refreshed instead of interleaving. Exit scans of
+concurrent launches do not skip each other; they queue on a second lock and run
+one at a time, since two scans of one session would index the same records.
+Rerun the index if that pass began before Kiro exited. Nested `kiro-usage exec`
+launches share the parent's marker and produce one summary when the outer launch
+exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -225,15 +229,19 @@ zero. Disk turn credits overlap captured credits and must never be added.
 Warnings go to standard error.
 
 `report` prints every capture in the store, attributed to a session or not, in
-the exit summary's style: a table by day and a table by model, each with a Total
-row, recomputing every ~estimate per call from the current `rates.json` and
-`models.json`. Days are local calendar days in the time zone `--help` names;
-`--since` and `--until` take `YYYY-MM-DD` and include both ends. `--session ID`
-shows that session's whole tree, every run included, in the exit summary's style
-instead, limited to the same days when they are given; repeat it for each root a
-session switch or fork left. A last line names the calculator: the fit dates in
-`rates.json`, then the reported models with no rates entry or no context window,
-when there are any. `--json` writes the structured report instead.
+the exit summary's style: models ordered by credits, then a conversation table
+with Main, Sub/WF, Unknown when nonzero, and a closing Total row. Main means the
+recorded conversation ID equals its recorded root conversation ID; Unknown lacks
+a conversation ID; all other calls are Sub/WF. Every ~estimate is recomputed per
+call from the current `rates.json` and `models.json`. `--since` and `--until`
+take `YYYY-MM-DD` and include both ends, filtering by each call's local start
+day in the time zone `--help` names. `--session ID` shows that session's whole
+tree, every run included, in the exit summary's style instead, limited to the
+same days when they are given; repeat it for each root a session switch or fork
+left. A last line names the calculator: the fit dates in `rates.json`, then the
+reported models with no rates entry or no context window, when there are any.
+`--json` writes the structured report, retaining day groups and adding
+conversation pools.
 
 Scripts that previously parsed session JSON or list JSON lines must now pass
 `--json`: `kiro-usage session sess_example --json` preserves the full report,
