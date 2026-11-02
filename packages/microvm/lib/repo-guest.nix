@@ -19,6 +19,15 @@ in {
     fi
     cd /home/sandbox/repo
   '';
+  # The runtime session launcher supplies origin and identity after clone/init.
+  configure = ''
+    ${git} config --unset-all remote.origin.url
+    if [[ -n $branch ]]; then
+      ${git} config "branch.$branch.remote" origin
+      ${git} config "branch.$branch.merge" "refs/heads/$branch"
+    fi
+    ${lib.getExe (import ../../../lib/git-tool-settings/repo-config.nix {inherit pkgs;})} include . /run/sandbox-command/repo-config
+  '';
   export = import ../../../lib/strict-shell-application.nix pkgs {
     name = "sandbox-repo-export";
     runtimeInputs = [pkgs.coreutils pkgs.git];
