@@ -111,6 +111,7 @@ in {
       enabled = true;
       name = "microvm";
     })
+    ./git.nix
     (import ./identities.nix {inherit inheritOptions;})
     (import ./relay.nix {inherit backend routed;})
   ];
