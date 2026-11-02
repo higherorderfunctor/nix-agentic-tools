@@ -23,6 +23,7 @@
   guestRepo = import ./repo-guest.nix {inherit lib pkgs;};
   hostRepo = import ./repo-host.nix {inherit lib pkgs;};
   keyHelper = import ../../../lib/ai/inference/key-helper.nix {inherit lib pkgs;};
+  redact = import ../../../lib/redact {inherit lib;};
   # The one door the inference key travels through: guest endpoint port on the
   # door address, socat to the selected instance's native loopback port.
   inferenceDoor = {
@@ -103,7 +104,6 @@
       && inference.client != ""
       && builtins.isString inference.instance
       && inference.instance != ""
-      && (builtins.isString inference.key || (builtins.isAttrs inference.key && inference.key ? _redact))
       && builtins.isString inference.option
       && validPort inference.port
     );
@@ -392,6 +392,7 @@ in
   assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) allDoors)) == builtins.length allDoors) "mkSandbox.doors, mkSandbox.inference and mkSandbox.signing ports must be unique";
   assert lib.assertMsg validHomeFiles "mkSandbox.homeFiles maps guest-home-relative paths (no leading slash, no . or .. segments) to store-built files";
   assert lib.assertMsg validInference "mkSandbox.inference must be null or {client; instance; key; option; port;}: the CPA client name, its instance, the host key reference, the option that selected it and the instance's native loopback port";
+  assert lib.assertMsg (inference == null || redact.isRedacted inference.key) "mkSandbox.inference.key must be a redact reference; plaintext keys are refused";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
   assert lib.assertMsg (builtins.isBool repoConfig && (!repoConfig || repo)) "mkSandbox.repoConfig requires repo = true and reads SANDBOX_REPO_CONFIG at launch";
     (import ../../../lib/strict-shell-application.nix pkgs {
@@ -443,6 +444,12 @@ in
           inference_key=$(${lib.getExe inferenceKeyHelper})
           if [[ -z $inference_key ]]; then
             echo '${outName}: ${inference.option} read an empty key for instance ${inference.instance}, client ${inference.client}' >&2
+            exit 1
+          fi
+          # These bytes would escape curl's double-quoted header value or
+          # introduce another config line. Refuse before staging or probing.
+          if [[ $inference_key == *[\"\\$'\n\r']* ]]; then
+            echo '${outName}: ${inference.option} contains characters unsafe for the inference probe; refusing to start the sandbox' >&2
             exit 1
           fi
           printf '%s' "$inference_key" > inference-key
