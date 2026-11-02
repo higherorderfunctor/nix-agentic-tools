@@ -168,8 +168,8 @@ diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
 index 6fbec048..8045ea81 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -356,6 +356,12 @@ var sharedKeyFields = map[string]bool{
- 	"request-retry": true, "request-scoped-errors": true,
+@@ -381,6 +381,12 @@
+ 	return root, nil
  }
  
 +// isV8GroupKeyField is shared with the settings extractor: a field accepted
@@ -178,10 +178,10 @@ index 6fbec048..8045ea81 100644
 +	return field == "base-url" || sharedKeyFields[field] || (provider == "claude" && field == "tool-aliases")
 +}
 +
- func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
- 	if groups.Kind != yaml.SequenceNode {
- 		return nil, fmt.Errorf("api-keys.%s must be a list", provider)
-@@ -388,7 +394,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+ var sharedKeyFields = map[string]bool{
+ 	"priority": true, "prefix": true, "proxy-url": true, "headers": true,
+ 	"models": true, "excluded-models": true, "disable-cooling": true,
+@@ -419,7 +425,7 @@
  		}
  		for i := 0; i < len(group.Content); i += 2 {
  			field := group.Content[i].Value
@@ -190,7 +190,7 @@ index 6fbec048..8045ea81 100644
  				return nil, fmt.Errorf("api-keys.%s: unsupported group field %s", provider, field)
  			}
  		}
-@@ -402,7 +408,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -433,7 +439,7 @@
  			item := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
  			for i := 0; i < len(group.Content); i += 2 {
  				field := group.Content[i].Value
@@ -199,7 +199,7 @@ index 6fbec048..8045ea81 100644
  					setYAMLPath(item, field, group.Content[i+1])
  				}
  			}
-@@ -439,7 +445,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+@@ -470,7 +476,7 @@
  			key := deepCopyNode(entry)
  			for i := 0; i < len(entry.Content); i += 2 {
  				field := entry.Content[i].Value

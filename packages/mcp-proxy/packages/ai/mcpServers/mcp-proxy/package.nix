@@ -49,9 +49,19 @@ in
     # conflict), while still supplying it on one that does not. Measured on
     # sweep 34388647306 — the first sweep after the versionCheckHook fix,
     # which is what let the build reach this phase at all.
+    #
+    # Upstream 0.13.2 also lists `cryptography` directly. nixpkgs' recipe
+    # does not, and pyjwt carries it only as an optional extra, so the
+    # runtime-deps check reports `cryptography not installed`. It is
+    # appended the same way, as nixpkgs' own derivation.
     dependencies =
       (old.dependencies or [])
-      ++ [python3Packages.httpx-auth];
+      ++ (with python3Packages; [cryptography httpx-auth]);
+    # Upstream 0.13.2 also raised `certifi>=2026.10.19` to refresh its trust
+    # bundle. nixpkgs' certifi replaces that bundle with the system cacert,
+    # so the floor buys nothing here and only trips the runtime-deps check
+    # until nixpkgs ships the newer release.
+    pythonRelaxDeps = ["certifi"];
     nativeCheckInputs = with python3Packages; [pytest pytest-asyncio];
     doInstallCheck = true;
     installCheckPhase = vu.mkMcpSmokeTest {bin = "mcp-proxy";};
