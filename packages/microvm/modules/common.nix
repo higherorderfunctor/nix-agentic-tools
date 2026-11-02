@@ -1,4 +1,4 @@
-{
+{backend}: {
   config,
   lib,
   options,
@@ -93,7 +93,7 @@
           runtime = name;
         };
 in {
-  imports = [(import ./identities.nix {inherit inheritOptions;}) (import ./relay.nix {inherit routed;})];
+  imports = [(import ./identities.nix {inherit inheritOptions;}) (import ./relay.nix {inherit backend routed;})];
 
   options.ai =
     {
