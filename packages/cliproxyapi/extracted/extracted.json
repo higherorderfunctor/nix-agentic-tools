@@ -57,6 +57,22 @@
       "description": "BaseURL is the base URL for the Claude API endpoint.\nIf empty, the default Claude API URL will be used.",
       "type": "string"
     },
+    "api-keys.claude[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.claude[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.claude[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.claude[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.claude[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -97,6 +113,22 @@
     "api-keys.claude[].keys[].cloak.strict-mode": {
       "description": "StrictMode controls how caller system prompts are handled when cloaking.\n- false (default): legacy-model whitelist uses a user reminder; all other models use a mid-conversation system message\n- true: strip caller system prompts and keep only the Claude Code billing and identity blocks",
       "type": "bool"
+    },
+    "api-keys.claude[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.claude[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.claude[].keys[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
@@ -352,6 +384,22 @@
       "description": "BaseURL is the base URL for the Codex API endpoint.\nIf empty, the default Codex API URL will be used.",
       "type": "string"
     },
+    "api-keys.codex[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.codex[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.codex[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.codex[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.codex[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -375,6 +423,22 @@
     "api-keys.codex[].keys[].api-key": {
       "description": "APIKey is the authentication key for accessing Codex API services.",
       "type": "string"
+    },
+    "api-keys.codex[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.codex[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.codex[].keys[].disable-codex-cloaking": {
       "description": "DisableCodexCloaking optionally overrides the global codex.disable-codex-cloaking for this credential.\nTrue disables cloaking; false explicitly enables cloaking; omitted inherits global codex.disable-codex-cloaking.",
@@ -620,6 +684,22 @@
       "description": "BaseURL optionally overrides the Gemini API endpoint.",
       "type": "string"
     },
+    "api-keys.gemini[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.gemini[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.gemini[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.gemini[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -639,6 +719,22 @@
     "api-keys.gemini[].keys[].api-key": {
       "description": "APIKey is the authentication key for accessing Gemini API services.",
       "type": "string"
+    },
+    "api-keys.gemini[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.gemini[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.gemini[].keys[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
@@ -868,6 +964,22 @@
       "description": "BaseURL optionally overrides the Gemini API endpoint.",
       "type": "string"
     },
+    "api-keys.interactions[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.interactions[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.interactions[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.interactions[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -887,6 +999,22 @@
     "api-keys.interactions[].keys[].api-key": {
       "description": "APIKey is the authentication key for accessing Gemini API services.",
       "type": "string"
+    },
+    "api-keys.interactions[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.interactions[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.interactions[].keys[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
@@ -1122,6 +1250,22 @@
       "description": "BaseURL is the base URL for the Codex API endpoint.\nIf empty, the default Codex API URL will be used.",
       "type": "string"
     },
+    "api-keys.meta[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.meta[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.meta[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.meta[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.meta[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -1145,6 +1289,22 @@
     "api-keys.meta[].keys[].api-key": {
       "description": "APIKey is the authentication key for accessing Codex API services.",
       "type": "string"
+    },
+    "api-keys.meta[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.meta[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.meta[].keys[].disable-codex-cloaking": {
       "description": "DisableCodexCloaking optionally overrides the global codex.disable-codex-cloaking for this credential.\nTrue disables cloaking; false explicitly enables cloaking; omitted inherits global codex.disable-codex-cloaking.",
@@ -1394,6 +1554,22 @@
       "description": "CodexShellArgCleanup removes redundant approval arguments from Codex shell calls translated from chat completions.",
       "type": "bool"
     },
+    "api-keys.openai-compatibility[].connection-pool": {
+      "description": "ConnectionPool is the provider-group default for upstream connection reuse.\nA per-key connection-pool entry overrides it field by field; omitted disables pooling.",
+      "type": "object"
+    },
+    "api-keys.openai-compatibility[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.openai-compatibility[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this provider when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -1415,6 +1591,22 @@
     "api-keys.openai-compatibility[].keys[].api-key": {
       "description": "APIKey is the authentication key for accessing the external API services.",
       "type": "string"
+    },
+    "api-keys.openai-compatibility[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this key, overriding\nthe provider-group default field by field. Pools stay per credential, so\nopting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.openai-compatibility[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.openai-compatibility[].keys[].proxy-url": {
       "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
@@ -1564,6 +1756,22 @@
       "description": "BaseURL optionally overrides the Vertex-compatible API endpoint.\nWhen it contains a \"/publishers/\" segment it is used as the full resource\nprefix (e.g. \"https://aiplatform.googleapis.com/v1/projects/{p}/locations/{l}/publishers/google/models\")\nand the executor only appends \"/{model}:{action}\". Otherwise \"/v1\" is\ninserted if absent, then \"/publishers/google/models\" is appended; a\ntrailing version segment like \"/v1\" or \"/v1beta1\" is never duplicated.",
       "type": "string"
     },
+    "api-keys.vertex[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.vertex[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.vertex[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.vertex[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -1583,6 +1791,22 @@
     "api-keys.vertex[].keys[].api-key": {
       "description": "APIKey is the authentication key for accessing the Vertex-compatible API.\nMaps to the x-goog-api-key header.",
       "type": "string"
+    },
+    "api-keys.vertex[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.vertex[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.vertex[].keys[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
@@ -1764,6 +1988,22 @@
       "description": "BaseURL is the base URL for the Codex API endpoint.\nIf empty, the default Codex API URL will be used.",
       "type": "string"
     },
+    "api-keys.xai[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.xai[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.xai[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.xai[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
+    },
     "api-keys.xai[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
       "type": "bool"
@@ -1787,6 +2027,22 @@
     "api-keys.xai[].keys[].api-key": {
       "description": "APIKey is the authentication key for accessing Codex API services.",
       "type": "string"
+    },
+    "api-keys.xai[].keys[].connection-pool": {
+      "description": "ConnectionPool configures upstream connection reuse for this credential.\nOmitted disables pooling (preserving the fresh-transport-per-request default);\npools stay per credential, so opting in never shares connections with another key.",
+      "type": "object"
+    },
+    "api-keys.xai[].keys[].connection-pool.enabled": {
+      "description": "Enabled controls whether connection reuse is active for this credential.\nWriting the connection-pool block is the opt-in, so an omitted or true\nvalue enables pooling; an explicit false opts a key out of its group pool.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout is how long an idle pooled connection survives before it\nis closed. Defaults to \"300s\". Measured against ollama.com, an idle\nconnection was still reused after 600s, so 300s sits inside the upstream\nwindow while covering the multi-minute gaps between interactive requests.\nZero or a negative value disables keep-alives, so every request dials\nafresh.",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost caps idle connections kept per upstream host.\nDefaults to 2, matching net/http's DefaultMaxIdleConnsPerHost. Zero or a\nnegative value disables keep-alives as well.",
+      "type": "int"
     },
     "api-keys.xai[].keys[].disable-codex-cloaking": {
       "description": "DisableCodexCloaking optionally overrides the global codex.disable-codex-cloaking for this credential.\nTrue disables cloaking; false explicitly enables cloaking; omitted inherits global codex.disable-codex-cloaking.",
