@@ -206,6 +206,22 @@ in {
         [[ $(tip "$state/repositories/second.git" refs/heads/main) == "$before" ]]
         stop
 
+        # A forge removed from the config leaves nothing to trust: with the
+        # credential intact — so only the pin could save it — startup refuses
+        # a repository still routed to that host, and the stale pin file
+        # itself is gone while current forges keep theirs. The timeout turns
+        # a regression that does serve into a fast failure instead of a hang.
+        jq --arg base "$base" 'del(.forges."two.example.invalid")
+          | .credentials.second = {forges: ["two.example.invalid"], sshKeyFile: ($base + "/second key")}' \
+          relay.json >stale-forge.json
+        if (cd "$state"; GIT_RELAY_CONFIG="$base/stale-forge.json" exec timeout 5 ${lib.getExe relay}) >stale-forge.log 2>&1; then
+          echo 'FAIL: startup served a repository whose forge was removed' >&2
+          exit 1
+        fi
+        grep -F "repository 'second': no forge pins for 'two.example.invalid'" stale-forge.log
+        [[ ! -e $state/known_hosts.d/two.example.invalid ]]
+        [[ -s $state/known_hosts.d/one.example.invalid ]]
+
         # A direct JSON caller cannot bypass the module's SSH-only upstream rule.
         jq --arg upstream "$base/upstream/ok.git" '.repositories.ok.upstream = $upstream' relay.json >local.json
         if (cd "$state"; GIT_RELAY_CONFIG="$base/local.json" exec ${lib.getExe relay}) >local.log 2>&1; then
