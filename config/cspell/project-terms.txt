@@ -117,6 +117,7 @@ cliproxyapi
 clis
 cliutil
 cmdbuilder
+codeberg
 codeqlmanifest
 codesign
 codewhisperer
@@ -133,6 +134,7 @@ cpamp
 createrequire
 creds
 customisation
+curlrc
 datamodels
 dataurl
 deadnix
@@ -341,6 +343,7 @@ neighbour
 neighbouring
 neighbours
 netrc
+netdev
 newfstatat
 niks
 nixbld
@@ -350,8 +353,10 @@ nixos
 nixpkgs
 nobuiltin
 nodev
+nnoproxy
 noescape
 noexplore
+noproxy
 nohup
 nomodel
 nosub
@@ -400,6 +405,7 @@ prio
 procps
 pthread
 purpleclay
+pushurl
 pycache
 pythonnousersite
 qiiiiii
@@ -467,6 +473,7 @@ sigtool
 simpara
 skillsdir
 slurpfile
+slirp
 smartlog
 sourcehut
 sourcepath
@@ -553,11 +560,13 @@ unstages
 unstarted
 unstash
 untarring
+urandom
 unwire
 upgrader
 uppercased
 usebruno
 userns
+vcpus
 virtualisation
 vllm
 wbits
@@ -565,6 +574,7 @@ wfagents
 wfcap
 wfctl
 wfpins
+wfile
 wikilink
 worktree
 worktrees

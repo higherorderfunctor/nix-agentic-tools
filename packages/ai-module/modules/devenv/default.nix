@@ -92,6 +92,13 @@
     };
 in {
   imports = [../common.nix];
+  # The per-project runtime root prevents HM and devenv services with the same
+  # name from sharing secret files or agent sockets.
+  options.ai.services = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule ({name, ...}: {
+      config.runtimeDir = lib.escapeShellArg "${config.devenv.runtime}/ai-service-${name}";
+    }));
+  };
   config = lib.mkMerge [
     {
       files = files.native;

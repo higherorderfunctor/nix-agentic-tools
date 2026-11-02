@@ -575,6 +575,77 @@
         };
       }) "family names must be unique across vendors"
     );
+    "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let
+      goSelected = plan:
+        change {
+          ai.programs.delegate-routing = {
+            opencodeGo = {inherit plan;};
+            runtimes.claude = {
+              extraRuntimes = [];
+              manualExternalDelegates = [];
+              models = [{vendors = ["opencode-go"];}];
+            };
+          };
+        };
+      kimi = {
+        match = "kimi-k3*";
+        tier = "strong";
+      };
+      overlapping = families: models:
+        change {
+          ai.programs.delegate-routing = {
+            inherit families;
+            runtimes.claude.models = [{vendors = ["opencode-go"];}] ++ models;
+          };
+        };
+      inherit (import ../lib/opencode-go.nix {inherit lib;}) note;
+      planned = readSkill (goSelected "go-plus") "claude";
+      unplanned = readSkill (goSelected null) "claude";
+    in
+      # Presets ship but render only when selected; the default skill has no
+      # Pool column and no provisional note.
+      !(lib.hasInfix "(opencode-go)" claude)
+      && !(lib.hasInfix "| Pool " claude)
+      && !(hasProse note claude)
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
+      && hasProse note planned
+      && lib.hasInfix "| Pool " planned
+      && lib.hasInfix "go-plus: $60 of list-price use empties the monthly pool" planned
+      && lib.hasInfix "go-plus: unlimited" planned
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
+      && !(lib.hasInfix "| Pool " unplanned)
+      && passes (goSelected "go-plus")
+      # A manual-only target's Go families carry the same pool hint; the
+      # formatter wraps list items onto indented lines.
+      && lib.hasInfix "go-kimi-k3 (opencode-go) `kimi-k3`: go-plus: $60 of list-price use empties the monthly pool" (lib.replaceStrings ["\n  "] [" "] (skill {
+        ai.programs.delegate-routing = {
+          opencodeGo.plan = "go-plus";
+          runtimes.kimchi.models = [{vendors = ["opencode-go"];}];
+        };
+      }))
+      # A selected preset and another family, of any vendor, matching the
+      # same Go catalog model on one runtime fail; on different runtimes, or
+      # with no preset selected, they pass.
+      && lib.all (failsWith (overlapping {example.kimi = kimi;} [{families = ["kimi"];}])) ["kimi-k3 (" "example.kimi" "opencode-go.go-kimi-k3"]
+      && failsWith (overlapping {opencode-go.mine = kimi;} []) "opencode-go.mine"
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families.example.kimi = kimi;
+          runtimes = {
+            claude.models = [{families = ["kimi"];}];
+            codex.models = [{vendors = ["opencode-go"];}];
+          };
+        };
+      })
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families = {
+            example.kimi = kimi;
+            other.kimi-exact = kimi // {match = "kimi-k3";};
+          };
+          runtimes.claude.models = [{families = ["kimi" "kimi-exact"];}];
+        };
+      }));
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
       failsWith (invalidNode {
         kind = "subagent";

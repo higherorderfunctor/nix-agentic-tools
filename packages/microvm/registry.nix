@@ -8,6 +8,26 @@
         name = "sandbox";
         dir = facetOwner;
       }
+      {
+        location = "package";
+        name = "sandbox-git";
+        dir = facetOwner;
+      }
+      {
+        location = "package";
+        name = "sandbox-identities";
+        dir = facetOwner;
+      }
+      {
+        location = "package";
+        name = "sandbox-inference";
+        dir = facetOwner;
+      }
+      {
+        location = "package";
+        name = "sandbox-signing";
+        dir = facetOwner;
+      }
     ];
   };
 }

@@ -1,8 +1,10 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-29 — usage follows each runtime's selected proxy,
-> with direct reads when management metadata is absent; review role overrides
-> migrate to the single Review step, with no compatibility keys shipped.
+> **Last verified:** 2026-10-30 — usage follows each runtime's selected proxy,
+> with direct reads when management metadata is absent; OpenCode Go usage joins
+> z.ai as an API-key pool found by base URL, with opt-in Go preset families;
+> review role overrides migrate to the single Review step, with no compatibility
+> keys shipped.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -87,6 +89,29 @@ add a family. `lib/families.nix` carries the package families without concrete
 model versions or Kimchi-served vendors. Consumers selecting Kimchi models
 declare the corresponding vendor families in their delegate-routing
 configuration.
+
+`lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
+catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
+(`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
+get no preset. They come from per-model research, and every tier is provisional:
+whenever an `opencode-go` family renders, one line under the tables says so.
+Each family is named `go-` plus the exact Go id, except
+`go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research found
+share a role. The `go-` prefix keeps them apart from hand-written families such
+as `kimi-k3`. Presets render only when a runtime selects them, for example
+`models = [{vendors = ["opencode-go"];}]`; a tier-only selector picks them up
+like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
+field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
+fact: the list-price dollars that empty the account's monthly pool, so a lower
+limit weighs more. The skill shows a Pool column only when a selected family
+carries pool text. If one runtime selects a preset and another family of any
+vendor, a custom `opencode-go` one included, that match the same servable Go
+catalog id, such as a hand-written `deepseek-v*-flash*` beside
+`go-deepseek-v4.1-flash`, evaluation fails and names the id and the families.
+Selecting them on different runtimes is allowed, and families that overlap with
+no preset selected are not checked. The `delegate-routing-opencode-go-presets`
+check fails when a servable catalog id matches no preset or several, or a preset
+matches no catalog id.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
@@ -183,17 +208,24 @@ delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
 helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
-direct read. `zai-usage claude|codex` selects the route whose GLM pool it reads;
-consumers attach it to a runtime through that runtime's usage techniques.
+direct read. `zai-usage claude|codex` and `opencode-usage claude|codex` select
+the route whose GLM or OpenCode Go pool they read; consumers attach them to a
+runtime through that runtime's usage techniques. `opencode-usage` reads the
+undocumented `GET https://opencode.ai/zen/go/v1/usage`, the request OpenCode's
+open-source client makes, and prints Go's `rolling`, `weekly` and `monthly`
+windows with `status`, `usedPercent`, `remainingPercent` and a local `resetsAt`.
 
 Usage follows generic `ai.<runtime>.settings.inference` selection. A selected
 local instance with a file management-key reference supplies metadata
 automatically. With no proxy or no management metadata, helpers use their direct
-login or `ZAI_API_KEY_FILE`. Once metadata is supplied, missing accounts,
-ambiguous z.ai keys, malformed responses and request failures are errors; stale
-local logins are not consulted. The backend never drains the usage queue. z.ai
-discovery reads secret-bearing configuration in memory, matches hostname
-`api.z.ai` and requires one distinct key across both supported transports.
+login, `ZAI_API_KEY_FILE` or `OPENCODE_API_KEY_FILE`. Once metadata is supplied,
+missing accounts, ambiguous API keys, malformed responses and request failures
+are errors; stale local logins are not consulted. The backend never drains the
+usage queue. API-key discovery reads secret-bearing configuration in memory
+across the claude, codex and openai-compatibility transports and requires one
+distinct key. z.ai matches hostname `api.z.ai`; OpenCode Go matches hostname
+`opencode.ai` under base path `/inference/go`, so it finds the key whichever
+native API a credential declares and ignores other OpenCode surfaces.
 
 When a host manages the proxy and a project delivers routing, add the matching
 runtime pairs in `devenv.local.nix` (use `ai.codex.environmentVariables` for

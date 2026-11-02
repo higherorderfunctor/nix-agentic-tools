@@ -4,4 +4,5 @@
   ...
 }: {
   ai.mkSandbox = import ./mkSandbox.nix {inherit inputs lib;};
+  ai.mkSshSigner = import ./mkSshSigner.nix;
 }
