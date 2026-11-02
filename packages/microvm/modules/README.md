@@ -41,6 +41,14 @@ evaluation. Enabled Kiro, Kimchi and Copilot runtimes with
 defaults never warn. Extra packages and Git enter the guest system profile and
 executable PATH so child shells can find them.
 
+Git inside the guest is configured through `ai.sandbox.git`
+(docs/sandbox-git.md): the same ini `settings` tree and the same typed tool
+options (`absorb`, `branchless`, `revise`) as the host's `git.*`, mirrored at
+`ai.<runtime>.sandbox.git`, delivered as the guest's system `/etc/gitconfig`
+with SSH refused (`core.sshCommand`) and the seed paths trusted
+(`safe.directory`) forced on top. Enabled tools' packages join the guest system
+profile.
+
 `ai.sandboxes.<name>` remains for one release as a deprecated standalone surface
 and warns when non-empty. Migrate runtime guests to `ai.sandbox`, or use the
 factory below for a standalone guest. A legacy declaration such as
@@ -50,7 +58,7 @@ names are exclusive through `ai.claims`, including collisions with runtime
 launchers.
 
 The standalone factory takes the caller's package set, required `exe` and
-`outName`, and optional packages and sizing:
+`outName`, and optional packages, sizing and `gitConfig`:
 
 ```nix
 inputs.nix-agentic-tools.lib.ai.mkSandbox pkgs {
@@ -67,10 +75,11 @@ microvm.nix comes from this flake's pinned input; consumers need no separate
 microvm input or module arguments. `exe` must be an absolute executable path;
 use `lib.getExe' pkg "name"` to select a binary explicitly. Its Nix string
 context keeps the package in the launcher closure. `outName` must be a single
-name, not a path. The factory defaults to `memory = 1024`, `vcpus = 1` and
-`packages = []`; memory must be an integer of at least 128 MiB, CPUs a positive
-integer, and packages a list of derivations. Packages enter both the guest
-system profile and executable PATH.
+name, not a path. The factory defaults to `memory = 1024`, `vcpus = 1`,
+`packages = []` and `gitConfig = null` (no system Git configuration); memory
+must be an integer of at least 128 MiB, CPUs a positive integer, packages a list
+of derivations, and `gitConfig` a string of Git INI or null. Packages enter both
+the guest system profile and executable PATH.
 
 Run without arguments to invoke the executable without arguments. To pass guest
 arguments, put `--` first: `sandbox-hello -- --version`. The launcher removes
