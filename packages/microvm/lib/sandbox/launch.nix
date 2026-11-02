@@ -10,6 +10,7 @@
   pkgs,
   relayConfig,
   runtime,
+  runtimeIdentities,
 }: let
   connected = factory (args
     // {
@@ -17,12 +18,13 @@
         {
           arguments = ["STDIO" "TCP:127.0.0.1:${toString instance.port}"];
           command = "${pkgs.socat}/bin/socat";
-          port = 9418;
+          port = guestPort;
         }
       ];
       repo = true;
       repoConfig = true;
     });
+  guestPort = 9418;
   plain = factory args;
   seeded = factory (args // {repo = true;});
   selector = import ./selector.nix {inherit identities pkgs runtime;};
@@ -32,8 +34,8 @@
   };
   tableFile = pkgs.writeText "sandbox-${runtime}-selection.json" (builtins.toJSON table);
   users = pkgs.writeText "sandbox-${runtime}-users.json" (builtins.toJSON (lib.mapAttrs (_: entry: entry.user) identities));
-  # session open validates credential references but never reads their key.
-  # The daemon and its hooks use the resolved service config on every push.
+  # session open validates references but only the daemon writes shared pins.
+  # Its hooks read the resolved service config and current pins on every push.
   managementConfig = pkgs.writeText "sandbox-${runtime}-relay.json" relayConfig;
 in
   (import ../../../../lib/strict-shell-application.nix pkgs {
@@ -42,7 +44,7 @@ in
     text = ''
       selected=$(${lib.getExe selector} ${tableFile})
       identity=$(jq -r '.identity // "none"' <<< "$selected")
-      printf '%s %s\n' ${lib.escapeShellArg "${runtime}-sandbox: identities=${builtins.toJSON (builtins.attrNames identities)} (runtime values replace ai.sandbox.git.identities);"} "$(jq -c '{token, identity}' <<< "$selected")" >&2
+      printf '%s %s\n' ${lib.escapeShellArg "${runtime}-sandbox: identities=${builtins.toJSON (builtins.attrNames identities)}${lib.optionalString runtimeIdentities " (runtime values replace ai.sandbox.git.identities)"};"} "$(jq -c '{token, identity}' <<< "$selected")" >&2
       if [[ $selected == null ]]; then
         if git rev-parse --show-toplevel >/dev/null 2>&1; then
           exec ${lib.getExe seeded} "$@"
@@ -88,7 +90,7 @@ in
       git config --file "$SANDBOX_REPO_CONFIG" user.email "$(jq -r --arg identity "$identity" '.[$identity].email' ${users})"
       git config --file "$SANDBOX_REPO_CONFIG" commit.gpgSign false
       git config --file "$SANDBOX_REPO_CONFIG" tag.gpgSign false
-      git config --file "$SANDBOX_REPO_CONFIG" remote.origin.url "git://10.0.2.100:9418/sessions/$token.git"
+      git config --file "$SANDBOX_REPO_CONFIG" remote.origin.url "git://${connected.doorAddress}:${toString guestPort}/sessions/$token.git"
       git config --file "$SANDBOX_REPO_CONFIG" remote.origin.prune false
       ${lib.getExe connected} "$@"
     '';

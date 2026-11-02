@@ -3,10 +3,8 @@
   harness,
   lib,
   pkgs,
-  self,
   ...
 }: let
-  factory = self.lib.ai.mkSandbox pkgs;
   mkLintedCheck = import ../../../lib/mk-linted-check.nix {inherit pkgs;};
   redact = import ../../../lib/redact {inherit lib;};
   state = "/tmp/microvm-sandbox-session-check";
@@ -46,10 +44,27 @@
       name = "Guest Session Bot";
     };
   };
-  backends = {
-    devenv = harness.evalDevenv fixture;
-    hm = harness.evalHmModules [fixture {ai.codex.pinDaemonToPackage = false;}];
+  evaluate = {
+    devenv = harness.evalDevenv;
+    hm = config: harness.evalHmModules [{inherit config;} {ai.codex.pinDaemonToPackage = false;}];
   };
+  backends = lib.mapAttrs (_: eval: eval fixture) evaluate;
+  withoutIdentities = lib.mapAttrs (_: eval:
+    eval (lib.recursiveUpdate fixture {
+      ai.claude.sandbox.git.identities = lib.mkForce {};
+      ai.codex.sandbox.git.identities = lib.mkForce {};
+    }))
+  evaluate;
+  inherited = harness.evalHmModules [
+    (fixture
+      // {
+        ai = fixture.ai // {codex = builtins.removeAttrs fixture.ai.codex ["sandbox"];};
+      })
+    {
+      ai.codex.pinDaemonToPackage = false;
+      ai.sandbox.git.identities.work = identity "codex-only";
+    }
+  ];
   launcher = result: runtime:
     lib.findFirst (package: package.meta.mainProgram == "${runtime}-sandbox") (throw "missing ${runtime} session launcher") result.config.ai.internal.sandboxPackages;
   check = name: predicate:
@@ -88,18 +103,10 @@ in {
         == [token]
         && table.${token}.credential == "${runtime}-${own}"
         && table.${token}.identity == own
-        && package.plain.drvPath
-        == (factory {
-          exe = lib.getExe guest;
-          memory = 1024;
-          outName = "${runtime}-sandbox";
-          packages = [pkgs.git];
-          vcpus = 1;
-        }).drvPath
         && package.plain.guest.config.microvm.interfaces == []
         && package.seeded.guest.config.microvm.interfaces == []
         && !lib.any (lib.hasPrefix "user,id=doors") package.seeded.guest.config.microvm.qemu.extraArgs
-        && lib.hasInfix "guestfwd=tcp:10.0.2.100:9418-cmd:" netdev
+        && lib.hasInfix "guestfwd=tcp:${package.connected.doorAddress}:9418-cmd:" netdev
         && builtins.elem "name=opt/sandbox.repo-config,file=repo-config" connected.microvm.qemu.extraArgs
         && cfg.ai.git-relay.instances.sandbox.stateDir == state;
     in
@@ -108,13 +115,25 @@ in {
       microvm-sandbox-session-boot = boot;
       microvm-sandbox-session-launchers = mkLintedCheck "microvm-sandbox-session-launchers" {
         runtimeInputs = [pkgs.gnugrep];
-        text = lib.concatMapStringsSep "\n" (package: ''
-          grep -F ${lib.escapeShellArg "${lib.getExe package.selector} ${package.tableFile}"} ${lib.getExe package}
-          if grep -Fq sandbox-select ${lib.getExe package.plain}; then
-            echo 'plain factory launcher unexpectedly invokes identity selection' >&2
-            exit 1
-          fi
-        '') [claude codex];
+        text =
+          lib.concatMapStringsSep "\n" (package: ''
+            grep -F ${lib.escapeShellArg "${lib.getExe package.selector} ${package.tableFile}"} ${lib.getExe package}
+            grep -F 'runtime values replace ai.sandbox.git.identities' ${lib.getExe package}
+          '') [claude codex]
+          + lib.concatMapStringsSep "\n" (result:
+            lib.concatMapStringsSep "\n" (runtime: ''
+              if grep -Fq sandbox-select ${lib.getExe (launcher result runtime)}; then
+                echo 'module launcher without identities unexpectedly invokes selection' >&2
+                exit 1
+              fi
+            '') ["claude" "codex"]) (builtins.attrValues withoutIdentities)
+          + ''
+            grep -F sandbox-select ${lib.getExe (launcher inherited "codex")}
+            if grep -Fq 'runtime values replace ai.sandbox.git.identities' ${lib.getExe (launcher inherited "codex")}; then
+              echo 'inherited identities unexpectedly announce runtime replacement' >&2
+              exit 1
+            fi
+          '';
       };
     }
   );
