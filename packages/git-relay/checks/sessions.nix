@@ -70,7 +70,7 @@ in {
             cd "$state"
             exec {lock_fd}<>"locks/$token"
             flock -n "$lock_fd" || :
-            GIT_RELAY_CONFIG="$base/relay.json" exec ${lib.getExe relay} session "$@"
+            GIT_RELAY_CONFIG="''${session_config:-$base/relay.json}" exec ${lib.getExe relay} session "$@"
           )
         }
         absent() {
@@ -84,19 +84,33 @@ in {
         mkdir -p "$state/locks"
         exec {held_lock}<>"$state/locks/${held}"
         flock -n "$held_lock"
-        locked "${held}" open --token "${held}" --credential work --upstream "$ssh_upstream"
-        locked "${abandoned}" open --token "${abandoned}" --credential work --upstream "$ssh_upstream"
-        [[ -d $state/repositories/sessions/${held}.git ]]
-        [[ -d $state/repositories/sessions/${abandoned}.git ]]
+        absent locked "${held}" open --token "${held}" --credential work --upstream "$ssh_upstream"
+        [[ ! -e $state/known_hosts.d/sessions.example.invalid ]]
+        # A leftover session from a prior daemon is reaped at startup.
+        git init --bare --quiet "$state/repositories/sessions/${abandoned}.git"
+        touch "$state/locks/${abandoned}"
 
         pid=
         # TERM lets git daemon stop its git-daemon child as well.
         trap '[[ -z $pid ]] || kill -TERM "$pid" 2>/dev/null || :' EXIT
-        (
-          cd "$state"
-          GIT_RELAY_CONFIG="$base/relay.json" exec ${lib.getExe relay}
-        ) >relay.log 2>&1 &
-        pid=$!
+        start_relay() {
+          if [[ -n $pid ]]; then
+            kill -TERM "$pid"
+            wait "$pid" || :
+          fi
+          (
+            cd "$state"
+            GIT_RELAY_CONFIG="$base/relay.json" exec ${lib.getExe relay}
+          ) >relay.log 2>&1 &
+          pid=$!
+        }
+        start_relay
+        for _ in {1..100}; do
+          [[ -s $state/known_hosts.d/sessions.example.invalid ]] && break
+          kill -0 "$pid" 2>/dev/null || break
+          sleep 0.1
+        done
+        locked "${held}" open --token "${held}" --credential work --upstream "$ssh_upstream"
         for _ in {1..100}; do
           if git ls-remote "$url/sessions/${held}.git" >/dev/null 2>&1; then break; fi
           kill -0 "$pid" 2>/dev/null || break
@@ -139,21 +153,6 @@ in {
         grep -qxF -- "UserKnownHostsFile=\"$state/known_hosts.d/sessions.example.invalid\"" ssh-args
         grep -qxF -- IdentitiesOnly=yes ssh-args
 
-        # Re-opens rewrite the shared pin file while a reader loops over it;
-        # the write-then-rename publish keeps every read a complete pin line.
-        : >pin-misses
-        (
-          for _ in {1..300}; do
-            grep -qxF -- "$pin" "$state/known_hosts.d/sessions.example.invalid" || echo miss >>pin-misses
-          done
-        ) &
-        pin_reader=$!
-        for _ in {1..10}; do
-          locked "${fresh}" open --token "${fresh}" --credential work --upstream "$scp_upstream"
-        done
-        wait "$pin_reader"
-        [[ ! -s pin-misses ]]
-
         # Wrong tokens serve nothing; malformed ones never open.
         absent git ls-remote "$url/sessions/${unknown}.git"
         for token in TOOSHORT ${held}% 0F1E2D3C4B5A69788796A5B4C3D2E1F0; do
@@ -176,7 +175,7 @@ in {
           echo "FAIL: open accepted an unpinned host" >&2
           exit 1
         fi
-        grep -F "no forge pins for 'unpinned.example.invalid'" open.log
+        grep -F "no live daemon pins for 'unpinned.example.invalid'" open.log
         # A malformed --alternates is refused before anything is created.
         if locked "${unknown}" open --token "${unknown}" --credential work \
           --upstream "$ssh_upstream" --alternates relative/objects >open.log 2>&1; then
@@ -208,6 +207,43 @@ in {
         git init --bare --quiet "$state/repositories/staging/${held}.git"
         absent git ls-remote "$url/staging/${held}.git"
         rm -rf -- "$state/repositories/staging/${held}.git"
+
+        # An old launcher opens against its old template after a daemon pin
+        # rotation; it must leave the daemon's new trust file untouched.
+        cp relay.json stale.json
+        session_config="$base/stale.json"
+        rotated_pin='sessions.example.invalid ssh-ed25519 rotated'
+        jq --arg pin "$rotated_pin" '.forges["sessions.example.invalid"].hostKeys = $pin' relay.json >rotated.json
+        mv rotated.json relay.json
+        start_relay
+        for _ in {1..100}; do
+          grep -qxF "$rotated_pin" "$state/known_hosts.d/sessions.example.invalid" && break
+          sleep 0.1
+        done
+        locked "${held}" open --token "${held}" --credential work --upstream "$ssh_upstream"
+        grep -qxF "$rotated_pin" "$state/known_hosts.d/sessions.example.invalid"
+        # Removing the forge must remain a refusal even with the old template.
+        jq '.forges = {"other.example.invalid": {hostKeys: "other.example.invalid ssh-ed25519 fixture"}}' relay.json >removed.json
+        mv removed.json relay.json
+        start_relay
+        for _ in {1..100}; do
+          [[ ! -e $state/known_hosts.d/sessions.example.invalid ]] && break
+          sleep 0.1
+        done
+        if locked "${unknown}" open --token "${unknown}" --credential work --upstream "$ssh_upstream" >open.log 2>&1; then
+          echo 'FAIL: stale config resurrected removed forge pins' >&2
+          exit 1
+        fi
+        grep -F "no live daemon pins for 'sessions.example.invalid'" open.log
+        [[ ! -e $state/known_hosts.d/sessions.example.invalid ]]
+        [[ ! -e $state/repositories/sessions/${unknown}.git ]]
+        cp stale.json relay.json
+        unset session_config
+        start_relay
+        for _ in {1..100}; do
+          git ls-remote "$url/sessions/${held}.git" >/dev/null 2>&1 && break
+          sleep 0.1
+        done
 
         # Removing the credential's permission for the upstream host revokes
         # the session: the next push is refused and no new session opens.
