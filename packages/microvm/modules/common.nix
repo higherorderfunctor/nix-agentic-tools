@@ -100,6 +100,8 @@ in {
       enabled = true;
       name = "microvm";
     })
+    (import ./identities.nix {inherit inheritOptions;})
+    (import ./relay.nix {inherit routed;})
   ];
 
   options.ai =
