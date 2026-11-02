@@ -78,7 +78,8 @@
       factory {
         exe = lib.getExe package;
         # The guest's system git configuration (modules/git.nix), delivered as
-        # a file: a protected scope, and libgit2 tools read files only.
+        # a file because the libgit2 tools read files only; the system scope
+        # is the one `safe.directory` is honored in.
         gitConfig = lib.generators.toGitINI cfg.git._ini;
         memory = cfg.vm.memory;
         outName = commandName name;
