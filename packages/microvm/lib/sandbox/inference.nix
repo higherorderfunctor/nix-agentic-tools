@@ -41,10 +41,12 @@
       key = null;
       url = null;
     };
-  # A disabled runtime's inherited client name requests nothing; an explicit
-  # null opts a live sandbox out.
+  # Inherited client names request nothing after a runtime opts out of its
+  # inference selection. A runtime definition (even mkDefault) is explicit.
   live = config.ai.${runtime}.enable && config.ai.${runtime}.sandbox.enable;
-  requested = live && sandboxClient != null;
+  explicitClient = options.ai.${runtime}.sandbox.inference.clientKey.highestPrio < 1500;
+  selected = hostSelection.instance != null || hostSelection.url != null;
+  requested = live && sandboxClient != null && (selected || explicitClient);
   option = "ai.${runtime}.sandbox.inference.clientKey";
   guestSelection = hostSelection // {clientKey = sandboxClient;};
   registry = config.ai.internal.inferenceInstances;
@@ -59,15 +61,17 @@
     then config.ai.cliproxyapi.instances.${name}.port
     else null;
   port = instancePort hostSelection.instance;
-  # A sandbox client an enabled host harness also selects must be refused:
-  # revoking it would then cut a host harness too.
+  # Different client/instance names may still resolve to the same reference.
+  # Compare references only: evaluating secret bytes would expose them.
   selectsSameClient = harness:
     config.ai.${harness}.enable
     && selectsInference harness
     && (let
       own = config.ai.${harness}.settings.inference;
+      hostEndpoint = inferenceLib.resolve registry own;
     in
-      own.instance == guestSelection.instance && own.clientKey == sandboxClient);
+      (own.instance == guestSelection.instance && own.clientKey == sandboxClient)
+      || (hostEndpoint != null && hostEndpoint ? key && hostEndpoint.key == resolved.key));
   hostReuse = lib.filter selectsSameClient runtimeNames;
   active =
     selectable
@@ -100,7 +104,11 @@ in {
   assertions =
     # Generic resolver diagnostics (missing/disabled instance, missing
     # client, external selection) name this option path themselves.
-    lib.optionals requested (inferenceLib.assertionsFor registry ["ai" runtime "sandbox" "inference" "clientKey"] guestSelection)
+    lib.optionals (requested && selected) (inferenceLib.assertionsFor registry ["ai" runtime "sandbox" "inference" "clientKey"] guestSelection)
+    ++ lib.optional (requested && !selected) {
+      assertion = false;
+      message = "${option} explicitly requests a sandbox client without an inference instance; set ai.${runtime}.settings.inference.instance or unset ${option}.";
+    }
     ++ lib.optional (requested && !(builtins.elem runtime supportedRuntimes)) {
       assertion = builtins.elem runtime supportedRuntimes;
       message = "${option}: sandbox inference supports the claude and codex guest routes only.";
@@ -115,7 +123,7 @@ in {
     }
     ++ lib.optional (active && hostReuse != []) {
       assertion = hostReuse == [];
-      message = "${option} names client \`${sandboxClient}\` of instance \`${hostSelection.instance}\`, also selected by ${lib.concatMapStringsSep ", " (harness: "ai.${harness}.settings.inference") hostReuse}; give the sandbox a VM-only client.";
+      message = "${option} names client \`${sandboxClient}\` of instance \`${hostSelection.instance}\`, whose client or key reference is also selected by ${lib.concatMapStringsSep ", " (harness: "ai.${harness}.settings.inference") hostReuse}; give the sandbox a VM-only client and key reference.";
     };
   # Only the factory parameters an active selection needs; everything else
   # (door, blob, probe) stays absent when inference is inactive.

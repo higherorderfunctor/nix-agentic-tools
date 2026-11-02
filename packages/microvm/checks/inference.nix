@@ -314,6 +314,12 @@ in {
       optedOut = eval (lib.recursiveUpdate fixture {ai.codex.sandbox.inference.clientKey = null;});
       defaultReplaced = eval (lib.recursiveUpdate fixture {ai.codex.sandbox.inference.clientKey = lib.mkDefault "other";});
       absent = eval (lib.recursiveUpdate fixture {ai.sandbox.inference.clientKey = null;});
+      inferenceOptOut = eval (lib.recursiveUpdate fixture {
+        ai = {
+          claude.settings.inference.instance = null;
+          settings.inference = selection;
+        };
+      });
       inactive = launcher: {
         doors = inferenceDoors launcher == [];
         blob = !(builtins.elem "name=opt/sandbox.inference-key,file=inference-key" launcher.guest.config.microvm.qemu.extraArgs);
@@ -369,8 +375,11 @@ in {
       # key install, home file or extra service directory.
       && (let plain = inactive (launcherOf optedOut "codex-sandbox"); in plain.doors && plain.blob && plain.keyInstall && plain.homeFiles && plain.service)
       && (let plain = inactive (launcherOf absent "claude-sandbox"); in plain.doors && plain.blob && plain.keyInstall && plain.homeFiles && plain.service)
+      && inferenceOptOut.config.ai.claude.sandbox.inference.clientKey == "vm"
+      && (let plain = inactive (launcherOf inferenceOptOut "claude-sandbox"); in plain.doors && plain.blob && plain.keyInstall && plain.homeFiles && plain.service)
       # An inactive configuration asserts nothing.
       && failedMessages absent == []
+      && failedMessages inferenceOptOut == []
       # A replaced client that does not exist is refused, not silently inert.
       && lib.any (lib.hasInfix "not a client of") (failedMessages defaultReplaced))
     // forBackends "refusals" (api:
@@ -379,6 +388,15 @@ in {
         refused api ["ai.claude.sandbox.inference.clientKey" "which no proxy owner registers"] {ai.claude.settings.inference.instance = "ghost";}
         && refused api ["ai.claude.sandbox.inference.clientKey" "is disabled"] {ai.claude.settings.inference.instance = "off";}
         && refused api ["ai.claude.sandbox.inference.clientKey" "not a client of"] {ai.claude.sandbox.inference.clientKey = "ghost";}
+        && refused api ["ai.claude.sandbox.inference.clientKey" "explicitly requests a sandbox client without an inference instance"] {
+          ai.claude = {
+            sandbox.inference.clientKey = lib.mkDefault "vm";
+            settings.inference = {
+              clientKey = null;
+              instance = null;
+            };
+          };
+        }
         && refused api ["ai.claude.sandbox.inference.clientKey" "is set without `instance`"] {
           ai.claude.settings.inference = {
             instance = null;
@@ -396,6 +414,16 @@ in {
           };
         }
         && refused api ["also selected by ai.claude.settings.inference"] {ai.claude.settings.inference.clientKey = "vm";}
+        && refused api ["key reference is also selected by ai.codex.settings.inference"] {
+          ai = {
+            cliproxyapi.instances.other = instance 8517 vmKey;
+            codex.settings.inference = {
+              clientKey = "vm";
+              instance = "other";
+            };
+          };
+        }
+        && refused api ["key reference is also selected by ai.claude.settings.inference"] {ai.cliproxyapi.instances.main.clientKeys.vm.key = hostKey;}
         && refused api ["claude and codex guest routes only"] {
           ai.kiro =
             (harness.setEnable "kiro" true).ai.kiro
