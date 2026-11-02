@@ -420,7 +420,7 @@ in
       passthru =
         (old.passthru or {})
         // {
-          inherit guest;
+          inherit doorAddress guest;
           repoExport = guestRepo.export;
         };
     })
