@@ -145,5 +145,5 @@ recovery also fails; nonempty failed exports are retained as
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.
 
-See `packages/microvm/modules/README.md` for host setup. Guest smoke tests need
-Linux/KVM and run separately from sandboxed builds.
+See `packages/microvm/modules/README.md` for host setup, `sandbox-inference.md`
+for sandbox inference, and the checks for Linux/KVM guest smoke tests.

@@ -13,6 +13,11 @@
         name = "sandbox-identities";
         dir = facetOwner;
       }
+      {
+        location = "package";
+        name = "sandbox-inference";
+        dir = facetOwner;
+      }
     ];
   };
 }
