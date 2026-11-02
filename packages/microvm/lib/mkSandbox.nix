@@ -12,7 +12,6 @@
   vcpus ? 1,
 }: let
   # QEMU executes one wrapper per connection with its socket on stdin/stdout.
-  # exec preserves that socket and the recorded PID for launcher cleanup.
   doorAddress = "10.0.2.100";
   doorMac = "02:00:00:00:d0:01";
   guestRepo = import ./repo-guest.nix {inherit lib pkgs;};
@@ -22,8 +21,23 @@
     import ../../../lib/strict-shell-application.nix pkgs {
       name = "sandbox-door-${toString door.port}";
       text = ''
-        printf '%s\n' "$$" > "door-${toString door.port}-$$.pid"
-        exec ${pkgs.coreutils}/bin/env -i \
+        # QEMU can wait for and replace its initial shell. Keep one shell for the
+        # connection lifetime so its PID remains available to launcher cleanup.
+        if [[ -z ''${SANDBOX_DOOR_CHILD:-} ]]; then
+          SANDBOX_DOOR_CHILD=1 "$0" "$@" <&0 >&1 &
+          child=$!
+          wait "$child"
+          exit $?
+        fi
+        unset SANDBOX_DOOR_CHILD
+        pid_file="door-${toString door.port}-$$.pid"
+        temporary_pid_file="$pid_file.tmp"
+        # Publish the complete identity before the command can communicate with the guest.
+        trap '${pkgs.coreutils}/bin/rm -f -- "$pid_file" "$temporary_pid_file"' EXIT
+        read -r -a process < /proc/self/stat
+        printf '%s %s\n' "$$" "''${process[21]}" > "$temporary_pid_file"
+        ${pkgs.coreutils}/bin/mv -- "$temporary_pid_file" "$pid_file"
+        ${pkgs.coreutils}/bin/env -i \
           ${lib.concatStrings (lib.mapAttrsToList (name: value: "${lib.escapeShellArg "${name}=${value}"} ") door.environment)} \
           ${door.command} ${lib.concatMapStrings (argument: "${lib.escapeShellArg argument} ") (door.arguments or [])}2>> doors.log
       '';
@@ -265,9 +279,13 @@
     # QEMU leaves door children running if it dies during a connection.
     for pid_file in door-*.pid; do
       [[ -f $pid_file ]] || continue
-      read -r pid < "$pid_file"
-      if [[ $pid =~ ^[0-9]+$ ]]; then
-        kill "$pid" 2>/dev/null || :
+      read -r pid start_time < "$pid_file"
+      if [[ $pid =~ ^[0-9]+$ && $start_time =~ ^[0-9]+$ ]] && IFS= read -r stat 2>/dev/null < "/proc/$pid/stat"; then
+        # A stale PID can name an unrelated process; start time identifies the door.
+        read -r -a process <<< "''${stat##*) }"
+        if [[ ''${process[19]:-} == "$start_time" ]]; then
+          kill "$pid" 2>/dev/null || :
+        fi
       fi
     done
   '';
