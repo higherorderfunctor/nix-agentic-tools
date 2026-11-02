@@ -466,8 +466,10 @@ in {
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
         builtins.attrNames (builtins.functionArgs factory)
-        == ["doors" "exe" "memory" "outName" "packages" "repo" "repoConfig" "signing" "vcpus"]
+        == ["doors" "exe" "homeFiles" "inference" "memory" "outName" "packages" "repo" "repoConfig" "signing" "vcpus"]
         && (builtins.functionArgs factory).doors
+        && (builtins.functionArgs factory).homeFiles
+        && (builtins.functionArgs factory).inference
         && (builtins.functionArgs factory).memory
         && (builtins.functionArgs factory).packages
         && (builtins.functionArgs factory).repo
