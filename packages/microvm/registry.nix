@@ -8,6 +8,11 @@
         name = "sandbox";
         dir = facetOwner;
       }
+      {
+        location = "package";
+        name = "sandbox-identities";
+        dir = facetOwner;
+      }
     ];
   };
 }
