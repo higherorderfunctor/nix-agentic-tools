@@ -573,6 +573,7 @@ unstages
 unstarted
 unstash
 untarring
+urandom
 unwire
 upgrader
 uppercased
@@ -586,6 +587,7 @@ wfagents
 wfcap
 wfctl
 wfpins
+wfile
 wikilink
 worktree
 worktrees

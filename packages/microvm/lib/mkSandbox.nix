@@ -541,7 +541,7 @@ in
       passthru =
         (old.passthru or {})
         // {
-          inherit doorAddress guest guestRuntimeFile;
+          inherit allDoors doorAddress guest guestRuntimeFile homeFiles;
           repoExport = guestRepo.export;
         };
     })
