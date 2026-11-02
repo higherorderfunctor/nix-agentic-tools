@@ -83,6 +83,8 @@
         vcpus = cfg.vm.vcpus;
       };
 in {
+  imports = [./git.nix];
+
   options.ai =
     {
       internal.sandboxPackages = lib.mkOption {

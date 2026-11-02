@@ -83,6 +83,8 @@ in {
           vcpus = 3;
         };
       };
+      # git.nix adds the sandbox's `git` tree next to these leaves.
+      withoutGit = sandbox: builtins.removeAttrs sandbox ["git"];
       replaceWith = value: api.eval (lib.recursiveUpdate fixture {ai.codex.sandbox = value;});
       replaced = replaceWith replacement;
       defaultReplaced = replaceWith (lib.mapAttrsRecursive (_: lib.mkDefault) replacement);
@@ -98,8 +100,8 @@ in {
       && cfg.codex.sandbox.extraPackages == [pkgs.ripgrep]
       && cfg.sandbox.vm.memory == 8192
       && cfg.sandbox.extraPackages == [pkgs.fd]
-      && defaultReplaced.config.ai.codex.sandbox == replacement
-      && replaced.config.ai.codex.sandbox == replacement
+      && withoutGit replaced.config.ai.codex.sandbox == replacement
+      && withoutGit defaultReplaced.config.ai.codex.sandbox == replacement
       && map (package: package.meta.mainProgram) replaced.config.ai.internal.sandboxPackages == ["claude-sandbox"])
     // forBackends "defaults" (api: let
       result = api.eval {};
@@ -112,7 +114,7 @@ in {
       partial = api.eval {ai.sandbox.vm.memory = 8192;};
     in
       lib.all (runtime:
-        result.config.ai.${runtime}.sandbox
+        builtins.removeAttrs result.config.ai.${runtime}.sandbox ["git"]
         == {
           enable = false;
           extraPackages = [];
