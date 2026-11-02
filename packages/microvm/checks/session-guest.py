@@ -1,3 +1,4 @@
+# cspell:ignore gpgsig
 """The real guest checks identity precedence and the two transmitted packs."""
 
 import os
@@ -29,8 +30,17 @@ elif sys.argv[1] == "no-remote":
 else:
     assert git("config", "user.name") == "Guest Session Bot"
     assert git("config", "user.email") == "guest-session@example.invalid"
-    assert git("config", "--bool", "commit.gpgSign") == "false"
-    assert git("config", "--bool", "tag.gpgSign") == "false"
+    signing = sys.argv[1] == "signed"
+    assert git("config", "--bool", "commit.gpgSign") == str(signing).lower()
+    assert git("config", "--bool", "tag.gpgSign") == str(signing).lower()
+    if signing:
+        assert os.environ["SSH_AUTH_SOCK"] == "/run/sandbox-signing/agent.sock"
+        assert git("config", "gpg.format") == "ssh"
+        assert git("config", "user.signingKey").startswith("key::ssh-ed25519 ")
+        assert Path(git("config", "gpg.ssh.allowedSignersFile")).read_text().startswith("guest-session@example.invalid ssh-ed25519 ")
+    else:
+        assert "SSH_AUTH_SOCK" not in os.environ
+        assert not Path("/run/sandbox-signing/agent.sock").exists()
     origin = git("remote", "get-url", "origin")
     assert re.fullmatch(r"git://10\.0\.2\.100:9418/sessions/[0-9a-f]{32}\.git", origin), origin
     assert git("remote", "get-url", "--push", "origin") == origin
@@ -39,9 +49,14 @@ else:
     assert git("config", "branch.main.merge") == "refs/heads/main"
     seed = git("rev-parse", "HEAD")
     for index in (1, 2):
-        Path(f"guest-{index}").write_text(f"guest session change {index}\n")
+        Path(f"guest-{index}").write_text(f"{sys.argv[1]} guest session change {index}\n")
         git("add", f"guest-{index}")
         git("commit", "--quiet", "-m", f"guest-{index}")
+        if signing:
+            git("verify-commit", "HEAD")
+            assert "gpgsig -----BEGIN SSH SIGNATURE-----" in git("cat-file", "commit", "HEAD")
+        else:
+            assert "gpgsig " not in git("cat-file", "commit", "HEAD")
         result = subprocess.run(
             ["git", "push", "--progress", "origin", "HEAD"],
             env=os.environ | {"GIT_TRACE_PACKET": "1"},
@@ -58,4 +73,5 @@ else:
         unknown = "git-upload-pack /sessions/" + "0" * 32 + ".git\0host=10.0.2.100\0"
         connection.sendall(f"{len(unknown) + 4:04x}".encode() + unknown.encode())
         assert b"ERR" in connection.recv(4096)
+    print("SESSION_SIGNED_OK" if signing else "SESSION_UNSIGNED_OK", flush=True)
     print("SESSION_GUEST_OK", flush=True)
