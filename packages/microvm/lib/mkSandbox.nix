@@ -1,8 +1,9 @@
-# cspell:ignore chardev dports virtio vcpu vcpus virtserialport
+# cspell:ignore chardev dports guestfwd netdev networkd romfile slirp vcpu vcpus virtio virtserialport
 {
   inputs,
   lib,
 }: pkgs: {
+  doors ? [],
   exe,
   memory ? 1024,
   outName,
@@ -10,8 +11,50 @@
   repo ? false,
   vcpus ? 1,
 }: let
+  # QEMU executes one wrapper per connection with its socket on stdin/stdout.
+  # exec preserves that socket and the recorded PID for launcher cleanup.
+  doorAddress = "10.0.2.100";
+  doorMac = "02:00:00:00:d0:01";
   guestRepo = import ./repo-guest.nix {inherit lib pkgs;};
   hostRepo = import ./repo-host.nix {inherit lib pkgs;};
+  hasDoors = doors != [];
+  doorWrapper = door:
+    import ../../../lib/strict-shell-application.nix pkgs {
+      name = "sandbox-door-${toString door.port}";
+      text = ''
+        printf '%s\n' "$$" > "door-${toString door.port}-$$.pid"
+        exec ${pkgs.coreutils}/bin/env -i \
+          ${lib.concatStrings (lib.mapAttrsToList (name: value: "${lib.escapeShellArg "${name}=${value}"} ") door.environment)} \
+          ${door.command} ${lib.concatMapStrings (argument: "${lib.escapeShellArg argument} ") (door.arguments or [])}2>> doors.log
+      '';
+    };
+  validEnvironment = environment:
+    builtins.isAttrs environment
+    && builtins.all (
+      name: builtins.isString environment.${name} && builtins.match "[A-Za-z_][A-Za-z0-9_]*" name != null
+    ) (builtins.attrNames environment);
+  validDoor = door:
+    builtins.isAttrs door
+    && builtins.elem (builtins.attrNames door) [["arguments" "command" "environment" "port"] ["command" "environment" "port"] ["command" "port"]]
+    && builtins.isInt door.port
+    && door.port >= 1
+    && door.port <= 65535
+    && builtins.isString door.command
+    && builtins.match "/[a-zA-Z0-9._+/-]+" door.command != null
+    && builtins.isList (door.arguments or [])
+    && builtins.all builtins.isString (door.arguments or [])
+    && validEnvironment door.environment;
+  normalizedDoors = map (door:
+    {
+      arguments = [];
+      environment = {};
+    }
+    // door)
+  doors;
+  doorNetdev = lib.concatStringsSep "," (
+    ["user" "id=doors" "restrict=on" "net=10.0.2.0/24"]
+    ++ map (door: "guestfwd=tcp:${doorAddress}:${toString door.port}-cmd:${lib.getExe (doorWrapper door)}") normalizedDoors
+  );
   runtimeName =
     if repo
     then "sandbox-command"
@@ -114,6 +157,12 @@
               "file,id=status,path=status"
               "-device"
               "virtserialport,chardev=status,name=sandbox.status"
+            ]
+            ++ lib.optionals hasDoors [
+              "-netdev"
+              doorNetdev
+              "-device"
+              "virtio-net-pci,netdev=doors,mac=${doorMac},romfile="
             ];
           shares =
             [
@@ -147,18 +196,36 @@
           vcpu = vcpus;
           writableStoreOverlay = "/nix/.rw-store";
         };
-        networking.hostName = "sandbox";
+        networking = lib.mkMerge [
+          {hostName = "sandbox";}
+          (lib.mkIf hasDoors {
+            useDHCP = false;
+            useNetworkd = true;
+          })
+        ];
         nixpkgs.hostPlatform = pkgs.stdenv.hostPlatform;
         services.udev.extraRules = lib.concatMapStringsSep "\n" (name: ''
           SUBSYSTEM=="virtio-ports", ATTR{name}=="sandbox.${name}", OWNER="root", GROUP="root", MODE="0600"
         '') (["status"] ++ lib.optionals repo ["bundle" "bundle-status"]);
         system.stateVersion = "26.05";
+        systemd.network.networks = lib.mkIf hasDoors {
+          "10-doors" = {
+            address = ["10.0.2.15/24"];
+            # A default route sends stray traffic into slirp, where restrict=on
+            # must drop it, instead of failing early in the guest.
+            gateway = ["10.0.2.2"];
+            linkConfig.RequiredForOnline = "routable";
+            matchConfig.MACAddress = doorMac;
+            networkConfig.LinkLocalAddressing = "no";
+          };
+        };
         systemd.services = {
           sandbox = let
             portDevices = map (name: "dev-virtio\\x2dports-sandbox.${lib.replaceStrings ["-"] ["\\x2d"] name}.device") (["status"] ++ lib.optionals repo ["bundle" "bundle-status"]);
           in {
-            after = portDevices ++ ["systemd-modules-load.service" "systemd-user-sessions.service"];
+            after = portDevices ++ ["systemd-modules-load.service" "systemd-user-sessions.service"] ++ lib.optional hasDoors "network-online.target";
             requires = portDevices;
+            wants = lib.optional hasDoors "network-online.target";
             serviceConfig = {
               ExecStart = lib.getExe guestCommand;
               ExecStartPre =
@@ -194,6 +261,16 @@
     ];
   };
   runner = guest.config.microvm.declaredRunner;
+  runtimeDoorCleanup = lib.optionalString hasDoors ''
+    # QEMU leaves door children running if it dies during a connection.
+    for pid_file in door-*.pid; do
+      [[ -f $pid_file ]] || continue
+      read -r pid < "$pid_file"
+      if [[ $pid =~ ^[0-9]+$ ]]; then
+        kill "$pid" 2>/dev/null || :
+      fi
+    done
+  '';
 in
   assert lib.assertMsg pkgs.stdenv.hostPlatform.isLinux "mkSandbox requires a Linux host package set";
   assert lib.assertMsg (builtins.isString exe && lib.hasPrefix "/" exe) "mkSandbox.exe must be an absolute executable path";
@@ -201,6 +278,8 @@ in
   assert lib.assertMsg (builtins.isInt vcpus && vcpus >= 1) "mkSandbox.vcpus must be a positive integer";
   assert lib.assertMsg (builtins.isList packages && builtins.all lib.isDerivation packages) "mkSandbox.packages must be a list of packages";
   assert lib.assertMsg (validName outName) "mkSandbox.outName must be a single executable name";
+  assert lib.assertMsg (builtins.isList doors && builtins.all validDoor normalizedDoors) "mkSandbox.doors entries must be {port; command; arguments ? []; environment ? {};} with a TCP port, an absolute command path, string arguments and string environment values";
+  assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) doors)) == builtins.length doors) "mkSandbox.doors ports must be unique";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
@@ -225,6 +304,7 @@ in
           # Invoked by the EXIT trap, including preparation failures.
           # shellcheck disable=SC2329
           cleanup() {
+            ${runtimeDoorCleanup}
             ${lib.optionalString repo hostRepo.cleanup}
             ${pkgs.coreutils}/bin/rm -rf -- "$runtime_dir"
           }
