@@ -434,7 +434,7 @@ in {
             a = args;
             b = args;
           };
-          rejected = result: builtins.any (a: !a.assertion && lib.hasPrefix "ai.claims.command.sandbox-hello:" a.message) result.config.assertions;
+          rejected = result: builtins.any (a: !a.assertion && lib.hasPrefix "Sandbox command sandbox-hello:" a.message) result.config.assertions;
         in
           rejected (evalHm duplicate) && rejected (evalDevenv duplicate)
       );

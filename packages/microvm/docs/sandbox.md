@@ -22,7 +22,8 @@ The guest-route table selects the plain `ai.claude.package` or
 a sandbox with a null package fails evaluation. Kiro, Kimchi and Copilot have no
 guest route yet: an enabled runtime with resolved `sandbox.enable = true` warns
 once; set `ai.<runtime>.sandbox.enable = false` to opt out. Untouched defaults
-never warn. Sandbox commands claim their names through `ai.claims`.
+never warn. Sandbox commands claim their names through
+`ai.microvm.claims.command`.
 
 `extraPackages` and Git enter executable PATH and the guest system profile,
 including child shells resetting PATH to `/run/current-system/sw/bin`.

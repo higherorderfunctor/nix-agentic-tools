@@ -57,6 +57,18 @@
   # Guest routes and host command construction.
   active = builtins.filter (name: config.ai.${name}.enable && config.ai.${name}.sandbox.enable) runtimeNames;
   commandName = name: "${name}-sandbox";
+  commands = builtins.groupBy (entry: entry.name) (
+    map (runtime: {
+      name = commandName runtime;
+      path = "ai.${runtime}.sandbox";
+    })
+    routed
+    ++ lib.mapAttrsToList (name: sandbox: {
+      name = sandbox.outName;
+      path = "ai.sandboxes.${name}";
+    })
+    config.ai.sandboxes
+  );
   factory = config.ai.internal.mkSandbox pkgs;
   routed = builtins.filter (name: routes ? ${name}) active;
   # Guest routes deliberately select the configured package before host
@@ -110,7 +122,16 @@
           signers = signers.${name};
         };
 in {
-  imports = [./git.nix (import ./identities.nix {inherit inheritOptions;}) (import ./relay.nix {inherit backend routed;}) (import ./signing.nix {inherit signers;})];
+  imports = [
+    (import ../../ai-module/lib/runtime.nix {
+      enabled = true;
+      name = "microvm";
+    })
+    ./git.nix
+    (import ./identities.nix {inherit inheritOptions;})
+    (import ./relay.nix {inherit backend routed;})
+    (import ./signing.nix {inherit signers;})
+  ];
 
   options.ai =
     {
@@ -145,16 +166,19 @@ in {
 
   config = lib.mkMerge [
     {
-      assertions = map packageAssertion routed;
+      assertions =
+        map packageAssertion routed
+        ++ lib.mapAttrsToList (name: entries: {
+          assertion = builtins.length entries == 1;
+          message = "Sandbox command ${name}: claimed by ${lib.concatMapStringsSep " and " (entry: entry.path) entries}";
+        })
+        commands;
       warnings =
         lib.optional (config.ai.sandboxes != {}) "ai.sandboxes is deprecated for one release; use ai.sandbox for runtime guests or lib.ai.mkSandbox for standalone guests."
         ++ map (name: "ai.${name}.sandbox.enable is true, but ${name} has no guest route; set ai.${name}.sandbox.enable = false to opt out.") (builtins.filter (name: !(routes ? ${name})) active);
     }
     {
-      ai.claims.command = lib.mkMerge (
-        map (name: {${commandName name} = ["ai.${name}.sandbox"];}) routed
-        ++ lib.mapAttrsToList (name: sandbox: {${sandbox.outName} = ["ai.sandboxes.${name}"];}) config.ai.sandboxes
-      );
+      ai.microvm.claims.command = builtins.attrNames commands;
     }
   ];
 }

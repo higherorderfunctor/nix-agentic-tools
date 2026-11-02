@@ -109,13 +109,22 @@ in {
     // lib.genAttrs runtimeNames (_: {sandbox.git = inheritOptions ["git"] gitOptions;});
 
   config = {
-    ai.claims.sandbox-remote = lib.mkMerge (map (runtime:
-      lib.mkMerge (lib.mapAttrsToList (identity: entry:
-        lib.mapAttrs' (token: _: lib.nameValuePair "${runtime}:${token}" ["ai.${runtime}.sandbox.git.identities.${identity}"]) entry.remotes)
-      config.ai.${runtime}.sandbox.git.identities))
-    active);
     assertions =
       validate "ai.sandbox.git" config.ai.sandbox.git
-      ++ lib.concatMap (runtime: validate "ai.${runtime}.sandbox.git" config.ai.${runtime}.sandbox.git) runtimeNames;
+      ++ lib.concatMap (runtime: validate "ai.${runtime}.sandbox.git" config.ai.${runtime}.sandbox.git) runtimeNames
+      ++ lib.concatMap (runtime: let
+        tokens = builtins.groupBy (entry: entry.token) (lib.concatLists (lib.mapAttrsToList (identity: entry:
+          map (token: {
+            inherit token;
+            path = "ai.${runtime}.sandbox.git.identities.${identity}";
+          }) (builtins.attrNames entry.remotes))
+        config.ai.${runtime}.sandbox.git.identities));
+      in
+        lib.mapAttrsToList (token: entries: {
+          assertion = builtins.length entries == 1;
+          message = "Sandbox remote token ${token}: claimed by ${lib.concatMapStringsSep " and " (entry: entry.path) entries}";
+        })
+        tokens)
+      active;
   };
 }

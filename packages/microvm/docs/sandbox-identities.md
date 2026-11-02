@@ -40,8 +40,8 @@ exactly as written in the remote URL, including case and SSH aliases. For
 example, `remotes.github-work.forge = "github.com"` maps
 `git@github-work:org/repo.git` to the real forge without reading
 `~/.ssh/config`. Two identities claiming the same token in a sandbox-enabled
-runtime fail through `ai.claims.sandbox-remote."<runtime>:<token>"`. Tokens and
-forge hosts use the relay's DNS/IPv4 grammar.
+runtime fail an assertion naming the token and both identity option paths.
+Tokens and forge hosts use the relay's DNS/IPv4 grammar.
 
 `git.forges.<host>.hostKeys`, `sshPort`, and `sshUser` default to null. Non-null
 fields override the shared relay forge facts independently; null retains those

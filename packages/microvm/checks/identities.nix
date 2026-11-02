@@ -96,7 +96,7 @@ in {
       invalid = change: changed (lib.recursiveUpdate change {ai.sandbox.enable = false;});
       plaintext = changed {ai.sandbox.git.identities.x.push.key = "plaintext";};
     in
-      containsFailure "ai.claims.sandbox-remote.codex:github-alias: claimed by ai.codex.sandbox.git.identities.first and ai.codex.sandbox.git.identities.second" duplicate
+      containsFailure "Sandbox remote token github-alias: claimed by ai.codex.sandbox.git.identities.first and ai.codex.sandbox.git.identities.second" duplicate
       && containsFailure "ai.codex.sandbox.git.forges.\"unpinned.invalid\".hostKeys" (invalid {ai.codex.sandbox.git.identities.x = identity "unpinned.invalid" "unpinned.invalid";})
       && containsFailure "remotes.\"bad/token\"" (invalid {ai.codex.sandbox.git.identities.x = identity "bad/token" "github.com";})
       && containsFailure "remotes.\"valid\".forge" (invalid {ai.codex.sandbox.git.identities.x = identity "valid" "bad/forge";})

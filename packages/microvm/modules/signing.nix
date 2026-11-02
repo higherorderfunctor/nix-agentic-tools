@@ -5,12 +5,6 @@
 }: let
   signer = import ../lib/mkSshSigner.nix pkgs;
 in {
-  imports = [
-    (import ../../ai-module/lib/runtime.nix {
-      enabled = true;
-      name = "microvm";
-    })
-  ];
   # ai.services owns key delivery and rotation; one agent belongs to each
   # routed runtime/identity, even when two identities reference the same key.
   config.ai.microvm.services = lib.mkMerge (lib.mapAttrsToList (_: identities:

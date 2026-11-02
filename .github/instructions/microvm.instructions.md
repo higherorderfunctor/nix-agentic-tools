@@ -29,7 +29,8 @@ The guest-route table selects the plain `ai.claude.package` or
 a sandbox with a null package fails evaluation. Kiro, Kimchi and Copilot have no
 guest route yet: an enabled runtime with resolved `sandbox.enable = true` warns
 once; set `ai.<runtime>.sandbox.enable = false` to opt out. Untouched defaults
-never warn. Sandbox commands claim their names through `ai.claims`.
+never warn. Sandbox commands claim their names through
+`ai.microvm.claims.command`.
 
 `extraPackages` and Git enter executable PATH and the guest system profile,
 including child shells resetting PATH to `/run/current-system/sw/bin`.
@@ -313,8 +314,8 @@ exactly as written in the remote URL, including case and SSH aliases. For
 example, `remotes.github-work.forge = "github.com"` maps
 `git@github-work:org/repo.git` to the real forge without reading
 `~/.ssh/config`. Two identities claiming the same token in a sandbox-enabled
-runtime fail through `ai.claims.sandbox-remote."<runtime>:<token>"`. Tokens and
-forge hosts use the relay's DNS/IPv4 grammar.
+runtime fail an assertion naming the token and both identity option paths.
+Tokens and forge hosts use the relay's DNS/IPv4 grammar.
 
 `git.forges.<host>.hostKeys`, `sshPort`, and `sshUser` default to null. Non-null
 fields override the shared relay forge facts independently; null retains those

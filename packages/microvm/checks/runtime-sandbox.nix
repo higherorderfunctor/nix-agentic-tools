@@ -75,9 +75,11 @@ in {
           outName = "claude-sandbox";
         };
       });
+      otherOwner = api.eval (lib.recursiveUpdate fixture {ai.claude.claims.command = ["claude-sandbox"];});
       rejected = prefix: result: lib.any (assertion: !assertion.assertion && lib.hasPrefix prefix assertion.message) result.config.assertions;
     in
-      rejected "ai.claims.command.claude-sandbox:" collision)
+      rejected "Sandbox command claude-sandbox: claimed by ai.claude.sandbox and ai.sandboxes.old" collision
+      && rejected "ai.claims.command.claude-sandbox: claimed by claude and microvm" otherOwner)
     // forBackends "copy-down" (api: let
       result = api.eval fixture;
       cfg = result.config.ai;
@@ -162,8 +164,8 @@ in {
       && lib.all (package: builtins.elem package.drvPath (map (p: p.drvPath) (api.packages result))) actual
       && result.config.ai.claims.command
       == {
-        claude-sandbox = ["ai.claude.sandbox"];
-        codex-sandbox = ["ai.codex.sandbox"];
+        claude-sandbox = ["microvm"];
+        codex-sandbox = ["microvm"];
       })
     // forBackends "null-package" (api:
       lib.all (runtime: let
