@@ -1,4 +1,4 @@
-{
+{backend}: {
   config,
   lib,
   options,
@@ -111,7 +111,7 @@ in {
       name = "microvm";
     })
     (import ./identities.nix {inherit inheritOptions;})
-    (import ./relay.nix {inherit routed;})
+    (import ./relay.nix {inherit backend routed;})
   ];
 
   options.ai =
