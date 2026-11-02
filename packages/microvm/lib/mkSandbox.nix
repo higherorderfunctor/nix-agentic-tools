@@ -1,4 +1,4 @@
-# cspell:ignore chardev dports guestfwd netdev networkd romfile slirp vcpu vcpus virtio virtserialport
+# cspell:ignore chardev dports guestfwd netdev networkd romfile setsid slirp vcpu vcpus virtio virtserialport
 {
   inputs,
   lib,
@@ -23,7 +23,7 @@
     ++ lib.optional (signing != null) {
       command = "${pkgs.socat}/bin/socat";
       arguments = ["STDIO" "UNIX-CONNECT:${signing.socket}"];
-      port = signing.port;
+      inherit (signing) port;
     };
   hasDoors = allDoors != [];
   doorWrapper = door:
@@ -33,7 +33,7 @@
         # QEMU can wait for and replace its initial shell. Keep one shell for the
         # connection lifetime so its PID remains available to launcher cleanup.
         if [[ -z ''${SANDBOX_DOOR_CHILD:-} ]]; then
-          SANDBOX_DOOR_CHILD=1 "$0" "$@" <&0 >&1 &
+          SANDBOX_DOOR_CHILD=1 ${pkgs.util-linux}/bin/setsid "$0" "$@" <&0 >&1 &
           child=$!
           wait "$child"
           exit $?
@@ -51,6 +51,7 @@
           ${door.command} ${lib.concatMapStrings (argument: "${lib.escapeShellArg argument} ") (door.arguments or [])}2>> doors.log
       '';
     };
+  validAbsolutePath = value: builtins.isString value && builtins.match "/[a-zA-Z0-9._+/-]+" value != null;
   validEnvironment = environment:
     builtins.isAttrs environment
     && builtins.all (
@@ -59,11 +60,8 @@
   validDoor = door:
     builtins.isAttrs door
     && builtins.elem (builtins.attrNames door) [["arguments" "command" "environment" "port"] ["command" "environment" "port"] ["command" "port"]]
-    && builtins.isInt door.port
-    && door.port >= 1
-    && door.port <= 65535
-    && builtins.isString door.command
-    && builtins.match "/[a-zA-Z0-9._+/-]+" door.command != null
+    && validPort door.port
+    && validAbsolutePath door.command
     && builtins.isList (door.arguments or [])
     && builtins.all builtins.isString (door.arguments or [])
     && validEnvironment door.environment;
@@ -74,14 +72,16 @@
     }
     // door)
   allDoors;
-  validSigning = signing:
-    builtins.isAttrs signing
-    && builtins.attrNames signing == ["port" "socket"]
-    && builtins.isInt signing.port
-    && signing.port >= 1
-    && signing.port <= 65535
-    && builtins.isString signing.socket
-    && lib.hasPrefix "/" signing.socket;
+  validPort = port: builtins.isInt port && port >= 1 && port <= 65535;
+  validSigning =
+    signing
+    == null
+    || (
+      builtins.isAttrs signing
+      && builtins.attrNames signing == ["port" "socket"]
+      && validPort signing.port
+      && validAbsolutePath signing.socket
+    );
   doorNetdev = lib.concatStringsSep "," (
     ["user" "id=doors" "restrict=on" "net=10.0.2.0/24"]
     ++ map (door: "guestfwd=tcp:${doorAddress}:${toString door.port}-cmd:${lib.getExe (doorWrapper door)}") normalizedDoors
@@ -259,6 +259,8 @@
               ExecStart = "${pkgs.socat}/bin/socat UNIX-LISTEN:${agentSocket},fork,mode=0600 TCP:${doorAddress}:${toString signing.port}";
               Restart = "on-failure";
               RuntimeDirectory = "sandbox";
+              RuntimeDirectoryMode = "0700";
+              Type = "exec";
               User = "sandbox";
             };
             wantedBy = ["multi-user.target"];
@@ -307,14 +309,15 @@
   runner = guest.config.microvm.declaredRunner;
   runtimeDoorCleanup = lib.optionalString hasDoors ''
     # QEMU leaves door children running if it dies during a connection.
-    for pid_file in door-*.pid; do
-      [[ -f $pid_file ]] || continue
-      read -r pid start_time < "$pid_file"
+    for pid_file in "$runtime_dir"/door-*.pid; do
+      # A connection may finish and unlink its record while cleanup is reading it.
+      { read -r pid start_time < "$pid_file"; } 2>/dev/null || continue
       if [[ $pid =~ ^[0-9]+$ && $start_time =~ ^[0-9]+$ ]] && IFS= read -r stat 2>/dev/null < "/proc/$pid/stat"; then
         # A stale PID can name an unrelated process; start time identifies the door.
         read -r -a process <<< "''${stat##*) }"
-        if [[ ''${process[19]:-} == "$start_time" ]]; then
-          kill "$pid" 2>/dev/null || :
+        if [[ ''${process[19]:-} == "$start_time" && ''${process[2]:-} == "$pid" ]]; then
+          # Kill the connection's group, including a command the wrapper is waiting for.
+          kill -KILL -- "-$pid" 2>/dev/null || :
         fi
       fi
     done
@@ -326,10 +329,10 @@ in
   assert lib.assertMsg (builtins.isInt vcpus && vcpus >= 1) "mkSandbox.vcpus must be a positive integer";
   assert lib.assertMsg (builtins.isList packages && builtins.all lib.isDerivation packages) "mkSandbox.packages must be a list of packages";
   assert lib.assertMsg (validName outName) "mkSandbox.outName must be a single executable name";
+  assert lib.assertMsg validSigning "mkSandbox.signing must be null or {port; socket;} with a TCP port and an absolute host agent socket";
   assert lib.assertMsg (builtins.isList doors && builtins.all validDoor normalizedDoors) "mkSandbox.doors entries must be {port; command; arguments ? []; environment ? {};} with a TCP port, an absolute command path, string arguments and string environment values";
   assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) allDoors)) == builtins.length allDoors) "mkSandbox.doors and mkSandbox.signing ports must be unique";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
-  assert lib.assertMsg (signing == null || validSigning signing) "mkSandbox.signing must be null or {port; socket;} with a TCP port and an absolute host agent socket";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
       runtimeInputs = lib.optionals repo [pkgs.coreutils pkgs.git pkgs.util-linux];
@@ -353,8 +356,7 @@ in
           # Invoked by the EXIT trap, including preparation failures.
           # shellcheck disable=SC2329
           cleanup() {
-            ${runtimeDoorCleanup}
-            ${lib.optionalString repo hostRepo.cleanup}
+            ${runtimeDoorCleanup}${lib.optionalString repo hostRepo.cleanup}
             ${pkgs.coreutils}/bin/rm -rf -- "$runtime_dir"
           }
           trap cleanup EXIT

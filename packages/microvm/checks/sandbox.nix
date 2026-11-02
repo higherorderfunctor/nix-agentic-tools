@@ -94,13 +94,7 @@
     time.sleep(3600)
   '';
   doorLifecyclePackage = factory {
-    doors = [
-      {
-        command = lib.getExe doorFixture;
-        environment.PATH = "${pkgs.python3}/bin";
-        port = 7000;
-      }
-    ];
+    doors = [fixtureDoor];
     exe = lib.getExe doorLifecycleGuestFixture;
     outName = "sandbox-door-lifecycle";
   };
@@ -144,32 +138,39 @@
     [[ $(readlink "/proc/$qemu_pid/exe") == */.qemu-system-*-wrapped ]]
     printf 'LIFECYCLE_PIDS launcher=%s qemu=%s door=%s\n' "$launcher_pid" "$qemu_pid" "$door_pid"
     kill -0 "$door_pid"
+    command_pid=$(< "/proc/$door_pid/task/$door_pid/children")
+    command_pid=''${command_pid// /}
+    [[ $command_pid =~ ^[0-9]+$ ]]
     kill -KILL "$qemu_pid"
     wait "$launcher_pid" || launcher_status=$?
     printf 'LIFECYCLE_WAIT status=%s\n' "''${launcher_status:-0}"
-    [[ ''${launcher_status:-0} -ne 0 ]]
-    if [[ -r /proc/$door_pid/stat ]]; then
-      read -r -a process < "/proc/$door_pid/stat"
-      [[ ''${process[2]} == Z ]] || {
-        echo "FAIL: door $door_pid survived QEMU death and launcher cleanup" >&2
+    [[ ''${launcher_status:-0} == 125 ]]
+    for pid in "$door_pid" "$command_pid"; do
+      for _ in {1..100}; do
+        if ! IFS= read -r stat 2>/dev/null < "/proc/$pid/stat"; then break; fi
+        read -r -a process <<< "''${stat##*) }"
+        [[ ''${process[0]} == Z ]] && break
+        sleep 0.01
+      done
+      [[ ! -r /proc/$pid/stat || ''${process[0]} == Z ]] || {
+        echo "FAIL: door process $pid survived QEMU death and launcher cleanup" >&2
         exit 1
       }
-    fi
+    done
     [[ ! -e $runtime_dir ]]
     echo "PASS: QEMU death orphaned door $door_pid; launcher exit trap reaped it (launcher status ''${launcher_status:-0})"
   '';
   doorPackage = factory {
-    doors = [
-      {
-        command = lib.getExe doorFixture;
-        environment.PATH = "${pkgs.python3}/bin";
-        port = 7000;
-      }
-    ];
+    doors = [fixtureDoor];
     exe = lib.getExe doorGuestFixture;
     outName = "sandbox-door-fixture";
   };
   factory = self.lib.ai.mkSandbox pkgs;
+  fixtureDoor = {
+    command = lib.getExe doorFixture;
+    environment.PATH = "${pkgs.python3}/bin";
+    port = 7000;
+  };
   sshSigner = self.lib.ai.mkSshSigner pkgs;
   # Guest-side assertions: each fixture exits non-zero when the guest disagrees.
   # They need KVM, so they are launchers to run, not sandboxed builds.
@@ -314,6 +315,7 @@
     '';
   };
   repoPackage = factory {
+    doors = [fixtureDoor];
     exe = lib.getExe repoProbe;
     outName = "sandbox-repo-probe";
     repo = true;
@@ -385,15 +387,19 @@ in {
         '';
       };
       microvm-sandbox-argv-launcher = argvPackage;
-      microvm-sandbox-door-cleanup = pkgs.runCommand "microvm-sandbox-door-cleanup" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        ${lib.getExe pkgs.python3} ${./door-cleanup.py} \
-          ${lib.getExe doorPackage} \
-          ${doorPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
-          ${lib.escapeShellArg (lib.findFirst (lib.hasPrefix "user,id=doors") "" doorPackage.guest.config.microvm.qemu.extraArgs)}
-        touch "$out"
-      '';
+      microvm-sandbox-door-cleanup = mkLintedCheck "microvm-sandbox-door-cleanup" {
+        runtimeInputs = [pkgs.git];
+        text = ''
+          ${lib.getExe pkgs.python3} ${./door-cleanup.py} \
+            ${lib.getExe doorPackage} \
+            ${doorPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
+            ${lib.escapeShellArg (lib.findFirst (lib.hasPrefix "user,id=doors") "" doorPackage.guest.config.microvm.qemu.extraArgs)}
+          ${lib.getExe pkgs.python3} ${./door-cleanup.py} \
+            ${lib.getExe repoPackage} \
+            ${repoPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
+            ${lib.escapeShellArg (lib.findFirst (lib.hasPrefix "user,id=doors") "" repoPackage.guest.config.microvm.qemu.extraArgs)} --repo
+        '';
+      };
       microvm-sandbox-door-launcher = doorPackage;
       microvm-sandbox-door-lifecycle = doorLifecycleCheck;
       microvm-sandbox-doors = mkTest "microvm-sandbox-doors" (
@@ -555,6 +561,14 @@ in {
             socket-invalid = rejects {
               port = 2222;
               socket = "relative-agent.sock";
+            };
+            socket-options = rejects {
+              port = 2222;
+              socket = "/tmp/agent.sock,forever";
+            };
+            socket-shell = rejects {
+              port = 2222;
+              socket = "/tmp/agent socket";
             };
           };
         in
