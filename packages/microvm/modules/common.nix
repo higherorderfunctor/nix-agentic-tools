@@ -103,6 +103,7 @@
           instance = config.ai.git-relay.instances.sandbox;
           relayConfig = config.ai.git-relay.services.git-relay-sandbox.files.config.content;
           runtime = name;
+          runtimeIdentities = options.ai.${name}.sandbox.git.identities.highestPrio < 1500;
         };
 in {
   imports = [
