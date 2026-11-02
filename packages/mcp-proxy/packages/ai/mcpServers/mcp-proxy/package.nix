@@ -52,6 +52,11 @@ in
     dependencies =
       (old.dependencies or [])
       ++ [python3Packages.httpx-auth];
+    # Upstream 0.13.2 raised `certifi>=2026.10.19` to refresh its trust
+    # bundle. nixpkgs' certifi replaces that bundle with the system cacert,
+    # so the floor buys nothing here and only trips the runtime-deps check
+    # until nixpkgs ships the newer release.
+    pythonRelaxDeps = ["certifi"];
     nativeCheckInputs = with python3Packages; [pytest pytest-asyncio];
     doInstallCheck = true;
     installCheckPhase = vu.mkMcpSmokeTest {bin = "mcp-proxy";};
