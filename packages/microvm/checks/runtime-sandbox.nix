@@ -82,6 +82,7 @@ in {
           forges = {};
           identities = {};
         };
+        inference.clientKey = null;
         vm = {
           memory = 4096;
           vcpus = 3;
@@ -124,6 +125,7 @@ in {
             forges = {};
             identities = {};
           };
+          inference = {clientKey = null;};
           vm = {
             memory = 4096;
             vcpus = 2;

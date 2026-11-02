@@ -40,6 +40,11 @@
       description = "Packages available throughout the guest and on its executable PATH. A runtime definition replaces the whole root list, rather than appending to it.";
       type = lib.types.listOf lib.types.package;
     };
+    inference.clientKey = lib.mkOption {
+      default = null;
+      description = "VM-only client of this runtime's selected proxy instance (ai.<runtime>.settings.inference); null disables sandbox inference and never falls back to the host client. The guest receives exactly the owner lowering's output for that client — its guest-user config, the door endpoint and a per-launch key file — and no consumer native settings or host logins. The client must not be one an enabled host harness selects in the same evaluation.";
+      type = lib.types.nullOr lib.types.str;
+    };
     vm = {
       memory = lib.mkOption {
         default = 4096;
@@ -58,6 +63,7 @@
   active = builtins.filter (name: config.ai.${name}.enable && config.ai.${name}.sandbox.enable) runtimeNames;
   commandName = name: "${name}-sandbox";
   factory = config.ai.internal.mkSandbox pkgs;
+  inferenceFor = import ../lib/sandbox/inference.nix {inherit config lib options pkgs;};
   routed = builtins.filter (name: routes ? ${name}) active;
   # Guest routes deliberately select the configured package before host
   # installPackage/jail/environment wrapping. Kiro/Kimchi need airlock first;
@@ -73,13 +79,17 @@
   runtimePackage = name: let
     cfg = config.ai.${name}.sandbox;
     package = routes.${name};
-    args = {
-      exe = lib.getExe package;
-      memory = cfg.vm.memory;
-      outName = commandName name;
-      packages = cfg.extraPackages ++ [pkgs.git];
-      vcpus = cfg.vm.vcpus;
-    };
+    # An active sandbox inference selection adds its factory arguments to the
+    # plain ones; an inactive one adds nothing.
+    args =
+      (inferenceFor name).extension
+      // {
+        exe = lib.getExe package;
+        memory = cfg.vm.memory;
+        outName = commandName name;
+        packages = cfg.extraPackages ++ [pkgs.git];
+        vcpus = cfg.vm.vcpus;
+      };
   in
     assert lib.assertMsg (packageAssertion name).assertion (packageAssertion name).message;
       if cfg.git.identities == {}
@@ -128,7 +138,9 @@ in {
 
   config = lib.mkMerge [
     {
-      assertions = map packageAssertion routed;
+      assertions =
+        map packageAssertion routed
+        ++ lib.concatMap (name: (inferenceFor name).assertions) runtimeNames;
       warnings =
         lib.optional (config.ai.sandboxes != {}) "ai.sandboxes is deprecated for one release; use ai.sandbox for runtime guests or lib.ai.mkSandbox for standalone guests."
         ++ map (name: "ai.${name}.sandbox.enable is true, but ${name} has no guest route; set ai.${name}.sandbox.enable = false to opt out.") (builtins.filter (name: !(routes ? ${name})) active);
