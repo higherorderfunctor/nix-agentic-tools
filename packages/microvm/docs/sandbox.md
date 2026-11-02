@@ -42,8 +42,9 @@ never warn. Sandbox commands claim their names through `ai.claims`.
 `extraPackages` and Git from the module's package set enter both the executable
 PATH and the guest system profile, so child shells resetting PATH to
 `/run/current-system/sw/bin` still find them. This phase supplies no repository,
-doors, identities or Git settings. Never log a harness into a provider inside
-the VM; VM-only CPA client keys will supply authentication in a later phase.
+doors or identities; Git settings arrive through `ai.sandbox.git`
+(docs/sandbox-git.md). Never log a harness into a provider inside the VM;
+VM-only CPA client keys will supply authentication in a later phase.
 
 The public standalone factory also accepts packages and sizing:
 
@@ -119,13 +120,16 @@ it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
 
 The factory accepts
-`{exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`. With
-`repo = true`, launch from a Git checkout (including a linked worktree or an
-unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
-committed HEAD, preserving its branch name or detached state. Uncommitted host
-changes are excluded. Shallow, partial, and alternates-using repositories are
-refused; supported object formats are SHA-1 and SHA-256. This factory parameter
-does not add a module option.
+`{exe; gitConfig ? null; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`.
+A string `gitConfig` installs as the guest's system Git configuration
+(docs/sandbox-git.md); null keeps a repo guest's `safe.directory` default and
+leaves every other guest without the file. With `repo = true`, launch from a Git
+checkout (including a linked worktree or an unborn branch). The guest starts in
+`/home/sandbox/repo` at that checkout's committed HEAD, preserving its branch
+name or detached state. Uncommitted host changes are excluded. Shallow, partial,
+and alternates-using repositories are refused; supported object formats are
+SHA-1 and SHA-256. The `repo` and `gitConfig` parameters do not add module
+options.
 
 The launcher builds an isolated bare seed repository with templates disabled and
 the host's explicit object format. Only the chosen push remote's tracking refs

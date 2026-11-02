@@ -171,6 +171,8 @@ in {
       microvm-sandbox-guest = mkTest "microvm-sandbox-guest" (
         guest.nixpkgs.hostPlatform.system
         == pkgs.stdenv.hostPlatform.system
+        # A factory call without gitConfig delivers no system configuration.
+        && !(guest.environment.etc ? gitconfig)
         && guest.microvm.hypervisor == "qemu"
         && guest.microvm.interfaces == []
         && guest.microvm.volumes == []
@@ -196,12 +198,14 @@ in {
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
         builtins.attrNames (builtins.functionArgs factory)
-        == ["exe" "memory" "outName" "packages" "repo" "vcpus"]
+        == ["exe" "gitConfig" "memory" "outName" "packages" "repo" "vcpus"]
+        && (builtins.functionArgs factory).gitConfig
         && (builtins.functionArgs factory).memory
         && (builtins.functionArgs factory).packages
         && (builtins.functionArgs factory).repo
         && (builtins.functionArgs factory).vcpus
         && !(builtins.functionArgs factory).exe
+        && !(builtins.tryEval (factory (args // {gitConfig = 5;}))).success
         && !(builtins.tryEval (factory (args // {memory = 0;}))).success
         && !(builtins.tryEval (factory (args // {vcpus = 0;}))).success
         && !(builtins.tryEval (factory (args // {exe = "hello";}))).success
