@@ -1,9 +1,11 @@
 # cspell:ignore maxstack sshcommand
 # Evaluation contracts of the sandbox's Git surface (modules/git.nix): the
 # copy-down priority matrix (raw, typed and fixed keys into the runtime `_ini`
-# sink), enable propagation into the guest package list, and the rendered
-# system configuration parsing with real git. The host tool instantiations
-# stay byte-identical through their own checks (checks/git-config/module-eval.nix).
+# sink), enable propagation into the guest package list, the owner's
+# test.jobs/test.strategy coupling holding across the root-to-runtime typed
+# copy-down, case-variant guest-fixed keys refused, and the rendered system
+# configuration parsing with real git. The host tool instantiations stay
+# byte-identical through their own checks (checks/git-config/module-eval.nix).
 {
   harness,
   lib,
@@ -113,6 +115,54 @@ in {
           };
         }
       )))
+    // (forBackends "coupling" (eval: let
+      # A root `test.jobs` a runtime `test.strategy` has to meet inside the
+      # runtime's typed tree: the inherited leaf forwards into it, so the
+      # owner's assertions read both together, and the system file being the
+      # guest's lowest Git scope makes an unset strategy upstream's
+      # working-copy, which a jobs value above 1 cannot run with.
+      both = {
+        ai.sandbox.git.branchless.settings.test.jobs = 4;
+        ai.codex.sandbox.git.branchless.settings.test.strategy = "working-copy";
+      };
+      rootOnly = {ai.sandbox.git.branchless.settings.test.jobs = 4;};
+      ini = config: (sink eval config).branchless.test;
+      needsWorktree = lib.hasInfix ''ai.codex.sandbox.git.branchless.settings.test.jobs = 4 needs ai.codex.sandbox.git.branchless.settings.test.strategy = "worktree"'';
+    in
+      # The root's jobs reaches the runtime tree its strategy lands in: the
+      # shared contradiction fires there, and both values render.
+      lib.any (lib.hasInfix ''ai.codex.sandbox.git.branchless.settings.test.jobs = 4 contradicts ai.codex.sandbox.git.branchless.settings.test.strategy = "working-copy"'') (failedMessages eval both)
+      && ini both
+      == {
+        jobs = 4;
+        strategy = "working-copy";
+      }
+      # An unset strategy fails from the root's forwarded leaf and from the
+      # runtime's own alike, and writes no key.
+      && lib.any needsWorktree (failedMessages eval rootOnly)
+      && lib.any needsWorktree (failedMessages eval {ai.codex.sandbox.git.branchless.settings.test.jobs = 4;})
+      && ini rootOnly == {jobs = 4;}))
+    // (forBackends "case-fold" (eval: let
+      # Git folds the case of section and key names, Nix does not. A consumer
+      # key a guest-fixed key differs from only by case is two keys to Nix
+      # and one to Git, and both render — so the refusal is an assertion
+      # over the raw keys that flow toward the rendered file, whatever
+      # priority they carry.
+      strong = {ai.codex.sandbox.git.settings.core.sshcommand = lib.mkOverride 40 "ssh";};
+      plain = {ai.codex.sandbox.git.settings.core.sshcommand = "ssh";};
+      fromRoot = {ai.sandbox.git.settings.safe.DIRECTORY = "/evil";};
+      caseRefused = lib.hasInfix "differs from only by case";
+    in
+      # The merge keeps both keys — the force is per leaf, and case does not
+      # distinguish Nix attributes — so the refusal cannot live there.
+      (sink eval plain).core.sshcommand
+      == "ssh"
+      && lib.hasInfix "/sandbox-no-ssh" (sink eval plain).core.sshCommand
+      && lib.any (lib.hasInfix "ai.codex.sandbox.git sets core.sshcommand") (failedMessages eval plain)
+      && lib.any caseRefused (failedMessages eval plain)
+      && lib.any caseRefused (failedMessages eval strong)
+      && lib.any (lib.hasInfix "sets safe.DIRECTORY") (failedMessages eval fromRoot)
+      && lib.filter caseRefused (failedMessages eval renderFixture) == []))
     // {
       # The module-built launcher's guest carries the rendered configuration
       # as its SYSTEM git file and the enabled tool's package in its system
