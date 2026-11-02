@@ -1,8 +1,8 @@
 # Sandbox Git identities
 
-> Identity option inheritance, URL selection, signer services and session-only
-> relay lowering are checked on Home Manager and devenv. Runtime launchers
-> select an identity before boot; see [signing](sandbox-signing.md).
+> **Last verified:** 2026-11-02 — signer services and session-only relay wiring
+> are checked on Home Manager and devenv. Real guest boots verify signed and
+> unsigned identity launches; see [signing](sandbox-signing.md).
 
 `ai.sandbox.git.identities` supplies author details and explicit push keys:
 
