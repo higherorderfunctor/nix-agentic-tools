@@ -15,17 +15,17 @@
     mcp = prev.mcp_1;
   });
 
-  rev = "701a0453487d1b28c8f9806ee4863674c70210dd";
+  rev = "23a79691e801f48c37a79fb71827ae6a3b540aee";
   src = fetchFromGitHub {
     owner = "sparfenyuk";
     repo = "mcp-proxy";
     inherit rev;
-    hash = "sha256-dChbKePHfI3IdJRBw/XoKTeadcnHeJByblOSQ8jG/yA=";
+    hash = "sha256-hEFTEZQfAXcaG2W/wgp2NB/Ubq/bUHRfbb1bG4TRIdk=";
   };
 in
   (pkgs.mcp-proxy.override {inherit python3Packages;}).overridePythonAttrs (old: let
     # upstream: readPyprojectVersion @ pyproject.toml
-    upstreamVersion = "0.13.0";
+    upstreamVersion = "0.13.2";
   in {
     version = vu.mkVersion {
       upstream = upstreamVersion;
