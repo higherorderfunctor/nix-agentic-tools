@@ -145,14 +145,14 @@ Before boot the launcher holds `<common>/sandbox-locks/<token>` and creates
 `refs/sandbox/<token>/<n>` in the host for every borrowed root, including a
 linked worktree's detached HEAD. These refs retain reachable objects even across
 `git gc --prune=now`. Pin publication coordinates with Git GC and maintenance
-locks and checks the full borrowed object graph before boot. An active collector
-or maintenance operation causes a retry diagnostic; the publication locks are
-released before the guest starts. Forced GC and direct pruning that bypass Git
-locking are unsupported during publication. The exit trap removes its pins; the
-next launch removes pins from sessions whose locks are no longer held. Lock
-files remain to avoid locking different inodes for the same session. Pin
-creation fails the launch if concurrent maintenance already removed a required
-object.
+locks and checks the full borrowed object graph before boot. Another sandbox
+launch, an active collector, or a maintenance operation holding these locks
+causes a retry diagnostic; the publication locks are released before the guest
+starts. Forced GC and direct pruning that bypass Git locking are unsupported
+during publication. The exit trap removes its pins; the next launch removes pins
+from sessions whose locks are no longer held. Lock files remain to avoid locking
+different inodes for the same session. Pin creation fails the launch if
+concurrent maintenance already removed a required object.
 
 On graceful service completion, the guest exports committed work through a
 separate virtio bundle port. It includes local refs and detached HEAD and
@@ -164,7 +164,8 @@ isolated temporary repository, and makes it self-contained before saving it at
 `~/.local/state`) and printing a fetch command. Saved bundles remain recoverable
 after session pins are removed and host maintenance prunes the original commits.
 Empty exports need no recovery. Export or verification failures are reported
-separately from guest completion; nonempty failed exports are retained as
+separately from guest completion. Runner failures are reported even when
+recovery also fails; nonempty failed exports are retained as
 `<token>.failed.bundle`. Recovery covers committed work on graceful completion
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.

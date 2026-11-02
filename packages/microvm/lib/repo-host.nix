@@ -138,12 +138,12 @@ in {
     # Coordinate with both Git GC and maintenance until every borrowed object
     # is pinned and checked, including descendants of roots captured earlier.
     if ! (set -C; : > "$repo_common/objects/maintenance.lock"); then
-      echo 'sandbox: repository maintenance is active; retry after it finishes' >&2
+      echo 'sandbox: could not acquire repository maintenance lock; another sandbox launch or Git maintenance may be active; retry after it finishes' >&2
       exit 2
     fi
     repo_maintenance_locked=1
     if ! (set -C; : > "$repo_common/gc.pid.lock"); then
-      echo 'sandbox: repository GC is acquiring its lock; retry after it finishes' >&2
+      echo 'sandbox: could not acquire repository GC lock; another sandbox launch or Git GC may be active; retry after it finishes' >&2
       exit 2
     fi
     repo_gc_locked=1

@@ -7,10 +7,11 @@ applyTo: "packages/microvm/**"
 
 # MicroVM sandbox implementation
 
-<!-- cspell:ignore ACPI chardev sysfs virtio -->
+<!-- cspell:ignore ACPI chardev sysfs vcpus virtio -->
 
 > **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
-> routes.
+> routes; repository object retention, read-only mounts, and committed-work
+> recovery through virtio serial ports.
 
 `ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
 runtimes. Home Manager and devenv expose the same options and install
@@ -123,6 +124,58 @@ has no infrastructure diagnostic.
 The runner executes inside that directory, and the wrapper's exit trap removes
 it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
+
+The factory accepts
+`{exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`. With
+`repo = true`, launch from a Git checkout (including a linked worktree or an
+unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
+committed HEAD, preserving its branch name or detached state. Uncommitted host
+changes are excluded. Shallow, partial, and alternates-using repositories are
+refused; supported object formats are SHA-1 and SHA-256. This factory parameter
+does not add a module option.
+
+The launcher builds an isolated bare seed repository with templates disabled and
+the host's explicit object format. Only the chosen push remote's tracking refs
+become seed branches; the checkout's HEAD becomes `refs/sandbox/head`. Remote
+selection is `branch.<name>.pushRemote`, `remote.pushDefault`,
+`branch.<name>.remote`, then `origin`. An unborn checkout gets an empty seed.
+The generated seed and the host common directory's `objects/` are separate
+read-only 9p exports. Their relative sources resolve in the per-launch runtime
+directory. Host config, hooks, refs, and worktree metadata are never exported.
+The guest clones the seed with `--shared --no-checkout`; its system Git config
+trusts only the seed and object mount paths. The object share contains all host
+objects, including objects outside the seeded refs; it is not an object-level
+confidentiality boundary. The whole host Nix store is also readable in the
+guest.
+
+Before boot the launcher holds `<common>/sandbox-locks/<token>` and creates
+`refs/sandbox/<token>/<n>` in the host for every borrowed root, including a
+linked worktree's detached HEAD. These refs retain reachable objects even across
+`git gc --prune=now`. Pin publication coordinates with Git GC and maintenance
+locks and checks the full borrowed object graph before boot. Another sandbox
+launch, an active collector, or a maintenance operation holding these locks
+causes a retry diagnostic; the publication locks are released before the guest
+starts. Forced GC and direct pruning that bypass Git locking are unsupported
+during publication. The exit trap removes its pins; the next launch removes pins
+from sessions whose locks are no longer held. Lock files remain to avoid locking
+different inodes for the same session. Pin creation fails the launch if
+concurrent maintenance already removed a required object.
+
+On graceful service completion, the guest exports committed work through a
+separate virtio bundle port. It includes local refs and detached HEAD and
+excludes only the immutable seeded commits, which the host retains. Changes to
+`origin/*` inside the guest cannot introduce unknown bundle prerequisites. The
+host verifies the bundle against the host repository, validates its pack in an
+isolated temporary repository, and makes it self-contained before saving it at
+`$XDG_STATE_HOME/ai-sandbox/bundles/<token>.bundle` (default state root:
+`~/.local/state`) and printing a fetch command. Saved bundles remain recoverable
+after session pins are removed and host maintenance prunes the original commits.
+Empty exports need no recovery. Export or verification failures are reported
+separately from guest completion. Runner failures are reported even when
+recovery also fails; nonempty failed exports are retained as
+`<token>.failed.bundle`. Recovery covers committed work on graceful completion
+only. Forced VM shutdown, host termination, and uncommitted files are not
+recoverable through this path.
 
 The user-facing contract and host preparation are documented in
 `packages/microvm/modules/README.md`. The owner checks cover empty imports,

@@ -245,6 +245,7 @@ in
             runner_status=0
           else
             runner_status=$?
+            echo '${outName}: VM runner failed' >&2
           fi
         ''
         + lib.optionalString repo hostRepo.recover
@@ -268,8 +269,6 @@ in
               fi
             fi
             echo '${outName}: VM stopped without a valid guest completion status' >&2
-          else
-            echo '${outName}: VM runner failed' >&2
           fi
           exit 125
         '';
