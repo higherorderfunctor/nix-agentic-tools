@@ -114,9 +114,10 @@ def runner():
             assert exported.returncode == 0, "new guest commit was excluded by mutable origin refs"
         else:
             assert exported.returncode == 3 and not exported.stdout
-    (runtime / "status").write_text("exited:0\n")
+    if not case["runner_status"]:
+        (runtime / "status").write_text("exited:0\n")
     Path(case["runtime"]).write_text(str(runtime))
-    raise SystemExit(17 if case["mode"] == "runner-failure" else 0)
+    raise SystemExit(case["runner_status"])
 
 
 if len(sys.argv) == 2 and sys.argv[1] == "--runner":
@@ -156,7 +157,7 @@ with tempfile.TemporaryDirectory() as directory:
     hostile_config.write_text(f"[init]\n\tdefaultBranch = host-secret-branch\n\ttemplateDir = {template}\n")
     counter = 0
 
-    def setup(*, branch="topic", mode="empty", object_format="sha1", unborn=False):
+    def setup(*, branch="topic", mode="empty", object_format="sha1", runner_status=0, unborn=False):
         global counter
         counter += 1
         case_root = root / str(counter)
@@ -212,6 +213,7 @@ with tempfile.TemporaryDirectory() as directory:
             "main": str(main),
             "mode": mode,
             "recovered": str(case_root / "recovered"),
+            "runner_status": runner_status,
             "runtime": str(case_root / "runtime"),
             "seed_refs": refs,
             "worktree": str(worktree),
@@ -303,10 +305,12 @@ with tempfile.TemporaryDirectory() as directory:
 
     def refuse_publication(case, diagnostic):
         main = Path(case["main"])
+        locks = [main / ".git" / name for name in ["gc.pid", "gc.pid.lock", "objects/maintenance.lock"]]
+        existing_locks = {path: path.read_bytes() for path in locks if path.exists()}
         result = subprocess.run([str(host)], cwd=Path(case["worktree"]) / "sub", env=env, text=True, capture_output=True, timeout=10)
         assert result.returncode == 2 and diagnostic in result.stderr, (result.returncode, result.stderr)
         assert not output("for-each-ref", "--format=%(refname)", "refs/sandbox/", cwd=main)
-        assert not (main / ".git/gc.pid.lock").exists()
+        assert {path: path.read_bytes() for path in locks if path.exists()} == existing_locks
         return result
 
     hostname = socket.gethostname()
@@ -319,19 +323,18 @@ with tempfile.TemporaryDirectory() as directory:
         refuse_publication(case, "repository GC is active or its owner is unknown")
         assert record.read_text() == gc_record
         assert not (common / "objects/maintenance.lock").exists()
-    case_root, case = setup()
-    common = Path(case["main"]) / ".git"
-    maintenance = common / "objects/maintenance.lock"
-    maintenance.write_text("existing-maintenance-owner\n")
-    refuse_publication(case, "repository maintenance is active")
-    assert maintenance.read_text() == "existing-maintenance-owner\n"
-    assert not (common / "gc.pid").exists()
+    for lock_name, owner in [("gc.pid.lock", "Git GC"), ("objects/maintenance.lock", "Git maintenance")]:
+        case_root, case = setup()
+        common = Path(case["main"]) / ".git"
+        (common / lock_name).write_text("existing-publication-owner\n")
+        result = refuse_publication(case, f"another sandbox launch or {owner} may be active; retry after it finishes")
+        assert "could not acquire repository" in result.stderr
     case_root, case = setup()
     common = Path(case["main"]) / ".git"
     (common / "gc.pid").write_text(f"{stale_pid} {hostname}")
     invoke(case_root, case)
     assert not any(path.exists() for path in [common / "gc.pid", common / "gc.pid.lock", common / "objects/maintenance.lock"])
-    print("PASS: live/foreign/malformed GC owners and active maintenance refuse within ten seconds without replacing locks; stale local GC is reaped and publication locks end before QEMU")
+    print("PASS: live/foreign/malformed GC owners and contended GC/maintenance locks refuse within ten seconds without replacing locks; stale local GC is reaped and publication locks end before QEMU")
 
     case_root, case = setup()
     common = Path(case["main"]) / ".git"
@@ -366,15 +369,28 @@ with tempfile.TemporaryDirectory() as directory:
         assert recovered in output("for-each-ref", "--format=%(objectname)", "refs/recovered/", cwd=case["main"]).splitlines()
     print("PASS: branch/detached/unborn recovery survives host ref deletion and gc, verifies in empty repo, and printed fetch command restores guest HEAD despite origin advancing")
 
-    for mode in ["export-failure", "invalid-bundle", "malformed-ref", "missing-export", "runner-failure", "truncated-pack"]:
+    for mode in ["export-failure", "invalid-bundle", "malformed-ref", "missing-export", "truncated-pack"]:
         case_root, case = setup(mode=mode)
         result = invoke(case_root, case, expected=125)
-        assert "failed" in result.stderr
+        assert "recovery failed" in result.stderr
+        assert "VM runner failed" not in result.stderr
         if mode in ("invalid-bundle", "malformed-ref", "truncated-pack"):
             failed = list((case_root / "state/ai-sandbox/bundles").glob("*.failed.bundle"))
             expected_payload = b"truncated bundle\n" if mode == "invalid-bundle" else Path(case["corrupted"]).read_bytes()
             assert len(failed) == 1 and failed[0].read_bytes() == expected_payload
-    print("PASS: corrupt header, malformed ref, truncated pack, missing graceful export and failed VM return infrastructure failure and clean session pins")
+    print("PASS: corrupt header, malformed ref, truncated pack, missing graceful export return infrastructure failure and clean session pins")
+
+    for mode in ["empty", "missing-export", "recover", "truncated-pack"]:
+        case_root, case = setup(mode=mode, runner_status=17)
+        result = invoke(case_root, case, expected=125)
+        assert "VM runner failed" in result.stderr, result.stderr
+        assert ("recovery failed" in result.stderr) == (mode in ("missing-export", "truncated-pack")), result.stderr
+        if mode == "recover":
+            assert "verified committed-work recovery: git fetch" in result.stderr, result.stderr
+        elif mode == "truncated-pack":
+            failed = list((case_root / "state/ai-sandbox/bundles").glob("*.failed.bundle"))
+            assert len(failed) == 1 and failed[0].read_bytes() == Path(case["corrupted"]).read_bytes()
+    print("PASS: VM runner failure stays visible with empty, missing, valid and corrupt exports; recovery still saves valid or unverified data")
 
     for refusal in ["alternates", "http-alternates", "partial-config", "promisor-config", "promisor-pack", "shallow"]:
         case_root, case = setup()
