@@ -51,9 +51,11 @@ never warn. Sandbox commands claim their names through
 
 `extraPackages` and Git from the module's package set enter both the executable
 PATH and the guest system profile, so child shells resetting PATH to
-`/run/current-system/sw/bin` still find them. This phase supplies no repository,
-doors, identities or Git settings. Never log a harness into a provider inside
-the VM; VM-only CPA client keys will supply authentication in a later phase.
+`/run/current-system/sw/bin` still find them. The standalone factory below also
+supplies repository and door parameters; the module option tree does not yet
+expose those surfaces or Git identity settings. Never log a harness into a
+provider inside the VM; VM-only CPA client keys will supply authentication in a
+later phase.
 
 The public standalone factory also accepts packages and sizing:
 
@@ -129,13 +131,19 @@ it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
 
 The factory accepts
-`{exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`. With
-`repo = true`, launch from a Git checkout (including a linked worktree or an
-unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
-committed HEAD, preserving its branch name or detached state. Uncommitted host
-changes are excluded. Shallow, partial, and alternates-using repositories are
-refused; supported object formats are SHA-1 and SHA-256. This factory parameter
-does not add a module option.
+`{doors ? []; exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`.
+Each door is `{port; command; arguments ? []; environment ? {};}` with a unique
+TCP port, absolute host executable and string arguments/environment. QEMU runs a
+fresh wrapper per connection with socket stdin/stdout; the command gets only its
+declared environment, and host stderr stays in the launcher's private runtime
+directory. The restricted user network exposes only those forwarded guest ports.
+Launcher cleanup checks each recorded PID's process start time before killing an
+orphaned door. With `repo = true`, launch from a Git checkout (including a
+linked worktree or an unborn branch). The guest starts in `/home/sandbox/repo`
+at that checkout's committed HEAD, preserving its branch name or detached state.
+Uncommitted host changes are excluded. Shallow, partial, and alternates-using
+repositories are refused; supported object formats are SHA-1 and SHA-256. These
+factory parameters do not add module options.
 
 The launcher builds an isolated bare seed repository with templates disabled and
 the host's explicit object format. Only the chosen push remote's tracking refs
