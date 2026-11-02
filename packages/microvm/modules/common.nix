@@ -94,7 +94,7 @@
           runtimeIdentities = options.ai.${name}.sandbox.git.identities.highestPrio < 1500;
         };
 in {
-  imports = [(import ./identities.nix {inherit inheritOptions;}) (import ./relay.nix {inherit backend routed;})];
+  imports = [./git.nix (import ./identities.nix {inherit inheritOptions;}) (import ./relay.nix {inherit backend routed;})];
 
   options.ai =
     {
