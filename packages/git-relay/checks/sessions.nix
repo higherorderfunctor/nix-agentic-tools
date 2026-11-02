@@ -1,10 +1,12 @@
-# cspell:ignore AAAASSESSION deadbeefdeadbeefdeadbeefdeadbeef TOOSHORT urandom
+# cspell:ignore AAAASSESSION cafebabecafebabecafebabecafebabe deadbeefdeadbeefdeadbeefdeadbeef TOOSHORT urandom
 # Session repositories: opened under a caller-held flock, served the moment
 # they appear by a session-only daemon, forwarded with their own credential,
 # reaped only when unlocked, and refused once the credential loses the
-# upstream host. Static repositories stay unreachable. Upstream URLs pass
-# through verbatim: a scp-style target without .git neither gains nor needs
-# the suffix. Linux only: a Darwin build sandbox has no loopback networking.
+# upstream host. Static repositories stay unreachable, and a session is
+# published only complete: staged outside the served tree, moved into place
+# by one rename. Upstream URLs pass through verbatim: a scp-style target
+# without .git neither gains nor needs the suffix. Linux only: a Darwin
+# build sandbox has no loopback networking.
 {
   lib,
   pkgs,
@@ -17,6 +19,7 @@
   held = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
   fresh = "1a2b3c4d5e6f708192a3b4c5d6e7f809";
   abandoned = "deadbeefdeadbeefdeadbeefdeadbeef";
+  crashed = "cafebabecafebabecafebabecafebabe";
   unknown = "99999999999999999999999999999999";
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
@@ -113,6 +116,8 @@ in {
           --upstream "$scp_upstream" --alternates "$base/upstream/ssh-target.git/objects"
         [[ $(<"$state/repositories/sessions/${fresh}.git/objects/info/alternates") \
           == "$base/upstream/ssh-target.git/objects" ]]
+        # The staged build was published whole; nothing lingers outside sessions.
+        [[ -z $(ls -A -- "$state/repositories/staging") ]]
         git ls-remote "$url/sessions/${fresh}.git" >/dev/null
 
         git init --quiet work
@@ -133,6 +138,21 @@ in {
         grep -qxF -- "$base/session key" ssh-args
         grep -qxF -- "UserKnownHostsFile=\"$state/known_hosts.d/sessions.example.invalid\"" ssh-args
         grep -qxF -- IdentitiesOnly=yes ssh-args
+
+        # Re-opens rewrite the shared pin file while a reader loops over it;
+        # the write-then-rename publish keeps every read a complete pin line.
+        : >pin-misses
+        (
+          for _ in {1..300}; do
+            grep -qxF -- "$pin" "$state/known_hosts.d/sessions.example.invalid" || echo miss >>pin-misses
+          done
+        ) &
+        pin_reader=$!
+        for _ in {1..10}; do
+          locked "${fresh}" open --token "${fresh}" --credential work --upstream "$scp_upstream"
+        done
+        wait "$pin_reader"
+        [[ ! -s pin-misses ]]
 
         # Wrong tokens serve nothing; malformed ones never open.
         absent git ls-remote "$url/sessions/${unknown}.git"
@@ -157,6 +177,15 @@ in {
           exit 1
         fi
         grep -F "no forge pins for 'unpinned.example.invalid'" open.log
+        # A malformed --alternates is refused before anything is created.
+        if locked "${unknown}" open --token "${unknown}" --credential work \
+          --upstream "$ssh_upstream" --alternates relative/objects >open.log 2>&1; then
+          echo "FAIL: open accepted a relative --alternates" >&2
+          exit 1
+        fi
+        grep -F 'one absolute object directory path' open.log
+        [[ ! -e $state/repositories/sessions/${unknown}.git ]]
+        [[ ! -e $state/repositories/staging/${unknown}.git ]]
 
         # open refuses a lock the caller does not hold, and creates nothing.
         if (cd "$state"; GIT_RELAY_CONFIG="$base/relay.json" exec ${lib.getExe relay} session open \
@@ -174,6 +203,12 @@ in {
         absent git ls-remote "$url/../stale.git"
         absent git ls-remote "$url/stale.git"
 
+        # A repository still being opened is staged outside the served tree.
+        mkdir -p "$state/repositories/staging"
+        git init --bare --quiet "$state/repositories/staging/${held}.git"
+        absent git ls-remote "$url/staging/${held}.git"
+        rm -rf -- "$state/repositories/staging/${held}.git"
+
         # Removing the credential's permission for the upstream host revokes
         # the session: the next push is refused and no new session opens.
         before=$(tip upstream/ssh-target.git refs/heads/main)
@@ -190,9 +225,14 @@ in {
         fi
         grep -F "not allowed for 'sessions.example.invalid'" open.log
 
-        # gc reaps the unlocked fresh session and never touches the held one.
+        # gc reaps the unlocked fresh session and a staged-but-unpublished
+        # one, and never touches the held session.
+        git init --bare --quiet "$state/repositories/staging/${crashed}.git"
+        : >"$state/locks/${crashed}"
         (cd "$state"; GIT_RELAY_CONFIG="$base/relay.json" exec ${lib.getExe relay} session gc)
         [[ ! -e $state/repositories/sessions/${fresh}.git ]]
+        [[ ! -e $state/repositories/staging/${crashed}.git ]]
+        [[ ! -e $state/locks/${crashed} ]]
         [[ -d $state/repositories/sessions/${held}.git ]]
         git ls-remote "$url/sessions/${held}.git" >/dev/null
 

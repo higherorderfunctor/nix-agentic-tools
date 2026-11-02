@@ -99,6 +99,7 @@ in
       config=''${GIT_RELAY_CONFIG:?GIT_RELAY_CONFIG must name the JSON config file}
       root=$PWD/repositories
       sessions=$root/sessions
+      staging=$root/staging
       locks=$PWD/locks
       pins=$PWD/known_hosts.d
       host_pattern=${lib.escapeShellArg "^${upstreamUrl.hostPattern}$"}
@@ -125,16 +126,21 @@ in
       }
 
       # Forge names become filenames; refuse path separators and dot aliases.
+      # Write-then-rename: a push through any session of this host reads either
+      # the complete old pins or the complete new ones, never a truncated file.
       pin() { # <host>
         mkdir -p "$pins"
         [[ $1 =~ $host_pattern ]] || { echo "git-relay: invalid forge host '$1'" >&2; exit 1; }
+        local tmp
+        tmp=$(mktemp "$pins/.pin.XXXXXX")
         jq -er --arg host "$1" \
           '.forges[$host].hostKeys | select(type == "string" and test("[^[:space:]]"))' \
-          "$config" >"$pins/$1" || { echo "git-relay: no forge pins for '$1'" >&2; exit 1; }
+          "$config" >"$tmp" || { rm -f -- "$tmp"; echo "git-relay: no forge pins for '$1'" >&2; exit 1; }
+        mv -f -- "$tmp" "$pins/$1"
       }
 
-      # A served repository — static or session — gets the same forwarding
-      # hook, credential, upstream, host pin and receive policy.
+      # A repository — static served, or session staged — gets the same
+      # forwarding hook, credential, upstream, host pin and receive policy.
       prepare_repo() { # <dir> <credential> <upstream> <host>
         local repo=$1 credential=$2 upstream=$3 host=$4
         # Empty templates refuse host hooks; isolated init uses Git's built-in HEAD default.
@@ -170,20 +176,20 @@ in
         exec {lock_probe}>&-
       }
 
-      # Reap session directories whose lock this process can take: a live
-      # caller holds its lock, so only abandoned sessions go. Lock files
-      # without a session directory belong to callers between lock and open,
-      # and are never touched.
+      # Reap session and staged directories whose lock this process can take:
+      # a live caller holds its lock, so only abandoned work goes. Lock files
+      # without either directory belong to callers between lock and open, and
+      # are never touched.
       session_gc() {
         local session token probe
-        mkdir -p "$sessions" "$locks"
-        for session in "$sessions"/*.git; do
+        mkdir -p "$sessions" "$staging" "$locks"
+        for session in "$sessions"/*.git "$staging"/*.git; do
           [[ -e $session ]] || continue
           token=$(basename -- "$session" .git)
           [[ $token =~ ^[0-9a-f]{32}$ ]] || continue
           exec {probe}<>"$locks/$token"
           if flock -n "$probe"; then
-            rm -rf -- "$session"
+            rm -rf -- "$sessions/$token.git" "$staging/$token.git"
             rm -f -- "$locks/$token"
           fi
           exec {probe}>&-
@@ -226,6 +232,12 @@ in
                 echo "git-relay: a session token is exactly 32 lowercase hex characters" >&2
                 exit 1
               }
+              # Validated before anything is created: git reads this file
+              # verbatim, so a refused --alternates must leave no session.
+              [[ -z $alternates || ($alternates == /* && $alternates != *$'\n'*) ]] || {
+                echo "git-relay: --alternates is one absolute object directory path" >&2
+                exit 1
+              }
               host=$(relay_host "$upstream") || {
                 echo "git-relay: session upstream must use SSH (ssh:// or [user@]host:path)" >&2
                 exit 1
@@ -237,14 +249,16 @@ in
               }
               session_gc
               require_lock "$token"
-              prepare_repo "$sessions/$token.git" "$credential" "$upstream" "$host"
-              if [[ -n $alternates ]]; then
-                [[ $alternates == /* && $alternates != *$'\n'* ]] || {
-                  echo "git-relay: --alternates is one absolute object directory path" >&2
-                  exit 1
-                }
-                printf '%s\n' "$alternates" >"$sessions/$token.git/objects/info/alternates"
-              fi
+              # Stage outside the served sessions tree and publish with one
+              # rename: until it lands, the daemon serves nothing of this
+              # session, so no push can arrive before the hook is installed.
+              # A retry after a crashed attempt starts from an empty stage.
+              rm -rf -- "$staging/$token.git"
+              prepare_repo "$staging/$token.git" "$credential" "$upstream" "$host"
+              [[ -z $alternates ]] ||
+                printf '%s\n' "$alternates" >"$staging/$token.git/objects/info/alternates"
+              rm -rf -- "$sessions/$token.git"
+              mv -T -- "$staging/$token.git" "$sessions/$token.git"
               ;;
             close)
               [[ $# == 3 ]] || { echo "git-relay: session close takes one token" >&2; exit 1; }
@@ -253,9 +267,9 @@ in
                 echo "git-relay: a session token is exactly 32 lowercase hex characters" >&2
                 exit 1
               }
-              # The lock holder's exit trap; the lock file goes with the directory.
+              # The lock holder's exit trap; the lock file goes with the directories.
               require_lock "$token"
-              rm -rf -- "$sessions/$token.git"
+              rm -rf -- "$sessions/$token.git" "$staging/$token.git"
               rm -f -- "$locks/$token"
               ;;
             gc)
@@ -271,10 +285,21 @@ in
           listen=$(jq -er .listen "$config")
           port=$(jq -er .port "$config")
           mkdir -p "$root" "$locks"
+          declare -A current=()
           hosts=$(jq -r '.forges | keys[]' "$config")
           while IFS= read -r host; do
             pin "$host"
+            current[$host]=1
           done <<<"$hosts"
+          # Pin files are config-derived state: the refresh above leaves exactly
+          # the current forges pinned, so drop every other file — a forge
+          # removed from the config must leave no trusted keys behind for a
+          # static repository or a still-recorded session to lean on.
+          for pin_file in "$pins"/*; do
+            [[ -f $pin_file ]] || continue
+            host=$(basename -- "$pin_file")
+            [[ -n ''${current[$host]+x} ]] || rm -f -- "$pin_file"
+          done
           # Abandoned sessions go at start; a live caller's held lock survives.
           session_gc
           if [[ $(jq -r '.sessions // false' "$config") == true ]]; then
@@ -305,7 +330,9 @@ in
               echo "git-relay: repository '$name': upstream must use SSH (ssh:// or [user@]host:path)" >&2
               exit 1
             }
-            # An absent forge must never fall back to the daemon user's known_hosts.
+            # Pruned to the current forges above, a missing pin means the
+            # config no longer vouches for this host; never fall back to the
+            # daemon user's known_hosts.
             [[ -s $pins/$host ]] || { echo "git-relay: repository '$name': no forge pins for '$host'" >&2; exit 1; }
             credential=$(jq -er --arg name "$name" '.repositories[$name].credential' "$config")
             credential_key "$credential" "$host" >/dev/null || {
