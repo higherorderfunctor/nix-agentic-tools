@@ -24,8 +24,12 @@ writes no local refs; upstream policy decides which pushes are accepted.
   ed25519 pins cover Codeberg, GitHub and GitLab; publisher URLs live in
   `packages/git-relay/lib/forges.nix`. Consumer entries merge per host, and a
   consumer's `hostKeys` replaces that host's pins. Other hosts need explicit
-  pins; the launcher writes `stateDir/known_hosts.d/<host>`. For a nondefault
-  SSH port, supply matching `[host]:port` entries in that host's pins.
+  pins; the launcher writes `stateDir/known_hosts.d/<host>`, replacing the file
+  atomically so pushes reading it never see it truncated. Every daemon start
+  rewrites the current forges' pins and deletes files for hosts the config no
+  longer lists, so a removed forge leaves no trusted pins behind. For a
+  nondefault SSH port, supply matching `[host]:port` entries in that host's
+  pins.
 - `settings.repositories.<name>.upstream`: SSH URL, either
   `ssh://[user@]host[:port]/path` or `[user@]host:path`, with a DNS or IPv4
   host. Other transports and unpinned hosts are refused during evaluation and
@@ -54,13 +58,18 @@ directory and the served URL. The upstream is validated with the same grammar as
 static repositories and forwarded verbatim: scp-style `host:path` stays
 home-relative, `ssh://host/path` stays absolute, and no `.git` suffix is
 appended or removed. `--alternates` records one absolute object directory in the
-session's `objects/info/alternates`.
+session's `objects/info/alternates`; every argument is validated before anything
+is created, so a refused open leaves no session behind.
 
-`session close T` removes the session directory and its lock file; the caller's
-exit trap is the usual caller. `session gc` removes session directories whose
-lock it can take — a held lock marks a live session — and never touches lock
-files without a session directory, which belong to callers between lock and
-open. The daemon runs gc at every start, and every `open` runs it first.
+`open` builds the repository under `stateDir/repositories/staging`, outside the
+served `sessions` tree, and publishes it into place with a single rename: a
+session becomes servable only complete, with its forwarding hook, routing and
+alternates already installed. `session close T` removes the session and any
+staged directory plus the lock file; the caller's exit trap is the usual caller.
+`session gc` removes session and staged directories whose lock it can take — a
+held lock marks a live session — and never touches lock files without either
+directory, which belong to callers between lock and open. The daemon runs gc at
+every start, and every `open` runs it first.
 
 An instance with `settings.sessions = true` serves only the `sessions`
 directory: no static repositories may be configured, and the daemon whitelists
