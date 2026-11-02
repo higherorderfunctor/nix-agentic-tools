@@ -11,19 +11,32 @@
   relayConfig,
   runtime,
   runtimeIdentities,
+  signers,
 }: let
-  connected = factory (args
-    // {
-      doors = [
-        {
-          arguments = ["STDIO" "TCP:127.0.0.1:${toString instance.port}"];
-          command = "${pkgs.socat}/bin/socat";
-          port = guestPort;
-        }
-      ];
-      repo = true;
-      repoConfig = true;
-    });
+  connect = signing:
+    factory (args
+      // {
+        doors = [
+          {
+            arguments = ["STDIO" "TCP:127.0.0.1:${toString instance.port}"];
+            command = "${pkgs.socat}/bin/socat";
+            port = guestPort;
+          }
+        ];
+        inherit signing;
+        packages = args.packages ++ lib.optional (signing != null) pkgs.openssh;
+        repo = true;
+        repoConfig = true;
+      });
+  connected = connect null;
+  signed =
+    if signers == {}
+    then connected
+    else
+      connect {
+        port = 2222;
+        socket = null;
+      };
   guestPort = 9418;
   plain = factory args;
   seeded = factory (args // {repo = true;});
@@ -40,7 +53,7 @@
 in
   (import ../../../../lib/strict-shell-application.nix pkgs {
     name = args.outName;
-    runtimeInputs = [pkgs.coreutils pkgs.git pkgs.jq pkgs.util-linux];
+    runtimeInputs = [pkgs.coreutils pkgs.git pkgs.jq pkgs.openssh pkgs.util-linux];
     text = ''
       selected=$(${lib.getExe selector} ${tableFile})
       identity=$(jq -r '.identity // "none"' <<< "$selected")
@@ -50,6 +63,40 @@ in
           exec ${lib.getExe seeded} "$@"
         fi
         exec ${lib.getExe plain} "$@"
+      fi
+      signing_service=""
+      signing_socket=""
+      case "$identity" in
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (identity: signer: ''
+          ${lib.escapeShellArg identity})
+            signing_service=${lib.escapeShellArg signer.service}
+            signing_socket=$(
+              ${lib.concatStringsSep "\n" (lib.mapAttrsToList (variable: value:
+            (import ../../../../lib/redact {inherit lib;}).assign {
+              inherit pkgs value variable;
+              option = "ai.services.${signer.service}.environment.${variable}";
+            })
+          signer.environment)}
+              printf '%s' ${signer.runtimeDir}/agent.sock
+            )
+            ;;
+        '')
+        signers)}
+        *) ;;
+      esac
+      if [[ -n $signing_socket ]]; then
+        if ! public_key=$(SSH_AUTH_SOCK="$signing_socket" timeout 10 ssh-add -L); then
+          echo "${runtime}-sandbox: signer unavailable or empty; start $signing_service" >&2
+          exit 1
+        fi
+        mapfile -t public_keys <<< "$public_key"
+        if (( ''${#public_keys[@]} != 1 )) || ! ssh-keygen -l -f /dev/stdin <<< "$public_key" >/dev/null; then
+          echo "${runtime}-sandbox: $signing_service must contain exactly one signing key; restart it" >&2
+          exit 1
+        fi
+        # Agent comments can contain host paths; the guest needs only key bytes.
+        read -r key_type key_data _ <<< "$public_key"
+        public_key="$key_type $key_data"
       fi
       common=$(git rev-parse --path-format=absolute --git-common-dir)
       # The relay creates SHA-1 sessions; borrowing SHA-256 objects cannot work.
@@ -92,8 +139,21 @@ in
       git config --file "$SANDBOX_REPO_CONFIG" tag.gpgSign false
       git config --file "$SANDBOX_REPO_CONFIG" remote.origin.url "git://${connected.doorAddress}:${toString guestPort}/sessions/$token.git"
       git config --file "$SANDBOX_REPO_CONFIG" remote.origin.prune false
-      ${lib.getExe connected} "$@"
+      if [[ -n $signing_socket ]]; then
+        email=$(git config --file "$SANDBOX_REPO_CONFIG" user.email)
+        export SANDBOX_ALLOWED_SIGNERS="$config_dir/allowed-signers"
+        export SANDBOX_SIGNING_SOCKET="$signing_socket"
+        printf '%s %s\n' "$email" "$public_key" > "$SANDBOX_ALLOWED_SIGNERS"
+        git config --file "$SANDBOX_REPO_CONFIG" gpg.format ssh
+        git config --file "$SANDBOX_REPO_CONFIG" user.signingKey "key::$public_key"
+        git config --file "$SANDBOX_REPO_CONFIG" commit.gpgSign true
+        git config --file "$SANDBOX_REPO_CONFIG" tag.gpgSign true
+        git config --file "$SANDBOX_REPO_CONFIG" gpg.ssh.allowedSignersFile /run/sandbox-command/allowed-signers
+        ${lib.getExe signed} "$@"
+      else
+        ${lib.getExe connected} "$@"
+      fi
     '';
   }).overrideAttrs (old: {
-    passthru = (old.passthru or {}) // {inherit connected plain seeded selector table tableFile;};
+    passthru = (old.passthru or {}) // {inherit connected plain seeded selector signed table tableFile;};
   })
