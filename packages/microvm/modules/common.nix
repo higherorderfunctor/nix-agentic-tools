@@ -83,6 +83,8 @@
         vcpus = cfg.vm.vcpus;
       };
 in {
+  imports = [(import ./identities.nix {inherit inheritOptions;}) (import ./relay.nix {inherit routed;})];
+
   options.ai =
     {
       internal.sandboxPackages = lib.mkOption {

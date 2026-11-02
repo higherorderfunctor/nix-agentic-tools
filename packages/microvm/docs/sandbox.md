@@ -27,10 +27,10 @@ runtimes. Home Manager and devenv expose the same options and install
 to 4096 MiB/two CPUs. Every runtime in `lib/ai/runtimes.nix` mirrors the whole
 option tree at `ai.<runtime>.sandbox`. Only defined root leaves supply runtime
 option defaults, following the peer-default pattern in `ai.proxy`. Runtime
-definitions, including `mkDefault`, replace each whole option: a list (and any
-future attribute-set option) is replaced rather than merged with the root. Other
-leaves keep their root values. Nothing flows up. Kiro's new root tree is
-separate from its existing `ai.kiro.cli.sandbox` setting.
+definitions, including `mkDefault`, replace each whole option: a list or
+attribute-set option is replaced rather than merged with the root. Other leaves
+keep their root values. Nothing flows up. Kiro's new root tree is separate from
+its existing `ai.kiro.cli.sandbox` setting.
 
 The guest-route table selects the plain `ai.claude.package` or
 `ai.codex.package`, before host launcher environment and jail wrapping. Enabling
@@ -42,8 +42,10 @@ never warn. Sandbox commands claim their names through `ai.claims`.
 `extraPackages` and Git from the module's package set enter both the executable
 PATH and the guest system profile, so child shells resetting PATH to
 `/run/current-system/sw/bin` still find them. This phase supplies no repository,
-doors, identities or Git settings. Never log a harness into a provider inside
-the VM; VM-only CPA client keys will supply authentication in a later phase.
+doors or guest Git settings. Identity options, selection, and relay lowering are
+described in `packages/microvm/docs/sandbox-identities.md`; they are not yet
+wired into the launcher. Never log a harness into a provider inside the VM;
+VM-only CPA client keys will supply authentication in a later phase.
 
 The public standalone factory also accepts packages and sizing:
 
