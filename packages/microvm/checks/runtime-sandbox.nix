@@ -78,6 +78,10 @@ in {
       replacement = {
         enable = false;
         extraPackages = [];
+        git = {
+          forges = {};
+          identities = {};
+        };
         vm = {
           memory = 4096;
           vcpus = 3;
@@ -116,6 +120,10 @@ in {
         == {
           enable = false;
           extraPackages = [];
+          git = {
+            forges = {};
+            identities = {};
+          };
           vm = {
             memory = 4096;
             vcpus = 2;
