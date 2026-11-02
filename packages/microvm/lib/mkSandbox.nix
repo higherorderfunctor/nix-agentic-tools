@@ -9,14 +9,23 @@
   outName,
   packages ? [],
   repo ? false,
+  signing ? null,
   vcpus ? 1,
 }: let
+  agentSocket = "/run/sandbox/agent.sock";
   # QEMU executes one wrapper per connection with its socket on stdin/stdout.
   doorAddress = "10.0.2.100";
   doorMac = "02:00:00:00:d0:01";
   guestRepo = import ./repo-guest.nix {inherit lib pkgs;};
   hostRepo = import ./repo-host.nix {inherit lib pkgs;};
-  hasDoors = doors != [];
+  allDoors =
+    doors
+    ++ lib.optional (signing != null) {
+      command = "${pkgs.socat}/bin/socat";
+      arguments = ["STDIO" "UNIX-CONNECT:${signing.socket}"];
+      inherit (signing) port;
+    };
+  hasDoors = allDoors != [];
   doorWrapper = door:
     import ../../../lib/strict-shell-application.nix pkgs {
       name = "sandbox-door-${toString door.port}";
@@ -64,7 +73,15 @@
       environment = {};
     }
     // door)
-  doors;
+  allDoors;
+  validSigning = signing:
+    builtins.isAttrs signing
+    && builtins.attrNames signing == ["port" "socket"]
+    && builtins.isInt signing.port
+    && signing.port >= 1
+    && signing.port <= 65535
+    && builtins.isString signing.socket
+    && lib.hasPrefix "/" signing.socket;
   doorNetdev = lib.concatStringsSep "," (
     ["user" "id=doors" "restrict=on" "net=10.0.2.0/24"]
     ++ map (door: "guestfwd=tcp:${doorAddress}:${toString door.port}-cmd:${lib.getExe (doorWrapper door)}") normalizedDoors
@@ -234,6 +251,18 @@
           };
         };
         systemd.services = {
+          sandbox-signing-agent = lib.mkIf (signing != null) {
+            after = ["network-online.target"];
+            before = ["sandbox.service"];
+            requires = ["network-online.target"];
+            serviceConfig = {
+              ExecStart = "${pkgs.socat}/bin/socat UNIX-LISTEN:${agentSocket},fork,mode=0600 TCP:${doorAddress}:${toString signing.port}";
+              Restart = "on-failure";
+              RuntimeDirectory = "sandbox";
+              User = "sandbox";
+            };
+            wantedBy = ["multi-user.target"];
+          };
           sandbox = let
             portDevices = map (name: "dev-virtio\\x2dports-sandbox.${lib.replaceStrings ["-"] ["\\x2d"] name}.device") (["status"] ++ lib.optionals repo ["bundle" "bundle-status"]);
           in {
@@ -241,6 +270,7 @@
             requires = portDevices;
             wants = lib.optional hasDoors "network-online.target";
             serviceConfig = {
+              Environment = lib.optional (signing != null) "SSH_AUTH_SOCK=${agentSocket}";
               ExecStart = lib.getExe guestCommand;
               ExecStartPre =
                 map (name: "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.${name}/raw /run/${runtimeName}/${name}")
@@ -297,8 +327,9 @@ in
   assert lib.assertMsg (builtins.isList packages && builtins.all lib.isDerivation packages) "mkSandbox.packages must be a list of packages";
   assert lib.assertMsg (validName outName) "mkSandbox.outName must be a single executable name";
   assert lib.assertMsg (builtins.isList doors && builtins.all validDoor normalizedDoors) "mkSandbox.doors entries must be {port; command; arguments ? []; environment ? {};} with a TCP port, an absolute command path, string arguments and string environment values";
-  assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) doors)) == builtins.length doors) "mkSandbox.doors ports must be unique";
+  assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) allDoors)) == builtins.length allDoors) "mkSandbox.doors and mkSandbox.signing ports must be unique";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
+  assert lib.assertMsg (signing == null || validSigning signing) "mkSandbox.signing must be null or {port; socket;} with a TCP port and an absolute host agent socket";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
       runtimeInputs = lib.optionals repo [pkgs.coreutils pkgs.git pkgs.util-linux];
