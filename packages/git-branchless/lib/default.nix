@@ -1,7 +1,8 @@
 {
-  # `{lib, extracted ? <the committed sidecar>}: {options; leaves; report; revsetFunctions;}`
-  # — the shared generator (lib/git-tool-settings) over git-branchless's
-  # sidecar, with the two hand tables only this tool needs.
+  # `{lib, extracted ? <the committed sidecar>}: {options; leaves; report;
+  # revsetFunctions; assertions;}` — the shared generator
+  # (lib/git-tool-settings) over git-branchless's sidecar, with the two hand
+  # tables only this tool needs.
   git-branchless.settings = {
     lib,
     extracted ?
@@ -9,8 +10,8 @@
         dir = ../extracted;
         inherit lib;
       },
-  }:
-    import ../../../lib/git-tool-settings {
+  }: let
+    generated = import ../../../lib/git-tool-settings {
       inherit extracted lib;
       rows = builtins.fromJSON (builtins.readFile ../extract/annotations.json);
       tool = "git-branchless";
@@ -36,5 +37,29 @@
             };
         };
       };
+    };
+  in
+    generated
+    // {
+      # The test.jobs/test.strategy coupling every scope shares: the tool
+      # factory (lib/git-tool-settings/tool-module.nix) evaluates these
+      # wherever the tree mounts, so a sandbox tree gets them too. Each host
+      # backend keeps only what its configuration scope adds: Home Manager is
+      # the lowest layer it writes, so a null strategy there is upstream's
+      # working-copy and fails; repository-local, a null strategy may come
+      # user-global, so devenv only warns.
+      # Parenthesized on purpose: a bare lambda is not a valid list element,
+      # and the factory's `{cfg, optionPath}` argument arrives as one attrset.
+      assertions = [
+        (ctx: let
+          test = ctx.cfg.settings.test;
+        in {
+          assertion = !(test.jobs != null && test.jobs != 1 && test.strategy == "working-copy");
+          message = ''
+            ${ctx.optionPath}.settings.test.jobs = ${toString test.jobs} contradicts ${ctx.optionPath}.settings.test.strategy = "working-copy".
+            git-branchless runs one job at a time with the working-copy strategy, and a configured jobs value does not change the strategy, so every `git test run` would fail. Set test.strategy = "worktree".
+          '';
+        })
+      ];
     };
 }
