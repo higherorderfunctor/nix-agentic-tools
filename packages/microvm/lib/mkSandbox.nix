@@ -101,6 +101,7 @@
     ["user" "id=doors" "restrict=on" "net=10.0.2.0/24"]
     ++ map (door: "guestfwd=tcp:${doorAddress}:${toString door.port}-cmd:${lib.getExe (doorWrapper door)}") normalizedDoors
   );
+  guestRuntimeFile = name: "/run/${runtimeName}/${name}";
   runtimeName =
     if repo
     then "sandbox-command"
@@ -111,7 +112,7 @@
     runtimeInputs = packages;
     text =
       ''
-        mapfile -d "" -t args < /run/${runtimeName}/argv
+        mapfile -d "" -t args < ${guestRuntimeFile "argv"}
       ''
       + lib.optionalString repo guestRepo.clone
       + lib.optionalString repoConfig guestRepo.configure
@@ -299,7 +300,7 @@
               Environment = lib.optional (signing != null) "SSH_AUTH_SOCK=${agentSocket}";
               ExecStart = lib.getExe guestCommand;
               ExecStartPre =
-                map (name: "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.${name}/raw /run/${runtimeName}/${name}")
+                map (name: "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.${name}/raw ${guestRuntimeFile name}")
                 (["argv"] ++ lib.optionals repo ["repo-head" "repo-branch"] ++ lib.optionals repoConfig (["repo-config"] ++ lib.optional (signing != null) "allowed-signers"))
                 # The sandbox user owns its runtime directory, so roots live outside it.
                 ++ lib.optional repo "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.seed-roots/raw /run/sandbox-seed-roots";
@@ -454,7 +455,7 @@ in
       passthru =
         (old.passthru or {})
         // {
-          inherit doorAddress guest;
+          inherit doorAddress guest guestRuntimeFile;
           repoExport = guestRepo.export;
         };
     })
