@@ -41,13 +41,15 @@
   in
     generated
     // {
-      # The test.jobs/test.strategy coupling every scope shares: the tool
-      # factory (lib/git-tool-settings/tool-module.nix) evaluates these
-      # wherever the tree mounts, so a sandbox tree gets them too. Each host
-      # backend keeps only what its configuration scope adds: Home Manager is
-      # the lowest layer it writes, so a null strategy there is upstream's
-      # working-copy and fails; repository-local, a null strategy may come
-      # user-global, so devenv only warns.
+      # The test.jobs/test.strategy coupling, in two strengths. The tool
+      # factory (lib/git-tool-settings/tool-module.nix) evaluates both lists
+      # wherever the tree mounts, so a sandbox tree gets them too.
+      # `assertions` holds what every scope knows: an explicit working-copy
+      # strategy cannot run a jobs value above 1. `lowestScopeAssertions`
+      # holds what only the lowest scopes know — that an UNSET strategy there
+      # is upstream's working-copy; repository-local mounts pass none of it
+      # (a user-global strategy may still supply the leaf, so devenv only
+      # warns).
       # Parenthesized on purpose: a bare lambda is not a valid list element,
       # and the factory's `{cfg, optionPath}` argument arrives as one attrset.
       assertions = [
@@ -58,6 +60,24 @@
           message = ''
             ${ctx.optionPath}.settings.test.jobs = ${toString test.jobs} contradicts ${ctx.optionPath}.settings.test.strategy = "working-copy".
             git-branchless runs one job at a time with the working-copy strategy, and a configured jobs value does not change the strategy, so every `git test run` would fail. Set test.strategy = "worktree".
+          '';
+        })
+      ];
+      # The same coupling where the tree writes git's LOWEST scope: Home
+      # Manager's user-global file and the sandbox's guest system file. There
+      # nothing below the written file can supply a strategy, so an unset one
+      # IS upstream's default working-copy and a jobs value above 1 fails
+      # every `git test run` — those mounts carry these through the factory's
+      # `assertions` parameter, while repository-local mounts (devenv) only
+      # warn, because a user-global strategy may still supply the leaf.
+      lowestScopeAssertions = [
+        (ctx: let
+          test = ctx.cfg.settings.test;
+        in {
+          assertion = test.jobs == null || test.jobs == 1 || test.strategy == "worktree";
+          message = ''
+            ${ctx.optionPath}.settings.test.jobs = ${toString test.jobs} needs ${ctx.optionPath}.settings.test.strategy = "worktree".
+            git-branchless runs one job at a time with the working-copy strategy (its default), and a configured jobs value does not change the strategy, so every `git test run` would fail.
           '';
         })
       ];
