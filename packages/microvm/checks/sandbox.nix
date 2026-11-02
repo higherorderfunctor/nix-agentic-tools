@@ -214,7 +214,7 @@
   sizeDefault = mkSizePackage 1024 1;
   sizeLarge = mkSizePackage 4096 2;
   signingGuestFixture = mkGuestScript "sandbox-signing-guest-fixture" ''
-    [[ $SSH_AUTH_SOCK == /run/sandbox/agent.sock ]]
+    [[ $SSH_AUTH_SOCK == /run/sandbox-signing/agent.sock ]]
     private_dir=$1
     for _ in {1..100}; do
       [[ -S $SSH_AUTH_SOCK ]] && break
@@ -551,9 +551,9 @@ in {
           signingConfig = signingPackage.guest.config;
           rejects = signing: !(builtins.tryEval (factory (args // {inherit signing;})).drvPath).success;
           assertions = {
-            agent-environment = signingConfig.systemd.services.sandbox.serviceConfig.Environment == ["SSH_AUTH_SOCK=/run/sandbox/agent.sock"];
+            agent-environment = signingConfig.systemd.services.sandbox.serviceConfig.Environment == ["SSH_AUTH_SOCK=/run/sandbox-signing/agent.sock"];
             agent-owner = signingConfig.systemd.services.sandbox-signing-agent.serviceConfig.User == "sandbox";
-            bridge = lib.hasInfix "UNIX-LISTEN:/run/sandbox/agent.sock,fork,mode=0600 TCP:10.0.2.100:2222" signingConfig.systemd.services.sandbox-signing-agent.serviceConfig.ExecStart;
+            bridge = lib.hasInfix "UNIX-LISTEN:/run/sandbox-signing/agent.sock,fork,mode=0600 TCP:10.0.2.100:2222" signingConfig.systemd.services.sandbox-signing-agent.serviceConfig.ExecStart;
             door = lib.hasInfix "guestfwd=tcp:10.0.2.100:2222-cmd:/nix/store/" (lib.findFirst (lib.hasPrefix "user,id=doors") "" signingConfig.microvm.qemu.extraArgs);
             missing-socket = rejects {
               port = 2222;
