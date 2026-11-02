@@ -10,6 +10,11 @@
       }
       {
         location = "package";
+        name = "sandbox-git";
+        dir = facetOwner;
+      }
+      {
+        location = "package";
         name = "sandbox-identities";
         dir = facetOwner;
       }
