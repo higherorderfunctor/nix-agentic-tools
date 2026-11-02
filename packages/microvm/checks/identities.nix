@@ -90,14 +90,19 @@ in {
           second = identities.x;
         };
       };
+      divergent = changed {ai.codex.sandbox.git.forges."git.example.invalid".hostKeys = "git.example.invalid ssh-ed25519 rotated";};
+      # Validate invalid identity inputs without lowering them into the relay's
+      # stricter lines option, which rejects absent pins before assertions run.
+      invalid = change: changed (lib.recursiveUpdate change {ai.sandbox.enable = false;});
       plaintext = changed {ai.sandbox.git.identities.x.push.key = "plaintext";};
     in
       containsFailure "Sandbox remote token github-alias: claimed by ai.codex.sandbox.git.identities.first and ai.codex.sandbox.git.identities.second" duplicate
-      && containsFailure "ai.codex.sandbox.git.forges.\"unpinned.invalid\".hostKeys" (changed {ai.codex.sandbox.git.identities.x = identity "unpinned.invalid" "unpinned.invalid";})
-      && containsFailure "remotes.\"bad/token\"" (changed {ai.codex.sandbox.git.identities.x = identity "bad/token" "github.com";})
-      && containsFailure "remotes.\"valid\".forge" (changed {ai.codex.sandbox.git.identities.x = identity "valid" "bad/forge";})
-      && containsFailure "forges.\"bad/forge\"" (changed {ai.codex.sandbox.git.forges."bad/forge".hostKeys = pins;})
-      && containsFailure "forges.\"github.com\".hostKeys" (changed {ai.sandbox.git.forges."github.com".hostKeys = " \n";})
+      && containsFailure "ai.codex.sandbox.git.forges.\"unpinned.invalid\".hostKeys" (invalid {ai.codex.sandbox.git.identities.x = identity "unpinned.invalid" "unpinned.invalid";})
+      && containsFailure "remotes.\"bad/token\"" (invalid {ai.codex.sandbox.git.identities.x = identity "bad/token" "github.com";})
+      && containsFailure "remotes.\"valid\".forge" (invalid {ai.codex.sandbox.git.identities.x = identity "valid" "bad/forge";})
+      && containsFailure "forges.\"bad/forge\"" (invalid {ai.codex.sandbox.git.forges."bad/forge".hostKeys = pins;})
+      && containsFailure "forges.\"github.com\".hostKeys" (invalid {ai.sandbox.git.forges."github.com".hostKeys = " \n";})
+      && containsFailure ''ai.claude.sandbox.git.forges."git.example.invalid".hostKeys and ai.codex.sandbox.git.forges."git.example.invalid".hostKeys'' divergent
       && !succeeds plaintext.config.ai.sandbox.git.identities.x.push.key
       && !succeeds (api.eval {ai.sandbox.git.identities.missing = {};}).config.ai.sandbox.git.identities.missing
       && failures (changed {
@@ -109,7 +114,15 @@ in {
       })
       == [])
     // check "relay" (api: let
-      result = api.eval fixture;
+      result = api.evalModules [
+        fixture
+        {
+          options.devenv.reviewFixture = lib.mkOption {
+            default = false;
+            type = lib.types.bool;
+          };
+        }
+      ];
       instance = result.config.ai.git-relay.instances.sandbox;
       native = api.eval (lib.recursiveUpdate fixture {
         ai.git-relay.instances.sandbox = {
