@@ -242,7 +242,12 @@ in
                 echo "git-relay: session upstream must use SSH (ssh:// or [user@]host:path)" >&2
                 exit 1
               }
-              pin "$host"
+              # Only the daemon publishes pins. A stale session client must not
+              # restore a rotated key or a forge removed by the live service.
+              [[ -s $pins/$host ]] || {
+                echo "git-relay: no live daemon pins for '$host'; start or restart its service" >&2
+                exit 1
+              }
               credential_key "$credential" "$host" >/dev/null || {
                 echo "git-relay: credential '$credential' absent, keyless, or not allowed for '$host'" >&2
                 exit 1
