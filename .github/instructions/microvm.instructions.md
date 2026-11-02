@@ -52,10 +52,10 @@ never warn. Sandbox commands claim their names through
 `extraPackages` and Git from the module's package set enter both the executable
 PATH and the guest system profile, so child shells resetting PATH to
 `/run/current-system/sw/bin` still find them. The standalone factory below also
-supplies repository and door parameters; the module option tree does not yet
-expose those surfaces or Git identity settings. Never log a harness into a
-provider inside the VM; VM-only CPA client keys will supply authentication in a
-later phase.
+supplies repository, door and signing parameters; the module option tree does
+not yet expose those surfaces or Git identity settings. Never log a harness into
+a provider inside the VM; VM-only CPA client keys will supply authentication in
+a later phase.
 
 The public standalone factory also accepts packages and sizing:
 
@@ -131,7 +131,7 @@ it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
 
 The factory accepts
-`{doors ? []; exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`.
+`{doors ? []; exe; outName; memory ? 1024; packages ? []; repo ? false; signing ? null; vcpus ? 1;}`.
 Each door is `{port; command; arguments ? []; environment ? {};}` with a unique
 TCP port, absolute host executable and string arguments/environment. QEMU runs a
 fresh wrapper per connection with socket stdin/stdout; the command gets only its
@@ -144,6 +144,11 @@ at that checkout's committed HEAD, preserving its branch name or detached state.
 Uncommitted host changes are excluded. Shallow, partial, and alternates-using
 repositories are refused; supported object formats are SHA-1 and SHA-256. These
 factory parameters do not add module options.
+
+Optional `signing = {port; socket;}` adds a door to the absolute host
+`ssh-agent` socket. A guest bridge publishes `SSH_AUTH_SOCK` without sharing the
+private key or its directory. `lib.ai.mkSshSigner pkgs` starts a dedicated host
+agent, loads one key, and leaves it running until the signer is stopped.
 
 The launcher builds an isolated bare seed repository with templates disabled and
 the host's explicit object format. Only the chosen push remote's tracking refs
