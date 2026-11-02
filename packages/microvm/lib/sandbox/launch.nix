@@ -36,7 +36,7 @@
   # The daemon and its hooks use the resolved service config on every push.
   managementConfig = pkgs.writeText "sandbox-${runtime}-relay.json" relayConfig;
 in
-  import ../../../../lib/strict-shell-application.nix pkgs {
+  (import ../../../../lib/strict-shell-application.nix pkgs {
     name = args.outName;
     runtimeInputs = [pkgs.coreutils pkgs.git pkgs.jq pkgs.util-linux];
     text = ''
@@ -92,4 +92,6 @@ in
       git config --file "$SANDBOX_REPO_CONFIG" remote.origin.prune false
       ${lib.getExe connected} "$@"
     '';
-  }
+  }).overrideAttrs (old: {
+    passthru = (old.passthru or {}) // {inherit connected plain seeded selector table tableFile;};
+  })
