@@ -250,6 +250,19 @@
       grep -F 'refusing to start the sandbox' "$log"
       [[ ! -e $marker ]]
 
+      # Synthetic values exercise every byte that could alter curl's config;
+      # the same runner marker proves refusal before QEMU in each case.
+      for unsafe_key in 'quote"key' 'backslash\key' $'line\nkey' $'return\rkey'; do
+        printf '%s' "$unsafe_key" > ${lib.escapeShellArg canaryPath}
+        if "$variant" -- ${codexConfig} > "$log" 2>&1; then
+          echo 'FAIL: launch accepted an unsafe inference key' >&2
+          exit 1
+        fi
+        grep -F 'contains characters unsafe for the inference probe' "$log"
+        [[ ! -e $marker ]]
+      done
+      printf '%s' "$canary" > ${lib.escapeShellArg canaryPath}
+
       # One boot with the stub up: the probe and the guest door request both
       # authenticate as the canary, and nothing else does.
       rm -f -- "$log"
@@ -416,6 +429,8 @@ in {
           && rejects {inference = valid // {port = 0;};}
           && rejects {inference = valid // {extra = true;};}
           && rejects {inference = valid // {key = null;};}
+          && rejects {inference = valid // {key = "synthetic-plaintext-key";};}
+          && rejects {inference = valid // {key._redact = {};};}
           && rejects {inference = valid // {client = "";};}
           # The inference door's guest port collides with an explicit door.
           && rejects {
