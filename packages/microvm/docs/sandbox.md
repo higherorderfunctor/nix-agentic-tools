@@ -29,9 +29,10 @@ never warn. Sandbox commands claim their names through
 
 `extraPackages` and Git enter executable PATH and the guest system profile,
 including child shells resetting PATH to `/run/current-system/sw/bin`.
-Repository, door, signing and Git identity settings have no module options yet.
-Never log a harness into a provider inside the VM; VM-only CPA client keys will
-supply authentication later.
+Repository, door and signing settings have no module options yet. Identity
+options, selection and relay lowering are in `sandbox-identities.md`; the
+launcher does not use them yet. Never log a harness into a provider inside the
+VM; VM-only CPA client keys will supply authentication later.
 
 The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
 executable path whose Nix string context retains its package) and `outName` (a

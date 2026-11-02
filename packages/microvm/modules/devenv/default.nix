@@ -1,4 +1,4 @@
 {config, ...}: {
-  imports = [../common.nix];
+  imports = [../../../git-relay/modules/devenv ../common.nix];
   packages = config.ai.internal.sandboxPackages;
 }
