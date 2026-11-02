@@ -217,7 +217,9 @@ ai.sandbox.git.forges."git.example.org" = {
 
 There is no first-use trust. Every declared identity's remote must resolve to
 pins, even if that runtime is disabled. Runtime `forges` assignment also
-replaces the root set before merging non-null fields over built-ins.
+replaces the root set before merging non-null fields over built-ins. Active
+runtimes sharing a forge must resolve identical pins; divergent pins fail
+evaluation with both runtime option paths.
 
 The standalone `sandbox-select <table.json>` reads the current checkout's raw
 Git config. Push-remote precedence is `branch.<name>.pushRemote`,
@@ -257,21 +259,23 @@ repositories and turning off session-only mode are refused for this instance,
 preventing guest access to predictable static repository URLs.
 
 A runtime launcher with identities runs selection before boot. Its single notice
-lists the runtime's identities, replacement semantics, remote token and selected
-identity. An unmatched remote refuses launch. Outside a repository it boots with
-no doors; inside a repository with no push remote it still seeds committed work,
-with no relay door or identity. Runtimes without identities retain their
-existing launcher. Kiro, Kimchi and Copilot still have no guest route.
+lists the runtime's identities, remote token and selected identity. It mentions
+replacement semantics only when that runtime defines its own identity set. An
+unmatched remote refuses launch. Outside a repository it boots with no doors;
+inside a repository with no push remote it still seeds committed work, with no
+relay door or identity. Runtimes without identities retain their existing
+launcher. Kiro, Kimchi and Copilot still have no guest route.
 
 For a match, the launcher creates a random 128-bit session token and holds its
 lock before opening the relay session. It reads the relay package, port and
 state directory from `ai.git-relay.instances.sandbox`, including native
 overrides and backend-specific state roots. Session management uses the
 service's public config template to validate credential references; it never
-reads push keys. The running daemon and forwarding hooks use its resolved config
-and keys. A `git ls-remote` probe of the new session must succeed before boot;
-failures name the instance's `port` option. Start the relay first (`devenv up`
-on devenv).
+reads push keys or writes pin files. Session creation requires existing daemon
+pins, so an old launcher cannot restore rotated or removed pins. The running
+daemon and forwarding hooks use its resolved config and current pins. A
+`git ls-remote` probe of the new session must succeed before boot; failures name
+the instance's `port` option. Start the relay first (`devenv up` on devenv).
 
 The guest receives only a port-9418 door to that relay and a launch-time Git
 config through fw_cfg. The random session URL never enters the store or kernel
