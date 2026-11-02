@@ -30,10 +30,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
+      - uses: ./.github/actions/install-nix
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: nix-agentic-tools
@@ -73,14 +70,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Multi-user installation is essential on macOS: clients of different
       # Nix versions must not contend for LocalStore's exclusive migration lock.
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-      - uses: ./.github/actions/assert-nix-config
+      - uses: ./.github/actions/install-nix
         with:
           require: |
-            ^accept-flake-config = true
             ^max-jobs = 1
       # This action owns uploads. NFB's optional second Cachix daemon had
       # forced shutdowns on macOS; its duplicate uploader is unnecessary.
@@ -183,10 +175,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
+      - uses: ./.github/actions/install-nix
       - name: Plan Linux extraction
         id: linux
         run: |
@@ -411,17 +400,11 @@ jobs:
       # check. That is now measured, not inferred: run 31837837510 built
       # the earlier workflows-patched Kiro locally under `_nixbld*` and passed.
       - if: needs.kiro-scope.outputs.needed == 'true'
-        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+        uses: ./.github/actions/install-nix
         with:
-          extra_nix_config: |
-            accept-flake-config = true
+          extra-config: |
             sandbox = true
-
-      - if: needs.kiro-scope.outputs.needed == 'true'
-        uses: ./.github/actions/assert-nix-config
-        with:
           require: |
-            ^accept-flake-config = true
             ^sandbox = true
 
       # This only realizes the IFD sources used during evaluation. It has no
@@ -539,16 +522,11 @@ jobs:
           python3 dev/scripts/test-ci-packages.py
           python3 dev/scripts/test-ci-cache.py
           python3 dev/scripts/test-update-matrix.py
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      - uses: ./.github/actions/install-nix
         with:
-          extra_nix_config: |
-            accept-flake-config = true
+          extra-config: |
             sandbox = true
-
-      - uses: ./.github/actions/assert-nix-config
-        with:
           require: |
-            ^accept-flake-config = true
             ^sandbox = true
 
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
@@ -996,14 +974,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-      - uses: ./.github/actions/assert-nix-config
+      - uses: ./.github/actions/install-nix
         with:
           require: |
-            ^accept-flake-config = true
             ^max-jobs = 1
       - name: Warm IFD sources (retry, best-effort)
         uses: ./.github/actions/warm-ifd
@@ -1082,10 +1055,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
+      - uses: ./.github/actions/install-nix
       - name: Run the live jail smoke test
         run: |
           set -euETo pipefail
@@ -1122,15 +1092,11 @@ jobs:
           sudo udevadm settle
           ls -l /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      - uses: ./.github/actions/install-nix
         with:
-          extra_nix_config: |
-            accept-flake-config = true
+          extra-config: |
             system-features = benchmark big-parallel kvm nixos-test
-      - uses: ./.github/actions/assert-nix-config
-        with:
           require: |
-            ^accept-flake-config = true
             ^system-features = .*[[:space:]]kvm([[:space:]]|$)
             ^system-features = .*[[:space:]]nixos-test([[:space:]]|$)
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
@@ -1159,10 +1125,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
+      - uses: ./.github/actions/install-nix
       # Scan every ref EXCEPT gh-pages. `fetch-depth: 0` pulls all
       # branches, and docs.yml force-pushes gh-pages as an ORPHAN
       # single commit (no parents) holding the generated mdBook/NuschtOS

@@ -1,0 +1,90 @@
+name: Install Nix
+description: >-
+  Install Nix with the repository's base CI config, plus any job-specific lines,
+  then fail loudly unless `nix config show` carries every required setting.
+
+  BASE CONFIG, applied to every job:
+
+  - `accept-flake-config = true` makes the substituters declared in flake.nix's
+    `nixConfig` apply.
+  - `fallback = true` builds a dependency locally when its substitute fails to
+    download, instead of failing the job on a transient cache.nixos.org or
+    Cachix error (HTTP 416/206 after Nix's own retries). A real build failure
+    still fails; only a failed download becomes a slower local build.
+
+  WHY THE ASSERTION: cachix/install-nix-action's install-nix.sh exits 0 WITHOUT
+  writing any config when nix is already on PATH ("Aborting: Nix is already
+  installed"). A runner image that ships nix would therefore turn the install
+  step green while silently dropping every config line, and the first symptom
+  would be an eval failure far from the cause.
+
+  SCOPE: the assertion covers what the installer wrote, at the moment it ran,
+  and nothing about what is in effect later: cachix-action REASSIGNS
+  `substituters`, discarding anything the installer put there. Do not require
+  substituter patterns expecting them to prove those caches are active; this
+  repo's substituters live in flake.nix's `nixConfig`, which never appears in
+  `nix config show` at all.
+
+  Patterns match values, not key names, so a setting written as `false` fails
+  the same as a missing one. The base patterns are always required, so the
+  assertion can never check zero patterns.
+
+  The assertion is inline, not a nested local action, because update.yml checks
+  this repository out under `automation/` and a nested `uses: ./…` resolves from
+  the workspace root.
+
+inputs:
+  extra-config:
+    description: Job-specific nix.conf lines appended after the base config.
+    default: ""
+  require:
+    description: >-
+      Newline-separated extended-regex patterns, each of which must match a line
+      of `nix config show`, in addition to the base config's patterns.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      with:
+        extra_nix_config: |
+          accept-flake-config = true
+          fallback = true
+          ${{ inputs.extra-config }}
+    - shell: bash
+      env:
+        REQUIRE: |
+          ^accept-flake-config = true
+          ^fallback = true
+          ${{ inputs.require }}
+      run: |
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        conf="$(nix config show)"
+
+        rc=0
+        while IFS= read -r pattern; do
+          [ -n "$pattern" ] || continue
+          # Herestring, NOT `printf | grep -q`. Under `pipefail` that pipeline
+          # is the SIGPIPE trap documented at length in ci.yml: grep -q exits on
+          # first match, printf takes SIGPIPE, pipefail reports 141, and the
+          # leading `!` inverts a successful match into a reported MISS. An
+          # early match is the worst case: `nix config show` sorts
+          # `accept-flake-config` first.
+          if ! command grep -Eq -- "$pattern" <<< "$conf"; then
+            echo "::error::nix config has no line matching '${pattern}' -" \
+              "the installer step reported success without applying its" \
+              "configuration"
+            rc=1
+          fi
+        done <<< "$REQUIRE"
+
+        if [ "$rc" -ne 0 ]; then
+          echo "::group::nix config show"
+          printf '%s\n' "$conf"
+          echo "::endgroup::"
+        fi
+
+        exit "$rc"
