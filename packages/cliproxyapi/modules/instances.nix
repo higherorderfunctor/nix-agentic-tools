@@ -10,6 +10,7 @@
 backend: {
   config,
   lib,
+  pkgs,
   ...
 }: let
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
@@ -88,7 +89,7 @@ in {
       inherit backend;
       defaultPort = 8317;
       derived = {instance, ...}: {
-        api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower (providersLib.apiKeys instance));
+        api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower pkgs instance.credentials);
         access = lib.mkIf (instance.clientKeys != {}) {
           api-keys = map (client: client.key) (builtins.attrValues instance.clientKeys);
           key-allowlist =

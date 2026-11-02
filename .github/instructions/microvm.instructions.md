@@ -7,18 +7,76 @@ applyTo: "packages/microvm/**"
 
 # MicroVM sandbox implementation
 
-<!-- cspell:ignore ACPI chardev sysfs virtio -->
+<!-- cspell:ignore ACPI chardev sysfs vcpus virtio -->
 
-> **Last verified:** 2026-10-12 — the launcher forwards guest completion through
-> a root-only virtio serial port.
+> **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
+> routes; repository object retention, read-only mounts, and committed-work
+> recovery through virtio serial ports.
 
-The public `lib.ai.mkSandbox pkgs {exe; outName;}` factory owns the guest
-definition and standalone launcher. The shared host option `ai.sandboxes` has
-only those fields, with `outName` defaulting to its attribute name. Backend
-modules differ only in the package installation sink. The repository binds the
-factory into `ai.internal.mkSandbox`, declared alongside the other shared
-internal bindings in `sharedOptions.nix`, so backend imports need no consumer
-`inputs` special argument. An empty map never forces a guest or the factory.
+`ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
+runtimes. Home Manager and devenv expose the same options and install
+`claude-sandbox` and `codex-sandbox` into their respective package profiles:
+
+```nix
+{pkgs, ...}: {
+  ai.claude.enable = true;
+  ai.codex.enable = true;
+  ai.sandbox = {
+    enable = true;
+    extraPackages = [pkgs.fd pkgs.ripgrep];
+    vm = {memory = 8192; vcpus = 4;};
+  };
+  ai.codex.sandbox.vm.memory = 4096;
+}
+```
+
+`enable` defaults to false, `extraPackages` to `[]`, and `vm.memory`/`vm.vcpus`
+to 4096 MiB/two CPUs. Every runtime in `lib/ai/runtimes.nix` mirrors the whole
+option tree at `ai.<runtime>.sandbox`. Only defined root leaves supply runtime
+option defaults, following the peer-default pattern in `ai.proxy`. Runtime
+definitions, including `mkDefault`, replace each whole option: a list (and any
+future attribute-set option) is replaced rather than merged with the root. Other
+leaves keep their root values. Nothing flows up. Kiro's new root tree is
+separate from its existing `ai.kiro.cli.sandbox` setting.
+
+The guest-route table selects the plain `ai.claude.package` or
+`ai.codex.package`, before host launcher environment and jail wrapping. Enabling
+a sandbox with a null package fails evaluation. Kiro, Kimchi and Copilot have no
+guest route yet: an enabled runtime with resolved `sandbox.enable = true` warns
+once; set `ai.<runtime>.sandbox.enable = false` to opt out. Untouched defaults
+never warn. Sandbox commands claim their names through `ai.claims`.
+
+`extraPackages` and Git from the module's package set enter both the executable
+PATH and the guest system profile, so child shells resetting PATH to
+`/run/current-system/sw/bin` still find them. This phase supplies no repository,
+doors, identities or Git settings. Never log a harness into a provider inside
+the VM; VM-only CPA client keys will supply authentication in a later phase.
+
+The public standalone factory also accepts packages and sizing:
+
+```nix
+inputs.nix-agentic-tools.lib.ai.mkSandbox pkgs {
+  exe = lib.getExe pkgs.hello;
+  memory = 4096;
+  outName = "sandbox-hello";
+  packages = [pkgs.git pkgs.ripgrep];
+  vcpus = 2;
+}
+```
+
+The factory defaults remain 1024 MiB, one CPU and no extra packages. Memory must
+be at least 128 MiB and CPUs at least one. It returns a package with
+`bin/<outName>` and owns the guest definition and launcher. `exe` must be an
+absolute executable path (usually `lib.getExe package`); its string context
+keeps the package in the closure. `outName` must be a single executable name.
+The pinned microvm source is bound through `ai.internal.mkSandbox`; consumers
+need no extra module arguments.
+
+`ai.sandboxes.<name> = {exe; outName?;}` remains for one release. A non-empty
+value warns to migrate runtime guests to `ai.sandbox`, or standalone guests to
+`lib.ai.mkSandbox`. Its default `outName` is the attribute name. Collisions
+between legacy entries or with runtime sandbox commands fail through the same
+claims registry. An empty configuration installs no sandbox and forces no guest.
 
 The guest shares the host's store at `/nix/.ro-store`, not `/nix/store`:
 upstream mounts the latter as an overlay with tmpfs upper and work directories
@@ -66,6 +124,58 @@ has no infrastructure diagnostic.
 The runner executes inside that directory, and the wrapper's exit trap removes
 it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
+
+The factory accepts
+`{exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`. With
+`repo = true`, launch from a Git checkout (including a linked worktree or an
+unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
+committed HEAD, preserving its branch name or detached state. Uncommitted host
+changes are excluded. Shallow, partial, and alternates-using repositories are
+refused; supported object formats are SHA-1 and SHA-256. This factory parameter
+does not add a module option.
+
+The launcher builds an isolated bare seed repository with templates disabled and
+the host's explicit object format. Only the chosen push remote's tracking refs
+become seed branches; the checkout's HEAD becomes `refs/sandbox/head`. Remote
+selection is `branch.<name>.pushRemote`, `remote.pushDefault`,
+`branch.<name>.remote`, then `origin`. An unborn checkout gets an empty seed.
+The generated seed and the host common directory's `objects/` are separate
+read-only 9p exports. Their relative sources resolve in the per-launch runtime
+directory. Host config, hooks, refs, and worktree metadata are never exported.
+The guest clones the seed with `--shared --no-checkout`; its system Git config
+trusts only the seed and object mount paths. The object share contains all host
+objects, including objects outside the seeded refs; it is not an object-level
+confidentiality boundary. The whole host Nix store is also readable in the
+guest.
+
+Before boot the launcher holds `<common>/sandbox-locks/<token>` and creates
+`refs/sandbox/<token>/<n>` in the host for every borrowed root, including a
+linked worktree's detached HEAD. These refs retain reachable objects even across
+`git gc --prune=now`. Pin publication coordinates with Git GC and maintenance
+locks and checks the full borrowed object graph before boot. Another sandbox
+launch, an active collector, or a maintenance operation holding these locks
+causes a retry diagnostic; the publication locks are released before the guest
+starts. Forced GC and direct pruning that bypass Git locking are unsupported
+during publication. The exit trap removes its pins; the next launch removes pins
+from sessions whose locks are no longer held. Lock files remain to avoid locking
+different inodes for the same session. Pin creation fails the launch if
+concurrent maintenance already removed a required object.
+
+On graceful service completion, the guest exports committed work through a
+separate virtio bundle port. It includes local refs and detached HEAD and
+excludes only the immutable seeded commits, which the host retains. Changes to
+`origin/*` inside the guest cannot introduce unknown bundle prerequisites. The
+host verifies the bundle against the host repository, validates its pack in an
+isolated temporary repository, and makes it self-contained before saving it at
+`$XDG_STATE_HOME/ai-sandbox/bundles/<token>.bundle` (default state root:
+`~/.local/state`) and printing a fetch command. Saved bundles remain recoverable
+after session pins are removed and host maintenance prunes the original commits.
+Empty exports need no recovery. Export or verification failures are reported
+separately from guest completion. Runner failures are reported even when
+recovery also fails; nonempty failed exports are retained as
+`<token>.failed.bundle`. Recovery covers committed work on graceful completion
+only. Forced VM shutdown, host termination, and uncommitted files are not
+recoverable through this path.
 
 The user-facing contract and host preparation are documented in
 `packages/microvm/modules/README.md`. The owner checks cover empty imports,
