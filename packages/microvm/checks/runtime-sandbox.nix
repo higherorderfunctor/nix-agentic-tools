@@ -39,9 +39,12 @@
         };
       };
     };
-  expected = runtime:
+  # The factory call common.nix makes for a runtime guest, with the module's
+  # rendered git configuration and package list.
+  expected = result: runtime:
     factory {
       exe = lib.getExe pkgs.hello;
+      gitConfig = lib.generators.toGitINI result.config.ai.${runtime}.sandbox.git._ini;
       memory =
         if runtime == "codex"
         then 4096
@@ -146,7 +149,7 @@ in {
     in
       map (package: package.meta.mainProgram) actual
       == ["claude-sandbox" "codex-sandbox"]
-      && map (package: package.drvPath) actual == map (runtime: (expected runtime).drvPath) ["claude" "codex"]
+      && map (package: package.drvPath) actual == map (runtime: (expected result runtime).drvPath) ["claude" "codex"]
       && lib.all (package: builtins.elem package.drvPath (map (p: p.drvPath) (api.packages result))) actual
       && result.config.ai.claims.command
       == {
