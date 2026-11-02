@@ -1,7 +1,7 @@
 pkgs:
 import ../../../lib/strict-shell-application.nix pkgs {
   name = "sandbox-ssh-signer";
-  runtimeInputs = [pkgs.openssh];
+  runtimeInputs = [pkgs.coreutils pkgs.openssh];
   text = ''
     if (( $# != 2 )); then
       echo 'sandbox-ssh-signer: usage: sandbox-ssh-signer <socket> <key-file>' >&2

@@ -1,4 +1,4 @@
-# cspell:ignore chardev dports guestfwd netdev objectname vcpu vcpus virtio virtserialport
+# cspell:ignore chardev dports getppid guestfwd netdev objectname vcpu vcpus virtio virtserialport
 {
   harness,
   lib,
@@ -27,7 +27,7 @@
   doorFixture = pkgs.writeScriptBin "sandbox-door-fixture" ''
     #!${lib.getExe pkgs.python3}
     import os, stat, sys
-    print("PID", os.getpid(), "STDIN", "socket" if stat.S_ISSOCK(os.fstat(0).st_mode) else "other", "SAME", os.fstat(0).st_ino == os.fstat(1).st_ino, flush=True)
+    print("PID", os.getppid(), "STDIN", "socket" if stat.S_ISSOCK(os.fstat(0).st_mode) else "other", "SAME", os.fstat(0).st_ino == os.fstat(1).st_ino, flush=True)
     print("MARKER", repr(os.environ.get("SANDBOX_DOOR_TEST_MARKER")), "PATH", repr(os.environ.get("PATH")), "VARIABLES", sorted(os.environ), flush=True)
     print("DOOR_STDERR_MUST_NOT_REACH_GUEST", file=sys.stderr, flush=True)
     if len(sys.argv) > 1 and sys.argv[1] == "hold":
@@ -60,6 +60,8 @@
     assert ra.readline() == "ECHO one\n" and rb.readline() == "ECHO two\n"
     a.shutdown(socket.SHUT_WR)
     assert ra.read() == "BYE\n"
+    b.shutdown(socket.SHUT_WR)
+    assert rb.read() == "BYE\n"
     print(f"PASS: door per connection ({header[1]} != {other[1]}), clean environment, host-only stderr, exit on EOF", flush=True)
     b.close()
     blocked = [("10.0.2.2", 22), ("10.0.2.2", 7000), ("10.0.2.3", 53), ("1.1.1.1", 443), ("10.0.2.100", 7001)]
@@ -104,6 +106,7 @@
   };
   doorLifecycleCheck = mkGuestScript "sandbox-door-lifecycle-check" ''
     log=$(mktemp)
+    export SANDBOX_DOOR_TEST_MARKER=must-not-reach-the-door
     ${lib.getExe doorLifecyclePackage} > "$log" 2>&1 &
     launcher_pid=$!
     # Invoked indirectly by traps.
@@ -128,7 +131,13 @@
     [[ $door_pid =~ ^[0-9]+$ ]]
     runtime_dir=$(readlink "/proc/$launcher_pid/cwd")
     [[ $runtime_dir == /tmp/sandbox-door-lifecycle.* ]]
-    [[ $(< "$runtime_dir/door-7000-$door_pid.pid") == "$door_pid" ]]
+    for _ in {1..100}; do
+      [[ -s $runtime_dir/door-7000-$door_pid.pid ]] && break
+      kill -0 "$launcher_pid"
+      sleep 0.1
+    done
+    read -r recorded_pid door_start_time < "$runtime_dir/door-7000-$door_pid.pid"
+    [[ $recorded_pid == "$door_pid" && $door_start_time =~ ^[0-9]+$ ]]
     grep -Fx 'DOOR_STDERR_MUST_NOT_REACH_GUEST' "$runtime_dir/doors.log"
     grep -Fqx 'DOOR_HOLD_READY' <(tr -d '\r' < "$log")
     read -r qemu_pid < <(pgrep -P "$launcher_pid" -f '^microvm@sandbox ')
@@ -139,9 +148,12 @@
     wait "$launcher_pid" || launcher_status=$?
     printf 'LIFECYCLE_WAIT status=%s\n' "''${launcher_status:-0}"
     [[ ''${launcher_status:-0} -ne 0 ]]
-    if kill -0 "$door_pid" 2>/dev/null; then
-      echo "FAIL: door $door_pid survived QEMU death and launcher cleanup" >&2
-      exit 1
+    if [[ -r /proc/$door_pid/stat ]]; then
+      read -r -a process < "/proc/$door_pid/stat"
+      [[ ''${process[2]} == Z ]] || {
+        echo "FAIL: door $door_pid survived QEMU death and launcher cleanup" >&2
+        exit 1
+      }
     fi
     [[ ! -e $runtime_dir ]]
     echo "PASS: QEMU death orphaned door $door_pid; launcher exit trap reaped it (launcher status ''${launcher_status:-0})"
@@ -373,6 +385,15 @@ in {
         '';
       };
       microvm-sandbox-argv-launcher = argvPackage;
+      microvm-sandbox-door-cleanup = pkgs.runCommand "microvm-sandbox-door-cleanup" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${lib.getExe pkgs.python3} ${./door-cleanup.py} \
+          ${lib.getExe doorPackage} \
+          ${doorPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
+          ${lib.escapeShellArg (lib.findFirst (lib.hasPrefix "user,id=doors") "" doorPackage.guest.config.microvm.qemu.extraArgs)}
+        touch "$out"
+      '';
       microvm-sandbox-door-launcher = doorPackage;
       microvm-sandbox-door-lifecycle = doorLifecycleCheck;
       microvm-sandbox-doors = mkTest "microvm-sandbox-doors" (
@@ -396,6 +417,8 @@ in {
           && rejects [(valid // {port = 0;})]
           && rejects [(valid // {command = "nc 10.0.0.1 22";})]
           && rejects [(valid // {command = "/bin/x,restrict=off";})]
+          && rejects [(valid // {arguments = "not-a-list";})]
+          && rejects [(valid // {arguments = [42];})]
           && rejects [(valid // {extra = true;})]
           && rejects [valid valid]
       );

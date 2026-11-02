@@ -134,13 +134,13 @@ TCP port, absolute host executable and string arguments/environment. QEMU runs a
 fresh wrapper per connection with socket stdin/stdout; the command gets only its
 declared environment, and host stderr stays in the launcher's private runtime
 directory. The restricted user network exposes only those forwarded guest ports.
-Launcher cleanup kills recorded door PIDs when QEMU exits. With `repo = true`,
-launch from a Git checkout (including a linked worktree or an unborn branch).
-The guest starts in `/home/sandbox/repo` at that checkout's committed HEAD,
-preserving its branch name or detached state. Uncommitted host changes are
-excluded. Shallow, partial, and alternates-using repositories are refused;
-supported object formats are SHA-1 and SHA-256. These factory parameters do not
-add module options.
+Launcher cleanup checks each recorded PID's process start time before killing an
+orphaned door. With `repo = true`, launch from a Git checkout (including a
+linked worktree or an unborn branch). The guest starts in `/home/sandbox/repo`
+at that checkout's committed HEAD, preserving its branch name or detached state.
+Uncommitted host changes are excluded. Shallow, partial, and alternates-using
+repositories are refused; supported object formats are SHA-1 and SHA-256. These
+factory parameters do not add module options.
 
 Optional `signing = {port; socket;}` adds a door to the absolute host
 `ssh-agent` socket. A guest bridge publishes `SSH_AUTH_SOCK` without sharing the
