@@ -88,7 +88,7 @@
       runtime = "claude";
       switches.ai = {
         claude.ultracodeOnLaunch = lib.mkForce true;
-        programs.delegate-routing.runtimes.claude.routing."Pool drain".enable = lib.mkForce on;
+        programs.delegate-routing.routing."Pool drain".enable = lib.mkForce on;
       };
       task = dependent;
     }) [false true];
