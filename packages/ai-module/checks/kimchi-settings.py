@@ -165,7 +165,7 @@ with tempfile.TemporaryDirectory() as temporary:
                     assert state.read_bytes() == snapshot and len(list(state.parent.glob("*.bak"))) == backup_count
                     activate("empty")
                     if backend == "hm":
-                        assert "redaction" not in json.loads(config_path.read_text())
+                        assert "tui" not in json.loads(config_path.read_text())
                         assert "hideThinkingBlock" not in json.loads((harness / "settings.json").read_text())
                     activate("disabled")
                     if backend == "hm":

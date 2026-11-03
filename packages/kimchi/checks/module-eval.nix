@@ -538,7 +538,7 @@ in {
         config.ai.kimchi = {
           enable = true;
           package = null;
-          native.settings.redaction.enabled = false;
+          native.settings.tui.wheelScrollLines = 3;
         };
         devenv = evalDevenv config;
         hm = evalHm config;
@@ -548,25 +548,25 @@ in {
         && hm.config.home.packages == []
         && fileValue ".kimchi/config.json" devenv
         == {
-          redaction.enabled = false;
+          tui.wheelScrollLines = 3;
         }
-        && (hmConfigDocument hm).value.redaction.enabled == false
+        && (hmConfigDocument hm).value.tui.wheelScrollLines == 3
     );
 
     # Regression lock for the flattenDotKeys bug: config.json must be NESTED
-    # JSON, never Kiro-style flat dot keys ("redaction.enabled").
+    # JSON, never Kiro-style flat dot keys ("tui.wheelScrollLines").
     module-kimchi-config-json-nested = mkTest "kimchi-config-json-nested" (
       let
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            native.settings.redaction.enabled = false;
+            native.settings.tui.wheelScrollLines = 3;
           };
         };
         text = builtins.toJSON (fileValue ".kimchi/config.json" result);
       in
-        lib.hasInfix ''"redaction":{"enabled":false}'' text
-        && !lib.hasInfix "redaction.enabled" text
+        lib.hasInfix ''"tui":{"wheelScrollLines":3}'' text
+        && !lib.hasInfix "tui.wheelScrollLines" text
     );
 
     # Parity: the same config.json surface triggers the HM shared writer.
@@ -1015,7 +1015,7 @@ in {
               configDir = "custom/kimchi";
               context.filename = "custom.md";
               enable = true;
-              native.settings.redaction.enabled = false;
+              native.settings.tui.wheelScrollLines = 3;
             };
             mcpServers.example = {
               package = pkgs.hello;
@@ -1027,8 +1027,8 @@ in {
         };
         files = deliveredFiles result.config;
       in
-        (fileValue ".kimchi/config.json" result).redaction.enabled
-        == false
+        (fileValue ".kimchi/config.json" result).tui.wheelScrollLines
+        == 3
         # Owner-only, so Kimchi's group/other read warning stays quiet.
         && files.".kimchi/config.json".mode == "0400"
         && result.config.ai.files.".kimchi/config.json".method == "ro"
@@ -1421,7 +1421,7 @@ in {
     module-kimchi-devenv-exact-cwd-guard = let
       guardedPackages = [
         (mkDevenvKimchiPackage {
-          ai.kimchi.native.settings.redaction.enabled = false;
+          ai.kimchi.native.settings.tui.wheelScrollLines = 3;
         })
         (mkDevenvKimchiPackage {
           ai.kimchi.native.harnessSettings.hideThinkingBlock = true;
