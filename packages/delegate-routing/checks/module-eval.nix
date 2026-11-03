@@ -40,7 +40,7 @@
       };
     };
   };
-  hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.replaceStrings ["\n" "`"] [" " ""] text);
+  hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.toLower (lib.replaceStrings ["\n" "`"] [" " ""] text));
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
   optionTree = result: path: lib.getAttrFromPath path result.options;
   checkBackend = {
@@ -817,14 +817,14 @@
       && lib.hasInfix "### ${workflowName}" codex
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
-      && lib.hasInfix "5. **Loop:**" claude
+      && lib.hasInfix "6. **Loop:**" claude
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
-      && lib.hasInfix "5. **Loop:**" (readSkill runtimeWorkflowStep "claude")
+      && lib.hasInfix "6. **Loop:**" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix workflowHeader (readSkill runtimeCatalogHeader "claude"))
       && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogHeader "claude")
-      && lib.hasInfix "5. **Loop:**" (readSkill runtimeCatalogHeader "claude")
+      && lib.hasInfix "6. **Loop:**" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
       && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
       && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")

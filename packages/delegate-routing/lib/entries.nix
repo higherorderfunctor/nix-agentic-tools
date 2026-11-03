@@ -50,6 +50,10 @@ in {
         source = ../fragments/review-work.md;
       }
       {
+        name = "Describe";
+        source = ../fragments/review-describe.md;
+      }
+      {
         name = "Review";
         source = ../fragments/review-one-reviewer.md;
       }

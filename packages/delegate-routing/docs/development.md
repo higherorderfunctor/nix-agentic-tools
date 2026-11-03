@@ -1,8 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-29 — usage follows each runtime's selected proxy,
-> with direct reads when management metadata is absent; review role overrides
-> migrate to the single Review step, with no compatibility keys shipped.
+> **Last verified:** 2026-11-02 — the review workflow saves its rubric to a file
+> given verbatim to the worker and every reviewer and adds a Describe step; the
+> stub and the reminder load the skill in the turn that delegates.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -27,10 +27,11 @@ disabled. Policy belongs in these entries rather than renderer string literals.
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
 The package ships one enabled workflow, "Work and review", with the steps
-Rubric, Subtractive, Work, Review and Loop chained by `after`. Review embeds the
-checks; they are not separate steps. Add, replace, disable or reorder a step by
-key. A workflow can have introductory text or only steps; an enabled step needs
-content.
+Rubric, Subtractive, Work, Describe, Review and Loop chained by `after`. The
+rubric is a saved file, pasted verbatim into the worker's and every reviewer's
+brief. Review embeds the checks; they are not separate steps. Add, replace,
+disable or reorder a step by key. A workflow can have introductory text or only
+steps; an enabled step needs content.
 
 **Breaking migration:** remove overrides of `steps.Prosecute`, `steps.Defend`
 and `steps.Judge`, and move their review policy into `steps.Review.text`
@@ -42,8 +43,8 @@ Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`
 selects the destination for its header and numbered steps together; steps retain
 their order within that workflow. The always-on stub tells the agent to load the
-skill before delegation. When the always-on render is empty, no router rule is
-emitted. Keep model tables and harness details in the skill.
+skill in each turn that delegates. When the always-on render is empty, no router
+rule is emitted. Keep model tables and harness details in the skill.
 
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
