@@ -3243,6 +3243,10 @@
     "upstream.claude.header-defaults.arch": { "type": "string" },
     "upstream.claude.header-defaults.client-request-id": { "type": "string" },
     "upstream.claude.header-defaults.inject-diagnostics": { "type": "bool" },
+    "upstream.claude.header-defaults.native-entrypoints": { "type": "list" },
+    "upstream.claude.header-defaults.native-entrypoints[]": {
+      "type": "string"
+    },
     "upstream.claude.header-defaults.os": { "type": "string" },
     "upstream.claude.header-defaults.package-version": { "type": "string" },
     "upstream.claude.header-defaults.runtime-version": { "type": "string" },
