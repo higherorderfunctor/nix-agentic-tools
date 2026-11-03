@@ -10,7 +10,7 @@ Every rubric carries these standing rows:
    its own reason. A mechanism is proportional to what it judges: one that fires
    on changes outside its input (a fingerprint wider than the judged spans,
    failing on every unrelated bump) is a finding, not strictness. The planner
-   writes to this; the plan's first reviewer judges scope against the stated
+   plans to this row; the plan's first reviewer judges scope against the stated
    goal before any row.
 2. **Fixtures.** Fixtures send what a production client sends: a Host or
    authority without a port on a default-port destination, a plain push and not

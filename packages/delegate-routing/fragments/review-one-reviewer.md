@@ -6,14 +6,14 @@ checks in fresh contexts. Use different models for the two checks where
 possible. Report disagreements only.
 
 **First check:** gets the draft, the description's guarantee claims (never its
-review history or the writer's notes) and the rubric file verbatim. Grades every
-rubric row in order, claims first: pass with the line that meets it, fail with
-location and evidence, or unknown with what would settle it. A guarantee with no
-enforcing line in this diff is an issue of at least medium severity. Then lists
-issues no row covers, checking each against the draft itself. For each fail or
-issue, returns its location, the row or requirement it breaks, evidence, whether
-it holds, and a proposed severity; if uncertain, returns the open question that
-would settle it.
+review history or the writer's notes) and the rubric file verbatim. Grades the
+description's claims first, then every rubric row in order: pass with the line
+that meets it, fail with location and evidence, or unknown with what would
+settle it. A guarantee with no enforcing line in this diff is an issue of at
+least medium severity. Then lists issues no row covers, checking each against
+the draft itself. For each fail or issue, returns its location, the row or
+requirement it breaks, evidence, whether it holds, and a proposed severity; if
+uncertain, returns the open question that would settle it.
 
 **Second check:** gets each issue that holds, its location and its rubric row or
 requirement, without the first check's reasoning, evidence or severity.

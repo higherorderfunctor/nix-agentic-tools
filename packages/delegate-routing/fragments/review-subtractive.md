@@ -1,4 +1,5 @@
-Add these rows to the rubric file for the worker and every reviewer:
+Append these rows to the rubric file, continuing its numbering, for the worker
+and every reviewer:
 
 - **Callers.** Each added line must name a caller or the concrete input it
   refuses (value, path or environment); otherwise remove it. A guard with a real
