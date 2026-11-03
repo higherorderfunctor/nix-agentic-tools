@@ -22,7 +22,10 @@ own runner (`dev/scripts/update-matrix.py`).
   so the recorded hash is over the unpacked NAR. Recipes pass
   `sourcesFile = repoPath ./relative/sources.json` explicitly. A `versionCheck`
   override can use `pythonDependencyVersionCmd` to select the newest stable
-  release allowed by pinned parent runtime or build requirements.
+  release allowed by pinned parent runtime or build requirements, or by a local
+  `pyproject.toml`. A rev-tracked Python package exposes `mkPythonDependencyFix`
+  as `passthru.fixPythonDependencies`; `update-pkg.sh` runs it after the rev
+  bump to move those sidecars inside its own target.
 - **Rust release packages** (`fblog`, `rumdl`): release sidecars record the
   version, source and Cargo dependency hashes, and `rustToolchainChannel`. Their
   owner update targets pass `--use-update-script`: `mkUpdateScript` runs
