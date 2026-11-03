@@ -434,7 +434,7 @@ print({json.dumps(json.dumps(CLAUDE))})
         self.usage["codex"]["rate_limit"]["primary_window"] = None
         result = self.run_helper("codex")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("invalid codex usage response", result.stderr)
+        self.assertIn("invalid vendor usage response", result.stderr)
         usage["rateLimits"]["primary"] = None
         self.direct_codex(usage)
         result = self.run_helper("codex", cpa=False)
