@@ -8,11 +8,12 @@
 # on stdin, never argv).
 # Arguments: --provider and --base-url select the credential through Manager+
 # credential discovery; --auth-index (repeatable) pins indices instead, which
-# survives key rotation; --limit, --unit, --reset-day (1..28) and --time-zone
-# (IANA name, default UTC) describe the calendar window; --pool and
-# --account-name label the output; --now-ms fixes the clock for replay and
-# tests. Read by checks/usage-runtime.py and the consumer example in
-# docs/development.md.
+# survives key rotation and is trimmed of surrounding whitespace; --limit
+# (a positive USD amount; Manager+ prices in USD only), --reset-day (1..28)
+# and --time-zone (IANA name, default UTC) describe the calendar window;
+# --pool and --account-name label the output; --now-ms fixes the clock for
+# replay and tests. Read by checks/usage-runtime.py and the consumer example
+# in docs/development.md.
 proxy_usage_request() {
   local method=$1 path=$2 payload=${3-} empty_not_found=${4-} response status
   if ! proxy_usage_key=$(<"$proxy_usage_key_file"); then
@@ -46,20 +47,19 @@ EOF_MANAGER
 
 readonly proxy_usage_url=${MANAGER_URL:-}
 readonly proxy_usage_key_file=${MANAGER_KEY_FILE:-}
-proxy_usage_provider='' proxy_usage_base_url='' proxy_usage_limit='' proxy_usage_unit=''
+proxy_usage_provider='' proxy_usage_base_url='' proxy_usage_limit=''
 proxy_usage_reset_day='' proxy_usage_zone=UTC proxy_usage_pool='' proxy_usage_account_name=''
-proxy_usage_now_ms='' proxy_usage_indices=()
+proxy_usage_now_ms='' proxy_usage_index='' proxy_usage_indices=()
 [[ -n $proxy_usage_url && -n $proxy_usage_key_file ]] ||
   usage_cpa_error 'requires MANAGER_URL and MANAGER_KEY_FILE'
 while [[ $# -gt 0 ]]; do
   case $1 in
-  --provider | --base-url | --limit | --unit | --reset-day | --time-zone | --pool | --account-name | --now-ms)
+  --provider | --base-url | --limit | --reset-day | --time-zone | --pool | --account-name | --now-ms)
     [[ $# -ge 2 ]] || usage_cpa_error "requires a value for $1"
     case $1 in
     --provider) proxy_usage_provider=$2 ;;
     --base-url) proxy_usage_base_url=$2 ;;
     --limit) proxy_usage_limit=$2 ;;
-    --unit) proxy_usage_unit=$2 ;;
     --reset-day) proxy_usage_reset_day=$2 ;;
     --time-zone) proxy_usage_zone=$2 ;;
     --pool) proxy_usage_pool=$2 ;;
@@ -70,8 +70,12 @@ while [[ $# -gt 0 ]]; do
     shift 2
     ;;
   --auth-index)
-    [[ $# -ge 2 && -n $2 ]] || usage_cpa_error 'requires a nonempty value for --auth-index'
-    proxy_usage_indices+=("$2")
+    [[ $# -ge 2 ]] || usage_cpa_error 'requires a value for --auth-index'
+    proxy_usage_index=$2
+    proxy_usage_index=${proxy_usage_index#"${proxy_usage_index%%[![:space:]]*}"}
+    proxy_usage_index=${proxy_usage_index%"${proxy_usage_index##*[![:space:]]}"}
+    [[ -n $proxy_usage_index ]] || usage_cpa_error 'requires a nonempty value for --auth-index'
+    proxy_usage_indices+=("$proxy_usage_index")
     shift 2
     ;;
   *) usage_cpa_error "unknown argument $1" ;;
@@ -80,7 +84,6 @@ done
 [[ -n $proxy_usage_limit ]] || usage_cpa_error 'requires --limit'
 jq -en --arg limit "$proxy_usage_limit" '$limit | tonumber | select(. > 0)' >/dev/null 2>&1 ||
   usage_cpa_error '--limit must be a positive number'
-[[ -n $proxy_usage_unit ]] || usage_cpa_error 'requires --unit'
 [[ -n $proxy_usage_reset_day ]] || usage_cpa_error 'requires --reset-day'
 [[ $proxy_usage_reset_day =~ ^([1-9]|1[0-9]|2[0-8])$ ]] ||
   usage_cpa_error '--reset-day must be an integer from 1 through 28'
@@ -158,21 +161,52 @@ proxy_usage_payload=$(jq -cen --argjson window "$proxy_usage_window" --arg zone 
     to_ms: $window.now_ms,
     time_zone: $zone,
     filters: {auth_indices: $indices, include_failed: true},
-    include: {summary: true, summary_profile: "compact"}}')
-proxy_usage_analytics=$(proxy_usage_request POST /v0/management/monitoring/analytics "$proxy_usage_payload") || exit 1
-jq -e 'type == "object"
-       and (.summary | type == "object")
-       and (.summary.total_cost | type == "number")
-       and ((.coverage // {}) | type == "object")' \
-  <<<"$proxy_usage_analytics" >/dev/null 2>&1 || usage_cpa_error 'invalid analytics response'
-# Hourly pricing roll-ups carry no credential key, so any deleted raw event or
-# degraded-summary limitation can lower this credential's total.
-if jq -e '.coverage // {} | ((.raw_deleted_event_count // 0) > 0
-           or (.fidelity_limitations // []
-               | any(. == "core_metrics_require_raw_events"
-                     or . == "extended_summary_metrics_require_raw_events")))' \
-  <<<"$proxy_usage_analytics" >/dev/null 2>&1; then
-  usage_cpa_error 'cost coverage incomplete'
+    include: {summary: true, summary_profile: "compact", model_stats: true}}')
+proxy_usage_from=$(jq -r '.from_ms' <<<"$proxy_usage_window")
+proxy_usage_current=$(jq -r '.now_ms' <<<"$proxy_usage_window")
+[[ $proxy_usage_from =~ ^[0-9]+$ && $proxy_usage_current =~ ^[0-9]+$ ]] ||
+  usage_cpa_error 'invalid time zone or clock'
+if ((proxy_usage_from < proxy_usage_current)); then
+  proxy_usage_analytics=$(proxy_usage_request POST /v0/management/monitoring/analytics "$proxy_usage_payload") || exit 1
+  # Exactly one JSON document with a finite non-negative cost and well-typed
+  # coverage reaches the projection; jq diagnostics never surface.
+  jq -se 'length == 1 and (.[0] | type == "object"
+           and (.summary | type == "object")
+           and (.summary.total_cost | type == "number")
+           and (.summary.total_cost >= 0)
+           and (.summary.total_cost <= 1.7976931348623157e+308)
+           and (.model_stats | (type == "array" or type == "null"))
+           and (all(.model_stats[]?; (.model | type) == "string"))
+           and (.coverage | (type == "object" or type == "null"))
+           and (.coverage.raw_deleted_event_count | (type == "number" or type == "null"))
+           and ((.coverage.raw_deleted_event_count // 0) >= 0)
+           and (.coverage.fidelity_limitations | (type == "array" or type == "null")))' \
+    <<<"$proxy_usage_analytics" >/dev/null 2>&1 || usage_cpa_error 'invalid analytics response'
+  # Hourly pricing roll-ups carry no credential key, so any deleted raw event or
+  # degraded-summary limitation can lower this credential's total.
+  if jq -e '.coverage // {} | ((.raw_deleted_event_count // 0) > 0
+             or any(.fidelity_limitations[]?;
+                    . == "core_metrics_require_raw_events"
+                    or . == "extended_summary_metrics_require_raw_events"))' \
+    <<<"$proxy_usage_analytics" >/dev/null 2>&1; then
+    usage_cpa_error 'cost coverage incomplete'
+  fi
+  # Manager+ prices a model it has no entry for at zero, which must not read as
+  # accounted spend; the count of unpriced models is reported, never names.
+  proxy_usage_prices=$(proxy_usage_request GET /v0/management/model-prices) || exit 1
+  jq -se 'length == 1 and (.[0] | type == "object"
+           and (.prices | (type == "object" or type == "null")))' \
+    <<<"$proxy_usage_prices" >/dev/null 2>&1 || usage_cpa_error 'invalid model prices response'
+  proxy_usage_unpriced=$(jq -n --argjson analytics "$proxy_usage_analytics" --argjson prices "$proxy_usage_prices" '
+    ($analytics.model_stats // [] | map(.model) | unique) as $models
+    | [$models[] | select(. as $m | ($prices.prices // {} | has($m)) | not)] | length
+  ' 2>/dev/null) || usage_cpa_error 'invalid model prices response'
+  [[ $proxy_usage_unpriced == 0 ]] ||
+    usage_cpa_error "analytics contain $proxy_usage_unpriced unpriced models"
+else
+  # The reset instant itself: an empty range, which Manager+ rejects, and
+  # nothing has been spent in the new window yet.
+  proxy_usage_analytics='{"summary":{"total_cost":0}}'
 fi
 
 if [[ ${#proxy_usage_indices[@]} -eq 1 ]]; then
@@ -193,4 +227,4 @@ jq -cen --arg pool "$proxy_usage_pool" --arg name "$proxy_usage_account_name" \
                        remainingPercent: (if $left < 0 then 0 else $left end),
                        resetsAt: $resets, status: "estimated", windowSeconds: $seconds}},
    balances: [],
-   bonuses: []}'
+   bonuses: []}' 2>/dev/null || usage_cpa_error 'invalid analytics response'

@@ -67,7 +67,11 @@ ANALYTICS = {"generated_at_ms": 1,
              "coverage": {"scope": "time_range", "mode": "mixed", "raw_complete": False,
                           "core_aggregate_used": True, "raw_deleted_event_count": 0,
                           "fidelity_limitations": []},
+             "model_stats": [{"model": "claude-fable-5-1", "calls": 27, "total_tokens": 2657502,
+                              "cost": 5.0}],
              "summary": {"total_calls": 27, "total_cost": 5.0}}
+MODEL_PRICES = {"prices": {"claude-fable-5-1": {"prompt": 10, "completion": 50, "cache": 0.25,
+                                                "cacheRead": 0.25, "cacheCreation": 12.5}}}
 
 class UsageTests(unittest.TestCase):
     def setUp(self):
@@ -98,6 +102,8 @@ class UsageTests(unittest.TestCase):
         self.raw = None
         self.status_body = copy.deepcopy(MANAGER_STATUS)
         self.analytics = copy.deepcopy(ANALYTICS)
+        self.analytics_raw = None
+        self.model_prices = copy.deepcopy(MODEL_PRICES)
         owner = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -118,6 +124,8 @@ class UsageTests(unittest.TestCase):
                     response = owner.status_body
                 elif self.path == "/v0/management/monitoring/analytics":
                     response = owner.analytics
+                elif self.path == "/v0/management/model-prices":
+                    response = owner.model_prices
                 elif self.path == "/v0/management/auth-files":
                     response = {"files": owner.files}
                 elif self.path.startswith("/v8/management/config/api-keys/"):
@@ -145,7 +153,10 @@ class UsageTests(unittest.TestCase):
                     return
                 self.send_response(owner.management_status)
                 self.end_headers()
-                self.wfile.write(owner.raw if owner.raw is not None else json.dumps(response).encode())
+                raw = owner.raw
+                if raw is None and self.path == "/v0/management/monitoring/analytics":
+                    raw = owner.analytics_raw
+                self.wfile.write(raw if raw is not None else json.dumps(response).encode())
 
         self.handler = Handler
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -238,7 +249,7 @@ for line in sys.stdin:
 
     def proxy_command(self, *extra, now="1793707200000", day="1", zone="UTC", limit="100"):
         return ["--provider", "claude", "--base-url", "https://api.anthropic.com",
-                "--limit", limit, "--unit", "USD", "--reset-day", day, "--time-zone", zone,
+                "--limit", limit, "--reset-day", day, "--time-zone", zone,
                 "--pool", "anthropic-api", "--account-name", "personal-anthropic-api",
                 "--now-ms", now, *extra]
 
@@ -264,8 +275,9 @@ for line in sys.stdin:
         self.assert_utc(window["resetsAt"])
         for field in ["usedPercent", "remainingPercent", "windowSeconds"]:
             self.assertIsInstance(window[field], (int, float))
-        # A real calendar month in any zone, DST included, is 28 to 31 days long.
-        self.assertGreaterEqual(window["windowSeconds"], 28 * 86400)
+        # A real calendar month in any zone, DST included, is 28 days minus one
+        # hour (a DST-shortened February) to 31 days plus one hour long.
+        self.assertGreaterEqual(window["windowSeconds"], 28 * 86400 - 3600)
         self.assertLessEqual(window["windowSeconds"], 31 * 86400 + 3600)
         self.assertEqual(window["remainingPercent"], max(0, 100 - window["usedPercent"]))
         self.assertEqual(value["balances"], [])
@@ -287,15 +299,16 @@ for line in sys.stdin:
         self.assertEqual([(method, path) for method, path, headers, body in self.requests],
                          [("GET", "/status"),
                           ("GET", "/v8/management/config/api-keys/claude"),
-                          ("POST", "/v0/management/monitoring/analytics")])
+                          ("POST", "/v0/management/monitoring/analytics"),
+                          ("GET", "/v0/management/model-prices")])
         for method, path, headers, body in self.requests:
             self.assertEqual(headers["Authorization"], f"Bearer {SECRET}")
-        analytics_request = self.requests[-1][3]
+        analytics_request = self.requests[-2][3]
         self.assertEqual(analytics_request["from_ms"], 1793491200000)
         self.assertEqual(analytics_request["to_ms"], 1793707200000)
         self.assertEqual(analytics_request["time_zone"], "UTC")
         self.assertEqual(analytics_request["filters"], {"auth_indices": ["idx-one"], "include_failed": True})
-        self.assertEqual(analytics_request["include"], {"summary": True, "summary_profile": "compact"})
+        self.assertEqual(analytics_request["include"], {"summary": True, "summary_profile": "compact", "model_stats": True})
 
     def test_proxy_window_calendar_lengths(self):
         self.configs["claude"] = [PROXY_GROUP]
@@ -309,6 +322,9 @@ for line in sys.stdin:
             # and springs forward inside the March window (31 days minus one hour).
             ("1793732400000", "1", "America/Denver", 2595600, "2026-12-01T07:00:00Z"),
             ("1773165600000", "1", "America/Denver", 2674800, "2026-04-01T06:00:00Z"),
+            # A Denver window from mid-February to mid-March 2027 spans spring
+            # forward: a DST-shortened 28-day month, one hour less.
+            ("1803150000000", "15", "America/Denver", 2415600, "2027-03-15T06:00:00Z"),
         ]:
             with self.subTest(now=now, zone=zone, day=day):
                 result = self.run_proxy(*self.proxy_command(now=now, day=day, zone=zone))
@@ -345,21 +361,106 @@ for line in sys.stdin:
     def test_proxy_auth_index_pins(self):
         self.configs["claude"] = [PROXY_GROUP, {"base-url": "https://api.anthropic.com",
                                                 "keys": [{"auth_index": "idx-two"}]}]
+
+        def analytics_filter():
+            return [body for method, path, headers, body in self.requests
+                    if path == "/v0/management/monitoring/analytics"][-1]["filters"]["auth_indices"]
+
         # A pin resolves an otherwise ambiguous credential set without discovery.
         self.requests.clear()
         result = self.run_proxy(*self.proxy_command("--auth-index", "idx-two"))
         self.assertEqual(result.returncode, 0, result.stderr)
         value = json.loads(result.stdout)
         self.assertEqual(value["account"]["auth_index"], "idx-two")
-        self.assertEqual(self.requests[-1][3]["filters"]["auth_indices"], ["idx-two"])
+        self.assertEqual(analytics_filter(), ["idx-two"])
         self.assertEqual([path for method, path, headers, body in self.requests],
-                         ["/status", "/v0/management/monitoring/analytics"])
+                         ["/status", "/v0/management/monitoring/analytics", "/v0/management/model-prices"])
         # Several pins cover a rotation; no single index can name the account.
         result = self.run_proxy(*self.proxy_command("--auth-index", "idx-old", "--auth-index", "idx-two"))
         self.assertEqual(result.returncode, 0, result.stderr)
         value = json.loads(result.stdout)
         self.assertIsNone(value["account"]["auth_index"])
-        self.assertEqual(self.requests[-1][3]["filters"]["auth_indices"], ["idx-old", "idx-two"])
+        self.assertEqual(analytics_filter(), ["idx-old", "idx-two"])
+        # Surrounding whitespace is trimmed so the filter stays exact.
+        result = self.run_proxy(*self.proxy_command("--auth-index", "  idx-two\t"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(analytics_filter(), ["idx-two"])
+        # An all-whitespace pin is rejected before any request leaves.
+        self.requests.clear()
+        result = self.run_proxy(*self.proxy_command("--auth-index", "   "))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires a nonempty value for --auth-index", result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(self.requests, [])
+
+    def test_proxy_unpriced_models_fail(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        self.analytics["model_stats"].append({"model": "claude-mystery-5", "calls": 3,
+                                               "total_tokens": 10, "cost": 0})
+        # Manager+ prices a model with no price entry at zero; that must not
+        # read as accounted spend. The count is reported, never model names.
+        for prices, count in [(MODEL_PRICES["prices"], 1), ({}, 2)]:
+            with self.subTest(count=count):
+                self.model_prices = {"prices": prices}
+                result = self.run_proxy(*self.proxy_command())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"analytics contain {count} unpriced models", result.stderr)
+                self.assertNotIn("claude-mystery-5", result.stderr)
+                self.assertNotIn("claude-fable-5-1", result.stderr)
+                self.assertEqual(result.stdout, "")
+        # The price book itself must be the Manager+ shape.
+        for bad in [{"prices": ["claude-fable-5-1"]}, []]:
+            with self.subTest(bad=bad):
+                self.model_prices = bad
+                result = self.run_proxy(*self.proxy_command())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid model prices response", result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_proxy_cost_and_coverage_fail_closed(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        for cost in [-5.0, float("nan"), float("inf")]:
+            with self.subTest(cost=cost):
+                self.analytics = copy.deepcopy(ANALYTICS)
+                self.analytics["summary"]["total_cost"] = cost
+                result = self.run_proxy(*self.proxy_command())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid analytics response", result.stderr)
+                self.assertEqual(result.stdout, "")
+        # A malformed coverage object is a bad response, not a clean one.
+        for field, value in [("fidelity_limitations", "core_metrics_require_raw_events"),
+                             ("fidelity_limitations", 7),
+                             ("raw_deleted_event_count", "many"),
+                             ("raw_deleted_event_count", -3)]:
+            with self.subTest(field=field, value=value):
+                self.analytics = copy.deepcopy(ANALYTICS)
+                self.analytics["coverage"][field] = value
+                result = self.run_proxy(*self.proxy_command())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid analytics response", result.stderr)
+                self.assertEqual(result.stdout, "")
+        # Exactly one JSON document may reach the projection, and no jq
+        # diagnostic may leak around the fixed message.
+        self.analytics_raw = (json.dumps(ANALYTICS) + "\n" + json.dumps(ANALYTICS)).encode()
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, "usage: proxy invalid analytics response\n")
+        self.assertEqual(result.stdout, "")
+        self.analytics_raw = None
+
+    def test_proxy_reset_instant_reports_zero(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        self.requests.clear()
+        # now is the exact window start: Manager+ rejects an empty range, and
+        # nothing has been spent in the new window yet.
+        result = self.run_proxy(*self.proxy_command(now="1793491200000"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        window = json.loads(result.stdout)["windows"]["monthly"]
+        self.assertEqual(window["usedPercent"], 0)
+        self.assertEqual(window["remainingPercent"], 100)
+        self.assertEqual(window["windowSeconds"], 2592000)
+        self.assertEqual([path for method, path, headers, body in self.requests],
+                         ["/status", "/v8/management/config/api-keys/claude"])
 
     def test_proxy_failures_are_explicit_without_response_bodies(self):
         self.configs["claude"] = [PROXY_GROUP]
@@ -408,7 +509,7 @@ for line in sys.stdin:
 
     def test_proxy_argument_and_environment_errors(self):
         self.configs["claude"] = [PROXY_GROUP]
-        base = ["--limit", "100", "--unit", "USD", "--reset-day", "1",
+        base = ["--limit", "100", "--reset-day", "1",
                 "--pool", "anthropic-api", "--account-name", "a"]
         for env, args, expected in [
             ({"MANAGER_URL": ""}, self.proxy_command(), "requires MANAGER_URL"),
@@ -421,10 +522,11 @@ for line in sys.stdin:
             ({}, self.proxy_command(now="yesterday"), "epoch milliseconds"),
             ({}, base, "credential discovery requires --provider"),
             ({}, base[2:], "requires --limit"),
-            ({}, base[:2] + base[4:], "requires --unit"),
-            ({}, base[:4] + base[6:], "requires --reset-day"),
-            ({}, base[:6] + base[8:], "requires --pool"),
-            ({}, base[:8], "requires --account-name"),
+            ({}, base[:2] + base[4:], "requires --reset-day"),
+            ({}, base[:4] + base[6:], "requires --pool"),
+            ({}, base[:6], "requires --account-name"),
+            # The limit is USD only; --unit no longer exists.
+            ({}, ["--unit", "USD", *self.proxy_command()], "unknown argument --unit"),
             ({}, self.proxy_command("--provider", "claude", "--bogus-flag"), "unknown argument"),
         ]:
             with self.subTest(expected=expected, args=args):

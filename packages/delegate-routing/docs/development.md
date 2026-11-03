@@ -254,17 +254,18 @@ technique with this command under
 
 The command takes `--provider` and `--base-url` for credential discovery through
 Manager+ (zero or several matches are errors naming the count), `--auth-index`,
-repeatable, to pin indices through key rotation, `--limit`, `--unit`,
-`--reset-day` (1 through 28) and `--time-zone` (an IANA name, UTC by default)
-for the calendar window, `--pool` and `--account-name` for the output, and
-`--now-ms` to fix the clock for replay and tests. `MANAGER_URL` and
-`MANAGER_KEY_FILE` carry the Manager+ endpoint and its admin key file; the key
-is read in process and sent through curl `--config` on stdin, never through
-argv. The reader fails when the collector is not running, when discovery matches
-zero or several credentials, when the analytics response is invalid, or when its
-coverage reports deleted raw events or a degraded summary: hourly pricing
-roll-ups carry no credential key, so a lowered total must not read as spare
-budget.
+repeatable, to pin indices through key rotation, `--limit` (a positive USD
+amount; Manager+ prices in USD only), `--reset-day` (1 through 28) and
+`--time-zone` (an IANA name, UTC by default) for the calendar window, `--pool`
+and `--account-name` for the output, and `--now-ms` to fix the clock for replay
+and tests. `MANAGER_URL` and `MANAGER_KEY_FILE` carry the Manager+ endpoint and
+its admin key file; the key is read in process and sent through curl `--config`
+on stdin, never through argv. The reader fails when the collector is not
+running, when discovery matches zero or several credentials, when the analytics
+response is invalid, when its coverage reports deleted raw events or a degraded
+summary, or when any model in the analytics lacks a Manager+ price entry
+(Manager+ prices unknown models at zero): hourly pricing roll-ups carry no
+credential key, so a lowered total must not read as spare budget.
 
 A consumer example with placeholder values:
 
@@ -279,7 +280,7 @@ A consumer example with placeholder values:
       };
     };
     runtimes.codex.techniques.proxy-accounted-usage = {
-      command = "<proxy-accounted-usage path> --provider claude --base-url https://api.anthropic.com --limit 100 --unit USD --reset-day 1 --time-zone UTC --pool anthropic-api --account-name personal-anthropic-api";
+      command = "<proxy-accounted-usage path> --provider claude --base-url https://api.anthropic.com --limit 100 --reset-day 1 --time-zone UTC --pool anthropic-api --account-name personal-anthropic-api";
       kind = "usage";
       notes = "Manager+ accounted budget; MANAGER_URL and MANAGER_KEY_FILE carry the endpoint and admin key file";
     };
