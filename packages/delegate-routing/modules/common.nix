@@ -212,7 +212,7 @@ in {
               type = lib.types.nullOr (lib.types.submodule {
                 options = {
                   limit = lib.mkOption {
-                    type = lib.types.number;
+                    type = lib.types.numbers.positive;
                     description = "Configured monthly allowance, not an observed remaining balance.";
                   };
                   resetDay = lib.mkOption {
@@ -220,7 +220,7 @@ in {
                     description = "Day of the calendar month when the allowance resets, in UTC.";
                   };
                   unit = lib.mkOption {
-                    type = lib.types.str;
+                    type = lib.types.nonEmptyStr;
                     description = "Unit of the configured allowance.";
                   };
                 };
@@ -358,10 +358,18 @@ in {
         ])
         portable.pools)
       ++ lib.concatMap (family:
-        lib.mapAttrsToList (target: pool: {
-          assertion = builtins.elem target supportedRuntimes && (pool == null || builtins.hasAttr pool portable.pools);
-          message = "ai.programs.delegate-routing.families.${family.vendor}.${family.name}.pools.${target}: unknown runtime or pool `${toString pool}`.";
-        })
+        lib.mapAttrsToList (target: pool: let
+          path = "ai.programs.delegate-routing.families.${family.vendor}.${family.name}.pools.${target}";
+        in
+          if !(builtins.elem target supportedRuntimes)
+          then {
+            assertion = false;
+            message = "${path}: `${target}` is not a runtime; bind pools by target runtime name.";
+          }
+          else {
+            assertion = pool == null || builtins.hasAttr pool portable.pools;
+            message = "${path}: unknown pool `${toString pool}`; declare it under ai.programs.delegate-routing.pools.";
+          })
         family.pools)
       flattenedFamilies
       ++ lib.concatMap (runtime: let
