@@ -415,12 +415,13 @@ for line in sys.stdin:
                                               "total_tokens": 100, "cost": 1.5})
         result = self.run_proxy(*self.proxy_command())
         self.assertEqual(result.returncode, 0, result.stderr)
-        # A row with calls or tokens above zero and cost exactly zero reads as
-        # unpriced; the count is reported, never model names.
+        # A row that consumed tokens and costs zero reads as unpriced; calls
+        # without tokens (failed before use) cost nothing legitimately. The
+        # count is reported, never model names.
         for stats, count in [
             ([{"model": "claude-mystery-5", "calls": 3, "total_tokens": 10, "cost": 0}], 1),
             ([{"model": "claude-mystery-5", "calls": 0, "total_tokens": 10, "cost": 0}], 1),
-            ([{"model": "claude-mystery-5", "calls": 3, "total_tokens": 0, "cost": 0}], 1),
+            ([{"model": "claude-failed-only", "calls": 3, "total_tokens": 0, "cost": 0}], 0),
             ([{"model": "a", "calls": 3, "total_tokens": 10, "cost": 0},
               {"model": "b", "calls": 4, "total_tokens": 20, "cost": 0}], 2),
             ([{"model": "claude-no-traffic", "calls": 0, "total_tokens": 0, "cost": 0}], 0),

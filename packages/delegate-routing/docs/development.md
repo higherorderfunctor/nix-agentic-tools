@@ -264,10 +264,12 @@ on stdin, never through argv. The reader fails when the collector is not
 running, when discovery matches zero or several credentials, when the analytics
 response is invalid (`model_stats` may be empty only when the summary reports
 zero calls), when its coverage reports deleted raw events or a degraded summary,
-or when an analytics model row reports calls or tokens with zero cost: Manager+
-prices each row through its billing or pricing model and prices a model it has
-no entry for at zero, and coverage is judged from those analytics rows, not a
-price book, so a lowered total must not read as spare budget.
+or when an analytics model row reports tokens with zero cost: Manager+ prices a
+row through its billing or pricing model and leaves one it cannot price at zero,
+and coverage is judged from those analytics rows, not a price book. Calls that
+used no tokens cost nothing legitimately. A display model that merges a priced
+and an unpriced billing model shows a positive total and is not detected; that
+is the limit of the estimate, which is why the window's status is `estimated`.
 
 A consumer example with placeholder values:
 

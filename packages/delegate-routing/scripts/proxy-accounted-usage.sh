@@ -205,12 +205,14 @@ if ((proxy_usage_from < proxy_usage_current)); then
     usage_cpa_error 'cost coverage incomplete'
   fi
   # Manager+ prices a stat through its billing or pricing model, so coverage is
-  # judged from the analytics rows themselves, not a price book: a row with
-  # calls or tokens above zero costs zero exactly when Manager+ has no price
-  # for it, which must not read as accounted spend. The count of unpriced
-  # models is reported, never names.
+  # judged from the analytics rows themselves, not a price book: a row that
+  # consumed tokens and costs zero is one Manager+ could not price, which must
+  # not read as accounted spend. Calls without tokens (failed before use) cost
+  # nothing legitimately. A display model that merges a priced and an unpriced
+  # billing model shows a positive total and passes; that is the limit of the
+  # estimate. The count of unpriced models is reported, never names.
   proxy_usage_unpriced=$(jq -r '[.model_stats[]?
-                                 | select((.calls > 0 or .total_tokens > 0) and .cost == 0)] | length' \
+                                 | select(.total_tokens > 0 and .cost == 0)] | length' \
     <<<"$proxy_usage_analytics" 2>/dev/null) || usage_cpa_error 'invalid analytics response'
   [[ $proxy_usage_unpriced == 0 ]] ||
     usage_cpa_error "analytics contain $proxy_usage_unpriced unpriced models"
