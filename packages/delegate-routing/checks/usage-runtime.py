@@ -84,10 +84,7 @@ class UsageTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name)
         self.helpers = {}
-        header = f"#!{shutil.which('bash')}
-set -euETo pipefail
-shopt -s inherit_errexit 2>/dev/null || :
-"
+        header = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
         for vendor in ["claude", "codex", "opencode", "zai"]:
             helper = self.home / f"{vendor}-usage"
             helper.write_text(header + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
