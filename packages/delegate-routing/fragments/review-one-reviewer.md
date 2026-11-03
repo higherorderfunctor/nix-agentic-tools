@@ -15,10 +15,10 @@ issue, returns its location, the row or requirement it breaks, evidence, whether
 it holds, and a proposed severity; if uncertain, returns the open question that
 would settle it.
 
-**Second check:** gets each issue that holds, its location and its rubric row,
-without the first check's reasoning, evidence or severity. Independently checks
-the draft for what would make the issue wrong. Returns concede, or rebut with
-its own evidence.
+**Second check:** gets each issue that holds, its location and its rubric row or
+requirement, without the first check's reasoning, evidence or severity.
+Independently checks the draft for what would make the issue wrong. Returns
+concede, or rebut with its own evidence.
 
 **Judge:** handles rebutted issues, high-severity concessions and a small sample
 of concessions below high severity to check for lazy agreement. Gets both
