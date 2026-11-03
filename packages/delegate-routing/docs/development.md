@@ -1,8 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-02 — the review workflow saves its rubric to a file
-> given verbatim to the worker and every reviewer and adds a Describe step; the
-> stub and the reminder load the skill in the turn that delegates.
+> **Last verified:** 2026-11-02 — routing ships an always-on "Pool drain" entry
+> that drains usage pools in balance; the stub and the reminder load the skill
+> in the turn that delegates.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -19,10 +19,11 @@ expose the same surface.
 
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
 `source`. Names become headings. The package ships the always-on "Load
-delegate-routing" stub and four enabled entries: "Follow the user's request",
-"Size the work", "Choose execution" and "Validate the result". "Validate the
-result" is always-on too. The "Orchestrator session" catalog entry ships
-disabled. Policy belongs in these entries rather than renderer string literals.
+delegate-routing" stub and five enabled entries: "Follow the user's request",
+"Size the work", "Choose execution", "Pool drain" and "Validate the result".
+"Pool drain" and "Validate the result" are always-on too. The "Orchestrator
+session" catalog entry ships disabled. Policy belongs in these entries rather
+than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.

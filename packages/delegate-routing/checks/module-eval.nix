@@ -238,6 +238,7 @@
     alwaysDisabled = change {
       ai.programs.delegate-routing.routing = {
         "Load delegate-routing".enable = false;
+        "Pool drain".enable = false;
         "Validate the result".enable = false;
       };
     };
@@ -774,15 +775,18 @@
       );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
-      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Size the work" "Validate the result"]
+      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Pool drain" "Size the work" "Validate the result"]
       && !routingDefaults."Orchestrator session".enable
       && routingDefaults."Load delegate-routing".always
+      && routingDefaults."Pool drain".always
       && routingDefaults."Validate the result".always
       && ordered claude ["Follow the user's request" "Size the work" "Choose execution"]
       && lib.hasInfix "## Routing" claude
       && hasLoadInstruction stub
+      && lib.hasInfix "### Pool drain" stub
       && lib.hasInfix "### Validate the result" stub
       && !(lib.hasInfix "### Load delegate-routing" claude)
+      && !(lib.hasInfix "### Pool drain" claude)
       && !(lib.hasInfix "### Validate the result" claude)
       && !(lib.hasInfix "### Size the work" stub)
       && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)

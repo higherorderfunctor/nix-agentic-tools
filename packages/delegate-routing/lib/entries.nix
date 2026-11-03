@@ -24,6 +24,11 @@ in {
       enable = false;
       source = ../fragments/orchestrator-session.md;
     };
+    "Pool drain" = {
+      after = ["Size the work"];
+      always = true;
+      source = ../fragments/pool-drain.md;
+    };
     "Size the work" = {
       after = ["Follow the user's request"];
       source = ../fragments/size-the-work.md;
