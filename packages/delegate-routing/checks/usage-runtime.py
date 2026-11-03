@@ -430,11 +430,16 @@ print({json.dumps(json.dumps(CLAUDE))})
                     self.assertEqual(value["windows"][name]["windowSeconds"], seconds)
                     self.assertEqual(value["balances"], [])
                     self.assertEqual(value["bonuses"], [])
+        # A Codex body with no window at all is a shape regression, not an empty pool.
         self.usage["codex"]["rate_limit"]["primary_window"] = None
-        self.assertEqual(json.loads(self.run_helper("codex").stdout)["windows"], {})
+        result = self.run_helper("codex")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid codex usage response", result.stderr)
         usage["rateLimits"]["primary"] = None
         self.direct_codex(usage)
-        self.assertEqual(json.loads(self.run_helper("codex", cpa=False).stdout)["windows"], {})
+        result = self.run_helper("codex", cpa=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid codex usage response", result.stderr)
 
     def test_codex_reset_details_fail_without_failing_usage(self):
         for failure in ["transport", "management", "vendor", "malformed", "invalid_json", "invalid_credits", "invalid_expiry"]:

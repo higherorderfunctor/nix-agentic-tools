@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 if usage_cpa codex; then exit 0; fi
 
-timeout 25s python3 - <<'PY' | usage_project codex
+timeout 25s python3 - <<'PY' | usage_project codex || {
 import json
 import subprocess
 
@@ -39,3 +39,6 @@ finally:
         p.kill()
         p.wait()
 PY
+  printf '%s\n' 'usage: invalid codex usage response' >&2
+  exit 1
+}

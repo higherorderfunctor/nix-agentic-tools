@@ -68,7 +68,8 @@ usage_project() {
             windows: ([($limits.primary_window // $limits.primary), ($limits.secondary_window // $limits.secondary)]
               | map(select(. != null)
                   | named_window((.limit_window_seconds // (.windowDurationMins * 60)); null;
-                      (.used_percent // .usedPercent); (.reset_at // .resetsAt); null)) | from_entries),
+                      (.used_percent // .usedPercent); (.reset_at // .resetsAt); null))
+              | if . == [] then error("codex windows") else from_entries end),
             balances: [$credits | select(.has_credits // .hasCredits // false)
               | {kind: "credits", remaining: (.balance | tonumber), unit: "credits", expiresAt: null}],
             bonuses: (try (($resets // $reset) | bonuses($reset.available_count // $reset.availableCount))
