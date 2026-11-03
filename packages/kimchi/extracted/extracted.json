@@ -172,19 +172,6 @@
         "type": "object",
         "typeExpression": "PreferencesConfig"
       },
-      "redaction": {
-        "optional": true,
-        "project": true,
-        "properties": {
-          "enabled": {
-            "optional": true,
-            "type": "boolean",
-            "typeExpression": "boolean"
-          }
-        },
-        "type": "object",
-        "typeExpression": "{ enabled?: boolean; }"
-      },
       "region": {
         "enum": ["us", "eu", "self-hosted"],
         "optional": true,
@@ -313,7 +300,6 @@
         "memoryEmbedding",
         "memoryExtraction",
         "migrationState",
-        "redaction",
         "skillPaths",
         "tui"
       ]
@@ -966,12 +952,22 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "GIT_CEILING_DIRECTORIES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "GIT_COMMON_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
       },
       "GIT_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "GIT_DISCOVERY_ACROSS_FILESYSTEM": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -1615,11 +1611,6 @@
         "type": "string"
       },
       "KIMCHI_QUICKJS_WASM_PATH": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi"],
-        "type": "string"
-      },
-      "KIMCHI_REDACTION_ENABLED": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -3557,7 +3548,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:835",
+            "origin": "src/config.ts:823",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3584,7 +3575,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:835",
+            "origin": "src/config.ts:823",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3626,7 +3617,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:835",
+            "origin": "src/config.ts:823",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3707,56 +3698,68 @@
         "bundledModule": null,
         "file": "src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 241,
-        "readBy": "kimchi",
-        "targets": [
-          {
-            "host": null,
-            "kind": "argument",
-            "origin": "src/extensions/pr-cost-reporting/worker.ts:241",
-            "value": "input"
-          }
-        ]
-      },
-      {
-        "bundledModule": null,
-        "file": "src/extensions/pr-cost-reporting/worker.ts",
-        "library": "fetch",
-        "line": 375,
-        "readBy": "kimchi",
-        "targets": [
-          {
-            "host": null,
-            "kind": "argument",
-            "origin": "src/extensions/pr-cost-reporting/worker.ts:375",
-            "value": "input"
-          }
-        ]
-      },
-      {
-        "bundledModule": null,
-        "file": "src/extensions/pr-cost-reporting/worker.ts",
-        "library": "fetch",
-        "line": 442,
+        "line": 259,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:918",
+            "origin": "src/config.ts:906",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
-            "host": "app.eu.kimchi.dev",
+            "host": "api.cast.ai",
             "kind": "url",
-            "origin": "src/regions.ts:34",
-            "value": "https://app.eu.kimchi.dev"
+            "origin": "src/regions.ts:29",
+            "value": "https://api.cast.ai"
           },
           {
-            "host": "app.kimchi.dev",
+            "host": "api.eu.cast.ai",
             "kind": "url",
-            "origin": "src/regions.ts:27",
-            "value": "https://app.kimchi.dev"
+            "origin": "src/regions.ts:36",
+            "value": "https://api.eu.cast.ai"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/pr-cost-reporting/worker.ts",
+        "library": "fetch",
+        "line": 416,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/pr-cost-reporting/worker.ts:416",
+            "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/pr-cost-reporting/worker.ts",
+        "library": "fetch",
+        "line": 480,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:906",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": "api.cast.ai",
+            "kind": "url",
+            "origin": "src/regions.ts:29",
+            "value": "https://api.cast.ai"
+          },
+          {
+            "host": "api.eu.cast.ai",
+            "kind": "url",
+            "origin": "src/regions.ts:36",
+            "value": "https://api.eu.cast.ai"
           }
         ]
       },
@@ -3830,20 +3833,20 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:918",
+            "origin": "src/config.ts:906",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
-            "host": "app.eu.kimchi.dev",
+            "host": "api.cast.ai",
             "kind": "url",
-            "origin": "src/regions.ts:34",
-            "value": "https://app.eu.kimchi.dev"
+            "origin": "src/regions.ts:29",
+            "value": "https://api.cast.ai"
           },
           {
-            "host": "app.kimchi.dev",
+            "host": "api.eu.cast.ai",
             "kind": "url",
-            "origin": "src/regions.ts:27",
-            "value": "https://app.kimchi.dev"
+            "origin": "src/regions.ts:36",
+            "value": "https://api.eu.cast.ai"
           }
         ]
       },
@@ -3902,7 +3905,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:835",
+            "origin": "src/config.ts:823",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3983,7 +3986,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:918",
+            "origin": "src/config.ts:906",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
@@ -4071,16 +4074,16 @@
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
-            "host": "app.eu.kimchi.dev",
+            "host": "api.cast.ai",
             "kind": "url",
-            "origin": "src/regions.ts:34",
-            "value": "https://app.eu.kimchi.dev"
+            "origin": "src/regions.ts:29",
+            "value": "https://api.cast.ai"
           },
           {
-            "host": "app.kimchi.dev",
+            "host": "api.eu.cast.ai",
             "kind": "url",
-            "origin": "src/regions.ts:27",
-            "value": "https://app.kimchi.dev"
+            "origin": "src/regions.ts:36",
+            "value": "https://api.eu.cast.ai"
           }
         ]
       },
@@ -4154,13 +4157,13 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:835",
+            "origin": "src/config.ts:823",
             "value": "KIMCHI_BASE_URL"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:918",
+            "origin": "src/config.ts:906",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
@@ -4180,18 +4183,6 @@
             "kind": "url",
             "origin": "src/update/github.ts:9",
             "value": "https://api.github.com"
-          },
-          {
-            "host": "app.eu.kimchi.dev",
-            "kind": "url",
-            "origin": "src/regions.ts:34",
-            "value": "https://app.eu.kimchi.dev"
-          },
-          {
-            "host": "app.kimchi.dev",
-            "kind": "url",
-            "origin": "src/regions.ts:27",
-            "value": "https://app.kimchi.dev"
           },
           {
             "host": "github.com",
@@ -6473,6 +6464,20 @@
         "line": 95,
         "readBy": "kimchi",
         "value": "https://app.kimchi.dev"
+      },
+      {
+        "file": "src/regions.ts",
+        "host": "app.kimchi.dev",
+        "line": 27,
+        "readBy": "kimchi",
+        "value": "https://app.kimchi.dev"
+      },
+      {
+        "file": "src/regions.ts",
+        "host": "app.eu.kimchi.dev",
+        "line": 34,
+        "readBy": "kimchi",
+        "value": "https://app.eu.kimchi.dev"
       },
       {
         "file": "@earendil-works/pi-ai/dist/api/bedrock-converse-stream.js",
