@@ -57,6 +57,17 @@ CODEX_RESETS = {"available_count": 2, "credits": [
 ZAI = {"code": 200, "data": {"level": "test-level", "limits": [
     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}
     for unit, number in [(3, 5), (6, 1)]]}}
+# Manager+ fixture: endpoint shapes from the pinned 1.14.10 source, synthetic values.
+MANAGER_STATUS = {"service": "cpa-manager-plus", "dbPath": "/usage.sqlite",
+                  "collector": {"collector": "running", "upstream": "http://127.0.0.1:8317",
+                                "mode": "auto", "transport": "http"}}
+PROXY_GROUP = {"base-url": "https://api.anthropic.com",
+               "keys": [{"api-key": "upstream-private-key", "auth_index": "idx-one"}]}
+ANALYTICS = {"generated_at_ms": 1,
+             "coverage": {"scope": "time_range", "mode": "mixed", "raw_complete": False,
+                          "core_aggregate_used": True, "raw_deleted_event_count": 0,
+                          "fidelity_limitations": []},
+             "summary": {"total_calls": 27, "total_cost": 5.0}}
 
 class UsageTests(unittest.TestCase):
     def setUp(self):
@@ -64,11 +75,16 @@ class UsageTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name)
         self.helpers = {}
+        header = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
         for vendor in ["claude", "codex", "zai"]:
             helper = self.home / f"{vendor}-usage"
-            helper.write_text(f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
+            helper.write_text(header + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
             helper.chmod(0o755)
             self.helpers[vendor] = str(helper)
+        proxy = self.home / "proxy-accounted-usage"
+        proxy.write_text(header + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / "proxy-accounted-usage.sh").read_text())
+        proxy.chmod(0o755)
+        self.helpers["proxy"] = str(proxy)
         self.key = self.home / "management-key"
         self.key.write_text(SECRET + "\n")
         self.files = [self.account("claude", "a"), self.account("codex", "b")]
@@ -80,6 +96,8 @@ class UsageTests(unittest.TestCase):
         self.management_status = 200
         self.envelope = None
         self.raw = None
+        self.status_body = copy.deepcopy(MANAGER_STATUS)
+        self.analytics = copy.deepcopy(ANALYTICS)
         owner = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -96,7 +114,11 @@ class UsageTests(unittest.TestCase):
                 size = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(size)) if size else None
                 owner.requests.append((self.command, self.path, dict(self.headers), body))
-                if self.path == "/v0/management/auth-files":
+                if self.path == "/status":
+                    response = owner.status_body
+                elif self.path == "/v0/management/monitoring/analytics":
+                    response = owner.analytics
+                elif self.path == "/v0/management/auth-files":
                     response = {"files": owner.files}
                 elif self.path.startswith("/v8/management/config/api-keys/"):
                     response = owner.configs.get(self.path.rsplit("/", 1)[1])
@@ -132,7 +154,8 @@ class UsageTests(unittest.TestCase):
         self.thread.start()
         self.addCleanup(self.server.shutdown)
         self.url = f"http://127.0.0.1:{self.server.server_port}"
-        self.env = {key: value for key, value in os.environ.items() if not key.startswith("DELEGATE_USAGE_CPA_")}
+        self.env = {key: value for key, value in os.environ.items()
+                    if not key.startswith(("DELEGATE_USAGE_CPA_", "MANAGER_"))}
         self.env.update(HOME=str(self.home), TZ="America/Denver")
 
     @staticmethod
@@ -212,6 +235,236 @@ for line in sys.stdin:
 ''')
         executable.chmod(0o755)
         self.env["PATH"] = str(executable.parent) + os.pathsep + self.env["PATH"]
+
+    def proxy_command(self, *extra, now="1793707200000", day="1", zone="UTC", limit="100"):
+        return ["--provider", "claude", "--base-url", "https://api.anthropic.com",
+                "--limit", limit, "--unit", "USD", "--reset-day", day, "--time-zone", zone,
+                "--pool", "anthropic-api", "--account-name", "personal-anthropic-api",
+                "--now-ms", now, *extra]
+
+    def run_proxy(self, *args, **overrides):
+        env = self.env.copy()
+        env.update({"MANAGER_URL": self.url, "MANAGER_KEY_FILE": str(self.key)})
+        env.update(overrides)
+        result = subprocess.run([self.helpers["proxy"], *args], env=env, text=True, capture_output=True, timeout=10)
+        self.assertNotIn(SECRET, result.stdout + result.stderr)
+        if result.returncode == 0:
+            self.assert_monthly_schema(json.loads(result.stdout))
+        return result
+
+    def assert_monthly_schema(self, value):
+        self.assertEqual(set(value), {"pool", "account", "windows", "balances", "bonuses"})
+        self.assertEqual(set(value["account"]), {"auth_index", "name", "plan"})
+        self.assertIsNone(value["account"]["plan"])
+        self.assertTrue(value["account"]["auth_index"] is None or isinstance(value["account"]["auth_index"], str))
+        self.assertEqual(set(value["windows"]), {"monthly"})
+        window = value["windows"]["monthly"]
+        self.assertEqual(set(window), {"usedPercent", "remainingPercent", "resetsAt", "status", "windowSeconds"})
+        self.assertEqual(window["status"], "estimated")
+        self.assert_utc(window["resetsAt"])
+        for field in ["usedPercent", "remainingPercent", "windowSeconds"]:
+            self.assertIsInstance(window[field], (int, float))
+        # A real calendar month in any zone, DST included, is 28 to 31 days long.
+        self.assertGreaterEqual(window["windowSeconds"], 28 * 86400)
+        self.assertLessEqual(window["windowSeconds"], 31 * 86400 + 3600)
+        self.assertEqual(window["remainingPercent"], max(0, 100 - window["usedPercent"]))
+        self.assertEqual(value["balances"], [])
+        self.assertEqual(value["bonuses"], [])
+
+    def test_proxy_reader_schema_and_requests(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        self.requests.clear()
+        result = self.run_proxy(*self.proxy_command())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(json.loads(result.stdout), {
+            "pool": "anthropic-api",
+            "account": {"auth_index": "idx-one", "name": "personal-anthropic-api", "plan": None},
+            "windows": {"monthly": {"usedPercent": 5, "remainingPercent": 95,
+                                    "resetsAt": "2026-12-01T00:00:00Z", "status": "estimated",
+                                    "windowSeconds": 2592000}},
+            "balances": [], "bonuses": []})
+        self.assertEqual([(method, path) for method, path, headers, body in self.requests],
+                         [("GET", "/status"),
+                          ("GET", "/v8/management/config/api-keys/claude"),
+                          ("POST", "/v0/management/monitoring/analytics")])
+        for method, path, headers, body in self.requests:
+            self.assertEqual(headers["Authorization"], f"Bearer {SECRET}")
+        analytics_request = self.requests[-1][3]
+        self.assertEqual(analytics_request["from_ms"], 1793491200000)
+        self.assertEqual(analytics_request["to_ms"], 1793707200000)
+        self.assertEqual(analytics_request["time_zone"], "UTC")
+        self.assertEqual(analytics_request["filters"], {"auth_indices": ["idx-one"], "include_failed": True})
+        self.assertEqual(analytics_request["include"], {"summary": True, "summary_profile": "compact"})
+
+    def test_proxy_window_calendar_lengths(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        for now, day, zone, seconds, resets in [
+            # A window opened on November 15 closes in December: the month boundary.
+            ("1796274000000", "15", "UTC", 2592000, "2026-12-15T00:00:00Z"),
+            # January spans 31 days; February 2027 spans 28.
+            ("1800003600000", "1", "UTC", 2678400, "2027-02-01T00:00:00Z"),
+            ("1802250000000", "1", "UTC", 2419200, "2027-03-01T00:00:00Z"),
+            # Denver falls back inside the November window (30 days plus one hour)
+            # and springs forward inside the March window (31 days minus one hour).
+            ("1793732400000", "1", "America/Denver", 2595600, "2026-12-01T07:00:00Z"),
+            ("1773165600000", "1", "America/Denver", 2674800, "2026-04-01T06:00:00Z"),
+        ]:
+            with self.subTest(now=now, zone=zone, day=day):
+                result = self.run_proxy(*self.proxy_command(now=now, day=day, zone=zone))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                window = json.loads(result.stdout)["windows"]["monthly"]
+                self.assertEqual(window["windowSeconds"], seconds)
+                self.assertEqual(window["resetsAt"], resets)
+
+    def test_proxy_limit_percent_clamping(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        for cost, used, remaining in [(250.0, 250, 0), (100.0, 100, 0), (0.0, 0, 100)]:
+            with self.subTest(cost=cost):
+                self.analytics["summary"]["total_cost"] = cost
+                window = json.loads(self.run_proxy(*self.proxy_command()).stdout)["windows"]["monthly"]
+                self.assertEqual(window["usedPercent"], used)
+                self.assertEqual(window["remainingPercent"], remaining)
+
+    def test_proxy_credential_counts(self):
+        other = {"base-url": "https://other.example.test", "keys": [{"auth_index": "idx-two"}]}
+        twice = [PROXY_GROUP, {"base-url": "https://api.anthropic.com", "keys": [{"auth_index": "idx-two"}]}]
+        for groups, count in [([], 0), ([other], 0), (twice, 2)]:
+            with self.subTest(count=count):
+                self.configs["claude"] = groups
+                result = self.run_proxy(*self.proxy_command())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"credential discovery matched {count} credentials", result.stderr)
+                self.assertEqual(result.stdout, "")
+        # An absent provider collection is zero credentials, not a transport error.
+        self.configs.pop("claude")
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("credential discovery matched 0 credentials", result.stderr)
+
+    def test_proxy_auth_index_pins(self):
+        self.configs["claude"] = [PROXY_GROUP, {"base-url": "https://api.anthropic.com",
+                                                "keys": [{"auth_index": "idx-two"}]}]
+        # A pin resolves an otherwise ambiguous credential set without discovery.
+        self.requests.clear()
+        result = self.run_proxy(*self.proxy_command("--auth-index", "idx-two"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["account"]["auth_index"], "idx-two")
+        self.assertEqual(self.requests[-1][3]["filters"]["auth_indices"], ["idx-two"])
+        self.assertEqual([path for method, path, headers, body in self.requests],
+                         ["/status", "/v0/management/monitoring/analytics"])
+        # Several pins cover a rotation; no single index can name the account.
+        result = self.run_proxy(*self.proxy_command("--auth-index", "idx-old", "--auth-index", "idx-two"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertIsNone(value["account"]["auth_index"])
+        self.assertEqual(self.requests[-1][3]["filters"]["auth_indices"], ["idx-old", "idx-two"])
+
+    def test_proxy_failures_are_explicit_without_response_bodies(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        self.status_body["collector"]["collector"] = "stopped"
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("collector is not running", result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.status_body["collector"]["collector"] = "running"
+        for field, value in [("raw_deleted_event_count", 5),
+                             ("fidelity_limitations", ["core_metrics_require_raw_events"]),
+                             ("fidelity_limitations", ["extended_summary_metrics_require_raw_events"])]:
+            with self.subTest(field=field, value=value):
+                self.analytics = copy.deepcopy(ANALYTICS)
+                self.analytics["coverage"][field] = value
+                result = self.run_proxy(*self.proxy_command())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("cost coverage incomplete", result.stderr)
+                self.assertEqual(result.stdout, "")
+        for bad in [{"summary": {}}, {"summary": {"total_cost": "5"}}, {"coverage": "degraded"}, {}]:
+            with self.subTest(bad=bad):
+                self.analytics = bad
+                result = self.run_proxy(*self.proxy_command())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid analytics response", result.stderr)
+                self.assertEqual(result.stdout, "")
+        self.analytics = copy.deepcopy(ANALYTICS)
+        # A body that is not JSON fails on the first route it reaches; the body
+        # itself never surfaces.
+        self.raw = b"private-response-body"
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid status response", result.stderr)
+        self.assertNotIn("private-response-body", result.stdout + result.stderr)
+        self.raw = None
+        self.management_status = 500
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("management HTTP 500", result.stderr)
+        self.assertNotIn("private-response-body", result.stderr)
+        self.management_status = 200
+        self.key.write_text("line\nbreak")
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("single line", result.stderr)
+
+    def test_proxy_argument_and_environment_errors(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        base = ["--limit", "100", "--unit", "USD", "--reset-day", "1",
+                "--pool", "anthropic-api", "--account-name", "a"]
+        for env, args, expected in [
+            ({"MANAGER_URL": ""}, self.proxy_command(), "requires MANAGER_URL"),
+            ({"MANAGER_KEY_FILE": ""}, self.proxy_command(), "requires MANAGER_URL"),
+            ({"MANAGER_KEY_FILE": str(self.home / "absent")}, self.proxy_command(), "cannot read management key file"),
+            ({}, self.proxy_command(limit="0"), "positive number"),
+            ({}, self.proxy_command(limit="zero"), "positive number"),
+            ({}, self.proxy_command(day="0"), "from 1 through 28"),
+            ({}, self.proxy_command(day="29"), "from 1 through 28"),
+            ({}, self.proxy_command(now="yesterday"), "epoch milliseconds"),
+            ({}, base, "credential discovery requires --provider"),
+            ({}, base[2:], "requires --limit"),
+            ({}, base[:2] + base[4:], "requires --unit"),
+            ({}, base[:4] + base[6:], "requires --reset-day"),
+            ({}, base[:6] + base[8:], "requires --pool"),
+            ({}, base[:8], "requires --account-name"),
+            ({}, self.proxy_command("--provider", "claude", "--without a unit"), "unknown argument"),
+        ]:
+            with self.subTest(expected=expected, args=args):
+                result = self.run_proxy(*args, **env)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected, result.stderr)
+                self.assertEqual(result.stdout, "")
+        # Argument and environment errors fail before any request leaves the process.
+        self.assertEqual(self.requests, [])
+        # The zone name itself is validated by the window arithmetic.
+        result = self.run_proxy(*self.proxy_command(zone="Mars/Olympus_Mons"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid time zone", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_proxy_key_never_reaches_tool_arguments_or_environment(self):
+        binary = self.home / "bin"
+        binary.mkdir()
+        for tool in ["curl", "jq", "python3"]:
+            real = shutil.which(tool)
+            executable = binary / tool
+            executable.write_text(f"#!{sys.executable}\n" + f'''import os, sys
+for secret in [{SECRET!r}, "upstream-private-key"]:
+    assert secret not in " ".join(sys.argv)
+    assert secret not in os.environ.values()
+os.execv({real!r}, [{real!r}] + sys.argv[1:])
+''')
+            executable.chmod(0o755)
+        self.configs["claude"] = [PROXY_GROUP]
+        result = self.run_proxy(*self.proxy_command(), PATH=str(binary) + os.pathsep + self.env["PATH"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("upstream-private-key", result.stdout + result.stderr)
+
+    def test_proxy_real_clock_window(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        result = self.run_proxy(*self.proxy_command()[:-2])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        window = json.loads(result.stdout)["windows"]["monthly"]
+        self.assertGreaterEqual(window["windowSeconds"], 28 * 86400)
+        self.assertLessEqual(window["windowSeconds"], 31 * 86400 + 3600)
 
     def test_vendor_requests_and_multiple_accounts(self):
         self.files.append(self.account("codex", "c", id_token={"chatgpt_account_id": "account-c"}))

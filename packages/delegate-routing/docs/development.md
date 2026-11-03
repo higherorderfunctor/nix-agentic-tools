@@ -1,14 +1,26 @@
 # Delegate routing package
 
 > **Last verified:** 2026-11-03 — routing ships an always-on "Pool drain" entry,
-> the usage helpers share one schema with UTC reset times, and portable pools
-> resolve usage readers and label family reaches on both backends.
+> the usage helpers share one schema with UTC reset times, portable pools
+> resolve usage readers and label family reaches on both backends, and
+> proxy-accounted-usage reads a Manager+ accounted monthly budget.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
 > for one stateless hook on every harness, with no marker or PreCompact re-arm.
 > Earlier design:
 > `git show be765e0e:packages/claude-code/docs/heron-brook-clamp.md`.
+>
+> **Settled, do not relitigate** (2026-11-03): a budget spent through the proxy
+> on an Anthropic API key is accounted by CPA Manager+, never by Anthropic's own
+> endpoints. Anthropic's usage, cost and analytics endpoints are Admin API, and
+> the Admin API is unavailable for individual Console accounts
+> (https://platform.claude.com/docs/en/manage-claude/usage-cost-api and
+> https://platform.claude.com/docs/en/manage-claude/usage-cost-analytics-api);
+> an org:admin OAuth token and a workspace-less key both fail on such an
+> account, and converting it to an organization risks the monthly API credit
+> grant. Every other pool reads the provider's own endpoint; this reader is the
+> one exception and reports itself as estimated.
 
 `ai.programs.delegate-routing` exposes portable `families`, `pools`, `routing`
 and `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude,
@@ -226,6 +238,62 @@ has `usedPercent`, `remainingPercent`, a UTC RFC 3339 `resetsAt`, `status` and
 and balances and bonuses are arrays. Codex reset credits carry expiry dates when
 available; if the extra proxy request fails, the helper still reports their
 count.
+
+### Proxy accounted usage
+
+`proxy-accounted-usage` reads a monthly budget that CPA Manager+ accounts for
+one upstream credential, such as an Anthropic API key spent through the proxy.
+Manager+ collects the proxy usage queue into SQLite and prices it at read time,
+so the reported cost is its priced estimate; the output is the shared usage
+schema with one `monthly` window carrying status `"estimated"` and a
+`windowSeconds` that is the real calendar length in the configured zone. The
+package ships no technique default and no pool for it: a consumer declares the
+technique with this command under
+`ai.programs.delegate-routing.runtimes.<runtime>.techniques` and a pool whose
+`usage` names it.
+
+The command takes `--provider` and `--base-url` for credential discovery through
+Manager+ (zero or several matches are errors naming the count), `--auth-index`,
+repeatable, to pin indices through key rotation, `--limit`, `--unit`,
+`--reset-day` (1 through 28) and `--time-zone` (an IANA name, UTC by default)
+for the calendar window, `--pool` and `--account-name` for the output, and
+`--now-ms` to fix the clock for replay and tests. `MANAGER_URL` and
+`MANAGER_KEY_FILE` carry the Manager+ endpoint and its admin key file; the key
+is read in process and sent through curl `--config` on stdin, never through
+argv. The reader fails when the collector is not running, when discovery matches
+zero or several credentials, when the analytics response is invalid, or when its
+coverage reports deleted raw events or a degraded summary: hourly pricing
+roll-ups carry no credential key, so a lowered total must not read as spare
+budget.
+
+A consumer example with placeholder values:
+
+```nix
+{
+  ai.programs.delegate-routing = {
+    pools.anthropic-api = {
+      description = "Monthly USD budget on the Anthropic API key, accounted by Manager+";
+      usage = {
+        runtime = "codex";
+        technique = "proxy-accounted-usage";
+      };
+    };
+    runtimes.codex.techniques.proxy-accounted-usage = {
+      command = "<proxy-accounted-usage path> --provider claude --base-url https://api.anthropic.com --limit 100 --unit USD --reset-day 1 --time-zone UTC --pool anthropic-api --account-name personal-anthropic-api";
+      kind = "usage";
+      notes = "Manager+ accounted budget; MANAGER_URL and MANAGER_KEY_FILE carry the endpoint and admin key file";
+    };
+  };
+  ai.codex.environmentVariables = {
+    MANAGER_KEY_FILE = "/run/secrets/manager-admin-key";
+    MANAGER_URL = "http://127.0.0.1:18317";
+  };
+}
+```
+
+The `<proxy-accounted-usage path>` placeholder is the packaged script, the
+`usageScripts.proxy-accounted-usage` passthru of the `delegate-routing-content`
+package.
 
 Usage follows generic `ai.<runtime>.settings.inference` selection. A selected
 local instance with a file management-key reference supplies metadata
