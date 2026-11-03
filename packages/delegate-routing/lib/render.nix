@@ -44,7 +44,16 @@
   poolsText = lib.optionalString (pools != {}) ''
     ## Pools
 
-    ${table ["Name" "Reader" "Measure" "Description"] (lib.mapAttrsToList (name: pool: let
+    ${table ["Name" "Reader" "Measure" "Description"] (lib.mapAttrsToList (name: declared: let
+        # The public render and mkSkill helpers pass pool declarations
+        # without the module's defaults, so default the optional fields here.
+        pool =
+          {
+            description = "";
+            usage = null;
+            window = null;
+          }
+          // declared;
         # Assertions own invalid-reader diagnostics, even if delivery forces
         # rendering before it collects the module's assertions.
         command =
