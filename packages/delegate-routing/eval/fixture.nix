@@ -52,7 +52,8 @@
         tier = "small";
         useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
       };
-      zhipu = {
+      zhipu = lib.mapAttrs (_: family:
+        family // {pools = lib.genAttrs ["claude" "codex" "kimchi"] (_: "zai-coding");}) {
         glm = {
           avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
           effort = "low, high or max; high default, max for judging";
@@ -66,6 +67,23 @@
           match = "glm-*-flash";
           tier = "mid";
           useFor = "code to a spec; image or document input";
+        };
+      };
+    };
+    pools = {
+      api-allowance = {
+        description = "Example monthly allowance without a usage reader.";
+        window = {
+          limit = 100;
+          resetDay = 1;
+          unit = "credits";
+        };
+      };
+      zai-coding = {
+        description = "Example shared budget for GLM reaches.";
+        usage = {
+          runtime = "claude";
+          technique = "zai-usage";
         };
       };
     };

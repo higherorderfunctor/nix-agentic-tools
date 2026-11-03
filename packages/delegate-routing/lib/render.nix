@@ -4,6 +4,7 @@
   families,
   models,
   techniques,
+  pools ? {},
   routing ? {},
   workflows ? {},
   extraRuntimes ? [],
@@ -29,6 +30,46 @@
       ]
       ++ map row rows);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
+  poolSuffix = family: target: let
+    pool = selection.poolFor family target;
+  in
+    lib.optionalString (pool != null) " (${pool})";
+  reach = family: target:
+    (
+      if target == runtime
+      then "native"
+      else "via ${target} external"
+    )
+    + poolSuffix family target;
+  poolsText = lib.optionalString (pools != {}) ''
+    ## Pools
+
+    ${table ["Name" "Reader" "Measure" "Description"] (lib.mapAttrsToList (name: pool: let
+        # Assertions own invalid-reader diagnostics, even if delivery forces
+        # rendering before it collects the module's assertions.
+        command =
+          if pool.usage == null
+          then null
+          else techniques.${pool.usage.runtime}.${pool.usage.technique}.command or null;
+      in [
+        name
+        (
+          if command == null
+          then "none"
+          else "`${command}`"
+        )
+        (
+          if pool.usage != null
+          then "measured"
+          else if pool.window == null
+          then "unknown"
+          else "configured: ${toString pool.window.limit} ${pool.window.unit} per month, resets day ${toString pool.window.resetDay}; current use unknown"
+        )
+        pool.description
+      ])
+      pools)}
+
+  '';
   tier = name: let
     members = builtins.filter (family: family.tier == name) candidates;
   in
@@ -40,10 +81,7 @@
           family.useFor
           family.avoidFor
           family.effort
-          (lib.concatMapStringsSep "; " (target:
-            if target == runtime
-            then "native"
-            else "via ${target} external") (targets family))
+          (lib.concatMapStringsSep "; " (reach family) (targets family))
         ])
         members)}
     '';
@@ -80,7 +118,7 @@
   manual = target: ''
     ### ${target}
 
-    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}") (selected target)}
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}${poolSuffix family target}") (selected target)}
 
     ${techniqueBlock target true}
     Not a candidate for auto-selection; use only when the user names it.
@@ -96,7 +134,7 @@ in ''
 
   Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`).
 
-  ${lib.concatMapStringsSep "\n" tier tiers}
+  ${poolsText}${lib.concatMapStringsSep "\n" tier tiers}
   Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
 
   ${techniqueBlock runtime false}

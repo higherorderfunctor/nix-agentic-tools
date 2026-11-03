@@ -387,7 +387,127 @@
         else evaluation.config.ai.${runtime}.environmentVariables
       );
     usageEmpty = extra: lib.all (runtime: usageVars (usage extra) runtime == {}) ["claude" "codex"];
+    poolConfig = {
+      families.anthropic.opus.pools = {
+        claude = "measured";
+        codex = "configured";
+        kiro = "measured";
+      };
+      pools = {
+        configured.window = {
+          limit = 12.5;
+          resetDay = 28;
+          unit = "units";
+        };
+        measured = {
+          description = "SHARED | BUDGET\nDESCRIPTION";
+          usage = {
+            runtime = "claude";
+            technique = "pool-reader";
+          };
+        };
+      };
+      runtimes = {
+        claude.techniques.pool-reader = {
+          command = "read-pool --current";
+          kind = "usage";
+        };
+        codex.models = [{families = ["opus"];}];
+      };
+    };
+    poolResult = change {ai.programs.delegate-routing = poolConfig;};
+    poolSkill = readSkill poolResult "claude";
+    poolChange = settings: change {ai.programs.delegate-routing = lib.recursiveUpdate poolConfig settings;};
+    # Print the actual diagnostic as evidence that rejection names the bad key.
+    poolFailsWith = evaluation: expected: let
+      failures = lib.filter (item: !item.assertion && lib.hasInfix expected item.message) evaluation.config.assertions;
+    in
+      failures != [] && builtins.trace (builtins.head failures).message true;
+    poolReaderFails = settings:
+      poolFailsWith (poolChange settings) "pools.measured.usage.technique: reference an enabled usage technique with a non-empty command.";
+    poolWindowFails = window:
+      !(builtins.tryEval (builtins.deepSeq (poolChange {pools.configured.window = window;}).config.ai.programs.delegate-routing.pools true)).success;
   in {
+    "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
+      poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown runtime or pool `missing`"
+      && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown"
+      && lib.hasInfix "native; via codex external (configured)" (readSkill (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
+    );
+    "module-delegate-routing-${name}-pools-empty" = mkTest "delegate-routing-${name}-pools-empty" (
+      result.config.ai.programs.delegate-routing.pools
+      == {}
+      && lib.all (runtime:
+        !(lib.hasInfix "## Pools" (readSkill result runtime))
+        && readSkill result runtime
+        == readSkill (change {
+          ai.programs.delegate-routing = {
+            families.anthropic.opus.pools.claude = null;
+            pools = {};
+          };
+        })
+        runtime)
+      runtimes
+      && lib.all (family: family.pools == {}) ((import ../lib/select-families.nix {inherit lib;}).flatten result.config.ai.programs.delegate-routing.families)
+    );
+    "module-delegate-routing-${name}-pools-reader-assertions" = mkTest "delegate-routing-${name}-pools-reader-assertions" (
+      poolReaderFails {runtimes.claude.techniques.pool-reader.enable = false;}
+      && poolReaderFails {runtimes.claude.techniques.pool-reader.kind = "introspect";}
+      && poolReaderFails {runtimes.claude.techniques.pool-reader.command = null;}
+      && poolReaderFails {runtimes.claude.techniques.pool-reader.command = "";}
+      && poolReaderFails {runtimes.claude.techniques.pool-reader.command = " \n ";}
+      && poolReaderFails {pools.measured.usage.technique = "missing";}
+      && poolFailsWith (change {
+        ai = {
+          claude.enable = lib.mkForce false;
+          programs.delegate-routing = poolConfig;
+        };
+      }) "pools.measured.usage.runtime: the reader runtime must be enabled"
+      && poolFailsWith (poolChange {pools.empty = {};}) "pools.empty: set usage or window"
+    );
+    "module-delegate-routing-${name}-pools-reader-environment" = mkTest "delegate-routing-${name}-pools-reader-environment" (
+      usageVars (usage (lib.recursiveUpdate usageSelected {
+        ai.programs.delegate-routing.pools.measured.usage = {
+          runtime = "codex";
+          technique = "usage";
+        };
+      })) "claude"
+      == lib.foldl' (environment: runtime:
+        environment
+        // {
+          "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_MANAGEMENT_KEY_FILE" = "/run/secrets/management";
+          "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_URL" = "http://127.0.0.1:8317";
+        }) {} ["claude" "codex"]
+    );
+    "module-delegate-routing-${name}-pools-render" = mkTest "delegate-routing-${name}-pools-render" (
+      let
+        compact = text: lib.concatStringsSep " " (lib.filter (part: part != "") (lib.splitString " " text));
+        text = compact poolSkill;
+        window = poolResult.config.ai.programs.delegate-routing.pools.configured.window;
+      in
+        passes poolResult
+        && lib.hasInfix "## Pools" text
+        && lib.hasInfix "| Name | Reader | Measure | Description |" text
+        && lib.hasInfix "| configured | none | configured: 12.500000 units per month, resets day 28; current use unknown | |" text
+        && lib.hasInfix "| measured | `read-pool --current` | measured | SHARED \\| BUDGET DESCRIPTION |" text
+        && lib.hasInfix "**pool-reader (usage):** `read-pool --current`" text
+        && lib.hasInfix "native (measured); via codex external (configured)" text
+        && lib.hasInfix "- opus (anthropic) `claude-opus-*` (measured)" text
+        && lib.hasInfix "native (configured)" (readSkill poolResult "codex")
+        && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
+        && readSkill (poolChange {pools.measured.window = window;}) "claude" == poolSkill
+        && ruleText poolResult == stub
+        && poolResult.config.ai.programs.delegate-routing.pools.configured.description == ""
+        && poolResult.config.ai.programs.delegate-routing.pools.configured.usage == null
+        && poolResult.config.ai.programs.delegate-routing.pools.measured.window == null
+    );
+    "module-delegate-routing-${name}-pools-window-type" = mkTest "delegate-routing-${name}-pools-window-type" (
+      poolWindowFails {resetDay = 29;}
+      && poolWindowFails {resetDay = 0;}
+      && poolWindowFails {resetDay = 1.5;}
+      && poolWindowFails {limit = "invalid";}
+      && poolWindowFails {unit = 1;}
+      && passes (poolChange {pools.configured.window.resetDay = 1;})
+    );
     "module-delegate-routing-${name}-usage" = mkTest "delegate-routing-${name}-usage" (
       lib.all (runtime:
         usageVars (usage usageSelected) runtime
