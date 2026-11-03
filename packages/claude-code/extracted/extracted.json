@@ -1084,6 +1084,8 @@
         "enum": ["disable"],
         "type": "string"
       },
+      "permissions.workingDirectoriesAsGiven": { "type": "array" },
+      "permissions.workingDirectoriesAsGiven[]": { "type": "string" },
       "plansDirectory": { "type": "string" },
       "pluginConfigs": { "type": "object" },
       "pluginConfigs.*": { "type": "anyOf" },
