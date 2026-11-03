@@ -20,7 +20,7 @@
 
           def urlopen(url):
               assert url == "https://pypi.org/pypi/mcp/json", url
-              releases = {version: [] for version in ["1.29.0", "1.30.0", "1.31.0rc1", "2.0.0"]}
+              releases = {version: [] for version in ["1.29.0", "1.30.0", "1.30.1", "1.31.0rc1", "2.0.0"]}
               return io.BytesIO(json.dumps({"releases": releases}).encode())
 
 
@@ -91,12 +91,12 @@
       require '>=1.30,<2'
       pin 1.29.0
       ${fixer 0} || fail 'changed requirement exited non-zero'
-      test "$(jq -cS . sources.json)" = '{"src":{"hash":"sha256-fixture","url":"https://github.com/example/sdk/archive/v1.30.0.tar.gz"},"version":"1.30.0"}' \
+      test "$(jq -cS . sources.json)" = '{"src":{"hash":"sha256-fixture","url":"https://github.com/example/sdk/archive/v1.30.1.tar.gz"},"version":"1.30.1"}' \
         || fail "changed requirement wrote $(cat sources.json)"
-      test "$(cat prefetch.log)" = '--type sha256 --unpack https://github.com/example/sdk/archive/v1.30.0.tar.gz' \
+      test "$(cat prefetch.log)" = '--type sha256 --unpack https://github.com/example/sdk/archive/v1.30.1.tar.gz' \
         || fail "changed requirement prefetched $(cat prefetch.log)"
 
-      pin 1.30.0
+      pin 1.30.1
       ${fixer 0} || fail 'unchanged selection exited non-zero'
       unchanged 'unchanged selection'
       test ! -e prefetch.log || fail 'unchanged selection prefetched'
