@@ -5,14 +5,20 @@ are accepted findings for the loop. For a shared abstraction (`lib/**`,
 checks in fresh contexts. Use different models for the two checks where
 possible. Report disagreements only.
 
-**First check:** gets the draft and requirements. Finds issues and checks each
-against the draft itself. For each issue, returns its location, the requirement
-it breaks, evidence, whether it holds, and a proposed severity; if uncertain,
-returns the open question that would settle it.
+**First check:** gets the draft, the description's guarantee claims (never its
+review history or the writer's notes) and the rubric file verbatim. Grades every
+rubric row in order, claims first: pass with the line that meets it, fail with
+location and evidence, or unknown with what would settle it. A guarantee with no
+enforcing line in this diff is an issue of at least medium severity. Then lists
+issues no row covers, checking each against the draft itself. For each fail or
+issue, returns its location, the row or requirement it breaks, evidence, whether
+it holds, and a proposed severity; if uncertain, returns the open question that
+would settle it.
 
-**Second check:** gets each issue that holds and its location, without the first
-check's reasoning, evidence or severity. Independently checks the draft for what
-would make the issue wrong. Returns concede, or rebut with its own evidence.
+**Second check:** gets each issue that holds, its location and its rubric row,
+without the first check's reasoning, evidence or severity. Independently checks
+the draft for what would make the issue wrong. Returns concede, or rebut with
+its own evidence.
 
 **Judge:** handles rebutted issues, high-severity concessions and a small sample
 of concessions below high severity to check for lazy agreement. Gets both
