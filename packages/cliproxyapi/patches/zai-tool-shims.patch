@@ -543,7 +543,7 @@ index 8db878fa..40cf4a8f 100644
  	if rebuildMidSystemMessageEnabled(e.cfg, auth) {
  		rebuildMidSystemMessagesToTopLevelDoc(doc)
  	}
-+	if !claudeCredentialUsesOAuth(auth, apiKey) {
++	if claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
 +		doc, _, err = prepareClaudeAPIKeyToolNamesDoc(doc, auth)
 +		if err != nil {
 +			return cliproxyexecutor.Response{}, err
