@@ -139,7 +139,6 @@
     "KIMCHI_PERMISSIONS": { "controls": "initial permission mode" },
     "KIMCHI_PROXY": { "controls": "HTTP and HTTPS proxy override" },
     "KIMCHI_PROXY_HELPER": { "controls": "SSH proxy helper executable" },
-    "KIMCHI_REDACTION_ENABLED": { "controls": "PII redaction override" },
     "KIMCHI_REGION": {
       "controls": "account region whose endpoints Kimchi uses (us or eu); overrides config.json region, and an unknown value counts as unset"
     },

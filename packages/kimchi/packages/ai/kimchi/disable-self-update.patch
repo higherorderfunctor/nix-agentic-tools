@@ -49,10 +49,10 @@ index 428a820..d342a7a 100644
  		const current = getVersion()
  		// Canary users opted into the canary track; don't nag them about
 diff --git i/src/update/auto-update.ts w/src/update/auto-update.ts
-index dbf8323..69e9bbe 100644
+index 9f81ccd..94f64f5 100644
 --- i/src/update/auto-update.ts
 +++ w/src/update/auto-update.ts
-@@ -274,7 +274,7 @@ export interface MaybeAutoUpdateOnLaunchOptions {
+@@ -279,7 +279,7 @@ export interface MaybeAutoUpdateOnLaunchOptions {
   */
  export async function maybeAutoUpdateOnLaunch(opts: MaybeAutoUpdateOnLaunchOptions = {}): Promise<void> {
  	try {
@@ -60,8 +60,8 @@ index dbf8323..69e9bbe 100644
 +		if (true) return
  		if (argvHasSkipTrigger(process.argv)) return
  		if (isNonInteractiveLaunch(process.argv)) return
- 		if (isHomebrewInstall()) return
-@@ -310,7 +310,7 @@ export async function maybeAutoUpdateOnLaunch(opts: MaybeAutoUpdateOnLaunchOptio
+ 		if (isHomebrewInstall()) {
+@@ -327,7 +327,7 @@ export async function maybeAutoUpdateOnLaunch(opts: MaybeAutoUpdateOnLaunchOptio
  			// the slow-network users this exists for) instead of merely
  			// abandoning the promise while the download loiters in the
  			// background.
