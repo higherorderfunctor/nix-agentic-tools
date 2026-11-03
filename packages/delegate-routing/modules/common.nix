@@ -55,6 +55,7 @@
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
   requiredTargets = runtime:
     lib.unique ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates);
+  poolReaders = map (pool: pool.usage.runtime) (lib.filter (pool: pool.usage != null) (builtins.attrValues portable.pools));
   redact = import ../../../lib/redact {inherit lib;};
   usageFor = runtime: let
     # The runtime's selection already carries the root fields it inherits.
@@ -86,7 +87,7 @@
     };
   usageEnvironment = runtime:
     lib.foldl' (environment: target: environment // usageFor target) {}
-    (lib.filter (target: builtins.elem target ["claude" "codex"]) (requiredTargets runtime));
+    (lib.filter (target: builtins.elem target ["claude" "codex"]) (lib.unique (requiredTargets runtime ++ poolReaders)));
   # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
   # when ai.kiro.cli.package != null: the managed wrapper carries --v3 to launches.
   reachesKiro = lib.any (runtime:
@@ -164,6 +165,11 @@ in {
               type = lib.types.str;
               description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
             };
+            pools = lib.mkOption {
+              type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+              default = {};
+              description = "Budget pool by target runtime. A null binding means no pool is known for that reach.";
+            };
             tier = lib.mkOption {
               type = lib.types.enum tierNames;
               description = "Capability tier.";
@@ -177,6 +183,55 @@ in {
         }));
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
+      };
+      pools = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule {
+          options = {
+            description = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "Budget description shown in the Pools table.";
+            };
+            usage = lib.mkOption {
+              type = lib.types.nullOr (lib.types.submodule {
+                options = {
+                  runtime = lib.mkOption {
+                    type = lib.types.enum supportedRuntimes;
+                    description = "Enabled runtime whose usage technique reads this pool.";
+                  };
+                  technique = lib.mkOption {
+                    type = lib.types.str;
+                    description = "Enabled usage technique with a non-empty command for this pool.";
+                  };
+                };
+              });
+              default = null;
+              description = "Canonical usage reader for this budget, resolved from the runtime's techniques.";
+            };
+            window = lib.mkOption {
+              type = lib.types.nullOr (lib.types.submodule {
+                options = {
+                  limit = lib.mkOption {
+                    type = lib.types.numbers.positive;
+                    description = "Configured monthly allowance, not an observed remaining balance.";
+                  };
+                  resetDay = lib.mkOption {
+                    type = lib.types.ints.between 1 28;
+                    description = "Day of the calendar month when the allowance resets, in UTC.";
+                  };
+                  unit = lib.mkOption {
+                    type = lib.types.nonEmptyStr;
+                    description = "Unit of the configured allowance.";
+                  };
+                };
+              });
+              default = null;
+              description = "Configured monthly window for an unmeasured budget; current use remains unknown. A usage reader takes precedence.";
+            };
+          };
+        });
+        default = {};
+        description = "Portable budget pools. Each pool needs a usage reader or a configured monthly window.";
       };
       reminder = lib.mkOption {
         type = aiTypes.optionalTextSource {
@@ -207,7 +262,7 @@ in {
       skills = {runtime, ...}: {
         delegate-routing = "${defaults.passthru.mkSkill {
           inherit runtime models techniques;
-          inherit (portable) families;
+          inherit (portable) families pools;
           inherit (resolved runtime) routing workflows;
           inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
         }}";
@@ -280,6 +335,43 @@ in {
           message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";
         }
       ]
+      ++ lib.concatLists (lib.mapAttrsToList (name: pool: let
+          path = "ai.programs.delegate-routing.pools.${lib.strings.escapeNixIdentifier name}";
+          reader = pool.usage;
+          node =
+            if reader == null
+            then null
+            else techniques.${reader.runtime}.${reader.technique} or null;
+        in [
+          {
+            assertion = reader != null || pool.window != null;
+            message = "${path}: set usage or window for this pool.";
+          }
+          {
+            assertion = reader == null || runtimeEnabled reader.runtime;
+            message = "${path}.usage.runtime: the reader runtime must be enabled through ai.<runtime>.enable.";
+          }
+          {
+            assertion = reader == null || (node != null && node.enable && node.kind == "usage" && node.command != null && lib.trim node.command != "");
+            message = "${path}.usage.technique: reference an enabled usage technique with a non-empty command.";
+          }
+        ])
+        portable.pools)
+      ++ lib.concatMap (family:
+        lib.mapAttrsToList (target: pool: let
+          path = "ai.programs.delegate-routing.families.${family.vendor}.${family.name}.pools.${target}";
+        in
+          if !(builtins.elem target supportedRuntimes)
+          then {
+            assertion = false;
+            message = "${path}: `${target}` is not a runtime; bind pools by target runtime name.";
+          }
+          else {
+            assertion = pool == null || builtins.hasAttr pool portable.pools;
+            message = "${path}: unknown pool `${toString pool}`; declare it under ai.programs.delegate-routing.pools.";
+          })
+        family.pools)
+      flattenedFamilies
       ++ lib.concatMap (runtime: let
         path = "ai.programs.delegate-routing.runtimes.${runtime}";
       in

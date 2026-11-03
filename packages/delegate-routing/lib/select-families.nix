@@ -51,4 +51,7 @@ in {
         })
       settings.techniques)
     config.ai.programs.delegate-routing.runtimes;
+
+  # Package families omit bindings; module families also admit explicit null.
+  poolFor = family: target: family.pools.${target} or null;
 }

@@ -1,8 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-03 — routing ships an always-on "Pool drain" entry
-> that drains usage pools in balance, and the usage helpers share one schema for
-> windows, balances and bonuses with UTC reset times.
+> **Last verified:** 2026-11-03 — routing ships an always-on "Pool drain" entry,
+> the usage helpers share one schema with UTC reset times, and portable pools
+> resolve usage readers and label family reaches on both backends.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -10,10 +10,10 @@
 > Earlier design:
 > `git show be765e0e:packages/claude-code/docs/heron-brook-clamp.md`.
 
-`ai.programs.delegate-routing` exposes portable `families`, `routing` and
-`workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
-Kimchi and Kiro. Both Home Manager and devenv import `modules/common.nix` and
-expose the same surface.
+`ai.programs.delegate-routing` exposes portable `families`, `pools`, `routing`
+and `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude,
+Codex, Kimchi and Kiro. Both Home Manager and devenv import `modules/common.nix`
+and expose the same surface.
 
 ## Named guidance
 
@@ -135,6 +135,36 @@ External and manual runtime sections include external, introspect and usage
 nodes. Kimchi has no usage node because no command reads usage without a model
 turn. Shared table rendering escapes cells once.
 
+### Pools
+
+A pool is a budget shared by model reaches. It is not a runtime.
+`pools.<name>.description` describes it in the skill's Pools table, before the
+family tiers. The drain rule reads this table to find the budgets and readers.
+
+Set `usage.runtime` and `usage.technique` to read a measured pool through an
+existing technique. The runtime must be enabled. The technique must be enabled,
+have kind `usage`, and have a non-empty command. The table resolves that command
+from the technique catalog. Reader metadata follows the reader's runtime even
+when it is not a delegate target.
+
+For a budget without a reader, set `window.limit`, `window.unit` and
+`window.resetDay`. This declares an allowance per calendar month in UTC, with a
+reset day from 1 through 28. Current use stays unknown. A pool needs `usage` or
+`window`; both default to null. If both are set, the measured reader takes
+precedence. The description defaults to an empty string.
+
+Bind a family through `families.<vendor>.<family>.pools.<runtime> = "<pool>"`.
+The key names the target harness that launches the model. Each native, external
+or manual reach shows its binding. Several families or harnesses can share one
+pool. A null binding means no pool is known for that reach. Unknown pool names
+fail evaluation. Two accounts for one family on one harness are out of scope;
+route and instance reaches are not represented.
+
+The pool registry and family bindings default to `{}`. A consumer with one
+vendor and one harness writes nothing extra. Without pools, the skill text stays
+byte-identical. The package does not infer budgets from vendors or add account
+names to its defaults.
+
 ## Delivery and previews
 
 When an enabled runtime reaches Kiro, as the session runtime or through
@@ -219,10 +249,10 @@ Codex's pair):
 }
 ```
 
-`mkSkill`, `render` and `skills` consume the same family, selector, technique
-and named-entry inputs. Generated skill trees use `lib.ai.generated` and the
-shared Markdown formatter; previews read the built files. Package discovery
-supplies content, both backend modules and checks.
+`mkSkill`, `render` and `skills` consume the same family, pool, selector,
+technique and named-entry inputs. Generated skill trees use `lib.ai.generated`
+and the shared Markdown formatter; previews read the built files. Package
+discovery supplies content, both backend modules and checks.
 
 Run these from the repository root to print skills without launching delegates:
 
