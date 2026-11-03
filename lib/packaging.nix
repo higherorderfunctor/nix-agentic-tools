@@ -27,23 +27,54 @@ rec {
     rev,
   }: "${upstream}+${builtins.substring 0 7 rev}";
 
-  # Resolve runtime or build requirements against mutable parent release pins.
+  # Resolve runtime or build requirements against mutable parent release pins,
+  # or the runtime requirements of a local `pyproject` at an unreleased rev.
   pythonDependencyVersionCmd = {
     dependency,
     parents,
     pkgs,
   }: let
     python = pkgs.python3.withPackages (ps: [ps.packaging]);
-    parentArgs = parent: [
-      (
-        if parent ? pyprojectUrl
-        then "--build-system"
-        else "--runtime"
-      )
-      (parent.pyprojectUrl or parent.project)
-      parent.sourcesFile
-    ];
+    parentArgs = parent:
+      if parent ? pyproject
+      then ["--pyproject" parent.pyproject]
+      else [
+        (
+          if parent ? pyprojectUrl
+          then "--build-system"
+          else "--runtime"
+        )
+        (parent.pyprojectUrl or parent.project)
+        parent.sourcesFile
+      ];
   in "${python}/bin/python3 -I ${./packaging/dependency-version.py} ${pkgs.lib.escapeShellArgs ([dependency] ++ builtins.concatMap parentArgs parents)}";
+
+  # Dependency pin writer for a rev-tracked Python package. Each
+  # `dependencies.<pname>` row is a `ghArchiveUpdateScript` sidecar
+  # ({repo, sourcesFile, tagPrefix?}) bumped to the newest stable release the
+  # package's own `pyproject` allows. update-pkg.sh runs it as
+  # `passthru.fixPythonDependencies` after the rev bump, so `pyproject` (a
+  # path inside `src`) is read at the new rev in the same update target.
+  mkPythonDependencyFix = {
+    dependencies,
+    pkgs,
+    pname,
+    pyproject,
+  }:
+    pkgs.writeShellScript "fix-python-dependencies-${pname}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${pkgs.lib.concatStringsSep "\n" (pkgs.lib.mapAttrsToList (dependency: row: "${ghArchiveUpdateScript (row
+        // {
+          inherit pkgs;
+          pname = dependency;
+          versionCheck.cmd = pythonDependencyVersionCmd {
+            inherit dependency pkgs;
+            parents = [{inherit pyproject;}];
+          };
+        })}")
+      dependencies)}
+    '';
 
   # Read version from Cargo.toml [package] section.
   readCargoVersion = path:

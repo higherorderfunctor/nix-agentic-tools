@@ -280,8 +280,10 @@ and versioning-tool source pins under one update target. `mcp-types` shares the
 SDK source and version, while `httpcore2` shares HTTPX2's; those exact-version
 pairs cannot drift independently. The private versioning tool also needs a newer
 Dunamai. The shared `pythonDependencyVersionCmd` selects the newest stable
-release satisfying runtime requirements from PyPI or build requirements from
-pinned `pyproject.toml` URLs. MCP updates run in parent-first order: SDK,
+release satisfying runtime requirements from PyPI, build requirements from
+pinned `pyproject.toml` URLs, or a local `pyproject.toml`'s
+`[project].dependencies`; `mkPythonDependencyFix` uses the last form for a
+rev-tracked package's own pins. MCP updates run in parent-first order: SDK,
 HTTPX2, uv-dynamic-versioning, Dunamai. PR CI detects the changed Semble
 extraction derivation after an MCP pin bump and regenerates its SDK-generated
 schemas. These scoped dependencies leave nixpkgs' MCP 1.x consumers intact.

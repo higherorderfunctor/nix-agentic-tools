@@ -361,11 +361,11 @@ set +e
 
   cd "$wt"
 
-  # Rev-tracked packages can carry source-derived toolchain literals. Refresh
-  # those opt-in values before nix-update evaluates dependencies, even when
-  # Phase 0 found no new rev. Release scripts own this ordering themselves.
+  # Rev-tracked packages can carry source-derived toolchain literals and
+  # Python dependency pins. Refresh those opt-in values before nix-update
+  # evaluates dependencies, even when Phase 0 found no new rev. Release scripts own this ordering themselves.
   if [ -n "$git_url" ] && [[ " $extra_flags " != *" --use-update-script "* ]]; then
-    for refresh in 'fixGoFloor Go-floor' 'fixRustToolchain Rust-toolchain'; do
+    for refresh in 'fixGoFloor Go-floor' 'fixPythonDependencies Python-dependency' 'fixRustToolchain Rust-toolchain'; do
       read -r fixer_attr label <<<"$refresh"
       if ! refresh_package_source_version "$name" "$fixer_attr" "$label"; then
         log_failure "$label refresh failed"

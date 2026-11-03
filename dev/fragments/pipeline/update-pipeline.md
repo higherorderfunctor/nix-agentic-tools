@@ -71,13 +71,15 @@ Targets fall into three categories:
   verification.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
-  Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
-  nix-update, including on an unchanged-rev sweep. The Beads binary target is a
-  grouped package: its `passthru.updateScript` runs independent Beads and Dolt
-  release updaters in sequence, so either upstream can move while the target
-  still produces one branch and one PR. The paired Dolt remains a nested package
-  dependency, not a second registry row. There is no base-checkout format/build
-  finalizer because it cannot observe changes committed only on target branches.
+  Rev-tracked packages exposing `passthru.fixGoFloor`,
+  `passthru.fixPythonDependencies` or `passthru.fixRustToolchain` run those
+  fixers before nix-update, including on an unchanged-rev sweep. The Beads
+  binary target is a grouped package: its `passthru.updateScript` runs
+  independent Beads and Dolt release updaters in sequence, so either upstream
+  can move while the target still produces one branch and one PR. The paired
+  Dolt remains a nested package dependency, not a second registry row. There is
+  no base-checkout format/build finalizer because it cannot observe changes
+  committed only on target branches.
 
   Semble's grouped script tracks the CLI, model2vec, vicinity and the grammar
   wheels. Human-reviewed template hashes stay unchanged: a changed template
@@ -164,7 +166,11 @@ receives the repo URL as a trailing argument:
 5. `git commit` creates a commit with the rev + src hash change.
 6. A package exposing `passthru.fixGoFloor` derives its recipe literal from the
    freshly pinned source and amends it into that commit. This step also runs
-   when the rev is unchanged, repairing a stale floor on the next sweep.
+   when the rev is unchanged, repairing a stale floor on the next sweep. A
+   package exposing `passthru.fixPythonDependencies` (`mkPythonDependencyFix`)
+   likewise bumps its Python dependency sidecars to the newest stable release
+   its `pyproject.toml` at the pinned rev allows, so the pin moves in the same
+   target rather than on a separate branch.
 7. `nix-update --version skip` runs to update dependency hashes (cargo, pnpm,
    vendor, etc.). If changes occur, they amend into the existing commit.
 

@@ -22,6 +22,7 @@ def main():
     parser.add_argument("dependency")
     parser.add_argument("--runtime", nargs=2, action="append", default=[], metavar=("PROJECT", "PIN"))
     parser.add_argument("--build-system", nargs=2, action="append", default=[], metavar=("URL", "PIN"))
+    parser.add_argument("--pyproject", action="append", default=[], metavar="PATH")
     args = parser.parse_args()
     parents = []
     for project, pin in args.runtime:
@@ -32,6 +33,8 @@ def main():
         with urlopen(url.format(version=version)) as response:
             metadata = tomllib.loads(response.read().decode())
         parents.append((url.format(version=version), metadata["build-system"]["requires"]))
+    for path in args.pyproject:
+        parents.append((path, tomllib.loads(Path(path).read_text())["project"]["dependencies"]))
     if not parents:
         parser.error("at least one pinned parent is required")
 
