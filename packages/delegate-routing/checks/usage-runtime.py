@@ -425,7 +425,7 @@ for line in sys.stdin:
             ({}, base[:4] + base[6:], "requires --reset-day"),
             ({}, base[:6] + base[8:], "requires --pool"),
             ({}, base[:8], "requires --account-name"),
-            ({}, self.proxy_command("--provider", "claude", "--without a unit"), "unknown argument"),
+            ({}, self.proxy_command("--provider", "claude", "--bogus-flag"), "unknown argument"),
         ]:
             with self.subTest(expected=expected, args=args):
                 result = self.run_proxy(*args, **env)
