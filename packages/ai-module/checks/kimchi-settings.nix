@@ -62,7 +62,7 @@
                 };
                 native = {
                   harnessSettings = lib.optionalAttrs declared {hideThinkingBlock = true;};
-                  settings = lib.optionalAttrs isHm {region = "us";} // lib.optionalAttrs declared {redaction.enabled = false;};
+                  settings = lib.optionalAttrs isHm {region = "us";} // lib.optionalAttrs declared {tui.wheelScrollLines = 3;};
                 };
                 permissions = lib.optionalAttrs declared {defaultMode = "plan";};
                 projectTrust = lib.optionalAttrs isHm trust;
