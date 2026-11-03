@@ -40,7 +40,7 @@
       };
     };
   };
-  hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.replaceStrings ["\n" "`"] [" " ""] text);
+  hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.toLower (lib.replaceStrings ["\n" "`"] [" " ""] text));
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
   optionTree = result: path: lib.getAttrFromPath path result.options;
   checkBackend = {
