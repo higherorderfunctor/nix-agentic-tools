@@ -15,12 +15,10 @@
   # fixPythonDependencies passthru moves this pin with each rev bump to the
   # newest SDK 1 release the new pyproject allows. The pin replaces `mcp_1`
   # because nixpkgs' recipe binds `mcp = final.mcp_1` in its own inner
-  # scope, which would shadow an `mcp` set here; `mcp` follows it for the
-  # case where nixpkgs drops that binding.
+  # scope, which would shadow an `mcp` set here.
   mcpSourcesFile = ../../../../mcp-sources.json;
   mcpSources = builtins.fromJSON (builtins.readFile mcpSourcesFile);
-  python3Packages = pkgs.python3Packages.overrideScope (final: prev: {
-    mcp = final.mcp_1;
+  python3Packages = pkgs.python3Packages.overrideScope (_: prev: {
     mcp_1 = prev.mcp_1.overridePythonAttrs {
       inherit (mcpSources) version;
       src = fetchFromGitHub {
