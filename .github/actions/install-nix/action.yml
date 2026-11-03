@@ -12,6 +12,12 @@ description: >-
     Cachix error (HTTP 416/206 after Nix's own retries). A real build failure
     still fails; only a failed download becomes a slower local build.
 
+  ONE RETRY: the installer downloads Nix itself from releases.nixos.org, before
+  `fallback` can apply, and that download has failed with a TLS EOF (run
+  41591038832). A failed first attempt gets exactly one more; a second failure
+  fails the job. If the first attempt got far enough to leave Nix installed, the
+  retry exits 0 without writing config and the assertion below fails.
+
   WHY THE ASSERTION: cachix/install-nix-action's install-nix.sh exits 0 WITHOUT
   writing any config when nix is already on PATH ("Aborting: Nix is already
   installed"). A runner image that ships nix would therefore turn the install
@@ -46,12 +52,29 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+    # Built once so both installer attempts get the same config; action
+    # metadata rejects YAML anchors.
+    - id: config
+      shell: bash
+      env:
+        EXTRA: ${{ inputs.extra-config }}
+      run: |
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        {
+          echo 'text<<NIX_CONF_EOF'
+          printf '%s\n' 'accept-flake-config = true' 'fallback = true' "$EXTRA"
+          echo 'NIX_CONF_EOF'
+        } >>"$GITHUB_OUTPUT"
+    - id: install
+      continue-on-error: true
+      uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
       with:
-        extra_nix_config: |
-          accept-flake-config = true
-          fallback = true
-          ${{ inputs.extra-config }}
+        extra_nix_config: ${{ steps.config.outputs.text }}
+    - if: steps.install.outcome == 'failure'
+      uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      with:
+        extra_nix_config: ${{ steps.config.outputs.text }}
     - shell: bash
       env:
         REQUIRE: |
