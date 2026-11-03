@@ -70,8 +70,6 @@ ANALYTICS = {"generated_at_ms": 1,
              "model_stats": [{"model": "claude-fable-5-1", "calls": 27, "total_tokens": 2657502,
                               "cost": 5.0}],
              "summary": {"total_calls": 27, "total_cost": 5.0}}
-MODEL_PRICES = {"prices": {"claude-fable-5-1": {"prompt": 10, "completion": 50, "cache": 0.25,
-                                                "cacheRead": 0.25, "cacheCreation": 12.5}}}
 
 class UsageTests(unittest.TestCase):
     def setUp(self):
@@ -103,7 +101,6 @@ class UsageTests(unittest.TestCase):
         self.status_body = copy.deepcopy(MANAGER_STATUS)
         self.analytics = copy.deepcopy(ANALYTICS)
         self.analytics_raw = None
-        self.model_prices = copy.deepcopy(MODEL_PRICES)
         owner = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -124,8 +121,6 @@ class UsageTests(unittest.TestCase):
                     response = owner.status_body
                 elif self.path == "/v0/management/monitoring/analytics":
                     response = owner.analytics
-                elif self.path == "/v0/management/model-prices":
-                    response = owner.model_prices
                 elif self.path == "/v0/management/auth-files":
                     response = {"files": owner.files}
                 elif self.path.startswith("/v8/management/config/api-keys/"):
@@ -299,11 +294,10 @@ for line in sys.stdin:
         self.assertEqual([(method, path) for method, path, headers, body in self.requests],
                          [("GET", "/status"),
                           ("GET", "/v8/management/config/api-keys/claude"),
-                          ("POST", "/v0/management/monitoring/analytics"),
-                          ("GET", "/v0/management/model-prices")])
+                          ("POST", "/v0/management/monitoring/analytics")])
         for method, path, headers, body in self.requests:
             self.assertEqual(headers["Authorization"], f"Bearer {SECRET}")
-        analytics_request = self.requests[-2][3]
+        analytics_request = self.requests[-1][3]
         self.assertEqual(analytics_request["from_ms"], 1793491200000)
         self.assertEqual(analytics_request["to_ms"], 1793707200000)
         self.assertEqual(analytics_request["time_zone"], "UTC")
@@ -341,6 +335,25 @@ for line in sys.stdin:
                 window = json.loads(self.run_proxy(*self.proxy_command()).stdout)["windows"]["monthly"]
                 self.assertEqual(window["usedPercent"], used)
                 self.assertEqual(window["remainingPercent"], remaining)
+        # Exponent notation is a fine finite limit.
+        self.analytics["summary"]["total_cost"] = 5.0
+        window = json.loads(self.run_proxy(*self.proxy_command(limit="1e2")).stdout)["windows"]["monthly"]
+        self.assertEqual(window["usedPercent"], 5)
+
+    def test_proxy_used_percent_must_be_finite(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        # cost / limit * 100 keeps representable magnitudes exact instead of
+        # overflowing the scaled product first.
+        self.analytics["summary"]["total_cost"] = 1e307
+        window = json.loads(self.run_proxy(*self.proxy_command(limit="1e10")).stdout)["windows"]["monthly"]
+        self.assertEqual(window["usedPercent"], 1e299)
+        self.assertEqual(window["remainingPercent"], 0)
+        # A percent no double can hold fails rather than printing a clamped one.
+        self.analytics["summary"]["total_cost"] = 1e308
+        result = self.run_proxy(*self.proxy_command(limit="1e-10"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, "usage: proxy used percent is not finite\n")
+        self.assertEqual(result.stdout, "")
 
     def test_proxy_credential_counts(self):
         other = {"base-url": "https://other.example.test", "keys": [{"auth_index": "idx-two"}]}
@@ -374,7 +387,7 @@ for line in sys.stdin:
         self.assertEqual(value["account"]["auth_index"], "idx-two")
         self.assertEqual(analytics_filter(), ["idx-two"])
         self.assertEqual([path for method, path, headers, body in self.requests],
-                         ["/status", "/v0/management/monitoring/analytics", "/v0/management/model-prices"])
+                         ["/status", "/v0/management/monitoring/analytics"])
         # Several pins cover a rotation; no single index can name the account.
         result = self.run_proxy(*self.proxy_command("--auth-index", "idx-old", "--auth-index", "idx-two"))
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -395,27 +408,68 @@ for line in sys.stdin:
 
     def test_proxy_unpriced_models_fail(self):
         self.configs["claude"] = [PROXY_GROUP]
-        self.analytics["model_stats"].append({"model": "claude-mystery-5", "calls": 3,
-                                               "total_tokens": 10, "cost": 0})
-        # Manager+ prices a model with no price entry at zero; that must not
-        # read as accounted spend. The count is reported, never model names.
-        for prices, count in [(MODEL_PRICES["prices"], 1), ({}, 2)]:
+        # Manager+ prices a stat through its billing or pricing model, so a
+        # display alias with a positive cost is priced with no key of its own:
+        # coverage is judged from the analytics rows alone, never a price book.
+        self.analytics["model_stats"].append({"model": "claude-fable-5-1-alias", "calls": 9,
+                                              "total_tokens": 100, "cost": 1.5})
+        result = self.run_proxy(*self.proxy_command())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # A row with calls or tokens above zero and cost exactly zero reads as
+        # unpriced; the count is reported, never model names.
+        for stats, count in [
+            ([{"model": "claude-mystery-5", "calls": 3, "total_tokens": 10, "cost": 0}], 1),
+            ([{"model": "claude-mystery-5", "calls": 0, "total_tokens": 10, "cost": 0}], 1),
+            ([{"model": "claude-mystery-5", "calls": 3, "total_tokens": 0, "cost": 0}], 1),
+            ([{"model": "a", "calls": 3, "total_tokens": 10, "cost": 0},
+              {"model": "b", "calls": 4, "total_tokens": 20, "cost": 0}], 2),
+            ([{"model": "claude-no-traffic", "calls": 0, "total_tokens": 0, "cost": 0}], 0),
+        ]:
             with self.subTest(count=count):
-                self.model_prices = {"prices": prices}
+                self.analytics = copy.deepcopy(ANALYTICS)
+                self.analytics["model_stats"].extend(stats)
+                result = self.run_proxy(*self.proxy_command())
+                if count:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stderr, f"usage: proxy analytics contain {count} unpriced models\n")
+                    self.assertNotIn("claude-mystery-5", result.stderr)
+                    self.assertEqual(result.stdout, "")
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+        # The rows that judge coverage must themselves be well typed.
+        for field, value in [("calls", "many"), ("calls", -3), ("total_tokens", "lots"),
+                             ("total_tokens", -1), ("cost", "free"), ("cost", -1)]:
+            with self.subTest(field=field, value=value):
+                self.analytics = copy.deepcopy(ANALYTICS)
+                self.analytics["model_stats"][0][field] = value
                 result = self.run_proxy(*self.proxy_command())
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn(f"analytics contain {count} unpriced models", result.stderr)
-                self.assertNotIn("claude-mystery-5", result.stderr)
-                self.assertNotIn("claude-fable-5-1", result.stderr)
+                self.assertIn("invalid analytics response", result.stderr)
                 self.assertEqual(result.stdout, "")
-        # The price book itself must be the Manager+ shape.
-        for bad in [{"prices": ["claude-fable-5-1"]}, []]:
-            with self.subTest(bad=bad):
-                self.model_prices = bad
-                result = self.run_proxy(*self.proxy_command())
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("invalid model prices response", result.stderr)
-                self.assertEqual(result.stdout, "")
+
+    def test_proxy_model_stats_required_with_calls(self):
+        self.configs["claude"] = [PROXY_GROUP]
+        # model_stats may be empty only when total_calls is zero: without rows,
+        # coverage cannot be judged.
+        for stats in ["absent", None, []]:
+            for calls, ok in [(27, False), (0, True)]:
+                with self.subTest(stats=stats, calls=calls):
+                    self.analytics = copy.deepcopy(ANALYTICS)
+                    self.analytics["summary"]["total_calls"] = calls
+                    if calls == 0:
+                        self.analytics["summary"]["total_cost"] = 0
+                    if stats == "absent":
+                        self.analytics.pop("model_stats")
+                    else:
+                        self.analytics["model_stats"] = stats
+                    result = self.run_proxy(*self.proxy_command())
+                    if ok:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(json.loads(result.stdout)["windows"]["monthly"]["usedPercent"], 0)
+                    else:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertEqual(result.stderr, "usage: proxy invalid analytics response\n")
+                        self.assertEqual(result.stdout, "")
 
     def test_proxy_cost_and_coverage_fail_closed(self):
         self.configs["claude"] = [PROXY_GROUP]
@@ -514,9 +568,14 @@ for line in sys.stdin:
         for env, args, expected in [
             ({"MANAGER_URL": ""}, self.proxy_command(), "requires MANAGER_URL"),
             ({"MANAGER_KEY_FILE": ""}, self.proxy_command(), "requires MANAGER_URL"),
-            ({"MANAGER_KEY_FILE": str(self.home / "absent")}, self.proxy_command(), "cannot read management key file"),
-            ({}, self.proxy_command(limit="0"), "positive number"),
-            ({}, self.proxy_command(limit="zero"), "positive number"),
+            ({}, self.proxy_command(limit="0"), "finite positive number"),
+            ({}, self.proxy_command(limit="zero"), "finite positive number"),
+            # Only finite values are limits, whatever jq's tonumber tolerates.
+            ({}, self.proxy_command(limit="Infinity"), "finite positive number"),
+            ({}, self.proxy_command(limit="inf"), "finite positive number"),
+            ({}, self.proxy_command(limit="NaN"), "finite positive number"),
+            ({}, self.proxy_command(limit="nan"), "finite positive number"),
+            ({}, self.proxy_command(limit="1e999"), "finite positive number"),
             ({}, self.proxy_command(day="0"), "from 1 through 28"),
             ({}, self.proxy_command(day="29"), "from 1 through 28"),
             ({}, self.proxy_command(now="yesterday"), "epoch milliseconds"),
@@ -534,6 +593,12 @@ for line in sys.stdin:
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stderr)
                 self.assertEqual(result.stdout, "")
+        # A missing key file prints only the fixed message, never a shell
+        # redirection diagnostic before it.
+        result = self.run_proxy(*self.proxy_command(), MANAGER_KEY_FILE=str(self.home / "absent"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, "usage: proxy cannot read management key file\n")
+        self.assertEqual(result.stdout, "")
         # Argument and environment errors fail before any request leaves the process.
         self.assertEqual(self.requests, [])
         # The zone name itself is validated by the window arithmetic.

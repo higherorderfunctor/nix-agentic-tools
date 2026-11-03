@@ -254,18 +254,20 @@ technique with this command under
 
 The command takes `--provider` and `--base-url` for credential discovery through
 Manager+ (zero or several matches are errors naming the count), `--auth-index`,
-repeatable, to pin indices through key rotation, `--limit` (a positive USD
-amount; Manager+ prices in USD only), `--reset-day` (1 through 28) and
+repeatable, to pin indices through key rotation, `--limit` (a finite positive
+USD amount; Manager+ prices in USD only), `--reset-day` (1 through 28) and
 `--time-zone` (an IANA name, UTC by default) for the calendar window, `--pool`
 and `--account-name` for the output, and `--now-ms` to fix the clock for replay
 and tests. `MANAGER_URL` and `MANAGER_KEY_FILE` carry the Manager+ endpoint and
 its admin key file; the key is read in process and sent through curl `--config`
 on stdin, never through argv. The reader fails when the collector is not
 running, when discovery matches zero or several credentials, when the analytics
-response is invalid, when its coverage reports deleted raw events or a degraded
-summary, or when any model in the analytics lacks a Manager+ price entry
-(Manager+ prices unknown models at zero): hourly pricing roll-ups carry no
-credential key, so a lowered total must not read as spare budget.
+response is invalid (`model_stats` may be empty only when the summary reports
+zero calls), when its coverage reports deleted raw events or a degraded summary,
+or when an analytics model row reports calls or tokens with zero cost: Manager+
+prices each row through its billing or pricing model and prices a model it has
+no entry for at zero, and coverage is judged from those analytics rows, not a
+price book, so a lowered total must not read as spare budget.
 
 A consumer example with placeholder values:
 

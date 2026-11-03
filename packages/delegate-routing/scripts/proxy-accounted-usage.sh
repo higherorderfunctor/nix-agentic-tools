@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# cspell:ignore isinfinite isnan
 # Reads a monthly budget that CPA Manager+ accounts for one upstream
 # credential; usage-cpa.sh is prepended by mkUsageScript and supplies
 # usage_cpa_error. Every response body stays in memory: failures print fixed
@@ -9,14 +10,14 @@
 # Arguments: --provider and --base-url select the credential through Manager+
 # credential discovery; --auth-index (repeatable) pins indices instead, which
 # survives key rotation and is trimmed of surrounding whitespace; --limit
-# (a positive USD amount; Manager+ prices in USD only), --reset-day (1..28)
+# (a finite positive USD amount; Manager+ prices in USD only), --reset-day (1..28)
 # and --time-zone (IANA name, default UTC) describe the calendar window;
 # --pool and --account-name label the output; --now-ms fixes the clock for
 # replay and tests. Read by checks/usage-runtime.py and the consumer example
 # in docs/development.md.
 proxy_usage_request() {
   local method=$1 path=$2 payload=${3-} empty_not_found=${4-} response status
-  if ! proxy_usage_key=$(<"$proxy_usage_key_file"); then
+  if [[ ! -r $proxy_usage_key_file ]] || ! proxy_usage_key=$(<"$proxy_usage_key_file") 2>/dev/null; then
     usage_cpa_error 'cannot read management key file'
   fi
   if [[ -z $proxy_usage_key || $proxy_usage_key == *$'\n'* || $proxy_usage_key == *$'\r'* ]]; then
@@ -82,8 +83,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -n $proxy_usage_limit ]] || usage_cpa_error 'requires --limit'
-jq -en --arg limit "$proxy_usage_limit" '$limit | tonumber | select(. > 0)' >/dev/null 2>&1 ||
-  usage_cpa_error '--limit must be a positive number'
+jq -en --arg limit "$proxy_usage_limit" \
+  '$limit | tonumber | select((. > 0) and ((isinfinite or isnan) | not))' >/dev/null 2>&1 ||
+  usage_cpa_error '--limit must be a finite positive number'
 [[ -n $proxy_usage_reset_day ]] || usage_cpa_error 'requires --reset-day'
 [[ $proxy_usage_reset_day =~ ^([1-9]|1[0-9]|2[0-8])$ ]] ||
   usage_cpa_error '--reset-day must be an integer from 1 through 28'
@@ -169,14 +171,25 @@ proxy_usage_current=$(jq -r '.now_ms' <<<"$proxy_usage_window")
 if ((proxy_usage_from < proxy_usage_current)); then
   proxy_usage_analytics=$(proxy_usage_request POST /v0/management/monitoring/analytics "$proxy_usage_payload") || exit 1
   # Exactly one JSON document with a finite non-negative cost and well-typed
-  # coverage reaches the projection; jq diagnostics never surface.
+  # coverage reaches the projection; jq diagnostics never surface. model_stats
+  # may be empty only when the summary reports no calls: without rows, coverage
+  # cannot be judged.
   jq -se 'length == 1 and (.[0] | type == "object"
            and (.summary | type == "object")
            and (.summary.total_cost | type == "number")
            and (.summary.total_cost >= 0)
            and (.summary.total_cost <= 1.7976931348623157e+308)
-           and (.model_stats | (type == "array" or type == "null"))
-           and (all(.model_stats[]?; (.model | type) == "string"))
+           and (.summary.total_calls | type == "number")
+           and (.summary.total_calls >= 0)
+           and (if .summary.total_calls > 0
+                then (.model_stats | type == "array" and length > 0)
+                else (.model_stats | (type == "array" or type == "null")) end)
+           and (all(.model_stats[]?;
+                    (.model | type) == "string"
+                    and (.calls | type) == "number" and .calls >= 0
+                    and (.total_tokens | type) == "number" and .total_tokens >= 0
+                    and (.cost | type) == "number" and .cost >= 0
+                    and (.cost <= 1.7976931348623157e+308)))
            and (.coverage | (type == "object" or type == "null"))
            and (.coverage.raw_deleted_event_count | (type == "number" or type == "null"))
            and ((.coverage.raw_deleted_event_count // 0) >= 0)
@@ -191,16 +204,14 @@ if ((proxy_usage_from < proxy_usage_current)); then
     <<<"$proxy_usage_analytics" >/dev/null 2>&1; then
     usage_cpa_error 'cost coverage incomplete'
   fi
-  # Manager+ prices a model it has no entry for at zero, which must not read as
-  # accounted spend; the count of unpriced models is reported, never names.
-  proxy_usage_prices=$(proxy_usage_request GET /v0/management/model-prices) || exit 1
-  jq -se 'length == 1 and (.[0] | type == "object"
-           and (.prices | (type == "object" or type == "null")))' \
-    <<<"$proxy_usage_prices" >/dev/null 2>&1 || usage_cpa_error 'invalid model prices response'
-  proxy_usage_unpriced=$(jq -n --argjson analytics "$proxy_usage_analytics" --argjson prices "$proxy_usage_prices" '
-    ($analytics.model_stats // [] | map(.model) | unique) as $models
-    | [$models[] | select(. as $m | ($prices.prices // {} | has($m)) | not)] | length
-  ' 2>/dev/null) || usage_cpa_error 'invalid model prices response'
+  # Manager+ prices a stat through its billing or pricing model, so coverage is
+  # judged from the analytics rows themselves, not a price book: a row with
+  # calls or tokens above zero costs zero exactly when Manager+ has no price
+  # for it, which must not read as accounted spend. The count of unpriced
+  # models is reported, never names.
+  proxy_usage_unpriced=$(jq -r '[.model_stats[]?
+                                 | select((.calls > 0 or .total_tokens > 0) and .cost == 0)] | length' \
+    <<<"$proxy_usage_analytics" 2>/dev/null) || usage_cpa_error 'invalid analytics response'
   [[ $proxy_usage_unpriced == 0 ]] ||
     usage_cpa_error "analytics contain $proxy_usage_unpriced unpriced models"
 else
@@ -214,12 +225,16 @@ if [[ ${#proxy_usage_indices[@]} -eq 1 ]]; then
 else
   proxy_usage_auth_index=null
 fi
+# Divide before scaling so only a truly unrepresentable percent overflows, and
+# fail on that instead of printing a clamped double.
+proxy_usage_used=$(jq -en --argjson analytics "$proxy_usage_analytics" --argjson limit "$proxy_usage_limit" \
+  '$analytics.summary.total_cost / $limit * 100 | select((isinfinite or isnan) | not)' 2>/dev/null) ||
+  usage_cpa_error 'used percent is not finite'
 jq -cen --arg pool "$proxy_usage_pool" --arg name "$proxy_usage_account_name" \
   --arg resets "$(jq -r '.resets_at' <<<"$proxy_usage_window")" \
   --argjson seconds "$(jq -r '.window_seconds' <<<"$proxy_usage_window")" \
   --argjson auth_index "$proxy_usage_auth_index" \
-  --argjson analytics "$proxy_usage_analytics" --argjson limit "$proxy_usage_limit" '
-  (100 * $analytics.summary.total_cost / $limit) as $used |
+  --argjson used "$proxy_usage_used" '
   (100 - $used) as $left |
   {pool: $pool,
    account: {auth_index: $auth_index, name: $name, plan: null},
