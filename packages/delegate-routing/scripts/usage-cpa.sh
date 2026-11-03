@@ -1,7 +1,90 @@
 # shellcheck shell=bash
+# cspell:ignore todateiso fromdateiso
 readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
 readonly delegate_usage_claude_beta='oauth-2025-04-20'
-readonly delegate_usage_claude_projection='{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
+# All usage techniques and the runtime fixtures read this common schema.
+usage_project() {
+  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" '
+    def utc:
+      if type == "number" then floor | todateiso8601 else
+        (capture("^(?<date>.{19})(?:\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") // error("usage timestamp"))
+        | (.date + "Z" | fromdateiso8601) -
+          (if .zone == "Z" then 0 else
+            ((.zone[1:3] | tonumber) * 3600 + (.zone[4:6] | tonumber) * 60)
+            * (if .zone[0:1] == "+" then 1 else -1 end) end)
+        | todateiso8601
+      end;
+    def window($seconds; $used; $reset; $status):
+      if ($used | type) != "number" then error("usage percent") else
+        {usedPercent: $used, remainingPercent: (100 - $used),
+         resetsAt: ($reset | utc), status: $status, windowSeconds: $seconds} end;
+    def duration:
+      if . == 604800 then "7d" elif . == 18000 then "5h" else "\(.)s" end;
+    def named_window($seconds; $scope; $used; $reset; $status):
+      {key: (($seconds | duration) + (if $scope == null then "" else ":" + $scope end)),
+       value: window($seconds; $used; $reset; $status)};
+    def bonuses($count):
+      if .credits != null then
+        [.credits[] | {kind: "rate_limit_reset", count: 1,
+                        expiresAt: ((.expires_at // .expiresAt) | if . == null then null else utc end)}]
+      elif ($count // 0) > 0 then
+        [{kind: "rate_limit_reset", count: $count, expiresAt: null}]
+      else [] end;
+    if type != "object" then error("usage body") else . end
+    | {pool: $vendor,
+       account: {auth_index: ($account.auth_index // null),
+                 name: ($account.email // $account.name // $account.auth_index // null),
+                 plan: null}, windows: {}, balances: [], bonuses: []} as $base
+    | if $vendor == "claude" then
+        if has("five_hour") | not then error("claude usage") else . end
+        | . as $usage
+        | $base + {
+            windows: ([
+              {seconds: 18000, scope: null, value: .five_hour},
+              {seconds: 604800, scope: null, value: .seven_day},
+              {seconds: 604800, scope: "opus", value: .seven_day_opus},
+              {seconds: 604800, scope: "sonnet", value: .seven_day_sonnet}
+              | select(.value != null)
+              | named_window(.seconds; .scope; .value.utilization; .value.resets_at;
+                  if .seconds == 604800 and .scope == null then
+                    ([$usage.limits[]? | select(.kind == "weekly_all") | .severity][0] // null) else null end)
+            ] + [
+              .limits[]? | select(.kind == "weekly_scoped")
+              | named_window(604800; (.scope.model.display_name | ascii_downcase);
+                  .percent; .resets_at; if .is_active then "active" else "inactive" end)
+            ] | from_entries),
+            balances: [ .spend | select(. != null)
+              | {kind: "extra_usage", remaining: ((.limit.amount_minor - .used.amount_minor) / pow(10; .limit.exponent)),
+                 unit: .limit.currency, expiresAt: null}],
+            bonuses: [.promo_credits | select(type == "object") | select(.count | type == "number")
+              | {kind: "promo_credits", count: .count, expiresAt: null}]
+          }
+      elif $vendor == "codex" then
+        (.rate_limit // .rateLimits // error("codex usage")) as $limits
+        | ($limits.credits // .credits) as $credits
+        | (.rate_limit_reset_credits // .rateLimitResetCredits) as $reset
+        | $base + {
+            account: ($base.account + {plan: (.plan_type // null)}),
+            windows: ([($limits.primary_window // $limits.primary), ($limits.secondary_window // $limits.secondary)]
+              | map(select(. != null)
+                  | named_window((.limit_window_seconds // (.windowDurationMins * 60)); null;
+                      (.used_percent // .usedPercent); (.reset_at // .resetsAt); null))
+              | if . == [] then error("codex windows") else from_entries end),
+            balances: [$credits | select(.has_credits // .hasCredits // false)
+              | {kind: "credits", remaining: (.balance | tonumber), unit: "credits", expiresAt: null}],
+            bonuses: (try (($resets // $reset) | bonuses($reset.available_count // $reset.availableCount))
+              catch (null | bonuses($reset.available_count // $reset.availableCount)))
+          }
+      else
+        if .code != 200 then error("z.ai envelope") else . end
+        | [.data.limits[]? | select(.unit == 3 or .unit == 6)
+          | named_window(((if .unit == 3 then 3600 else 604800 end) * .number); null;
+              .percentage; (.nextResetTime / 1000); null)] as $windows
+        | if $windows == [] then error("z.ai windows") else
+            $base + {account: ($base.account + {plan: .data.level}), windows: ($windows | from_entries)} end
+      end
+  ' 2>/dev/null
+}
 
 usage_cpa_error() {
   printf '%s\n' "usage: proxy $1" >&2
@@ -42,7 +125,7 @@ EOF_CPA
 
 # Shared by the packaged usage helpers; returns 1 only for direct-login fallback.
 usage_cpa() {
-  local vendor=$1 files accounts account request envelope vendor_status body result
+  local vendor=$1 files accounts account request envelope vendor_status body result resets reset_request
   local delegate_usage_cpa_url delegate_usage_cpa_key_file url_variable key_variable
   local route=${2:-$vendor}
   url_variable="DELEGATE_USAGE_CPA_${route^^}_URL"
@@ -117,40 +200,20 @@ except (AttributeError, TypeError, ValueError):
       usage_cpa_error "vendor HTTP $vendor_status"
     fi
     body=$(jq -r '.body' <<<"$envelope")
-    if [[ $vendor == zai ]]; then
-      usage_zai <<<"$body" || usage_cpa_error 'invalid z.ai usage response'
-      continue
+    resets=null
+    if [[ $vendor == codex ]]; then
+      reset_request=$(jq -c '.url = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"' <<<"$request")
+      # Expiry details are optional; the usage response still supplies the count.
+      if envelope=$(usage_cpa_request POST api-call "$reset_request" 2>/dev/null); then
+        resets=$(jq -ce '
+          select(.status_code >= 200 and .status_code < 300) | .body | fromjson
+          | select(.credits | type == "array")
+        ' <<<"$envelope" 2>/dev/null) || resets=null
+      fi
     fi
-    if ! result=$(jq -ce --arg vendor "$vendor" --argjson account "$account" '
-      if type != "object" then error("body") else
-      (if $vendor == "claude" then
-        if (has("five_hour") | not) or (.five_hour != null and (.five_hour | type != "object")) then error("usage") else
-        '"$delegate_usage_claude_projection"' end
-      else .rate_limit.primary_window |
-        if (.used_percent | type != "number") or (.reset_at | type != "number")
-        then error("usage") else
-        {usedPercent: .used_percent, remainingPercent: (100 - .used_percent),
-         resetsAt: (.reset_at | strflocaltime("%Y-%m-%d %H:%M:%S %Z"))} end
-      end) + {account: {auth_index: $account.auth_index,
-                        name: ($account.email // $account.name // $account.auth_index)}} end
-    ' <<<"$body" 2>/dev/null); then
+    if ! result=$(usage_project "$vendor" "$account" "$resets" <<<"$body"); then
       usage_cpa_error 'invalid vendor usage response'
     fi
     jq . <<<"$result"
   done < <(jq -c '.[]' <<<"$accounts")
-}
-
-usage_zai() {
-  jq -e '
-  def window: if .unit == 3 then "\(.number)h" else "\(.number)w" end;
-  if .code != 200 then error("invalid z.ai envelope code") else . end
-  | [.data.limits[]? | select(.unit == 3 or .unit == 6)
-      | {key: window,
-         value: {usedPercent: .percentage,
-                 remainingPercent: (100 - .percentage),
-                 resetsAt: (.nextResetTime / 1000 | floor | strflocaltime("%Y-%m-%d %H:%M:%S %Z"))}}] as $windows
-  | if $windows == [] then error("z.ai response has no usage windows") else
-      {level: .data.level, windows: ($windows | from_entries)}
-    end
-' 2>/dev/null
 }

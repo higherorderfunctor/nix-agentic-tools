@@ -1,8 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-02 — routing ships an always-on "Pool drain" entry
-> that drains usage pools in balance; the stub and the reminder load the skill
-> in the turn that delegates.
+> **Last verified:** 2026-11-03 — routing ships an always-on "Pool drain" entry
+> that drains usage pools in balance, and the usage helpers share one schema for
+> windows, balances and bonuses with UTC reset times.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -187,6 +187,15 @@ content package injects packaged usage helper paths into technique defaults. The
 helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
 direct read. `zai-usage claude|codex` selects the route whose GLM pool it reads;
 consumers attach it to a runtime through that runtime's usage techniques.
+
+Usage helpers print one JSON document per account with `pool`, `account`
+(`auth_index`, `name`, `plan`), `windows`, `balances` and `bonuses`. Each window
+has `usedPercent`, `remainingPercent`, a UTC RFC 3339 `resetsAt`, `status` and
+`windowSeconds`; names derive from the duration (`5h`, `7d`, otherwise
+`<seconds>s`, with `:<model>` for scoped windows); missing windows are absent,
+and balances and bonuses are arrays. Codex reset credits carry expiry dates when
+available; if the extra proxy request fails, the helper still reports their
+count.
 
 Usage follows generic `ai.<runtime>.settings.inference` selection. A selected
 local instance with a file management-key reference supplies metadata

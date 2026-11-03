@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 if usage_cpa codex; then exit 0; fi
 
-timeout 25s python3 - <<'PY' | jq '.rateLimits.primary | {usedPercent, remainingPercent: (100 - .usedPercent), resetsAt: (.resetsAt | strflocaltime("%Y-%m-%d %H:%M:%S %Z"))}'
+timeout 25s python3 - <<'PY' | usage_project codex || {
 import json
 import subprocess
 
@@ -20,7 +20,7 @@ def receive(request_id):
         message = json.loads(line)
         if message.get("id") == request_id:
             if "error" in message:
-                raise RuntimeError(message["error"])
+                raise RuntimeError("Codex rate-limit request failed")
             return message["result"]
     raise RuntimeError("Codex closed the connection")
 
@@ -39,3 +39,6 @@ finally:
         p.kill()
         p.wait()
 PY
+  printf '%s\n' 'usage: invalid codex usage response' >&2
+  exit 1
+}

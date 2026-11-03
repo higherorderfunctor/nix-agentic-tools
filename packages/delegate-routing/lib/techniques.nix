@@ -1,7 +1,9 @@
 {
   claudeUsageScript,
   codexUsageScript,
-}: {
+}: let
+  usageNotes = "prints the usage schema: windows{usedPercent,remainingPercent,resetsAt,status,windowSeconds}, balances, bonuses";
+in {
   claude = {
     Agent = {
       kind = "subagent";
@@ -38,7 +40,7 @@
     usage = {
       command = claudeUsageScript;
       kind = "usage";
-      notes = "read `five_hour.utilization` and `seven_day.utilization`";
+      notes = usageNotes;
     };
   };
   codex = {
@@ -69,7 +71,7 @@
     usage = {
       command = codexUsageScript;
       kind = "usage";
-      notes = "read `usedPercent`, `remainingPercent`, `resetsAt`";
+      notes = usageNotes;
     };
   };
   kimchi = {

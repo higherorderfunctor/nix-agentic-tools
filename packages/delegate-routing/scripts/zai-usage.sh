@@ -16,4 +16,7 @@ delegate_usage_body=$(printf 'Authorization: Bearer %s\n' "$delegate_usage_key" 
   curl --fail --silent --show-error --max-time 25 \
     -H @- -H 'Accept-Language: en-US,en' \
     "${ZAI_API_BASE:-https://api.z.ai}/api/monitor/usage/quota/limit")
-usage_zai <<<"$delegate_usage_body"
+usage_project zai <<<"$delegate_usage_body" || {
+  printf '%s\n' 'usage: invalid z.ai usage response' >&2
+  exit 1
+}
