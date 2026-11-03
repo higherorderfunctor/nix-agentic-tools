@@ -53,22 +53,29 @@
   in
     assert lib.assertMsg (failures == []) (lib.concatStringsSep "\n" failures); {
       inherit expect files id runtime switches task techniques;
-      usage = {
-        claude = {
-          remainingPercent =
-            if codexHeadroom
-            then 10
-            else 90;
+      # suite.py puts these helper-shaped documents in the routing prompt.
+      usage = lib.genAttrs ["claude" "codex"] (pool: let
+        remaining =
+          if (pool == "codex") == codexHeadroom
+          then 90
+          else 10;
+      in {
+        account = {
+          auth_index = null;
+          name = null;
+          plan = null;
+        };
+        balances = [];
+        bonuses = [];
+        inherit pool;
+        windows."5h" = {
+          remainingPercent = remaining;
+          resetsAt = "2030-03-17T17:46:40Z";
+          status = null;
+          usedPercent = 100 - remaining;
           windowSeconds = 18000;
         };
-        codex = {
-          remainingPercent =
-            if codexHeadroom
-            then 90
-            else 10;
-          windowSeconds = 18000;
-        };
-      };
+      });
     };
   label = on:
     if on
