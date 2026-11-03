@@ -5,14 +5,31 @@
 {
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   inherit (pkgs) fetchFromGitHub;
   vu = packageLib;
-  # mcp-proxy requires mcp<2; select nixpkgs' maintained SDK 1 package in
-  # the scope consumed by the upstream recipe, including its test inputs.
-  python3Packages = pkgs.python3Packages.overrideScope (_: prev: {
-    mcp = prev.mcp_1;
+  # mcp-proxy requires mcp<2, and its floor can rise past nixpkgs' mcp_1.
+  # Keep nixpkgs' SDK 1 recipe but pin its source here; the
+  # fixPythonDependencies passthru moves this pin with each rev bump to the
+  # newest SDK 1 release the new pyproject allows. The pin replaces `mcp_1`
+  # because nixpkgs' recipe binds `mcp = final.mcp_1` in its own inner
+  # scope, which would shadow an `mcp` set here; `mcp` follows it for the
+  # case where nixpkgs drops that binding.
+  mcpSourcesFile = ../../../../mcp-sources.json;
+  mcpSources = builtins.fromJSON (builtins.readFile mcpSourcesFile);
+  python3Packages = pkgs.python3Packages.overrideScope (final: prev: {
+    mcp = final.mcp_1;
+    mcp_1 = prev.mcp_1.overridePythonAttrs {
+      inherit (mcpSources) version;
+      src = fetchFromGitHub {
+        owner = "modelcontextprotocol";
+        repo = "python-sdk";
+        tag = "v${mcpSources.version}";
+        inherit (mcpSources.src) hash;
+      };
+    };
   });
 
   rev = "23a79691e801f48c37a79fb71827ae6a3b540aee";
@@ -81,4 +98,17 @@ in
     preVersionCheck = ''
       version="${upstreamVersion}"
     '';
+    passthru =
+      (old.passthru or {})
+      // {
+        fixPythonDependencies = vu.mkPythonDependencyFix {
+          inherit pkgs;
+          pname = "mcp-proxy";
+          pyproject = "${src}/pyproject.toml";
+          dependencies.mcp = {
+            repo = "modelcontextprotocol/python-sdk";
+            sourcesFile = repoPath mcpSourcesFile;
+          };
+        };
+      };
   })
