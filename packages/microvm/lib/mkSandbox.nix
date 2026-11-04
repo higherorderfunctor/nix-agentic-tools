@@ -15,7 +15,7 @@
   vcpus ? 1,
 }: let
   repoPaths = import ./repo-paths.nix;
-  agentSocket = "/run/sandbox/agent.sock";
+  agentSocket = "/run/sandbox-signing/agent.sock";
   # QEMU executes one wrapper per connection with its socket on stdin/stdout.
   doorAddress = "10.0.2.100";
   doorMac = "02:00:00:00:d0:01";
@@ -26,10 +26,21 @@
   allDoors =
     doors
     ++ lib.optional (signing != null) {
-      command = "${pkgs.socat}/bin/socat";
-      arguments = ["STDIO" "UNIX-CONNECT:${signing.socket}"];
+      command =
+        if signing.socket == null
+        then lib.getExe selectedSignerDoor
+        else "${pkgs.socat}/bin/socat";
+      arguments = lib.optionals (signing.socket != null) ["STDIO" "UNIX-CONNECT:${signing.socket}"];
       inherit (signing) port;
     };
+  # sandbox/launch.nix selects the identity at launch; QEMU's scrubbed door
+  # environment reads only the socket recorded in its private runner directory.
+  selectedSignerDoor = import ../../../lib/strict-shell-application.nix pkgs {
+    name = "sandbox-selected-signer-door";
+    text = ''
+      exec ${pkgs.socat}/bin/socat STDIO "UNIX-CONNECT:$(< signing-socket)"
+    '';
+  };
   hasDoors = allDoors != [];
   doorWrapper = door:
     import ../../../lib/strict-shell-application.nix pkgs {
@@ -56,7 +67,8 @@
           ${door.command} ${lib.concatMapStrings (argument: "${lib.escapeShellArg argument} ") (door.arguments or [])}2>> doors.log
       '';
     };
-  validAbsolutePath = value: builtins.isString value && builtins.match "/[a-zA-Z0-9._+/-]+" value != null;
+  absolutePathPattern = "/[a-zA-Z0-9._+/-]+";
+  validAbsolutePath = value: builtins.isString value && builtins.match absolutePathPattern value != null;
   validEnvironment = environment:
     builtins.isAttrs environment
     && builtins.all (
@@ -85,7 +97,7 @@
       builtins.isAttrs signing
       && builtins.attrNames signing == ["port" "socket"]
       && validPort signing.port
-      && validAbsolutePath signing.socket
+      && (signing.socket == null || validAbsolutePath signing.socket)
     );
   doorNetdev = lib.concatStringsSep "," (
     ["user" "id=doors" "restrict=on" "net=10.0.2.0/24"]
@@ -186,7 +198,8 @@
               "-device"
               "virtserialport,chardev=bundle-status,name=sandbox.bundle-status"
             ]
-            ++ lib.optionals repoConfig ["-fw_cfg" "name=opt/sandbox.repo-config,file=repo-config"]
+            ++ lib.concatMap (name: ["-fw_cfg" "name=opt/sandbox.${name},file=${name}"])
+            (lib.optionals repoConfig (["repo-config"] ++ lib.optional (signing != null) "allowed-signers"))
             ++ [
               "-fw_cfg"
               "name=opt/sandbox.argv,file=argv"
@@ -257,7 +270,9 @@
             serviceConfig = {
               ExecStart = "${pkgs.socat}/bin/socat UNIX-LISTEN:${agentSocket},fork,mode=0600 TCP:${doorAddress}:${toString signing.port}";
               Restart = "on-failure";
-              RuntimeDirectory = "sandbox";
+              # /run/sandbox belongs to the sandbox service; its own directory
+              # keeps a bridge restart from removing the command's files.
+              RuntimeDirectory = "sandbox-signing";
               RuntimeDirectoryMode = "0700";
               Type = "exec";
               User = "sandbox";
@@ -275,7 +290,7 @@
               ExecStart = lib.getExe guestCommand;
               ExecStartPre =
                 map (name: "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.${name}/raw /run/sandbox/${name}")
-                (["argv"] ++ lib.optionals repo ["repo-head" "repo-branch"] ++ lib.optional repoConfig "repo-config")
+                (["argv"] ++ lib.optionals repo ["repo-head" "repo-branch"] ++ lib.optionals repoConfig (["repo-config"] ++ lib.optional (signing != null) "allowed-signers"))
                 # The sandbox user owns its runtime directory, so roots live outside it.
                 ++ lib.optional repo "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.seed-roots/raw /run/sandbox-seed-roots";
               ExecStopPost = "+${lib.getExe guestCompletion}";
@@ -330,7 +345,7 @@ in
   assert lib.assertMsg (builtins.isInt vcpus && vcpus >= 1) "mkSandbox.vcpus must be a positive integer";
   assert lib.assertMsg (builtins.isList packages && builtins.all lib.isDerivation packages) "mkSandbox.packages must be a list of packages";
   assert lib.assertMsg (validName outName) "mkSandbox.outName must be a single executable name";
-  assert lib.assertMsg validSigning "mkSandbox.signing must be null or {port; socket;} with a TCP port and an absolute host agent socket";
+  assert lib.assertMsg validSigning "mkSandbox.signing must be null or {port; socket;} with a TCP port and an absolute host agent socket (null reads SANDBOX_SIGNING_SOCKET at launch)";
   assert lib.assertMsg (builtins.isList doors && builtins.all validDoor normalizedDoors) "mkSandbox.doors entries must be {port; command; arguments ? []; environment ? {};} with a TCP port, an absolute command path, string arguments and string environment values";
   assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) allDoors)) == builtins.length allDoors) "mkSandbox.doors and mkSandbox.signing ports must be unique";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
@@ -359,6 +374,12 @@ in
             exit 2
           fi
         ''
+        + lib.optionalString (signing != null && signing.socket == null) ''
+          if [[ ! ''${SANDBOX_SIGNING_SOCKET:-} =~ ^${absolutePathPattern}$ ]]; then
+            echo '${outName}: signing.socket = null requires SANDBOX_SIGNING_SOCKET to match ${absolutePathPattern}' >&2
+            exit 2
+          fi
+        ''
         + lib.optionalString repo hostRepo.prepare
         + ''
           runtime_dir="$(${pkgs.coreutils}/bin/mktemp -d -t ${outName}.XXXXXXXX)"
@@ -379,11 +400,17 @@ in
           fi
           : > status
         ''
+        + lib.optionalString (signing != null && signing.socket == null) ''
+          printf '%s' "$SANDBOX_SIGNING_SOCKET" > signing-socket
+        ''
         + lib.optionalString repo hostRepo.start
         + lib.optionalString repoConfig ''
           ${pkgs.coreutils}/bin/install -m 0600 -- "''${SANDBOX_REPO_CONFIG:?repoConfig requires SANDBOX_REPO_CONFIG}" repo-config
           # The caller's relay session borrows the seed's objects through this link.
           ${pkgs.coreutils}/bin/ln -s -T -- "$runtime_dir/seed/objects" "$SANDBOX_SEED_OBJECTS"
+        ''
+        + lib.optionalString (repoConfig && signing != null) ''
+          ${pkgs.coreutils}/bin/install -m 0600 -- "''${SANDBOX_ALLOWED_SIGNERS:?signed repoConfig requires SANDBOX_ALLOWED_SIGNERS}" allowed-signers
         ''
         + ''
           if ${runner}/bin/microvm-run; then
