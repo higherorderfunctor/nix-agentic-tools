@@ -510,7 +510,7 @@
       {
         "file": "source",
         "from": "",
-        "to": "﻿"
+        "to": "\ufeff"
       }
     ],
     "name": "bom-preserved",
@@ -523,7 +523,7 @@
       {
         "file": "source",
         "from": "",
-        "to": "// 😀\n"
+        "to": "// \ud83d\ude00\n"
       }
     ],
     "name": "unicode-before-span",
@@ -667,8 +667,8 @@
         "to": "\"a/b~c\":true,\"judgments\":["
       }
     ],
-    "name": "json-pointer-input-key",
-    "rejects": "printing unescaped JSON pointer keys"
+    "name": "path-input-key",
+    "rejects": "losing the named input field in diagnostics"
   },
   {
     "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
@@ -699,60 +699,32 @@
     "rejects": "unsupported region properties hiding a root without a measured gateway row"
   },
   {
-    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "details": [
-      "region \"ap\" contains unsupported MethodDeclaration",
-      "use named property assignments with identifier or string-literal names"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "hiddenRegion": "llmBaseUrl() { return \"https://ap.example\" }",
-    "name": "method-gateway-hidden",
-    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+    "codes": [],
+    "hiddenRegion": "label() { return \"https://ap.example\" }",
+    "name": "method-unrelated-region",
+    "rejects": "rejecting named members in an unrelated region",
+    "unchanged": true
   },
   {
-    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "details": [
-      "region \"ap\" contains unsupported ShorthandPropertyAssignment",
-      "use named property assignments with identifier or string-literal names"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "hiddenRegion": "llmBaseUrl",
-    "name": "shorthand-gateway-hidden",
-    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+    "codes": [],
+    "hiddenRegion": "label",
+    "name": "shorthand-unrelated-region",
+    "rejects": "rejecting named members in an unrelated region",
+    "unchanged": true
   },
   {
-    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "details": [
-      "region \"ap\" contains unsupported GetAccessor",
-      "use named property assignments with identifier or string-literal names"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "hiddenRegion": "get llmBaseUrl() { return \"https://ap.example\" }",
-    "name": "getter-gateway-hidden",
-    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+    "codes": [],
+    "hiddenRegion": "get label() { return \"https://ap.example\" }",
+    "name": "getter-unrelated-region",
+    "rejects": "rejecting named members in an unrelated region",
+    "unchanged": true
   },
   {
-    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "details": [
-      "region \"ap\" contains unsupported SetAccessor",
-      "use named property assignments with identifier or string-literal names"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "hiddenRegion": "set llmBaseUrl(value: string) {}",
-    "name": "setter-gateway-hidden",
-    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+    "codes": [],
+    "hiddenRegion": "set label(value: string) {}",
+    "name": "setter-unrelated-region",
+    "rejects": "rejecting named members in an unrelated region",
+    "unchanged": true
   },
   {
     "codes": ["VERDICT_INPUT"],
@@ -777,5 +749,18 @@
     "name": "non-canonical-recorded-spans",
     "rejects": "order-only evidence changes producing an empty diff",
     "unorderedArray": "spans"
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\t\tllmBaseUrl: \"\",",
+        "to": "\t\tget llmBaseUrl() { return \"\" },"
+      }
+    ],
+    "name": "self-hosted-getter",
+    "rejects": "rejecting a named getter in the unrelated self-hosted region",
+    "unchanged": true
   }
 ]

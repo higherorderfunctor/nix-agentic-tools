@@ -27,7 +27,7 @@ in {
     shopt -s inherit_errexit 2>/dev/null || :
     ${pkgs.nodejs}/bin/node ${./surface-judgments.test.mjs} \
       --typescript ${typescript} --scripts ${scripts} --jq ${pkgs.jq}/bin/jq \
-      --fixtures ${./fixtures/surface-judgments} --verdicts ${../surface-judgments.json}
+      --fixtures ${./fixtures/surface-judgments}
     ${pkgs.coreutils}/bin/cat ${packets}/diagnostics.txt
     ${pkgs.jq}/bin/jq -e '.ok' ${packets}/status.json > /dev/null
     ${pkgs.coreutils}/bin/cp ${packets}/diagnostics.txt "$out"

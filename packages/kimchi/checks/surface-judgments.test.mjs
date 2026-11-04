@@ -24,12 +24,45 @@ const scripts = flags["--scripts"] ?? resolve(here, "../extract/judgments");
 const fixtures =
   flags["--fixtures"] ?? join(here, "fixtures/surface-judgments");
 const read = (name) => JSON.parse(readFileSync(join(fixtures, name), "utf8"));
-const verdicts = JSON.parse(
-  readFileSync(
-    flags["--verdicts"] ?? join(here, "../surface-judgments.json"),
-    "utf8",
-  ),
-);
+const verdicts = read("base/verdicts.json");
+if (!flags["--isolation-child"]) {
+  const temporary = mkdtempSync(join(tmpdir(), "kimchi-fixture-isolation-"));
+  try {
+    mkdirSync(join(temporary, "checks"));
+    const runner = join(temporary, "checks/surface-judgments.test.mjs");
+    writeFileSync(runner, readFileSync(fileURLToPath(import.meta.url)));
+    const live = structuredClone(verdicts);
+    live.judgments[0].claim = "An independently rejudged live claim.";
+    writeFileSync(
+      join(temporary, "surface-judgments.json"),
+      JSON.stringify(live),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        runner,
+        "--fixtures",
+        resolve(fixtures),
+        "--scripts",
+        resolve(scripts),
+        "--typescript",
+        flags["--typescript"],
+        "--jq",
+        flags["--jq"] ?? "jq",
+        "--isolation-child",
+        "true",
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(
+      result.status,
+      0,
+      `fixtures must ignore live verdict edits: ${result.stdout}${result.stderr}`,
+    );
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
+}
 const baseline = Object.fromEntries(
   verdicts.judgments.map(({ id, packet, evidenceHash }) => [
     id,

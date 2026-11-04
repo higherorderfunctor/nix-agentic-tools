@@ -33,7 +33,7 @@ const actions = {
   REMOVED_ROOT: `Inspect the removed evidence and remove this judgment by hand from ${verdictFile}.`,
   SOURCE_INPUT: `Correct the pinned source or structural resolver, regenerate facts if the source changed, then investigate and rejudge ${verdictFile}.`,
   UNCLASSIFIED_ROOT: `Review the candidate packet and add one scoped judgment or explicit unknown record to ${verdictFile}.`,
-  VERDICT_INPUT: `Correct the named input in ${verdictFile}, inspect the emitted evidence, and rerun the check.`,
+  VERDICT_INPUT: `Correct the named field of the record in ${verdictFile} and rerun the check; its packet will be emitted once the record is valid.`,
 };
 const failures = [],
   current = {},
@@ -48,7 +48,7 @@ function fail(
   judgment,
   code,
   detail,
-  old = judgment.evidenceHash,
+  old = judgment.evidenceHash ?? "unavailable",
   fresh = "unavailable",
 ) {
   const id = typeof judgment.id === "string" ? judgment.id : unavailable.id;
@@ -85,7 +85,8 @@ async function evaluate() {
     return;
   }
   for (const { judgment, error } of records)
-    if (error) fail(judgment ?? unavailable, error.code, error.message);
+    if (error)
+      fail(judgment ?? unavailable, error.code, error.message, "unavailable");
   const valid = records
     .filter((record) => !record.error)
     .map((record) => record.judgment);
@@ -217,19 +218,19 @@ failures.sort((a, b) => compare(a.id, b.id) || compare(a.code, b.code));
 const diagnostics = failures.length
   ? failures
       .map(
-        (f) => `FAIL kimchi-surface-judgments [${escapeText(f.code)}]
+        (f) => `FAIL kimchi-surface-judgments [${f.code}]
 Judgment: ${escapeText(f.id)}
 Claim: ${escapeText(f.claim)}
 Changed: ${escapeText(f.detail)}
-Evidence hash: old=${escapeText(f.old, "hash")}; new=${escapeText(f.fresh, "hash")}
-Packets: nix build .#checks.${escapeText(args.system)}.kimchi-surface-judgments.passthru.packets --out-link /tmp/kimchi-judgment-packets
+Evidence hash: old=${f.old}; new=${f.fresh}
+Packets: nix build .#checks.${args.system}.kimchi-surface-judgments.passthru.packets --out-link /tmp/kimchi-judgment-packets
 Inspect: /tmp/kimchi-judgment-packets/current.json; /tmp/kimchi-judgment-packets/diff.json; /tmp/kimchi-judgment-packets/display.json
-Fix: ${escapeText(actions[f.code])}
+Fix: ${actions[f.code]}
 A red check means: ask a session to investigate and rejudge. CI does not update verdicts or hashes.
 `,
       )
       .join("")
-  : `ok: kimchi-surface-judgments: ${escapeText(String(counts.roots))} roots classified; ${escapeText(String(counts.supported))} supported, ${escapeText(String(counts.refuted))} refuted, ${escapeText(String(counts.unknown))} unknown; all evidence hashes match.\n`;
+  : `ok: kimchi-surface-judgments: ${counts.roots} roots classified; ${counts.supported} supported, ${counts.refuted} refuted, ${counts.unknown} unknown; all evidence hashes match.\n`;
 await mkdir(args.out, { recursive: true });
 for (const [name, value] of Object.entries({
   current,

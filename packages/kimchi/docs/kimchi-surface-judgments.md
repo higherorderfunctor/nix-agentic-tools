@@ -59,14 +59,16 @@ and these structural roles are produced:
   identifiers or decoded string literals. The one top-level exported
   `const REGIONS` initializer can unwrap `as` and `satisfies` only. Every direct
   member of `REGIONS` must be a named property assignment to a plain object
-  literal. Inside each region, every element must also be a property assignment
-  with an identifier or string-literal name. Spreads, computed names, methods,
-  shorthand properties and accessors fail with `SOURCE_INPUT` naming the region
-  and construct; wrapped members also fail. This scan includes regions without
-  measured gateway rows, so unsupported registry structure cannot hide a root.
+  literal. Inside each region, spreads and computed property names fail with
+  `SOURCE_INPUT` naming the region and construct; wrapped members also fail.
+  Named methods, shorthand properties and accessors are allowed: the measured
+  query includes their named fields, using `<unresolved>` for nonliteral values.
+  Resolving a selected property still requires a direct property assignment.
+  This scan includes regions without measured gateway rows, so unsupported
+  registry structure cannot hide a root.
 - `searchUrl :: declaration` selects the complete top-level exported named
   function. All same-name declarations count, including overload signatures: an
-  overloaded name is ambiguous. A unique declaration needs a body.
+  overloaded name is ambiguous.
 
 Zero matches fail as missing; multiple matches fail as ambiguous. There is no
 line-offset or first-match fallback. Resolution uses TypeScript against
@@ -143,12 +145,12 @@ The complete catalogue follows. Each action names
 | `ANCHOR_AMBIGUOUS`  | `ambiguous anchor <anchor>: expected one match, found <count>; candidates=<display-locations>; span old=<old-span-hash>; new=unresolved` | Make the structural citation unique without line offsets, then rejudge `packages/kimchi/surface-judgments.json`.                                                                                    |
 | `ANCHOR_MISSING`    | `missing anchor <anchor>: expected one match, found 0; span old=<old-span-hash>; new=unresolved`                                         | Inspect the source change; correct the citation only after reviewing its meaning, then rejudge `packages/kimchi/surface-judgments.json`.                                                            |
 | `EVIDENCE_CHANGED`  | `selected evidence changed: rows removed=<rows>; rows added=<rows>; spans=<span-differences>`                                            | Investigate every listed change, then update the claim, scope, rationale, verdict, recorded packet and evidenceHash as warranted in `packages/kimchi/surface-judgments.json`.                       |
-| `FACT_INPUT`        | `invalid regionRegistry.fields input at <JSON-pointer>: <reason>`                                                                        | Correct the regionRegistry producer or source pin, run `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then investigate and rejudge `packages/kimchi/surface-judgments.json`. |
+| `FACT_INPUT`        | `invalid regionRegistry.fields input at <path>: <reason>`                                                                                | Correct the regionRegistry producer or source pin, run `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then investigate and rejudge `packages/kimchi/surface-judgments.json`. |
 | `RECORDED_HASH`     | `recorded packet hashes to <computed-recorded-hash>, not its recorded evidenceHash <recorded-hash>`                                      | Inspect the recorded packet edit and current evidence, then deliberately update the reviewed record in `packages/kimchi/surface-judgments.json`.                                                    |
 | `REMOVED_ROOT`      | `removed root <region>: no nonempty llmBaseUrl declaration remains; removed rows=<rows>`                                                 | Inspect the removed evidence and remove this judgment by hand from `packages/kimchi/surface-judgments.json`.                                                                                        |
 | `SOURCE_INPUT`      | `cannot resolve source evidence in src/regions.ts: <reason>`                                                                             | Correct the pinned source or structural resolver, regenerate facts if the source changed, then investigate and rejudge `packages/kimchi/surface-judgments.json`.                                    |
 | `UNCLASSIFIED_ROOT` | `unclassified root <region>: a nonempty llmBaseUrl declaration has no judgment; added rows=<rows>`                                       | Review the candidate packet and add one scoped judgment or explicit unknown record to `packages/kimchi/surface-judgments.json`.                                                                     |
-| `VERDICT_INPUT`     | `invalid verdict input at <JSON-pointer>: <reason>`                                                                                      | Correct the named input in `packages/kimchi/surface-judgments.json`, inspect the emitted evidence, and rerun the check.                                                                             |
+| `VERDICT_INPUT`     | `invalid verdict input at <path>: <reason>`                                                                                              | Correct the named field of the record in `packages/kimchi/surface-judgments.json` and rerun the check; its packet will be emitted once the record is valid.                                         |
 
 Schema reasons are the literal strings `invalid JSON`,
 `unsupported schemaVersion`, `unknown field`, `missing field`,
@@ -195,8 +197,12 @@ cat /tmp/kimchi-judgment-packets/display.json
 
 Investigate every changed row and span against the original pinned source.
 Review the exact proposition and its boundary; name missing evidence for an
-unknown. Deliberately edit the verdict file, copying a current packet and hash
-only as part of that review. There is no accept/update operation. Then run:
+unknown. Rejudging edits only `packages/kimchi/surface-judgments.json`. The
+fixture suite uses its own
+`checks/fixtures/surface-judgments/base/verdicts.json` and local expectations,
+which do not change when live claims or verdicts are reviewed. Deliberately edit
+the live verdict file, copying a current packet and hash only as part of that
+review. There is no accept/update operation. Then run:
 
 ```bash
 set -euETo pipefail

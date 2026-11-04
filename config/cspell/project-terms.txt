@@ -41,6 +41,7 @@ qll
 SYSTEMONE
 TERMUX
 TYPESAFE
+ufeff
 uncarried
 userconfig
 WEZTERM

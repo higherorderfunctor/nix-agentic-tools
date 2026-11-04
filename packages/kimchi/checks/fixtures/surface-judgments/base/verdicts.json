@@ -1,0 +1,148 @@
+{
+  "judgments": [
+    {
+      "claim": "The EU service serves web search at https://llm.eu.kimchi.dev/v1/search.",
+      "evidenceHash": "sha256:4072cc8504901bab219db44cf13126032b3f29e3fdfd3df90ef6104ae329c7b6",
+      "id": "eu-search-service-availability",
+      "missingEvidence": "A versioned server contract or an authenticated observation establishing that the EU service implements this route.",
+      "packet": {
+        "rows": [
+          {
+            "field": "llmBaseUrl",
+            "region": "eu",
+            "site": {
+              "anchor": {
+                "role": {
+                  "keys": ["eu", "llmBaseUrl"],
+                  "kind": "property"
+                },
+                "symbol": "REGIONS"
+              },
+              "path": "src/regions.ts"
+            },
+            "value": "https://llm.eu.kimchi.dev"
+          }
+        ],
+        "schemaVersion": 1,
+        "selector": {
+          "fact": {
+            "kind": "regionRegistry.fields",
+            "where": {
+              "field": "llmBaseUrl",
+              "region": "eu"
+            }
+          },
+          "sources": [
+            {
+              "anchor": {
+                "role": {
+                  "kind": "declaration"
+                },
+                "symbol": "searchUrl"
+              },
+              "path": "src/regions.ts"
+            }
+          ]
+        },
+        "spans": [
+          {
+            "anchor": {
+              "role": {
+                "keys": ["eu", "llmBaseUrl"],
+                "kind": "property"
+              },
+              "symbol": "REGIONS"
+            },
+            "path": "src/regions.ts",
+            "sha256": "sha256:00fc9f38cca6e85e8b3b52aa47e5b15dfc579edcf0658b3121e5b693c44a67b6"
+          },
+          {
+            "anchor": {
+              "role": {
+                "kind": "declaration"
+              },
+              "symbol": "searchUrl"
+            },
+            "path": "src/regions.ts",
+            "sha256": "sha256:2677600c372c6f48cf537fc8036b9feae4f5173acd108ccb8532d6356be3950a"
+          }
+        ]
+      },
+      "rationale": "The EU declaration and searchUrl body establish this client-derived URL. They do not establish deployment, route availability, or server behavior.",
+      "scope": "The route derived from the EU registry declaration and searchUrl in the original Kimchi source; no live-service observation is included.",
+      "verdict": "unknown"
+    },
+    {
+      "claim": "For an argument whose llmBaseUrl equals the US registry declaration, searchUrl constructs https://llm.kimchi.dev/v1/search.",
+      "evidenceHash": "sha256:6f4778769d25031b71090d6199f66c1982917db7deea931b701d7236607f1ffa",
+      "id": "us-search-url-construction",
+      "packet": {
+        "rows": [
+          {
+            "field": "llmBaseUrl",
+            "region": "us",
+            "site": {
+              "anchor": {
+                "role": {
+                  "keys": ["us", "llmBaseUrl"],
+                  "kind": "property"
+                },
+                "symbol": "REGIONS"
+              },
+              "path": "src/regions.ts"
+            },
+            "value": "https://llm.kimchi.dev"
+          }
+        ],
+        "schemaVersion": 1,
+        "selector": {
+          "fact": {
+            "kind": "regionRegistry.fields",
+            "where": {
+              "field": "llmBaseUrl",
+              "region": "us"
+            }
+          },
+          "sources": [
+            {
+              "anchor": {
+                "role": {
+                  "kind": "declaration"
+                },
+                "symbol": "searchUrl"
+              },
+              "path": "src/regions.ts"
+            }
+          ]
+        },
+        "spans": [
+          {
+            "anchor": {
+              "role": {
+                "keys": ["us", "llmBaseUrl"],
+                "kind": "property"
+              },
+              "symbol": "REGIONS"
+            },
+            "path": "src/regions.ts",
+            "sha256": "sha256:dabd60889610528689c2e881a53ec4c9439458e12e1659bc144d0c4c5a777b10"
+          },
+          {
+            "anchor": {
+              "role": {
+                "kind": "declaration"
+              },
+              "symbol": "searchUrl"
+            },
+            "path": "src/regions.ts",
+            "sha256": "sha256:2677600c372c6f48cf537fc8036b9feae4f5173acd108ccb8532d6356be3950a"
+          }
+        ]
+      },
+      "rationale": "The selected declaration supplies https://llm.kimchi.dev. The complete searchUrl body returns that argument property followed by /v1/search.",
+      "scope": "Direct evaluation of searchUrl with the selected declared value; excludes effective configuration, overrides, callers, execution and server availability.",
+      "verdict": "supported"
+    }
+  ],
+  "schemaVersion": 1
+}

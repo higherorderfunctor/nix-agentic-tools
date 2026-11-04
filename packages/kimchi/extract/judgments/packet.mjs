@@ -32,16 +32,8 @@ const nonblank = (value) =>
   typeof value === "string" && value.trim().length > 0;
 const digest = (value) =>
   typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
-export const escapeText = (value, mode) => {
-  if (
-    typeof value !== "string" ||
-    (mode === "hash" &&
-      !digest(value) &&
-      !["absent", "unavailable", "unresolved"].includes(value))
-  )
-    return "unavailable";
-  if (mode === "pointer")
-    return value.replaceAll("~", "~0").replaceAll("/", "~1");
+export const escapeText = (value) => {
+  if (typeof value !== "string") return "unavailable";
   return /[\r\n]/.test(value) ? JSON.stringify(value) : value;
 };
 export const schemaPrefix = (code) =>
@@ -62,7 +54,7 @@ function validate(value, shape, path = "", code = "VERDICT_INPUT") {
   } else if (object(value)) {
     for (const key of Object.keys(value))
       if (!Object.hasOwn(shape, key))
-        schema(code, `${path}/${escapeText(key, "pointer")}`, "unknown field");
+        schema(code, `${path}/${key}`, "unknown field");
     for (const [key, specification] of Object.entries(shape)) {
       if (!Object.hasOwn(value, key))
         schema(code, `${path}/${key}`, "missing field");
@@ -275,7 +267,10 @@ export function resolver(bytes, ts, display) {
       )
         shape(propertySite(name(entry) ?? "*"));
       for (const property of entry.initializer.properties)
-        if (!ts.isPropertyAssignment(property) || name(property) === null)
+        if (
+          ts.isSpreadAssignment(property) ||
+          (property.name && ts.isComputedPropertyName(property.name))
+        )
           sourceError(
             `region ${JSON.stringify(name(entry))} contains unsupported ${property.name && ts.isComputedPropertyName(property.name) ? "computed property name" : ts.SyntaxKind[property.kind]}: use named property assignments with identifier or string-literal names`,
           );
@@ -292,7 +287,6 @@ export function resolver(bytes, ts, display) {
         ),
         citation,
       );
-      if (!node.body) shape(citation);
     } else {
       node = unwrap(match(registries, citation).initializer);
       for (const [index, key] of role.keys.entries()) {

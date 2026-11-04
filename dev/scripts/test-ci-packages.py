@@ -34,8 +34,6 @@ class ExtractedSelectionTest(unittest.TestCase):
         cls.root = Path(cls.directory.name)
         paths = subprocess.check_output(["git", "ls-files", "-z"], cwd=repository).decode().split("\0")
         for name in filter(None, paths):
-            if not (repository / name).exists() and not (repository / name).is_symlink():
-                continue
             destination = cls.root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(repository / name, destination, follow_symlinks=False)
