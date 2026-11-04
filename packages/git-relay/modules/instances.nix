@@ -15,9 +15,16 @@ backend: {
     options = {
       credentials = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
-          options.sshKeyFile = lib.mkOption {
-            type = redact.types.secretFile;
-            description = "The push key as a redact reference; ai.services delivers its path in a 0600 runtime file.";
+          options = {
+            forges = lib.mkOption {
+              type = lib.types.listOf (lib.types.strMatching upstream.hostPattern);
+              default = [];
+              description = "The upstream hosts (DNS names or IPv4 addresses) this credential may forward to. Every push re-reads the current config, so removing a host revokes pushes to it without deleting the key or the repository.";
+            };
+            sshKeyFile = lib.mkOption {
+              type = redact.types.secretFile;
+              description = "The push key as a redact reference; ai.services delivers its path in a 0600 runtime file.";
+            };
           };
         });
         default = {};
@@ -113,6 +120,14 @@ in {
         {
           assertion = host == null || (builtins.hasAttr host settings.forges && builtins.match "[[:space:]]*" settings.forges.${host}.hostKeys == null);
           message = "${location}.upstream: the upstream host must have pins in ${option}.forges.\"${toString host}\".hostKeys.";
+        }
+        {
+          assertion =
+            host
+            == null
+            || !builtins.hasAttr repository.credential settings.credentials
+            || builtins.elem host settings.credentials.${repository.credential}.forges;
+          message = "${location}.upstream: the upstream host must be listed in ${option}.credentials.${repository.credential}.forges, which every push re-reads.";
         }
       ])
       settings.repositories))

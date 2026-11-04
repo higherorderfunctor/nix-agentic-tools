@@ -1,7 +1,9 @@
-# cspell:ignore ASKPASS refspecs unconfigured
+# cspell:ignore ASKPASS refspecs unconfigured urandom
 # Agents push to git://<listen>:<port>/<repository>.git. The daemon forwards
 # through a per-repository SSH credential resolved from GIT_RELAY_CONFIG at
 # every push; the hook refuses the receive when that atomic forward fails.
+# `session open|close|gc` manage per-session repositories a session-only
+# daemon serves; session subcommands run from the daemon's state directory.
 {
   openssh ? pkgs.openssh,
   pkgs,
@@ -11,23 +13,52 @@
   inherit (pkgs) lib;
   strict = strictShellApplication pkgs;
   upstreamUrl = import ../../../../lib/upstream.nix {inherit lib;};
+  # One rule the hook, the daemon's start check and `session open` share: the
+  # credential must exist with a key and currently allow the repository's
+  # upstream host, so removing either revokes pushes without touching the
+  # repository on disk. `arrays` refuses a missing or non-list allowlist.
+  credentialAllowed = ''
+    .credentials[$credential]
+    | select((.sshKeyFile | type == "string" and length > 0) and (.forges | arrays | index($host)))
+    | .sshKeyFile
+  '';
+
+  # lib/upstream.nix's grammar; scp-style paths stay home-relative and
+  # ssh:// paths absolute, and neither is rewritten, so both name one host.
+  # Defines relay_host for the launcher and for the hooks, which derive a
+  # repository's host from its upstream rather than keep a second copy.
+  relayHost = ''
+    ssh_pattern=${lib.escapeShellArg "^${upstreamUrl.sshPattern}$"}
+    scp_pattern=${lib.escapeShellArg "^${upstreamUrl.scpPattern}$"}
+    relay_host() { # <upstream>
+      if [[ $1 =~ $ssh_pattern ]]; then
+        printf '%s' "''${BASH_REMATCH[2]}"
+      elif [[ $1 != *://* && $1 =~ $scp_pattern ]]; then
+        printf '%s' "''${BASH_REMATCH[2]}"
+      else
+        return 1
+      fi
+    }
+  '';
 
   # The forward and the access hook's refresh reach a repository's upstream
   # one way: its configured upstream, the key its credential names in the
   # current config, and SSH held to that key and the forge's pins. Each caller
   # defines refuse for the channel its refusal reaches the client on.
   upstreamTransport = ''
+    ${relayHost}
     # A repository the launcher did not configure cannot reach an upstream.
     if ! upstream=$(git config --get relay.upstream) ||
+      ! host=$(relay_host "$upstream") ||
       ! credential=$(git config --get relay.credential) ||
       ! known_hosts=$(git config --get relay.knownHosts); then
       refuse "missing relay upstream, credential or knownHosts"
     fi
-    # Removing this credential from the current config revokes existing repos.
-    key=$(jq -er --arg credential "$credential" \
-      '.credentials[$credential].sshKeyFile | select(type == "string" and length > 0)' \
-      "$GIT_RELAY_CONFIG") ||
-      refuse "credential '$credential' absent or missing sshKeyFile in current config"
+    # Removing this credential, or its permission for this upstream host,
+    # from the current config revokes this repository's next push.
+    key=$(jq -er --arg credential "$credential" --arg host "$host" \
+      '${credentialAllowed}' "$GIT_RELAY_CONFIG") ||
+      refuse "credential '$credential' absent, keyless, or not allowed for '$host'"
     # OpenSSH parses this option again as a file list: the quotes keep a state
     # directory ($PWD) with spaces one path, and escaping " and \ keeps a $PWD
     # containing either from ending that quoted path early.
@@ -112,7 +143,7 @@
 in
   strict {
     name = "git-relay";
-    runtimeInputs = [pkgs.coreutils pkgs.git pkgs.jq];
+    runtimeInputs = [pkgs.coreutils pkgs.git pkgs.jq pkgs.util-linux];
     text = ''
       # Refuse host config and injected command-scope config for init, daemon,
       # receive-pack and hooks alike; GIT_CONFIG also redirects `git config` writes.
@@ -127,54 +158,53 @@ in
       # No inherited transport command, prompt helper or agent may select a key.
       unset GIT_SSH_COMMAND GIT_SSH GIT_SSH_VARIANT GIT_ASKPASS SSH_ASKPASS SSH_AUTH_SOCK
       config=''${GIT_RELAY_CONFIG:?GIT_RELAY_CONFIG must name the JSON config file}
-      # The git protocol has no authentication, so the daemon serves only the
-      # local machine: a JSON caller cannot bind it to a reachable address.
-      listen=$(jq -er .listen "$config")
-      [[ $listen =~ ^127(\.[0-9]{1,3}){3}$ || $listen == ::1 ]] || {
-        echo "git-relay: refusing non-loopback listen address '$listen'" >&2
-        exit 1
-      }
       root=$PWD/repositories
+      sessions=$root/sessions
+      staging=$root/staging
+      locks=$PWD/locks
       pins=$PWD/known_hosts.d
-      # --strict-paths requires an explicit served directory; empty configs fail.
-      names=$(jq -r '.repositories | keys[]' "$config")
-      [[ -n $names ]] || { echo "git-relay: no repositories configured" >&2; exit 1; }
-      mkdir -p "$root" "$pins"
-      hosts=$(jq -r '.forges | keys[]' "$config")
       host_pattern=${lib.escapeShellArg "^${upstreamUrl.hostPattern}$"}
       name_pattern=${lib.escapeShellArg "^${upstreamUrl.repositoryNamePattern}$"}
-      while IFS= read -r host; do
-        # Forge names become filenames; refuse path separators and dot aliases.
-        [[ $host =~ $host_pattern ]] || { echo "git-relay: invalid forge host '$host'" >&2; exit 1; }
-        jq -er --arg host "$host" '.forges[$host].hostKeys | select(type == "string" and test("[^[:space:]]"))' \
-          "$config" >"$pins/$host"
-      done <<<"$hosts"
-      ssh_pattern=${lib.escapeShellArg "^${upstreamUrl.sshPattern}$"}
-      scp_pattern=${lib.escapeShellArg "^${upstreamUrl.scpPattern}$"}
-      served=()
-      while IFS= read -r name; do
-        # A direct JSON caller cannot escape the served repository directory.
-        [[ $name =~ $name_pattern ]] || {
-          echo "git-relay: invalid repository name '$name'" >&2; exit 1;
+      token_pattern='^[0-9a-f]{32}$'
+      ${relayHost}
+
+      # The shared credential rule: the key this credential may use for this
+      # upstream host, or the refusal every caller reports.
+      credential_key() { # <credential> <host>
+        jq -er --arg credential "$1" --arg host "$2" \
+          '${credentialAllowed}' "$config" || {
+          echo "git-relay: credential '$1' absent, keyless, or not allowed for '$2'" >&2
+          return 1
         }
-        upstream=$(jq -er --arg name "$name" '.repositories[$name].upstream' "$config")
-        if [[ $upstream =~ $ssh_pattern ]]; then
-          host=''${BASH_REMATCH[2]}
-        elif [[ $upstream != *://* && $upstream =~ $scp_pattern ]]; then
-          host=''${BASH_REMATCH[2]}
-        else
-          echo "git-relay: repository '$name': upstream must use SSH (ssh:// or [user@]host:path)" >&2
+      }
+
+      # The token names the lock file, the directory and the URL: 128 random
+      # bits, as od -An -tx1 -N16 /dev/urandom prints.
+      require_token() { # <token>
+        [[ $1 =~ $token_pattern ]] || {
+          echo "git-relay: a session token is exactly 32 lowercase hex characters" >&2
           exit 1
-        fi
-        # An absent forge must never fall back to the daemon user's known_hosts.
-        jq -e --arg host "$host" '.forges | has($host)' "$config" >/dev/null &&
-          [[ -s $pins/$host ]] || { echo "git-relay: repository '$name': no forge pins for '$host'" >&2; exit 1; }
-        credential=$(jq -er --arg name "$name" '.repositories[$name].credential' "$config")
-        jq -e --arg credential "$credential" \
-          '.credentials[$credential].sshKeyFile | type == "string" and length > 0' "$config" >/dev/null || {
-          echo "git-relay: repository '$name': credential '$credential' missing sshKeyFile" >&2; exit 1;
         }
-        repo=$root/$name.git
+      }
+
+      # Forge names become filenames; refuse path separators and dot aliases.
+      # Write-then-rename: a push through any session of this host reads either
+      # the complete old pins or the complete new ones, never a truncated file.
+      pin() { # <host>
+        mkdir -p "$pins"
+        [[ $1 =~ $host_pattern ]] || { echo "git-relay: invalid forge host '$1'" >&2; exit 1; }
+        local tmp
+        tmp=$(mktemp "$pins/.pin.XXXXXX")
+        jq -er --arg host "$1" \
+          '.forges[$host].hostKeys | select(type == "string" and test("[^[:space:]]"))' \
+          "$config" >"$tmp" || { rm -f -- "$tmp"; echo "git-relay: no forge pins for '$1'" >&2; exit 1; }
+        mv -f -- "$tmp" "$pins/$1"
+      }
+
+      # A repository — static served, or session staged — gets the same
+      # forwarding hook, credential, upstream, host pin and receive policy.
+      prepare_repo() { # <dir> <credential> <upstream> <host>
+        local repo=$1 credential=$2 upstream=$3 host=$4
         # Empty templates refuse host hooks; isolated init uses Git's built-in HEAD default.
         [[ -d $repo ]] || git init --bare --template= --quiet "$repo"
         # Refuse repository-provided hooks in favor of the forwarding hook.
@@ -192,17 +222,201 @@ in
         git -C "$repo" config receive.denyDeletes false
         # Upstream-approved force pushes must not be refused locally.
         git -C "$repo" config receive.denyNonFastForwards false
-        served+=("$repo")
-      done <<<"$names"
+      }
 
-      # Explicit strict paths refuse unconfigured and stale repos; export-all
-      # serves these paths without trusting a git-daemon-export-ok marker.
-      port=$(jq -er .port "$config")
-      # The pre-receive hook writes forward output here, never to the client.
-      exec 3>&2
-      exec git daemon --reuseaddr --listen="$listen" --port="$port" \
-        --base-path="$root" --strict-paths --export-all --enable=receive-pack --informative-errors \
-        --access-hook=${lib.getExe accessHook} \
-        "''${served[@]}"
+      # A caller holds flock on the session's lock file for the session's whole
+      # life; a lock this process can take itself proves no caller does.
+      require_lock() { # <token>
+        local lock=$locks/$1
+        mkdir -p "$locks"
+        exec {lock_probe}<>"$lock"
+        if flock -n "$lock_probe"; then
+          # No caller holds it, so the file this call created belongs to no one.
+          rm -f -- "$lock"
+          echo "git-relay: hold flock on $lock first" >&2
+          exit 1
+        fi
+        exec {lock_probe}>&-
+      }
+
+      # Reap session and staged directories whose lock this process can take:
+      # a live caller holds its lock, so only abandoned work goes. Lock files
+      # without either directory belong to callers between lock and open, and
+      # are never touched.
+      session_gc() {
+        local session token probe
+        mkdir -p "$sessions" "$staging" "$locks"
+        for session in "$sessions"/*.git "$staging"/*.git; do
+          [[ -e $session ]] || continue
+          token=$(basename -- "$session" .git)
+          [[ $token =~ $token_pattern ]] || continue
+          exec {probe}<>"$locks/$token"
+          if flock -n "$probe"; then
+            rm -rf -- "$sessions/$token.git" "$staging/$token.git"
+            rm -f -- "$locks/$token"
+          fi
+          exec {probe}>&-
+        done
+      }
+
+      # The daemon takes no arguments; `session` selects session management.
+      case ''${1-} in
+        session)
+          case ''${2-} in
+            open)
+              shift 2
+              token="" credential="" upstream="" alternates=""
+              while (($#)); do
+                (($# >= 2)) || { echo "git-relay: session open: $1 needs a value" >&2; exit 1; }
+                case $1 in
+                  --alternates) alternates=$2 ;;
+                  --credential) credential=$2 ;;
+                  --token) token=$2 ;;
+                  --upstream) upstream=$2 ;;
+                  *)
+                    echo "git-relay: session open: unknown option $1" >&2
+                    exit 1
+                    ;;
+                esac
+                shift 2
+              done
+              [[ -n $token && -n $credential && -n $upstream ]] || {
+                echo "git-relay: session open needs --token, --credential and --upstream" >&2
+                exit 1
+              }
+              require_token "$token"
+              # Validated before anything is created: git reads this file
+              # verbatim, so a refused --alternates must leave no session.
+              [[ -z $alternates || ($alternates == /* && $alternates != *$'\n'*) ]] || {
+                echo "git-relay: --alternates is one absolute object directory path" >&2
+                exit 1
+              }
+              host=$(relay_host "$upstream") || {
+                echo "git-relay: session upstream must use SSH (ssh:// or [user@]host:path)" >&2
+                exit 1
+              }
+              # Only the daemon publishes pins. A stale session client must not
+              # restore a rotated key or a forge removed by the live service.
+              [[ -s $pins/$host ]] || {
+                echo "git-relay: no live daemon pins for '$host'; start or restart its service" >&2
+                exit 1
+              }
+              credential_key "$credential" "$host" >/dev/null || exit 1
+              session_gc
+              require_lock "$token"
+              # Stage outside the served sessions tree and publish with one
+              # rename: until it lands, the daemon serves nothing of this
+              # session, so no push can arrive before the hook is installed.
+              # A retry after a crashed attempt starts from an empty stage.
+              rm -rf -- "$staging/$token.git"
+              prepare_repo "$staging/$token.git" "$credential" "$upstream" "$host"
+              [[ -z $alternates ]] ||
+                printf '%s\n' "$alternates" >"$staging/$token.git/objects/info/alternates"
+              rm -rf -- "$sessions/$token.git"
+              mv -T -- "$staging/$token.git" "$sessions/$token.git"
+              ;;
+            close)
+              [[ $# == 3 ]] || { echo "git-relay: session close takes one token" >&2; exit 1; }
+              token=$3
+              require_token "$token"
+              # The lock holder's exit trap; the lock file goes with the directories.
+              require_lock "$token"
+              rm -rf -- "$sessions/$token.git" "$staging/$token.git"
+              rm -f -- "$locks/$token"
+              ;;
+            gc)
+              session_gc
+              ;;
+            *)
+              echo "git-relay: unknown session command ''${2-}; expected open, close or gc" >&2
+              exit 1
+              ;;
+          esac
+          ;;
+        "") # the daemon
+          # The git protocol has no authentication, so the daemon serves only
+          # the local machine: a JSON caller cannot bind it to a reachable
+          # address.
+          listen=$(jq -er .listen "$config")
+          [[ $listen =~ ^127(\.[0-9]{1,3}){3}$ || $listen == ::1 ]] || {
+            echo "git-relay: refusing non-loopback listen address '$listen'" >&2
+            exit 1
+          }
+          port=$(jq -er .port "$config")
+          # The pre-receive hook writes the forward's output here, never to the client.
+          exec 3>&2
+          mkdir -p "$root" "$locks"
+          declare -A current=()
+          hosts=$(jq -r '.forges | keys[]' "$config")
+          while IFS= read -r host; do
+            pin "$host"
+            current[$host]=1
+          done <<<"$hosts"
+          # Pin files are config-derived state: the refresh above leaves exactly
+          # the current forges pinned, so drop every other file — a forge
+          # removed from the config must leave no trusted keys behind for a
+          # static repository or a still-recorded session to lean on.
+          # `.pin.*` is a pin() write a crash left behind.
+          for pin_file in "$pins"/* "$pins"/.pin.*; do
+            [[ -f $pin_file ]] || continue
+            host=$(basename -- "$pin_file")
+            [[ -n ''${current[$host]+x} ]] || rm -f -- "$pin_file"
+          done
+          # Abandoned sessions go at start; a live caller's held lock survives.
+          session_gc
+          if [[ $(jq -r '.sessions // false' "$config") == true ]]; then
+            jq -e '(.repositories // {}) == {}' "$config" >/dev/null || {
+              echo "git-relay: a session-only relay serves no repositories" >&2
+              exit 1
+            }
+            # One whitelisted sessions directory serves every descendant, so a
+            # new session is served without a daemon restart; without
+            # --strict-paths git itself refuses `.` and `..` path aliases, and
+            # no static repository is configured or reachable.
+            exec git daemon --reuseaddr --listen="$listen" --port="$port" \
+              --base-path="$root" --export-all --enable=receive-pack --informative-errors \
+              --access-hook=${lib.getExe accessHook} \
+              "$sessions"
+          fi
+          # --strict-paths requires an explicit served directory; empty configs fail.
+          names=$(jq -r '.repositories | keys[]' "$config")
+          [[ -n $names ]] || { echo "git-relay: no repositories configured" >&2; exit 1; }
+          served=()
+          while IFS= read -r name; do
+            # A direct JSON caller cannot escape the served repository directory.
+            [[ $name =~ $name_pattern ]] || {
+              echo "git-relay: invalid repository name '$name'" >&2
+              exit 1;
+            }
+            upstream=$(jq -er --arg name "$name" '.repositories[$name].upstream' "$config")
+            host=$(relay_host "$upstream") || {
+              echo "git-relay: repository '$name': upstream must use SSH (ssh:// or [user@]host:path)" >&2
+              exit 1
+            }
+            # Pruned to the current forges above, a missing pin means the
+            # config no longer vouches for this host; never fall back to the
+            # daemon user's known_hosts.
+            [[ -s $pins/$host ]] || { echo "git-relay: repository '$name': no forge pins for '$host'" >&2; exit 1; }
+            credential=$(jq -er --arg name "$name" '.repositories[$name].credential' "$config")
+            credential_key "$credential" "$host" >/dev/null || {
+              echo "git-relay: repository '$name' refused" >&2
+              exit 1
+            }
+            prepare_repo "$root/$name.git" "$credential" "$upstream" "$host"
+            served+=("$root/$name.git")
+          done <<<"$names"
+
+          # Explicit strict paths refuse unconfigured and stale repos; export-all
+          # serves these paths without trusting a git-daemon-export-ok marker.
+          exec git daemon --reuseaddr --listen="$listen" --port="$port" \
+            --base-path="$root" --strict-paths --export-all --enable=receive-pack --informative-errors \
+            --access-hook=${lib.getExe accessHook} \
+            "''${served[@]}"
+          ;;
+        *)
+          echo "git-relay: unknown command $1; the daemon takes no arguments, sessions go through 'git-relay session'" >&2
+          exit 1
+          ;;
+      esac
     '';
   }
