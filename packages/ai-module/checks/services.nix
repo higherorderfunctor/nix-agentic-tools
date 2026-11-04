@@ -5,6 +5,7 @@
   ...
 }: let
   backends = import ./backends.nix {inherit harness lib pkgs;};
+  mkLintedCheck = import ../../../lib/mk-linted-check.nix {inherit pkgs;};
   redact = import ../../../lib/redact {inherit lib;};
   services = import ../lib/services.nix {inherit lib;};
   strictShellApplication = import ../../../lib/strict-shell-application.nix;
@@ -349,6 +350,35 @@ in {
       '';
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      ai-module-services-runtime-roots = let
+        fixture.services.probe = {
+          command = ["${pkgs.coreutils}/bin/printenv" "CONFIG"];
+          files.config = {
+            content = "{}";
+            secrets = {};
+            variable = "CONFIG";
+          };
+        };
+        home = backends.evaluate "hm" fixture;
+        project = backends.evaluateWith "devenv" fixture [{devenv.runtime = "/build/project-runtime";}];
+      in
+        mkLintedCheck "ai-module-services-runtime-roots" {
+          runtimeInputs = [pkgs.coreutils];
+          text = ''
+            export XDG_RUNTIME_DIR=/build/home-runtime
+            mkdir -p "$XDG_RUNTIME_DIR" /build/project-runtime
+            ${home.systemd.user.services.probe.Service.ExecStart} > home-path
+            ${project.processes.probe.exec} > project-path
+            [[ $(< home-path) == /build/home-runtime/ai-service-probe/config.json ]]
+            [[ $(< project-path) == /build/project-runtime/ai-service-probe/config.json ]]
+            for file in "$(< home-path)" "$(< project-path)"; do
+              [[ $(stat -c %a "$file") == 600 ]]
+              [[ $(stat -c %a "''${file%/*}") == 700 ]]
+            done
+            rm -- "$(< home-path)"
+            [[ -f $(< project-path) ]]
+          '';
+        };
       ai-module-services-backends = mkCheck "ai-module-services-backends" (
         lib.all (restart: let
           unit = hm.systemd.user.services.${restart};
