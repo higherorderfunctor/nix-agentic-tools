@@ -235,7 +235,7 @@
       head -c 32 /dev/urandom | base64 | tr -d '\n' > ${lib.escapeShellArg canaryPath}
       chmod 0600 ${lib.escapeShellArg canaryPath}
       canary=$(< ${lib.escapeShellArg canaryPath})
-      
+
       # Refusal with the origin down, proven before QEMU: a runner stub marks
       # its own invocation, and a refusal must leave the marker untouched.
       log=$(mktemp)
@@ -249,7 +249,20 @@
       fi
       grep -F 'refusing to start the sandbox' "$log"
       [[ ! -e $marker ]]
-      
+
+      # Synthetic values exercise every byte that could alter curl's config;
+      # the same runner marker proves refusal before QEMU in each case.
+      for unsafe_key in 'quote"key' 'backslash\key' $'line\nkey' $'return\rkey'; do
+        printf '%s' "$unsafe_key" > ${lib.escapeShellArg canaryPath}
+        if "$variant" -- ${codexConfig} > "$log" 2>&1; then
+          echo 'FAIL: launch accepted an unsafe inference key' >&2
+          exit 1
+        fi
+        grep -F 'contains characters unsafe for the inference probe' "$log"
+        [[ ! -e $marker ]]
+      done
+      printf '%s' "$canary" > ${lib.escapeShellArg canaryPath}
+
       # One boot with the stub up: the probe and the guest door request both
       # authenticate as the canary, and nothing else does.
       rm -f -- "$log"
@@ -272,14 +285,14 @@
       [[ $(grep -Fc 'guest auth_ok' "$events") == 1 ]]
       # `! grep` as a statement is errexit-exempt; the if makes absence fail.
       if grep -Fq auth_bad "$events"; then exit 1; fi
-      
+
       # Zero canary bytes anywhere in either launcher's realized closure.
       closure=${pkgs.closureInfo {rootPaths = [bootLauncher (launcherOf bootResult "codex-sandbox")];}}/store-paths
       mapfile -t closure_paths < "$closure"
       hits=$(grep -r -a -F -l -- "$canary" "''${closure_paths[@]}" 2>/dev/null | wc -l || true)
       [[ $hits == 0 ]]
       echo "PASS: closure canary hits: $hits"
-      
+
       # The launcher's private runtime directory is gone after exit.
       [[ -z $(ls /tmp/claude-sandbox.* 2>/dev/null) ]]
       echo PASS: inference door boot
@@ -415,6 +428,8 @@ in {
           && rejects {inference = valid // {port = 0;};}
           && rejects {inference = valid // {extra = true;};}
           && rejects {inference = valid // {key = null;};}
+          && rejects {inference = valid // {key = "synthetic-plaintext-key";};}
+          && rejects {inference = valid // {key._redact = {};};}
           && rejects {inference = valid // {client = "";};}
           # The inference door's guest port collides with an explicit door.
           && rejects {
