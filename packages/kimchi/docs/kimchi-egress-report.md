@@ -52,21 +52,20 @@ field names on drift, including `header.scan`, with the
 `packages/kimchi/extract/egress/regenerate.sh` fix command. No generator reads
 `extracted.json` directly, as required by `checks.extracted-contract-guard`.
 
-To regenerate from the committed facts, run from the repository root with Nix,
-Node and treefmt installed:
+PR CI regenerates and commits both. To reproduce it locally on x86_64-linux,
+where the CodeQL engine runs, regenerate the facts first and then the report
+from the repository root, with Node and treefmt installed. `regenerate.sh`
+itself builds nothing; it reads the committed facts:
 
 ```bash
+nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate
 packages/kimchi/extract/egress/regenerate.sh
 git diff packages/kimchi/egress-report.json
 ```
 
 The report diff is the review artifact. When the scanner changes, review its
 `egressScan` delta and distinguish it from release changes in the pull request
-body. A report refresh uses the commit convention:
-
-```text
-chore(kimchi): refresh egress report for <version>
-```
+body.
 
 The extracted-facts planner selects Kimchi when its extraction derivation
 changes, including edits to `scan.mjs`. Kimchi's package also declares
