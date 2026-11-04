@@ -20,6 +20,11 @@
       }
       {
         location = "package";
+        name = "sandbox-inference";
+        dir = facetOwner;
+      }
+      {
+        location = "package";
         name = "sandbox-signing";
         dir = facetOwner;
       }
