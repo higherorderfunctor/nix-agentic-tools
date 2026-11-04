@@ -1,6 +1,6 @@
 # MicroVM sandbox implementation
 
-<!-- cspell:ignore ACPI chardev sysfs vcpus virtio -->
+<!-- cspell:ignore ACPI chardev gettys poweroff sysfs vcpus virtio -->
 
 > **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
 > routes; seeded-history copies, read-only mounts, and committed-work recovery
@@ -11,8 +11,8 @@ runtimes. Home Manager and devenv expose the same options and install
 `claude-sandbox` and `codex-sandbox` into their respective package profiles. The
 options, example and copy-down rules are in
 `packages/microvm/modules/README.md`. Only runtimes with a guest route mirror
-the tree at `ai.<runtime>.sandbox`. Defaults are inherited in the option
-default, following the peer-default pattern in `ai.proxy`.
+the tree at `ai.<runtime>.sandbox`; defaults are inherited in the option
+default, as in `ai.proxy`.
 
 The guest-route table selects the plain `ai.claude.package` or
 `ai.codex.package`, before host launcher environment and jail wrapping. Enabling
@@ -20,69 +20,45 @@ a sandbox with a null package fails evaluation. Kiro, Kimchi and Copilot have no
 guest route and no `sandbox` option. Sandbox commands claim their names through
 `ai.microvm.claims.command`.
 
-`extraPackages` enter both the executable PATH and the guest system profile, so
-child shells resetting PATH to `/run/current-system/sw/bin` still find them. The
-standalone factory below also supplies repository and door parameters; the
-module option tree does not yet expose those surfaces or Git identity settings.
-Never log a harness into a provider inside the VM; VM-only CPA client keys will
-supply authentication in a later phase.
+`extraPackages` enter executable PATH and the guest system profile, including
+child shells resetting PATH to `/run/current-system/sw/bin`. Repository, door,
+signing and Git identity settings have no module options yet. Never log a
+harness into a provider inside the VM; VM-only CPA client keys will supply
+authentication later.
 
-The public standalone factory also accepts packages and sizing:
+The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
+executable path whose Nix string context retains its package) and `outName` (a
+single executable name). Optional defaults are `doors = []`, `memory = 1024`
+MiB, `packages = []`, `repo = false`, `signing = null`, and `vcpus = 1`. Memory
+must be at least 128 MiB and CPUs at least one. The factory owns the guest and
+`bin/<outName>` launcher. The pinned microvm source is bound through
+`ai.internal.mkSandbox`; consumers need no extra module arguments. An empty
+configuration installs no sandbox and forces no guest.
 
-```nix
-inputs.nix-agentic-tools.lib.ai.mkSandbox pkgs {
-  exe = lib.getExe pkgs.hello;
-  memory = 4096;
-  outName = "sandbox-hello";
-  packages = [pkgs.git pkgs.ripgrep];
-  vcpus = 2;
-}
-```
+The host store is shared read-only at `/nix/.ro-store`; upstream overlays
+`/nix/store` with tmpfs upper/work directories beneath `/nix/.rw-store`. Root is
+tmpfs too. No host disk, home or workspace is shared by default; only doors add
+a NIC and only repo mode adds the seed mount described below. The entire host
+store is readable, beyond the executable's closure.
 
-The factory defaults remain 1024 MiB, one CPU and no extra packages. Memory must
-be at least 128 MiB and CPUs at least one. It returns a package with
-`bin/<outName>` and owns the guest definition and launcher. `exe` must be an
-absolute executable path (usually `lib.getExe package`); its string context
-keeps the package in the closure. `outName` must be a single executable name.
-The pinned microvm source is bound through `ai.internal.mkSandbox`; consumers
-need no extra module arguments. An empty configuration installs no sandbox and
-forces no guest.
+QEMU's upstream runner uses `-no-reboot` because its microvm machine can hang on
+poweroff. Privileged `ExecStopPost` writes systemd's main-process `EXIT_CODE`
+and `EXIT_STATUS` to `/dev/virtio-ports/sandbox.status`, then requests reboot
+even if reporting fails. The unit waits for that device; root-only udev rules
+prevent the guest command from forging completion. Preparation failures and
+other service results produce no record. The file chardev writes into the
+private host runtime directory; console output is never parsed. Virtio serial
+uses the PCI bus already enabled by the store share. Serial gettys are disabled.
 
-The guest shares the host's store at `/nix/.ro-store`, not `/nix/store`:
-upstream mounts the latter as an overlay with tmpfs upper and work directories
-beneath `/nix/.rw-store`. Sharing directly at the overlay destination would hide
-the lower mount. Root is tmpfs as well; no disk, NIC, home or workspace is
-shared.
-
-QEMU's upstream runner has `-no-reboot`, because its microvm machine can hang on
-powering off. The service's privileged `ExecStopPost` writes systemd's
-main-process `EXIT_CODE` and `EXIT_STATUS` through
-`/dev/virtio-ports/sandbox.status`, then requests reboot even if reporting
-fails. A root-only udev rule prevents the unprivileged process from forging
-completion. The unit waits for this device before starting; the reporter accepts
-ordinary completion results only, and unset main-process status (including
-preparation failure) produces no record. QEMU writes the separate file chardev
-into the private host runtime directory. Console output is never parsed. The
-existing store share already enables PCI in the upstream runner; virtio serial
-uses that bus on Linux guests without adding a mount. No serial getty competes
-with the process for its console.
-
-The host wrapper accepts zero arguments or removes one leading `--`, rejecting
-other prefixes before checking KVM and allocating its unique temporary runtime
-directory. It serializes the remaining arguments with NUL separators; zero
-arguments produce an empty file, distinct from one empty argument. QEMU reads
-that relative `argv` file through `-fw_cfg`, so changing arguments never
-rebuilds the guest and adds no share. The `qemu_fw_cfg` driver exposes the blob
-in sysfs; privileged `ExecStartPre` installs it into the service's private
-runtime directory. The unprivileged guest wrapper reads it with Bash `mapfile`
-and executes the shell-quoted fixed `exe` with the resulting array. No argument
-string is evaluated as shell syntax. Keep the executable's Nix string context
-intact: it supplies the package dependency without a separate package field.
-
-The pinned QEMU microvm machine exposes fw_cfg with the existing ACPI setup. The
-sysfs raw file reports size zero despite containing data; streaming reads work,
-including payloads larger than a page. This narrow read-only blob replaces the
-need for any host control-directory share.
+The launcher accepts zero arguments or strips one leading `--`; other prefixes
+fail before KVM checks or runtime allocation. Arguments are NUL-separated in a
+relative `argv` file delivered through QEMU `-fw_cfg`, without rebuilding or a
+control-directory share. Zero arguments differ from one empty argument.
+`qemu_fw_cfg` exposes the blob in sysfs; privileged `ExecStartPre` installs it
+in the service runtime directory, and Bash `mapfile` restores the array for the
+shell-quoted executable. No argument string is evaluated as shell syntax.
+Streaming sysfs reads work beyond a page despite the raw file reporting size
+zero; the pinned machine exposes fw_cfg through its existing ACPI setup.
 
 After a successful runner exit, the host validates the completion record and
 returns the guest exit code (0–255), or 128 plus the signal number for a killed
@@ -91,12 +67,10 @@ completion and VM failure return 125 with a diagnostic, so a normal VM shutdown
 alone cannot imply guest success. Guest exit 125 shares that numerical value but
 has no infrastructure diagnostic.
 
-The runner executes inside that directory, and the wrapper's exit trap removes
-it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
-trap.
+The runner executes in the private runtime directory. Its caller must retain the
+shell and EXIT trap, which reap doors, release repository pins, and remove the
+directory after recovery has finished.
 
-The factory accepts
-`{doors ? []; exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`.
 Each door is `{port; command; arguments ? [];}` with a unique TCP port, absolute
 host executable and string arguments. QEMU runs a fresh wrapper per connection
 with socket stdin/stdout; the command gets an empty environment, and host stderr
@@ -104,34 +78,38 @@ stays in the launcher's private runtime directory, which no guest share
 includes. Door arguments sit in a wrapper in the Nix store, which the guest
 mounts, so the guest can read them: a secret must come from a runtime file in
 the launcher's directory that the command reads when it starts. The restricted
-user network exposes only those forwarded guest ports. Launcher cleanup checks
-each recorded PID's process start time before killing an orphaned door. CI runs
-the wrapper outside QEMU, runs the cleanup against stubbed records and checks
-the generated QEMU arguments; the network restriction, one process per
-connection, the environment seen from inside the guest and orphan cleanup after
-QEMU dies are proved only by the hand-run KVM fixtures
-(`microvm-sandbox-door-launcher` and `microvm-sandbox-door-lifecycle`). With
-`repo = true`, launch from a Git checkout (including a linked worktree or an
-unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
-committed HEAD, preserving its branch name or detached state. Uncommitted host
-changes are excluded. Shallow and partial repositories are refused; supported
-object formats are SHA-1 and SHA-256. Git joins the guest system profile and
-executable PATH only in this mode. These factory parameters do not add module
-options.
+user network exposes only those forwarded guest ports. Each connection has its
+own process group. Launcher cleanup checks the recorded PID's start time and
+group before killing the whole group, tolerating vanished or incomplete records
+so runtime cleanup and exit status survive. CI runs the wrapper outside QEMU,
+runs the cleanup against stubbed records and checks the generated QEMU
+arguments; the network restriction, one process per connection, the environment
+seen from inside the guest and orphan cleanup after QEMU dies are proved only by
+the hand-run KVM fixtures (`microvm-sandbox-door-launcher` and
+`microvm-sandbox-door-lifecycle`). With `repo = true`, launch from a Git
+checkout (including a linked worktree or an unborn branch). The guest starts in
+`/home/sandbox/repo` at that checkout's committed HEAD, preserving its branch
+name or detached state. Uncommitted host changes are excluded. Shallow and
+partial repositories are refused; supported object formats are SHA-1 and
+SHA-256. Git joins the guest system profile and executable PATH only in this
+mode. These factory parameters do not add module options.
 
-The launcher builds an isolated bare seed repository with templates disabled and
-the host's explicit object format. Only the chosen push remote's tracking refs
-become seed branches; the checkout's HEAD becomes `refs/sandbox/head`. Remote
-selection is `branch.<name>.pushRemote`, `remote.pushDefault`,
-`branch.<name>.remote`, then `origin`. An unborn checkout gets an empty seed.
-The launcher copies only the history reachable from the seeded refs into the
-seed's own pack (`pack-objects --revs --stdout` piped into `index-pack`), so
+Optional `signing = {port; socket;}` adds a door to the absolute host
+`ssh-agent` socket. A guest bridge publishes `SSH_AUTH_SOCK` without sharing the
+private key or its directory. `lib.ai.mkSshSigner pkgs` starts a dedicated host
+agent, loads one key, and leaves it running until the signer is stopped.
+
+The launcher creates an isolated bare seed with templates disabled and the
+host's object format. Selected push-remote tracking refs become seed branches;
+HEAD becomes `refs/sandbox/head`. Selection is `branch.<name>.pushRemote`,
+`remote.pushDefault`, `branch.<name>.remote`, then `origin`. Unborn seeds are
+empty. The launcher copies only the history reachable from the seeded refs into
+the seed's own pack (`pack-objects --revs --stdout` piped into `index-pack`), so
 stashes, other branches and amended-away commits stay on the host. The seed is
-the only repository share: a read-only 9p export at `/mnt/seed` whose relative
-source resolves in the per-launch runtime directory. Host config, hooks, refs,
-other objects and worktree metadata are never exported. The guest clones the
-seed with `--shared --no-checkout`; its system Git config trusts only the seed
-mount path. The whole host Nix store is also readable in the guest.
+the only repository share, a read-only 9p export at `/mnt/seed` relative to the
+runtime directory; host config, hooks, refs, other objects and worktree metadata
+stay out. The guest uses `clone --shared --no-checkout`, with system Git trust
+limited to the seed mount path.
 
 The launcher writes nothing into the host repository: it holds no refs, locks or
 temporary pack files there, so host GC and maintenance run freely during a
@@ -155,7 +133,6 @@ recovery also fails; nonempty failed exports are retained as
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.
 
-The user-facing contract and host preparation are documented in
-`packages/microvm/modules/README.md`. The owner checks cover empty imports,
-installation parity, factory validation, and guest boundaries. Real guest boot
-requires a Linux host with KVM access and is a separate smoke test.
+See `packages/microvm/modules/README.md` for host setup. Owner checks cover
+module parity, validation, process cleanup and recovery; real guest smoke tests
+need Linux/KVM and run separately from sandboxed builds.

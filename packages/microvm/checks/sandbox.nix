@@ -169,12 +169,13 @@
     command = lib.getExe doorFixture;
     port = 7000;
   };
+  sshSigner = self.lib.ai.mkSshSigner pkgs;
   # Guest-side assertions: each fixture exits non-zero when the guest disagrees.
   # They need KVM, so they are launchers to run, not sandboxed builds.
   mkGuestScript = name: text:
     import ../../../lib/strict-shell-application.nix pkgs {
       inherit name text;
-      runtimeInputs = [pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.procps];
+      runtimeInputs = [pkgs.coreutils pkgs.diffutils pkgs.gawk pkgs.gnugrep pkgs.gnused pkgs.openssh pkgs.procps];
     };
   packagesFixture = mkGuestScript "sandbox-packages-fixture" ''
     git --version | grep -Fx 'git version ${pkgs.git.version}'
@@ -210,6 +211,84 @@
     };
   sizeDefault = mkSizePackage 1024 1;
   sizeLarge = mkSizePackage 4096 2;
+  signingGuestFixture = mkGuestScript "sandbox-signing-guest-fixture" ''
+    [[ $SSH_AUTH_SOCK == /run/sandbox/agent.sock ]]
+    private_dir=$1
+    for _ in {1..100}; do
+      [[ -S $SSH_AUTH_SOCK ]] && break
+      sleep 0.1
+    done
+    [[ -S $SSH_AUTH_SOCK ]]
+    [[ $(stat -c '%U:%a' "$SSH_AUTH_SOCK") == sandbox:600 ]]
+    private_dir=''${private_dir:?}
+    [[ ! -e $private_dir ]]
+    if grep -Fq "$private_dir" /proc/mounts; then
+      echo 'FAIL: private key path is shared with the guest' >&2
+      exit 1
+    fi
+    ssh-add -L | tee listed-key
+    [[ $(awk '{print $1, $3}' listed-key) == 'ssh-ed25519 sandbox-signing-test' ]]
+    printf 'microvm signing door test\n' > message
+    ssh-keygen -Y sign -f listed-key -n microvm-test message
+    [[ -s message.sig ]]
+    base64 -w 0 listed-key; echo ' MICROVM_TEST_KEY'
+    base64 -w 0 message; echo ' MICROVM_TEST_MESSAGE'
+    base64 -w 0 message.sig; echo ' MICROVM_TEST_SIGNATURE'
+    echo PASS: guest lists and signs through the sandbox-owned agent socket
+  '';
+  signingPackage = factory {
+    exe = lib.getExe signingGuestFixture;
+    outName = "sandbox-signing-fixture";
+    packages = [pkgs.openssh];
+    signing = {
+      port = 2222;
+      socket = "/tmp/microvm-signing-agent.sock";
+    };
+  };
+  signingCheck = mkGuestScript "sandbox-signing-check" ''
+    private_dir=$(mktemp -d -p /tmp microvm-signing-private-key.XXXXXXXX)
+    artifacts=$(mktemp -d)
+    agent_socket=/tmp/microvm-signing-agent.sock
+    log=$(mktemp)
+    # Invoked indirectly by traps.
+    # shellcheck disable=SC2329
+    cleanup() {
+      status=$?
+      if (( status != 0 )); then
+        cat "$log"
+      fi
+      if [[ -n ''${signer_pid:-} ]]; then
+        kill "$signer_pid" 2>/dev/null || :
+        wait "$signer_pid" 2>/dev/null || :
+      fi
+      rm -rf -- "$private_dir" "$artifacts" "$agent_socket" "$log"
+    }
+    trap cleanup EXIT
+    ssh-keygen -q -t ed25519 -N "" -C sandbox-signing-test -f "$private_dir/private-key"
+    # The signer must not load an inherited agent; the dedicated socket is explicit.
+    export SSH_AUTH_SOCK=/tmp/microvm-signing-inherited-agent-must-not-be-used.sock
+    ${lib.getExe sshSigner} "$agent_socket" "$private_dir/private-key" &
+    signer_pid=$!
+    for _ in {1..100}; do
+      [[ -S $agent_socket ]] && break
+      kill -0 "$signer_pid"
+      sleep 0.1
+    done
+    [[ -S $agent_socket ]]
+    ${lib.getExe signingPackage} -- "$private_dir" > "$log"
+    grep -E ' MICROVM_TEST_KEY' "$log"
+    for artifact in KEY MESSAGE SIGNATURE; do
+      count=$(grep -Ec "[[:blank:]]MICROVM_TEST_$artifact" "$log")
+      [[ $count == 1 ]]
+      encoded=$(sed -n "s/^\([A-Za-z0-9+/=]*\)[[:blank:]]MICROVM_TEST_$artifact.*/\1/p" "$log")
+      [[ -n $encoded ]]
+      printf '%s' "$encoded" | base64 -d > "$artifacts/$artifact"
+    done
+    cmp "$private_dir/private-key.pub" "$artifacts/KEY"
+    printf 'sandbox-signing-test %s\n' "$(< "$private_dir/private-key.pub")" > "$private_dir/allowed-signers"
+    ssh-keygen -Y verify -f "$private_dir/allowed-signers" -I sandbox-signing-test -n microvm-test -s "$artifacts/SIGNATURE" < "$artifacts/MESSAGE"
+    echo 'PASS: dedicated signer listed and signed; host verified the generated public key'
+  '';
   package = factory args;
   guest = package.guest.config;
   # `recover` creates work for a graceful-shutdown recovery smoke boot.
@@ -382,11 +461,12 @@ in {
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
         builtins.attrNames (builtins.functionArgs factory)
-        == ["doors" "exe" "memory" "outName" "packages" "repo" "vcpus"]
+        == ["doors" "exe" "memory" "outName" "packages" "repo" "signing" "vcpus"]
         && (builtins.functionArgs factory).doors
         && (builtins.functionArgs factory).memory
         && (builtins.functionArgs factory).packages
         && (builtins.functionArgs factory).repo
+        && (builtins.functionArgs factory).signing
         && (builtins.functionArgs factory).vcpus
         && !(builtins.functionArgs factory).exe
         && !(builtins.tryEval (factory (args // {memory = 0;}))).success
@@ -447,6 +527,41 @@ in {
       );
       microvm-sandbox-size-default-launcher = sizeDefault;
       microvm-sandbox-size-large-launcher = sizeLarge;
+      microvm-sandbox-signing = mkTest "microvm-sandbox-signing" (
+        let
+          signingConfig = signingPackage.guest.config;
+          rejects = signing: !(builtins.tryEval (factory (args // {inherit signing;})).drvPath).success;
+          assertions = {
+            agent-environment = signingConfig.systemd.services.sandbox.serviceConfig.Environment == ["SSH_AUTH_SOCK=/run/sandbox/agent.sock"];
+            agent-owner = signingConfig.systemd.services.sandbox-signing-agent.serviceConfig.User == "sandbox";
+            bridge = lib.hasInfix "UNIX-LISTEN:/run/sandbox/agent.sock,fork,mode=0600 TCP:10.0.2.100:2222" signingConfig.systemd.services.sandbox-signing-agent.serviceConfig.ExecStart;
+            door = lib.hasInfix "guestfwd=tcp:10.0.2.100:2222-cmd:/nix/store/" (lib.findFirst (lib.hasPrefix "user,id=doors") "" signingConfig.microvm.qemu.extraArgs);
+            missing-socket = rejects {
+              port = 2222;
+            };
+            no-key-share = builtins.length signingConfig.microvm.shares == 1;
+            port-range = rejects {
+              port = 0;
+              socket = "/tmp/agent.sock";
+            };
+            socket-invalid = rejects {
+              port = 2222;
+              socket = "relative-agent.sock";
+            };
+            socket-options = rejects {
+              port = 2222;
+              socket = "/tmp/agent.sock,forever";
+            };
+            socket-shell = rejects {
+              port = 2222;
+              socket = "/tmp/agent socket";
+            };
+          };
+        in
+          builtins.all (name: assertions.${name} || throw "microvm-sandbox-signing: ${name}") (builtins.attrNames assertions)
+      );
+      microvm-sandbox-signing-check = signingCheck;
+      microvm-sandbox-signing-launcher = signingPackage;
       microvm-sandbox-status-launcher = factory {
         exe = lib.getExe statusFixture;
         outName = "sandbox-status-fixture";

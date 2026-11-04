@@ -9,8 +9,10 @@
   outName,
   packages ? [],
   repo ? false,
+  signing ? null,
   vcpus ? 1,
 }: let
+  agentSocket = "/run/sandbox/agent.sock";
   # QEMU executes one wrapper per connection with its socket on stdin/stdout.
   doorAddress = "10.0.2.100";
   doorMac = "02:00:00:00:d0:01";
@@ -18,7 +20,14 @@
   hostRepo = import ./repo-host.nix {inherit lib pkgs;};
   # The command starts in a Git checkout, so its shells need Git on PATH.
   guestPackages = packages ++ lib.optional repo pkgs.git;
-  hasDoors = doors != [];
+  allDoors =
+    doors
+    ++ lib.optional (signing != null) {
+      command = "${pkgs.socat}/bin/socat";
+      arguments = ["STDIO" "UNIX-CONNECT:${signing.socket}"];
+      inherit (signing) port;
+    };
+  hasDoors = allDoors != [];
   # Door arguments sit in this wrapper in the Nix store, which the guest mounts,
   # so the guest can read them. Secrets must come from a runtime file in the
   # launcher's directory that the command reads when it starts.
@@ -44,19 +53,27 @@
           ${door.command} ${lib.concatMapStrings (argument: "${lib.escapeShellArg argument} ") door.arguments}2>> doors.log
       '';
     };
+  validAbsolutePath = value: builtins.isString value && builtins.match "/[a-zA-Z0-9._+/-]+" value != null;
   validDoor = door:
     lib.subtractLists ["arguments" "command" "port"] (builtins.attrNames door)
     == []
     && door ? command
     && door ? port
-    && builtins.isInt door.port
-    && door.port >= 1
-    && door.port <= 65535
-    && builtins.isString door.command
-    && builtins.match "/[a-zA-Z0-9._+/-]+" door.command != null
+    && validPort door.port
+    && validAbsolutePath door.command
     && builtins.isList door.arguments
     && builtins.all builtins.isString door.arguments;
-  normalizedDoors = map (door: {arguments = [];} // door) doors;
+  normalizedDoors = map (door: {arguments = [];} // door) allDoors;
+  validPort = port: builtins.isInt port && port >= 1 && port <= 65535;
+  validSigning =
+    signing
+    == null
+    || (
+      builtins.isAttrs signing
+      && builtins.attrNames signing == ["port" "socket"]
+      && validPort signing.port
+      && validAbsolutePath signing.socket
+    );
   doorNetdev = lib.concatStringsSep "," (
     ["user" "id=doors" "restrict=on" "net=10.0.2.0/24"]
     ++ map (door: "guestfwd=tcp:${doorAddress}:${toString door.port}-cmd:${lib.getExe (doorWrapper door)}") normalizedDoors
@@ -216,6 +233,20 @@
           };
         };
         systemd.services = {
+          sandbox-signing-agent = lib.mkIf (signing != null) {
+            after = ["network-online.target"];
+            before = ["sandbox.service"];
+            requires = ["network-online.target"];
+            serviceConfig = {
+              ExecStart = "${pkgs.socat}/bin/socat UNIX-LISTEN:${agentSocket},fork,mode=0600 TCP:${doorAddress}:${toString signing.port}";
+              Restart = "on-failure";
+              RuntimeDirectory = "sandbox";
+              RuntimeDirectoryMode = "0700";
+              Type = "exec";
+              User = "sandbox";
+            };
+            wantedBy = ["multi-user.target"];
+          };
           sandbox = let
             portDevices = map (name: "dev-virtio\\x2dports-sandbox.${lib.replaceStrings ["-"] ["\\x2d"] name}.device") (["status"] ++ lib.optionals repo ["bundle" "bundle-status"]);
           in {
@@ -223,6 +254,7 @@
             requires = portDevices;
             wants = lib.optional hasDoors "network-online.target";
             serviceConfig = {
+              Environment = lib.optional (signing != null) "SSH_AUTH_SOCK=${agentSocket}";
               ExecStart = lib.getExe guestCommand;
               ExecStartPre =
                 map (name: "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.${name}/raw /run/sandbox/${name}")
@@ -281,8 +313,9 @@ in
   assert lib.assertMsg (builtins.isInt vcpus && vcpus >= 1) "mkSandbox.vcpus must be a positive integer";
   assert lib.assertMsg (builtins.isList packages && builtins.all lib.isDerivation packages) "mkSandbox.packages must be a list of packages";
   assert lib.assertMsg (validName outName) "mkSandbox.outName must be a single executable name";
+  assert lib.assertMsg validSigning "mkSandbox.signing must be null or {port; socket;} with a TCP port and an absolute host agent socket";
   assert lib.assertMsg (builtins.isList doors && builtins.all validDoor normalizedDoors) "mkSandbox.doors entries must be {port; command; arguments ? [];} with a TCP port, an absolute command path and string arguments";
-  assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) doors)) == builtins.length doors) "mkSandbox.doors ports must be unique";
+  assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) allDoors)) == builtins.length allDoors) "mkSandbox.doors and mkSandbox.signing ports must be unique";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
