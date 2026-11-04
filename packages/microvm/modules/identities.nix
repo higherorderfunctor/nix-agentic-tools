@@ -58,6 +58,11 @@
               };
             }));
           };
+          signing.key = lib.mkOption {
+            default = null;
+            description = "Optional signing key as a redact reference, delivered to a dedicated signer per runtime and identity; null means unsigned commits and no agent door.";
+            type = lib.types.nullOr redact.types.secretFile;
+          };
           user = {
             email = lib.mkOption {
               description = "Required guest Git author and committer email.";
@@ -98,7 +103,13 @@
     forges;
   validateIdentities = path: identities:
     lib.concatLists (lib.mapAttrsToList (identity: entry:
-      lib.concatLists (lib.mapAttrsToList (token: remote: [
+      [
+        {
+          assertion = entry.signing.key == null || (entry.user.email != "" && !lib.hasPrefix "#" entry.user.email && builtins.match ".*[[:space:],].*" entry.user.email == null);
+          message = "${path}.identities.${identity}.user.email: signing requires one nonempty allowed-signers principal without whitespace or commas, not starting with '#'.";
+        }
+      ]
+      ++ lib.concatLists (lib.mapAttrsToList (token: remote: [
           {
             assertion = validHost token;
             message = "${path}.identities.${identity}.remotes.\"${token}\": a URL token must be a DNS name or IPv4 address.";

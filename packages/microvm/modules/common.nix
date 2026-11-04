@@ -66,6 +66,17 @@
     assertion = routes.${name} != null;
     message = "ai.${name}.sandbox.enable requires ai.${name}.package to be non-null; configuration-only runtimes cannot run in a guest.";
   };
+  # The signer module and launcher consume one selection/name table.
+  signers = lib.genAttrs routed (runtime:
+    lib.mapAttrs (identity: entry: let
+      service = "sandbox-signer-${runtime}-${identity}";
+      evaluated = config.ai.services.${service};
+    in {
+      inherit service;
+      inherit (evaluated) runtimeDir;
+      environment = lib.filterAttrs (name: _: builtins.elem name ["TMPDIR" "XDG_RUNTIME_DIR"]) evaluated.environment;
+      key = entry.signing.key;
+    }) (lib.filterAttrs (_: entry: entry.signing.key != null) config.ai.${runtime}.sandbox.git.identities));
   runtimePackage = name: let
     cfg = config.ai.${name}.sandbox;
     package = routes.${name};
@@ -91,6 +102,7 @@
           instance = config.ai.git-relay.instances.sandbox;
           runtime = name;
           runtimeIdentities = options.ai.${name}.sandbox.git.identities.highestPrio < 1500;
+          signers = signers.${name};
         };
 in {
   imports = [
@@ -101,6 +113,7 @@ in {
     (import ./git.nix {inherit routeNames;})
     (import ./identities.nix {inherit inheritOptions routed routeNames;})
     (import ./relay.nix {inherit backend routed;})
+    (import ./signing.nix {inherit signers;})
   ];
 
   options.ai =

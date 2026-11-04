@@ -38,7 +38,16 @@ import ../../../lib/strict-shell-application.nix pkgs {
       echo "sandbox-ssh-signer: timed out waiting for socket: $socket" >&2
       exit 1
     fi
-    SSH_AUTH_SOCK=$socket ssh-add -- "$key_file"
+    # ai.services' textual secret reader strips trailing newlines; OpenSSH
+    # requires a line ending after the private key's footer.
+    key() { cat -- "$key_file"; printf '\n'; }
+    # The launcher compares the agent's key with this one, so a key a guest
+    # swapped into the agent is refused at the next launch.
+    ssh-keygen -y -f /dev/stdin < <(key) > "$socket.pub.tmp"
+    mv -- "$socket.pub.tmp" "$socket.pub"
+    key | SSH_AUTH_SOCK=$socket ssh-add -
+    # The agent holds the key now; the file copy only widens its exposure.
+    rm -f -- "$key_file"
     wait "$agent_pid"
   '';
 }
