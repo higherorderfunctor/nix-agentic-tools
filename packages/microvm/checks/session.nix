@@ -21,12 +21,16 @@
     codex = {
       enable = true;
       package = guest;
-      sandbox.git.identities.work = identity "codex-only";
+      sandbox.git.identities = {
+        unsigned = identity "codex-unsigned";
+        work = (identity "codex-only") // {signing.key = redact.file "${state}/signing-key";};
+      };
     };
     git-relay.instances.sandbox = {
       port = 29418;
       stateDir = state;
     };
+    microvm.services.sandbox-signer-codex-work.environment.XDG_RUNTIME_DIR = "${state}/signer-runtime";
     sandbox = {
       enable = true;
       git.forges."127.0.0.1".hostKeys = "[127.0.0.1]:29422 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4";
@@ -51,14 +55,17 @@
   backends = lib.mapAttrs (_: eval: eval fixture) evaluate;
   withoutIdentities = lib.mapAttrs (_: eval:
     eval (lib.recursiveUpdate fixture {
-      ai.claude.sandbox.git.identities = lib.mkForce {};
-      ai.codex.sandbox.git.identities = lib.mkForce {};
+      ai = {
+        claude.sandbox.git.identities = lib.mkForce {};
+        codex.sandbox.git.identities = lib.mkForce {};
+        microvm.services = lib.mkForce {};
+      };
     }))
   evaluate;
   inherited = harness.evalHmModules [
     (fixture
       // {
-        ai = fixture.ai // {codex = builtins.removeAttrs fixture.ai.codex ["sandbox"];};
+        ai = (builtins.removeAttrs fixture.ai ["microvm"]) // {codex = builtins.removeAttrs fixture.ai.codex ["sandbox"];};
       })
     {
       ai.codex.pinDaemonToPackage = false;
@@ -75,13 +82,18 @@
   codex = launcher backends.hm "codex";
   claude = launcher backends.hm "claude";
   relay = backends.hm.config.ai.git-relay.instances.sandbox.package;
+  signer = (import ../../ai-module/lib/services.nix {inherit lib;}).mkLauncher {
+    inherit pkgs;
+    entry = backends.hm.config.ai.services.sandbox-signer-codex-work;
+    name = "sandbox-signer-codex-work";
+  };
   boot = import ../../../lib/strict-shell-application.nix pkgs {
     name = "sandbox-session-boot-check";
     runtimeInputs = [pkgs.coreutils pkgs.git pkgs.openssh pkgs.openssl pkgs.python3];
     text = ''
       exec ${lib.getExe pkgs.python3} ${./session.py} \
         ${lib.getExe codex} ${lib.getExe claude} ${lib.getExe relay} \
-        ${lib.getExe' pkgs.openssh "sshd"} ${lib.getExe' pkgs.git "git-shell"} ${lib.getExe pkgs.bash} ${state}
+        ${lib.getExe' pkgs.openssh "sshd"} ${lib.getExe' pkgs.git "git-shell"} ${lib.getExe pkgs.bash} ${state} ${lib.getExe signer}
     '';
   };
 in {
@@ -100,7 +112,11 @@ in {
         netdev = lib.findFirst (lib.hasPrefix "user,id=doors") "" connected.microvm.qemu.extraArgs;
       in
         builtins.attrNames table
-        == [token]
+        == (
+          if runtime == "codex"
+          then ["codex-only" "codex-unsigned"]
+          else [token]
+        )
         && table.${token}.credential == "${runtime}-${own}"
         && table.${token}.identity == own
         && package.plain.guest.config.microvm.interfaces == []
