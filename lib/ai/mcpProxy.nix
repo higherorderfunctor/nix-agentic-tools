@@ -99,7 +99,7 @@
 
   strictShellApplication = import ../strict-shell-application.nix;
   mcp = import ../mcp.nix {inherit lib;};
-  caddy = import ./caddy.nix {inherit lib pkgs;};
+  caddy = import ./caddy.nix {inherit lib;};
   inherit (caddy) envRef;
   redact = import ../redact {inherit lib;};
 
@@ -330,7 +330,7 @@
   # The `case` is load bearing: with no '/' after the host,
   # "''${_rest#*/}" returns _rest unchanged and the path would silently
   # become the hostname.
-  runScriptFor = spec:
+  runScriptFor = spec: runtimeDir:
     strictShellApplication pkgs {
       name = "mcp-proxy-${spec.name}";
       text = ''
@@ -350,7 +350,7 @@
         export ${spec.originVar}="$_scheme://$_host" ${spec.pathVar}="$_path"
 
         ${caddy.runCaddy {
-          name = "mcp-proxy-${spec.name}";
+          inherit runtimeDir;
           inherit (pkgs) caddy;
           config = caddyfileFor spec;
         }}'';
@@ -358,10 +358,10 @@
 
   # The `ai.services` entry for one proxy declaration. Secrets stay
   # references: the generic launcher resolves them at start.
-  serviceFor = name: server: let
+  serviceFor = name: server: runtimeDir: let
     spec = specFor name server;
   in {
-    command = [(lib.getExe (runScriptFor spec))];
+    command = [(lib.getExe (runScriptFor spec runtimeDir))];
     environment =
       spec.headerSecrets
       // {

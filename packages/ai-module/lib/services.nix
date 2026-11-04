@@ -24,7 +24,21 @@
       variable = lib.mkOption {type = lib.types.strMatching identifier;};
     };
   };
-  serviceEntry = lib.types.submodule {
+  # The backend supplies a literal root; Home Manager selects its root at
+  # start. This is the sole owner of the per-service directory name.
+  runtimePath = root: name: let
+    word =
+      if root == null
+      then ''"''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}"''
+      else lib.escapeShellArg root;
+    user = lib.optionalString (root == null) ''"$(if [ -z "''${XDG_RUNTIME_DIR:-}" ]; then printf '%s-' "$UID"; fi)"'';
+  in "${word}/ai-service-${user}${lib.escapeShellArg name}";
+  serviceEntry = lib.types.submodule ({
+    config,
+    name,
+    ...
+  }: {
+    config.runtimeDir = runtimePath config.runtimeRoot name;
     options = {
       command = lib.mkOption {type = lib.types.nonEmptyListOf lib.types.str;};
       enable = defaulted lib.types.bool true;
@@ -33,8 +47,22 @@
       ports = defaulted (lib.types.attrsOf lib.types.port) {};
       restart = defaulted (lib.types.enum ["always" "never" "on-failure"]) "on-failure";
       restartOnChange = defaulted (lib.types.listOf (lib.types.strMatching "/.*")) [];
+      runtimeDir = lib.mkOption {
+        description = "Quoted shell word for this service's private runtime directory; consumed by its launcher and Caddy run script.";
+        internal = true;
+        readOnly = true;
+        type = lib.types.str;
+        visible = false;
+      };
+      runtimeRoot = lib.mkOption {
+        default = null;
+        description = "Literal backend runtime root; null selects Home Manager's runtime environment.";
+        internal = true;
+        type = lib.types.nullOr (lib.types.strMatching "/.*");
+        visible = false;
+      };
     };
-  };
+  });
   # Files whose content change restarts the service: the declared paths plus
   # every `redact.file` the environment and the rendered files read, secret
   # files included.
@@ -49,7 +77,7 @@
   # Where a Home Manager launcher records what its start read. The user
   # manager sets XDG_RUNTIME_DIR for every unit; the reconcile entry exports
   # it before reading.
-  stampFile = name: ''"$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}.stamp"}'';
+  stampFile = entry: "${entry.runtimeDir}.stamp";
   # Every NAME of a `{$NAME}` string in a JSON value.
   placeholders = value:
     if builtins.isString value
@@ -123,15 +151,24 @@
       ${slot.variable}=${target}''
     else assignment;
   # The 0700 per-service runtime directory every launcher file goes to. It is
-  # chosen after the declared environment is applied, so a declared
+  # chosen after the declared literal environment is applied, so a declared
   # XDG_RUNTIME_DIR or TMPDIR picks it as it does for the daemon.
-  runtimeDirectory = pkgs: name: let
+  runtimeDirectory = pkgs: name: entry: let
     coreutils = "${pkgs.coreutils}/bin";
   in ''
-    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
-      _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
-    else
-      _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
+    _ai_dir=${entry.runtimeDir}
+    _ai_root="''${_ai_dir%/*}"
+    # A trailing slash makes -L follow a root symlink instead of testing it.
+    while [[ $_ai_root == */ && $_ai_root != / ]]; do
+      _ai_root="''${_ai_root%/}"
+    done
+    # Devenv can use /tmp/devenv-<hash> without XDG_RUNTIME_DIR. Do not
+    # trust a consumer's devenv version to reject an unsafe parent: another
+    # owner or group/other write access lets it replace our checked leaf.
+    if [ -L "$_ai_root" ] || [ ! -d "$_ai_root" ] || [ ! -O "$_ai_root" ] \
+      || [ "$((8#$(${coreutils}/stat -c %a -- "$_ai_root") & 0022))" -ne 0 ]; then
+      printf '%s\n' ${lib.escapeShellArg "ai.services.${name}: runtime root must be an existing owned directory, not a symlink, with no group or other write access:"} "$_ai_root" >&2
+      exit 1
     fi
     umask 077
     if ! ${coreutils}/mkdir -m 0700 -- "$_ai_dir" 2>/dev/null; then
@@ -184,7 +221,7 @@
     '';
     stampBlock = lib.optionalString stamped ''
       # What this invocation read, for Home Manager's post-reload check.
-      _ai_stamp=${stampFile name}
+      _ai_stamp=${stampFile entry}
       _ai_temporary="$(${coreutils}/mktemp "$_ai_stamp.XXXXXX")"
       printf '%s %s\n' "$_ai_digest" "$INVOCATION_ID" > "$_ai_temporary"
       ${coreutils}/mv -f -- "$_ai_temporary" "$_ai_stamp"
@@ -192,6 +229,16 @@
     # Inherited exported slots must lose both their value and export flag
     # before any reader runs; resolved slots are private to this launcher.
     unsetSlots = lib.optionalString (slots != []) "unset ${slotNames}\n";
+    literalEnvironment = lib.filterAttrs (_: value: value == null || builtins.isString value) entry.environment;
+    secretEnvironment = lib.filterAttrs (_: value: value != null && !builtins.isString value && !redact.isAsFile value) entry.environment;
+    assignEnvironment = environment:
+      lib.concatStringsSep "\n" (lib.mapAttrsToList (variable: value:
+        redact.assign {
+          inherit pkgs value variable;
+          export = true;
+          option = "ai.services.${name}.environment.${variable}";
+        })
+      environment);
     variables = builtins.attrNames entry.environment ++ lib.mapAttrsToList (_: file: file.variable) files;
     clashes = lib.unique (lib.filter (variable: lib.count (other: other == variable) variables > 1) variables);
     reserved =
@@ -206,17 +253,12 @@
       strictShellApplication pkgs {
         name = "ai-service-${name}";
         text = ''
-          ${hashBlock}${unsetSlots}# Generated literal assignments: dollar signs and quotes are data.
+          ${unsetSlots}# Generated literal assignments: dollar signs and quotes are data.
           # shellcheck disable=SC2016,SC2089,SC2090
           {
-          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (variable: value:
-            redact.assign {
-              inherit pkgs value variable;
-              export = true;
-              option = "ai.services.${name}.environment.${variable}";
-            })
-          (lib.filterAttrs (_: value: !redact.isAsFile value) entry.environment))}
-          ${lib.optionalString (slots != [] || files != {}) (runtimeDirectory pkgs name)}${lib.concatMapStringsSep "\n" (readSlot pkgs) slots}
+          ${assignEnvironment literalEnvironment}
+          ${runtimeDirectory pkgs name entry}${hashBlock}${assignEnvironment secretEnvironment}
+          ${lib.concatMapStringsSep "\n" (readSlot pkgs) slots}
           ${lib.concatMapStrings (slot: lib.optionalString (slot ? exported) "export ${slot.exported}=\"\$${slot.variable}\"\n") slots}:
           }
           ${lib.concatStrings (lib.mapAttrsToList (renderFile pkgs name slots) files)}${unsetSlots}${stampBlock}# shellcheck disable=SC2016
@@ -329,7 +371,7 @@
     watched = lib.filterAttrs (_: paths: paths != []) (lib.mapAttrs (_: triggers) (enabled services));
     names = builtins.attrNames watched;
     observer = index: name: ''
-      observe_${toString index}() { observe ${lib.escapeShellArg "${name}.service"} ${stampFile name} ${lib.escapeShellArgs watched.${name}}; }
+      observe_${toString index}() { observe ${lib.escapeShellArg "${name}.service"} ${stampFile services.${name}} ${lib.escapeShellArgs watched.${name}}; }
     '';
   in
     lib.optionalAttrs (pkgs.stdenv.hostPlatform.isLinux && watched != {}) {
