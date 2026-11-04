@@ -9,6 +9,7 @@
   outName,
   packages ? [],
   repo ? false,
+  repoConfig ? false,
   signing ? null,
   vcpus ? 1,
 }: let
@@ -101,6 +102,7 @@
         mapfile -d "" -t args < /run/${runtimeName}/argv
       ''
       + lib.optionalString repo guestRepo.clone
+      + lib.optionalString repoConfig guestRepo.configure
       + ''
         exec ${lib.escapeShellArg exe} "''${args[@]}"
       '';
@@ -183,6 +185,7 @@
               "-device"
               "virtserialport,chardev=bundle-status,name=sandbox.bundle-status"
             ]
+            ++ lib.optionals repoConfig ["-fw_cfg" "name=opt/sandbox.repo-config,file=repo-config"]
             ++ [
               "-fw_cfg"
               "name=opt/sandbox.argv,file=argv"
@@ -278,7 +281,7 @@
               ExecStart = lib.getExe guestCommand;
               ExecStartPre =
                 map (name: "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.${name}/raw /run/${runtimeName}/${name}")
-                (["argv"] ++ lib.optionals repo ["repo-head" "repo-branch"])
+                (["argv"] ++ lib.optionals repo ["repo-head" "repo-branch"] ++ lib.optional repoConfig "repo-config")
                 # The sandbox user owns its runtime directory, so roots live outside it.
                 ++ lib.optional repo "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.seed-roots/raw /run/sandbox-seed-roots";
               ExecStopPost = "+${lib.getExe guestCompletion}";
@@ -337,6 +340,7 @@ in
   assert lib.assertMsg (builtins.isList doors && builtins.all validDoor normalizedDoors) "mkSandbox.doors entries must be {port; command; arguments ? []; environment ? {};} with a TCP port, an absolute command path, string arguments and string environment values";
   assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) allDoors)) == builtins.length allDoors) "mkSandbox.doors and mkSandbox.signing ports must be unique";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
+  assert lib.assertMsg (builtins.isBool repoConfig && (!repoConfig || repo)) "mkSandbox.repoConfig requires repo = true and reads SANDBOX_REPO_CONFIG at launch";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
       runtimeInputs = lib.optionals repo [pkgs.coreutils pkgs.git pkgs.util-linux];
@@ -352,6 +356,12 @@ in
           if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
             echo '${outName}: /dev/kvm must be readable and writable; enable KVM and grant your user access to the kvm group' >&2
             exit 1
+          fi
+        ''
+        + lib.optionalString repoConfig ''
+          if [[ ''${SANDBOX_REPO_CONFIG:-} != /* ]]; then
+            echo '${outName}: repoConfig requires an absolute SANDBOX_REPO_CONFIG file path' >&2
+            exit 2
           fi
         ''
         + lib.optionalString repo hostRepo.prepare
@@ -375,6 +385,9 @@ in
           : > status
         ''
         + lib.optionalString repo hostRepo.start
+        + lib.optionalString repoConfig ''
+          ${pkgs.coreutils}/bin/install -m 0600 -- "''${SANDBOX_REPO_CONFIG:?repoConfig requires SANDBOX_REPO_CONFIG}" repo-config
+        ''
         + ''
           if ${runner}/bin/microvm-run; then
             runner_status=0
@@ -411,7 +424,7 @@ in
       passthru =
         (old.passthru or {})
         // {
-          inherit guest;
+          inherit doorAddress guest;
           repoExport = guestRepo.export;
         };
     })
