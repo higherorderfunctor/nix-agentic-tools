@@ -233,7 +233,7 @@ export -f gh git
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(old.read_text(), 'fresh\n')
 
-    def test_kimchi_producer_includes_report_in_regeneration_delta(self):
+    def test_producer_regeneration_delta_and_kimchi_report_gate(self):
         produce = ci_step_script("Produce native extracted facts", "extracted-facts.yml")
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
@@ -262,7 +262,7 @@ export -f git nix
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(commands[-1], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
                     self.assertIn("Kimchi's regenerated egress report failed checks.x86_64-linux.kimchi-egress-report", result.stderr)
-                    self.assertIn("nix shell --inputs-from . nixpkgs#nodejs .#.formatter.x86_64-linux --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh && nix build .#.checks.x86_64-linux.kimchi-egress-report --no-link", result.stderr)
+                    self.assertIn("nix run .#.checks.x86_64-linux.kimchi-extracted.passthru.regenerate && nix shell --inputs-from . nixpkgs#nodejs .#.formatter.x86_64-linux --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh && nix build .#.checks.x86_64-linux.kimchi-egress-report --no-link", result.stderr)
                     self.assertFalse(patch.exists())
                     self.assertFalse(output.exists())
                     continue
