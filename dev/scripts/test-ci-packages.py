@@ -28,7 +28,7 @@ class ExtractedSelectionTest(unittest.TestCase):
         # Evaluate the real flake and owner declaration in an isolated source
         # tree: mocked drvPaths alone cannot catch an omitted generator input.
         repository = Path(__file__).resolve().parents[2]
-        cls.directory = tempfile.TemporaryDirectory(prefix=".ci-selection-", dir=repository)
+        cls.directory = tempfile.TemporaryDirectory(prefix="ci-selection-")
         cls.addClassCleanup(cls.directory.cleanup)
         cls.root = Path(cls.directory.name)
         paths = subprocess.check_output(["git", "ls-files", "-z"], cwd=repository).decode().split("\0")
@@ -262,7 +262,7 @@ export -f git nix
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(commands[-1], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
                     self.assertIn("Kimchi's regenerated egress report failed checks.x86_64-linux.kimchi-egress-report", result.stderr)
-                    self.assertIn("dev/skills/kimchi-egress-report/scripts/regenerate.sh && nix build .#.checks.x86_64-linux.kimchi-egress-report --no-link", result.stderr)
+                    self.assertIn("nix shell --inputs-from . nixpkgs#nodejs .#.formatter.x86_64-linux --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh && nix build .#.checks.x86_64-linux.kimchi-egress-report --no-link", result.stderr)
                     self.assertFalse(patch.exists())
                     self.assertFalse(output.exists())
                     continue
@@ -274,6 +274,8 @@ export -f git nix
                     self.assertIn("--command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh", commands[1])
                     self.assertEqual(commands[2], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
                     paths += " packages/kimchi/egress-report.json"
+                else:
+                    self.assertNotIn("build .#.checks.x86_64-linux.kimchi-egress-report --no-link", commands)
                 self.assertEqual(commands[-2:], [f"add -- {paths}", f"diff --cached --binary --full-index -- {paths}"])
                 self.assertEqual(patch.read_text(), 'egress report delta\n' if dirty == "true" else '')
 
