@@ -110,9 +110,12 @@ reference or secret file, and the `variable` exported with the path), `ports`,
 secrets at start, renders each file and each `redact.types.secretFile` value
 0600 into a 0700 `$XDG_RUNTIME_DIR/ai-service-<key>` directory, or
 `${TMPDIR:-/tmp}/ai-service-<uid>-<key>` without XDG_RUNTIME_DIR, both read
-after the declared environment applies, and execs argv on both backends; a
-secret file is delivered as its path. The root must exist; an existing service
-directory must be owned by the current user and neither a symlink nor a
+after the declared environment applies on Home Manager. Devenv instead uses
+`config.devenv.runtime/ai-service-<key>`, isolating per-project files and
+sockets from Home Manager. The evaluated service's internal `runtimeDir` is a
+quoted shell word shared by its launcher and socket clients. Both backends exec
+argv; a secret file is delivered as its path. The root must exist; an existing
+service directory must be owned by the current user and neither a symlink nor a
 non-directory. The launcher clears private secret slots before reading and
 before exec; `environment` names and file `variable` names reserve the `_ai_`
 prefix. Services read store paths and secrets, never engine-written files;
