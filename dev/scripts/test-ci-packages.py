@@ -500,7 +500,8 @@ nix-store() {
   case "$2:$3" in
     --requisites:*/f-kimchi-codeql-database-1.drv)
       printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/f-kimchi-codeql-database-1.drv \
-        /nix/store/g-kimchi-codeql-network-check.drv /nix/store/e-glibc-1.drv
+        /nix/store/g-kimchi-codeql-network-check.drv /nix/store/j-kimchi-codeql-request-evidence-check.drv \
+        /nix/store/e-glibc-1.drv
       [ "$MODE" = no-fixture ] || printf '%s\n' /nix/store/h-kimchi-codeql-database-network-fixture.drv
       [ "$MODE" = no-request-fixture ] || printf '%s\n' /nix/store/k-kimchi-codeql-database-request-evidence-fixture.drv
       [ "$MODE" = no-customized ] || printf '%s\n' /nix/store/i-codeql-javascript-customized-1.drv
@@ -551,9 +552,9 @@ export -f curl nix nix-store
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
                     if success:
                         # Four engine derivations, the release and both fixture
-                        # databases, the network check and the customized
-                        # engine; the engine the check needs again is asked once.
-                        self.assertEqual(len(queries.read_text().splitlines()), 9)
+                        # databases, both checks and the customized engine; the
+                        # engine the checks need again is asked once.
+                        self.assertEqual(len(queries.read_text().splitlines()), 10)
 
 class CheckBundlesTest(unittest.TestCase):
     def bundle(self, rows):

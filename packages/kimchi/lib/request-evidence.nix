@@ -31,9 +31,9 @@
       # A renamed or moved definitions or registry export matches nothing;
       # fail rather than record an empty inventory. Guards may be empty.
       jq -e 'length > 0' "$out/resourceDefinitions.json" >/dev/null ||
-        { echo "kimchi-codeql-${name}: no resource definitions found; check the STATIC_RESOURCE_DEFINITIONS export in src/resources/definitions.ts and ResourceDefinitions.ql" >&2; exit 1; }
+        { echo "kimchi-codeql-${name}: no resource definitions found; check the STATIC_RESOURCE_DEFINITIONS export in src/resources/definitions.ts and packages/kimchi/ql/network/ResourceDefinitions.ql" >&2; exit 1; }
       jq -e '(.fields | length > 0) and (.defaultRegion | length > 0)' "$out/regionRegistry.json" >/dev/null ||
-        { echo "kimchi-codeql-${name}: no region fields or default region found; check the REGIONS and DEFAULT_REGION exports in src/regions.ts and RegionRegistry.ql" >&2; exit 1; }
+        { echo "kimchi-codeql-${name}: no region fields or default region found; check the REGIONS and DEFAULT_REGION exports in src/regions.ts and packages/kimchi/ql/network/RegionRegistry.ql" >&2; exit 1; }
     '';
 in {
   inherit factsOf;
