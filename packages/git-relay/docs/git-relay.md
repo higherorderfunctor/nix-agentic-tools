@@ -37,6 +37,8 @@ writes no local refs; upstream policy decides which pushes are accepted.
 - `settings.repositories.<name>.credential`: required name of a defined
   credential whose `forges` lists this upstream's host. Each push resolves its
   key from the current `GIT_RELAY_CONFIG`.
+- `settings.sessions`: `true` serves only per-session repositories (below);
+  static `repositories` are then refused.
 - `settings.listen`: bind address, loopback by default. In static mode only
   configured repositories are served; removed repositories stay on disk,
   unserved.
@@ -68,6 +70,13 @@ staged directory plus the lock file; the caller's exit trap is the usual caller.
 held lock marks a live session — and never touches lock files without either
 directory, which belong to callers between lock and open. The daemon runs gc at
 every start, and every `open` runs it first.
+
+An instance with `settings.sessions = true` serves only the `sessions`
+directory: no static repositories may be configured, and the daemon whitelists
+that one directory without `--strict-paths`, so a session opened under a running
+daemon is served without a restart. Git's own request checks refuse `.` and `..`
+path aliases, keeping every served path under `sessions/`; static repositories
+are unreachable even when their directories remain on disk.
 
 ## Security
 
