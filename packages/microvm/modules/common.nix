@@ -87,9 +87,12 @@
     package = routes.${name};
     args = {
       exe = lib.getExe package;
+      # The guest's system git configuration (modules/git.nix), delivered as
+      # a file: a protected scope, and libgit2 tools read files only.
+      gitConfig = lib.generators.toGitINI cfg.git._ini;
       memory = cfg.vm.memory;
       outName = commandName name;
-      packages = cfg.extraPackages ++ [pkgs.git];
+      packages = cfg.extraPackages ++ cfg.git._packages ++ [pkgs.git];
       vcpus = cfg.vm.vcpus;
     };
   in
