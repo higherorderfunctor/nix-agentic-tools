@@ -162,7 +162,7 @@ in
         git config --file "$SANDBOX_REPO_CONFIG" user.signingKey "key::$public_key"
         git config --file "$SANDBOX_REPO_CONFIG" commit.gpgSign true
         git config --file "$SANDBOX_REPO_CONFIG" tag.gpgSign true
-        git config --file "$SANDBOX_REPO_CONFIG" gpg.ssh.allowedSignersFile /run/sandbox-command/allowed-signers
+        git config --file "$SANDBOX_REPO_CONFIG" gpg.ssh.allowedSignersFile ${lib.escapeShellArg (signed.guestRuntimeFile "allowed-signers")}
         ${lib.getExe signed} "$@"
       else
         ${lib.getExe connected} "$@"
