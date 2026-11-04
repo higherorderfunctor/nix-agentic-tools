@@ -283,10 +283,10 @@ path. The launcher clears inherited private secret slots before reading any
 secret and clears resolved slots before exec. Secret readers and the daemon
 never inherit those values; jq alone receives the needed slots in its
 environment, never argv. The launcher atomically creates a 0700 directory at
-`$XDG_RUNTIME_DIR/ai-service-<key>`, or, without XDG_RUNTIME_DIR,
-`${TMPDIR:-/tmp}/ai-service-<uid>-<key>` (numeric user ID), the root read after
-the declared environment is applied, so a declared `XDG_RUNTIME_DIR` or `TMPDIR`
-picks it as it does for the daemon on Home Manager. Devenv uses
+`$XDG_RUNTIME_DIR/ai-service-<key>` on Home Manager, the root read after the
+declared environment is applied. A launcher needing that directory refuses to
+start if `XDG_RUNTIME_DIR` is unset or empty, naming the service and the missing
+variable; systemd user units provide it. Devenv uses
 `config.devenv.runtime/ai-service-<key>` instead, keeping its files and sockets
 separate from Home Manager and other projects. The internal evaluated
 `runtimeDir` field is a quoted shell word consumed by service launchers and

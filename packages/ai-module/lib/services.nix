@@ -26,7 +26,7 @@
   };
   # A shell word, not shell source from a consumer. Sandbox launchers consume
   # this evaluated field to find sockets without duplicating backend paths.
-  defaultRuntimeDir = name: ''"$(if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then printf '%s' "$XDG_RUNTIME_DIR/ai-service-"; else printf '%s' "''${TMPDIR:-/tmp}/ai-service-$UID-"; fi)"${lib.escapeShellArg name}'';
+  defaultRuntimeDir = name: ''"''${XDG_RUNTIME_DIR:?${lib.escapeShellArg "ai.services.${name}: XDG_RUNTIME_DIR must be set"}}"/${lib.escapeShellArg "ai-service-${name}"}'';
   serviceEntry = lib.types.submodule ({name, ...}: {
     options = {
       command = lib.mkOption {type = lib.types.nonEmptyListOf lib.types.str;};
@@ -59,7 +59,7 @@
   # Where a Home Manager launcher records what its start read. The user
   # manager sets XDG_RUNTIME_DIR for every unit; the reconcile entry exports
   # it before reading.
-  stampFile = name: ''"$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}.stamp"}'';
+  stampFile = name: "${defaultRuntimeDir name}.stamp";
   # Every NAME of a `{$NAME}` string in a JSON value.
   placeholders = value:
     if builtins.isString value
@@ -133,8 +133,8 @@
       ${slot.variable}=${target}''
     else assignment;
   # The 0700 per-service runtime directory every launcher file goes to. It is
-  # chosen after the declared environment is applied, so a declared
-  # XDG_RUNTIME_DIR or TMPDIR picks it as it does for the daemon.
+  # chosen after the declared environment is applied, so Home Manager reads
+  # the daemon's XDG_RUNTIME_DIR. Devenv supplies its per-project runtime root.
   runtimeDirectory = pkgs: name: entry: let
     coreutils = "${pkgs.coreutils}/bin";
   in ''

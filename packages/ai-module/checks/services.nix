@@ -365,10 +365,13 @@ in {
         mkLintedCheck "ai-module-services-runtime-roots" {
           runtimeInputs = [pkgs.coreutils];
           text = ''
+            # The fixture supplies private roots; production gets them from
+            # the systemd user manager and devenv, respectively.
             export XDG_RUNTIME_DIR=/build/home-runtime
             mkdir -p "$XDG_RUNTIME_DIR" /build/project-runtime
             ${home.systemd.user.services.probe.Service.ExecStart} > home-path
-            ${project.processes.probe.exec} > project-path
+            # Devenv's root does not need the user manager's environment.
+            env -u XDG_RUNTIME_DIR ${project.processes.probe.exec} > project-path
             [[ $(< home-path) == /build/home-runtime/ai-service-probe/config.json ]]
             [[ $(< project-path) == /build/project-runtime/ai-service-probe/config.json ]]
             for file in "$(< home-path)" "$(< project-path)"; do
@@ -555,37 +558,48 @@ in {
               echo "a regular-file runtime directory was accepted" >&2
               exit 1
             fi
-            # A shared fallback root separates users by numeric uid.
-            mkdir "$TMPDIR/fallback"
-            XDG_RUNTIME_DIR= TMPDIR="$TMPDIR/fallback" ${launcher}/bin/ai-service-files-test
-            test "$(cat "$RECEIVED/path")" = "$TMPDIR/fallback/ai-service-$(id -u)-files-test/config.json"
             touch "$out"
           '';
-      # A declared XDG_RUNTIME_DIR or TMPDIR picks the runtime directory, as it
+      # A declared XDG_RUNTIME_DIR picks the runtime directory, as it
       # picks the daemon's own: the files and the daemon agree on a root that
       # differs from the one the launcher inherited.
       ai-module-services-declared-root = let
-        launcherWith = environment:
-          fileLauncher ((fileEntry {inherit config;}) // {inherit environment;});
-        runtime = launcherWith {XDG_RUNTIME_DIR = "/build/declared-runtime";};
-        temporary = launcherWith {TMPDIR = "/build/declared-temporary";};
+        runtime = fileLauncher ((fileEntry {inherit config;}) // {environment.XDG_RUNTIME_DIR = "/build/declared-runtime";});
       in
         pkgs.runCommandLocal "ai-module-services-declared-root" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           printf '%s' value > /build/secret
           export RECEIVED="$TMPDIR/received"
-          mkdir -p "$RECEIVED" /build/inherited-runtime /build/inherited-temporary /build/declared-runtime /build/declared-temporary
+          mkdir -p "$RECEIVED" /build/inherited-runtime /build/declared-runtime
           # The declared runtime root wins over the inherited one.
           XDG_RUNTIME_DIR=/build/inherited-runtime ${runtime}/bin/ai-service-files-test
           test "$(cat "$RECEIVED/path")" = /build/declared-runtime/ai-service-files-test/config.json
           ${pkgs.gnugrep}/bin/grep -Fx XDG_RUNTIME_DIR=/build/declared-runtime "$RECEIVED/environment"
           test ! -e /build/inherited-runtime/ai-service-files-test
-          # So does a declared TMPDIR, where no runtime root is set.
-          XDG_RUNTIME_DIR= TMPDIR=/build/inherited-temporary ${temporary}/bin/ai-service-files-test
-          test "$(cat "$RECEIVED/path")" = "/build/declared-temporary/ai-service-$(id -u)-files-test/config.json"
-          ${pkgs.gnugrep}/bin/grep -Fx TMPDIR=/build/declared-temporary "$RECEIVED/environment"
-          test ! -e "/build/inherited-temporary/ai-service-$(id -u)-files-test"
+          touch "$out"
+        '';
+      # Fails a launcher that starts under TMPDIR when XDG_RUNTIME_DIR is unset.
+      ai-module-services-missing-runtime-root = let
+        launcher = services.mkLauncher {
+          inherit pkgs;
+          name = "missing-runtime";
+          entry = {
+            command = ["${pkgs.coreutils}/bin/echo" "started"];
+            environment.TOKEN = asFile (redact.command "${pkgs.coreutils}/bin/id");
+            files = {};
+          };
+        };
+      in
+        pkgs.runCommandLocal "ai-module-services-missing-runtime-root" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          if env -u XDG_RUNTIME_DIR ${launcher}/bin/ai-service-missing-runtime > actual 2> refused.log; then
+            echo "a launcher without XDG_RUNTIME_DIR started the daemon" >&2
+            exit 1
+          fi
+          grep -F 'ai.services.missing-runtime: XDG_RUNTIME_DIR must be set' refused.log
+          test ! -s actual
           touch "$out"
         '';
       ai-module-services-secret-files = let
