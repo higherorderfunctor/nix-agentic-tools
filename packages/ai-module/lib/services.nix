@@ -24,7 +24,10 @@
       variable = lib.mkOption {type = lib.types.strMatching identifier;};
     };
   };
-  serviceEntry = lib.types.submodule {
+  # A shell word, not shell source from a consumer. Sandbox launchers consume
+  # this evaluated field to find sockets without duplicating backend paths.
+  defaultRuntimeDir = name: ''"$(if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then printf '%s' "$XDG_RUNTIME_DIR/ai-service-"; else printf '%s' "''${TMPDIR:-/tmp}/ai-service-$UID-"; fi)"${lib.escapeShellArg name}'';
+  serviceEntry = lib.types.submodule ({name, ...}: {
     options = {
       command = lib.mkOption {type = lib.types.nonEmptyListOf lib.types.str;};
       enable = defaulted lib.types.bool true;
@@ -33,8 +36,15 @@
       ports = defaulted (lib.types.attrsOf lib.types.port) {};
       restart = defaulted (lib.types.enum ["always" "never" "on-failure"]) "on-failure";
       restartOnChange = defaulted (lib.types.listOf (lib.types.strMatching "/.*")) [];
+      runtimeDir = lib.mkOption {
+        default = defaultRuntimeDir name;
+        description = "Quoted shell word for this service's private runtime directory; consumed by service and sandbox launchers.";
+        internal = true;
+        type = lib.types.str;
+        visible = false;
+      };
     };
-  };
+  });
   # Files whose content change restarts the service: the declared paths plus
   # every `redact.file` the environment and the rendered files read, secret
   # files included.
@@ -125,14 +135,10 @@
   # The 0700 per-service runtime directory every launcher file goes to. It is
   # chosen after the declared environment is applied, so a declared
   # XDG_RUNTIME_DIR or TMPDIR picks it as it does for the daemon.
-  runtimeDirectory = pkgs: name: let
+  runtimeDirectory = pkgs: name: entry: let
     coreutils = "${pkgs.coreutils}/bin";
   in ''
-    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
-      _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
-    else
-      _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
-    fi
+    _ai_dir=${entry.runtimeDir or (defaultRuntimeDir name)}
     umask 077
     if ! ${coreutils}/mkdir -m 0700 -- "$_ai_dir" 2>/dev/null; then
       if [ -L "$_ai_dir" ] || [ ! -d "$_ai_dir" ] || [ ! -O "$_ai_dir" ]; then
@@ -216,7 +222,7 @@
               option = "ai.services.${name}.environment.${variable}";
             })
           (lib.filterAttrs (_: value: !redact.isAsFile value) entry.environment))}
-          ${lib.optionalString (slots != [] || files != {}) (runtimeDirectory pkgs name)}${lib.concatMapStringsSep "\n" (readSlot pkgs) slots}
+          ${lib.optionalString (slots != [] || files != {}) (runtimeDirectory pkgs name entry)}${lib.concatMapStringsSep "\n" (readSlot pkgs) slots}
           ${lib.concatMapStrings (slot: lib.optionalString (slot ? exported) "export ${slot.exported}=\"\$${slot.variable}\"\n") slots}:
           }
           ${lib.concatStrings (lib.mapAttrsToList (renderFile pkgs name slots) files)}${unsetSlots}${stampBlock}# shellcheck disable=SC2016
