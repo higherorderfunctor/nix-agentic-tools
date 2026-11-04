@@ -188,10 +188,15 @@ the root's definitions forward with their nested `mkOverride` wrappers intact.
 So a nested `mkDefault` key at the root still loses to a runtime value or a
 typed tool leaf for that key, and an equal-priority disagreement stays a loud
 conflict — exactly as the host's `git.settings` behaves. A runtime that defines
-only a typed tool leaf keeps the inherited raw keys. A typed leaf a runtime
-leaves unset inherits the root leaf's definition at the root's own priority. The
-owner's per-tool assertions (git-branchless's `test.jobs`/`test.strategy`
-coupling, say) hold wherever the tree mounts.
+only a typed tool leaf keeps the inherited raw keys. A typed leaf's definitions
+reach the runtime's typed tree forwarded at the root's own priority — a leaf
+both sides define arbitrates by that priority — so the owner's per-tool
+assertions (git-branchless's `test.jobs`/`test.strategy` coupling, say) read
+root and runtime values together, wherever the tree mounts. And because the
+system file is the lowest Git scope the guest reads, an unset leaf there is
+upstream's default: git-branchless's lowest-scope check rejects a `test.jobs`
+above 1 without `test.strategy = "worktree"`, exactly as the Home Manager
+user-global tree already does.
 
 ## Guest-fixed keys
 
@@ -205,16 +210,26 @@ client:
   `repo-guest.nix` reads, even though the host owns them.
 
 A consumer value for either key loses wholly; a `safe.directory` list is
-replaced, never appended.
+replaced, never appended. Git folds the case of section and key names and Nix
+does not, so a key differing from one of these only by case renders as a second
+key Git reads as the same one — and the line that renders last wins. Such a key
+fails evaluation, with a message naming the fixed key.
 
 ## Delivery
 
 The merged tree renders per runtime (`lib.generators.toGitINI`) and installs as
 the guest's SYSTEM configuration, `/etc/gitconfig`:
 
-- a protected scope, the only one `safe.directory` and a forced
-  `core.sshCommand` hold in — a repository-local file cannot override them;
-- a file, because git-absorb and git-revise are libgit2 and read files only.
+- the protected scope `safe.directory` is honored in — Git ignores it in
+  repository-local files — and a file, because git-absorb and git-revise are
+  libgit2 and read files only;
+- the guest's lowest Git scope. `safe.directory` cannot be re-added by a
+  repository-local file (protected scope), but `core.sshCommand` follows
+  ordinary Git precedence: a guest process can override it through `--global`,
+  repository-local or `-c` configuration. The forced system value refuses an
+  ordinary push and names `origin`; it is not an SSH boundary. The boundary is
+  the guest itself, which holds no SSH credentials — pushes are meant to go
+  through `origin`, which the host relay serves.
 
 The standalone factory takes the same render explicitly:
 
@@ -239,10 +254,12 @@ that default.
 `packages/microvm/checks/git.nix` covers the priority matrix (raw-only, raw plus
 typed leaf, nested default versus typed, whole-option replacement,
 equal-priority conflict, forced keys), enable propagation into the guest package
-list, the rendered file parsing with real Git, and the module-built launcher's
-guest carrying the file and an enabled tool's package. The
-`microvm-git-launcher` check is a hand-run KVM smoke launcher asserting
-`git config --system` in a live guest; CI boots no VM.
+list, the `test.jobs`/`test.strategy` coupling holding across the
+root-to-runtime typed copy-down, case-variant guest-fixed keys refused, the
+rendered file parsing with real Git, and the module-built launcher's guest
+carrying the file and an enabled tool's package. The `microvm-git-launcher`
+check is a hand-run KVM smoke launcher asserting `git config --system` in a live
+guest; CI boots no VM.
 
 <!-- Fragment: packages/microvm/docs/sandbox-identities.md -->
 
