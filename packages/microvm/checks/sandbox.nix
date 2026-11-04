@@ -1,4 +1,4 @@
-# cspell:ignore chardev dports virtio objectname vcpu vcpus virtserialport
+# cspell:ignore chardev dports getppid guestfwd netdev objectname vcpu vcpus virtio virtserialport
 {
   harness,
   lib,
@@ -21,13 +21,162 @@
     exe = lib.getExe argvFixture;
     outName = "sandbox-argv-fixture";
   };
+  # Host side of the door: QEMU runs it per guest connection (measured), with
+  # the connection on stdin and stdout. It reports its pid and descriptor
+  # shape, marks stderr, then echoes lines until EOF.
+  doorFixture = pkgs.writeScriptBin "sandbox-door-fixture" ''
+    #!${lib.getExe pkgs.python3}
+    import os, stat, sys
+    print("PID", os.getppid(), "STDIN", "socket" if stat.S_ISSOCK(os.fstat(0).st_mode) else "other", "SAME", os.fstat(0).st_ino == os.fstat(1).st_ino, flush=True)
+    print("MARKER", repr(os.environ.get("SANDBOX_DOOR_TEST_MARKER")), "PATH", repr(os.environ.get("PATH")), "VARIABLES", sorted(os.environ), flush=True)
+    print("DOOR_STDERR_MUST_NOT_REACH_GUEST", file=sys.stderr, flush=True)
+    if len(sys.argv) > 1 and sys.argv[1] == "hold":
+        sys.stdin.read()
+        sys.exit(0)
+    for line in sys.stdin:
+        print(f"ECHO {line.rstrip()}", flush=True)
+    print("BYE", flush=True)
+  '';
+  doorGuestFixture = pkgs.writeScriptBin "sandbox-door-guest-fixture" ''
+    #!${lib.getExe pkgs.python3}
+    import os, socket, sys
+    expected_path = ${builtins.toJSON "${pkgs.python3}/bin"}
+    door = ("10.0.2.100", 7000)
+    def open_door():
+        s = socket.create_connection(door, timeout=10)
+        return s, s.makefile("r")
+    a, ra = open_door()
+    header = ra.readline().split()
+    assert header[0] == "PID" and header[2:] == ["STDIN", "socket", "SAME", "True"], header
+    environment = ra.readline()
+    # Python adds LC_CTYPE after the wrapper's env -i; it is not inherited.
+    expected = f"MARKER None PATH {expected_path!r} VARIABLES ['LC_CTYPE', 'PATH']\n"
+    assert environment == expected, (environment, expected)
+    b, rb = open_door()
+    other = rb.readline().split()
+    assert other[1] != header[1], "one door process served two connections"
+    rb.readline()
+    a.sendall(b"one\n"); b.sendall(b"two\n")
+    assert ra.readline() == "ECHO one\n" and rb.readline() == "ECHO two\n"
+    a.shutdown(socket.SHUT_WR)
+    assert ra.read() == "BYE\n"
+    b.shutdown(socket.SHUT_WR)
+    assert rb.read() == "BYE\n"
+    print(f"PASS: door per connection ({header[1]} != {other[1]}), clean environment, host-only stderr, exit on EOF", flush=True)
+    b.close()
+    blocked = [("10.0.2.2", 22), ("10.0.2.2", 7000), ("10.0.2.3", 53), ("1.1.1.1", 443), ("10.0.2.100", 7001)]
+    for target in blocked:
+        try:
+            socket.create_connection(target, timeout=3).close()
+        except OSError as error:
+            print(f"PASS: {target} blocked ({error!r})", flush=True)
+        else:
+            sys.exit(f"FAIL: {target} reachable")
+    query = b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01"
+    for resolver in ["10.0.2.3", "1.1.1.1"]:
+        u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        u.settimeout(3)
+        u.sendto(query, (resolver, 53))
+        try:
+            u.recvfrom(512)
+        except OSError as error:
+            print(f"PASS: DNS via {resolver} blocked ({error!r})", flush=True)
+        else:
+            sys.exit(f"FAIL: DNS via {resolver} answered")
+  '';
+  doorLifecycleGuestFixture = pkgs.writeScriptBin "sandbox-door-lifecycle-guest-fixture" ''
+    #!${lib.getExe pkgs.python3}
+    import socket, time
+    connection = socket.create_connection(("10.0.2.100", 7000), timeout=10)
+    stream = connection.makefile("r")
+    print(stream.readline().strip(), flush=True)
+    print("DOOR_HOLD_READY", flush=True)
+    time.sleep(3600)
+  '';
+  doorLifecyclePackage = factory {
+    doors = [fixtureDoor];
+    exe = lib.getExe doorLifecycleGuestFixture;
+    outName = "sandbox-door-lifecycle";
+  };
+  doorLifecycleCheck = mkGuestScript "sandbox-door-lifecycle-check" ''
+    log=$(mktemp)
+    export SANDBOX_DOOR_TEST_MARKER=must-not-reach-the-door
+    ${lib.getExe doorLifecyclePackage} > "$log" 2>&1 &
+    launcher_pid=$!
+    # Invoked indirectly by traps.
+    # shellcheck disable=SC2329
+    cleanup() {
+      status=$?
+      if (( status != 0 )); then
+        cat "$log"
+      fi
+      kill "$launcher_pid" 2>/dev/null || :
+      wait "$launcher_pid" 2>/dev/null || :
+      rm -f -- "$log"
+    }
+    trap cleanup EXIT
+    door_pid=""
+    for _ in {1..120}; do
+      door_pid=$(sed -n 's/^PID \([0-9][0-9]*\) STDIN socket SAME True\r*$/\1/p' "$log")
+      [[ -n $door_pid ]] && break
+      kill -0 "$launcher_pid"
+      sleep 1
+    done
+    [[ $door_pid =~ ^[0-9]+$ ]]
+    runtime_dir=$(readlink "/proc/$launcher_pid/cwd")
+    [[ $runtime_dir == /tmp/sandbox-door-lifecycle.* ]]
+    for _ in {1..100}; do
+      [[ -s $runtime_dir/door-7000-$door_pid.pid ]] && break
+      kill -0 "$launcher_pid"
+      sleep 0.1
+    done
+    read -r recorded_pid door_start_time < "$runtime_dir/door-7000-$door_pid.pid"
+    [[ $recorded_pid == "$door_pid" && $door_start_time =~ ^[0-9]+$ ]]
+    grep -Fx 'DOOR_STDERR_MUST_NOT_REACH_GUEST' "$runtime_dir/doors.log"
+    grep -Fqx 'DOOR_HOLD_READY' <(tr -d '\r' < "$log")
+    read -r qemu_pid < <(pgrep -P "$launcher_pid" -f '^microvm@sandbox ')
+    [[ $(readlink "/proc/$qemu_pid/exe") == */.qemu-system-*-wrapped ]]
+    printf 'LIFECYCLE_PIDS launcher=%s qemu=%s door=%s\n' "$launcher_pid" "$qemu_pid" "$door_pid"
+    kill -0 "$door_pid"
+    command_pid=$(< "/proc/$door_pid/task/$door_pid/children")
+    command_pid=''${command_pid// /}
+    [[ $command_pid =~ ^[0-9]+$ ]]
+    kill -KILL "$qemu_pid"
+    wait "$launcher_pid" || launcher_status=$?
+    printf 'LIFECYCLE_WAIT status=%s\n' "''${launcher_status:-0}"
+    [[ ''${launcher_status:-0} == 125 ]]
+    for pid in "$door_pid" "$command_pid"; do
+      for _ in {1..100}; do
+        if ! IFS= read -r stat 2>/dev/null < "/proc/$pid/stat"; then break; fi
+        read -r -a process <<< "''${stat##*) }"
+        [[ ''${process[0]} == Z ]] && break
+        sleep 0.01
+      done
+      [[ ! -r /proc/$pid/stat || ''${process[0]} == Z ]] || {
+        echo "FAIL: door process $pid survived QEMU death and launcher cleanup" >&2
+        exit 1
+      }
+    done
+    [[ ! -e $runtime_dir ]]
+    echo "PASS: QEMU death orphaned door $door_pid; launcher exit trap reaped it (launcher status ''${launcher_status:-0})"
+  '';
+  doorPackage = factory {
+    doors = [fixtureDoor];
+    exe = lib.getExe doorGuestFixture;
+    outName = "sandbox-door-fixture";
+  };
   factory = self.lib.ai.mkSandbox pkgs;
+  fixtureDoor = {
+    command = lib.getExe doorFixture;
+    environment.PATH = "${pkgs.python3}/bin";
+    port = 7000;
+  };
   # Guest-side assertions: each fixture exits non-zero when the guest disagrees.
   # They need KVM, so they are launchers to run, not sandboxed builds.
   mkGuestScript = name: text:
     import ../../../lib/strict-shell-application.nix pkgs {
       inherit name text;
-      runtimeInputs = [pkgs.coreutils pkgs.gnugrep];
+      runtimeInputs = [pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.procps];
     };
   packagesFixture = mkGuestScript "sandbox-packages-fixture" ''
     git --version | grep -Fx 'git version ${pkgs.git.version}'
@@ -87,6 +236,7 @@
     '';
   };
   repoPackage = factory {
+    doors = [fixtureDoor];
     exe = lib.getExe repoProbe;
     outName = "sandbox-repo-probe";
     repo = true;
@@ -156,6 +306,47 @@ in {
         touch "$out"
       '';
       microvm-sandbox-argv-launcher = argvPackage;
+      microvm-sandbox-door-cleanup = mkLintedCheck "microvm-sandbox-door-cleanup" {
+        runtimeInputs = [pkgs.git];
+        text = ''
+          ${lib.getExe pkgs.python3} ${./door-cleanup.py} \
+            ${lib.getExe doorPackage} \
+            ${doorPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
+            ${lib.escapeShellArg (lib.findFirst (lib.hasPrefix "user,id=doors") "" doorPackage.guest.config.microvm.qemu.extraArgs)}
+          ${lib.getExe pkgs.python3} ${./door-cleanup.py} \
+            ${lib.getExe repoPackage} \
+            ${repoPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
+            ${lib.escapeShellArg (lib.findFirst (lib.hasPrefix "user,id=doors") "" repoPackage.guest.config.microvm.qemu.extraArgs)} --repo
+        '';
+      };
+      microvm-sandbox-door-launcher = doorPackage;
+      microvm-sandbox-door-lifecycle = doorLifecycleCheck;
+      microvm-sandbox-doors = mkTest "microvm-sandbox-doors" (
+        let
+          door = doorPackage.guest.config;
+          doorless = argvPackage.guest.config;
+          valid = {
+            command = lib.getExe doorFixture;
+            port = 7000;
+          };
+          rejects = doors: !(builtins.tryEval (factory (args // {inherit doors;})).drvPath).success;
+        in
+          door.microvm.interfaces
+          == []
+          && lib.hasInfix "guestfwd=tcp:10.0.2.100:7000-cmd:/nix/store/" (lib.findFirst (lib.hasPrefix "user,id=doors") "" door.microvm.qemu.extraArgs)
+          && lib.hasInfix "-sandbox-door-7000" (lib.findFirst (lib.hasPrefix "user,id=doors") "" door.microvm.qemu.extraArgs)
+          && builtins.elem "network-online.target" door.systemd.services.sandbox.wants
+          && !(builtins.any (lib.hasInfix "netdev") doorless.microvm.qemu.extraArgs)
+          && doorless.systemd.services.sandbox.wants == []
+          && builtins.all (a: a.assertion) door.assertions
+          && rejects [(valid // {port = 0;})]
+          && rejects [(valid // {command = "nc 10.0.0.1 22";})]
+          && rejects [(valid // {command = "/bin/x,restrict=off";})]
+          && rejects [(valid // {arguments = "not-a-list";})]
+          && rejects [(valid // {arguments = [42];})]
+          && rejects [(valid // {extra = true;})]
+          && rejects [valid valid]
+      );
       microvm-sandbox-guest = mkTest "microvm-sandbox-guest" (
         guest.nixpkgs.hostPlatform.system
         == pkgs.stdenv.hostPlatform.system
@@ -185,7 +376,8 @@ in {
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
         builtins.attrNames (builtins.functionArgs factory)
-        == ["exe" "memory" "outName" "packages" "repo" "vcpus"]
+        == ["doors" "exe" "memory" "outName" "packages" "repo" "vcpus"]
+        && (builtins.functionArgs factory).doors
         && (builtins.functionArgs factory).memory
         && (builtins.functionArgs factory).packages
         && (builtins.functionArgs factory).repo
