@@ -3,8 +3,8 @@
 <!-- cspell:ignore ACPI chardev sysfs vcpus virtio -->
 
 > **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
-> routes; seeded-history copies, read-only mounts, and committed-work
-> recovery through virtio serial ports.
+> routes; seeded-history copies, read-only mounts, and committed-work recovery
+> through virtio serial ports.
 
 `ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
 runtimes. Home Manager and devenv expose the same options and install
@@ -134,7 +134,8 @@ temporary repository, and makes it self-contained before saving it at
 after the seed is removed and host maintenance prunes the original commits. An
 export over 1024 MiB is discarded with a diagnostic rather than saved. Empty
 exports need no recovery. Export or verification failures are reported
-separately from guest completion; nonempty failed exports are retained as
+separately from guest completion. Runner failures are reported even when
+recovery also fails; nonempty failed exports are retained as
 `<token>.failed.bundle`. Recovery covers committed work on graceful completion
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.

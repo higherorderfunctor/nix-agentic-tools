@@ -111,9 +111,10 @@ def runner():
             assert exported.returncode == 0, "new guest commit was excluded by mutable origin refs"
         else:
             assert exported.returncode == 3 and not exported.stdout
-    (runtime / "status").write_text("exited:0\n")
+    if not case["runner_status"]:
+        (runtime / "status").write_text("exited:0\n")
     Path(case["runtime"]).write_text(str(runtime))
-    raise SystemExit(17 if case["mode"] == "runner-failure" else 0)
+    raise SystemExit(case["runner_status"])
 
 
 if len(sys.argv) == 2 and sys.argv[1] == "--runner":
@@ -153,7 +154,7 @@ with tempfile.TemporaryDirectory() as directory:
     hostile_config.write_text(f"[init]\n\tdefaultBranch = host-secret-branch\n\ttemplateDir = {template}\n")
     counter = 0
 
-    def setup(*, branch="topic", mode="empty", object_format="sha1", unborn=False):
+    def setup(*, branch="topic", mode="empty", object_format="sha1", runner_status=0, unborn=False):
         global counter
         counter += 1
         case_root = root / str(counter)
@@ -209,6 +210,7 @@ with tempfile.TemporaryDirectory() as directory:
             "main": str(main),
             "mode": mode,
             "recovered": str(case_root / "recovered"),
+            "runner_status": runner_status,
             "runtime": str(case_root / "runtime"),
             "seed_refs": refs,
             "worktree": str(worktree),
@@ -351,10 +353,11 @@ with tempfile.TemporaryDirectory() as directory:
         assert recovered in output("for-each-ref", "--format=%(objectname)", "refs/recovered/", cwd=case["main"]).splitlines()
     print("PASS: branch/detached/unborn recovery survives host ref deletion and gc, verifies in empty repo, and printed fetch command restores guest HEAD despite origin advancing")
 
-    for mode in ["export-failure", "invalid-bundle", "malformed-ref", "missing-export", "oversized", "runner-failure", "truncated-pack"]:
+    for mode in ["export-failure", "invalid-bundle", "malformed-ref", "missing-export", "oversized", "truncated-pack"]:
         case_root, case = setup(mode=mode)
         result = invoke(case_root, case, expected=125)
-        assert "failed" in result.stderr
+        assert "recovery failed" in result.stderr
+        assert "VM runner failed" not in result.stderr
         if mode in ("invalid-bundle", "malformed-ref", "truncated-pack"):
             failed = list((case_root / "state/ai-sandbox/bundles").glob("*.failed.bundle"))
             expected_payload = b"truncated bundle\n" if mode == "invalid-bundle" else Path(case["corrupted"]).read_bytes()
@@ -362,7 +365,19 @@ with tempfile.TemporaryDirectory() as directory:
         elif mode == "oversized":
             assert "exceeds the 1024 MiB recovery limit" in result.stderr, result.stderr
             assert not any((case_root / "state/ai-sandbox/bundles").iterdir())
-    print("PASS: corrupt header, malformed ref, truncated pack, oversized export, missing graceful export and failed VM return infrastructure failure")
+    print("PASS: corrupt header, malformed ref, truncated pack, oversized export and missing graceful export return infrastructure failure")
+
+    for mode in ["empty", "missing-export", "recover", "truncated-pack"]:
+        case_root, case = setup(mode=mode, runner_status=17)
+        result = invoke(case_root, case, expected=125)
+        assert "VM runner failed" in result.stderr, result.stderr
+        assert ("recovery failed" in result.stderr) == (mode in ("missing-export", "truncated-pack")), result.stderr
+        if mode == "recover":
+            assert "verified committed-work recovery: git fetch" in result.stderr, result.stderr
+        elif mode == "truncated-pack":
+            failed = list((case_root / "state/ai-sandbox/bundles").glob("*.failed.bundle"))
+            assert len(failed) == 1 and failed[0].read_bytes() == Path(case["corrupted"]).read_bytes()
+    print("PASS: VM runner failure stays visible with empty, missing, valid and corrupt exports; recovery still saves valid or unverified data")
 
     for refusal in ["partial-config", "promisor-config", "promisor-pack", "shallow"]:
         case_root, case = setup()
