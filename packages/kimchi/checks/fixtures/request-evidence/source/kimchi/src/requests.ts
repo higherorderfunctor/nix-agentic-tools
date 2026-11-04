@@ -111,3 +111,17 @@ export function mutableId() {
   id = process.env.RESOURCE_ID || "tools.other";
   if (enabledResource(id)) fetch("https://mutable.example");
 }
+
+// Fails dropping typed const aliases because their declarations are local sources.
+export function typedAlias() {
+  const enabled: boolean = enabledResource(SEARCH_ID);
+  if (enabled) {
+    fetch("https://typed-alias.example");
+  }
+}
+
+// Fails treating flow from the right operand of && as a strict alias.
+export function logicalAnd(other: boolean) {
+  const enabled = other && process.env.AND;
+  if (enabled) fetch("https://logical-and.example");
+}

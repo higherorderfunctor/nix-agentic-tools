@@ -25,6 +25,7 @@ const facts = {
   network: {
     callSites: [
       9, 17, 24, 31, 40, 51, 57, 59, 64, 69, 70, 76, 85, 91, 97, 103, 105, 112,
+      119, 126,
     ].map((line) => ({
       bundledModule: null,
       file: "src/requests.ts",
@@ -69,7 +70,7 @@ assert.deepEqual(report.header.provenance, { ...FACT_FIELDS, ...SCAN_FIELDS });
 assert.deepEqual(report.regionRegistry, facts.regionRegistry);
 assert.deepEqual(report.resourceDefinitions, facts.resourceDefinitions);
 for (const row of report.requestGuards) {
-  const count = [9, 17, 24, 31, 40, 57].includes(row.line) ? 1 : 0;
+  const count = [9, 17, 24, 31, 40, 57, 119].includes(row.line) ? 1 : 0;
   assert.equal(row.guards.length, count);
   assert.equal(
     row.status,
@@ -94,5 +95,5 @@ assert.equal(
   0,
 );
 console.log(
-  "PASS: legacy fields preserved; six guards joined; twelve absent guards explicit; input order and bundle identity checked",
+  "PASS: legacy fields preserved; seven guards joined; thirteen absent guards explicit; input order and bundle identity checked",
 );

@@ -33,28 +33,40 @@ and target predicate. Each row carries a `callSite` (file, line, column,
 library, bundledModule), `guardSite` (file, line, column), `sourceKind`, `key`,
 `outcome`, `conditionOutcome` and `scope: "intraprocedural"`. A
 `ConditionGuardNode` must dominate that request's basic block. The source and
-test must be in the request's own function. Value flow follows local aliases; a
-test with another possible local source is omitted, since possible flow is not
-necessary flow.
+test must be in the request's own function. A value must be the source itself or
+a variable access with exactly one declarator in a `const` statement, whose
+initializer recursively meets the same rule after `getUnderlyingValue` unwraps
+it. Typed const declarations qualify too. The same strict alias rule applies to
+env and config receivers. Mutable bindings and reassigned variables do not
+qualify; local-source uniqueness alone cannot prove a necessary condition.
 
 Recognized sources are named `process.env` reads, one- or two-level property
 reads on the result of Kimchi's `src/config.ts` `loadConfig`, and boolean
 results of `src/resources/store.ts` `isResourceEnabled` with literal or
 imported-constant ids. Helpers are direct function declarations or named ES
 imports (including renamed imports), resolved by binding and file, not callee
-spelling. Config parameters and arbitrary objects named `config` do not qualify.
-This models reads of parsed configuration, not config parsing or override
-precedence.
+spelling. Namespace imports and member callees such as
+`store.isResourceEnabled(...)` are not modeled. Config parameters and arbitrary
+objects named `config` do not qualify. This models reads of parsed
+configuration, not config parsing or override precedence.
 
 Recognized tests are direct truthiness or a single `!` in an `if`, including
 early return/throw. `outcome` is the source's required `truthy`/`falsy` value;
 `conditionOutcome` is the boolean outcome of the whole `if` condition. Thus
 `if (!enabled) return` requires source truthy and condition false. An early
 throw caught before a request does not necessarily guard that request.
-Comparisons, compound conditions, unknown keys, transformed booleans and
-unresolved sources/polarities produce no guard rows. Neither callbacks nor
-interprocedural helpers nor `enabledExtensionFactories` registration propagate
-guards. Conditions are necessary locally, never sufficient for execution.
+Comparisons, compound conditions, conditional (`?:`) and logical (`&&`, `||`,
+`??`) alias initializers, unknown keys, transformed booleans and unresolved
+sources/polarities produce no guard rows. Parenthesised negation such as
+`if (!(enabled))` and requests at module top level (without an enclosing
+function) are not modeled. Neither callbacks nor interprocedural helpers nor
+`enabledExtensionFactories` registration propagate guards. Conditions are
+necessary locally, never sufficient for execution.
+
+In Kimchi 1.26.0, resource gating happens in factory/registration functions.
+This intraprocedural fact yields no Kimchi resource-guard rows at those request
+sites; the report labels them **no modeled local guard**. Interprocedural and
+factory gating is separate work.
 
 Rows are sorted and use only repository-relative paths. Guard locations retain
 the database's `kimchi/` prefix to distinguish carried dependencies under
@@ -82,15 +94,18 @@ In `src/requests.ts`, the only expected guards are:
 | 31:3             | 30:3           | env      | TOKEN             | truthy         | false             |
 | 40:5             | 39:3           | config   | telemetry.enabled | truthy         | true              |
 | 57:5             | 56:3           | env      | ONLY_FIRST        | truthy         | true              |
+| 119:5            | 118:3          | resource | tools.search      | truthy         | true              |
 
 All are `fetch`, `intraprocedural`, with both files `kimchi/src/requests.ts` and
 `callSite.bundledModule: null`. No rows are expected for the sibling request
 (51), second request (59), plain request (64), computed key (69), comparison
 (70), callback (76), caught throw (85), alternative source (91), unrelated
-config (97), ambiguous config/env receivers (103, 105), mutable id (112), or
-`src/shadowed.ts:6`. Resources are `tools.search / false / true` at
-definitions.ts:5 and `hooks.local / true / null` at :6; the imported id comes
-from resources/ids.ts:1. Region fields are
+config (97), ambiguous config/env receivers (103, 105), mutable id (112),
+logical AND alias (126), or `src/shadowed.ts:6`. The typed const alias at line
+117 yields the guard at 118 and request at 119. Resources are
+`tools.search / false / true` at definitions.ts:5 and
+`hooks.local / true / null` at :6; the imported id comes from
+resources/ids.ts:1. Region fields are
 `eu: id=eu, label=Europe, webAppUrl=https://eu.example` at regions.ts:3 and
 `local: id=local, label=Local, webAppUrl=""` at :4; the default is `local` at
 :6. Changing a default changes the expected resource row.

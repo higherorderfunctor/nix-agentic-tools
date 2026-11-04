@@ -28,8 +28,8 @@
       ];
     };
     # kimchi-codeql: the release's CodeQL database, its query runner, the
-    # local query loop, and the environment and network facts the database
-    # produces.
+    # local query loop, and the environment, network, regionRegistry,
+    # requestGuards and resourceDefinitions facts the database produces.
     kimchi-codeql = {
       scopes = [
         "packages/${facetOwner}/checks/fixtures/codeql-environment/**"
@@ -71,7 +71,8 @@
       ];
     };
     # kimchi-egress-report: field producers and the drift gate tying the
-    # complete report to egressScan, environment and network facts.
+    # complete report to egressScan, environment, network, regionRegistry,
+    # requestGuards and resourceDefinitions facts.
     kimchi-egress-report = {
       scopes = [
         "checks/references/kimchi-egress-report.nix"

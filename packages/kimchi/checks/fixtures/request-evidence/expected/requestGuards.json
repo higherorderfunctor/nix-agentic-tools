@@ -112,5 +112,24 @@
     "outcome": "truthy",
     "scope": "intraprocedural",
     "sourceKind": "env"
+  },
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 5,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 119
+    },
+    "conditionOutcome": true,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 118
+    },
+    "key": "tools.search",
+    "outcome": "truthy",
+    "scope": "intraprocedural",
+    "sourceKind": "resource"
   }
 ]

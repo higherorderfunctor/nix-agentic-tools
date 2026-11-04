@@ -8,10 +8,21 @@ import javascript
 import DeclarationValues
 import Network
 
-/** A phi with another source is possible flow, not necessary evidence. */
-private predicate onlySource(DataFlow::Node value, DataFlow::SourceNode source) {
-  source.flowsTo(value) and
-  not exists(DataFlow::SourceNode other | other = value.getALocalSource() and other != source)
+/** Follow only immutable const aliases, never possible flow through expressions. */
+private predicate strictAlias(DataFlow::Node value, DataFlow::SourceNode source) {
+  value = source
+  or
+  exists(VarAccess use, VariableDeclarator decl |
+    use = value.asExpr() and
+    decl.getBindingPattern().(VarDecl).getVariable() = use.getVariable() and
+    decl.getDeclStmt() instanceof ConstDeclStmt and
+    not exists(VariableDeclarator other |
+      other != decl and
+      other.getBindingPattern().(VarDecl).getVariable() = use.getVariable()
+    ) and
+    not use.getVariable().getAnAccess().isLValue() and
+    strictAlias(DataFlow::valueNode(decl.getInit().getUnderlyingValue()), source)
+  )
 }
 
 /** Binding-resolved Kimchi helpers; unrelated same-named functions do not qualify. */
@@ -29,10 +40,10 @@ private predicate configRead(DataFlow::PropRead read, string key) {
     helper(call, "src/config.ts", "loadConfig") and
     read.getContainer() = call.getContainer() and
     (
-      onlySource(read.getBase(), call) and key = read.getPropertyName()
+      strictAlias(read.getBase(), call) and key = read.getPropertyName()
       or
       exists(DataFlow::PropRead base |
-        onlySource(base.getBase(), call) and onlySource(read.getBase(), base) and
+        strictAlias(base.getBase(), call) and strictAlias(read.getBase(), base) and
         key = base.getPropertyName() + "." + read.getPropertyName()
       )
     )
@@ -42,7 +53,7 @@ private predicate configRead(DataFlow::PropRead read, string key) {
 private predicate guardSource(DataFlow::SourceNode source, string kind, string key) {
   exists(DataFlow::PropRead env, DataFlow::PropRead read |
     source = read and env.getPropertyName() = "env" and
-    onlySource(env.getBase(), NodeJSLib::process()) and onlySource(read.getBase(), env) and
+    strictAlias(env.getBase(), NodeJSLib::process()) and strictAlias(read.getBase(), env) and
     key = read.getPropertyName() and kind = "env"
   )
   or
@@ -63,7 +74,7 @@ where
   source.getContainer() = request.getContainer() and
   test.getEnclosingFunction() = request.asExpr().getEnclosingFunction() and
   guard.getTest() = test and guard.dominates(request.asExpr().getBasicBlock()) and
-  onlySource(DataFlow::valueNode(test), source) and
+  strictAlias(DataFlow::valueNode(test), source) and
   (
     branch.getCondition() = test and conditionOutcome = guard.getOutcome()
     or

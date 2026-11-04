@@ -580,10 +580,11 @@ jobs:
       # CodeQL Terms forbid distributing the CLI, and the pushFilter and
       # ci-packages.py's EXCLUDED_PREFIXES are only configuration. Every engine,
       # every engine's source asset, the Kimchi CodeQL databases
-      # (kimchi.passthru.codeql.database and the kimchi-codeql-network
-      # check's fixture database, which the check cache may hold but public
-      # Cachix must not) and every other CodeQL derivation that check needs,
-      # its customized engine included, must answer 404. It evaluates those
+      # (kimchi.passthru.codeql.database and the kimchi-codeql-network and
+      # kimchi-codeql-request-evidence checks' fixture databases, which the
+      # check cache may hold but public Cachix must not) and every other
+      # CodeQL derivation those checks need, the customized engine included,
+      # must answer 404. It evaluates those
       # paths without building any of them, so it runs on every event, forks
       # too.
       - name: Assert no CodeQL engine or database is published
@@ -616,8 +617,9 @@ jobs:
           fi
           # The Kimchi databases and the engine customized with the network
           # packs: every CodeQL derivation the release database and the
-          # network fixture check need, an engine's again among them.
-          for attr in ciPackages.x86_64-linux.kimchi.passthru.codeql.database checks.x86_64-linux.kimchi-codeql-network; do
+          # network and request-evidence fixture checks need, an engine's
+          # again among them.
+          for attr in ciPackages.x86_64-linux.kimchi.passthru.codeql.database checks.x86_64-linux.kimchi-codeql-network checks.x86_64-linux.kimchi-codeql-request-evidence; do
             nix eval --raw ".#.$attr.drvPath"
             echo
           done > "$RUNNER_TEMP/codeql-kimchi"
@@ -626,7 +628,7 @@ jobs:
           nix-store --query --requisites "${kimchi[@]}" > "$RUNNER_TEMP/codeql-kimchi-requisites"
           # Fail closed: without each of these the listing no longer reaches
           # the derivations that hold a database or an engine.
-          for want in 'kimchi-codeql-database-[0-9]' 'kimchi-codeql-database-network-fixture' 'codeql-javascript-customized-'; do
+          for want in 'kimchi-codeql-database-[0-9]' 'kimchi-codeql-database-network-fixture' 'kimchi-codeql-database-request-evidence-fixture' 'codeql-javascript-customized-'; do
             if ! grep -qE -- "-${want}[^/]*\.drv\$" "$RUNNER_TEMP/codeql-kimchi-requisites"; then
               echo "::error::no $want derivation among the Kimchi CodeQL requisites" >&2
               exit 1
