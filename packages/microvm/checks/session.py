@@ -1,4 +1,4 @@
-# cspell:ignore pkey
+# cspell:ignore gpgsig pkey
 """Run the module launcher against a session relay and a real local SSH upstream."""
 
 import fcntl
@@ -14,7 +14,7 @@ import tempfile
 import time
 from pathlib import Path
 
-codex, claude, relay, sshd, git_shell, bash, state_name = sys.argv[1:]
+codex, claude, relay, sshd, git_shell, bash, state_name, signer = sys.argv[1:]
 state = Path(state_name)
 
 
@@ -48,8 +48,14 @@ with open(state_name + ".lock", "w") as lock, tempfile.TemporaryDirectory(prefix
     env = os.environ | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
+        "SSH_AUTH_SOCK": str(root / "inherited-agent-must-not-be-used"),
+        "XDG_RUNTIME_DIR": str(root / "runtime"),
         "XDG_STATE_HOME": str(root / "recovery"),
     }
+    Path(env["XDG_RUNTIME_DIR"]).mkdir()
+    (state / "signer-runtime").mkdir()
+    signer_socket = state / "signer-runtime/ai-service-sandbox-signer-codex-work/agent.sock"
+    agent_env = env | {"SSH_AUTH_SOCK": str(signer_socket)}
     try:
         # A public fixed test seed gives the evaluated module a stable host pin;
         # its private key is generated only inside this check's runtime directory.
@@ -61,6 +67,7 @@ with open(state_name + ".lock", "w") as lock, tempfile.TemporaryDirectory(prefix
         )
         (state / "host-key").chmod(0o600)
         run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(state / "client-key"))
+        run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(state / "signing-key"))
         (state / "authorized_keys").write_text((state / "client-key.pub").read_text())
         host_public = run("ssh-keygen", "-y", "-f", str(state / "host-key"))
         upstream = root / "upstream.git"
@@ -98,7 +105,7 @@ with open(state_name + ".lock", "w") as lock, tempfile.TemporaryDirectory(prefix
             f"ForceCommand {git_shell} -c \"$SSH_ORIGINAL_COMMAND\"\n"
         )
         config = {
-            "credentials": {"codex-work": {"forges": ["127.0.0.1"], "sshKeyFile": str(state / "client-key")}},
+            "credentials": {name: {"forges": ["127.0.0.1"], "sshKeyFile": str(state / "client-key")} for name in ["codex-unsigned", "codex-work"]},
             "forges": {"127.0.0.1": {"hostKeys": f"[127.0.0.1]:29422 {host_public}"}},
             "listen": "127.0.0.1",
             "port": 29418,
@@ -128,9 +135,40 @@ with open(state_name + ".lock", "w") as lock, tempfile.TemporaryDirectory(prefix
         assert not list((state / "repositories/sessions").glob("*.git"))
         print("PASS: wrong runtime assignment refused before boot or session publication", flush=True)
 
+        def refuse_signer():
+            refused = subprocess.run([codex, "--", "signed"], cwd=work, env=env, text=True, capture_output=True)
+            assert refused.returncode != 0 and "sandbox-signer-codex-work" in refused.stderr, refused
+            assert "Booting" not in refused.stdout and "VM runner" not in refused.stderr, refused
+            assert not list((state / "repositories/sessions").glob("*.git"))
+
+        refuse_signer()
+        signer_log = open(root / "signer.log", "w+")
+        logs.append(signer_log)
+        signer_process = subprocess.Popen([signer], env=env, stdout=signer_log, stderr=subprocess.STDOUT, start_new_session=True)
+        processes.append(signer_process)
+        for _ in range(200):
+            assert signer_process.poll() is None, "signer exited before loading its key"
+            probe = subprocess.run(["ssh-add", "-L"], env=agent_env, text=True, capture_output=True)
+            if probe.returncode == 0:
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("signer did not become ready")
+        assert probe.stdout.strip() == (state / "signing-key.pub").read_text().strip()
+        delivered = signer_socket.parent / "SIGNING_KEY"
+        assert delivered.stat().st_mode & 0o777 == 0o600
+        assert signer_socket.parent.stat().st_mode & 0o777 == 0o700
+        # Emptying or adding another key must not silently change the identity.
+        run("ssh-add", str(state / "client-key"), env=agent_env)
+        refuse_signer()
+        run("ssh-add", "-D", env=agent_env)
+        refuse_signer()
+        run("ssh-add", str(state / "signing-key"), env=agent_env)
+        print("PASS: missing, empty and multi-key signer refuse before boot or session publication; service delivers private key mode 0600", flush=True)
+
         guest_log = open(root / "guest.log", "w+")
         logs.append(guest_log)
-        guest = subprocess.Popen([codex, "--", "matched"], cwd=work, env=env, stdout=guest_log, stderr=subprocess.STDOUT, start_new_session=True)
+        guest = subprocess.Popen([codex, "--", "signed"], cwd=work, env=env, stdout=guest_log, stderr=subprocess.STDOUT, start_new_session=True)
         processes.append(guest)
         sessions = state / "repositories/sessions"
         for _ in range(600):
@@ -156,7 +194,7 @@ with open(state_name + ".lock", "w") as lock, tempfile.TemporaryDirectory(prefix
         assert guest.wait(timeout=180) == 0
         guest_log.seek(0)
         output = guest_log.read()
-        for marker in ["SESSION_PUSH_1_OK objects=3", "SESSION_PUSH_2_OK objects=3", "SESSION_GUEST_OK"]:
+        for marker in ["SESSION_PUSH_1_OK objects=3", "SESSION_PUSH_2_OK objects=3", "SESSION_GUEST_OK", "SESSION_SIGNED_OK"]:
             assert marker in output, output
         assert not session.exists() and not (state / "locks" / token).exists()
         assert not list((state / "repositories/staging").glob("*.git"))
@@ -169,6 +207,26 @@ with open(state_name + ".lock", "w") as lock, tempfile.TemporaryDirectory(prefix
         # index-pack may append one already-present delta base to a thin pack.
         assert len(received) == 2 and all(3 <= total <= 4 and fresh == 3 for total, fresh in received), received
         print("PASS: two guest pushes reached actual SSH upstream as guest author, each guest pack sends exactly three new objects (verified in upstream quarantine); session and lock removed on exit", flush=True)
+
+        allowed_signers = root / "allowed-signers"
+        allowed_signers.write_text("guest-session@example.invalid " + (state / "signing-key.pub").read_text())
+        for revision in ["HEAD", "HEAD~1"]:
+            assert "gpgsig -----BEGIN SSH SIGNATURE-----" in git("-C", str(upstream), "cat-file", "commit", revision, env=env)
+            git("-C", str(upstream), "-c", f"gpg.ssh.allowedSignersFile={allowed_signers}", "verify-commit", revision, env=env)
+        print("PASS: guest verifies both signed commits; pushed upstream signatures verify against generated allowed-signers", flush=True)
+        os.killpg(signer_process.pid, signal.SIGTERM)
+        signer_process.wait(timeout=10)
+        refuse_signer()
+        print("PASS: stopped signer refuses before boot or session publication", flush=True)
+
+        # The same runtime also selects an unsigned identity with no signing door.
+        git("-C", str(work), "remote", "set-url", "origin", upstream_url.replace("codex-only", "codex-unsigned"), env=env)
+        git("-C", str(work), "fetch", str(upstream), "main", env=env)
+        git("-C", str(work), "reset", "--hard", "FETCH_HEAD", env=env)
+        unsigned = run(codex, "--", "unsigned", cwd=work, env=env)
+        assert "SESSION_UNSIGNED_OK" in unsigned, unsigned
+        assert "gpgsig " not in git("-C", str(upstream), "cat-file", "commit", "HEAD", env=env)
+        print("PASS: unsigned identity has no guest signing socket and pushes an unsigned commit with signer stopped", flush=True)
 
         git("-C", str(work), "remote", "remove", "origin", env=env)
         no_remote = run(codex, "--", "no-remote", cwd=work, env=env)
