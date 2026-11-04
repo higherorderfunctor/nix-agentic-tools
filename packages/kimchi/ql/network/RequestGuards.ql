@@ -65,7 +65,7 @@ private predicate guardSource(DataFlow::SourceNode source, string kind, string k
 
 from
   ClientRequest request, IfStmt branch, ConditionGuardNode guard, Expr test,
-  DataFlow::SourceNode source, string kind, string key, boolean conditionOutcome,
+  DataFlow::SourceNode source, string kind, string key, boolean condition,
   string outcome
 where
   exists(requestLibrary(request)) and
@@ -76,15 +76,15 @@ where
   guard.getTest() = test and guard.dominates(request.asExpr().getBasicBlock()) and
   strictAlias(DataFlow::valueNode(test), source) and
   (
-    branch.getCondition() = test and conditionOutcome = guard.getOutcome()
+    branch.getCondition() = test and condition = guard.getOutcome()
     or
     branch.getCondition().(LogNotExpr).getOperand() = test and
-    conditionOutcome != guard.getOutcome()
+    condition = guard.getOutcome().booleanNot()
   ) and
   (if guard.getOutcome() = true then outcome = "truthy" else outcome = "falsy")
 select request.getFile().getRelativePath() as file, request.getLocation().getStartLine() as line,
   request.getLocation().getStartColumn() as column, requestLibrary(request) as library,
   branch.getFile().getRelativePath() as guardFile, branch.getLocation().getStartLine() as guardLine,
   branch.getLocation().getStartColumn() as guardColumn, kind, key, outcome,
-  conditionOutcome.toString() as conditionOutcome, "intraprocedural" as scope,
+  condition.toString() as conditionOutcome, "intraprocedural" as scope,
   bundledModule(request) as bundled
