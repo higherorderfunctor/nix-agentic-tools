@@ -32,7 +32,6 @@
 | `packages/<owner>/extract/`             | the tool's own `extract.py` and its rows file, `annotations.json`                                                                                                                              |
 | `packages/<owner>/lib/default.nix`      | `lib.<owner>.settings {lib}` — the generator over that sidecar and rows, plus hand tables (if any)                                                                                             |
 | `lib/git-tool-settings/tool-module.nix` | the consumer-module factory, parameterized by mount root, sink and install target: host `git.<section>.{enable,settings}` lowered into `git.settings`; the sandbox mounts one tree per runtime |
-| `lib/git-tool-settings/lower.nix`       | one typed leaf's sink contribution (path shape, priority-preserving value), shared by the factory and the sandbox copy-down                                                                    |
 | `lib/git-tool-settings/ini-type.nix`    | Home Manager's `gitIniType`, the type of `git.settings` on both backends                                                                                                                       |
 | `lib/git-tool-settings/repo-config.*`   | devenv `include` / `init`; init reports failures while its task keeps dependents runnable                                                                                                      |
 
