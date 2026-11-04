@@ -36,33 +36,57 @@ the root's definitions forward with their nested `mkOverride` wrappers intact.
 So a nested `mkDefault` key at the root still loses to a runtime value or a
 typed tool leaf for that key, and an equal-priority disagreement stays a loud
 conflict — exactly as the host's `git.settings` behaves. A runtime that defines
-only a typed tool leaf keeps the inherited raw keys. A typed leaf a runtime
-leaves unset inherits the root leaf's definition at the root's own priority. The
-owner's per-tool assertions (git-branchless's `test.jobs`/`test.strategy`
-coupling, say) hold wherever the tree mounts.
+only a typed tool leaf keeps the inherited raw keys. The root's typed leaves
+forward into the runtime's typed tree as weak defaults: a runtime's own
+definition of the same leaf replaces the root's, as a runtime `settings` or
+`enable` does, and a raw key at normal priority also beats a root typed leaf. So
+the owner's per-tool assertions (git-branchless's `test.jobs`/`test.strategy`
+coupling, say) read root and runtime values together, wherever the tree mounts.
+And because the system file is the lowest Git scope the guest reads, an unset
+leaf there is upstream's default: git-branchless's lowest-scope check rejects a
+`test.jobs` above 1 without `test.strategy = "worktree"`, exactly as the Home
+Manager user-global tree already does.
 
 ## Guest-fixed keys
 
-Two keys are forced on top of everything, because the guest is not a trusted Git
-client:
+Two keys come last in the file, because the guest is not a trusted Git client:
 
 - `core.sshCommand` runs a store script that refuses: it prints that pushes go
   through the guest's `origin` remote, which the host relay serves, and exits
   non-zero. The guest holds no credentials.
 - `safe.directory` trusts `/mnt/seed`, the path `repo-guest.nix` clones from,
-  even though the host owns it.
+  even though the host owns it. An empty first value resets the list a consumer
+  built.
 
-A consumer value for either key loses wholly; a `safe.directory` list is
-replaced, never appended.
+They are appended after the consumer's render, not merged into it. Git takes the
+last value of a single-valued key whatever the case of its section and key
+names, so any consumer value for either key, in any spelling, loses.
+
+## Refused keys
+
+The file is built into the Nix store, which any local user reads, and the guest
+holds no credentials. So `settings` fails evaluation when the shared root or a
+runtime sets a key that carries one or can pull one in, in any case and under
+any subsection: the `credential`, `gpg`, `include` and `includeIf` sections,
+`http.*.extraHeader`, `url.*.insteadOf`, `url.*.pushInsteadOf` and
+`user.signingKey`. The message names the key and the option that sets it.
 
 ## Delivery
 
-The merged tree renders per runtime (`lib.generators.toGitINI`) and installs as
-the guest's SYSTEM configuration, `/etc/gitconfig`:
+The merged tree renders per runtime (`lib.generators.toGitINI`), followed by the
+guest-fixed keys, and installs as the guest's SYSTEM configuration,
+`/etc/gitconfig`:
 
-- a protected scope, the only one `safe.directory` and a forced
-  `core.sshCommand` hold in — a repository-local file cannot override them;
-- a file, because git-absorb and git-revise are libgit2 and read files only.
+- the protected scope `safe.directory` is honored in — Git ignores it in
+  repository-local files — and a file, because git-absorb and git-revise are
+  libgit2 and read files only;
+- the guest's lowest Git scope. `safe.directory` cannot be re-added by a
+  repository-local file (protected scope), but `core.sshCommand` follows
+  ordinary Git precedence: a guest process can override it through `--global`,
+  repository-local or `-c` configuration. The forced system value refuses an
+  ordinary push and names `origin`; it is not an SSH boundary. The boundary is
+  the guest itself, which holds no SSH credentials — pushes are meant to go
+  through `origin`, which the host relay serves.
 
 The standalone factory takes the same render explicitly:
 

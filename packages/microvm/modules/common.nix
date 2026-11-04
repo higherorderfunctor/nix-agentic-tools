@@ -72,8 +72,9 @@
     args = {
       exe = lib.getExe package;
       # The guest's system git configuration (modules/git.nix), delivered as
-      # a file: a protected scope, and libgit2 tools read files only.
-      gitConfig = lib.generators.toGitINI cfg.git._ini;
+      # a file because the libgit2 tools read files only; the system scope
+      # is the one `safe.directory` is honored in.
+      gitConfig = cfg.git._config;
       memory = cfg.vm.memory;
       outName = commandName name;
       packages = cfg.extraPackages ++ cfg.git._packages;

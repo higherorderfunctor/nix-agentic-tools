@@ -129,11 +129,11 @@
       {
         boot.kernelModules = ["qemu_fw_cfg" "virtio_console"];
         environment = {
-          # The guest's SYSTEM git configuration, a protected scope: the only
-          # one a repository-local file cannot override. `gitConfig` (the
-          # rendered `ai.<runtime>.sandbox.git._ini`) comes first; a repo
-          # guest then trusts the seed it clones from, whatever `gitConfig`
-          # holds. A guest with neither has no file.
+          # The guest's SYSTEM git configuration: a protected scope, where
+          # `safe.directory` is honored (Git ignores it repository-local).
+          # `gitConfig` (the rendered `ai.<runtime>.sandbox.git._config`) comes
+          # first; a repo guest then trusts the seed it clones from, whatever
+          # `gitConfig` holds. A guest with neither has no file.
           etc = lib.optionalAttrs (repo || gitConfig != null) {
             gitconfig.text =
               lib.optionalString (gitConfig != null) "${gitConfig}\n"
