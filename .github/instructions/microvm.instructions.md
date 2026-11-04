@@ -9,9 +9,8 @@ applyTo: "packages/microvm/**"
 
 <!-- cspell:ignore ACPI chardev gettys poweroff SSHSIG sysfs vcpus virtio -->
 
-> **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
-> routes; seeded-history copies, read-only mounts, and committed-work recovery
-> through virtio serial ports.
+> **Last verified:** 2026-11-02 — runtime guests, seeded-history copies,
+> read-only mounts, and committed-work recovery through virtio serial ports.
 
 `ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
 runtimes. Home Manager and devenv expose the same options and install
@@ -32,18 +31,18 @@ child shells resetting PATH to `/run/current-system/sw/bin`. Identity-aware
 launchers select a relay session and seed committed work; see
 `sandbox-identities.md` for launch ordering and no-door cases. Guest Git
 settings arrive through `ai.sandbox.git` (`sandbox-git.md`). Never log a harness
-into a provider inside the VM; VM-only CPA client keys will supply
-authentication later.
+into a provider inside the VM; VM-only CPA client keys supply authentication
+through `sandbox.inference.clientKey` (`sandbox-inference.md`).
 
 The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
 executable path whose Nix string context retains its package) and `outName` (a
 single executable name). Optional defaults are `doors = []`, `gitConfig = null`,
-`memory = 1024` MiB, `packages = []`, `repo = false`, `repoConfig = false`,
-`signing = null`, and `vcpus = 1`. Memory must be at least 128 MiB and CPUs at
-least one. The factory owns the guest and `bin/<outName>` launcher. The pinned
-microvm source is bound through `ai.internal.mkSandbox`; consumers need no extra
-module arguments. An empty configuration installs no sandbox and forces no
-guest.
+`homeFiles = {}`, `inference = null`, `memory = 1024` MiB, `packages = []`,
+`repo = false`, `repoConfig = false`, `signing = null`, and `vcpus = 1`. Memory
+must be at least 128 MiB and CPUs at least one. The factory owns the guest and
+`bin/<outName>` launcher. The pinned microvm source is bound through
+`ai.internal.mkSandbox`; consumers need no extra module arguments. An empty
+configuration installs no sandbox and forces no guest.
 
 The host store is shared read-only at `/nix/.ro-store`; upstream overlays
 `/nix/store` with tmpfs upper/work directories beneath `/nix/.rw-store`. Root is
@@ -159,8 +158,8 @@ recovery also fails; nonempty failed exports are retained as
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.
 
-See `packages/microvm/modules/README.md` for host setup. Guest smoke tests need
-Linux/KVM and run separately from sandboxed builds.
+See `packages/microvm/modules/README.md` for host setup, `sandbox-inference.md`
+for sandbox inference, and the checks for Linux/KVM guest smoke tests.
 
 <!-- Fragment: packages/microvm/docs/sandbox-git.md -->
 
@@ -421,6 +420,87 @@ still support both formats. Fetch exposes this session's pushed refs; refreshing
 from upstream remains deferred. On exit the launcher closes its session before
 releasing the lock. Concurrent relay GC skips held locks, including sessions
 whose guest is running.
+
+<!-- Fragment: packages/microvm/docs/sandbox-inference.md -->
+
+# Sandbox inference
+
+> **Last verified:** 2026-11-02 — client-key option inheritance, the inference
+> door, per-launch key transport and the guest user configs, on Home Manager and
+> devenv. The guest carries no consumer native Claude/Codex settings.
+
+`ai.sandbox.inference.clientKey` names the VM-only client of the runtime's
+selected proxy instance (`ai.<runtime>.settings.inference`). Null disables
+sandbox inference; a selected instance with a null client never falls back to
+the host client.
+
+```nix
+{inputs, ...}: let
+  redact = inputs.nix-agentic-tools.lib.redact;
+in {
+  ai = {
+    claude.enable = true;
+    cliproxyapi.instances.main = {
+      clientKeys = {
+        desktop.key = redact.file "/run/secrets/cpa-desktop";
+        sandbox.key = redact.file "/run/secrets/cpa-sandbox";
+      };
+      port = 8317;
+    };
+    sandbox = {enable = true; inference.clientKey = "sandbox";};
+    settings.inference = {clientKey = "desktop"; instance = "main";};
+  };
+}
+```
+
+## Selection
+
+Runtimes with a guest route mirror the option; a runtime value, including
+`mkDefault`, replaces the root value, and nothing flows back up. The guest
+selection reuses the runtime's selected instance and substitutes only the
+client, so the VM client's routes and models resolve independently of the host
+client's.
+
+A requested client is refused when the selection is missing or disabled, the
+client does not exist, or the runtime selected an external `url` instead of an
+instance. Sandbox inference supports `cliproxyapi` instances only, and a client
+that an enabled host harness also selects in the same evaluation is refused:
+revoking a shared key would cut a host harness too. Give every guest one
+dedicated client so a single revocation cuts them all. VM-only key provisioning
+is an operator obligation; equal bytes behind different references are not
+checked.
+
+## What crosses the boundary
+
+The guest config is exactly the owner lowering's output for the guest selection.
+Phase 6 carries no consumer native Claude or Codex settings into the guest:
+Claude gets a guest `~/.claude/settings.json` (door URL, key-file helper, quiet
+defaults), Codex a guest `~/.codex/config.toml` (provider table with command
+auth). No host config file, login, environment wrapper or home directory is
+copied.
+
+The client key is read on the host at launch through the shared inference key
+helper, written to a 0600 file in the launcher's private runtime directory,
+carried as a fw_cfg blob, and installed in the guest as
+`/run/sandbox-inference/key`, mode 0400, owned by the sandbox user. It never
+enters a Nix value, a store path, an argument vector or the kernel command line.
+fw_cfg is guest-visible by design: the key is for the guest, not protected from
+guest root. The guest file is a launch snapshot; rotation needs a relaunch, and
+CPA-side revocation refuses subsequent authenticated requests.
+
+## Door and launch refusal
+
+Inference traffic crosses one factory door: guest port 8317 on the door address,
+`socat` to the instance's native loopback port. The guest endpoint URL names the
+door, not the host origin. No proxy, second NIC or other credential crosses with
+it.
+
+Before QEMU starts, the launcher probes the instance's `/v1/models` with the
+staged key, supplied to curl through its stdin config. A connection failure,
+timeout, rejected key, non-200 status or non-list response refuses the launch,
+naming the instance, client and port only. The proxy is never auto-started and
+no other provider is tried. With inference inactive there is no door, blob,
+probe or helper at all.
 
 <!-- Fragment: packages/microvm/docs/sandbox-signing.md -->
 
