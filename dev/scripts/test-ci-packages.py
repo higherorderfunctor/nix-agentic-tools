@@ -84,7 +84,12 @@ class ExtractedSelectionTest(unittest.TestCase):
                 self.assert_selected(self.changed(path), [])
 
     def test_commit_back_outputs_do_not_select_kimchi(self):
-        self.assert_selected(self.changed("packages/kimchi/extracted/extracted.json", "packages/kimchi/egress-report.json"), [])
+        # The produce step commits back the owner's extracted directory and
+        # the report; neither may feed the selection identity.
+        extracted_dir = self.root / "packages/kimchi/extracted"
+        written = sorted(str(path.relative_to(self.root)) for path in extracted_dir.iterdir() if path.is_file())
+        self.assertTrue(written)
+        self.assert_selected(self.changed(*written, "packages/kimchi/egress-report.json"), [])
 
 
 def ci_step_script(name, workflow_name="ci.yml"):
