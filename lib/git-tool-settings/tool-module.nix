@@ -58,6 +58,14 @@
   # the sandbox's shared root is lowered per runtime with each definition's
   # priority (packages/microvm/modules/git.nix), not into a sink of its own.
   sink ? ["settings"],
+  # Checks this mount adds beside the owner's `settings.assertions`, in the
+  # same `{cfg; optionPath}` shape: what the Git scope the tree writes into
+  # adds. Home Manager passes git-branchless's `lowestScopeAssertions` (its
+  # user-global file is the lowest layer that flake writes, so an unset leaf
+  # there is upstream's default) and so does the sandbox (its system file is
+  # the guest's lowest scope); repository-local scopes pass none, because a
+  # higher scope may still supply the leaf.
+  assertions ? [],
 }: {
   config,
   lib,
@@ -93,9 +101,10 @@ in {
   # the per-runtime trees, which do install.
   config = lib.mkMerge (
     [
-      # The per-tool checks the owner's generator result carries, evaluated
-      # wherever the tree mounts; `optionPath` names the mounted root so the
-      # messages stay true at every root.
+      # The per-tool checks the owner's generator result carries plus whatever
+      # this mount's scope adds, evaluated wherever the tree mounts;
+      # `optionPath` names the mounted root so the messages stay true at
+      # every root.
       {
         assertions = map (
           check:
@@ -103,7 +112,7 @@ in {
               inherit cfg;
               optionPath = lib.concatStringsSep "." (root ++ [section]);
             }
-        ) (settings.assertions or []);
+        ) ((settings.assertions or []) ++ assertions);
       }
     ]
     ++ lib.optional (sink != null) (lib.setAttrByPath (root ++ sink) lowered)
