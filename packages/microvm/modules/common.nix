@@ -35,6 +35,11 @@
       description = "Packages available throughout the guest and on its executable PATH. A runtime definition replaces the whole root list, rather than appending to it.";
       type = lib.types.listOf lib.types.package;
     };
+    inference.clientKey = lib.mkOption {
+      default = null;
+      description = "VM-only client of this runtime's selected proxy instance (ai.<runtime>.settings.inference); null disables sandbox inference and never falls back to the host client. The guest receives exactly the owner lowering's output for that client — its guest-user config, the door endpoint and a per-launch key file — and no consumer native settings or host logins. The client must not be one an enabled host harness selects in the same evaluation.";
+      type = lib.types.nullOr lib.types.str;
+    };
     vm = {
       memory = lib.mkOption {
         default = 4096;
@@ -52,6 +57,7 @@
   # Guest routes and host command construction.
   commandName = name: "${name}-sandbox";
   factory = config.ai.internal.mkSandbox pkgs;
+  inferenceFor = import ../lib/sandbox/inference.nix {inherit config lib options pkgs;};
   routed = builtins.filter (name: config.ai.${name}.enable && config.ai.${name}.sandbox.enable) routeNames;
   # Guest routes deliberately select the configured package before host
   # installPackage/jail/environment wrapping. Only runtimes with a route get a
@@ -80,17 +86,18 @@
   runtimePackage = name: let
     cfg = config.ai.${name}.sandbox;
     package = routes.${name};
-    args = {
-      exe = lib.getExe package;
-      # The guest's system git configuration (modules/git.nix), delivered as
-      # a file because the libgit2 tools read files only; the system scope
-      # is the one `safe.directory` is honored in.
-      gitConfig = lib.generators.toGitINI cfg.git._ini;
-      memory = cfg.vm.memory;
-      outName = commandName name;
-      packages = cfg.extraPackages ++ cfg.git._packages;
-      vcpus = cfg.vm.vcpus;
-    };
+    # Inference adds only the guest home files and key transport arguments.
+    args =
+      (inferenceFor name).extension
+      // {
+        exe = lib.getExe package;
+        # The protected system scope supplies safe.directory before cloning.
+        gitConfig = lib.generators.toGitINI cfg.git._ini;
+        memory = cfg.vm.memory;
+        outName = commandName name;
+        packages = cfg.extraPackages ++ cfg.git._packages;
+        vcpus = cfg.vm.vcpus;
+      };
   in
     assert lib.assertMsg (packageAssertion name).assertion (packageAssertion name).message;
       if cfg.git.identities == {}
@@ -132,7 +139,7 @@ in {
     // lib.genAttrs routeNames (_: {sandbox = inheritOptions [] sandboxOptions;});
 
   config = {
-    assertions = map packageAssertion routed;
+    assertions = map packageAssertion routed ++ lib.concatMap (name: (inferenceFor name).assertions) routeNames;
     ai.microvm.claims.command = map commandName routed;
   };
 }
