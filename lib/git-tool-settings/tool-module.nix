@@ -58,6 +58,14 @@
   # the sandbox's shared root is lowered per runtime with each definition's
   # priority (packages/microvm/modules/git.nix), not into a sink of its own.
   sink ? ["settings"],
+  # Checks this mount evaluates in place of the owner's `settings.assertions`,
+  # in the same `{cfg; optionPath}` shape; null keeps the owner's. Home Manager
+  # passes git-branchless's `lowestScopeAssertions` (its user-global file is
+  # the lowest layer that flake writes, so an unset leaf there is upstream's
+  # default) and so does the sandbox (its system file is the guest's lowest
+  # scope); repository-local scopes pass null, because a higher scope may
+  # still supply the leaf.
+  assertions ? null,
 }: {
   config,
   lib,
@@ -93,17 +101,23 @@ in {
   # the per-runtime trees, which do install.
   config = lib.mkMerge (
     [
-      # The per-tool checks the owner's generator result carries, evaluated
-      # wherever the tree mounts; `optionPath` names the mounted root so the
-      # messages stay true at every root.
+      # The per-tool checks: the owner's generator result carries them, unless
+      # this mount's scope replaces them. They are evaluated wherever the tree
+      # mounts; `optionPath` names the mounted root so the messages stay true
+      # at every root.
       {
-        assertions = map (
-          check:
-            check {
-              inherit cfg;
-              optionPath = lib.concatStringsSep "." (root ++ [section]);
-            }
-        ) (settings.assertions or []);
+        assertions =
+          map (
+            check:
+              check {
+                inherit cfg;
+                optionPath = lib.concatStringsSep "." (root ++ [section]);
+              }
+          ) (
+            if assertions == null
+            then settings.assertions or []
+            else assertions
+          );
       }
     ]
     ++ lib.optional (sink != null) (lib.setAttrByPath (root ++ sink) lowered)
