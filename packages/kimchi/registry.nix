@@ -62,8 +62,8 @@
         }
       ];
     };
-    # kimchi-egress-report: which writer owns each field of the committed
-    # egress report, and the drift gate that ties it to the network fact.
+    # kimchi-egress-report: field producers and the drift gate tying the
+    # complete report to egressScan, environment and network facts.
     kimchi-egress-report = {
       scopes = [
         "checks/references/kimchi-egress-report.nix"
@@ -80,7 +80,8 @@
     };
   };
   # The package update script refreshes the pinned Kimchi and pi extraction
-  # sources; PR CI regenerates packages/kimchi/extracted/ facts from those pins.
+  # sources; PR CI regenerates packages/kimchi/extracted/ facts, including
+  # egressScan's scanner fields, and the complete egress report from those pins.
   update.targets = {
     kimchi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/kimchi/package.nix)];};
     kimchi-docs = {flags = ["--use-update-script"];};

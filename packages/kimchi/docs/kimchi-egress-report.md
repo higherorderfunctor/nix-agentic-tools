@@ -1,20 +1,21 @@
 ## Kimchi egress report
 
-> **Last verified:** 2026-10-29 — the report's network fields come from the
-> `network` and `environment` facts, read through `lib.extracted`, by
-> `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
-> cover; the drift check compares parsed JSON; regeneration uses installed
-> `treefmt`.
+> **Last verified:** 2026-11-03 — `generate.mjs` reads `egressScan`,
+> `environment` and `network` through `lib.extracted`; the Kimchi extraction
+> runs `scan.mjs` 2.0.0 on the original pinned Kimchi and pi trees; PR CI
+> regenerates the facts and complete report together.
 
 `packages/kimchi/egress-report.json` is the review artifact for the pinned
-release's network surface. It has two writers, and `header.provenance` names the
-writer of each field. Both scripts live in `dev/skills/kimchi-egress-report/`
-and share `scripts/report.mjs`, whose `FACT_FIELDS` and `SCAN_FIELDS` are the
-one list of who writes what.
+release's network surface. `generate.mjs` writes the complete report from facts.
+`header.provenance` names the producer of each field: the CodeQL facts or
+`scan.mjs`, whose output is the static x86_64-linux `egressScan` fact. Both
+scripts live in `dev/skills/kimchi-egress-report/` and share
+`scripts/report.mjs`, whose `FACT_FIELDS` and `SCAN_FIELDS` are the one list of
+field ownership.
 
 ### Field provenance
 
-| Field               | Writer         | Source                                                         |
+| Field               | Producer       | Source                                                         |
 | ------------------- | -------------- | -------------------------------------------------------------- |
 | `endpointVariables` | `generate.mjs` | `network` env targets, each joined with its `environment` row  |
 | `hosts`             | `generate.mjs` | `network` target hosts and `unattributed` URL literals         |
@@ -23,6 +24,7 @@ one list of who writes what.
 | `dependencies`      | `scan.mjs`     | Kimchi's `package.json` and `sources.json`                     |
 | `goCallSites`       | `scan.mjs`     | regex over `tools/proxy-helper`                                |
 | `goHosts`           | `scan.mjs`     | regex over `tools/proxy-helper`                                |
+| `header.scan`       | `scan.mjs`     | Verified source pins, release versions and scanner version     |
 | `spawnCallSites`    | `scan.mjs`     | TypeScript AST over Kimchi's tree, callee names                |
 | `urlPathLiterals`   | `scan.mjs`     | AST over Kimchi's tree, regex over pi's `dist` and the Go tree |
 
@@ -33,7 +35,9 @@ pi and its adapter. The scanner's fields keep its `kimchi/` and `pi/` labels.
 
 `header.facts` is the release in `sources.json`. It names the facts' release
 because `checks.kimchi-extracted` fails when the committed facts are not the
-pin's. `header.scan` is the release `scan.mjs` read, and it can trail.
+pin's. `header.scan` is the release `scan.mjs` read in that same extraction. The
+scanner verifies the Kimchi and pi NAR hashes, pi's version and Kimchi's direct
+pi dependency against `sources.json` before producing `egressScan`.
 
 ### Refreshing the report
 
@@ -42,13 +46,25 @@ pin's. `header.scan` is the release `scan.mjs` read, and it can trail.
 `nix eval`, runs the generator, then formats with installed `treefmt`. Kimchi's
 PR CI producer calls it after fact regeneration and commits its delta with the
 facts. The check compares parsed JSON with the committed report and prints a
-diff on drift. No generator reads `extracted.json` directly, as required by
+diff and the changed field names on drift, including `header.scan`, with the
+`dev/skills/kimchi-egress-report/scripts/regenerate.sh` fix command. No
+generator reads `extracted.json` directly, as required by
 `checks.extracted-contract-guard`.
 
-The generator refuses missing scanner fields and env targets without an
-`environment` row. Scanner fields change only on an operator-requested scan:
-commands, dependencies and spawned executables are outside the network fact; Go
-is outside its JavaScript database; scheme-less paths have no fact equivalent.
+The generator refuses a missing `egressScan`, missing scanner fields and env
+targets without an `environment` row. It reads no fields from the committed
+report. The Kimchi extraction runs the scanner with pinned Node and TypeScript
+on `extractionSources.kimchi` and `extractionSources.pi`, the original trees
+before build or CodeQL patches. Its sandbox supplies Nix for `nix hash path`
+with `nix-command` enabled and writable HOME/state directories.
+
+CI keeps scanner fields fresh through `egressScan`: commands, dependencies,
+spawned executables, Go sites and hosts, path literals and `header.scan` are
+regenerated with the CodeQL facts. `checks.kimchi-extracted` detects
+scanner-fact drift; `checks.kimchi-egress-report` detects any report-field
+drift. Commands, dependencies and spawned executables are outside the network
+fact; Go is outside its JavaScript database; scheme-less paths have no network
+fact equivalent.
 
 ### What the regex scanner reported that the fact does not
 

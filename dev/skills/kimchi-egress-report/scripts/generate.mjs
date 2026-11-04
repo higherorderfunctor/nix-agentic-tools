@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// regenerate.sh supplies lib.extracted facts; scan.mjs owns the retained fields.
+// regenerate.sh supplies network, environment and egressScan via lib.extracted.
 import { readFile } from "node:fs/promises";
 import {
   compare,
@@ -78,19 +78,21 @@ async function main() {
   const args = parseArgs("generate.mjs", process.argv.slice(2), {
     facts: null,
     out: "packages/kimchi/egress-report.json",
-    report: "packages/kimchi/egress-report.json",
     sources: "packages/kimchi/sources.json",
   });
-  const { environment, network } = await readJson(args.facts);
-  const scanned = await readJson(args.report);
-  const missing = Object.keys(SCAN_FIELDS).filter((name) => !(name in scanned));
-  if (missing.length > 0 || !scanned.header?.scan)
-    fail(`${args.report} lacks scanned fields: ${missing.join(", ")}`);
+  const { egressScan, environment, network } = await readJson(args.facts);
+  if (!egressScan) fail(`${args.facts} lacks the egressScan fact`);
+  const missing = Object.keys(SCAN_FIELDS).filter(
+    (name) => !(name in egressScan),
+  );
+  if (!egressScan.header?.scan) missing.push("header.scan");
+  if (missing.length > 0)
+    fail(`${args.facts} egressScan lacks fields: ${missing.join(", ")}`);
   const sources = await readJson(args.sources);
 
   const report = {
     ...Object.fromEntries(
-      Object.keys(SCAN_FIELDS).map((name) => [name, scanned[name]]),
+      Object.keys(SCAN_FIELDS).map((name) => [name, egressScan[name]]),
     ),
     header: {
       facts: {
@@ -99,7 +101,7 @@ async function main() {
         piVersion: sources.extraction.piPackage.version,
       },
       provenance: { ...FACT_FIELDS, ...SCAN_FIELDS },
-      scan: scanned.header.scan,
+      scan: egressScan.header.scan,
     },
     endpointVariables: endpointVariables(network, environment.variables),
     hosts: hosts(network),
