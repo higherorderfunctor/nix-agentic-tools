@@ -105,7 +105,8 @@ origin URL.
 Optional `signing = {port; socket;}` adds a door to the absolute host
 `ssh-agent` socket. A guest bridge publishes `SSH_AUTH_SOCK` without sharing the
 private key or its directory. `lib.ai.mkSshSigner pkgs` starts a dedicated host
-agent, loads one key, and leaves it running until the signer is stopped.
+agent, writes the key's public half to `<socket>.pub`, loads the key, removes
+the key file, and leaves the agent running until the signer is stopped.
 
 The door is a filter, not the agent protocol. It forwards key listing and sign
 requests whose data is an `SSHSIG` envelope, which `ssh-keygen -Y sign` produces

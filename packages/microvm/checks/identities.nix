@@ -95,6 +95,7 @@ in {
       && defaultReplaced.config.ai.codex.sandbox.git.identities == {}
       && builtins.attrNames opted.config.ai.codex.sandbox.git.identities == ["x"]
       && opted.config.ai.codex.sandbox.git.identities.x == result.config.ai.sandbox.git.identities.x
+      && result.config.ai.sandbox.git.identities.x.signing.key == null
       && failures result == [])
     // check "refusals" (api: let
       changed = change: api.eval (lib.recursiveUpdate fixture change);
