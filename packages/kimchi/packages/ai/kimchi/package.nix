@@ -103,22 +103,25 @@
       root = dir;
       fileset = lib.fileset.unions [(dir + "/report.mjs") (dir + "/scan.mjs")];
     };
+  # The pins scan.mjs reads; build-only fields such as vendorHash stay out
+  # so editing them does not rebuild the extraction.
+  scannerPins = pkgs.writeText "kimchi-scanner-pins.json" (builtins.toJSON {
+    inherit extraction;
+    inherit (sources) version;
+  });
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
       nativeBuildInputs = [(lib.getBin pkgs.nix) pkgs.nodejs pkgs.typescript_5];
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      # scan.mjs verifies both tree pins with `nix hash path`. The sandbox
-      # has no writable user home or Nix state; hashing needs no daemon/store
-      # writes, but Nix needs its command feature and writable runtime dirs.
-      export HOME="$TMPDIR/home" NIX_STATE_DIR="$TMPDIR/nix-state"
+      # scan.mjs verifies both tree pins with `nix hash path`, which needs
+      # no store or daemon but is an experimental command.
       export NIX_CONFIG="experimental-features = nix-command"
-      mkdir -p "$HOME" "$NIX_STATE_DIR"
       ${pkgs.nodejs}/bin/node ${egressScanner}/scan.mjs \
         --tree ${extractionSources.kimchi} \
         --pi ${extractionSources.pi} \
-        --sources ${../../../sources.json} \
+        --sources ${scannerPins} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
         --out egress-scan.json
       ${pkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json

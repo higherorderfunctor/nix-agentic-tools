@@ -1,4 +1,4 @@
-// Field ownership for both report writers.
+// Field ownership: the CodeQL facts or scan.mjs (the egressScan fact).
 
 import { writeFile } from "node:fs/promises";
 

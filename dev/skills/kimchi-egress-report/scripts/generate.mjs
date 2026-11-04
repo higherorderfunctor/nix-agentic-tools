@@ -81,7 +81,6 @@ async function main() {
     sources: "packages/kimchi/sources.json",
   });
   const { egressScan, environment, network } = await readJson(args.facts);
-  if (!egressScan) fail(`${args.facts} lacks the egressScan fact`);
   const missing = Object.keys(SCAN_FIELDS).filter(
     (name) => !(name in egressScan),
   );

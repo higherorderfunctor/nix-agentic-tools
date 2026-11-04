@@ -24,7 +24,6 @@ field ownership.
 | `dependencies`      | `scan.mjs`     | Kimchi's `package.json` and `sources.json`                     |
 | `goCallSites`       | `scan.mjs`     | regex over `tools/proxy-helper`                                |
 | `goHosts`           | `scan.mjs`     | regex over `tools/proxy-helper`                                |
-| `header.scan`       | `scan.mjs`     | Verified source pins, release versions and scanner version     |
 | `spawnCallSites`    | `scan.mjs`     | TypeScript AST over Kimchi's tree, callee names                |
 | `urlPathLiterals`   | `scan.mjs`     | AST over Kimchi's tree, regex over pi's `dist` and the Go tree |
 
@@ -55,8 +54,8 @@ The generator refuses a missing `egressScan`, missing scanner fields and env
 targets without an `environment` row. It reads no fields from the committed
 report. The Kimchi extraction runs the scanner with pinned Node and TypeScript
 on `extractionSources.kimchi` and `extractionSources.pi`, the original trees
-before build or CodeQL patches. Its sandbox supplies Nix for `nix hash path`
-with `nix-command` enabled and writable HOME/state directories.
+before build or CodeQL patches. Its sandbox supplies Nix with `nix-command`
+enabled for `nix hash path`.
 
 CI keeps scanner fields fresh through `egressScan`: commands, dependencies,
 spawned executables, Go sites and hosts, path literals and `header.scan` are
