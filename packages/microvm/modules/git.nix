@@ -103,7 +103,7 @@
   # below walks the one list of key paths.
   fixedValues = {
     core.sshCommand = lib.getExe noSsh;
-    safe.directory = ["/mnt/seed"];
+    safe.directory = builtins.attrValues (import ../lib/repo-paths.nix);
   };
   fixed = lib.mapAttrs (_: lib.mapAttrs (_: lib.mkForce)) fixedValues;
   # Every leaf key path of an ini tree, one per rendered key. A priority
