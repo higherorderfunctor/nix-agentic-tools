@@ -457,9 +457,11 @@ in {
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
         builtins.attrNames (builtins.functionArgs factory)
-        == ["doors" "exe" "gitConfig" "memory" "outName" "packages" "repo" "repoConfig" "signing" "vcpus"]
+        == ["doors" "exe" "gitConfig" "homeFiles" "inference" "memory" "outName" "packages" "repo" "repoConfig" "signing" "vcpus"]
         && (builtins.functionArgs factory).doors
         && (builtins.functionArgs factory).gitConfig
+        && (builtins.functionArgs factory).homeFiles
+        && (builtins.functionArgs factory).inference
         && (builtins.functionArgs factory).memory
         && (builtins.functionArgs factory).packages
         && (builtins.functionArgs factory).repo
@@ -502,7 +504,7 @@ in {
           && shares.seed.readOnly
           && builtins.elem "ro" g.fileSystems."/mnt/seed".options
           && builtins.all (name: builtins.elem "name=opt/sandbox.${name},file=${name}" g.microvm.qemu.extraArgs) ["repo-branch" "repo-head" "seed-roots"]
-          && g.systemd.services.sandbox.serviceConfig.RuntimeDirectory == "sandbox"
+          && g.systemd.services.sandbox.serviceConfig.RuntimeDirectory == ["sandbox"]
           && g.systemd.services.sandbox.unitConfig.RequiresMountsFor == ["/mnt/seed"]
           && lib.hasInfix "directory = /mnt/seed" g.environment.etc.gitconfig.text
           && !lib.hasInfix "*" g.environment.etc.gitconfig.text
