@@ -23,18 +23,20 @@ guest route and no `sandbox` option. Sandbox commands claim their names through
 `extraPackages` enter executable PATH and the guest system profile, including
 child shells resetting PATH to `/run/current-system/sw/bin`. Identity-aware
 launchers select a relay session and seed committed work; see
-`sandbox-identities.md` for launch ordering and no-door cases. Never log a
-harness into a provider inside the VM; VM-only CPA client keys will supply
+`sandbox-identities.md` for launch ordering and no-door cases. Guest Git
+settings arrive through `ai.sandbox.git` (`sandbox-git.md`). Never log a harness
+into a provider inside the VM; VM-only CPA client keys will supply
 authentication later.
 
 The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
 executable path whose Nix string context retains its package) and `outName` (a
-single executable name). Optional defaults are `doors = []`, `memory = 1024`
-MiB, `packages = []`, `repo = false`, `repoConfig = false`, `signing = null`,
-and `vcpus = 1`. Memory must be at least 128 MiB and CPUs at least one. The
-factory owns the guest and `bin/<outName>` launcher. The pinned microvm source
-is bound through `ai.internal.mkSandbox`; consumers need no extra module
-arguments. An empty configuration installs no sandbox and forces no guest.
+single executable name). Optional defaults are `doors = []`, `gitConfig = null`,
+`memory = 1024` MiB, `packages = []`, `repo = false`, `repoConfig = false`,
+`signing = null`, and `vcpus = 1`. Memory must be at least 128 MiB and CPUs at
+least one. The factory owns the guest and `bin/<outName>` launcher. The pinned
+microvm source is bound through `ai.internal.mkSandbox`; consumers need no extra
+module arguments. An empty configuration installs no sandbox and forces no
+guest.
 
 The host store is shared read-only at `/nix/.ro-store`; upstream overlays
 `/nix/store` with tmpfs upper/work directories beneath `/nix/.rw-store`. Root is
