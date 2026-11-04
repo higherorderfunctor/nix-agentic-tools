@@ -38,7 +38,9 @@ import ../../../lib/strict-shell-application.nix pkgs {
       echo "sandbox-ssh-signer: timed out waiting for socket: $socket" >&2
       exit 1
     fi
-    SSH_AUTH_SOCK=$socket ssh-add -- "$key_file"
+    # ai.services' textual secret reader strips trailing newlines; OpenSSH
+    # requires a line ending after the private key's footer.
+    { cat -- "$key_file"; printf '\n'; } | SSH_AUTH_SOCK=$socket ssh-add -
     wait "$agent_pid"
   '';
 }
