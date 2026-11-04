@@ -21,20 +21,20 @@ guest route and no `sandbox` option. Sandbox commands claim their names through
 `ai.microvm.claims.command`.
 
 `extraPackages` enter executable PATH and the guest system profile, including
-child shells resetting PATH to `/run/current-system/sw/bin`. Repository, door
-and signing settings have no module options yet. Identity options, selection and
-relay lowering are in `sandbox-identities.md`; the launcher does not use them
-yet. Never log a harness into a provider inside the VM; VM-only CPA client keys
-will supply authentication later.
+child shells resetting PATH to `/run/current-system/sw/bin`. Identity-aware
+launchers select a relay session and seed committed work; see
+`sandbox-identities.md` for launch ordering and no-door cases. Never log a
+harness into a provider inside the VM; VM-only CPA client keys will supply
+authentication later.
 
 The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
 executable path whose Nix string context retains its package) and `outName` (a
 single executable name). Optional defaults are `doors = []`, `memory = 1024`
-MiB, `packages = []`, `repo = false`, `signing = null`, and `vcpus = 1`. Memory
-must be at least 128 MiB and CPUs at least one. The factory owns the guest and
-`bin/<outName>` launcher. The pinned microvm source is bound through
-`ai.internal.mkSandbox`; consumers need no extra module arguments. An empty
-configuration installs no sandbox and forces no guest.
+MiB, `packages = []`, `repo = false`, `repoConfig = false`, `signing = null`,
+and `vcpus = 1`. Memory must be at least 128 MiB and CPUs at least one. The
+factory owns the guest and `bin/<outName>` launcher. The pinned microvm source
+is bound through `ai.internal.mkSandbox`; consumers need no extra module
+arguments. An empty configuration installs no sandbox and forces no guest.
 
 The host store is shared read-only at `/nix/.ro-store`; upstream overlays
 `/nix/store` with tmpfs upper/work directories beneath `/nix/.rw-store`. Root is
@@ -93,7 +93,12 @@ checkout (including a linked worktree or an unborn branch). The guest starts in
 name or detached state. Uncommitted host changes are excluded. Shallow and
 partial repositories are refused; supported object formats are SHA-1 and
 SHA-256. Git joins the guest system profile and executable PATH only in this
-mode. These factory parameters do not add module options.
+mode. These factory parameters do not add module options. `repoConfig = true`
+requires repo mode, an absolute `SANDBOX_REPO_CONFIG` file and an absolute
+`SANDBOX_SEED_OBJECTS` path at launch, where the launcher links the seed's
+object directory. The runtime session launcher uses it to deliver origin and
+identity through fw_cfg, included last in the clone after replacing its seed
+origin URL.
 
 Optional `signing = {port; socket;}` adds a door to the absolute host
 `ssh-agent` socket. A guest bridge publishes `SSH_AUTH_SOCK` without sharing the
@@ -134,6 +139,5 @@ recovery also fails; nonempty failed exports are retained as
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.
 
-See `packages/microvm/modules/README.md` for host setup. Owner checks cover
-module parity, validation, process cleanup and recovery; real guest smoke tests
-need Linux/KVM and run separately from sandboxed builds.
+See `packages/microvm/modules/README.md` for host setup. Guest smoke tests need
+Linux/KVM and run separately from sandboxed builds.
