@@ -11,6 +11,12 @@
 {
   backend,
   lib,
+  # What this backend's Git scope adds to the owner's per-tool checks, in the
+  # factory's `assertions` shape: the Home Manager module passes the owner's
+  # `lowestScopeAssertions` (user-global is the lowest layer that flake
+  # writes); devenv passes none, because repository-local leaves may still be
+  # supplied user-globally.
+  assertions ? [],
 }: let
   settings = (import ../lib/default.nix).git-branchless.settings {inherit lib;};
   generated = settings.options.branchless;
@@ -37,7 +43,7 @@ in
   }: {
     imports = [
       (import ../../../lib/git-tool-settings/tool-module.nix {
-        inherit backend settings;
+        inherit assertions backend settings;
         package = ai: ai.gitTools.git-branchless;
         section = "branchless";
         tool = "git-branchless";
