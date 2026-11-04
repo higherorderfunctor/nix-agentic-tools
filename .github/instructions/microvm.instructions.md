@@ -28,10 +28,11 @@ guest route and no `sandbox` option. Sandbox commands claim their names through
 `ai.microvm.claims.command`.
 
 `extraPackages` enter both the executable PATH and the guest system profile, so
-child shells resetting PATH to `/run/current-system/sw/bin` still find them.
-This phase supplies no repository, doors, identities or Git settings. Never log
-a harness into a provider inside the VM; VM-only CPA client keys will supply
-authentication in a later phase.
+child shells resetting PATH to `/run/current-system/sw/bin` still find them. The
+standalone factory below also supplies repository and door parameters; the
+module option tree does not yet expose those surfaces or Git identity settings.
+Never log a harness into a provider inside the VM; VM-only CPA client keys will
+supply authentication in a later phase.
 
 The public standalone factory also accepts packages and sizing:
 
@@ -102,14 +103,28 @@ it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
 trap.
 
 The factory accepts
-`{exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`. With
+`{doors ? []; exe; outName; memory ? 1024; packages ? []; repo ? false; vcpus ? 1;}`.
+Each door is `{port; command; arguments ? [];}` with a unique TCP port, absolute
+host executable and string arguments. QEMU runs a fresh wrapper per connection
+with socket stdin/stdout; the command gets an empty environment, and host stderr
+stays in the launcher's private runtime directory, which no guest share
+includes. Door arguments sit in a wrapper in the Nix store, which the guest
+mounts, so the guest can read them: a secret must come from a runtime file in
+the launcher's directory that the command reads when it starts. The restricted
+user network exposes only those forwarded guest ports. Launcher cleanup checks
+each recorded PID's process start time before killing an orphaned door. CI runs
+the wrapper outside QEMU, runs the cleanup against stubbed records and checks
+the generated QEMU arguments; the network restriction, one process per
+connection, the environment seen from inside the guest and orphan cleanup after
+QEMU dies are proved only by the hand-run KVM fixtures
+(`microvm-sandbox-door-launcher` and `microvm-sandbox-door-lifecycle`). With
 `repo = true`, launch from a Git checkout (including a linked worktree or an
 unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
 committed HEAD, preserving its branch name or detached state. Uncommitted host
 changes are excluded. Shallow and partial repositories are refused; supported
 object formats are SHA-1 and SHA-256. Git joins the guest system profile and
-executable PATH only in this mode. This factory parameter does not add a module
-option.
+executable PATH only in this mode. These factory parameters do not add module
+options.
 
 The launcher builds an isolated bare seed repository with templates disabled and
 the host's explicit object format. Only the chosen push remote's tracking refs
