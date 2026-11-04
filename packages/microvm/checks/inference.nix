@@ -299,7 +299,8 @@
     '';
   };
 in {
-  checks =
+  # mkSandbox builds a Linux guest and refuses other host package sets.
+  checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
     forBackends "core" (api: let
       # pkgs.hello is no Codex package: Home Manager's daemon pin would refuse
       # it, and devenv declares no such option to disable.
@@ -503,5 +504,6 @@ in {
             echo PASS: rendered guest configs
           '';
         };
-    };
+    }
+  );
 }
