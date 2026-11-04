@@ -307,17 +307,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1793771880,
-        "narHash": "sha256-ukxUF/La2pYAsNxpwB4tEF//hfSAIq1WNe68vcrHN80=",
+        "lastModified": 1793774382,
+        "narHash": "sha256-FbAHhkHJSREUBNegF3bOXtDyqzrAoIs6Aql1afo/cjE=",
         "owner": "purpleclay",
         "repo": "go-overlay",
-        "rev": "5c639e261eaab8cdbe4db838289221ebea6d242f",
+        "rev": "390b41ddf587846a6932ebef355f6e9981dd78e9",
         "type": "github"
       },
       "original": {
         "owner": "purpleclay",
         "repo": "go-overlay",
-        "rev": "5c639e261eaab8cdbe4db838289221ebea6d242f",
+        "rev": "390b41ddf587846a6932ebef355f6e9981dd78e9",
         "type": "github"
       }
     },
