@@ -21,9 +21,21 @@ const flags = Object.fromEntries(
     ),
 );
 const scripts = flags["--scripts"] ?? resolve(here, "../extract/judgments");
-const fixtures = join(here, "fixtures/surface-judgments");
+const fixtures =
+  flags["--fixtures"] ?? join(here, "fixtures/surface-judgments");
 const read = (name) => JSON.parse(readFileSync(join(fixtures, name), "utf8"));
-const baseline = read("expected/base-packets.json");
+const verdicts = JSON.parse(
+  readFileSync(
+    flags["--verdicts"] ?? join(here, "../surface-judgments.json"),
+    "utf8",
+  ),
+);
+const baseline = Object.fromEntries(
+  verdicts.judgments.map(({ id, packet, evidenceHash }) => [
+    id,
+    { packet, evidenceHash },
+  ]),
+);
 const messages = read("expected/diagnostics.json");
 for (const script of ["packet.mjs", "check.mjs"])
   assert.doesNotMatch(
@@ -37,8 +49,12 @@ for (const test of read("cases.json")) {
     const files = {
       source: read("base/source.json"),
       facts: JSON.stringify(read("base/facts.json")),
-      verdicts: JSON.stringify(read("base/verdicts.json")),
+      verdicts: JSON.stringify(verdicts),
     };
+    if (test.hiddenRegion)
+      files.source = `const HOSTED = { llmBaseUrl: "https://ap.example" };
+const llmBaseUrl = "https://ap.example";
+${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
     for (const edit of test.edits ?? []) {
       assert.ok(
         files[edit.file].includes(edit.from),
@@ -50,6 +66,25 @@ for (const test of read("cases.json")) {
       const facts = JSON.parse(files.facts);
       facts.regionRegistry.fields.reverse();
       files.facts = JSON.stringify(facts);
+    }
+    if (test.unorderedArray) {
+      const records = JSON.parse(files.verdicts);
+      const judgment = records.judgments[0];
+      const items = test.unorderedArray
+        .split(".")
+        .reduce((value, key) => value[key], judgment.packet);
+      if (items.length === 1) {
+        const extra = structuredClone(items[0]);
+        if (test.unorderedArray === "rows") extra.value = "https://zz.example";
+        else extra.anchor.symbol = "zzHelper";
+        items.push(extra);
+      }
+      items.reverse();
+      const { canonical, hash } = await import(
+        join(resolve(scripts), "packet.mjs")
+      );
+      judgment.evidenceHash = hash(canonical(judgment.packet));
+      files.verdicts = JSON.stringify(records);
     }
     mkdirSync(join(temporary, "src"));
     writeFileSync(
@@ -123,16 +158,25 @@ for (const test of read("cases.json")) {
     const diagnostics = readFileSync(join(out, "diagnostics.txt"), "utf8");
     if (messages[test.name])
       assert.equal(diagnostics, messages[test.name], test.name);
+    for (const detail of test.details ?? [])
+      assert.ok(
+        diagnostics.includes(detail),
+        `${test.name}: actionable detail ${detail}`,
+      );
     for (const code of test.codes)
       assert.ok(
         diagnostics.includes(`[${code}]`),
         `${test.name}: readable failure code`,
       );
-    const gate = run(["--gate", out]);
+    const gate = spawnSync(
+      flags["--jq"] ?? "jq",
+      ["-e", ".ok", join(out, "status.json")],
+      { encoding: "utf8" },
+    );
     assert.equal(
       gate.status,
       test.codes.length ? 1 : 0,
-      `${test.name}: mismatches must fail the separate gate`,
+      `${test.name}: mismatches must fail the shell gate predicate`,
     );
     assert.equal(
       readFileSync(join(temporary, "verdicts.json"), "utf8"),

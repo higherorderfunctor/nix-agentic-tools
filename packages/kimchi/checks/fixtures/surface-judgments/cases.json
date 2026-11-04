@@ -8,12 +8,6 @@
             "column": 42,
             "line": 8
           },
-          "facts": [
-            {
-              "file": "src/regions.ts",
-              "line": 8
-            }
-          ],
           "start": {
             "column": 3,
             "line": 8
@@ -24,12 +18,6 @@
             "column": 39,
             "line": 4
           },
-          "facts": [
-            {
-              "file": "src/regions.ts",
-              "line": 4
-            }
-          ],
           "start": {
             "column": 3,
             "line": 4
@@ -334,7 +322,10 @@
         "to": "\teu: ({\n\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t}),"
       }
     ],
-    "incomplete": true,
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
     "name": "wrapped-region-member",
     "rejects": "silently overlooking a wrapped direct registry member"
   },
@@ -359,7 +350,10 @@
         "to": "\"line\":8,\"column\":3"
       }
     ],
-    "incomplete": true,
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
     "name": "unsupported-location-field",
     "rejects": "hashing unnormalized location fields"
   },
@@ -372,7 +366,10 @@
         "to": "\"line\":8,\"origin\":\"src/regions.ts:8\""
       }
     ],
-    "incomplete": true,
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
     "name": "unsupported-origin-field",
     "rejects": "hashing file:line origins"
   },
@@ -483,7 +480,10 @@
   },
   {
     "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "incomplete": true,
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
     "invalidUtf8": true,
     "name": "invalid-source-utf8",
     "rejects": "decoding invalid UTF-8 with replacement"
@@ -497,7 +497,10 @@
         "to": "export function searchUrl( {"
       }
     ],
-    "incomplete": true,
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
     "name": "invalid-source-syntax",
     "rejects": "swallowing parser errors"
   },
@@ -565,7 +568,10 @@
         "to": "}) as const satisfies"
       }
     ],
-    "incomplete": true,
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
     "name": "unsupported-anchor-wrapper",
     "rejects": "unwrapping parentheses beyond the supported as/satisfies language"
   },
@@ -632,7 +638,10 @@
         "to": ""
       }
     ],
-    "incomplete": true,
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
     "invalidUtf8": true,
     "name": "recorded-hash-before-source-validation",
     "rejects": "reporting dependent source errors before invalid recorded evidence is refused"
@@ -660,5 +669,113 @@
     ],
     "name": "json-pointer-input-key",
     "rejects": "printing unescaped JSON pointer keys"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "details": [
+      "region \"ap\" contains unsupported SpreadAssignment",
+      "use named property assignments with identifier or string-literal names"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "hiddenRegion": "...HOSTED, id: \"ap\"",
+    "name": "spread-gateway-hidden",
+    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "details": [
+      "region \"ap\" contains unsupported computed property name",
+      "use named property assignments with identifier or string-literal names"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "hiddenRegion": "[\"llmBaseUrl\"]: \"https://ap.example\"",
+    "name": "computed-gateway-hidden",
+    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "details": [
+      "region \"ap\" contains unsupported MethodDeclaration",
+      "use named property assignments with identifier or string-literal names"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "hiddenRegion": "llmBaseUrl() { return \"https://ap.example\" }",
+    "name": "method-gateway-hidden",
+    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "details": [
+      "region \"ap\" contains unsupported ShorthandPropertyAssignment",
+      "use named property assignments with identifier or string-literal names"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "hiddenRegion": "llmBaseUrl",
+    "name": "shorthand-gateway-hidden",
+    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "details": [
+      "region \"ap\" contains unsupported GetAccessor",
+      "use named property assignments with identifier or string-literal names"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "hiddenRegion": "get llmBaseUrl() { return \"https://ap.example\" }",
+    "name": "getter-gateway-hidden",
+    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "details": [
+      "region \"ap\" contains unsupported SetAccessor",
+      "use named property assignments with identifier or string-literal names"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "hiddenRegion": "set llmBaseUrl(value: string) {}",
+    "name": "setter-gateway-hidden",
+    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "details": ["eu-search-service-availability", "non-canonical rows array"],
+    "name": "non-canonical-recorded-rows",
+    "rejects": "order-only evidence changes producing an empty diff",
+    "unorderedArray": "rows"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "details": [
+      "eu-search-service-availability",
+      "non-canonical selector.sources array"
+    ],
+    "name": "non-canonical-recorded-selector-sources",
+    "rejects": "order-only evidence changes producing an empty diff",
+    "unorderedArray": "selector.sources"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "details": ["eu-search-service-availability", "non-canonical spans array"],
+    "name": "non-canonical-recorded-spans",
+    "rejects": "order-only evidence changes producing an empty diff",
+    "unorderedArray": "spans"
   }
 ]

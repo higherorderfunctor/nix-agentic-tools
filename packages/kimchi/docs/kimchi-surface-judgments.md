@@ -37,10 +37,11 @@ refused.
 
 A packet contains exactly `schemaVersion: 1`, `selector`, `rows` and `spans`.
 The selector accepts only `regionRegistry.fields`, one nonempty region key and
-`field: "llmBaseUrl"`, plus an explicit `sources` list. It returns **all**
-matching rows and preserves multiplicity. It cannot filter by value, line,
-position or historical row count. Newly discovered roots get candidate packets
-with `sources: []`; the mechanism does not invent a claim or verdict.
+`field: "llmBaseUrl"`, plus an explicit `sources` list of declaration citations.
+It returns **all** matching rows and preserves multiplicity. It cannot filter by
+value, line, position or historical row count. Newly discovered roots get
+candidate packets with `sources: []`; the mechanism does not invent a claim or
+verdict.
 
 Each selected row preserves `region`, `field` and `value`, replacing `file` and
 `line` with `site: {path, anchor}`. The closed relevant-row schema refuses new
@@ -51,14 +52,18 @@ displayed citations always come from the resolved current anchors.
 Each span is `{path, anchor, sha256}`. Citations are the structural union of
 selected rows' property sites and explicit source selectors, deduplicated by
 identity. Repeated explicit source selectors are invalid. Only `src/regions.ts`
-and these structural roles are accepted:
+and these structural roles are produced:
 
 - `REGIONS :: property([region, "llmBaseUrl"])` selects the final property
   assignment through two direct named property assignments. Names may be
   identifiers or decoded string literals. The one top-level exported
   `const REGIONS` initializer can unwrap `as` and `satisfies` only. Every direct
-  member of `REGIONS` must be a plain object literal; a wrapped member fails
-  with `SOURCE_INPUT`, so unsupported registry structure cannot hide a root.
+  member of `REGIONS` must be a named property assignment to a plain object
+  literal. Inside each region, every element must also be a property assignment
+  with an identifier or string-literal name. Spreads, computed names, methods,
+  shorthand properties and accessors fail with `SOURCE_INPUT` naming the region
+  and construct; wrapped members also fail. This scan includes regions without
+  measured gateway rows, so unsupported registry structure cannot hide a root.
 - `searchUrl :: declaration` selects the complete top-level exported named
   function. All same-name declarations count, including overload signatures: an
   overloaded name is ambiguous. A unique declaration needs a body.
@@ -82,7 +87,10 @@ Canonical JSON recursively sorts object keys with locale-independent string
 ordering and uses UTF-8 `JSON.stringify`, without insignificant whitespace or a
 trailing newline. SHA-256 is written as `sha256:` plus lowercase hexadecimal.
 The stored packet's own hash is validated before comparison with current
-evidence. There is no additional recorded-packet consistency policy.
+evidence. Recorded `rows`, `selector.sources` and `spans` must already be in
+canonical order; otherwise `VERDICT_INPUT` names the judgment and array.
+Recorded row and span contents are checked by their hash and current-evidence
+comparison, without a separate structural schema.
 
 Changing a selected value, adding a matching fact row, renaming a cited symbol,
 or editing or reformatting bytes inside a cited span invalidates evidence.
@@ -109,7 +117,8 @@ candidates, or explicit incomplete results without a complete hash), `diff.json`
 `status.json` (classification counts and ordered failure codes). Missing
 baselines are `recorded: null`. Valid classified unknowns are counted
 separately. Failures sort by judgment id, then code; invalid records suppress
-dependent errors while independent records continue.
+dependent errors while independent records continue. Whole-input failures emit
+diagnostics and status without placeholder current packets or differences.
 
 Every failure uses this envelope. Substitutions containing newlines are JSON
 escaped; hashes are complete, or `absent`, `unavailable` or `unresolved`:
@@ -144,11 +153,14 @@ The complete catalogue follows. Each action names
 Schema reasons are the literal strings `invalid JSON`,
 `unsupported schemaVersion`, `unknown field`, `missing field`,
 `invalid type or value`, `duplicate judgment id`, `duplicate judgment root`,
-`unsupported selector` and `duplicate source citation`. Source reasons are
-`invalid UTF-8`, `TypeScript parse error <code> at <line:column>` and
-`unsupported structural shape at <anchor>`. A file-level verdict failure uses id
-`<verdict-file>` and claim `<unavailable: verdict input could not be read>`. An
-unclassified root uses id `<unclassified:<region>>` and claim
+`duplicate source citation` and `non-canonical <array> array for judgment <id>`.
+Source reasons are `invalid UTF-8`,
+`TypeScript parse error <code> at <line:column>` and
+`unsupported structural shape at <anchor>` or
+`region <region> contains unsupported <construct>: use named property assignments with identifier or string-literal names`.
+A file-level verdict failure uses id `<verdict-file>` and claim
+`<unavailable: verdict input could not be read>`. An unclassified root uses id
+`<unclassified:<region>>` and claim
 `No claim is recorded for hosted gateway <region>.`. Deleted roots have
 `new=absent`; new roots have `old=absent`; anchor failures have
 `new=unresolved`. `RECORDED_HASH` compares the stored hash with the recomputed

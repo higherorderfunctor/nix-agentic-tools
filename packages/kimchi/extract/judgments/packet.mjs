@@ -17,13 +17,14 @@ const ordered = (items) =>
     canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0,
   );
 export class EvidenceError extends Error {
-  constructor(code, detail) {
+  constructor(code, detail, citation) {
     super(detail);
     this.code = code;
+    this.citation = citation;
   }
 }
-const refuse = (code, detail) => {
-  throw new EvidenceError(code, detail);
+const refuse = (code, detail, citation) => {
+  throw new EvidenceError(code, detail, citation);
 };
 const object = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -31,11 +32,22 @@ const nonblank = (value) =>
   typeof value === "string" && value.trim().length > 0;
 const digest = (value) =>
   typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+export const escapeText = (value, mode) => {
+  if (
+    typeof value !== "string" ||
+    (mode === "hash" &&
+      !digest(value) &&
+      !["absent", "unavailable", "unresolved"].includes(value))
+  )
+    return "unavailable";
+  if (mode === "pointer")
+    return value.replaceAll("~", "~0").replaceAll("/", "~1");
+  return /[\r\n]/.test(value) ? JSON.stringify(value) : value;
+};
+export const schemaPrefix = (code) =>
+  `invalid ${code === "FACT_INPUT" ? "regionRegistry.fields" : "verdict"} input at `;
 function schema(code, path, reason) {
-  refuse(
-    code,
-    `invalid ${code === "FACT_INPUT" ? "regionRegistry.fields" : "verdict"} input at ${path}: ${reason}`,
-  );
+  refuse(code, `${schemaPrefix(code)}${path}: ${reason}`);
 }
 // The verdict and measured-row consumers share closed object/list validation.
 function validate(value, shape, path = "", code = "VERDICT_INPUT") {
@@ -50,11 +62,7 @@ function validate(value, shape, path = "", code = "VERDICT_INPUT") {
   } else if (object(value)) {
     for (const key of Object.keys(value))
       if (!Object.hasOwn(shape, key))
-        schema(
-          code,
-          `${path}/${key.replaceAll("~", "~0").replaceAll("/", "~1")}`,
-          "unknown field",
-        );
+        schema(code, `${path}/${escapeText(key, "pointer")}`, "unknown field");
     for (const [key, specification] of Object.entries(shape)) {
       if (!Object.hasOwn(value, key))
         schema(code, `${path}/${key}`, "missing field");
@@ -77,47 +85,26 @@ const propertySite = (region) => ({
   },
   path: registryPath,
 });
-function site(value, path) {
-  const role = (value, at) =>
-    validate(
-      value,
-      value?.kind === "property"
-        ? {
-            keys: (keys) =>
-              Array.isArray(keys) &&
-              keys.length === 2 &&
-              nonblank(keys[0]) &&
-              gatewayField(keys[1]),
-            kind: (kind) => kind === "property",
-          }
-        : { kind: (kind) => kind === "declaration" },
-      at,
-    );
-  validate(
-    value,
-    { anchor: { role, symbol: nonblank }, path: (p) => p === registryPath },
-    path,
-  );
-  if (
-    value.anchor.role.kind === "property" &&
-    value.anchor.symbol !== "REGIONS"
-  )
-    schema("VERDICT_INPUT", path, "invalid type or value");
-}
 function selector(value, path) {
   validate(
     value,
     {
-      fact: { kind: string, where: { field: string, region: nonblank } },
-      sources: [site],
+      fact: {
+        kind: (v) => v === "regionRegistry.fields",
+        where: { field: gatewayField, region: nonblank },
+      },
+      sources: [
+        {
+          anchor: {
+            role: { kind: (v) => v === "declaration" },
+            symbol: nonblank,
+          },
+          path: (v) => v === registryPath,
+        },
+      ],
     },
     path,
   );
-  if (
-    value.fact.kind !== "regionRegistry.fields" ||
-    !gatewayField(value.fact.where.field)
-  )
-    schema("VERDICT_INPUT", path, "unsupported selector");
   const seen = new Set();
   value.sources.forEach((source, i) => {
     const key = canonical(source);
@@ -131,19 +118,10 @@ function selector(value, path) {
   });
 }
 const packetShape = {
-  rows: [{ field: gatewayField, region: nonblank, site, value: string }],
+  rows: Array.isArray,
   schemaVersion: version,
   selector,
-  spans: [
-    (span, path) => {
-      validate(
-        span,
-        { anchor: (anchor) => object(anchor), path: string, sha256: digest },
-        path,
-      );
-      site({ anchor: span.anchor, path: span.path }, path);
-    },
-  ],
+  spans: Array.isArray,
 };
 export function verdicts(value) {
   validate(value, {
@@ -171,6 +149,17 @@ export function verdicts(value) {
         },
         path,
       );
+      for (const [array, items] of [
+        ["rows", judgment.packet.rows],
+        ["selector.sources", judgment.packet.selector.sources],
+        ["spans", judgment.packet.spans],
+      ])
+        if (canonical(items) !== canonical(ordered([...items])))
+          schema(
+            "VERDICT_INPUT",
+            `${path}/packet/${array.replace(".", "/")}`,
+            `non-canonical ${array} array for judgment ${judgment.id}`,
+          );
       const root = judgment.packet.selector.fact.where.region;
       if (ids.has(judgment.id))
         schema("VERDICT_INPUT", `${path}/id`, "duplicate judgment id");
@@ -190,15 +179,8 @@ export function verdicts(value) {
   });
 }
 export function factRows(value) {
-  validate(
-    value,
-    { regionRegistry: { fields: (v) => Array.isArray(v) } },
-    "",
-    "FACT_INPUT",
-  );
   return value.regionRegistry.fields.filter((row, i) => {
     const path = `/regionRegistry/fields/${i}`;
-    validate(row, object, path, "FACT_INPUT");
     if (!gatewayField(row.field)) return false;
     validate(
       row,
@@ -273,6 +255,7 @@ export function resolver(bytes, ts, display) {
       refuse(
         count ? "ANCHOR_AMBIGUOUS" : "ANCHOR_MISSING",
         `${count ? "ambiguous" : "missing"} anchor ${anchor}: expected one match, found ${count}${count ? `; candidates=${canonical(nodes.map((n) => coordinates(n.getStart(source, false))))}` : ""}`,
+        citation,
       );
     }
     return nodes[0];
@@ -284,13 +267,19 @@ export function resolver(bytes, ts, display) {
     const registry = unwrap(registries[0].initializer);
     if (!registry || !ts.isObjectLiteralExpression(registry))
       shape(propertySite("*"));
-    for (const entry of registry.properties)
+    for (const entry of registry.properties) {
       if (
         !ts.isPropertyAssignment(entry) ||
         name(entry) === null ||
         !ts.isObjectLiteralExpression(entry.initializer)
       )
         shape(propertySite(name(entry) ?? "*"));
+      for (const property of entry.initializer.properties)
+        if (!ts.isPropertyAssignment(property) || name(property) === null)
+          sourceError(
+            `region ${JSON.stringify(name(entry))} contains unsupported ${property.name && ts.isComputedPropertyName(property.name) ? "computed property name" : ts.SyntaxKind[property.kind]}: use named property assignments with identifier or string-literal names`,
+          );
+    }
   }
   return (citation) => {
     const { symbol, role } = citation.anchor;
@@ -334,7 +323,7 @@ export function resolver(bytes, ts, display) {
     };
   };
 }
-export function packet(selector, rows, resolve, display) {
+export function packet(selector, rows, resolve) {
   const selected = rows.filter(
     (row) => row.region === selector.fact.where.region,
   );
@@ -359,13 +348,6 @@ export function packet(selector, rows, resolve, display) {
       errors.push(error);
     }
   }
-  for (const row of selected) {
-    const entry = display[canonical(propertySite(row.region))];
-    if (entry) {
-      entry.facts ??= [];
-      entry.facts.push({ file: row.file, line: row.line });
-    }
-  }
   const result = {
     rows: ordered(normalized),
     schemaVersion: 1,
@@ -376,7 +358,11 @@ export function packet(selector, rows, resolve, display) {
     ? {
         incomplete: {
           ...result,
-          errors: errors.map((e) => ({ code: e.code, detail: e.message })),
+          errors: errors.map((e) => ({
+            citation: e.citation,
+            code: e.code,
+            detail: e.message,
+          })),
         },
       }
     : { packet: result, evidenceHash: hash(canonical(result)) };
@@ -393,10 +379,10 @@ export function differences(recorded, current) {
   };
   const spanMap = (packet) =>
     new Map(
-      (packet?.spans ?? []).map(({ sha256, ...site }) => [
-        canonical(site),
-        { site, hash: sha256 },
-      ]),
+      (packet?.spans ?? []).map((span) => {
+        const { sha256, ...site } = span ?? {};
+        return [canonical(site), { site, hash: sha256 }];
+      }),
     );
   const before = spanMap(recorded),
     after = spanMap(current);

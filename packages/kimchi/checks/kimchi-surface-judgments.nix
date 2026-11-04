@@ -25,8 +25,11 @@ in {
   checks.kimchi-surface-judgments = pkgs.runCommand "kimchi-surface-judgments-check" {passthru = {inherit packets;};} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    ${pkgs.nodejs}/bin/node ${./.}/surface-judgments.test.mjs --typescript ${typescript} --scripts ${scripts}
-    ${pkgs.nodejs}/bin/node ${scripts}/check.mjs --gate ${packets}
+    ${pkgs.nodejs}/bin/node ${./surface-judgments.test.mjs} \
+      --typescript ${typescript} --scripts ${scripts} --jq ${pkgs.jq}/bin/jq \
+      --fixtures ${./fixtures/surface-judgments} --verdicts ${../surface-judgments.json}
+    ${pkgs.coreutils}/bin/cat ${packets}/diagnostics.txt
+    ${pkgs.jq}/bin/jq -e '.ok' ${packets}/status.json > /dev/null
     ${pkgs.coreutils}/bin/cp ${packets}/diagnostics.txt "$out"
   '';
 }

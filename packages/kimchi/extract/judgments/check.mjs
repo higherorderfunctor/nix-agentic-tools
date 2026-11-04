@@ -6,30 +6,23 @@ import {
   canonical,
   differences,
   EvidenceError,
+  escapeText,
   factRows,
   hash,
   packet,
   resolver,
+  schemaPrefix,
   verdicts,
 } from "./packet.mjs";
 
 const { values: args } = parseArgs({
   options: Object.fromEntries(
-    ["facts", "gate", "out", "system", "tree", "typescript", "verdicts"].map(
-      (key) => [key, { type: "string" }],
-    ),
+    ["facts", "out", "system", "tree", "typescript", "verdicts"].map((key) => [
+      key,
+      { type: "string" },
+    ]),
   ),
 });
-if (args.gate) {
-  process.stdout.write(
-    await readFile(join(args.gate, "diagnostics.txt"), "utf8"),
-  );
-  process.exit(
-    JSON.parse(await readFile(join(args.gate, "status.json"), "utf8")).ok
-      ? 0
-      : 1,
-  );
-}
 const verdictFile = "packages/kimchi/surface-judgments.json";
 const actions = {
   ANCHOR_AMBIGUOUS: `Make the structural citation unique without line offsets, then rejudge ${verdictFile}.`,
@@ -61,37 +54,31 @@ function fail(
   const id = typeof judgment.id === "string" ? judgment.id : unavailable.id;
   const claim =
     typeof judgment.claim === "string" ? judgment.claim : unavailable.claim;
-  const printableHash = (value) =>
-    typeof value === "string" &&
-    (/^sha256:[a-f0-9]{64}$/.test(value) ||
-      ["absent", "unavailable", "unresolved"].includes(value))
-      ? value
-      : "unavailable";
   failures.push({
     id,
     claim,
     code,
     detail,
-    old: printableHash(old),
-    fresh: printableHash(fresh),
+    old,
+    fresh,
   });
 }
-async function json(path, code) {
+async function json(path) {
   const text = await readFile(path, "utf8");
   try {
     return JSON.parse(text);
   } catch (error) {
     if (!(error instanceof SyntaxError)) throw error;
     throw new EvidenceError(
-      code,
-      `invalid ${code === "FACT_INPUT" ? "regionRegistry.fields" : "verdict"} input at : invalid JSON`,
+      "VERDICT_INPUT",
+      `${schemaPrefix("VERDICT_INPUT")}: invalid JSON`,
     );
   }
 }
 async function evaluate() {
   let records;
   try {
-    records = verdicts(await json(args.verdicts, "VERDICT_INPUT"));
+    records = verdicts(await json(args.verdicts));
   } catch (error) {
     if (!(error instanceof EvidenceError)) throw error;
     fail(unavailable, error.code, error.message);
@@ -118,7 +105,7 @@ async function evaluate() {
   }
   let rows, resolve;
   try {
-    rows = factRows(await json(args.facts, "FACT_INPUT"));
+    rows = factRows(JSON.parse(await readFile(args.facts, "utf8")));
     const ts = (await import(pathToFileURL(args.typescript).href)).default;
     resolve = resolver(
       await readFile(join(args.tree, "src/regions.ts")),
@@ -130,18 +117,6 @@ async function evaluate() {
     for (const judgment of valid.length ? valid : [unavailable]) {
       if (!invalidHashes.has(judgment.id))
         fail(judgment, error.code, error.message);
-      diff[judgment.id] = {
-        recorded: judgment.evidenceHash ?? null,
-        current: null,
-        incomplete: [{ code: error.code, detail: error.message }],
-      };
-      current[judgment.id] = {
-        incomplete: {
-          rows: [],
-          spans: [],
-          errors: [{ code: error.code, detail: error.message }],
-        },
-      };
     }
     return;
   }
@@ -195,7 +170,7 @@ async function evaluate() {
       counts.roots++;
       counts[judgment.verdict]++;
     }
-    const result = packet(selector, rows, resolve, display);
+    const result = packet(selector, rows, resolve);
     current[id] = result;
     diff[id] = {
       recorded: recorded ? old : null,
@@ -215,8 +190,10 @@ async function evaluate() {
       for (const error of result.incomplete.errors) {
         let detail = error.detail;
         if (error.code.startsWith("ANCHOR_")) {
-          const citation = recorded?.spans.find(({ path, anchor }) =>
-            detail.includes(canonical({ path, anchor })),
+          const citation = recorded?.spans.find(
+            (span) =>
+              canonical({ path: span?.path, anchor: span?.anchor }) ===
+              canonical(error.citation),
           );
           detail += `; span old=${citation?.sha256 ?? "absent"}; new=unresolved`;
         }
@@ -237,24 +214,22 @@ async function evaluate() {
 await evaluate();
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 failures.sort((a, b) => compare(a.id, b.id) || compare(a.code, b.code));
-const displayText = (value) =>
-  /[\r\n]/.test(value) ? JSON.stringify(value) : value;
 const diagnostics = failures.length
   ? failures
       .map(
-        (f) => `FAIL kimchi-surface-judgments [${f.code}]
-Judgment: ${displayText(f.id)}
-Claim: ${displayText(f.claim)}
-Changed: ${displayText(f.detail)}
-Evidence hash: old=${f.old}; new=${f.fresh}
-Packets: nix build .#checks.${args.system}.kimchi-surface-judgments.passthru.packets --out-link /tmp/kimchi-judgment-packets
+        (f) => `FAIL kimchi-surface-judgments [${escapeText(f.code)}]
+Judgment: ${escapeText(f.id)}
+Claim: ${escapeText(f.claim)}
+Changed: ${escapeText(f.detail)}
+Evidence hash: old=${escapeText(f.old, "hash")}; new=${escapeText(f.fresh, "hash")}
+Packets: nix build .#checks.${escapeText(args.system)}.kimchi-surface-judgments.passthru.packets --out-link /tmp/kimchi-judgment-packets
 Inspect: /tmp/kimchi-judgment-packets/current.json; /tmp/kimchi-judgment-packets/diff.json; /tmp/kimchi-judgment-packets/display.json
-Fix: ${actions[f.code]}
+Fix: ${escapeText(actions[f.code])}
 A red check means: ask a session to investigate and rejudge. CI does not update verdicts or hashes.
 `,
       )
       .join("")
-  : `ok: kimchi-surface-judgments: ${counts.roots} roots classified; ${counts.supported} supported, ${counts.refuted} refuted, ${counts.unknown} unknown; all evidence hashes match.\n`;
+  : `ok: kimchi-surface-judgments: ${escapeText(String(counts.roots))} roots classified; ${escapeText(String(counts.supported))} supported, ${escapeText(String(counts.refuted))} refuted, ${escapeText(String(counts.unknown))} unknown; all evidence hashes match.\n`;
 await mkdir(args.out, { recursive: true });
 for (const [name, value] of Object.entries({
   current,

@@ -86,7 +86,7 @@ jobs:
               --out-link "$RUNNER_TEMP/kimchi-judgment-packets"
             mkdir -p "$packet_dir"
             cp -R "$RUNNER_TEMP/kimchi-judgment-packets/." "$packet_dir/"
-            if ! nix build ".#.checks.${SYSTEM}.kimchi-surface-judgments" --no-link; then
+            if ! nix build ".#.checks.${SYSTEM}.kimchi-surface-judgments" --no-link -L; then
               echo "::error::Kimchi's surface judgments failed; ask a session to investigate and rejudge packages/kimchi/surface-judgments.json; no facts patch will be uploaded." >&2
               echo "  gh run download ${RUN_ID} -n kimchi-judgments-${SYSTEM}" >&2
               exit 1

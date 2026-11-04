@@ -32,8 +32,10 @@ class ExtractedSelectionTest(unittest.TestCase):
         cls.directory = tempfile.TemporaryDirectory(prefix="ci-selection-")
         cls.addClassCleanup(cls.directory.cleanup)
         cls.root = Path(cls.directory.name)
-        paths = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=repository).decode().split("\0")
+        paths = subprocess.check_output(["git", "ls-files", "-z"], cwd=repository).decode().split("\0")
         for name in filter(None, paths):
+            if not (repository / name).exists() and not (repository / name).is_symlink():
+                continue
             destination = cls.root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(repository / name, destination, follow_symlinks=False)
@@ -258,7 +260,7 @@ nix() {
     run\ .#.checks.x86_64-linux.${OWNER}-extracted.passthru.regenerate|shell\ --inputs-from\ .\ nixpkgs#nodejs\ .#.formatter.x86_64-linux\ --command\ bash\ packages/kimchi/extract/egress/regenerate.sh) ;;
     build\ .#.checks.x86_64-linux.kimchi-egress-report\ --no-link) return "$REPORT_STATUS" ;;
     build\ .#.checks.x86_64-linux.kimchi-surface-judgments.passthru.packets\ --out-link\ *) mkdir -p "$4"; printf 'packet\n' > "$4/current.json" ;;
-    build\ .#.checks.x86_64-linux.kimchi-surface-judgments\ --no-link) return "$JUDGMENT_STATUS" ;;
+    build\ .#.checks.x86_64-linux.kimchi-surface-judgments\ --no-link\ -L) return "$JUDGMENT_STATUS" ;;
     *) return 1 ;;
   esac
 }
@@ -294,7 +296,7 @@ export -f git nix
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(len(commands), 3 if report_status else 5)
                     gate = "kimchi-egress-report" if report_status else "kimchi-surface-judgments"
-                    self.assertEqual(commands[-1], f"build .#.checks.x86_64-linux.{gate} --no-link")
+                    self.assertEqual(commands[-1], f"build .#.checks.x86_64-linux.{gate} --no-link" + (" -L" if judgment_status else ""))
                     if report_status:
                         self.assertIn("Kimchi's regenerated egress report failed checks.x86_64-linux.kimchi-egress-report", result.stderr)
                     if judgment_status:
@@ -312,7 +314,7 @@ export -f git nix
                     self.assertIn("--command bash packages/kimchi/extract/egress/regenerate.sh", commands[1])
                     self.assertEqual(commands[2], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
                     self.assertEqual(commands[3], f"build .#.checks.x86_64-linux.kimchi-surface-judgments.passthru.packets --out-link {directory}/kimchi-judgment-packets")
-                    self.assertEqual(commands[4], "build .#.checks.x86_64-linux.kimchi-surface-judgments --no-link")
+                    self.assertEqual(commands[4], "build .#.checks.x86_64-linux.kimchi-surface-judgments --no-link -L")
                     paths += " packages/kimchi/egress-report.json"
                 else:
                     self.assertNotIn("build .#.checks.x86_64-linux.kimchi-egress-report --no-link", commands)
