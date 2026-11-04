@@ -38,19 +38,10 @@ in {
 
   config = lib.mkMerge [
     {
-      # A configured `test.jobs` never changes the strategy (only the
-      # `--jobs` flag does), and the working-copy strategy runs one job at a
-      # time. Repository-local: a null strategy may still come user-global,
-      # so that case only warns.
-      assertions = [
-        {
-          assertion = !(test.jobs != null && test.jobs != 1 && test.strategy == "working-copy");
-          message = ''
-            git.branchless.settings.test.jobs = ${toString test.jobs} contradicts git.branchless.settings.test.strategy = "working-copy".
-            git-branchless runs one job at a time with the working-copy strategy, and a configured jobs value does not change the strategy, so every `git test run` would fail. Set test.strategy = "worktree".
-          '';
-        }
-      ];
+      # The shared jobs/strategy contradiction assertion travels with the
+      # tool factory (packages/git-branchless/lib/default.nix `assertions`);
+      # repository-local, a null strategy may still come user-global, so that
+      # case only warns here.
       warnings = lib.optional (test.jobs != null && test.jobs != 1 && test.strategy == null) ''
         git.branchless.settings.test.jobs = ${toString test.jobs} with git.branchless.settings.test.strategy unset: every `git test run` in this repository fails unless the user-global configuration sets branchless.test.strategy = "worktree". Set it here to make the repository self-contained.
       '';
