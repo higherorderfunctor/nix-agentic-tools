@@ -28,23 +28,23 @@
     recipeFile = repoPath ./package.nix;
   };
 
-  rev = "5070e8f67ec9cdfbf42bfd6e351b6f3f5e6a25cf";
+  rev = "ce23377cdc1c44232ac6ace0b2bbfbcd339a5b5e";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-FUBAYXdo0ESU3ks0OyV3VCbM/691UTINYN4vsOYs888=";
+    hash = "sha256-0I7JINMBiHGAimuTIiBc8I+d9SYkY4VXKf58GUIvdlk=";
   };
 in
   rustPlatform.buildRustPackage {
     pname = "agnix";
     version = vu.mkVersion {
       # upstream: readCargoWorkspaceVersion @ Cargo.toml
-      upstream = "0.60.3";
+      upstream = "0.61.0";
       inherit rev;
     };
     inherit src;
-    cargoHash = "sha256-wA2xnizHT5OuKOasxMYya/eJHWD0JaGUTYZpVcsEOFc=";
+    cargoHash = "sha256-8DmnthSQ3Kf/V1zj/NfBn66bgqZrhgANKxJGKoC2GsE=";
 
     nativeBuildInputs = [pkgs.pkg-config];
     buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
