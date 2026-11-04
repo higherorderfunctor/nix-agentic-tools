@@ -33,7 +33,7 @@ const actions = {
   REMOVED_ROOT: `Inspect the removed evidence and remove this judgment by hand from ${verdictFile}.`,
   SOURCE_INPUT: `Correct the pinned source or structural resolver, regenerate facts if the source changed, then investigate and rejudge ${verdictFile}.`,
   UNCLASSIFIED_ROOT: `Review the candidate packet and add one scoped judgment or explicit unknown record to ${verdictFile}.`,
-  VERDICT_INPUT: `Correct the named field of the record in ${verdictFile} and rerun the check; its packet will be emitted once the record is valid.`,
+  VERDICT_INPUT: `Correct the verdict file at the named path in ${verdictFile} and rerun the check; a record's packet will be emitted once it is valid.`,
 };
 const failures = [],
   current = {},

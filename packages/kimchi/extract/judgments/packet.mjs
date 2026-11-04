@@ -272,7 +272,7 @@ export function resolver(bytes, ts, display) {
           (property.name && ts.isComputedPropertyName(property.name))
         )
           sourceError(
-            `region ${JSON.stringify(name(entry))} contains unsupported ${property.name && ts.isComputedPropertyName(property.name) ? "computed property name" : ts.SyntaxKind[property.kind]}: use named property assignments with identifier or string-literal names`,
+            `region ${JSON.stringify(name(entry))} contains unsupported ${property.name && ts.isComputedPropertyName(property.name) ? "computed property name" : ts.SyntaxKind[property.kind]}: spreads and computed property names are refused; use named members with identifier or string-literal names`,
           );
     }
   }

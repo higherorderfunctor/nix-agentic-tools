@@ -674,7 +674,7 @@
     "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
     "details": [
       "region \"ap\" contains unsupported SpreadAssignment",
-      "use named property assignments with identifier or string-literal names"
+      "spreads and computed property names are refused; use named members with identifier or string-literal names"
     ],
     "expect": {
       "current.json": {},
@@ -688,7 +688,7 @@
     "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
     "details": [
       "region \"ap\" contains unsupported computed property name",
-      "use named property assignments with identifier or string-literal names"
+      "spreads and computed property names are refused; use named members with identifier or string-literal names"
     ],
     "expect": {
       "current.json": {},
@@ -751,16 +751,73 @@
     "unorderedArray": "spans"
   },
   {
-    "codes": [],
+    "codes": ["ANCHOR_MISSING", "UNCLASSIFIED_ROOT"],
     "edits": [
       {
         "file": "source",
         "from": "\t\tllmBaseUrl: \"\",",
         "to": "\t\tget llmBaseUrl() { return \"\" },"
+      },
+      {
+        "file": "facts",
+        "from": "\"value\":\"\"",
+        "to": "\"value\":\"<unresolved>\""
       }
     ],
     "name": "self-hosted-getter",
-    "rejects": "rejecting a named getter in the unrelated self-hosted region",
+    "rejects": "treating an unresolved self-hosted getter as an empty placeholder",
     "unchanged": true
+  },
+  {
+    "codes": ["EVIDENCE_CHANGED"],
+    "details": ["eu-search-service-availability", "<unresolved>"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",",
+        "to": "\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t\tget llmBaseUrl() { return \"https://override.example\" },"
+      },
+      {
+        "file": "facts",
+        "from": "{\"field\":\"llmBaseUrl\",\"file\":\"src/regions.ts\",\"line\":8,\"region\":\"eu\",\"value\":\"https://llm.eu.kimchi.dev\"}",
+        "to": "{\"field\":\"llmBaseUrl\",\"file\":\"src/regions.ts\",\"line\":8,\"region\":\"eu\",\"value\":\"https://llm.eu.kimchi.dev\"},{\"field\":\"llmBaseUrl\",\"file\":\"src/regions.ts\",\"line\":9,\"region\":\"eu\",\"value\":\"<unresolved>\"}"
+      }
+    ],
+    "expect": {
+      "current.json/eu-search-service-availability/packet/rows": [
+        {
+          "field": "llmBaseUrl",
+          "region": "eu",
+          "site": {
+            "anchor": {
+              "role": {
+                "keys": ["eu", "llmBaseUrl"],
+                "kind": "property"
+              },
+              "symbol": "REGIONS"
+            },
+            "path": "src/regions.ts"
+          },
+          "value": "<unresolved>"
+        },
+        {
+          "field": "llmBaseUrl",
+          "region": "eu",
+          "site": {
+            "anchor": {
+              "role": {
+                "keys": ["eu", "llmBaseUrl"],
+                "kind": "property"
+              },
+              "symbol": "REGIONS"
+            },
+            "path": "src/regions.ts"
+          },
+          "value": "https://llm.eu.kimchi.dev"
+        }
+      ]
+    },
+    "name": "eu-getter-overrides-literal",
+    "rejects": "ignoring an unresolved getter that overrides the selected literal"
   }
 ]
