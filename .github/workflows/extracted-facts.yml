@@ -66,6 +66,8 @@ jobs:
           systems: ${{ inputs.system }}
       - name: Produce native extracted facts
         id: produce
+        env:
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -77,6 +79,16 @@ jobs:
             if ! nix build ".#.checks.${SYSTEM}.kimchi-egress-report" --no-link; then
               echo "::error::Kimchi's regenerated egress report failed checks.${SYSTEM}.kimchi-egress-report; no patch will be uploaded." >&2
               echo "Fix the report generator/check, then run: nix run .#.checks.${SYSTEM}.kimchi-extracted.passthru.regenerate && nix shell --inputs-from . nixpkgs#nodejs .#.formatter.${SYSTEM} --command bash packages/kimchi/extract/egress/regenerate.sh && nix build .#.checks.${SYSTEM}.kimchi-egress-report --no-link" >&2
+              exit 1
+            fi
+            packet_dir="$RUNNER_TEMP/kimchi-judgments"
+            nix build ".#.checks.${SYSTEM}.kimchi-surface-judgments.passthru.packets" \
+              --out-link "$RUNNER_TEMP/kimchi-judgment-packets"
+            mkdir -p "$packet_dir"
+            cp -R "$RUNNER_TEMP/kimchi-judgment-packets/." "$packet_dir/"
+            if ! nix build ".#.checks.${SYSTEM}.kimchi-surface-judgments" --no-link; then
+              echo "::error::Kimchi's surface judgments failed; ask a session to investigate and rejudge packages/kimchi/surface-judgments.json; no facts patch will be uploaded." >&2
+              echo "  gh run download ${RUN_ID} -n kimchi-judgments-${SYSTEM}" >&2
               exit 1
             fi
             paths+=(packages/kimchi/egress-report.json)
@@ -95,6 +107,14 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           nix build ".#.checks.${SYSTEM}.${OWNER}-extracted" --no-link
+
+      - name: Upload Kimchi judgment packets
+        if: always() && matrix.owner == 'kimchi'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kimchi-judgments-${{ inputs.system }}
+          path: ${{ runner.temp }}/kimchi-judgments
+          if-no-files-found: warn
 
       # Runs only after the check passes: a failed owner's delta must not publish;
       # no-op owners upload an empty patch.

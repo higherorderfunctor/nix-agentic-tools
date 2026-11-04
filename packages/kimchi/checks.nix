@@ -6,6 +6,7 @@
     ./checks/kimchi-codeql-request-evidence.nix
     ./checks/kimchi-codeql.nix
     ./checks/kimchi-extracted.nix
+    ./checks/kimchi-surface-judgments.nix
     ./checks/module-eval.nix
     ./checks/native-options.nix
     ./checks/package-identity.nix

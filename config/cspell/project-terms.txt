@@ -335,6 +335,7 @@ mountpoint
 mpim
 mtimes
 multimodel
+multiset
 multivar
 mystor
 napi
@@ -356,6 +357,7 @@ noescape
 noexplore
 nohup
 nomodel
+nonblank
 nosub
 nosuid
 noyolo
@@ -509,6 +511,7 @@ termlog
 testapp
 tidwall
 timespec
+tllm
 tmpfs
 toctou
 toolsets

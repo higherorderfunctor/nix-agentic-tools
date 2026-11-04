@@ -1,0 +1,664 @@
+[
+  {
+    "codes": [],
+    "expect": {
+      "display.json": {
+        "{\"anchor\":{\"role\":{\"keys\":[\"eu\",\"llmBaseUrl\"],\"kind\":\"property\"},\"symbol\":\"REGIONS\"},\"path\":\"src/regions.ts\"}": {
+          "end": {
+            "column": 42,
+            "line": 8
+          },
+          "facts": [
+            {
+              "file": "src/regions.ts",
+              "line": 8
+            }
+          ],
+          "start": {
+            "column": 3,
+            "line": 8
+          }
+        },
+        "{\"anchor\":{\"role\":{\"keys\":[\"us\",\"llmBaseUrl\"],\"kind\":\"property\"},\"symbol\":\"REGIONS\"},\"path\":\"src/regions.ts\"}": {
+          "end": {
+            "column": 39,
+            "line": 4
+          },
+          "facts": [
+            {
+              "file": "src/regions.ts",
+              "line": 4
+            }
+          ],
+          "start": {
+            "column": 3,
+            "line": 4
+          }
+        },
+        "{\"anchor\":{\"role\":{\"kind\":\"declaration\"},\"symbol\":\"searchUrl\"},\"path\":\"src/regions.ts\"}": {
+          "end": {
+            "column": 2,
+            "line": 17
+          },
+          "start": {
+            "column": 1,
+            "line": 15
+          }
+        }
+      },
+      "status.json/counts": {
+        "refuted": 0,
+        "roots": 2,
+        "supported": 1,
+        "unknown": 1
+      }
+    },
+    "name": "baseline",
+    "rejects": "incorrect canonicalization, omitted source bytes, or unknown counted as supported",
+    "unchanged": true
+  },
+  {
+    "codes": ["UNCLASSIFIED_ROOT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\tus: {",
+        "to": "\tap: { llmBaseUrl: \"https://ap.example\" },\n\tus: {"
+      },
+      {
+        "file": "facts",
+        "from": "\"fields\":[",
+        "to": "\"fields\":[{\"region\":\"ap\",\"field\":\"llmBaseUrl\",\"value\":\"https://ap.example\",\"file\":\"src/regions.ts\",\"line\":3},"
+      }
+    ],
+    "expect": {
+      "current.json/<unclassified:ap>/packet/selector/sources": []
+    },
+    "name": "new-hosted-region",
+    "rejects": "iterating only verdicts, hardcoded coverage, or whole-registry hashing",
+    "unchanged": true
+  },
+  {
+    "codes": ["REMOVED_ROOT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\teu: {\n\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t},\n",
+        "to": ""
+      },
+      {
+        "file": "facts",
+        "from": "{\"field\":\"llmBaseUrl\",\"file\":\"src/regions.ts\",\"line\":8,\"region\":\"eu\",\"value\":\"https://llm.eu.kimchi.dev\"},",
+        "to": ""
+      }
+    ],
+    "name": "removed-hosted-region",
+    "rejects": "silently dropping a stale unknown record"
+  },
+  {
+    "codes": ["UNCLASSIFIED_ROOT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "llmBaseUrl: \"\"",
+        "to": "llmBaseUrl: \"https://self.example\""
+      },
+      {
+        "file": "facts",
+        "from": "\"value\":\"\"",
+        "to": "\"value\":\"https://self.example\""
+      }
+    ],
+    "name": "empty-placeholder-becomes-hosted",
+    "rejects": "hardcoded region allowlist",
+    "unchanged": true
+  },
+  {
+    "codes": ["REMOVED_ROOT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "llmBaseUrl: \"https://llm.eu.kimchi.dev\"",
+        "to": "llmBaseUrl: \"\""
+      },
+      {
+        "file": "facts",
+        "from": "\"value\":\"https://llm.eu.kimchi.dev\"",
+        "to": "\"value\":\"\""
+      }
+    ],
+    "name": "hosted-declaration-becomes-empty",
+    "rejects": "historical region keys treated as permanently covered"
+  },
+  {
+    "codes": ["EVIDENCE_CHANGED", "EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}",
+        "to": "export function searchUrl(region: KimchiRegion): string {\n\treturn `${region.llmBaseUrl}/v1/search`\n}"
+      }
+    ],
+    "name": "parameter-renamed",
+    "rejects": "hashing literals or a normalized AST"
+  },
+  {
+    "codes": ["EVIDENCE_CHANGED", "EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\treturn `${r.llmBaseUrl}/v1/search`",
+        "to": "  return `${r.llmBaseUrl}/v1/search`"
+      }
+    ],
+    "name": "helper-reformatted",
+    "rejects": "normalizing source whitespace"
+  },
+  {
+    "codes": ["ANCHOR_MISSING", "ANCHOR_MISSING"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "function searchUrl",
+        "to": "function renamedSearchUrl"
+      }
+    ],
+    "incomplete": true,
+    "name": "symbol-renamed",
+    "rejects": "falling back to line offsets or a similar function"
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "",
+        "to": "\n\n\n\n\n\n\n\n\n\n"
+      }
+    ],
+    "name": "lines-inserted-before-spans",
+    "rejects": "hashing coordinates or entire files",
+    "starts": [14, 18, 25],
+    "unchanged": true
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\n",
+        "to": ""
+      }
+    ],
+    "name": "lines-deleted-before-spans",
+    "rejects": "only supporting forward relocation",
+    "starts": [3, 7, 14],
+    "unchanged": true
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "United States",
+        "to": "USA"
+      }
+    ],
+    "name": "unrelated-source-edit",
+    "rejects": "hashing the whole REGIONS object or source file",
+    "unchanged": true
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}",
+        "to": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}\nexport function unrelatedRequest() { return fetch(\"https://unrelated.example\") }"
+      }
+    ],
+    "name": "unrelated-request-added",
+    "rejects": "release-wide or request-inventory fingerprints",
+    "unchanged": true
+  },
+  {
+    "codes": ["EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "facts",
+        "from": "\"fields\":[",
+        "to": "\"fields\":[{\"region\":\"eu\",\"field\":\"llmBaseUrl\",\"value\":\"https://llm.eu.kimchi.dev\",\"file\":\"src/regions.ts\",\"line\":8},"
+      }
+    ],
+    "expect": {
+      "diff.json/eu-search-service-availability/rows/added/length": 1
+    },
+    "name": "matching-row-added",
+    "rejects": "deduplicating selected rows or selecting only the first matching fact"
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "facts",
+        "from": "\"fields\":[",
+        "to": "\"fields\":[{\"region\":\"us\",\"field\":\"label\",\"value\":\"United States\",\"file\":\"src/regions.ts\",\"line\":5},"
+      }
+    ],
+    "name": "unrelated-row-added",
+    "rejects": "including unselected facts",
+    "unchanged": true
+  },
+  {
+    "codes": [],
+    "name": "fact-order-reversed",
+    "rejects": "input-order-dependent hashing",
+    "reverseFacts": true,
+    "unchanged": true
+  },
+  {
+    "codes": ["ANCHOR_AMBIGUOUS", "ANCHOR_AMBIGUOUS"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}",
+        "to": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}\nexport function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}"
+      }
+    ],
+    "incomplete": true,
+    "name": "anchor-ambiguous",
+    "rejects": "choosing the first function declaration"
+  },
+  {
+    "codes": ["ANCHOR_AMBIGUOUS"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",",
+        "to": "\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\","
+      }
+    ],
+    "incomplete": true,
+    "name": "property-ambiguous",
+    "rejects": "choosing the first duplicate property"
+  },
+  {
+    "codes": ["ANCHOR_AMBIGUOUS", "ANCHOR_AMBIGUOUS"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}",
+        "to": "export function searchUrl(r: KimchiRegion): string;\nexport function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}"
+      }
+    ],
+    "incomplete": true,
+    "name": "overloaded-function",
+    "rejects": "ignoring overload signatures"
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "",
+        "to": "\n"
+      }
+    ],
+    "name": "stale-fact-location",
+    "rejects": "rejecting stale fact line numbers instead of using anchor display lines",
+    "starts": [5, 9, 16],
+    "unchanged": true
+  },
+  {
+    "codes": ["UNCLASSIFIED_ROOT"],
+    "edits": [
+      {
+        "file": "facts",
+        "from": "\"value\":\"\"",
+        "to": "\"value\":\"<unresolved>\""
+      }
+    ],
+    "expect": {
+      "current.json/<unclassified:self-hosted>/packet/selector/sources": []
+    },
+    "name": "unresolved-gateway-is-root",
+    "rejects": "excluding an unresolved gateway from coverage",
+    "unchanged": true
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\teu: {\n\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t},",
+        "to": "\teu: ({\n\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t}),"
+      }
+    ],
+    "incomplete": true,
+    "name": "wrapped-region-member",
+    "rejects": "silently overlooking a wrapped direct registry member"
+  },
+  {
+    "codes": ["RECORDED_HASH"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "4072cc8504901bab219db44cf13126032b3f29e3fdfd3df90ef6104ae329c7b6",
+        "to": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "name": "corrupt-recorded-hash",
+    "rejects": "failing to validate the recorded packet hash"
+  },
+  {
+    "codes": ["FACT_INPUT", "FACT_INPUT"],
+    "edits": [
+      {
+        "file": "facts",
+        "from": "\"line\":8",
+        "to": "\"line\":8,\"column\":3"
+      }
+    ],
+    "incomplete": true,
+    "name": "unsupported-location-field",
+    "rejects": "hashing unnormalized location fields"
+  },
+  {
+    "codes": ["FACT_INPUT", "FACT_INPUT"],
+    "edits": [
+      {
+        "file": "facts",
+        "from": "\"line\":8",
+        "to": "\"line\":8,\"origin\":\"src/regions.ts:8\""
+      }
+    ],
+    "incomplete": true,
+    "name": "unsupported-origin-field",
+    "rejects": "hashing file:line origins"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "",
+        "to": "!"
+      }
+    ],
+    "name": "invalid-verdict-json",
+    "rejects": "accepting invalid JSON"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"schemaVersion\":1}",
+        "to": "\"schemaVersion\":2}"
+      }
+    ],
+    "name": "unsupported-verdict-schema",
+    "rejects": "accepting unknown schema versions"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"judgments\":[",
+        "to": "\"extra\":true,\"judgments\":["
+      }
+    ],
+    "name": "unknown-verdict-field",
+    "rejects": "accepting unused verdict fields"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "us-search-url-construction",
+        "to": "eu-search-service-availability"
+      }
+    ],
+    "name": "duplicate-judgment-id",
+    "rejects": "accepting duplicate ids"
+  },
+  {
+    "codes": ["UNCLASSIFIED_ROOT", "VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"where\":{\"field\":\"llmBaseUrl\",\"region\":\"us\"}",
+        "to": "\"where\":{\"field\":\"llmBaseUrl\",\"region\":\"eu\"}"
+      }
+    ],
+    "name": "duplicate-judgment-root",
+    "rejects": "accepting duplicate roots"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"missingEvidence\":\"A versioned server contract or an authenticated observation establishing that the EU service implements this route.\",",
+        "to": ""
+      }
+    ],
+    "name": "unknown-without-missing-evidence",
+    "rejects": "accepting unknown without named missing evidence"
+  },
+  {
+    "codes": ["EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "llmBaseUrl: \"https://llm.eu.kimchi.dev\"",
+        "to": "llmBaseUrl : \"https://llm.eu.kimchi.dev\""
+      }
+    ],
+    "name": "unknown-evidence-changed",
+    "rejects": "exempting unknown judgments from freshness"
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"verdict\":\"supported\"",
+        "to": "\"verdict\":\"refuted\""
+      }
+    ],
+    "expect": {
+      "status.json/counts": {
+        "refuted": 1,
+        "roots": 2,
+        "supported": 0,
+        "unknown": 1
+      }
+    },
+    "name": "refuted-is-classified",
+    "rejects": "counting refuted as supported",
+    "unchanged": true
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "incomplete": true,
+    "invalidUtf8": true,
+    "name": "invalid-source-utf8",
+    "rejects": "decoding invalid UTF-8 with replacement"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}",
+        "to": "export function searchUrl( {"
+      }
+    ],
+    "incomplete": true,
+    "name": "invalid-source-syntax",
+    "rejects": "swallowing parser errors"
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "",
+        "to": "﻿"
+      }
+    ],
+    "name": "bom-preserved",
+    "rejects": "stripping a BOM before byte-coordinate conversion",
+    "unchanged": true
+  },
+  {
+    "codes": [],
+    "edits": [
+      {
+        "file": "source",
+        "from": "",
+        "to": "// 😀\n"
+      }
+    ],
+    "name": "unicode-before-span",
+    "rejects": "using UTF-16 offsets directly as UTF-8 offsets",
+    "unchanged": true
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"kind\":\"regionRegistry.fields\"",
+        "to": "\"kind\":\"network\""
+      }
+    ],
+    "name": "unsupported-selector",
+    "rejects": "accepting arbitrary fact selectors"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"sources\":[{\"anchor\":{\"role\":{\"kind\":\"declaration\"},\"symbol\":\"searchUrl\"},\"path\":\"src/regions.ts\"}]",
+        "to": "\"sources\":[{\"anchor\":{\"role\":{\"kind\":\"declaration\"},\"symbol\":\"searchUrl\"},\"path\":\"src/regions.ts\"},{\"anchor\":{\"role\":{\"kind\":\"declaration\"},\"symbol\":\"searchUrl\"},\"path\":\"src/regions.ts\"}]"
+      }
+    ],
+    "name": "duplicate-source-citation",
+    "rejects": "accepting repeated explicit citations"
+  },
+  {
+    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "export const REGIONS = {",
+        "to": "export const REGIONS = ({"
+      },
+      {
+        "file": "source",
+        "from": "} as const satisfies",
+        "to": "}) as const satisfies"
+      }
+    ],
+    "incomplete": true,
+    "name": "unsupported-anchor-wrapper",
+    "rejects": "unwrapping parentheses beyond the supported as/satisfies language"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"claim\":\"The EU service serves web search at https://llm.eu.kimchi.dev/v1/search.\"",
+        "to": "\"claim\":{\"toString\":null}"
+      }
+    ],
+    "name": "invalid-claim-object",
+    "rejects": "coercing malformed claim values while emitting diagnostics"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"evidenceHash\":\"sha256:4072cc8504901bab219db44cf13126032b3f29e3fdfd3df90ef6104ae329c7b6\"",
+        "to": "\"evidenceHash\":false"
+      }
+    ],
+    "name": "invalid-evidence-hash-value",
+    "rejects": "printing malformed hashes as false instead of unavailable"
+  },
+  {
+    "codes": ["UNCLASSIFIED_ROOT", "VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "source",
+        "from": "\tus: {",
+        "to": "\tap: { llmBaseUrl: \"https://ap.example\" },\n\tus: {"
+      },
+      {
+        "file": "facts",
+        "from": "\"fields\":[",
+        "to": "\"fields\":[{\"region\":\"ap\",\"field\":\"llmBaseUrl\",\"value\":\"https://ap.example\",\"file\":\"src/regions.ts\",\"line\":3},"
+      },
+      {
+        "file": "verdicts",
+        "from": "\"rationale\":\"The EU declaration and searchUrl body establish this client-derived URL. They do not establish deployment, route availability, or server behavior.\"",
+        "to": "\"rationale\":\"\""
+      }
+    ],
+    "expect": {
+      "current.json/<unclassified:ap>/packet/selector/sources": []
+    },
+    "name": "invalid-record-does-not-hide-new-root",
+    "rejects": "suppressing independent root discovery after one invalid judgment"
+  },
+  {
+    "codes": ["RECORDED_HASH"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "sha256:4072cc8504901bab219db44cf13126032b3f29e3fdfd3df90ef6104ae329c7b6",
+        "to": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "file": "verdicts",
+        "from": ",{\"claim\":\"For an argument whose llmBaseUrl equals the US registry declaration, searchUrl constructs https://llm.kimchi.dev/v1/search.\",\"evidenceHash\":\"sha256:6f4778769d25031b71090d6199f66c1982917db7deea931b701d7236607f1ffa\",\"id\":\"us-search-url-construction\",\"packet\":{\"rows\":[{\"field\":\"llmBaseUrl\",\"region\":\"us\",\"site\":{\"anchor\":{\"role\":{\"keys\":[\"us\",\"llmBaseUrl\"],\"kind\":\"property\"},\"symbol\":\"REGIONS\"},\"path\":\"src/regions.ts\"},\"value\":\"https://llm.kimchi.dev\"}],\"schemaVersion\":1,\"selector\":{\"fact\":{\"kind\":\"regionRegistry.fields\",\"where\":{\"field\":\"llmBaseUrl\",\"region\":\"us\"}},\"sources\":[{\"anchor\":{\"role\":{\"kind\":\"declaration\"},\"symbol\":\"searchUrl\"},\"path\":\"src/regions.ts\"}]},\"spans\":[{\"anchor\":{\"role\":{\"keys\":[\"us\",\"llmBaseUrl\"],\"kind\":\"property\"},\"symbol\":\"REGIONS\"},\"path\":\"src/regions.ts\",\"sha256\":\"sha256:dabd60889610528689c2e881a53ec4c9439458e12e1659bc144d0c4c5a777b10\"},{\"anchor\":{\"role\":{\"kind\":\"declaration\"},\"symbol\":\"searchUrl\"},\"path\":\"src/regions.ts\",\"sha256\":\"sha256:2677600c372c6f48cf537fc8036b9feae4f5173acd108ccb8532d6356be3950a\"}]},\"rationale\":\"The selected declaration supplies https://llm.kimchi.dev. The complete searchUrl body returns that argument property followed by /v1/search.\",\"scope\":\"Direct evaluation of searchUrl with the selected declared value; excludes effective configuration, overrides, callers, execution and server availability.\",\"verdict\":\"supported\"}",
+        "to": ""
+      }
+    ],
+    "incomplete": true,
+    "invalidUtf8": true,
+    "name": "recorded-hash-before-source-validation",
+    "rejects": "reporting dependent source errors before invalid recorded evidence is refused"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"judgments\":[",
+        "to": "\"bad\\nkey\":true,\"judgments\":["
+      }
+    ],
+    "name": "newline-in-input-key",
+    "rejects": "letting untrusted field names break diagnostic envelopes"
+  },
+  {
+    "codes": ["VERDICT_INPUT"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"judgments\":[",
+        "to": "\"a/b~c\":true,\"judgments\":["
+      }
+    ],
+    "name": "json-pointer-input-key",
+    "rejects": "printing unescaped JSON pointer keys"
+  }
+]

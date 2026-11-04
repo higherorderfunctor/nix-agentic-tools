@@ -1,0 +1,27 @@
+{
+  "regionRegistry": {
+    "fields": [
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 8,
+        "region": "eu",
+        "value": "https://llm.eu.kimchi.dev"
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 11,
+        "region": "self-hosted",
+        "value": ""
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 4,
+        "region": "us",
+        "value": "https://llm.kimchi.dev"
+      }
+    ]
+  }
+}
