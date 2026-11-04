@@ -117,6 +117,7 @@ cliproxyapi
 clis
 cliutil
 cmdbuilder
+codeberg
 codeqlmanifest
 codesign
 codewhisperer
