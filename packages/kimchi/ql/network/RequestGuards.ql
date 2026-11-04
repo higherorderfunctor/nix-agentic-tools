@@ -15,6 +15,7 @@ private predicate onlySource(DataFlow::Node value, DataFlow::SourceNode source) 
 }
 
 /** Binding-resolved Kimchi helpers; unrelated same-named functions do not qualify. */
+bindingset[file]
 private predicate helper(DataFlow::CallNode call, string file, string name) {
   exists(FunctionDeclStmt callee |
     callee.getVariable() = resolvedBinding(call.getCalleeNode().asExpr()) and callee.getName() = name and

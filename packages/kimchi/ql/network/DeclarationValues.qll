@@ -22,6 +22,7 @@ string literalString(Expr value) {
   )
 }
 
+bindingset[file]
 Expr exportedInitializer(string file, string name) {
   exists(VariableDeclarator decl, ES2015Module module_ |
     module_.getFile().getRelativePath() = "kimchi/" + file and

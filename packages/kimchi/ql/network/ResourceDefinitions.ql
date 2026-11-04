@@ -7,6 +7,7 @@
 import javascript
 import DeclarationValues
 
+bindingset[name]
 private string booleanField(ObjectExpr definition, string name) {
   result = definition.getPropertyByName(name).getInit().(BooleanLiteral).getBoolValue().toString()
   or
