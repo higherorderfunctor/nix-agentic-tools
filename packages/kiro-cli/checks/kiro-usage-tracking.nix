@@ -90,8 +90,9 @@ in {
     kiro-usage-launchers = pkgs.runCommand "kiro-usage-launchers" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      ${harness.devenvRuntimeSetup {usage = dev.config.processes.kiro-usage.exec;}}
       ${pkgs.python3}/bin/python3 ${./usage-integration.py} \
-        ${wrapped hm} ${dev.config.processes.kiro-usage.exec} \
+        ${wrapped hm} "$devenvLaunchers/usage" \
         ${wrapped disabled}
       touch "$out"
     '';

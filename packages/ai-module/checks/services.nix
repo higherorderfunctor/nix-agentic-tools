@@ -5,9 +5,11 @@
   ...
 }: let
   backends = import ./backends.nix {inherit harness lib pkgs;};
+  mkLintedCheck = import ../../../lib/mk-linted-check.nix {inherit pkgs;};
   redact = import ../../../lib/redact {inherit lib;};
   services = import ../lib/services.nix {inherit lib;};
   strictShellApplication = import ../../../lib/strict-shell-application.nix;
+  evaluatedEntry = name: entry: (backends.evaluate "hm" {services.${name} = entry;}).ai.services.${name};
   daemon = {command = ["/bin/daemon" "an argument"];};
   entries = lib.genAttrs ["always" "never" "on-failure"] (restart: daemon // {inherit restart;});
   watched =
@@ -165,6 +167,9 @@
   launcherReader = strictShellApplication pkgs {
     name = "services-test-reader";
     text = ''
+      if [ -n "''${SERVICE_READER_MARKER:-}" ]; then
+        printf '%s' read > "$SERVICE_READER_MARKER"
+      fi
       if [ -n "''${SERVICE_READER_FAIL:-}" ]; then exit 1; fi
       if [ -n "''${SERVICE_READER_CHECK_SLOTS:-}" ]; then
         test -z "''${_ai_secret_0+x}''${_ai_secret_1+x}"
@@ -181,13 +186,21 @@
   launcher = services.mkLauncher {
     inherit pkgs;
     name = "test";
-    entry = {
+    entry = evaluatedEntry "test" {
       command = ["${receiver}/bin/services-test-receiver" "argument $(false)" "space ' quote"];
       environment = {
         LITERAL = "literal $(false) ' quote";
         PRIVATE = redact.command "${launcherReader}/bin/services-test-reader";
       };
       files = {};
+    };
+  };
+  runtimeProbe.services.probe = {
+    command = ["${pkgs.coreutils}/bin/printenv" "CONFIG"];
+    files.config = {
+      content = "{}";
+      secrets = {};
+      variable = "CONFIG";
     };
   };
   # A rendered file: two secrets, one needing JSON escapes and read from a
@@ -215,7 +228,8 @@
   };
   fileLauncher = entry:
     services.mkLauncher {
-      inherit entry pkgs;
+      inherit pkgs;
+      entry = evaluatedEntry "files-test" entry;
       name = "files-test";
     };
   config = {
@@ -264,7 +278,7 @@
   commandOnly = backends.evaluate "hm" {
     services.secret = daemon // {environment.KEY_FILE = asFile (redact.command "/run/current-system/sw/bin/read-key");};
   };
-  stampEntry = {
+  stampEntry = evaluatedEntry "help" {
     command = ["${pkgs.coreutils}/bin/true"];
     enable = true;
     environment = {};
@@ -336,6 +350,9 @@ in {
       ai-module-services-launcher = pkgs.runCommandLocal "ai-module-services-launcher" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
+        # The fixture supplies the root that the systemd user manager provides.
+        export XDG_RUNTIME_DIR="$TMPDIR/run"
+        mkdir -m 0700 "$XDG_RUNTIME_DIR"
         if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-test > failed; then
           echo "failed reader started the receiver" >&2
           exit 1
@@ -349,16 +366,104 @@ in {
       '';
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      # Fails if devenv uses an inherited Home Manager root instead of its
+      # evaluated project root, or if either launcher loses file privacy.
+      ai-module-services-runtime-roots = assert !(succeeds (evaluatedEntry "probe" (daemon // {runtimeRoot = "./devenv-runtime";})).runtimeDir); let
+        home = backends.evaluate "hm" runtimeProbe;
+        project = backends.evaluate "devenv" runtimeProbe;
+      in
+        mkLintedCheck "ai-module-services-runtime-roots" {
+          runtimeInputs = [pkgs.coreutils];
+          text = ''
+            export XDG_RUNTIME_DIR=/build/home-runtime
+            mkdir -m 0700 "$XDG_RUNTIME_DIR"
+            ${harness.devenvRuntimeSetup {probe = project.processes.probe.exec;}}
+            ${home.systemd.user.services.probe.Service.ExecStart} > home-path
+            "$devenvLaunchers/probe" > project-path
+            [[ $(< home-path) == /build/home-runtime/ai-service-probe/config.json ]]
+            [[ $(< project-path) == "$devenvRuntime/ai-service-probe/config.json" ]]
+            for file in "$(< home-path)" "$(< project-path)"; do
+              [[ $(stat -c %a "$file") == 600 ]]
+              [[ $(stat -c %a "''${file%/*}") == 700 ]]
+            done
+            rm -- "$(< home-path)"
+            [[ -f $(< project-path) ]]
+          '';
+        };
+      # Fails if runtimeDir accepts consumer shell source, while a normal
+      # evaluated service must still provide a usable computed directory.
+      ai-module-services-runtime-dir-read-only = mkCheck "ai-module-services-runtime-dir-read-only" (
+        succeeds (evaluatedEntry "probe" daemon).runtimeDir
+        && lib.all (runtimeDir: !(succeeds (evaluatedEntry "probe" (daemon // {inherit runtimeDir;})).runtimeDir)) [
+          "$(false)"
+          (lib.mkForce "$(false)")
+        ]
+      );
+      # Fails a launcher that trusts a predictable devenv root under /tmp
+      # without checking its parent, or reads a secret before refusing it.
+      ai-module-services-runtime-root-safety = let
+        fixture = lib.recursiveUpdate runtimeProbe {
+          services.probe.environment.TOKEN = redact.command "${launcherReader}/bin/services-test-reader";
+        };
+        root = harness.devenvRuntime;
+        project = root: (backends.evaluateWith "devenv" fixture [{devenv.runtime = root;}]).processes.probe.exec;
+      in
+        mkLintedCheck "ai-module-services-runtime-root-safety" {
+          runtimeInputs = [pkgs.coreutils pkgs.gnugrep];
+          text = ''
+            # Devenv uses /tmp/devenv-<hash> when XDG_RUNTIME_DIR is unset
+            # (including Darwin's default). The fixture imitates its name
+            # inside the build directory instead of using a shared /tmp path.
+            ${harness.devenvRuntimeSetup {
+              probe = project root;
+              trailing = project "${root}/";
+            }}
+            root="$devenvRuntime"
+            export SERVICE_READER_MARKER="$PWD/reader-called"
+            env -u XDG_RUNTIME_DIR "$devenvLaunchers/probe" > actual
+            [[ $(< actual) == "$root/ai-service-probe/config.json" ]]
+            [[ -f $SERVICE_READER_MARKER ]]
+            rm "$SERVICE_READER_MARKER"
+            refuses() {
+              if env -u XDG_RUNTIME_DIR "$1" > actual 2> refused.log; then
+                echo 'an unsafe runtime root started the daemon' >&2
+                exit 1
+              fi
+              grep -F "ai.services.probe: $2" refused.log
+              if [[ $2 == *'write access:' ]]; then
+                grep -F 'chmod go-w --' refused.log
+              elif grep -F 'chmod go-w --' refused.log; then
+                echo 'an inapplicable chmod hint was printed' >&2
+                exit 1
+              fi
+              [[ ! -s actual && ! -e $SERVICE_READER_MARKER ]]
+            }
+            for mode in 0770 0777; do
+              chmod "$mode" "$root"
+              refuses "$devenvLaunchers/probe" 'runtime root must have no group or other write access:'
+            done
+            chmod 0700 "$root"
+            mv "$root" "$root-target"
+            ln -s "$root-target" "$root"
+            refuses "$devenvLaunchers/probe" 'runtime root must not be a symlink:'
+            refuses "$devenvLaunchers/trailing" 'runtime root must not be a symlink:'
+            rm "$root"
+            refuses "$devenvLaunchers/probe" 'runtime root must be an existing directory:'
+            # The store root exists but belongs to the Nix administrator,
+            # never the unprivileged check user; its leaf must not be made.
+            refuses ${project "/nix/store"} 'runtime root must be owned by the current user:'
+            rm -r "$root-target"
+          '';
+        };
       ai-module-services-backends = mkCheck "ai-module-services-backends" (
         lib.all (restart: let
           unit = hm.systemd.user.services.${restart};
           process = devenv.processes.${restart};
         in
-          unit
+          (unit // {Service = builtins.removeAttrs unit.Service ["ExecStart"];})
           == {
             Install.WantedBy = ["default.target"];
             Service = {
-              ExecStart = process.exec;
               Restart =
                 if restart == "never"
                 then "no"
@@ -372,6 +477,7 @@ in {
               StartLimitIntervalSec = 300;
             };
           }
+          && unit.Service.ExecStart != process.exec
           && process.restart
           == {
             max = 4;
@@ -561,7 +667,7 @@ in {
       ai-module-services-secret-files = let
         launcher = services.mkLauncher {
           inherit pkgs;
-          entry = secretFiles;
+          entry = evaluatedEntry "secret-files-test" secretFiles;
           name = "secret-files-test";
         };
       in
