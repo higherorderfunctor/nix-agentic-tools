@@ -285,18 +285,31 @@ never inherit those values; jq alone receives the needed slots in its
 environment, never argv. The launcher atomically creates a 0700 directory at
 `$XDG_RUNTIME_DIR/ai-service-<key>`, or, without XDG_RUNTIME_DIR,
 `${TMPDIR:-/tmp}/ai-service-<uid>-<key>` (numeric user ID), the root read after
-the declared environment is applied, so a declared `XDG_RUNTIME_DIR` or `TMPDIR`
-picks it as it does for the daemon. An existing directory must be owned by the
-current user and must not be a symlink; other inputs fail before chmod or
-writes. The runtime root must already exist. jq replaces every placeholder
-string with its secret as a JSON string, writes a 0600 temporary file, renames
-it to `<file key>.json` and exports `variable` with that path. Content and
-secrets are both known at evaluation, so the launcher refuses to build when a
-placeholder has no secret, a secret has no placeholder, or a `variable` repeats
-another file's or an environment name. Declared environment names and file
-variables cannot start with `_ai_`, the launcher's private namespace. JSON is
-the one format: YAML 1.2 readers take it as is. A daemon's own writes to the
-file are lost at the next start.
+the declared literal environment is applied, so a declared `XDG_RUNTIME_DIR` or
+`TMPDIR` picks it as it does for the daemon on Home Manager. Every launcher
+prepares its runtime directory before reading secrets. Devenv uses
+`config.devenv.runtime/ai-service-<key>` instead, keeping its files and Caddy
+state separate from Home Manager and other projects. The internal evaluated
+`runtimeDir` field is a read-only quoted shell word consumed by the service
+launcher and Caddy run script; it is derived from the literal backend
+`runtimeRoot`, with one owner for the service leaf. An existing directory must
+be owned by the current user and must not be a symlink; other inputs fail before
+chmod or writes. The runtime root must already exist, belong to the current
+user, not be a symlink and forbid group and other writes. The launcher checks
+the root before reading secrets, including when devenv uses `/tmp/devenv-<hash>`
+without `XDG_RUNTIME_DIR`; safety does not depend on the consumer's devenv
+version guarding that root. For an owned root made group-writable by older
+versions of devenv, the refusal names `chmod go-w -- <root>` as the repair. The
+module harness uses a `./devenv-runtime` root under each check's build directory
+and creates it 0700; production devenv supplies an absolute path. jq replaces
+every placeholder string with its secret as a JSON string, writes a 0600
+temporary file, renames it to `<file key>.json` and exports `variable` with that
+path. Content and secrets are both known at evaluation, so the launcher refuses
+to build when a placeholder has no secret, a secret has no placeholder, or a
+`variable` repeats another file's or an environment name. Declared environment
+names and file variables cannot start with `_ai_`, the launcher's private
+namespace. JSON is the one format: YAML 1.2 readers take it as is. A daemon's
+own writes to the file are lost at the next start.
 
 A `redact.types.secretFile` value, in `environment` or a file's `secrets`, is
 delivered as a path (`dev/fragments/redact/redact.md`, Secret files). The

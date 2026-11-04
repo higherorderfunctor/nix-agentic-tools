@@ -131,6 +131,13 @@
         }
       ];
     }).config.files;
+  # Production devenv supplies an absolute root and creates it before launch.
+  # An explicit relative root keeps fixtures inside each build on Linux and
+  # Darwin; service checks run devenvRuntimeSetup instead of the supervisor.
+  devenvRuntime = "./devenv-runtime";
+  devenvRuntimeSetup = ''
+    ${pkgs.coreutils}/bin/mkdir -m 0700 -- ${lib.escapeShellArg devenvRuntime}
+  '';
   devenvStubs = {
     options = {
       assertions = lib.mkOption {
@@ -149,6 +156,10 @@
         root = lib.mkOption {
           type = lib.types.str;
           default = "/tmp/devenv-root";
+        };
+        runtime = lib.mkOption {
+          type = lib.types.str;
+          default = devenvRuntime;
         };
         state = lib.mkOption {
           type = lib.types.str;
@@ -451,6 +462,6 @@
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its generated tree";
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvRuntime devenvRuntimeSetup devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
   inherit testing;
 }
