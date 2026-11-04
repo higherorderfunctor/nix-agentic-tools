@@ -5,6 +5,7 @@
 }: pkgs: {
   doors ? [],
   exe,
+  gitConfig ? null,
   memory ? 1024,
   outName,
   packages ? [],
@@ -128,11 +129,19 @@
       {
         boot.kernelModules = ["qemu_fw_cfg" "virtio_console"];
         environment = {
-          etc = lib.optionalAttrs repo {
-            gitconfig.text = ''
-              [safe]
-                directory = /mnt/seed
-            '';
+          # The guest's SYSTEM git configuration, a protected scope: the only
+          # one a repository-local file cannot override. `gitConfig` (the
+          # rendered `ai.<runtime>.sandbox.git._ini`) replaces the repo-mode
+          # default; null keeps a repo guest's safe.directory and leaves every
+          # other guest without the file.
+          etc = lib.optionalAttrs (repo || gitConfig != null) {
+            gitconfig.text =
+              if gitConfig == null
+              then ''
+                [safe]
+                  directory = /mnt/seed
+              ''
+              else gitConfig;
           };
           # A child shell resetting PATH still finds tools in the system profile.
           systemPackages = guestPackages;
@@ -322,6 +331,7 @@ in
   assert lib.assertMsg (builtins.length (lib.unique (map (door: door.port) allDoors)) == builtins.length allDoors) "mkSandbox.doors and mkSandbox.signing ports must be unique";
   assert lib.assertMsg (builtins.isBool repo) "mkSandbox.repo must be a boolean";
   assert lib.assertMsg (builtins.isBool repoConfig && (!repoConfig || repo)) "mkSandbox.repoConfig requires repo = true and reads SANDBOX_REPO_CONFIG and SANDBOX_SEED_OBJECTS at launch";
+  assert lib.assertMsg (gitConfig == null || builtins.isString gitConfig) "mkSandbox.gitConfig must be a string of git INI, or null for no system configuration";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
       runtimeInputs = lib.optionals repo [pkgs.coreutils pkgs.git pkgs.util-linux];
