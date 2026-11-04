@@ -231,10 +231,18 @@
         else facts.hostRunOn system dir)
       owners;
     in
-      lib.mapAttrs (name: _:
-        if system == "x86_64-linux"
-        then lib.genAttrs (ownerCheck name).handled (handled: (ownerCheck name).extracted.${handled}.drvPath)
-        else {${system} = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;})
+      lib.mapAttrs (name: _: let
+        selectionInput = self.ciPackages.${system}.${name}.passthru.extractedSelectionInput or null;
+      in
+        (
+          if system == "x86_64-linux"
+          then lib.genAttrs (ownerCheck name).handled (handled: (ownerCheck name).extracted.${handled}.drvPath)
+          else {${system} = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;}
+        )
+        // lib.optionalAttrs (selectionInput != null) {
+          # Compared by ci-extracted-facts.py, never a handled extraction system.
+          selectionInput = toString selectionInput;
+        })
       selected);
 
     ciCheckEvaluator =

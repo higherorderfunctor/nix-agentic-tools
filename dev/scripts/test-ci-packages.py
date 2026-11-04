@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Exercise the package coverage gate without evaluating or building Nix."""
+"""Exercise package coverage and extracted-fact selection without building Nix."""
 
 import copy
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -19,6 +20,71 @@ SPEC.loader.exec_module(ci)
 EXTRACTED_SPEC = importlib.util.spec_from_file_location("ci_extracted_facts", Path(__file__).with_name("ci-extracted-facts.py"))
 extracted = importlib.util.module_from_spec(EXTRACTED_SPEC)
 EXTRACTED_SPEC.loader.exec_module(extracted)
+
+
+class ExtractedSelectionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Evaluate the real flake and owner declaration in an isolated source
+        # tree: mocked drvPaths alone cannot catch an omitted generator input.
+        repository = Path(__file__).resolve().parents[2]
+        cls.directory = tempfile.TemporaryDirectory(prefix=".ci-selection-", dir=repository)
+        cls.addClassCleanup(cls.directory.cleanup)
+        cls.root = Path(cls.directory.name)
+        paths = subprocess.check_output(["git", "ls-files", "-z"], cwd=repository).decode().split("\0")
+        for name in filter(None, paths):
+            destination = cls.root / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(repository / name, destination, follow_symlinks=False)
+        cls.base = cls.evaluate()
+
+    @classmethod
+    def evaluate(cls):
+        result = subprocess.run(["nix", "eval", "--json", f"path:{cls.root}#ciExtractedFacts.x86_64-linux.kimchi"],
+                                capture_output=True, text=True, check=True, timeout=300)
+        return json.loads(result.stdout)
+
+    def changed(self, *paths):
+        originals = {path: (self.root / path).read_bytes() for path in paths}
+        try:
+            for path, original in originals.items():
+                # Valid whitespace changes source identity without requiring a
+                # new release, scanner output, or a generated-output fixture.
+                (self.root / path).write_bytes(original + b"\n")
+            return self.evaluate()
+        finally:
+            for path, original in originals.items():
+                (self.root / path).write_bytes(original)
+
+    def assert_selected(self, head, expected):
+        with mock.patch.object(extracted, "derivations", side_effect=[{"kimchi": head}, {"kimchi": self.base}]):
+            with mock.patch.object(extracted.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)):
+                self.assertEqual(extracted.plan(self.root, "x86_64-linux", "pull_request", "base"), expected)
+
+    def test_generator_inputs_select_kimchi(self):
+        for path in (
+            "checks/references/kimchi-egress-report.nix",
+            "dev/skills/kimchi-egress-report/scripts/generate.mjs",
+            "dev/skills/kimchi-egress-report/scripts/regenerate.sh",
+            "dev/skills/kimchi-egress-report/scripts/report.mjs",
+        ):
+            with self.subTest(path=path):
+                head = self.changed(path)
+                self.assert_selected(head, ["kimchi"])
+                self.assertNotEqual(head.get("selectionInput"), self.base.get("selectionInput"))
+
+    def test_scanner_input_selects_kimchi(self):
+        head = self.changed("dev/skills/kimchi-egress-report/scripts/scan.mjs")
+        self.assert_selected(head, ["kimchi"])
+        self.assertEqual(head.get("selectionInput"), self.base.get("selectionInput"))
+
+    def test_other_owner_and_kimchi_docs_do_not_select_kimchi(self):
+        for path in ("packages/semble/sources.json", "packages/kimchi/docs/kimchi-egress-report.md"):
+            with self.subTest(path=path):
+                self.assert_selected(self.changed(path), [])
+
+    def test_commit_back_outputs_do_not_select_kimchi(self):
+        self.assert_selected(self.changed("packages/kimchi/extracted/extracted.json", "packages/kimchi/egress-report.json"), [])
 
 
 def ci_step_script(name, workflow_name="ci.yml"):
@@ -171,7 +237,10 @@ export -f gh git
         produce = ci_step_script("Produce native extracted facts", "extracted-facts.yml")
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-nix() { printf '%s\n' "$*" >> "$RUNNER_TEMP/commands"; }
+nix() {
+  printf '%s\n' "$*" >> "$RUNNER_TEMP/commands"
+  if [ "$1" = build ]; then return "$CHECK_STATUS"; fi
+}
 git() {
   printf '%s\n' "$*" >> "$RUNNER_TEMP/commands"
   case "$1" in
@@ -182,19 +251,31 @@ git() {
 }
 export -f git nix
 '''
-        for dirty in ("false", "true"):
-            with self.subTest(dirty=dirty), tempfile.TemporaryDirectory() as directory:
+        for owner, dirty, check_status in (("kimchi", "false", 0), ("kimchi", "true", 0), ("kimchi", "true", 1), ("semble", "true", 0)):
+            with self.subTest(owner=owner, dirty=dirty, check_status=check_status), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "output"
-                env = dict(os.environ, DIRTY=dirty, GITHUB_OUTPUT=str(output), OWNER="kimchi", RUNNER_TEMP=directory, SYSTEM="x86_64-linux")
+                env = dict(os.environ, CHECK_STATUS=str(check_status), DIRTY=dirty, GITHUB_OUTPUT=str(output), OWNER=owner, RUNNER_TEMP=directory, SYSTEM="x86_64-linux")
                 result = subprocess.run(["bash", "-c", services + produce], cwd=directory, env=env, capture_output=True, text=True)
+                commands = (Path(directory) / "commands").read_text().splitlines()
+                patch = Path(directory) / f"facts/{owner}.patch"
+                if check_status:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(commands[-1], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
+                    self.assertIn("Kimchi's regenerated egress report failed checks.x86_64-linux.kimchi-egress-report", result.stderr)
+                    self.assertIn("dev/skills/kimchi-egress-report/scripts/regenerate.sh && nix build .#.checks.x86_64-linux.kimchi-egress-report --no-link", result.stderr)
+                    self.assertFalse(patch.exists())
+                    self.assertFalse(output.exists())
+                    continue
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(output.read_text(), f"changed={dirty}\n")
-                commands = (Path(directory) / "commands").read_text().splitlines()
-                self.assertEqual(commands[0], "run .#.checks.x86_64-linux.kimchi-extracted.passthru.regenerate")
-                self.assertIn("--command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh", commands[1])
-                self.assertEqual(commands[2], "add -- packages/kimchi/extracted packages/kimchi/egress-report.json")
-                self.assertEqual(commands[3], "diff --cached --binary --full-index -- packages/kimchi/extracted packages/kimchi/egress-report.json")
-                self.assertEqual((Path(directory) / "facts/kimchi.patch").read_text(), 'egress report delta\n' if dirty == "true" else '')
+                self.assertEqual(commands[0], f"run .#.checks.x86_64-linux.{owner}-extracted.passthru.regenerate")
+                paths = f"packages/{owner}/extracted"
+                if owner == "kimchi":
+                    self.assertIn("--command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh", commands[1])
+                    self.assertEqual(commands[2], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
+                    paths += " packages/kimchi/egress-report.json"
+                self.assertEqual(commands[-2:], [f"add -- {paths}", f"diff --cached --binary --full-index -- {paths}"])
+                self.assertEqual(patch.read_text(), 'egress report delta\n' if dirty == "true" else '')
 
     def test_linux_planner_selects_darwin_only_change_in_handled_inputs(self):
         old = {"kiro-cli": {"aarch64-darwin": "old-darwin", "x86_64-linux": "same-linux"}}
