@@ -28,20 +28,20 @@ guest route and no `sandbox` option. Sandbox commands claim their names through
 `ai.microvm.claims.command`.
 
 `extraPackages` enter executable PATH and the guest system profile, including
-child shells resetting PATH to `/run/current-system/sw/bin`. Repository, door
-and signing settings have no module options yet. Identity options, selection and
-relay lowering are in `sandbox-identities.md`; the launcher does not use them
-yet. Never log a harness into a provider inside the VM; VM-only CPA client keys
-will supply authentication later.
+child shells resetting PATH to `/run/current-system/sw/bin`. Identity-aware
+launchers select a relay session and seed committed work; see
+`sandbox-identities.md` for launch ordering and no-door cases. Never log a
+harness into a provider inside the VM; VM-only CPA client keys will supply
+authentication later.
 
 The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
 executable path whose Nix string context retains its package) and `outName` (a
 single executable name). Optional defaults are `doors = []`, `memory = 1024`
-MiB, `packages = []`, `repo = false`, `signing = null`, and `vcpus = 1`. Memory
-must be at least 128 MiB and CPUs at least one. The factory owns the guest and
-`bin/<outName>` launcher. The pinned microvm source is bound through
-`ai.internal.mkSandbox`; consumers need no extra module arguments. An empty
-configuration installs no sandbox and forces no guest.
+MiB, `packages = []`, `repo = false`, `repoConfig = false`, `signing = null`,
+and `vcpus = 1`. Memory must be at least 128 MiB and CPUs at least one. The
+factory owns the guest and `bin/<outName>` launcher. The pinned microvm source
+is bound through `ai.internal.mkSandbox`; consumers need no extra module
+arguments. An empty configuration installs no sandbox and forces no guest.
 
 The host store is shared read-only at `/nix/.ro-store`; upstream overlays
 `/nix/store` with tmpfs upper/work directories beneath `/nix/.rw-store`. Root is
@@ -93,7 +93,11 @@ committed HEAD, preserving its branch name or detached state. Uncommitted host
 changes are excluded. Shallow and partial repositories are refused; supported
 object formats are SHA-1 and SHA-256. Git joins the guest system profile and
 executable PATH only in this mode. These factory parameters do not add module
-options.
+options. `repoConfig = true` requires repo mode, an absolute
+`SANDBOX_REPO_CONFIG` file and an absolute `SANDBOX_SEED_OBJECTS` path at
+launch, where the launcher links the seed's object directory. The runtime
+session launcher uses it to deliver origin and identity through fw_cfg, included
+last in the clone after replacing its seed origin URL.
 
 Optional `signing = {port; socket;}` adds a door to the absolute host
 `ssh-agent` socket. A guest bridge publishes `SSH_AUTH_SOCK` without sharing the
@@ -134,17 +138,16 @@ recovery also fails; nonempty failed exports are retained as
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.
 
-See `packages/microvm/modules/README.md` for host setup. Owner checks cover
-module parity, validation, process cleanup and recovery; real guest smoke tests
-need Linux/KVM and run separately from sandboxed builds.
+See `packages/microvm/modules/README.md` for host setup. Guest smoke tests need
+Linux/KVM and run separately from sandboxed builds.
 
 <!-- Fragment: packages/microvm/docs/sandbox-identities.md -->
 
 # Sandbox Git identities
 
 > **Last verified:** 2026-11-01 — identity option inheritance, URL selection,
-> and session-only relay lowering on Home Manager and devenv. The selector is a
-> standalone program; launcher integration and signing consumption come later.
+> and session-only relay lowering on Home Manager and devenv. Runtime launchers
+> select an identity before boot; signing consumption comes later.
 
 `ai.sandbox.git.identities` supplies author details and explicit push keys:
 
@@ -240,3 +243,46 @@ defaults. Generated pins have priority 900 to beat the relay's built-in
 `mkDefault` pins; ordinary consumer definitions have priority 100. Static
 repositories and turning off session-only mode are refused for this instance,
 preventing guest access to predictable static repository URLs.
+
+A runtime launcher with identities runs selection before boot. Its single notice
+lists the runtime's identities, remote token and selected identity. It mentions
+replacement semantics only when that runtime defines its own identity set. An
+unmatched remote refuses launch. Outside a repository it boots with no doors;
+inside a repository with no push remote it still seeds committed work, with no
+relay door or identity. Runtimes without identities retain their existing
+launcher. Kiro, Kimchi and Copilot still have no guest route.
+
+For a match, the launcher creates a random 128-bit session token and holds its
+lock before opening the relay session. It reads the relay package, port and
+state directory from `ai.git-relay.instances.sandbox`, including native
+overrides and backend-specific state roots. Session management uses the
+service's public config template to validate credential references; it never
+reads push keys or writes pin files. Session creation requires existing daemon
+pins, so an old launcher cannot restore rotated or removed pins. The running
+daemon and forwarding hooks use its resolved config and current pins. A
+`git ls-remote` probe of the new session must succeed before boot; failures name
+the instance's `port` option. Start the relay first (`devenv up` on devenv).
+
+The guest receives only a port-9418 door to that relay and a launch-time Git
+config through fw_cfg. The random session URL never enters the store or kernel
+command line. After cloning the object seed, its final config include supplies
+`user.name`, `user.email`, unsigned commit/tag settings, and the session's
+`remote.origin.url`. Fetch and push share that URL, `remote.origin.prune` is
+false, and an attached or unborn branch tracks its same-named origin branch.
+Detached HEAD remains detached. The final include overrides consumer identity
+settings; no operator identity, key or agent is inherited.
+
+The relay session borrows only the seed's copied history: its alternates name
+`SANDBOX_SEED_OBJECTS`, a link the factory points at the seed's object directory
+before boot. Git advertises the seeded refs and pushes transfer only new
+objects, while host-only branches, stashes and other host objects stay
+unreachable from the session, so a guest cannot publish them. The factory
+retains its graceful-shutdown recovery behavior. When the factory exits it
+removes the seed, leaving the link dangling until the launcher closes the
+session; the guest has stopped by then, so nothing can push into that window.
+Shallow and partial repositories remain refused. Matched SHA-256 repositories
+are refused because the relay initializes SHA-1 sessions; no-door object seeds
+still support both formats. Fetch exposes this session's pushed refs; refreshing
+from upstream remains deferred. On exit the launcher closes its session before
+releasing the lock. Concurrent relay GC skips held locks, including sessions
+whose guest is running.

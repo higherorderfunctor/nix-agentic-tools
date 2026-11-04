@@ -69,15 +69,26 @@
   runtimePackage = name: let
     cfg = config.ai.${name}.sandbox;
     package = routes.${name};
+    args = {
+      exe = lib.getExe package;
+      memory = cfg.vm.memory;
+      outName = commandName name;
+      packages = cfg.extraPackages;
+      vcpus = cfg.vm.vcpus;
+    };
   in
     assert lib.assertMsg (packageAssertion name).assertion (packageAssertion name).message;
-      factory {
-        exe = lib.getExe package;
-        memory = cfg.vm.memory;
-        outName = commandName name;
-        packages = cfg.extraPackages;
-        vcpus = cfg.vm.vcpus;
-      };
+      if cfg.git.identities == {}
+      then factory args
+      else
+        import ../lib/sandbox/launch.nix {
+          inherit args factory lib pkgs;
+          inherit (cfg.git) forges identities;
+          instance = config.ai.git-relay.instances.sandbox;
+          relayConfig = config.ai.git-relay.services.git-relay-sandbox.files.config.content;
+          runtime = name;
+          runtimeIdentities = options.ai.${name}.sandbox.git.identities.highestPrio < 1500;
+        };
 in {
   imports = [
     (import ../../ai-module/lib/runtime.nix {
