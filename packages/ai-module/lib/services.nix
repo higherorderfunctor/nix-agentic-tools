@@ -29,10 +29,9 @@
   runtimePath = root: name: let
     word =
       if root == null
-      then ''"''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}"''
+      then ''"''${XDG_RUNTIME_DIR:?${lib.escapeShellArg "ai.services.${name}: XDG_RUNTIME_DIR must be set"}}"''
       else lib.escapeShellArg root;
-    user = lib.optionalString (root == null) ''"$(if [ -z "''${XDG_RUNTIME_DIR:-}" ]; then printf '%s-' "$UID"; fi)"'';
-  in "${word}/ai-service-${user}${lib.escapeShellArg name}";
+  in "${word}/${lib.escapeShellArg "ai-service-${name}"}";
   serviceEntry = lib.types.submodule ({
     config,
     name,
@@ -153,8 +152,8 @@
       ${slot.variable}=${target}''
     else assignment;
   # The 0700 per-service runtime directory every launcher file goes to. It is
-  # chosen after the declared literal environment is applied, so a declared
-  # XDG_RUNTIME_DIR or TMPDIR picks it as it does for the daemon.
+  # chosen after the declared literal environment is applied, so Home Manager
+  # reads the daemon's XDG_RUNTIME_DIR. Devenv supplies its project runtime root.
   runtimeDirectory = pkgs: name: entry: let
     coreutils = "${pkgs.coreutils}/bin";
   in ''

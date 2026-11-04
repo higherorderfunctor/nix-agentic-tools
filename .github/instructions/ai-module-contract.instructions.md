@@ -7,17 +7,18 @@ applyTo: ".github/workflows/devenv-test.yml,checks/*/module-eval.nix,checks/modu
 
 ## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-22 — secret providers supply activation nodes and
+> **Last verified:** 2026-11-03 — secret providers supply activation nodes and
 > Home Manager service unit ordering; repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
 > service's `files` and secret files render at start in checked private runtime
-> directories, chosen after the declared literal environment applies, with
-> user-qualified fallbacks; private secret slots are cleared before reads and
-> exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
-> a restart trigger alone makes a unit a secret reader, and every service has a
-> start limit so a crash loop ends failed. CPA client keys are instance-owned
-> rather than runtime resource claims.
+> directories, chosen after the declared literal environment applies, with Home
+> Manager requiring `XDG_RUNTIME_DIR` and devenv using its project root; private
+> secret slots are cleared before reads and exec, public variables reserve
+> `_ai_`, tool instances use `lib/instances.nix`, a restart trigger alone makes
+> a unit a secret reader, and every service has a start limit so a crash loop
+> ends failed. CPA client keys are instance-owned rather than runtime resource
+> claims.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -108,12 +109,13 @@ files), `files` (JSON `content` with `{$NAME}` placeholders, `secrets` NAME →
 reference or secret file, and the `variable` exported with the path), `ports`,
 `restart` and `restartOnChange` (absolute paths). A strict launcher reads
 secrets at start, renders each file and each `redact.types.secretFile` value
-0600 into a 0700 `$XDG_RUNTIME_DIR/ai-service-<key>` directory, or
-`${TMPDIR:-/tmp}/ai-service-<uid>-<key>` without XDG_RUNTIME_DIR, both read
-after the declared literal environment applies on Home Manager. Devenv instead
-uses `config.devenv.runtime/ai-service-<key>`, isolating per-project files and
-Caddy state from Home Manager. The evaluated service's internal `runtimeDir` is
-a read-only quoted shell word derived from its literal backend `runtimeRoot`,
+0600 into a 0700 `$XDG_RUNTIME_DIR/ai-service-<key>` directory on Home Manager,
+read after the declared literal environment applies. A Home Manager launcher
+refuses unset or empty `XDG_RUNTIME_DIR` before reading secrets, naming the
+service and missing variable; systemd user units provide it. Devenv instead uses
+`config.devenv.runtime/ai-service-<key>`, isolating per-project files and Caddy
+state from Home Manager. The evaluated service's internal `runtimeDir` is a
+read-only quoted shell word derived from its literal backend `runtimeRoot`,
 shared by its launcher and Caddy run script. Both backends exec argv; a secret
 file is delivered as its path. The root must exist, be owned by the current
 user, not be a symlink and forbid group and other writes. Every launcher checks
