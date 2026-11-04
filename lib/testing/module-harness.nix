@@ -150,6 +150,10 @@
           type = lib.types.str;
           default = "/tmp/devenv-root";
         };
+        runtime = lib.mkOption {
+          type = lib.types.str;
+          default = "/tmp/devenv-runtime";
+        };
         state = lib.mkOption {
           type = lib.types.str;
           default = "/tmp/devenv-state";
