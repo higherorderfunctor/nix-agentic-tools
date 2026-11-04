@@ -95,6 +95,7 @@ in {
       enabled = true;
       name = "microvm";
     })
+    (import ./git.nix {inherit routeNames;})
     (import ./identities.nix {inherit inheritOptions routed routeNames;})
     (import ./relay.nix {inherit backend routed;})
   ];
