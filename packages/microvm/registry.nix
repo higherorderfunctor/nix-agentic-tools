@@ -18,6 +18,11 @@
         name = "sandbox-identities";
         dir = facetOwner;
       }
+      {
+        location = "package";
+        name = "sandbox-signing";
+        dir = facetOwner;
+      }
     ];
   };
 }
