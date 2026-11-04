@@ -168,7 +168,6 @@ in {
       # directories in lib/traceSource.nix would add nothing (measured 2026-09-22).
       delegate-evidence = ./skills/delegate-evidence;
       index-repo-docs = ./skills/index-repo-docs;
-      kimchi-egress-report = ./skills/kimchi-egress-report;
       kimchi-surface-scan = ./skills/kimchi-surface-scan;
       pr-review-loop = ./skills/pr-review-loop;
       repo-review = ./skills/repo-review;

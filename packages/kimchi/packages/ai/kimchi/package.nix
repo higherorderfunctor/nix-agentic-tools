@@ -97,7 +97,7 @@
   # scan.mjs and the report.mjs it imports, without generate.mjs: a
   # generator-only edit must not rebuild the extraction.
   egressScanner = let
-    dir = ../../../../../dev/skills/kimchi-egress-report/scripts;
+    dir = ../../../extract/egress;
   in
     lib.fileset.toSource {
       root = dir;
@@ -394,9 +394,9 @@ in
           root = ../../../../..;
           fileset = lib.fileset.unions [
             ../../../../../checks/references/kimchi-egress-report.nix
-            ../../../../../dev/skills/kimchi-egress-report/scripts/generate.mjs
-            ../../../../../dev/skills/kimchi-egress-report/scripts/regenerate.sh
-            ../../../../../dev/skills/kimchi-egress-report/scripts/report.mjs
+            ../../../extract/egress/generate.mjs
+            ../../../extract/egress/regenerate.sh
+            ../../../extract/egress/report.mjs
           ];
         };
         inherit extractionSources;

@@ -278,7 +278,8 @@ Owners can declare `passthru.extractedSelectionInput` on their package for
 inputs that require fact/report regeneration without rebuilding extraction.
 `ciExtractedFacts` compares it as the non-system `selectionInput` key alongside
 handled derivations; matrices still contain owner names only. Kimchi declares a
-fileset of `generate.mjs`, `report.mjs`, `regenerate.sh` and
+fileset of `generate.mjs`, `report.mjs` and `regenerate.sh` under
+`packages/kimchi/extract/egress/`, plus
 `checks/references/kimchi-egress-report.nix`. Changes to these report generator
 inputs select Kimchi, as `scan.mjs` changes already do through its extraction
 derivation. Kimchi docs, other owners' files and committed `extracted.json` or

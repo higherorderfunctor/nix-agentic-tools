@@ -67,8 +67,8 @@
     kimchi-egress-report = {
       scopes = [
         "checks/references/kimchi-egress-report.nix"
-        "dev/skills/kimchi-egress-report/**"
         "packages/${facetOwner}/egress-report.json"
+        "packages/${facetOwner}/extract/egress/**"
       ];
       sources = [
         {

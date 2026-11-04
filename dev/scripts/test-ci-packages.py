@@ -64,9 +64,9 @@ class ExtractedSelectionTest(unittest.TestCase):
     def test_generator_inputs_select_kimchi(self):
         for path in (
             "checks/references/kimchi-egress-report.nix",
-            "dev/skills/kimchi-egress-report/scripts/generate.mjs",
-            "dev/skills/kimchi-egress-report/scripts/regenerate.sh",
-            "dev/skills/kimchi-egress-report/scripts/report.mjs",
+            "packages/kimchi/extract/egress/generate.mjs",
+            "packages/kimchi/extract/egress/regenerate.sh",
+            "packages/kimchi/extract/egress/report.mjs",
         ):
             with self.subTest(path=path):
                 head = self.changed(path)
@@ -74,7 +74,7 @@ class ExtractedSelectionTest(unittest.TestCase):
                 self.assertNotEqual(head.get("selectionInput"), self.base.get("selectionInput"))
 
     def test_scanner_input_selects_kimchi(self):
-        head = self.changed("dev/skills/kimchi-egress-report/scripts/scan.mjs")
+        head = self.changed("packages/kimchi/extract/egress/scan.mjs")
         self.assert_selected(head, ["kimchi"])
         self.assertEqual(head.get("selectionInput"), self.base.get("selectionInput"))
 
@@ -267,7 +267,7 @@ export -f git nix
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(commands[-1], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
                     self.assertIn("Kimchi's regenerated egress report failed checks.x86_64-linux.kimchi-egress-report", result.stderr)
-                    self.assertIn("nix run .#.checks.x86_64-linux.kimchi-extracted.passthru.regenerate && nix shell --inputs-from . nixpkgs#nodejs .#.formatter.x86_64-linux --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh && nix build .#.checks.x86_64-linux.kimchi-egress-report --no-link", result.stderr)
+                    self.assertIn("nix run .#.checks.x86_64-linux.kimchi-extracted.passthru.regenerate && nix shell --inputs-from . nixpkgs#nodejs .#.formatter.x86_64-linux --command bash packages/kimchi/extract/egress/regenerate.sh && nix build .#.checks.x86_64-linux.kimchi-egress-report --no-link", result.stderr)
                     self.assertFalse(patch.exists())
                     self.assertFalse(output.exists())
                     continue
@@ -276,7 +276,7 @@ export -f git nix
                 self.assertEqual(commands[0], f"run .#.checks.x86_64-linux.{owner}-extracted.passthru.regenerate")
                 paths = f"packages/{owner}/extracted"
                 if owner == "kimchi":
-                    self.assertIn("--command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh", commands[1])
+                    self.assertIn("--command bash packages/kimchi/extract/egress/regenerate.sh", commands[1])
                     self.assertEqual(commands[2], "build .#.checks.x86_64-linux.kimchi-egress-report --no-link")
                     paths += " packages/kimchi/egress-report.json"
                 else:
