@@ -108,12 +108,13 @@ files), `files` (JSON `content` with `{$NAME}` placeholders, `secrets` NAME →
 reference or secret file, and the `variable` exported with the path), `ports`,
 `restart` and `restartOnChange` (absolute paths). A strict launcher reads
 secrets at start, renders each file and each `redact.types.secretFile` value
-0600 into a 0700 `$XDG_RUNTIME_DIR/ai-service-<key>` directory, or
-`${TMPDIR:-/tmp}/ai-service-<uid>-<key>` without XDG_RUNTIME_DIR, both read
-after the declared literal environment applies on Home Manager. Devenv instead
-uses `config.devenv.runtime/ai-service-<key>`, isolating per-project files and
-Caddy state from Home Manager. The evaluated service's internal `runtimeDir` is
-a read-only quoted shell word derived from its literal backend `runtimeRoot`,
+0600 into a 0700 `$XDG_RUNTIME_DIR/ai-service-<key>` directory on Home Manager,
+read after the declared literal environment applies. A Home Manager launcher
+refuses unset or empty `XDG_RUNTIME_DIR` before reading secrets, naming the
+service and missing variable; systemd user units provide it. Devenv instead uses
+`config.devenv.runtime/ai-service-<key>`, isolating per-project files and Caddy
+state from Home Manager. The evaluated service's internal `runtimeDir` is a
+read-only quoted shell word derived from its literal backend `runtimeRoot`,
 shared by its launcher and Caddy run script. Both backends exec argv; a secret
 file is delivered as its path. The root must exist, be owned by the current
 user, not be a symlink and forbid group and other writes. Every launcher checks
