@@ -14,10 +14,19 @@
     first = redact.file "/run/secrets/git-relay-first-key";
     second = redact.file "/run/secrets/git-relay-second-key";
   };
+  hosts = {
+    first = "github.com";
+    second = "gitlab.com";
+  };
   keyed = {
     port = 19500;
     settings = {
-      credentials = lib.mapAttrs (_: sshKeyFile: {inherit sshKeyFile;}) keys;
+      credentials =
+        lib.mapAttrs (name: sshKeyFile: {
+          forges = [hosts.${name}];
+          inherit sshKeyFile;
+        })
+        keys;
       repositories = {
         alpha = {
           credential = "first";
@@ -64,8 +73,14 @@
     && builtins.fromJSON service.files.config.content
     == {
       credentials = {
-        first.sshKeyFile = placeholder "GIT_RELAY_CREDENTIALS_FIRST_SSHKEYFILE";
-        second.sshKeyFile = placeholder "GIT_RELAY_CREDENTIALS_SECOND_SSHKEYFILE";
+        first = {
+          forges = [hosts.first];
+          sshKeyFile = placeholder "GIT_RELAY_CREDENTIALS_FIRST_SSHKEYFILE";
+        };
+        second = {
+          forges = [hosts.second];
+          sshKeyFile = placeholder "GIT_RELAY_CREDENTIALS_SECOND_SSHKEYFILE";
+        };
       };
       inherit forges;
       listen = "127.0.0.1";
@@ -114,6 +129,9 @@
       "github.com::owner/alpha.git"
       "https://github.com/owner/alpha.git"
     ]
+    # A credential's allowlist must name each upstream host it serves and only real hosts.
+    && changed {credentials.first.forges = [];}
+    && changed {credentials.first.forges = ["github.com/owner"];}
     && named "alpha.git" == []
     && lib.all (name: lib.length (named name) == 1) ["-leading" ".hidden" "a/b" ".."]
     && builtins.all (name: lib.hasInfix "repositories.${name}" (lib.head (named name))) ["a/b" ".."];
