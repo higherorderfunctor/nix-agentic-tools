@@ -9953,6 +9953,307 @@
       }
     ]
   },
+  "regionRegistry": {
+    "defaultRegion": [{ "file": "src/regions.ts", "line": 59, "value": "us" }],
+    "fields": [
+      {
+        "field": "castApiUrl",
+        "file": "src/regions.ts",
+        "line": 36,
+        "region": "eu",
+        "value": "https://api.eu.cast.ai"
+      },
+      {
+        "field": "id",
+        "file": "src/regions.ts",
+        "line": 32,
+        "region": "eu",
+        "value": "eu"
+      },
+      {
+        "field": "label",
+        "file": "src/regions.ts",
+        "line": 33,
+        "region": "eu",
+        "value": "Europe"
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 35,
+        "region": "eu",
+        "value": "https://llm.eu.kimchi.dev"
+      },
+      {
+        "field": "webAppUrl",
+        "file": "src/regions.ts",
+        "line": 34,
+        "region": "eu",
+        "value": "https://app.eu.kimchi.dev"
+      },
+      {
+        "field": "castApiUrl",
+        "file": "src/regions.ts",
+        "line": 49,
+        "region": "self-hosted",
+        "value": ""
+      },
+      {
+        "field": "id",
+        "file": "src/regions.ts",
+        "line": 45,
+        "region": "self-hosted",
+        "value": "self-hosted"
+      },
+      {
+        "field": "label",
+        "file": "src/regions.ts",
+        "line": 46,
+        "region": "self-hosted",
+        "value": "Self-hosted"
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 48,
+        "region": "self-hosted",
+        "value": ""
+      },
+      {
+        "field": "webAppUrl",
+        "file": "src/regions.ts",
+        "line": 47,
+        "region": "self-hosted",
+        "value": ""
+      },
+      {
+        "field": "castApiUrl",
+        "file": "src/regions.ts",
+        "line": 29,
+        "region": "us",
+        "value": "https://api.cast.ai"
+      },
+      {
+        "field": "id",
+        "file": "src/regions.ts",
+        "line": 25,
+        "region": "us",
+        "value": "us"
+      },
+      {
+        "field": "label",
+        "file": "src/regions.ts",
+        "line": 26,
+        "region": "us",
+        "value": "United States"
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 28,
+        "region": "us",
+        "value": "https://llm.kimchi.dev"
+      },
+      {
+        "field": "webAppUrl",
+        "file": "src/regions.ts",
+        "line": 27,
+        "region": "us",
+        "value": "https://app.kimchi.dev"
+      }
+    ]
+  },
+  "requestGuards": [
+    {
+      "callSite": {
+        "bundledModule": null,
+        "column": 14,
+        "file": "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+        "library": "fetch",
+        "line": 1021
+      },
+      "conditionOutcome": false,
+      "guardSite": {
+        "column": 9,
+        "file": "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+        "line": 1015
+      },
+      "key": "PI_OFFLINE",
+      "outcome": "falsy",
+      "scope": "intraprocedural",
+      "sourceKind": "env"
+    }
+  ],
+  "resourceDefinitions": [
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.agents",
+      "line": 80,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.bash-tool-guard",
+      "line": 121,
+      "restartRequired": null
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.claude-code-hook-adapter",
+      "line": 129,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.claude-code-skills",
+      "line": 137,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.cost-per-pr",
+      "line": 153,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.dap",
+      "line": 113,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.ferment",
+      "line": 88,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.ferment-v2",
+      "line": 188,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.lsp",
+      "line": 104,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.memory",
+      "line": 197,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.pi-package-lookup",
+      "line": 162,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.pii-redaction",
+      "line": 216,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.side-chat",
+      "line": 206,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.todos",
+      "line": 96,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.workflows",
+      "line": 145,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "hooks.bash",
+      "line": 57,
+      "restartRequired": null
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "plugins.kimchi-mcp-gateway",
+      "line": 178,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "plugins.mcp-apps",
+      "line": 170,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.docx",
+      "line": 39,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.pdf",
+      "line": 30,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.pptx",
+      "line": 21,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.xlsx",
+      "line": 48,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "tools.web_fetch",
+      "line": 72,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "tools.web_search",
+      "line": 64,
+      "restartRequired": true
+    }
+  ],
   "virtualPackages": [
     "@earendil-works/pi-agent-core",
     "@earendil-works/pi-ai",
