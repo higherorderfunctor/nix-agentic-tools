@@ -15,22 +15,43 @@ scripts live in `packages/kimchi/extract/egress/` and share `report.mjs`, whose
 
 ### Field provenance
 
-| Field               | Producer       | Source                                                         |
-| ------------------- | -------------- | -------------------------------------------------------------- |
-| `endpointVariables` | `generate.mjs` | `network` env targets, each joined with its `environment` row  |
-| `hosts`             | `generate.mjs` | `network` target hosts and `unattributed` URL literals         |
-| `networkCallSites`  | `generate.mjs` | `network.callSites`, sorted                                    |
-| `commands`          | `scan.mjs`     | TypeScript AST over the Kimchi and pi trees                    |
-| `dependencies`      | `scan.mjs`     | Kimchi's `package.json` and `sources.json`                     |
-| `goCallSites`       | `scan.mjs`     | regex over `tools/proxy-helper`                                |
-| `goHosts`           | `scan.mjs`     | regex over `tools/proxy-helper`                                |
-| `spawnCallSites`    | `scan.mjs`     | TypeScript AST over Kimchi's tree, callee names                |
-| `urlPathLiterals`   | `scan.mjs`     | AST over Kimchi's tree, regex over pi's `dist` and the Go tree |
+| Field                 | Producer       | Source                                                              |
+| --------------------- | -------------- | ------------------------------------------------------------------- |
+| `endpointVariables`   | `generate.mjs` | `network` env targets, each joined with its `environment` row       |
+| `hosts`               | `generate.mjs` | `network` target hosts and `unattributed` URL literals              |
+| `networkCallSites`    | `generate.mjs` | `network.callSites`, sorted                                         |
+| `regionRegistry`      | `generate.mjs` | `regionRegistry` exported fields and default, with locations        |
+| `requestGuards`       | `generate.mjs` | `requestGuards` joined to each `network.callSites` row              |
+| `resourceDefinitions` | `generate.mjs` | `resourceDefinitions` static ids, defaults and restart declarations |
+| `commands`            | `scan.mjs`     | TypeScript AST over the Kimchi and pi trees                         |
+| `dependencies`        | `scan.mjs`     | Kimchi's `package.json` and `sources.json`                          |
+| `goCallSites`         | `scan.mjs`     | regex over `tools/proxy-helper`                                     |
+| `goHosts`             | `scan.mjs`     | regex over `tools/proxy-helper`                                     |
+| `spawnCallSites`      | `scan.mjs`     | TypeScript AST over Kimchi's tree, callee names                     |
+| `urlPathLiterals`     | `scan.mjs`     | AST over Kimchi's tree, regex over pi's `dist` and the Go tree      |
 
 A host's `files` are where its literal sits; its `callSites` are the call sites
 it reaches, empty for a literal no call site reads. File labels are the fact's
 own: `src/...` for Kimchi, and `@earendil-works/...` or `pi-mcp-adapter/...` for
 pi and its adapter. The scanner's fields keep its `kimchi/` and `pi/` labels.
+
+The three additional CodeQL fields come through `lib.extracted` in the same fact
+input. `resourceDefinitions` preserves declared defaults and restart
+requirements; missing restart declarations are null. `regionRegistry` preserves
+every modeled region field and the default-region declaration with source
+locations. Neither field describes effective enablement or override precedence.
+
+`requestGuards` is a separate list of network sites with `guards` and `status`;
+the existing `networkCallSites` shape and values are unchanged. Each guard names
+its exact call column, guard location, source kind/key, required source
+truthiness, whole-condition outcome and `intraprocedural` scope. These are
+necessary local conditions, not sufficient conditions for execution. A grouped
+network line can hold multiple calls: evidence applies only to the listed
+columns. An empty list is rendered as `no modeled local guard`, never as enabled
+or always on. Recognized forms and unresolved cases are documented in
+`packages/kimchi/docs/kimchi-codeql-guards.md`. All three fields have entries in
+`header.provenance`; legacy fields retain their shape and values. CI regenerates
+the committed facts and report together after compiling and running the queries.
 
 `header.facts` is the release in `sources.json`. It names the facts' release
 because `checks.kimchi-extracted` fails when the committed facts are not the

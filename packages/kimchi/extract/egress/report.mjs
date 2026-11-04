@@ -7,6 +7,12 @@ export const FACT_FIELDS = {
     "network fact: env targets, each joined with its environment fact row",
   hosts: "network fact: target hosts and unattributed URL literals",
   networkCallSites: "network fact: call sites",
+  regionRegistry:
+    "regionRegistry fact: exported region fields and default with source locations",
+  requestGuards:
+    "requestGuards fact: necessary intraprocedural conditions joined to network call sites",
+  resourceDefinitions:
+    "resourceDefinitions fact: static resource ids, defaults and restart declarations",
 };
 
 export const SCAN_FIELDS = {

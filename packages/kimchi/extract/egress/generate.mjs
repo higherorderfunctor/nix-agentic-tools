@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// regenerate.sh supplies network, environment and egressScan via lib.extracted.
+// regenerate.sh supplies the scanner and CodeQL facts via lib.extracted.
 import { readFile } from "node:fs/promises";
 import {
   compare,
@@ -74,13 +74,57 @@ function callSites(network) {
     .sort((left, right) => compare(key(left), key(right)));
 }
 
+function requestGuardSites(network, guards) {
+  return callSites(network).map(
+    ({ readBy, file, line, library, bundledModule }) => {
+      const path = `kimchi/${readBy === "pi" ? "node_modules/" : ""}${file}`;
+      const evidence = guards
+        .filter(
+          ({ callSite }) =>
+            callSite.file === path &&
+            callSite.line === line &&
+            callSite.library === library &&
+            callSite.bundledModule === bundledModule,
+        )
+        .sort((left, right) =>
+          compare(JSON.stringify(left), JSON.stringify(right)),
+        );
+      return {
+        bundledModule,
+        file,
+        guards: evidence,
+        library,
+        line,
+        readBy,
+        status:
+          evidence.length > 0
+            ? "necessary local conditions at the listed call columns; not sufficient for execution"
+            : "no modeled local guard",
+      };
+    },
+  );
+}
+
 async function main() {
   const args = parseArgs("generate.mjs", process.argv.slice(2), {
     facts: null,
     out: "packages/kimchi/egress-report.json",
     sources: "packages/kimchi/sources.json",
   });
-  const { egressScan, environment, network } = await readJson(args.facts);
+  const {
+    egressScan,
+    environment,
+    network,
+    regionRegistry,
+    requestGuards,
+    resourceDefinitions,
+  } = await readJson(args.facts);
+  for (const [name, value] of Object.entries({
+    regionRegistry,
+    requestGuards,
+    resourceDefinitions,
+  }))
+    if (value === undefined) fail(`${args.facts} lacks ${name}`);
   const missing = Object.keys(SCAN_FIELDS).filter(
     (name) => !(name in egressScan),
   );
@@ -105,6 +149,9 @@ async function main() {
     endpointVariables: endpointVariables(network, environment.variables),
     hosts: hosts(network),
     networkCallSites: callSites(network),
+    regionRegistry,
+    requestGuards: requestGuardSites(network, requestGuards),
+    resourceDefinitions,
   };
   await writeReport(args.out, report);
   console.log(

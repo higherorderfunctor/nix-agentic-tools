@@ -96,13 +96,6 @@ module TargetConfig implements DataFlow::ConfigSig {
 
 module TargetFlow = TaintTracking::Global<TargetConfig>;
 
-/** Gets the esbuild `__commonJS` module key enclosing `n`, or "" outside one. */
-string bundledModule(DataFlow::Node n) {
-  result = min(string key | key = esbuildModuleKey(n.getContainer()) | key)
-  or
-  not exists(esbuildModuleKey(n.getContainer())) and result = ""
-}
-
 /**
  * URL literals that reach no modeled request: the inventory a regex scan
  * would list, kept so the fact never shrinks below it, but unattributed.

@@ -29,6 +29,21 @@
     "systems": ["x86_64-linux"],
     "type": "object"
   },
+  "regionRegistry": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "requestGuards": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "list"
+  },
+  "resourceDefinitions": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "list"
+  },
   "virtualPackages": {
     "source": "static",
     "systems": ["x86_64-linux"],

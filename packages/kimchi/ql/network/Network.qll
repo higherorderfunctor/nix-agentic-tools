@@ -259,3 +259,10 @@ string esbuildModuleKey(StmtContainer c) {
     result = p.getName()
   )
 }
+
+/** Gets the esbuild `__commonJS` module key enclosing `n`, or "" outside one. */
+string bundledModule(DataFlow::Node n) {
+  result = min(string key | key = esbuildModuleKey(n.getContainer()) | key)
+  or
+  not exists(esbuildModuleKey(n.getContainer())) and result = ""
+}
