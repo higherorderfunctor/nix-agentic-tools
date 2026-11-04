@@ -1,9 +1,12 @@
-# cspell:ignore maxstack sshcommand
+# cspell:ignore askpass cookiefile extraheader gitproxy hookspath maxstack pushurl sendemail signingkey smtppass sshcommand sslkey
 # Evaluation contracts of the sandbox's Git surface (modules/git.nix): the
-# copy-down priority matrix (raw, typed and fixed keys into the runtime `_ini`
-# sink), enable propagation into the guest package list, and the rendered
-# system configuration parsing with real git. The host tool instantiations
-# stay byte-identical through their own checks (checks/git-config/module-eval.nix).
+# copy-down priority matrix (raw and typed keys into the runtime `_ini` sink),
+# enable propagation into the guest package list, the owner's
+# test.jobs/test.strategy coupling holding across the root-to-runtime typed
+# copy-down, credential-carrying keys refused, and the rendered system
+# configuration (the guest-fixed keys after the consumer's) parsing with real
+# git. The host tool instantiations stay byte-identical through their own
+# checks (checks/git-config/module-eval.nix).
 {
   harness,
   lib,
@@ -32,6 +35,8 @@
     backends;
   # The merged sink of one runtime (codex carries each row's runtime side).
   sink = eval: config: (eval config).config.ai.codex.sandbox.git._ini;
+  # The rendered system configuration of the same runtime.
+  rendered = eval: config: (eval config).config.ai.codex.sandbox.git._config;
   evaluates = value: (builtins.tryEval (builtins.deepSeq value true)).success;
   failedMessages = eval: config:
     map (a: a.message) (lib.filter (a: !a.assertion) (eval config).config.assertions);
@@ -46,16 +51,14 @@ in {
       rawOnly = sink eval rootRaw;
       rawPlusTyped = sink eval renderFixture;
     in
-      # Nothing set: the guest-fixed keys alone, in every runtime.
-      removeAttrs empty ["core" "safe"]
+      # Nothing set: no consumer keys, in every runtime.
+      empty
       == {}
-      && lib.hasInfix "/sandbox-no-ssh" empty.core.sshCommand
-      && empty.safe.directory == ["/mnt/seed"]
       && lib.all (runtime: (eval {}).config.ai.${runtime}.sandbox.git._ini == empty) ["claude" "codex"]
-      # Root raw only: every runtime's guest gets it under the fixed keys.
+      # Root raw only: every runtime's guest gets it.
       && rawOnly.absorb.maxStack == 20
       # Root raw plus a runtime typed leaf: the raw keys are kept.
-      && removeAttrs rawPlusTyped ["core" "safe"]
+      && rawPlusTyped
       == {
         absorb.maxStack = 20;
         revise.rerere = true;
@@ -74,20 +77,105 @@ in {
         in
           replaced.core.editor == "vim" && !(replaced ? absorb))
         # Equal-priority raw/typed disagreement stays a loud conflict, root raw
-        # vs runtime typed and root raw vs root typed alike — as on the host.
+        # vs runtime typed.
         && !(evaluates (sink eval (lib.recursiveUpdate rootRaw runtimeTypedLeaf)))
-        && !(evaluates (sink eval (lib.recursiveUpdate rootRaw {ai.sandbox.git.absorb.settings.maxStack = 30;})))
-        # The guest-fixed keys win over a consumer's values, wholly.
+        # A root typed leaf forwards as a weak default: a raw key at normal
+        # priority beats it without a conflict.
+        && (sink eval (lib.recursiveUpdate rootRaw {ai.sandbox.git.absorb.settings.maxStack = 30;})).absorb.maxStack == 20
+        # A runtime typed leaf replaces the root's value for the same leaf,
+        # even as a mkDefault, and leaves the other runtime on the root's.
         && (let
-          forced = sink eval {
-            ai.codex.sandbox.git.settings = {
-              core.sshCommand = "ssh";
-              safe.directory = ["/evil"];
-            };
-          };
+          shared = {ai.sandbox.git.absorb.settings.maxStack = 10;};
+          replaced = lib.recursiveUpdate shared runtimeTypedLeaf;
+          defaulted = lib.recursiveUpdate shared {ai.codex.sandbox.git.absorb.settings.maxStack = lib.mkDefault 30;};
         in
-          lib.hasInfix "/sandbox-no-ssh" forced.core.sshCommand
-          && forced.safe.directory == ["/mnt/seed"])))
+          (sink eval replaced).absorb.maxStack
+          == 30
+          && (sink eval defaulted).absorb.maxStack == 30
+          && (eval replaced).config.ai.claude.sandbox.git._ini.absorb.maxStack == 10)))
+    // (forBackends "fixed-keys" (eval: let
+      # Values for the guest-fixed keys, in the spellings Git folds into one.
+      consumer = {
+        ai.codex.sandbox.git.settings = {
+          Core.SSHCommand = "ssh-upper";
+          core.sshCommand = "ssh";
+          core.sshcommand = "ssh-lower";
+          safe.directory = ["/evil"];
+        };
+      };
+      text = rendered eval consumer;
+    in
+      # The consumer's keys stay in the file, ahead of the fixed ones...
+      lib.hasInfix "sshcommand = \"ssh-lower\"" text
+      && lib.hasInfix "SSHCommand = \"ssh-upper\"" text
+      && lib.hasInfix "directory = \"/evil\"" text
+      # ...which close it: Git takes the last value, and the empty
+      # `safe.directory` resets the consumer's list before the seed path.
+      && lib.hasInfix "[core]\n\tsshCommand = \"/nix/store/" text
+      && lib.hasSuffix "/bin/sandbox-no-ssh\"\n\n[safe]\n\tdirectory = \"\"\n\tdirectory = \"/mnt/seed\"\n" text
+      # Nothing set: the fixed keys alone.
+      && lib.hasPrefix "[core]\n\tsshCommand = \"/nix/store/" (rendered eval {})))
+    // (forBackends "refusals" (eval: let
+      # Each row: the settings, then the key the message must name. The file
+      # is world-readable in the store, so a credential, or a key that can
+      # pull one in, fails evaluation in whichever tree defines it.
+      refused = path: settings: key:
+        lib.any (lib.hasPrefix "${path}.settings sets ${key}, which the sandbox guest's git configuration refuses.") (failedMessages eval (lib.setAttrByPath (lib.splitString "." path) {inherit settings;}));
+      codex = "ai.codex.sandbox.git";
+      root = "ai.sandbox.git";
+    in
+      refused codex {credential.helper = "store --file /home/user/.git-credentials";} "credential.helper"
+      && refused codex {"credential.https://example.com".username = "user";} "credential.https://example.com.username"
+      && refused codex {Credential.Helper = "store";} "Credential.Helper"
+      && refused codex {http."https://example.com/".extraHeader = "Authorization: Bearer token";} "http.https://example.com/.extraHeader"
+      && refused codex {"http.https://example.com/".extraheader = "Authorization: Bearer token";} "http.https://example.com/.extraheader"
+      && refused codex {HTTP.ExtraHeader = "Authorization: Bearer token";} "HTTP.ExtraHeader"
+      && refused codex {user.signingKey = "/home/user/.ssh/id_ed25519";} "user.signingKey"
+      && refused codex {user.SIGNINGKEY = "/home/user/.ssh/id_ed25519";} "user.SIGNINGKEY"
+      && refused codex {gpg.ssh.program = "/home/user/bin/signer";} "gpg.ssh.program"
+      && refused codex {url."https://token@example.com/".insteadOf = "https://example.com/";} "url.https://token@example.com/.insteadOf"
+      && refused codex {url."https://token@example.com/".pushInsteadOf = "https://example.com/";} "url.https://token@example.com/.pushInsteadOf"
+      && refused codex {sendemail.smtpPass = "hunter2";} "sendemail.smtpPass"
+      && refused codex {SendEmail.SMTPPASS = "hunter2";} "SendEmail.SMTPPASS"
+      && refused codex {sendemail."work".smtpPass = "hunter2";} "sendemail.work.smtpPass"
+      && refused codex {core.askPass = "/home/user/bin/askpass";} "core.askPass"
+      && refused codex {core.ASKPASS = "/home/user/bin/askpass";} "core.ASKPASS"
+      && refused codex {core.hooksPath = "/home/user/hooks";} "core.hooksPath"
+      && refused codex {core.gitProxy = "/home/user/bin/proxy";} "core.gitProxy"
+      && refused codex {http.cookieFile = "/home/user/.cookies";} "http.cookieFile"
+      && refused codex {http.sslKey = "/home/user/key.pem";} "http.sslKey"
+      && refused codex {http.sslCert = "/home/user/cert.pem";} "http.sslCert"
+      && refused codex {http."https://example.com/".sslKey = "/home/user/key.pem";} "http.https://example.com/.sslKey"
+      && refused codex {http."https://example.com/".cookieFile = "/home/user/.cookies";} "http.https://example.com/.cookieFile"
+      && refused codex {remote.origin.url = "https://user:secret@example.com/org/repo.git";} "remote.origin.url"
+      && refused codex {remote.origin.url = "https://token@example.com/org/repo.git";} "remote.origin.url"
+      && refused codex {remote.origin.pushurl = "https://user:secret@example.com/org/repo.git";} "remote.origin.pushurl"
+      && refused codex {Remote.Origin.PushURL = "https://user:secret@example.com/org/repo.git";} "Remote.Origin.PushURL"
+      && refused codex {"remote.origin".url = "https://user:secret@example.com/org/repo.git";} "remote.origin.url"
+      && refused codex {remote.origin.url = ["https://example.com/org/repo.git" "https://user:secret@example.com/org/repo.git"];} "remote.origin.url"
+      && refused codex {url."https://user:secret@example.com/".other = "x";} "url.https://user:secret@example.com/.other"
+      && refused codex {include.path = "/home/user/.gitconfig";} "include.path"
+      && refused codex {includeIf."gitdir:/home/user/".path = "/home/user/.gitconfig";} "includeIf.gitdir:/home/user/.path"
+      # The shared root is checked once, under its own path.
+      && refused root {credential.helper = "store";} "credential.helper"
+      && refused root {sendemail.smtpPass = "hunter2";} "sendemail.smtpPass"
+      && refused root {remote.origin.url = "https://user:secret@example.com/org/repo.git";} "remote.origin.url"
+      && !(lib.any (lib.hasPrefix "ai.codex.sandbox.git.settings sets") (failedMessages eval {ai.sandbox.git.settings.credential.helper = "store";}))
+      # Ordinary host settings pass, including keys that only sit near a
+      # refused one.
+      && failedMessages eval {
+        ai.sandbox.git.settings = {
+          core.editor = "nano";
+          http.postBuffer = 524288000;
+          http.sslVerify = true;
+          remote.origin.url = "https://example.com/org/repo.git";
+          remote.mirror.pushurl = "git@example.com:org/repo.git";
+          url."https://example.com/".someOtherKey = "x";
+          user.name = "Sandbox";
+        };
+        ai.codex.sandbox.git.settings.core.sshcommand = "ssh";
+      }
+      == []))
     // (forBackends "enable" (eval: let
       absorbPackage = (eval {ai.sandbox.git.absorb.enable = true;}).config.ai.internal.packages.gitTools.git-absorb;
       packages = config: (eval config).config.ai.codex.sandbox.git._packages;
@@ -113,6 +201,33 @@ in {
           };
         }
       )))
+    // (forBackends "coupling" (eval: let
+      # A root `test.jobs` a runtime `test.strategy` has to meet inside the
+      # runtime's typed tree: the inherited leaf forwards into it, so the
+      # owner's assertions read both together, and the system file being the
+      # guest's lowest Git scope makes an unset strategy upstream's
+      # working-copy, which a jobs value above 1 cannot run with.
+      both = {
+        ai.sandbox.git.branchless.settings.test.jobs = 4;
+        ai.codex.sandbox.git.branchless.settings.test.strategy = "working-copy";
+      };
+      rootOnly = {ai.sandbox.git.branchless.settings.test.jobs = 4;};
+      ini = config: (sink eval config).branchless.test;
+      needsWorktree = lib.hasInfix ''ai.codex.sandbox.git.branchless.settings.test.jobs = 4 needs ai.codex.sandbox.git.branchless.settings.test.strategy = "worktree"'';
+    in
+      # The root's jobs reaches the runtime tree its strategy lands in: the
+      # shared contradiction fires there, and both values render.
+      lib.any (lib.hasInfix ''ai.codex.sandbox.git.branchless.settings.test.jobs = 4 contradicts ai.codex.sandbox.git.branchless.settings.test.strategy = "working-copy"'') (failedMessages eval both)
+      && ini both
+      == {
+        jobs = 4;
+        strategy = "working-copy";
+      }
+      # An unset strategy fails from the root's forwarded leaf and from the
+      # runtime's own alike, and writes no key.
+      && lib.any needsWorktree (failedMessages eval rootOnly)
+      && lib.any needsWorktree (failedMessages eval {ai.codex.sandbox.git.branchless.settings.test.jobs = 4;})
+      && ini rootOnly == {jobs = 4;}))
     // {
       # The module-built launcher's guest carries the rendered configuration
       # as its SYSTEM git file and the enabled tool's package in its system
@@ -163,7 +278,8 @@ in {
             exit 1
           fi
           grep -q 'Push through' ssh.refusal
-          [[ $(git config --system --get-all safe.directory | sort | paste -sd:) == /mnt/seed ]]
+          # The empty value resets the list; the seed path follows it.
+          [[ $(git config --system --get-all safe.directory | sort | paste -sd:) == :/mnt/seed ]]
           echo SANDBOX_GIT_OK
         '';
         result = evalHm {
@@ -175,22 +291,36 @@ in {
         };
       in
         lib.findFirst (package: package.meta.mainProgram == "claude-sandbox") (throw "missing claude-sandbox") result.config.ai.internal.sandboxPackages;
-      # The rendered system configuration parses with real git and carries the
-      # fixed keys, the raw keys and the typed leaf.
+      # The rendered system configuration parses with real git: the consumer's
+      # raw keys and typed leaf are in it, and the guest-fixed keys come last,
+      # so every case spelling of a consumer value for them loses.
       microvm-git-render = let
-        rendered = lib.generators.toGitINI (sink evalDevenv renderFixture);
+        text = rendered evalDevenv (lib.recursiveUpdate renderFixture {
+          ai.sandbox.git.settings = {
+            Core.SSHCommand = "ssh-upper";
+            core.sshCommand = "ssh";
+            core.sshcommand = "ssh-lower";
+            Safe.Directory = ["/evil-upper"];
+            safe.directory = ["/evil"];
+          };
+        });
       in
         mkLintedCheck "microvm-git-render" {
           runtimeInputs = [pkgs.coreutils pkgs.gnugrep pkgs.git];
           text = ''
             config_file="$(mktemp)"
             trap 'rm -f -- "$config_file"' EXIT
-            printf '%s\n' ${lib.escapeShellArg (builtins.unsafeDiscardStringContext rendered)} > "$config_file"
+            printf '%s' ${lib.escapeShellArg (builtins.unsafeDiscardStringContext text)} > "$config_file"
             git config --file "$config_file" --list > "$out.listed"
-            grep -Exq 'core\.sshcommand=/nix/store/[^/]+/bin/sandbox-no-ssh' "$out.listed"
-            [[ $(grep -Exc -e 'safe\.directory=/mnt/seed' "$out.listed") == 1 ]]
             grep -Exq 'absorb\.maxstack=20' "$out.listed"
             grep -Exq 'revise\.rerere=true' "$out.listed"
+            # Every consumer spelling is still in the file, ahead of the fixed key.
+            [[ $(grep -Ec '^core\.sshcommand=' "$out.listed") == 4 ]]
+            [[ $(grep -E '^core\.sshcommand=' "$out.listed" | tail -n 1) == core.sshcommand=/nix/store/*/bin/sandbox-no-ssh ]]
+            [[ $(git config --file "$config_file" core.sshCommand) == /nix/store/*/bin/sandbox-no-ssh ]]
+            # The fixed safe.directory resets the consumer's list, then adds the seed.
+            [[ $(grep -c '^safe\.directory=' "$out.listed") == 4 ]]
+            [[ $(grep '^safe\.directory=' "$out.listed" | tail -n 2 | paste -sd,) == 'safe.directory=,safe.directory=/mnt/seed' ]]
           '';
         };
     }

@@ -1,10 +1,15 @@
+# cspell:ignore askpass cookiefile extraheader gitproxy hookspath includeif insteadof pushinsteadof pushurl sendemail signingkey
 # The sandbox's Git surface: `ai.sandbox.git` (shared across runtimes) and
 # `ai.<runtime>.sandbox.git`, lowered into each runtime's internal `_ini` sink,
-# which common.nix renders as the guest's system Git configuration
-# (/etc/gitconfig — a protected scope, the only one `safe.directory` and a
-# forced `core.sshCommand` hold in, and a file because git-absorb and
-# git-revise are libgit2 and read files only). The types are the host's — the
-# raw tree is lib/git-tool-settings/ini-type.nix, each tool's typed tree the
+# which common.nix renders, with the guest-fixed keys after it, as the guest's
+# system Git configuration (/etc/gitconfig). That scope is where
+# `safe.directory` must live — Git honors it only in protected configuration —
+# and a file because git-absorb and git-revise are libgit2 and read files only.
+# It is also Git's LOWEST scope: the fixed `core.sshCommand` there is the
+# refusal an ordinary push hits, not a boundary — a guest process can override
+# it through any higher scope (`--global`, repository-local, `-c`), and the
+# guest holds no credentials either way. The types are the host's — the raw
+# tree is lib/git-tool-settings/ini-type.nix, each tool's typed tree the
 # owner's generator result — so one consumer value plugs into host and sandbox
 # alike; nothing is copied or retyped here.
 #
@@ -15,15 +20,17 @@
 # mkOverride wrappers intact, so a nested mkDefault key still loses to a
 # runtime value or a typed tool leaf for that key, and an equal-priority
 # disagreement stays a loud conflict — exactly as the host's `git.settings`
-# behaves (checks/git-config/module-eval.nix).
+# behaves (checks/git-config/module-eval.nix). The root's typed leaves replace
+# the same way: they forward as weak defaults a runtime's own value for the
+# leaf wins over (see `inheritedTyped`).
 {routeNames}: {
+  config,
   lib,
   options,
   pkgs,
   ...
 }: let
   iniType = import ../../../lib/git-tool-settings/ini-type.nix {inherit lib;};
-  lower = import ../../../lib/git-tool-settings/lower.nix {inherit lib;};
   # Nested priority wrappers travel with the definitions; the wrapper keeps an
   # option-wide `mkDefault`/`mkForce` from re-entering at ordinary priority
   # (packages/ai-module/lib/runtime.nix `forward`, the one precedent).
@@ -45,10 +52,16 @@
   tools;
   # One tool tree per runtime: typed leaves lower into the runtime's `_ini`
   # sink at their own priority, `enable` defaults to the shared root's and
-  # installs the package into the runtime's guest package list.
+  # installs the package into the runtime's guest package list. The guest's
+  # system file is the lowest Git scope it reads, so each tree also carries
+  # the owner's lowest-scope checks (an unset leaf there is upstream's
+  # default); the shared root tree above carries none, because it renders
+  # into no scope of its own — its leaves reach a guest only through these
+  # runtime trees, which check them.
   runtimeTrees = runtime:
     map (tool:
       import ../../../lib/git-tool-settings/tool-module.nix {
+        assertions = tool.settings.lowestScopeAssertions or null;
         enableDescription = "Install ${tool.owner} in ${runtime}'s sandbox guest and its guest package list; defaults to ai.sandbox.git.${tool.section}.enable, which a definition here replaces at any priority.";
         enableFrom = rootPath ++ [tool.section "enable"];
         install = ["_packages"];
@@ -85,37 +98,97 @@
       exit 1
     '';
   };
-  # Guest-fixed keys, forced over every consumer value: no SSH from the guest,
-  # and the seed path repo-guest.nix clones --shared from (/mnt/seed) is
-  # trusted even though the host owns it.
-  fixed = {
-    core.sshCommand = lib.mkForce (lib.getExe noSsh);
-    safe.directory = lib.mkForce ["/mnt/seed"];
+  # Guest-fixed keys: no SSH from the guest, and the seed path repo-guest.nix
+  # clones --shared from (/mnt/seed) is trusted even though the host owns it.
+  # They render AFTER everything the consumer sets, so they win: Git takes the
+  # last value of a single-valued key whatever the case of its section and key
+  # names, and an empty `safe.directory` resets the list a consumer built
+  # before the seed path joins it. An `include` earlier in the file cannot
+  # change that, and `include` itself is refused below.
+  fixedConfig = lib.generators.toGitINI {
+    core.sshCommand = lib.getExe noSsh;
+    safe.directory = ["" "/mnt/seed"];
   };
+  # The guest's /etc/gitconfig lands in the Nix store, which any local user
+  # reads, and the guest holds no credentials. A consumer value that carries
+  # one, or can pull one in, is refused wherever the raw tree defines it:
+  # whole sections, single keys of sections that hold other settings (the
+  # name of a credential helper, askpass or proxy program, a private key,
+  # certificate or cookie file, a hooks directory, a header or a URL rewrite),
+  # and a remote or rewritten URL carrying userinfo (`user:secret@host`). This
+  # is a list, not a scan: a credential in any other key or value is not seen.
+  refusedSections = ["credential" "gpg" "include" "includeIf" "sendemail"];
+  refusedKeys = {
+    core = ["askPass" "gitProxy" "hooksPath"];
+    http = ["cookieFile" "extraHeader" "sslCert" "sslKey"];
+    url = ["insteadOf" "pushInsteadOf"];
+    user = ["signingKey"];
+  };
+  userinfoKeys.remote = ["pushurl" "url"];
+  # A URL with userinfo: a scheme, `://`, then `@` before the first `/`.
+  hasUserinfo = value: lib.isString value && lib.length (builtins.split "[a-zA-Z][a-zA-Z0-9+.-]*://[^/@[:space:]]*@" value) > 1;
+  # Every key of an ini tree as the consumer wrote it, with its value and the
+  # section and key names Git compares (case folded; a dotted or quoted
+  # subsection is not part of the section name).
+  iniKeys = tree:
+    lib.concatMap (top:
+      lib.concatMap (name: let
+        value = tree.${top}.${name};
+        key = path: leafValue: {
+          inherit path;
+          value = leafValue;
+          section = lib.toLower (builtins.head (builtins.match "([^ .\"]*).*" top));
+          name = lib.toLower (lib.last path);
+        };
+      in
+        if lib.isAttrs value
+        then map (leaf: key [top name leaf] value.${leaf}) (lib.attrNames value)
+        else [(key [top name] value)]) (lib.attrNames tree.${top}))
+    (lib.attrNames tree);
+  isRefused = entry:
+    lib.elem entry.section (map lib.toLower refusedSections)
+    || lib.elem entry.name (map lib.toLower (refusedKeys.${entry.section} or []))
+    || (lib.elem entry.name (userinfoKeys.${entry.section} or []) && lib.any hasUserinfo (lib.toList entry.value))
+    || (entry.section == "url" && hasUserinfo (lib.concatStringsSep "." entry.path));
+  refusedDescription = "the sections ${lib.concatMapStringsSep ", " (section: "`${section}`") refusedSections}, the keys ${lib.concatStringsSep ", " (lib.concatMap (section: map (key: "`${section}.${key}`") refusedKeys.${section}) (lib.attrNames refusedKeys))} under any subsection, and a `remote.*.url`, `remote.*.pushurl` or `url.*` URL with userinfo";
   # The raw tree: the runtime's own definitions when it has any, else the
   # root's — the whole-option replacement the rest of the tree already uses.
+  runtimeDefinesSettings = runtime:
+    (lib.getAttrFromPath (runtimePath runtime ++ ["settings"]) options).highestPrio < 1500;
   rawSettings = runtime: let
     own = lib.getAttrFromPath (runtimePath runtime ++ ["settings"]) options;
   in
     forward (
-      if own.highestPrio < 1500
+      if runtimeDefinesSettings runtime
       then own
       else lib.getAttrFromPath (rootPath ++ ["settings"]) options
     );
-  # A typed leaf the runtime leaves unset inherits the root leaf's definition
-  # at the root's own priority — the same per-leaf lowering the tool module
-  # performs, so a root typed value conflicts with a raw value exactly as on
-  # the host.
-  inheritedTyped = runtime:
-    lib.concatMap (tool: let
-      ownTyped = (lib.getAttrFromPath (runtimePath runtime ++ [tool.section]) options).settings;
-      rootTyped = (lib.getAttrFromPath (rootPath ++ [tool.section]) options).settings;
-    in
-      lib.concatMap (leaf:
-        lib.optionals ((lib.getAttrFromPath (lib.tail leaf.path) ownTyped).highestPrio >= 1500)
-        (lower.lower leaf (lib.getAttrFromPath (lib.tail leaf.path) rootTyped)))
-      tool.settings.leaves)
-    tools;
+  # The root's typed leaf definitions reach the runtime's typed tree itself —
+  # never lowered around it into `_ini`: the tool module lowers the merged
+  # leaf, and the owner's assertions read the merged settings, so a root
+  # `test.jobs` meets a runtime `test.strategy` inside one tree instead of
+  # slipping past every assertion into `_ini`, which none of them reads. They
+  # forward as weak defaults, below any definition a runtime makes for the
+  # same leaf (a runtime `mkDefault` included), so the runtime's value replaces
+  # the root's as a runtime `settings` or `enable` does, where equal-priority
+  # definitions would be a conflict. For the same reason a root typed leaf also
+  # yields to a raw key at normal priority. Conditioning the forward on the
+  # runtime leaf being unset would read the priority of the very option these
+  # definitions land in, which does not terminate.
+  # Each definition is a relative path spliced under every runtime's own
+  # `ai.<runtime>` block, so one list serves them all.
+  rootTypedPriority = 1400;
+  inheritedTyped = lib.concatMap (tool:
+    lib.map (
+      leaf:
+        lib.setAttrByPath (["sandbox" "git" tool.section "settings"] ++ lib.tail leaf.path)
+        (let
+          rootLeaf = lib.getAttrFromPath (lib.tail leaf.path) (lib.getAttrFromPath (rootPath ++ [tool.section]) options).settings;
+        in
+          lib.mkIf rootLeaf.isDefined (lib.mkMerge (map (lib.mkOverride rootTypedPriority) rootLeaf.definitions)))
+    )
+    tool.settings.leaves)
+  tools;
 in {
   imports = rootTrees ++ lib.concatMap runtimeTrees routeNames;
 
@@ -123,7 +196,7 @@ in {
     {
       sandbox.git.settings = lib.mkOption {
         default = {};
-        description = "Git configuration for every sandbox guest, in the same shape as the host's `git.settings`. A runtime `sandbox.git.settings` definition replaces this whole value; a runtime that defines only a typed tool leaf keeps these keys, and a nested `mkDefault` key here still loses to a runtime value or a typed leaf for that key. The guest-fixed keys `core.sshCommand` and `safe.directory` are forced on top.";
+        description = "Git configuration for every sandbox guest, in the same shape as the host's `git.settings`. A runtime `sandbox.git.settings` definition replaces this whole value; a runtime that defines only a typed tool leaf keeps these keys, and a nested `mkDefault` key here still loses to a runtime value or a typed leaf for that key. The guest-fixed keys `core.sshCommand` and `safe.directory` render after everything here, so a value for either (in any case) loses; keys that carry or pull in credentials (${refusedDescription}) fail evaluation, because the file is world-readable in the store.";
         type = iniType;
       };
     }
@@ -131,14 +204,21 @@ in {
       sandbox.git = {
         settings = lib.mkOption {
           default = {};
-          description = "Git configuration for ${runtime}'s sandbox guest, in the same shape as the host's `git.settings`. Defining it replaces the whole inherited `ai.sandbox.git.settings` value; equal-priority disagreement with a typed tool leaf stays a loud conflict, exactly as on the host.";
+          description = "Git configuration for ${runtime}'s sandbox guest, in the same shape as the host's `git.settings`. Defining it replaces the whole inherited `ai.sandbox.git.settings` value; equal-priority disagreement with a typed tool leaf stays a loud conflict, exactly as on the host. The guest-fixed keys render after everything here and credential-carrying keys fail evaluation, as at the shared root.";
           type = iniType;
         };
         _ini = lib.mkOption {
           default = {};
-          description = "The runtime's merged Git configuration: raw definitions, typed tool leaves and the guest-fixed keys, each at its own priority; common.nix renders it as the guest's system /etc/gitconfig.";
+          description = "The runtime's merged Git configuration: raw definitions and typed tool leaves, each at its own priority, without the guest-fixed keys.";
           internal = true;
           type = iniType;
+          visible = false;
+        };
+        _config = lib.mkOption {
+          default = "";
+          description = "The runtime's rendered system Git configuration: `_ini` followed by the guest-fixed keys; common.nix hands it to the factory as the guest's /etc/gitconfig.";
+          internal = true;
+          type = lib.types.str;
           visible = false;
         };
         _packages = lib.mkOption {
@@ -151,7 +231,28 @@ in {
       };
     });
 
-  config.ai = lib.genAttrs routeNames (runtime: {
-    sandbox.git._ini = lib.mkMerge ([fixed (rawSettings runtime)] ++ inheritedTyped runtime);
-  });
+  config = {
+    # Refuse the credential-carrying keys (`refusedSections`) in every tree
+    # that defines raw settings: the shared root and each runtime's own.
+    assertions =
+      map (path: let
+        offenders = map (entry: lib.concatStringsSep "." entry.path) (lib.filter isRefused (iniKeys (lib.getAttrFromPath (path ++ ["settings"]) config)));
+      in {
+        assertion = offenders == [];
+        message = ''
+          ${lib.concatStringsSep "." path}.settings sets ${lib.concatStringsSep ", " offenders}, which the sandbox guest's git configuration refuses.
+          The guest's /etc/gitconfig is built into the Nix store, which any local user can read, and the guest holds no credentials. Credential helpers, askpass and proxy programs, authorization headers, mail passwords, signing keys, gpg programs, private key, certificate, cookie and hooks paths, URL rewrites and URLs with userinfo (they can embed a token) and includes (they can pull any of these in) never reach it. Drop the key.
+        '';
+      })
+      ([rootPath] ++ map runtimePath routeNames);
+
+    ai = lib.genAttrs routeNames (runtime:
+      lib.mkMerge (
+        [
+          {sandbox.git._ini = rawSettings runtime;}
+          {sandbox.git._config = lib.generators.toGitINI config.ai.${runtime}.sandbox.git._ini + fixedConfig;}
+        ]
+        ++ inheritedTyped
+      ));
+  };
 }

@@ -46,8 +46,8 @@ Git inside the guest is configured through `ai.sandbox.git`
 options (`absorb`, `branchless`, `revise`) as the host's `git.*`, mirrored at
 `ai.<runtime>.sandbox.git`, delivered as the guest's system `/etc/gitconfig`
 with SSH refused (`core.sshCommand`) and the seed paths trusted
-(`safe.directory`) forced on top. Enabled tools' packages join the guest system
-profile.
+(`safe.directory`) appended last, and credential-carrying keys refused. Enabled
+tools' packages join the guest system profile.
 
 The standalone factory takes the caller's package set, required `exe` and
 `outName`, and optional packages, sizing and `gitConfig`:
