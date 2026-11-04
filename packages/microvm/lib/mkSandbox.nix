@@ -14,6 +14,7 @@
   signing ? null,
   vcpus ? 1,
 }: let
+  repoPaths = import ./repo-paths.nix;
   agentSocket = "/run/sandbox/agent.sock";
   # QEMU executes one wrapper per connection with its socket on stdin/stdout.
   doorAddress = "10.0.2.100";
@@ -150,11 +151,7 @@
           etc = lib.optionalAttrs (repo || gitConfig != null) {
             gitconfig.text =
               if gitConfig == null
-              then ''
-                [safe]
-                  directory = /mnt/objects
-                  directory = /run/sandbox/seed
-              ''
+              then "[safe]\n" + lib.concatMapStrings (path: "  directory = ${path}\n") (builtins.attrValues repoPaths)
               else gitConfig;
           };
           # A child shell resetting PATH still finds tools in the system profile.
@@ -169,8 +166,8 @@
             };
           }
           // lib.optionalAttrs repo {
-            "/mnt/objects".options = ["ro"];
-            "/run/sandbox/seed".options = ["ro"];
+            "${repoPaths.objects}".options = ["ro"];
+            "${repoPaths.seed}".options = ["ro"];
           };
         microvm = {
           hypervisor = "qemu";
@@ -222,14 +219,14 @@
             # Sources resolve against the launcher's private runtime directory.
             ++ lib.optionals repo [
               {
-                mountPoint = "/mnt/objects";
+                mountPoint = repoPaths.objects;
                 proto = "9p";
                 readOnly = true;
                 source = "objects";
                 tag = "objects";
               }
               {
-                mountPoint = "/run/sandbox/seed";
+                mountPoint = repoPaths.seed;
                 proto = "9p";
                 readOnly = true;
                 source = "seed";
@@ -307,7 +304,7 @@
               User = "sandbox";
               WorkingDirectory = "/home/sandbox";
             };
-            unitConfig = lib.optionalAttrs repo {RequiresMountsFor = ["/mnt/objects" "/run/sandbox/seed"];};
+            unitConfig = lib.optionalAttrs repo {RequiresMountsFor = builtins.attrValues repoPaths;};
             wantedBy = ["multi-user.target"];
           };
           "serial-getty@ttyAMA0".enable = false;

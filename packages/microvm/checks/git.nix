@@ -21,6 +21,7 @@
       inherit name text;
       runtimeInputs = [pkgs.coreutils pkgs.gnugrep pkgs.git];
     };
+  safeDirectories = builtins.attrValues (import ../lib/repo-paths.nix);
   # One matrix row per backend: the sink is backend-independent, but the
   # surrounding module set differs.
   backends = {
@@ -51,7 +52,7 @@ in {
       removeAttrs empty ["core" "safe"]
       == {}
       && lib.hasInfix "/sandbox-no-ssh" empty.core.sshCommand
-      && empty.safe.directory == ["/mnt/objects" "/run/sandbox/seed"]
+      && empty.safe.directory == safeDirectories
       && lib.all (runtime: (eval {}).config.ai.${runtime}.sandbox.git._ini == empty) ["claude" "codex"]
       # Root raw only: every runtime's guest gets it under the fixed keys.
       && rawOnly.absorb.maxStack == 20
@@ -88,7 +89,7 @@ in {
           };
         in
           lib.hasInfix "/sandbox-no-ssh" forced.core.sshCommand
-          && forced.safe.directory == ["/mnt/objects" "/run/sandbox/seed"])))
+          && forced.safe.directory == safeDirectories)))
     // (forBackends "enable" (eval: let
       absorbPackage = (eval {ai.sandbox.git.absorb.enable = true;}).config.ai.internal.packages.gitTools.git-absorb;
       packages = config: (eval config).config.ai.codex.sandbox.git._packages;
