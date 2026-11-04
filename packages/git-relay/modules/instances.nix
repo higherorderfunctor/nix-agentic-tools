@@ -65,6 +65,18 @@ backend: {
           fails.
         '';
       };
+      sessions = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Whether this instance serves only per-session repositories under
+          `stateDir/repositories/sessions`, created by `git-relay session
+          open` while its caller holds `flock` on `stateDir/locks/<token>`; a
+          session is served without a daemon restart. Such an instance serves
+          no static repositories. `false` (the default) serves the static
+          `repositories`.
+        '';
+      };
     };
     # Define each built-in leaf at default priority so another host does not
     # discard the built-ins, and a consumer can replace one host's pins.
@@ -96,7 +108,11 @@ in {
     inherit (instance) settings;
     option = "ai.git-relay.instances.${instanceName}.settings";
   in
-    lib.mapAttrsToList (host: _: {
+    lib.optional settings.sessions {
+      assertion = settings.repositories == {};
+      message = "${option}.sessions: a session-only instance serves no repositories; keep static repositories on another instance.";
+    }
+    ++ lib.mapAttrsToList (host: _: {
       assertion = builtins.match upstream.hostPattern host != null;
       message = "${option}.forges.${host}: a forge host must be a DNS name or IPv4 address, since it names a pin file.";
     })
