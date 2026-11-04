@@ -6,5 +6,6 @@
     ./checks/sandbox.nix
     ./checks/selector.nix
     ./checks/session.nix
+    ./checks/signing.nix
   ];
 }
