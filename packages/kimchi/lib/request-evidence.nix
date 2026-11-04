@@ -10,7 +10,7 @@
     pkgs.runCommand "kimchi-codeql-${name}-request-evidence" {nativeBuildInputs = [pkgs.jq];} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      mkdir -p "$out"
+      ${pkgs.coreutils}/bin/mkdir -p "$out"
       jq -S '[.["#select"].tuples[] | . as [$id, $enabled, $restart, $file, $line] |
         def booleanValue: if . == "absent" then null elif . == "unresolved" then . else fromjson end;
         {id: $id, defaultEnabled: ($enabled | booleanValue), restartRequired: ($restart | booleanValue),
