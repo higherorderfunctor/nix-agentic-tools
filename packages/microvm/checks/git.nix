@@ -12,6 +12,13 @@
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
   mkLintedCheck = import ../../../lib/mk-linted-check.nix {inherit pkgs;};
+  # A guest-side probe: exits non-zero when the guest disagrees. Needs KVM, so
+  # it rides a launcher to run by hand, not a sandboxed build.
+  mkGuestScript = name: text:
+    import ../../../lib/strict-shell-application.nix pkgs {
+      inherit name text;
+      runtimeInputs = [pkgs.coreutils pkgs.gnugrep pkgs.git];
+    };
   # One matrix row per backend: the sink is backend-independent, but the
   # surrounding module set differs.
   backends = {
@@ -106,6 +113,54 @@ in {
         }
       )))
     // {
+      # The module-built launcher's guest carries the rendered configuration
+      # as its SYSTEM git file and the enabled tool's package in its system
+      # profile.
+      microvm-git-guest = let
+        fixture.ai = {
+          claude = {
+            enable = true;
+            package = pkgs.hello;
+          };
+          sandbox = {
+            enable = true;
+            git.absorb.enable = true;
+          };
+        };
+        result = evalHm fixture;
+        launcher = lib.findFirst (package: package.meta.mainProgram == "claude-sandbox") (throw "missing claude-sandbox") result.config.ai.internal.sandboxPackages;
+      in
+        mkTest "microvm-git-guest" (
+          launcher.guest.config.environment.etc.gitconfig.text
+          == lib.generators.toGitINI result.config.ai.claude.sandbox.git._ini
+          && lib.hasInfix "/bin/sandbox-no-ssh" launcher.guest.config.environment.etc.gitconfig.text
+          && builtins.elem result.config.ai.internal.packages.gitTools.git-absorb launcher.guest.config.environment.systemPackages
+        );
+      # Hand-run under KVM, like the other sandbox smoke launchers: the
+      # module-built guest runs this probe, proving the rendered system
+      # configuration is live — the forced core.sshCommand refuses and names
+      # origin, and both safe.directory entries are set.
+      microvm-git-launcher = let
+        probe = mkGuestScript "sandbox-git-probe" ''
+          ssh_command="$(git config --system core.sshCommand)"
+          [[ $ssh_command == */bin/sandbox-no-ssh ]]
+          if "$ssh_command" > /dev/null 2> ssh.refusal; then
+            echo 'SANDBOX_GIT_SSH_ALLOWED' >&2
+            exit 1
+          fi
+          grep -q 'Push through' ssh.refusal
+          [[ $(git config --system --get-all safe.directory | sort | paste -sd:) == /mnt/objects:/run/sandbox/seed ]]
+          echo SANDBOX_GIT_OK
+        '';
+        result = evalHm {
+          ai.claude = {
+            enable = true;
+            package = probe;
+          };
+          ai.sandbox.enable = true;
+        };
+      in
+        lib.findFirst (package: package.meta.mainProgram == "claude-sandbox") (throw "missing claude-sandbox") result.config.ai.internal.sandboxPackages;
       # The rendered system configuration parses with real git and carries the
       # fixed keys, the raw keys and the typed leaf.
       microvm-git-render = let
