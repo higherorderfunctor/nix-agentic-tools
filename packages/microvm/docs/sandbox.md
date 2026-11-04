@@ -2,9 +2,8 @@
 
 <!-- cspell:ignore ACPI chardev gettys poweroff SSHSIG sysfs vcpus virtio -->
 
-> **Last verified:** 2026-11-01 — shared runtime sandbox options and guest
-> routes; seeded-history copies, read-only mounts, and committed-work recovery
-> through virtio serial ports.
+> **Last verified:** 2026-11-02 — runtime guests, seeded-history copies,
+> read-only mounts, and committed-work recovery through virtio serial ports.
 
 `ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
 runtimes. Home Manager and devenv expose the same options and install
@@ -25,18 +24,18 @@ child shells resetting PATH to `/run/current-system/sw/bin`. Identity-aware
 launchers select a relay session and seed committed work; see
 `sandbox-identities.md` for launch ordering and no-door cases. Guest Git
 settings arrive through `ai.sandbox.git` (`sandbox-git.md`). Never log a harness
-into a provider inside the VM; VM-only CPA client keys will supply
-authentication later.
+into a provider inside the VM; VM-only CPA client keys supply authentication
+through `sandbox.inference.clientKey` (`sandbox-inference.md`).
 
 The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
 executable path whose Nix string context retains its package) and `outName` (a
 single executable name). Optional defaults are `doors = []`, `gitConfig = null`,
-`memory = 1024` MiB, `packages = []`, `repo = false`, `repoConfig = false`,
-`signing = null`, and `vcpus = 1`. Memory must be at least 128 MiB and CPUs at
-least one. The factory owns the guest and `bin/<outName>` launcher. The pinned
-microvm source is bound through `ai.internal.mkSandbox`; consumers need no extra
-module arguments. An empty configuration installs no sandbox and forces no
-guest.
+`homeFiles = {}`, `inference = null`, `memory = 1024` MiB, `packages = []`,
+`repo = false`, `repoConfig = false`, `signing = null`, and `vcpus = 1`. Memory
+must be at least 128 MiB and CPUs at least one. The factory owns the guest and
+`bin/<outName>` launcher. The pinned microvm source is bound through
+`ai.internal.mkSandbox`; consumers need no extra module arguments. An empty
+configuration installs no sandbox and forces no guest.
 
 The host store is shared read-only at `/nix/.ro-store`; upstream overlays
 `/nix/store` with tmpfs upper/work directories beneath `/nix/.rw-store`. Root is
@@ -152,6 +151,7 @@ recovery also fails; nonempty failed exports are retained as
 only. Forced VM shutdown, host termination, and uncommitted files are not
 recoverable through this path.
 
-See `packages/microvm/modules/README.md` for host setup. Owner checks cover
-module parity, validation, process cleanup and recovery; real guest smoke tests
-need Linux/KVM and run separately from sandboxed builds.
+See `packages/microvm/modules/README.md` for host setup and
+`sandbox-inference.md` for sandbox inference. Owner checks cover module parity,
+validation, process cleanup and recovery; real guest smoke tests need Linux/KVM
+and run separately from sandboxed builds.
