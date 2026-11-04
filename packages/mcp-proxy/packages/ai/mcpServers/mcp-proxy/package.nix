@@ -30,12 +30,12 @@
     };
   });
 
-  rev = "bea4dcb911cee73809c564a4d0ebf7ef2cb57f74";
+  rev = "be4031c899a4788d0e4440746739bb6d3706ead3";
   src = fetchFromGitHub {
     owner = "sparfenyuk";
     repo = "mcp-proxy";
     inherit rev;
-    hash = "sha256-7WLO0ITaEXfoPjhA5q85mIcElem5nGjioJSf7T6Ftho=";
+    hash = "sha256-G5AX0wQl74tNkoo4BhjuVG0noNZYGhv/LKVwd9cvkS8=";
   };
 in
   (pkgs.mcp-proxy.override {inherit python3Packages;}).overridePythonAttrs (old: let
