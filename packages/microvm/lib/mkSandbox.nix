@@ -1,14 +1,18 @@
-# cspell:ignore chardev dports vcpu virtio virtserialport
+# cspell:ignore chardev dports virtio vcpu vcpus virtserialport
 {
   inputs,
   lib,
 }: pkgs: {
   exe,
+  memory ? 1024,
   outName,
+  packages ? [],
+  vcpus ? 1,
 }: let
   validName = name: builtins.isString name && builtins.match "[a-zA-Z0-9][a-zA-Z0-9._+-]*" name != null;
   guestCommand = import ../../../lib/strict-shell-application.nix pkgs {
     name = "sandbox-exec";
+    runtimeInputs = packages;
     text = ''
       mapfile -d "" -t args < /run/sandbox/argv
       exec ${lib.escapeShellArg exe} "''${args[@]}"
@@ -36,6 +40,8 @@
       inputs.microvm.nixosModules.microvm
       {
         boot.kernelModules = ["qemu_fw_cfg" "virtio_console"];
+        # A child shell resetting PATH still finds tools in the system profile.
+        environment.systemPackages = packages;
         fileSystems."/nix/.rw-store" = {
           fsType = "tmpfs";
           neededForBoot = true;
@@ -44,7 +50,7 @@
         microvm = {
           hypervisor = "qemu";
           interfaces = [];
-          mem = 1024;
+          mem = memory;
           qemu.extraArgs = [
             "-fw_cfg"
             "name=opt/sandbox.argv,file=argv"
@@ -66,7 +72,7 @@
           ];
           socket = null;
           storeOnDisk = false;
-          vcpu = 1;
+          vcpu = vcpus;
           writableStoreOverlay = "/nix/.rw-store";
         };
         networking.hostName = "sandbox";
@@ -112,6 +118,11 @@
 in
   assert lib.assertMsg pkgs.stdenv.hostPlatform.isLinux "mkSandbox requires a Linux host package set";
   assert lib.assertMsg (builtins.isString exe && lib.hasPrefix "/" exe) "mkSandbox.exe must be an absolute executable path";
+  # ai.sandbox options refuse bad sizes first; these guard direct lib.ai.mkSandbox
+  # callers, which have no option layer.
+  assert lib.assertMsg (builtins.isInt memory && memory >= 128) "mkSandbox.memory must be an integer number of MiB, at least 128";
+  assert lib.assertMsg (builtins.isInt vcpus && vcpus >= 1) "mkSandbox.vcpus must be a positive integer";
+  assert lib.assertMsg (builtins.isList packages && builtins.all lib.isDerivation packages) "mkSandbox.packages must be a list of packages";
   assert lib.assertMsg (validName outName) "mkSandbox.outName must be a single executable name";
     (import ../../../lib/strict-shell-application.nix pkgs {
       name = outName;
