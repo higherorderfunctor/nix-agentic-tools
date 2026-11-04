@@ -365,7 +365,7 @@ in
           done
           # Abandoned sessions go at start; a live caller's held lock survives.
           session_gc
-          if [[ $(jq -r '.sessions // false' "$config") == true ]]; then
+          if jq -e '.sessions == true' "$config" >/dev/null; then
             jq -e '(.repositories // {}) == {}' "$config" >/dev/null || {
               echo "git-relay: a session-only relay serves no repositories" >&2
               exit 1
