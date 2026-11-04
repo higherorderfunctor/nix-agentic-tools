@@ -21,10 +21,10 @@ query predicate defaultRegion(string value, string file, int line) {
   )
 }
 
-from Property region, Property field
+from Property regionProp, Property fieldProp
 where
-  region = exportedInitializer("src/regions.ts", "REGIONS").(ObjectExpr).getAProperty() and
-  field = region.getInit().(ObjectExpr).getAProperty()
-select region.getName() as region, field.getName() as field,
-  registryValue(field.getInit()) as value, "src/regions.ts" as file,
-  field.getLocation().getStartLine() as line
+  regionProp = exportedInitializer("src/regions.ts", "REGIONS").(ObjectExpr).getAProperty() and
+  fieldProp = regionProp.getInit().(ObjectExpr).getAProperty()
+select regionProp.getName() as region, fieldProp.getName() as field,
+  registryValue(fieldProp.getInit()) as value, "src/regions.ts" as file,
+  fieldProp.getLocation().getStartLine() as line
