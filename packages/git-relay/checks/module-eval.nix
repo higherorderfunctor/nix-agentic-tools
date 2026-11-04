@@ -39,6 +39,13 @@
       };
     };
   };
+  sessionOnly = {
+    port = 19503;
+    settings = {
+      credentials = keyed.settings.credentials;
+      sessions = true;
+    };
+  };
   evaluate = backend: instances:
     (
       if backend == "hm"
@@ -62,6 +69,8 @@
     custom = evaluate backend {
       main = keyed // {settings = keyed.settings // {forges = customPins;};};
     };
+    session = evaluate backend {main = sessionOnly;};
+    sessionContent = builtins.fromJSON session.config.ai.services.git-relay-main.files.config.content;
   in
     service.files.config.variable
     == "GIT_RELAY_CONFIG"
@@ -87,6 +96,10 @@
       port = 19500;
       inherit (keyed.settings) repositories;
     }
+    && sessionContent.sessions == true
+    && sessionContent.repositories == {}
+    && sessionContent.credentials.first.forges == [hosts.first]
+    && failures session == []
     && lib.all (name: !lib.hasInfix "git-relay-${name}-key" service.files.config.content) (builtins.attrNames keys)
     && (builtins.fromJSON custom.config.ai.services.git-relay-main.files.config.content).forges == forges // customPins
     && lib.hasSuffix "/bin/git-relay-main" (lib.head service.command)
@@ -133,9 +146,12 @@
       "github.com::owner/alpha.git"
       "https://github.com/owner/alpha.git"
     ]
-    # A credential's allowlist must name each upstream host it serves and only real hosts.
+    # A session-only instance refuses static repositories; a credential's
+    # allowlist must name each upstream host it serves and only real hosts.
+    && changed {sessions = true;}
     && changed {credentials.first.forges = [];}
     && changed {credentials.first.forges = ["github.com/owner"];}
+    && lib.hasInfix "settings.sessions" (messageOf {sessions = true;})
     && lib.hasInfix "credentials.first.forges.0" (messageOf {credentials.first.forges = ["github.com/owner"];})
     && named "alpha.git" == []
     && lib.all (name: lib.length (named name) == 1) ["-leading" ".hidden" "a/b" ".."]
