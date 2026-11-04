@@ -8,43 +8,9 @@
   pkgs,
   ...
 }: let
+  inherit (import ./transport.nix {inherit pkgs;}) fakeSsh relay upstreamHook;
   mkLintedCheck = import ../../../lib/mk-linted-check.nix {inherit pkgs;};
-  strict = import ../../../lib/strict-shell-application.nix pkgs;
-  # This transport only replaces SSH's network hop. Git still chooses the
-  # repository's key and host pin, and invokes its ordinary receive-pack.
-  fakeSsh = strict {
-    name = "ssh";
-    runtimeInputs = [pkgs.git];
-    text = ''
-      while (($#)); do
-        case $1 in
-          -G) exit 0 ;;
-          -F|-i|-o|-p) shift 2 ;;
-          -*) echo "fake ssh: unexpected option $1" >&2; exit 1 ;;
-          *) shift; break ;;
-        esac
-      done
-      [[ $# == 1 ]] || { echo "fake ssh: expected one remote command" >&2; exit 1; }
-      case $1 in
-        "git-receive-pack "*|"git-upload-pack "*) exec ${pkgs.bash}/bin/bash -c "$1" ;;
-        *) echo "fake ssh: unexpected remote command" >&2; exit 1 ;;
-      esac
-    '';
-  };
-  relay = pkgs.callPackage ../packages/ai/generic/git-relay/package.nix {
-    openssh = fakeSsh;
-    strictShellApplication = import ../../../lib/strict-shell-application.nix;
-  };
   port = 28450;
-  # receive-pack keeps the SSH command so the caller can inspect the actual
-  # identity selection; rejecting one ref checks the forward's atomicity.
-  upstreamHook = strict {
-    name = "git-relay-upstream-update";
-    text = ''
-      printf '%s' "''${GIT_SSH_COMMAND-unset}" >"$GIT_DIR/forward-ssh"
-      [[ $1 != refs/heads/reject ]]
-    '';
-  };
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     git-relay-forward = mkLintedCheck "git-relay-forward" {
@@ -83,8 +49,8 @@ in {
         jq -n --arg base "$base" --arg first "$first_pin" --arg second "$second_pin" '
           {
             credentials: {
-              first: {sshKeyFile: ($base + "/first key")},
-              second: {sshKeyFile: ($base + "/second key")}
+              first: {forges: ["one.example.invalid"], sshKeyFile: ($base + "/first key")},
+              second: {forges: ["two.example.invalid"], sshKeyFile: ($base + "/second key")}
             },
             forges: {
               "one.example.invalid": {hostKeys: $first},
@@ -235,10 +201,26 @@ in {
         jq 'del(.credentials.second)' relay.json >next.json
         mv next.json relay.json
         refused --force second HEAD:main
-        grep -F "credential 'second' absent or missing sshKeyFile" push.log
+        grep -F "credential 'second' absent, keyless, or not allowed for 'two.example.invalid'" push.log
         [[ $(tip upstream/second.git refs/heads/main) == "$before" ]]
         [[ $(tip "$state/repositories/second.git" refs/heads/main) == "$before" ]]
         stop
+
+        # A forge removed from the config leaves nothing to trust: with the
+        # credential intact — so only the pin could save it — startup refuses
+        # a repository still routed to that host, and the stale pin file
+        # itself is gone while current forges keep theirs. The timeout turns
+        # a regression that does serve into a fast failure instead of a hang.
+        jq --arg base "$base" 'del(.forges."two.example.invalid")
+          | .credentials.second = {forges: ["two.example.invalid"], sshKeyFile: ($base + "/second key")}' \
+          relay.json >stale-forge.json
+        if (cd "$state"; GIT_RELAY_CONFIG="$base/stale-forge.json" exec timeout 5 ${lib.getExe relay}) >stale-forge.log 2>&1; then
+          echo 'FAIL: startup served a repository whose forge was removed' >&2
+          exit 1
+        fi
+        grep -F "repository 'second': no forge pins for 'two.example.invalid'" stale-forge.log
+        [[ ! -e $state/known_hosts.d/two.example.invalid ]]
+        [[ -s $state/known_hosts.d/one.example.invalid ]]
 
         # A direct JSON caller cannot bypass the module's SSH-only upstream rule.
         jq --arg upstream "$base/upstream/ok.git" '.repositories.ok.upstream = $upstream' relay.json >local.json
