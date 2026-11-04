@@ -107,7 +107,7 @@
   # change that, and `include` itself is refused below.
   fixedConfig = lib.generators.toGitINI {
     core.sshCommand = lib.getExe noSsh;
-    safe.directory = ["" "/mnt/seed"];
+    safe.directory = ["" (import ../lib/repo-paths.nix).seed];
   };
   # The guest's /etc/gitconfig lands in the Nix store, which any local user
   # reads, and the guest holds no credentials. A consumer value that carries

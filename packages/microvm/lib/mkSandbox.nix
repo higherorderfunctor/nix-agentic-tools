@@ -14,6 +14,7 @@
   signing ? null,
   vcpus ? 1,
 }: let
+  repoPaths = import ./repo-paths.nix;
   agentSocket = "/run/sandbox/agent.sock";
   # QEMU executes one wrapper per connection with its socket on stdin/stdout.
   doorAddress = "10.0.2.100";
@@ -139,7 +140,7 @@
               lib.optionalString (gitConfig != null) "${gitConfig}\n"
               + lib.optionalString repo ''
                 [safe]
-                  directory = /mnt/seed
+                  directory = ${repoPaths.seed}
               '';
           };
           # A child shell resetting PATH still finds tools in the system profile.
