@@ -134,6 +134,7 @@ cpamp
 createrequire
 creds
 customisation
+curlrc
 datamodels
 dataurl
 deadnix
@@ -341,6 +342,7 @@ neighbour
 neighbouring
 neighbours
 netrc
+netdev
 newfstatat
 niks
 nixbld
@@ -352,6 +354,7 @@ nobuiltin
 nodev
 noescape
 noexplore
+noproxy
 nohup
 nomodel
 nosub
@@ -468,6 +471,7 @@ sigtool
 simpara
 skillsdir
 slurpfile
+slirp
 smartlog
 sourcehut
 sourcepath
