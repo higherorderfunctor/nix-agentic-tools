@@ -117,6 +117,7 @@ cliproxyapi
 clis
 cliutil
 cmdbuilder
+codeberg
 codeqlmanifest
 codesign
 codewhisperer
@@ -399,6 +400,7 @@ prio
 procps
 pthread
 purpleclay
+pushurl
 pycache
 pythonnousersite
 qiiiiii
