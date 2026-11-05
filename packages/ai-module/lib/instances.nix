@@ -102,6 +102,14 @@ in {
               default = defaultPort;
               description = "The loopback port this instance listens on; it is claimed, so two instances or services cannot share it.";
             };
+            renderedConfig = lib.mkOption {
+              type = lib.types.str;
+              default = (render config.settings).content;
+              defaultText = lib.literalMD "the config file content rendered from `settings`, as `ai.services` writes it with secret references left as placeholders";
+              description = "The rendered config file content, for a caller that hands the same file to a management command.";
+              internal = true;
+              readOnly = true;
+            };
             settings = lib.mkOption {
               type = settingsType;
               default = {};
@@ -157,7 +165,8 @@ in {
         # Manager Plus's render also returns the environment it reads.
         environment = rendered.environment or {};
         files.config = {
-          inherit (rendered) content secrets;
+          content = instance.renderedConfig;
+          inherit (rendered) secrets;
           inherit variable;
         };
         ports.main = instance.port;

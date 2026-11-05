@@ -311,10 +311,12 @@ runtime directory is cleared.
 
 `lib/instances.nix` gives a tool with typed settings named instances:
 `ai.<owner>.instances.<name>` with `enable`, `package`, `port`, `settings` and
-`stateDir`, declared through one owner module per backend that differs only in
-the default state root (`xdg.stateHome` on Home Manager, `devenv.state` on
-devenv, so a repository's instance keeps its own logins). Each instance becomes
-the service `<owner>-<name>`: its port is `ports.main`, its settings render to
+`stateDir` (plus the internal read-only `renderedConfig`, the file content the
+service renders, for a caller that hands that file to a management command),
+declared through one owner module per backend that differs only in the default
+state root (`xdg.stateHome` on Home Manager, `devenv.state` on devenv, so a
+repository's instance keeps its own logins). Each instance becomes the service
+`<owner>-<name>`: its port is `ports.main`, its settings render to
 `files.config`, and a strict run script creates `stateDir` (and the owner's
 state subdirectories) 0700, enters it, runs the owner's `preStart` shell and
 execs the package with the owner's per-instance arguments. The owner fixes the
