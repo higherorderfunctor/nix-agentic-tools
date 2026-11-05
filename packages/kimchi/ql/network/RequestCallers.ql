@@ -142,7 +142,9 @@ where
   row(request, fn, kind, site, property, reason, _) and
   distance = min(int d | row(request, fn, kind, site, property, reason, d) | d)
 select request.getFile().getRelativePath() as file, request.getLocation().getStartLine() as line,
-  request.getLocation().getStartColumn() as column, requestLibrary(request) as library,
+  request.getLocation().getStartColumn() as column,
+  request.getLocation().getEndLine() as endLine, request.getLocation().getEndColumn() as endColumn,
+  requestLibrary(request) as library,
   fn.getFile().getRelativePath() as functionFile, fn.getLocation().getStartLine() as functionLine,
   fn.getLocation().getStartColumn() as functionColumn, kind,
   site.getFile().getRelativePath() as siteFile, site.getLocation().getStartLine() as siteLine,

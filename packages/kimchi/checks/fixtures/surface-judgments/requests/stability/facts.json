@@ -8,7 +8,9 @@
         "column": 12,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 3
+        "line": 3,
+        "endLine": 3,
+        "endColumn": 42
       },
       "distance": 0,
       "functionSite": {
@@ -30,7 +32,9 @@
         "column": 42,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 9
+        "line": 9,
+        "endLine": 9,
+        "endColumn": 73
       },
       "distance": 0,
       "functionSite": {
@@ -52,7 +56,9 @@
         "column": 42,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 9
+        "line": 9,
+        "endLine": 9,
+        "endColumn": 73
       },
       "distance": 1,
       "functionSite": {
@@ -74,7 +80,9 @@
         "column": 41,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 10
+        "line": 10,
+        "endLine": 10,
+        "endColumn": 71
       },
       "distance": 0,
       "functionSite": {
@@ -96,7 +104,9 @@
         "column": 41,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 10
+        "line": 10,
+        "endLine": 10,
+        "endColumn": 71
       },
       "distance": 1,
       "functionSite": {

@@ -106,8 +106,15 @@ returned arrow). Inserting an identical key earlier in the same named owner can
 still move those rows and requires review. Same-name owners have the same limit.
 These identities contain no source coordinates.
 
-Facts must match the pinned source revision. Request coordinates match exact
-call starts, choosing the innermost call when a chain shares a start. Function
+Facts must match the pinned source revision. Request coordinates match the exact
+start **and end** of one call or new expression. `callSite.endLine` and
+`callSite.endColumn` are required: a start alone cannot distinguish the outer
+request in `getFetch()(url)` from the inner request in `fetch(u).then(cb)`.
+CodeQL ends are inclusive and 1-based. TypeScript `getEnd()` is an exclusive,
+0-based UTF-16 offset; the adapter converts `getEnd() - 1` to a line and column,
+then adds one to both before comparing. Missing ends fail `REQUEST_FACT_INPUT`;
+a range with no exact invocation fails `REQUEST_LOCATION`. Ends are only used to
+select the invocation and never enter structural identities or packets. Function
 coordinates match the original start or the start after export/default
 modifiers, skipping JSDoc children and retaining async/visibility modifiers.
 Site coordinates match exact token starts. The top-level sentinel resolves to

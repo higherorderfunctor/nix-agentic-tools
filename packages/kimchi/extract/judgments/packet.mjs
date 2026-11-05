@@ -388,7 +388,12 @@ export async function requests(value, tree, ts, display) {
     value.requestCallers,
     [
       {
-        callSite: { ...location, library: nonblank },
+        callSite: {
+          ...location,
+          endColumn: location.column,
+          endLine: location.line,
+          library: nonblank,
+        },
         distance: Number.isInteger,
         functionSite: location,
         kind: nonblank,
@@ -557,10 +562,17 @@ export async function requests(value, tree, ts, display) {
             position.line === p.line &&
             position.column === p.column
           );
-        if (target === "request call")
+        if (target === "request call") {
+          if (!call(n)) return false;
+          // CodeQL ends are inclusive and 1-based; getEnd() is exclusive.
+          const end = coordinates(n.getEnd() - 1);
           return (
-            call(n) && position.line === p.line && position.column === p.column
+            position.line === p.line &&
+            position.column === p.column &&
+            end.line === p.endLine &&
+            end.column === p.endColumn
           );
+        }
         if (!ts.isFunctionLike(n)) return false;
         return starts(n).some(
           (v) =>
@@ -568,7 +580,6 @@ export async function requests(value, tree, ts, display) {
             coordinates(v).column === p.column,
         );
       });
-      if (target === "request call" && matches.length) return matches.at(-1);
       if (matches.length !== 1)
         refuse(
           "REQUEST_LOCATION",
@@ -697,8 +708,12 @@ export async function requests(value, tree, ts, display) {
   for (const [i, row] of value.requestCallers.entries()) {
     const path = `/requestCallers/${i}`,
       requestFile = await load(row.callSite.file.slice(7), `${path}/callSite`);
-    const { library, ...position } = row.callSite;
-    const node = requestFile.at(position, "request call", `${path}/callSite`),
+    const { endColumn, endLine, library, ...position } = row.callSite;
+    const node = requestFile.at(
+        { endColumn, endLine, ...position },
+        "request call",
+        `${path}/callSite`,
+      ),
       request = requestFile.callAddress(node);
     const selector = {
         fact: { kind: "requestCallers", where: { request } },

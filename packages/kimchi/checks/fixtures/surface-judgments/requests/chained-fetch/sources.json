@@ -1,0 +1,4 @@
+{
+  "src/regions.ts": "export const REGIONS = {};\n",
+  "src/requests.ts": "function chained() {\n  return fetch(u).then(cb);\n}\n"
+}
