@@ -578,6 +578,33 @@
       "REQUEST_LOCATION",
       "REQUEST_LOCATION"
     ],
+    "details": [
+      "cannot adapt requestCallers location at /requestCallers/1/site: caller site is ambiguous between nested invocations sharing a start; resolving it requires the site's end position in requestCallers"
+    ],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "function callerA() { return requestA(); }",
+        "to": "function callerA() { return makeRegistrar()(\"start\", requestFn); }"
+      }
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "name": "request-caller-shared-start-refused",
+    "rejects": "choosing the inner makeRegistrar() invocation for the shared-start caller site in makeRegistrar()(\"start\", requestFn)"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
     "expect": {
       "current.json": {},
       "diff.json": {}

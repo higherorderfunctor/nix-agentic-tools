@@ -683,7 +683,7 @@ export async function requests(value, tree, ts, display) {
           : {}),
       };
     };
-    const site = (n) => {
+    const site = (n, field) => {
       let invocation = n.parent;
       while (invocation && !call(invocation) && !broad(invocation))
         invocation = invocation.parent;
@@ -691,8 +691,19 @@ export async function requests(value, tree, ts, display) {
         invocation &&
         call(invocation) &&
         n.getEnd() <= invocation.expression.getEnd()
-      )
+      ) {
+        if (
+          call(invocation.parent) &&
+          invocation.parent.expression === invocation &&
+          n.getStart(source) === invocation.getStart(source) &&
+          invocation.getStart(source) === invocation.parent.getStart(source)
+        )
+          refuse(
+            "REQUEST_LOCATION",
+            `cannot adapt requestCallers location at ${field}: caller site is ambiguous between nested invocations sharing a start; resolving it requires the site's end position in requestCallers`,
+          );
         return callAddress(invocation, true);
+      }
       return address(n, {
         key: tokenKey(n),
         kind: functionStarts.has(n.getStart(source))
@@ -757,7 +768,10 @@ export async function requests(value, tree, ts, display) {
       library,
       property: row.property,
       reason: row.reason,
-      site: use.site(use.at(row.site, "source token", `${path}/site`)),
+      site: use.site(
+        use.at(row.site, "source token", `${path}/site`),
+        `${path}/site`,
+      ),
     });
   }
   return {
