@@ -11,6 +11,7 @@
     environment.variables = extracted.children aggregate "environment.variables.<name>";
     network = extracted.get aggregate "network";
     regionRegistry = extracted.get aggregate "regionRegistry";
+    requestCallers = extracted.get aggregate "requestCallers";
     requestGuards = extracted.get aggregate "requestGuards";
     resourceDefinitions = extracted.get aggregate "resourceDefinitions";
   };

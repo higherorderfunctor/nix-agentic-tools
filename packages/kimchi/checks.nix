@@ -3,6 +3,7 @@
     ./checks/command-shell.nix
     ./checks/docs-skill.nix
     ./checks/kimchi-codeql-network.nix
+    ./checks/kimchi-codeql-request-callers.nix
     ./checks/kimchi-codeql-request-evidence.nix
     ./checks/kimchi-codeql.nix
     ./checks/kimchi-extracted.nix

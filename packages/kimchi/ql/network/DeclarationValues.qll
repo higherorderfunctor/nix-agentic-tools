@@ -30,3 +30,40 @@ Expr exportedInitializer(string file, string name) {
     result = decl.getInit().getUnderlyingValue()
   )
 }
+
+/** Immutable binding aliases only; no property, parameter or return-value flow. */
+Expr boundValue(Expr value) {
+  result = value.getUnderlyingValue()
+  or
+  exists(VariableDeclarator decl |
+    decl.getBindingPattern().(VarDecl).getVariable() = resolvedBinding(value.getUnderlyingValue()) and
+    decl.getDeclStmt() instanceof ConstDeclStmt and
+    not decl.getBindingPattern().(VarDecl).getVariable().getAnAccess().isLValue() and
+    result = boundValue(decl.getInit())
+  )
+}
+
+/** Functions by declaration binding, or a method on a syntactically resolved receiver. */
+Function boundFunction(Expr value) {
+  result = boundValue(value).(Function)
+  or
+  result.(FunctionDeclStmt).getVariable() = resolvedBinding(boundValue(value))
+  or
+  exists(PropAccess access, ObjectExpr object |
+    access = boundValue(value) and not access instanceof OptionalUse and
+    object = boundValue(access.getBase()) and
+    result = boundFunction(object.getPropertyByName(access.getPropertyName()).getInit())
+  )
+  or
+  exists(PropAccess access, ClassDefinition cls |
+    access = boundValue(value) and not access instanceof OptionalUse and
+    (
+      access.getBase() instanceof ThisExpr and
+      access.getEnclosingFunction().getThisBinder() = cls.getAMethod().getInit()
+      or
+      cls.getIdentifier().(VarDecl).getVariable() =
+        resolvedBinding(boundValue(boundValue(access.getBase()).(NewExpr).getCallee()))
+    ) and
+    result = cls.getMethod(access.getPropertyName()).getInit()
+  )
+}

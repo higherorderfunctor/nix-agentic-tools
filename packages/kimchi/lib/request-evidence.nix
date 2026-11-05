@@ -28,6 +28,7 @@
          sourceKind: $kind, key: $key, outcome: $outcome, conditionOutcome: ($conditionOutcome | fromjson), scope: $scope}]
         | unique | sort_by([.callSite.file, .callSite.line, .callSite.column, .callSite.library, .callSite.bundledModule, .guardSite.line, .guardSite.column, .sourceKind, .key, .outcome, .conditionOutcome])' \
         ${results}/RequestGuards.json > "$out/requestGuards.json"
+      jq -S -f ${./request-callers.jq} ${results}/RequestCallers.json > "$out/requestCallers.json"
       # A renamed or moved definitions or registry export matches nothing;
       # fail rather than record an empty inventory. Guards may be empty.
       jq -e 'length > 0' "$out/resourceDefinitions.json" >/dev/null ||

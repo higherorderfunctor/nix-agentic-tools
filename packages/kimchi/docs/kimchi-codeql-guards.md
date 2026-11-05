@@ -1,6 +1,7 @@
 ## Resource definitions, region registry and request guards
 
-`lib/request-evidence.nix` reads three queries in `ql/network` from the same
+`lib/request-evidence.nix` reads these three queries and the separate
+[request callers](kimchi-codeql-callers.md) query in `ql/network` from the same
 `network.resultsOf` result derivation as the network fact. The existing query
 runner, SDK/undici models and release database are shared. The package merges
 `resourceDefinitions`, `regionRegistry` and `requestGuards` beside `network` and

@@ -1,0 +1,1300 @@
+[
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callbacks.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "stored",
+    "site": {
+      "column": 32,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 9
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callbacks.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "stored",
+    "site": {
+      "column": 23,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 13
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callbacks.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callbacks.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "registration",
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 11
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callbacks.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 2
+    },
+    "kind": "callback",
+    "property": "fetchImpl",
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 7
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callbacks.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 2
+    },
+    "kind": "callback",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 11
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callbacks.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 6
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/callbacks.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "stored",
+    "site": {
+      "column": 15,
+      "file": "kimchi/src/imported.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 28,
+      "file": "kimchi/src/callers.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/callers.ts",
+      "line": 9
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/imported.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 5
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 5
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 8
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 8
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/imported.ts",
+      "line": 5
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/imported.ts",
+      "line": 5
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/class.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 3
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "stored",
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/class.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 3
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/class.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 3
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 5,
+      "file": "kimchi/src/class.ts",
+      "line": 7
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/class.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 6
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "stored",
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/class.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 6
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/class.ts",
+      "line": 12
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/class.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/class.ts",
+      "line": 11
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/class.ts",
+      "line": 11
+    }
+  },
+  {
+    "callSite": {
+      "column": 17,
+      "file": "kimchi/src/columns.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 17,
+      "file": "kimchi/src/columns.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 38,
+      "file": "kimchi/src/columns.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 38,
+      "file": "kimchi/src/columns.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/columns.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/depth.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/depth.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/depth.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/depth.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/depth.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/depth.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/depth.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/depth.ts",
+      "line": 5
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/depth.ts",
+      "line": 9
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/depth.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 3,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/depth.ts",
+      "line": 8
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/depth.ts",
+      "line": 12
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/depth.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 4,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/depth.ts",
+      "line": 11
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/depth.ts",
+      "line": 15
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/depth.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 4,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/depth.ts",
+      "line": 14
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "depth",
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/depth.ts",
+      "line": 18
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/distance.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/distance.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/distance.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/distance.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/distance.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/distance.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/distance.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/distance.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/distance.ts",
+      "line": 9
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/distance.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/distance.ts",
+      "line": 5
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/distance.ts",
+      "line": 10
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/distance.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/distance.ts",
+      "line": 8
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/distance.ts",
+      "line": 13
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/distance.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/distance.ts",
+      "line": 12
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/distance.ts",
+      "line": 12
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/entry.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/entry.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/entry.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/entry.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/entry.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/entry.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 30,
+      "file": "kimchi/src/inline.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 24,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 24,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 30,
+      "file": "kimchi/src/inline.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/inline.ts",
+      "line": 3
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/inline.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 30,
+      "file": "kimchi/src/inline.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 24,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    },
+    "kind": "callback",
+    "property": "fetchImpl",
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/inline.ts",
+      "library": "fetch",
+      "line": 6
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 64,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 64,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/inline.ts",
+      "library": "fetch",
+      "line": 6
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/inline.ts",
+      "line": 3
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/inline.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/inline.ts",
+      "library": "fetch",
+      "line": 6
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 64,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    },
+    "kind": "callback",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/inline.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/method.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/method.ts",
+      "line": 3
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "stored",
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/method.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/method.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/method.ts",
+      "line": 3
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/method.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/method.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/method.ts",
+      "line": 3
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/method.ts",
+      "line": 8
+    }
+  },
+  {
+    "callSite": {
+      "column": 12,
+      "file": "kimchi/src/method.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/method.ts",
+      "line": 7
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/method.ts",
+      "line": 7
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/nested.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/nested.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/nested.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/nested.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/nested.ts",
+      "line": 2
+    },
+    "kind": "callback",
+    "property": "fetchImpl",
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/nested.ts",
+      "line": 7
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/nested.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/nested.ts",
+      "line": 6
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/nested.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 3,
+      "file": "kimchi/src/recursion.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/recursion.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/recursion.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 3,
+      "file": "kimchi/src/recursion.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/recursion.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/recursion.ts",
+      "line": 7
+    }
+  },
+  {
+    "callSite": {
+      "column": 3,
+      "file": "kimchi/src/recursion.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/recursion.ts",
+      "line": 6
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "recursion",
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/recursion.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 3,
+      "file": "kimchi/src/recursion.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/recursion.ts",
+      "line": 6
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/recursion.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 1,
+      "file": "kimchi/src/top-level.ts",
+      "library": "fetch",
+      "line": 2
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/top-level.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/top-level.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/unresolved.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/unresolved.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unresolved",
+    "site": {
+      "column": 10,
+      "file": "kimchi/src/unresolved.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/unresolved.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/unresolved.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/unresolved.ts",
+      "line": 2
+    }
+  }
+]
