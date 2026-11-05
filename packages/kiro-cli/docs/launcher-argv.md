@@ -96,6 +96,12 @@ would silently run v2, which is exactly what upstream's own default does, and
 would need a hand-curated conflict list that rots every release. The error names
 `--agent-engine=v3`, a flag the user never typed.
 
+**Selecting an agent under v3** is a protocol call, not a flag: the client sends
+`session/new` with `_meta.kiro.modeId = <agent name>` (or `session/set_mode`
+afterwards). An unknown name falls back to the default mode and sends
+`_kiro/customAgent/not_found`. The semble `module-semble-kiro-acp` check drives
+exactly this through the wrapper.
+
 ## Tool trust is `permissions.yaml`, never a flag
 
 The wrapper injects no `--trust-tools`. Under v3 no process hands the list to

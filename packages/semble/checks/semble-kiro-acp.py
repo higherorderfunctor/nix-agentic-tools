@@ -1,4 +1,9 @@
-"""Drive Kiro v2 ACP through initialize and session/new without a model turn."""
+"""Drive Kiro ACP on the v3 engine through initialize and session/new, no model turn.
+
+The agent is selected the way every v3 ACP client selects one: `session/new`
+carries `_meta.kiro.modeId`. `acp --agent` is rejected by the v3 engine the
+launcher forces, so it is never passed.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,11 @@ import threading
 import time
 
 
-COMMANDS_AVAILABLE = "_kiro.dev/commands/available"
+MCP_STATUS = "_kiro/mcp/status"
+
+# Sent when the requested modeId names no available agent; the session then
+# silently falls back to the default mode instead of failing.
+CUSTOM_AGENT_NOT_FOUND = "_kiro/customAgent/not_found"
 
 # How long the child gets to exit after stdin EOF. Overrunning it is a HARNESS
 # action, not a product failure -- see the harness_kill branch in run().
@@ -35,26 +44,23 @@ def exit_description(returncode):
     return f"killed by signal {-returncode}" if returncode < 0 else f"exited with status {returncode}"
 
 
-def command_statuses(
-    notifications: list[dict[str, object]],
-) -> list[dict[str, object]]:
-    return [
-        notification["params"]
-        for notification in notifications
-        if notification.get("method") == COMMANDS_AVAILABLE
-    ]
-
-
-def latest_command_status(
+def semble_server(
     notifications: list[dict[str, object]],
 ) -> dict[str, object] | None:
-    matches = command_statuses(notifications)
-    return matches[-1] if matches else None
+    """The newest MCP status entry for the semble server, if any was reported."""
+    entries = [
+        server
+        for notification in notifications
+        if notification.get("method") == MCP_STATUS
+        for server in notification["params"].get("servers", [])
+        if server.get("name") == "semble"
+    ]
+    return entries[-1] if entries else None
 
 
-def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
+def run(kiro: str, agent: str, workspace: str, *, wait_for_semble: bool) -> dict[str, object]:
     proc = subprocess.Popen(
-        [kiro, "acp", "--agent", agent],
+        [kiro, "acp"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -130,10 +136,15 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
             if "method" not in message and message.get("id") == request_id:
                 return message
 
-    def wait_until_commands_ready() -> None:
+    def wait_until_semble_connected() -> None:
         deadline = time.monotonic() + 90
-        while latest_command_status(notifications) is None:
-            receive(deadline, "commands/available readiness")
+        while True:
+            server = semble_server(notifications)
+            if server is not None and server.get("status") == "connected":
+                return
+            if server is not None and server.get("status") == "failed":
+                raise RuntimeError(f"{agent}: semble MCP server failed: {server}")
+            receive(deadline, "the semble MCP server to connect")
 
     def require_result(response: dict[str, object], method: str) -> dict[str, object]:
         result = response.get("result")
@@ -159,11 +170,16 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
             },
         )
         require_result(initialized, "initialize")
-        session = call(2, "session/new", {"cwd": workspace, "mcpServers": []})
+        session = call(
+            2,
+            "session/new",
+            {"cwd": workspace, "mcpServers": [], "_meta": {"kiro": {"modeId": agent}}},
+        )
         session_result = require_result(session, "session/new")
         if not session_result.get("sessionId"):
             raise RuntimeError(f"{agent}: session/new returned no session id: {session}")
-        wait_until_commands_ready()
+        if wait_for_semble:
+            wait_until_semble_connected()
     finally:
         proc.stdin.close()
         closed_at = time.monotonic()
@@ -213,8 +229,8 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
     # that as the product's status is what made the pre-fix reds unreadable --
     # `git log -S harness_kill` reaches the commit with the measurements.
     #
-    # Reaching here means the try block returned: initialize, session/new and
-    # commands/available all succeeded, so a slow exit afterwards costs this
+    # Reaching here means the try block returned: initialize, session/new and,
+    # for the configured agent, the semble connection all succeeded, so a slow exit afterwards costs this
     # check nothing it asserts. An AUTONOMOUS non-zero exit still fails.
     #
     # DELIBERATELY GIVEN UP: a child that never exits AT ALL is now a pass
@@ -244,62 +260,40 @@ def main() -> None:
     if len(sys.argv) != 5:
         sys.exit("usage: semble-kiro-acp.py <kiro-cli> <agent> <control> <workspace>")
 
-    configured = run(sys.argv[1], sys.argv[2], sys.argv[4])
-    control = run(sys.argv[1], sys.argv[3], sys.argv[4])
-
-    def commands_available(result: dict[str, object]) -> dict[str, object]:
-        status = latest_command_status(result["notifications"])
-        if status is None:
-            raise RuntimeError(
-                f"{result['agent']}: expected a commands/available notification"
-            )
-        return status
+    configured = run(sys.argv[1], sys.argv[2], sys.argv[4], wait_for_semble=True)
+    # The control cannot wait for a status that must never come. Its absence
+    # claim is read from everything the child sent before it exited; the
+    # configured run proves the status channel works.
+    control = run(sys.argv[1], sys.argv[3], sys.argv[4], wait_for_semble=False)
 
     for result in (configured, control):
         protocol = result["initialize"]["result"]["protocolVersion"]
         if protocol != 1:
-            raise RuntimeError(f"{result['agent']}: expected v2 ACP protocol 1, got {protocol}")
-        current_mode = result["session"]["result"]["modes"]["currentModeId"]
-        if current_mode != result["agent"]:
+            raise RuntimeError(f"{result['agent']}: expected ACP protocol 1, got {protocol}")
+        modes = result["session"]["result"]["modes"]
+        if modes["currentModeId"] != result["agent"]:
             raise RuntimeError(
-                f"{result['agent']}: session selected unexpected mode {current_mode}"
+                f"{result['agent']}: session selected unexpected mode {modes['currentModeId']}"
             )
+        if result["agent"] not in [mode["id"] for mode in modes["availableModes"]]:
+            raise RuntimeError(f"{result['agent']}: agent missing from available modes: {modes}")
+        fallbacks = [
+            notification
+            for notification in result["notifications"]
+            if notification.get("method") == CUSTOM_AGENT_NOT_FOUND
+        ]
+        if fallbacks:
+            raise RuntimeError(f"{result['agent']}: agent was not found: {fallbacks}")
 
-    configured_status = commands_available(configured)
-    servers = configured_status.get("mcpServers", [])
-    if servers != [{"name": "semble", "status": "running", "toolCount": 2}]:
-        raise RuntimeError(f"semble-search: unexpected MCP server status: {servers}")
-    tools = sorted(
-        tool["name"]
-        for tool in configured_status.get("tools", [])
-        if tool.get("source") == "mcp:semble"
-    )
+    server = semble_server(configured["notifications"])
+    if server is None or server.get("status") != "connected":
+        raise RuntimeError(f"semble-search: unexpected MCP server status: {server}")
+    tools = sorted(tool["name"] for tool in server.get("tools", []))
     if tools != ["find_related", "search"]:
         raise RuntimeError(f"semble-search: unexpected Semble tools: {tools}")
 
-    control_notifications = control["notifications"]
-    control_server_snapshots = [
-        status.get("mcpServers", [])
-        for status in command_statuses(control_notifications)
-        if status.get("mcpServers", [])
-    ]
-    if control_server_snapshots:
-        raise RuntimeError(
-            f"control-search: unexpectedly reported MCP servers: "
-            f"{control_server_snapshots}"
-        )
-    if any(
-        notification.get("method") == "_kiro.dev/mcp/server_initialized"
-        for notification in control_notifications
-    ):
-        raise RuntimeError("control-search: unexpectedly initialized an MCP server")
-    if any(
-        tool.get("source") == "mcp:semble"
-        for notification in control_notifications
-        if notification.get("method") == "_kiro.dev/commands/available"
-        for tool in notification["params"].get("tools", [])
-    ):
-        raise RuntimeError("control-search: unexpectedly reported Semble tools")
+    if semble_server(control["notifications"]) is not None:
+        raise RuntimeError("control-search: unexpectedly reported the semble MCP server")
 
     json.dump({"configured": configured, "control": control}, sys.stdout, indent=2)
     sys.stdout.write("\n")

@@ -1029,6 +1029,17 @@ in {
         tools = ["read"];
       });
       invalidFile = pkgs.writeText "invalid-search.json" "{}";
+      # The production launcher, which appends `--agent-engine=v3` to `acp`,
+      # without the buildFHSEnv layer: nested user namespaces are not portable
+      # across Nix build sandboxes.
+      wrapped =
+        (import ../../kiro-cli/lib/wrapPackage.nix {
+          inherit pkgs;
+          inherit (pkgs) lib;
+        }).wrapPackage {
+          package = pkgs.ai.kiro-cli;
+          useFhsSandbox = false;
+        };
     in
       assert fromGeneratedTree ".kiro/agents/semble-search.json" evaluated.config.home.file.".kiro/agents/semble-search.json";
         pkgs.runCommandLocal "module-test-semble-kiro-acp" {nativeBuildInputs = [pkgs.python3];} ''
@@ -1041,6 +1052,8 @@ in {
           export XDG_CONFIG_HOME="$TMPDIR/config"
           export XDG_DATA_HOME="$TMPDIR/data"
           export XDG_STATE_HOME="$TMPDIR/state"
+          export CFFIXED_USER_HOME="$HOME"
+          export KIRO_DISABLE_TELEMETRY=1
           # Since 2.35.1 `agent validate` and `acp` refuse to start without a
           # login; test mode passes that gate. A placeholder KIRO_API_KEY passes it
           # too, but then session/new asks the remote MCP governance API, which
@@ -1086,12 +1099,12 @@ in {
             exit 1
           }
 
-          # Invoke the unwrapped binary directly and omit --agent-engine: on 3.0.0
-          # `acp --agent` resolves to Kiro's v2 ACP path, which the v3 engine
-          # rejects `--agent` on. The driver sends only initialize and session/new, never a
-          # model-bearing session/prompt request.
+          # Drive the launcher production runs. It appends --agent-engine=v3 to
+          # `acp`, and the v3 engine selects the agent from session/new
+          # `_meta.kiro.modeId`; `acp --agent` is rejected there. The driver sends
+          # only initialize and session/new, never a model-bearing session/prompt.
           python3 ${./semble-kiro-acp.py} \
-            ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli \
+            ${wrapped}/bin/kiro-cli \
             semble-search \
             control-search \
             "$TMPDIR/workspace" \
