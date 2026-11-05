@@ -75,7 +75,9 @@ comments state the wrong implementations.
 | method.ts:4:12           | method.ts:3:3           | boundary  | method.ts:3:3            | -         | stored       | 0   |
 | method.ts:4:12           | method.ts:3:3           | enclosing | method.ts:3:3            | -         | -            | 0   |
 | method.ts:4:12           | method.ts:3:3           | caller    | method.ts:8:10           | -         | -            | 1   |
+| method.ts:4:12           | method.ts:3:3           | caller    | method.ts:11:11          | -         | -            | 1   |
 | method.ts:4:12           | method.ts:7:8           | boundary  | method.ts:7:8            | -         | unreferenced | 1   |
+| method.ts:4:12           | method.ts:10:8          | boundary  | method.ts:10:8           | -         | unreferenced | 1   |
 | nested.ts:3:10           | nested.ts:2:1           | enclosing | nested.ts:2:1            | -         | -            | 0   |
 | nested.ts:3:10           | nested.ts:2:1           | callback  | nested.ts:7:3            | fetchImpl | -            | 1   |
 | nested.ts:3:10           | nested.ts:6:8           | boundary  | nested.ts:6:8            | -         | unreferenced | 1   |

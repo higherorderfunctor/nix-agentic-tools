@@ -90,15 +90,17 @@ Boundary reasons:
   falls outside the supported edge and store syntax. Its concrete location is
   preserved instead of being silently omitted.
 
-There is no data flow through properties, spreads, optional chaining, coalescing
-(`??`), parameters, return values or mutable module state. A concrete object
-method binding is the narrow property lookup described above; it does not
-propagate an options property's value. Class inheritance, dynamic receivers and
-prototype mutation are not resolved. Property registrations and class member
-definitions can therefore have stored boundaries even when some ordinary callers
-resolve. The worker's `{ fetch: fetchBounded }` gives a callback edge at that
-call; `options?.fetch ?? globalThis.fetch`, `fetchImpl` and `fetchFn` do not
-create additional edges. Spreads and stored options objects are not expanded.
+Optional chaining does not change resolution: `client?.send()` and `ns?.f()`
+resolve like `client.send()` and `ns.f()`. There is no data flow through
+properties, spreads, coalescing (`??`), parameters, return values or mutable
+module state. A concrete object method binding is the narrow property lookup
+described above; it does not propagate an options property's value. Class
+inheritance, dynamic receivers and prototype mutation are not resolved. Property
+registrations and class member definitions can therefore have stored boundaries
+even when some ordinary callers resolve. The worker's `{ fetch: fetchBounded }`
+gives a callback edge at that call; `options?.fetch ?? globalThis.fetch`,
+`fetchImpl` and `fetchFn` do not create additional edges. Spreads and stored
+options objects are not expanded.
 
 Rows are **reachability evidence only**, not conditions. They make no claim that
 a request is enabled, disabled, default-on or dead. All-boundary evidence is

@@ -45,7 +45,7 @@ private Function importedFunction(Expr value) {
   exists(Import imp, string name, LexicalName binding |
     (
       exists(PropAccess access, ImportNamespaceSpecifier spec |
-        value = access and not access instanceof OptionalUse and
+        value = access and
         spec.getLocal().getVariable() = resolvedBinding(boundValue(access.getBase())) and
         imp = spec.getImportDeclaration() and name = access.getPropertyName()
       )
@@ -77,13 +77,13 @@ Function boundFunction(Expr value) {
   result = importedFunction(boundValue(value))
   or
   exists(PropAccess access, ObjectExpr object |
-    access = boundValue(value) and not access instanceof OptionalUse and
+    access = boundValue(value) and
     object = boundValue(access.getBase()) and
     result = boundFunction(object.getPropertyByName(access.getPropertyName()).getInit())
   )
   or
   exists(PropAccess access, ClassDefinition cls |
-    access = boundValue(value) and not access instanceof OptionalUse and
+    access = boundValue(value) and
     (
       access.getBase() instanceof ThisExpr and
       access.getEnclosingFunction().getThisBinder() = cls.getAMethod().getInit()
