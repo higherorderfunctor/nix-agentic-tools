@@ -19,8 +19,8 @@ in {
         jq -cS '.[]' ${fixture}/expected/requestCallers.json | sort > expected.rows
         jq -cS '.[]' actual.json | sort > actual.rows
         if ! diff -u expected.rows actual.rows; then
-          echo "Request caller rows removed (-) or added (+) above; callSite.file names the fixture case." >&2
-          echo "Read that case in checks/fixtures/request-callers/source/kimchi/src; its comment names the wrong implementation." >&2
+          echo "Request caller rows removed (-) or added (+) above; inspect both callSite.file and site.file for cross-file cases." >&2
+          echo "Read those files in checks/fixtures/request-callers/source/kimchi/src and expected/rows.md; source comments name the wrong implementation." >&2
           echo "Fix RequestCallers.ql, or update hand-written expected/requestCallers.json after reading the fixture source." >&2
           exit 1
         fi

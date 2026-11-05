@@ -28,19 +28,28 @@ paths are never emitted.
   stopping use or function, and `reason` explains the stop.
 
 Binding resolution follows function declarations, named imports (including
-renaming) and immutable const aliases. Methods resolve on object literals and
-const aliases of those objects, on a const-bound `new` instance whose class
-binding resolves, and on `this` in that class's methods. These are declaration
-bindings, never a search for matching function names. The shared helpers live in
-`DeclarationValues.qll`; the guard query's existing helpers are unchanged.
+renaming) and immutable const aliases. Namespace member calls such as `ns.f()`
+and const destructuring such as `const { f: renamed } = await import("./m.js")`
+resolve through CodeQL's imported module and its exported bindings. The dynamic
+import path must be a string literal; destructuring must bind a named property
+directly to a variable. These forms resolve exported function declarations and
+const function values without matching names across unrelated modules. Methods
+resolve on object literals and const aliases of those objects, on a const-bound
+`new` instance whose class binding resolves, and on `this` in that class's
+methods. These are declaration bindings, never a search for matching function
+names. The shared helpers live in `DeclarationValues.qll`; literal strings still
+follow only named imports and const aliases, through the same const-initializer
+helper as function values.
 
 Callbacks are syntax only: an arrow, function expression or binding-resolved
 identifier directly in an argument, or as a property value in an inline object
 argument (including nested literal value properties). An unrelated stored
 options object creates no callback edge. For resolved Kimchi callees, traversal
 continues through the function containing the receiving call, just as for
-ordinary callers. Passing a callback does not prove that the recipient invokes
-it. Parameter reads inside the recipient do not become caller edges.
+ordinary callers. This includes `new C({ reconnect })` when `C` resolves by
+declaration binding, named import or const alias to a Kimchi source class.
+Passing a callback does not prove that the recipient invokes it. Parameter reads
+inside the recipient do not become caller edges.
 
 Traversal remembers the current chain's function identities and stops before
 revisiting one. The integer depth domain is explicitly limited to 0 through 4.
@@ -49,13 +58,20 @@ possible fifth edge produces a boundary at distance four, naming that next call,
 rather than disappearing. Other boundaries at uses count the observed edge;
 stored and unresolved escapes use the distance of the reached function.
 
+At Kimchi 1.26.0, `src/models.ts:207:21` reaches `runWizard` at
+`src/setup-wizard/index.ts:36:8` at distance four. Its dynamically imported call
+at `src/cli.ts:617:33` must produce a `boundary` row with reason `depth`,
+distance `4`, and null property, using those request, function and call
+locations with the `kimchi/` prefix. It does not produce a fifth caller edge.
+
 Boundary reasons:
 
 - `depth`: a reached function at depth four has another caller or callback use.
 - `recursion`: the next containing function is already in this chain; the edge
   is retained but traversal stops.
 - `registration`: a callback's receiving callee cannot resolve to a Kimchi
-  source function, including SDK or framework methods such as `pi.on`.
+  source function or, for `new`, a source class declaration. This includes SDK
+  or framework methods such as `pi.on`.
 - `stored`: a function value initializes a variable, object property or class
   member, or is assigned to a variable or property outside the callback forms. A
   const alias can have both a store boundary and resolved caller edges.
@@ -89,13 +105,16 @@ model is called in CI.
 `codeql.databaseOf` and `network.resultsOf` used for release facts and applies
 the same decoder. It compares whole rows against the hand-written
 `checks/fixtures/request-callers/expected/requestCallers.json`. A failure prints
-removed/added rows, whose request file identifies the case, and instructs the
-operator to read that source before fixing the query or expected rows. Source
-comments name the incorrect implementation each case rejects.
+removed/added rows and directs the operator to both `callSite.file` and
+`site.file`, plus the expected row ledger. A cross-file case may have its
+request in `callers.ts` and its use in an import fixture or in `unrelated.ts` if
+name matching regresses. Read those sources before fixing the query or expected
+rows. Source comments name the incorrect implementation each case rejects.
 
 The expected rows were authored from fixture source, never from the query. They
-cover distinct columns, two callers with different local guards, renamed imports
-and aliases, a same-named negative module, callback properties versus stored
+cover distinct columns, two callers with different local guards, renamed,
+namespace and destructured dynamic imports, const aliases, a same-named negative
+module, source constructor callbacks, callback properties versus stored
 properties, registration, module storage, mutual recursion, depth, exported
 entries, inline arrows/function expressions, object/class methods, minimum
 distances and unsupported returned functions. See the adjacent
@@ -106,5 +125,4 @@ every exact location and row. Function declaration locations exclude the
 The existing `request-evidence/report.test.mjs` also supplies synthetic caller
 rows to the real report generator, checks columns and boundaries survive, and
 reverses their order. Local Node checks establish the reader contract only. QL
-compilation, fixture equality and real-release coverage must be settled by CI;
-no local engine or database build is required or claimed.
+compilation, fixture equality and real-release coverage must be settled by CI.

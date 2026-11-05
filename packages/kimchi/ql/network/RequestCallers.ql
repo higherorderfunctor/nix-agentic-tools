@@ -49,7 +49,11 @@ private predicate follows(InvokeExpr call, string kind) {
   kind = "caller"
   or
   kind = "callback" and
-  exists(Function receiver | receiver = boundFunction(call.getCallee()) and owned(receiver))
+  (
+    exists(Function receiver | receiver = boundFunction(call.getCallee()) and owned(receiver))
+    or
+    call instanceof NewExpr and owned(boundClass(call.getCallee()))
+  )
 }
 
 /** A function value escaping the two syntactic edge forms stops here. */

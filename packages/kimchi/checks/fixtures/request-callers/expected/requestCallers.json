@@ -259,6 +259,28 @@
     "reason": null,
     "site": {
       "column": 3,
+      "file": "kimchi/src/dynamic-import.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
       "file": "kimchi/src/imported.ts",
       "line": 6
     }
@@ -274,6 +296,28 @@
     "functionSite": {
       "column": 8,
       "file": "kimchi/src/callers.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/namespace-import.ts",
+      "line": 4
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/callers.ts",
       "line": 5
     },
     "kind": "boundary",
@@ -317,6 +361,28 @@
     "distance": 1,
     "functionSite": {
       "column": 8,
+      "file": "kimchi/src/dynamic-import.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/dynamic-import.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
       "file": "kimchi/src/imported.ts",
       "line": 5
     },
@@ -327,6 +393,28 @@
       "column": 8,
       "file": "kimchi/src/imported.ts",
       "line": 5
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/callers.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/namespace-import.ts",
+      "line": 3
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/namespace-import.ts",
+      "line": 3
     }
   },
   {
@@ -547,6 +635,94 @@
       "column": 8,
       "file": "kimchi/src/columns.ts",
       "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/constructor.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/constructor.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/constructor.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/constructor.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/constructor.ts",
+      "line": 2
+    },
+    "kind": "callback",
+    "property": "reconnect",
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/constructor.ts",
+      "line": 10
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/constructor.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/constructor.ts",
+      "line": 9
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/constructor.ts",
+      "line": 13
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/constructor.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 2,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/constructor.ts",
+      "line": 12
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/constructor.ts",
+      "line": 12
     }
   },
   {

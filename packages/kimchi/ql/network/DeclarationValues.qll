@@ -13,12 +13,14 @@ LexicalName resolvedBinding(VarAccess use) {
 }
 
 string literalString(Expr value) {
-  result = value.getUnderlyingValue().(StringLiteral).getValue()
-  or
+  result = boundValue(value).(StringLiteral).getValue()
+}
+
+private Expr constInitializer(LexicalName binding) {
   exists(VariableDeclarator decl |
-    decl.getBindingPattern().(VarDecl).getVariable() = resolvedBinding(value.getUnderlyingValue()) and
+    decl.getBindingPattern().(VarDecl).getVariable() = binding and
     decl.getDeclStmt() instanceof ConstDeclStmt and
-    result = literalString(decl.getInit())
+    result = decl.getInit()
   )
 }
 
@@ -35,12 +37,35 @@ Expr exportedInitializer(string file, string name) {
 Expr boundValue(Expr value) {
   result = value.getUnderlyingValue()
   or
-  exists(VariableDeclarator decl |
-    decl.getBindingPattern().(VarDecl).getVariable() = resolvedBinding(value.getUnderlyingValue()) and
-    decl.getDeclStmt() instanceof ConstDeclStmt and
-    not decl.getBindingPattern().(VarDecl).getVariable().getAnAccess().isLValue() and
-    result = boundValue(decl.getInit())
+  result = boundValue(constInitializer(resolvedBinding(value.getUnderlyingValue())))
+}
+
+/** Namespace members and const destructuring of awaited literal module imports. */
+private Function importedFunction(Expr value) {
+  exists(Import imp, string name, LexicalName binding |
+    (
+      exists(PropAccess access, ImportNamespaceSpecifier spec |
+        value = access and not access instanceof OptionalUse and
+        spec.getLocal().getVariable() = resolvedBinding(boundValue(access.getBase())) and
+        imp = spec.getImportDeclaration() and name = access.getPropertyName()
+      )
+      or
+      exists(VariableDeclarator decl, PropertyPattern property |
+        decl.getDeclStmt() instanceof ConstDeclStmt and
+        property = decl.getBindingPattern().(ObjectPattern).getAPropertyPattern() and
+        property.getValuePattern().(VarDecl).getVariable() = value.(VarAccess).getVariable() and
+        imp = decl.getInit().getUnderlyingValue().(AwaitExpr).getOperand().getUnderlyingValue().(DynamicImportExpr) and
+        imp.getImportedPathExpr() instanceof StringLiteral and name = property.getName()
+      )
+    ) and
+    imp.getImportedModule().(ES2015Module).exportsAs(binding, name) and
+    (result.(FunctionDeclStmt).getVariable() = binding or result = boundFunction(constInitializer(binding)))
   )
+}
+
+/** Source class declarations, including named imports and immutable aliases. */
+ClassDefinition boundClass(Expr value) {
+  result.getIdentifier().getVariable() = resolvedBinding(boundValue(value))
 }
 
 /** Functions by declaration binding, or a method on a syntactically resolved receiver. */
@@ -48,6 +73,8 @@ Function boundFunction(Expr value) {
   result = boundValue(value).(Function)
   or
   result.(FunctionDeclStmt).getVariable() = resolvedBinding(boundValue(value))
+  or
+  result = importedFunction(boundValue(value))
   or
   exists(PropAccess access, ObjectExpr object |
     access = boundValue(value) and not access instanceof OptionalUse and
@@ -61,8 +88,7 @@ Function boundFunction(Expr value) {
       access.getBase() instanceof ThisExpr and
       access.getEnclosingFunction().getThisBinder() = cls.getAMethod().getInit()
       or
-      cls.getIdentifier().(VarDecl).getVariable() =
-        resolvedBinding(boundValue(boundValue(access.getBase()).(NewExpr).getCallee()))
+      cls = boundClass(boundValue(access.getBase()).(NewExpr).getCallee())
     ) and
     result = cls.getMethod(access.getPropertyName()).getInit()
   )

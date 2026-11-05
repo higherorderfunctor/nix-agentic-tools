@@ -1,13 +1,13 @@
 ## Kimchi egress report
 
-> **Last verified:** 2026-11-03 — the producer-boundary fixture checks guard
-> joins, explicit absence and preservation of legacy report fields. Scripts in
-> `packages/kimchi/extract/egress/` consume `egressScan`, `environment`,
-> `network`, `regionRegistry`, `requestCallers`, `requestGuards` and
-> `resourceDefinitions` through `lib.extracted`. The extraction runs `scan.mjs`
-> 2.0.0 on the original pinned Kimchi and pi trees. QL compilation, fixture
-> results and complete release regeneration remain CI checks; PR CI regenerates
-> the facts and report together.
+> **Last verified:** 2026-11-05 — the producer-boundary fixture checks caller
+> rows, guard joins, explicit absence and preservation of legacy report fields.
+> Scripts in `packages/kimchi/extract/egress/` consume `egressScan`,
+> `environment`, `network`, `regionRegistry`, `requestCallers`, `requestGuards`
+> and `resourceDefinitions` through `lib.extracted`. The extraction runs
+> `scan.mjs` 2.0.0 on the original pinned Kimchi and pi trees. QL compilation,
+> fixture results and complete release regeneration remain CI checks; PR CI
+> regenerates the facts and report together.
 
 `packages/kimchi/egress-report.json` is the review artifact for the pinned
 release's network surface. `generate.mjs` writes the complete report from facts.
