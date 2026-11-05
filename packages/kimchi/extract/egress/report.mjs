@@ -9,8 +9,6 @@ export const FACT_FIELDS = {
   networkCallSites: "network fact: call sites",
   regionRegistry:
     "regionRegistry fact: exported region fields and default with source locations",
-  requestCallers:
-    "requestCallers fact: bounded caller and callback reachability with explicit boundaries; reachability evidence only, not conditions",
   requestGuards:
     "requestGuards fact: necessary intraprocedural conditions joined to network call sites",
   resourceDefinitions:

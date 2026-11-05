@@ -116,13 +116,11 @@ async function main() {
     environment,
     network,
     regionRegistry,
-    requestCallers,
     requestGuards,
     resourceDefinitions,
   } = await readJson(args.facts);
   for (const [name, value] of Object.entries({
     regionRegistry,
-    requestCallers,
     requestGuards,
     resourceDefinitions,
   }))
@@ -152,9 +150,6 @@ async function main() {
     hosts: hosts(network),
     networkCallSites: callSites(network),
     regionRegistry,
-    requestCallers: [...requestCallers].sort((left, right) =>
-      compare(JSON.stringify(left), JSON.stringify(right)),
-    ),
     requestGuards: requestGuardSites(network, requestGuards),
     resourceDefinitions,
   };

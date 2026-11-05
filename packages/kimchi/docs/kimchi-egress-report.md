@@ -1,13 +1,13 @@
 ## Kimchi egress report
 
-> **Last verified:** 2026-11-05 — the producer-boundary fixture checks caller
-> rows, guard joins, explicit absence and preservation of legacy report fields.
-> Scripts in `packages/kimchi/extract/egress/` consume `egressScan`,
-> `environment`, `network`, `regionRegistry`, `requestCallers`, `requestGuards`
-> and `resourceDefinitions` through `lib.extracted`. The extraction runs
-> `scan.mjs` 2.0.0 on the original pinned Kimchi and pi trees. QL compilation,
-> fixture results and complete release regeneration remain CI checks; PR CI
-> regenerates the facts and report together.
+> **Last verified:** 2026-11-05 — the producer-boundary fixture checks guard
+> joins, explicit absence and preservation of legacy report fields. Scripts in
+> `packages/kimchi/extract/egress/` consume `egressScan`, `environment`,
+> `network`, `regionRegistry`, `requestGuards` and `resourceDefinitions` through
+> `lib.extracted`. The extraction runs `scan.mjs` 2.0.0 on the original pinned
+> Kimchi and pi trees. QL compilation, fixture results and complete release
+> regeneration remain CI checks; PR CI regenerates the facts and report
+> together.
 
 `packages/kimchi/egress-report.json` is the review artifact for the pinned
 release's network surface. `generate.mjs` writes the complete report from facts.
@@ -24,7 +24,6 @@ scripts live in `packages/kimchi/extract/egress/` and share `report.mjs`, whose
 | `hosts`               | `generate.mjs` | `network` target hosts and `unattributed` URL literals              |
 | `networkCallSites`    | `generate.mjs` | `network.callSites`, sorted                                         |
 | `regionRegistry`      | `generate.mjs` | `regionRegistry` exported fields and default, with locations        |
-| `requestCallers`      | `generate.mjs` | `requestCallers` occurrence edges and stop boundaries, sorted       |
 | `requestGuards`       | `generate.mjs` | `requestGuards` joined to each `network.callSites` row              |
 | `resourceDefinitions` | `generate.mjs` | `resourceDefinitions` static ids, defaults and restart declarations |
 | `commands`            | `scan.mjs`     | TypeScript AST over the Kimchi and pi trees                         |
@@ -44,17 +43,6 @@ fact input. `resourceDefinitions` preserves declared defaults and restart
 requirements; missing restart declarations are null. `regionRegistry` preserves
 every modeled region field and the default-region declaration with source
 locations. Neither field describes effective enablement or override precedence.
-
-`requestCallers` is a separate list of Kimchi request occurrences, including
-columns, enclosing functions, caller/callback edges and explicit stop
-boundaries. It preserves the fact rows and sorts them deterministically.
-`header.provenance.requestCallers` labels them as reachability evidence only,
-not conditions. A registration, store, recursion, depth, unreferenced or
-unresolved boundary is never rendered as "no callers" or "dead". The existing
-report fields retain their exact values and shapes. See
-[request callers](kimchi-codeql-callers.md) for row fields, binding resolution,
-the four-edge limit and unsupported property or mutable-state flow. CI
-regenerates the fact and report together; neither projection is hand-edited.
 
 `requestGuards` is a separate list of network sites with `guards` and `status`;
 the existing `networkCallSites` shape and values are unchanged. Each guard names

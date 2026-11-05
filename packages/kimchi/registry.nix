@@ -80,7 +80,7 @@
     };
     # kimchi-egress-report: field producers and the drift gate tying the
     # complete report to egressScan, environment, network, regionRegistry,
-    # requestCallers, requestGuards and resourceDefinitions facts.
+    # requestGuards and resourceDefinitions facts.
     kimchi-egress-report = {
       scopes = [
         "checks/references/kimchi-egress-report.nix"

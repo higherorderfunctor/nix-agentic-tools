@@ -3,11 +3,12 @@
 `requestCallers` is one static x86_64-linux CodeQL fact. `RequestCallers.ql`
 shares the `network` query pack, models, release database and query results;
 `lib/request-evidence.nix` decodes it with `lib/request-callers.jq`. The package
-merges it beside `requestGuards`. Only requests under `kimchi/src/` qualify,
-using the same `ClientRequest`, library and target predicates as the network
-queries. A call occurrence is identified by file, line **and column**. Thus the
-two calls on `src/extensions/memory/backend.ts:192` remain distinct even though
-`network` groups them. Carried dependencies are outside this fact.
+merges it beside `requestGuards` for the judgment check; the egress report does
+not read or publish it. Only requests under `kimchi/src/` qualify, using the
+same `ClientRequest`, library and target predicates as the network queries. A
+call occurrence is identified by file, line **and column**. Thus the two calls
+on `src/extensions/memory/backend.ts:192` remain distinct even though `network`
+groups them. Carried dependencies are outside this fact.
 
 Every row contains `callSite` (file, line, column, library), `functionSite`
 (file, line, column), `kind`, `site` (file, line, column), `property`, `reason`
@@ -113,12 +114,16 @@ model is called in CI.
 `checks/kimchi-codeql-request-callers.nix` builds the fixture tree with the same
 `codeql.databaseOf` and `network.resultsOf` used for release facts and applies
 the same decoder. It compares whole rows against the hand-written
-`checks/fixtures/request-callers/expected/requestCallers.json`. A failure prints
-removed/added rows and directs the operator to both `callSite.file` and
-`site.file`, plus the expected row ledger. A cross-file case may have its
-request in `callers.ts` and its use in an import fixture or in `unrelated.ts` if
-name matching regresses. Read those sources before fixing the query or expected
-rows. Source comments name the incorrect implementation each case rejects.
+`checks/fixtures/request-callers/expected/requestCallers.jsonl`, with one
+compact JSON row per line in decoder order. Treefmt leaves this format
+unchanged. The check emits decoded rows with `jq -cS` and compares them with
+`diff -u`. A failure prints removed/added rows and directs the operator to both
+`callSite.file` and `site.file`. A cross-file case may have its request in
+`callers.ts` and its use in an import fixture or in `unrelated.ts` if name
+matching regresses. Read those sources before fixing the query or expected rows.
+The case comment on the first line of each fixture source file names the
+incorrect implementation it rejects. Update the expected `.jsonl` by hand after
+reading the source.
 
 The expected rows were authored from fixture source, never from the query. They
 cover distinct columns, two callers with different local guards, renamed,
@@ -126,13 +131,9 @@ namespace and destructured dynamic imports, const aliases, a same-named negative
 module, source constructor callers and callbacks, distinct chained call sites,
 callback properties versus stored properties, registration, module storage,
 mutual recursion, depth, exported entries, inline arrows/function expressions,
-object/class methods, minimum distances and unsupported returned functions. See
-the adjacent
-[expected row ledger](../checks/fixtures/request-callers/expected/rows.md) for
-every exact location and row. Function declaration locations exclude the
-`export` keyword, as the pinned extractor's `fixExports` does.
+object/class methods, minimum distances and unsupported returned functions.
+Function declaration locations exclude the `export` keyword, as the pinned
+extractor's `fixExports` does.
 
-The existing `request-evidence/report.test.mjs` also supplies synthetic caller
-rows to the real report generator, checks columns and boundaries survive, and
-reverses their order. Local Node checks establish the reader contract only. QL
-compilation, fixture equality and real-release coverage must be settled by CI.
+QL compilation, fixture equality and real-release coverage must be settled by
+CI.

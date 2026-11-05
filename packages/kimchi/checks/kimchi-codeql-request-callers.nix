@@ -16,12 +16,11 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         jq -S -f ${../lib/request-callers.jq} ${results}/RequestCallers.json > actual.json
-        jq -cS '.[]' ${fixture}/expected/requestCallers.json | sort > expected.rows
-        jq -cS '.[]' actual.json | sort > actual.rows
-        if ! diff -u expected.rows actual.rows; then
+        jq -cS '.[]' actual.json > actual.jsonl
+        if ! diff -u ${fixture}/expected/requestCallers.jsonl actual.jsonl; then
           echo "Request caller rows removed (-) or added (+) above; inspect both callSite.file and site.file for cross-file cases." >&2
-          echo "Read those files in checks/fixtures/request-callers/source/kimchi/src and expected/rows.md; source comments name the wrong implementation." >&2
-          echo "Fix RequestCallers.ql, or update hand-written expected/requestCallers.json after reading the fixture source." >&2
+          echo "Read those files in checks/fixtures/request-callers/source/kimchi/src; the case comment on each file's first line names the wrong implementation." >&2
+          echo "Fix RequestCallers.ql, or update hand-written expected/requestCallers.jsonl by hand after reading the fixture source." >&2
           exit 1
         fi
         cp actual.json "$out"

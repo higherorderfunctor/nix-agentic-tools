@@ -22,37 +22,6 @@ const facts = {
     ...Object.fromEntries(Object.keys(SCAN_FIELDS).map((key) => [key, []])),
   },
   environment: { variables: {} },
-  // Fails line-keyed joins and boundary omission: both columns survive unchanged.
-  requestCallers: [5, 35].flatMap((column) => [
-    {
-      callSite: {
-        file: "kimchi/src/requests.ts",
-        line: 57,
-        column,
-        library: "fetch",
-      },
-      functionSite: { file: "kimchi/src/requests.ts", line: 54, column: 1 },
-      kind: "enclosing",
-      site: { file: "kimchi/src/requests.ts", line: 54, column: 1 },
-      property: null,
-      reason: null,
-      distance: 0,
-    },
-    {
-      callSite: {
-        file: "kimchi/src/requests.ts",
-        line: 57,
-        column,
-        library: "fetch",
-      },
-      functionSite: { file: "kimchi/src/requests.ts", line: 54, column: 1 },
-      kind: "boundary",
-      site: { file: "kimchi/src/requests.ts", line: 60, column: 1 },
-      property: "fetchImpl",
-      reason: "registration",
-      distance: 1,
-    },
-  ]),
   network: {
     callSites: [
       9, 17, 24, 31, 40, 51, 57, 59, 64, 69, 70, 76, 85, 91, 97, 103, 105, 112,
@@ -91,16 +60,6 @@ function generate() {
   return read(output);
 }
 const report = generate();
-assert.equal(report.requestCallers.length, 4);
-for (const row of facts.requestCallers)
-  assert.deepEqual(
-    report.requestCallers.find(
-      (actual) =>
-        actual.kind === row.kind &&
-        actual.callSite.column === row.callSite.column,
-    ),
-    row,
-  );
 assert.deepEqual(report.networkCallSites, facts.network.callSites);
 assert.deepEqual(report.hosts, []);
 assert.deepEqual(report.endpointVariables, []);
@@ -123,7 +82,6 @@ for (const row of report.requestGuards) {
 assert.equal(report.requestGuards[1].guards[0].conditionOutcome, false);
 assert.equal(report.requestGuards[2].guards[0].outcome, "falsy");
 facts.network.callSites.reverse();
-facts.requestCallers.reverse();
 facts.requestGuards.reverse();
 assert.deepEqual(generate(), report);
 // Fails attaching a guard to another bundled module sharing a line/library.
@@ -136,11 +94,6 @@ assert.equal(
     .guards.length,
   0,
 );
-delete facts.requestCallers;
-assert.throws(
-  () => generate(),
-  (error) => /lacks requestCallers/.test(String(error.stderr)),
-);
 console.log(
-  "PASS: legacy fields preserved; four caller rows preserve columns and boundaries; seven guards joined; thirteen absent guards explicit; input order, bundle identity and missing caller fact checked",
+  "PASS: legacy fields preserved; seven guards joined; thirteen absent guards explicit; input order and bundle identity checked",
 );
