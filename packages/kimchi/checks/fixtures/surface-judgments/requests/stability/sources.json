@@ -1,4 +1,0 @@
-{
-  "src/regions.ts": "export const REGIONS = {};\n",
-  "src/requests.ts": "function deliverEvents() {\n  return reportingDelivery(() => {\n    return fetch(\"https://events.example\");\n  });\n}\nfunction loginExtension(pi) {\n  pi.on(\"session_start\", () => { refreshBillingStatus(); refreshBudgetStatus(); });\n}\nfunction refreshBillingStatus() { return fetch(\"https://billing.example\"); }\nfunction refreshBudgetStatus() { return fetch(\"https://budget.example\"); }\n"
-}

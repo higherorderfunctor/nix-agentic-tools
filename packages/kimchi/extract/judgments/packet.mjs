@@ -102,6 +102,7 @@ const requestSite = (role) => ({
   anchor: { role, symbol: steps },
   path: sourcePath,
 });
+const sourceSite = requestSite({ kind: (v) => v === "node", steps });
 const isRequest = (selector) => selector?.fact?.kind === "requestCallers";
 export const rootKey = (selector) =>
   canonical(
@@ -121,7 +122,7 @@ function selector(value, path) {
             kind: (v) => v === "requestCallers",
             where: { request: requestSite(callRole) },
           },
-          sources: [requestSite({ kind: (v) => v === "node", steps })],
+          sources: [sourceSite],
         }
       : {
           fact: {
@@ -158,6 +159,8 @@ const packetShape = {
   selector,
   spans: Array.isArray,
 };
+export const judgmentSelector = (judgment) =>
+  judgment?.selector ?? judgment?.packet?.selector;
 export function verdicts(value) {
   validate(value, {
     judgments: (v) => Array.isArray(v),
@@ -166,12 +169,13 @@ export function verdicts(value) {
   const ids = new Set(),
     roots = new Set();
   return value.judgments.map((judgment, i) => {
-    const path = `/judgments/${i}`;
+    const path = `/judgments/${i}`,
+      request = isRequest(judgment?.selector);
     try {
       validate(
         judgment,
         {
-          claim: isRequest(judgment?.packet?.selector)
+          claim: request
             ? Object.fromEntries(
                 requestClaimParts.map((key) => [key, nonblank]),
               )
@@ -181,36 +185,45 @@ export function verdicts(value) {
           ...(judgment?.verdict === "unknown"
             ? { missingEvidence: nonblank }
             : {}),
-          packet: {
-            ...packetShape,
-            ...(isRequest(judgment?.packet?.selector)
-              ? { statement: string }
-              : {}),
-          },
+          ...(request
+            ? {
+                evidence: {
+                  rows: [digest],
+                  spans: [{ ...sourceSite, sha256: digest }],
+                  statement: digest,
+                },
+                selector,
+              }
+            : { packet: packetShape }),
           rationale: nonblank,
           scope: nonblank,
           verdict: (v) => ["supported", "refuted", "unknown"].includes(v),
         },
         path,
       );
-      for (const [array, items] of [
-        ["rows", judgment.packet.rows],
-        ["selector.sources", judgment.packet.selector.sources],
-        ["spans", judgment.packet.spans],
+      const evidence = request ? judgment.evidence : judgment.packet;
+      for (const [array, items, field] of [
+        ["rows", evidence.rows, request ? "evidence/rows" : "packet/rows"],
+        [
+          "selector.sources",
+          judgmentSelector(judgment).sources,
+          request ? "selector/sources" : "packet/selector/sources",
+        ],
+        ["spans", evidence.spans, request ? "evidence/spans" : "packet/spans"],
       ])
         if (canonical(items) !== canonical(ordered([...items])))
           schema(
             "VERDICT_INPUT",
-            `${path}/packet/${array.replace(".", "/")}`,
+            `${path}/${field}`,
             `non-canonical ${array} array for judgment ${judgment.id}`,
           );
-      const root = rootKey(judgment.packet.selector);
+      const root = rootKey(judgmentSelector(judgment));
       if (ids.has(judgment.id))
         schema("VERDICT_INPUT", `${path}/id`, "duplicate judgment id");
       if (roots.has(root))
         schema(
           "VERDICT_INPUT",
-          `${path}/packet/selector`,
+          `${path}/${request ? "selector" : "packet/selector"}`,
           "duplicate judgment root",
         );
       ids.add(judgment.id);
@@ -789,25 +802,39 @@ export async function packet(selector, rows, resolve) {
       errors.push(error);
     }
   }
+  const rowEntries = request
+    ? normalized.map((row) => [hash(canonical(row)), row])
+    : null;
+  const evidence = request
+    ? {
+        rows: rowEntries.map(([digest]) => digest).sort(),
+        spans: spans.filter((span) => span.anchor.role.kind !== "statement"),
+        statement: spans.find((span) => span.anchor.role.kind === "statement")
+          ?.sha256,
+      }
+    : null;
   const result = {
-    rows: ordered(normalized),
+    rows: request ? Object.fromEntries(rowEntries) : ordered(normalized),
     schemaVersion: 1,
     selector: { ...selector, sources: ordered([...selector.sources]) },
     spans,
     ...(request ? { statement } : {}),
   };
-  return errors.length
-    ? {
-        incomplete: {
-          ...result,
-          errors: errors.map((e) => ({
-            citation: e.citation,
-            code: e.code,
-            detail: e.message,
-          })),
-        },
-      }
-    : { packet: result, evidenceHash: hash(canonical(result)) };
+  return {
+    ...(request ? { evidence } : {}),
+    ...(errors.length
+      ? {
+          incomplete: {
+            ...result,
+            errors: errors.map((e) => ({
+              citation: e.citation,
+              code: e.code,
+              detail: e.message,
+            })),
+          },
+        }
+      : { packet: result, evidenceHash: hash(canonical(evidence ?? result)) }),
+  };
 }
 export function differences(recorded, current) {
   const subtract = (left, right) => {
@@ -820,12 +847,20 @@ export function differences(recorded, current) {
     });
   };
   const spanMap = (packet) =>
-    new Map(
-      (packet?.spans ?? []).map((span) => {
+    new Map([
+      ...(packet?.spans ?? []).map((span) => {
         const { sha256, ...site } = span ?? {};
         return [canonical(site), { site, hash: sha256 }];
       }),
-    );
+      ...(packet?.statement
+        ? [
+            [
+              "request statement",
+              { site: "request statement", hash: packet.statement },
+            ],
+          ]
+        : []),
+    ]);
   const before = spanMap(recorded),
     after = spanMap(current);
   return {
