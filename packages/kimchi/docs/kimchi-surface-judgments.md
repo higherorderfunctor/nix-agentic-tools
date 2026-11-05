@@ -119,6 +119,10 @@ The ordinal counts only calls with that entire key. Thus adding
 `pi.on("session_shutdown", ...)` does not move a `pi.on("session_start", ...)`
 site.
 
+Caller sites shared by nested invocations such as
+`makeRegistrar()("start", requestFn)` fail `REQUEST_LOCATION`: resolving them
+requires the site's end position in `requestCallers`.
+
 Function-start tokens use `function-start`. An anonymous callback's key includes
 its containing call's site role, argument position, and intervening property
 names; an unrelated arrow passed to another call cannot shift it. Named starts
@@ -319,10 +323,10 @@ recorded-packet hash.
 Request input adds two codes to the same envelope and uses the same packet
 inspection command:
 
-| Code                 | `Changed:` detail                                                                                                                                | `Fix:` action                                                                                                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REQUEST_FACT_INPUT` | `invalid requestCallers input at <path>: <reason>`                                                                                               | Correct the requestCallers producer or source pin, run `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then investigate and rejudge `packages/kimchi/surface-judgments.json`.              |
-| `REQUEST_LOCATION`   | `cannot adapt requestCallers location at <path>: expected one <target> at <location>, found <count>; regenerate facts against the pinned source` | Align requestCallers with the pinned source using `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then inspect the candidate packets and rejudge `packages/kimchi/surface-judgments.json`. |
+| Code                 | `Changed:` detail                                                                                                                                                                                                                                                                           | `Fix:` action                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REQUEST_FACT_INPUT` | `invalid requestCallers input at <path>: <reason>`                                                                                                                                                                                                                                          | Correct the requestCallers producer or source pin, run `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then investigate and rejudge `packages/kimchi/surface-judgments.json`.              |
+| `REQUEST_LOCATION`   | `cannot adapt requestCallers location at <path>: expected one <target> at <location>, found <count>; regenerate facts against the pinned source`, or `caller site is ambiguous between nested invocations sharing a start; resolving it requires the site's end position in requestCallers` | Align requestCallers with the pinned source using `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then inspect the candidate packets and rejudge `packages/kimchi/surface-judgments.json`. |
 
 A request source read failure has Changed text
 `cannot adapt requestCallers location at <path>: cannot read source <source-path> (<filesystem-code>); regenerate facts against the pinned source`
