@@ -10,6 +10,7 @@ import {
   factRows,
   hash,
   packet,
+  requestClaimParts,
   requests,
   resolver,
   rootKey,
@@ -60,7 +61,7 @@ function fail(
     typeof judgment.claim === "string"
       ? judgment.claim
       : judgment.claim &&
-          ["default", "destination", "disable", "trigger"].every(
+          requestClaimParts.every(
             (key) => typeof judgment.claim[key] === "string",
           )
         ? canonical(judgment.claim)

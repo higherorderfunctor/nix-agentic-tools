@@ -36,9 +36,9 @@ refused.
 ## Network request occurrences
 
 Every distinct request occurrence in `requestCallers` is a separate judgment
-root, including two calls on the same line. At Kimchi 1.26.0 there are 29 roots
-and 583 caller rows. Enumeration reads the fact independently of verdicts; it
-neither searches for extra network calls nor infers execution conditions.
+root, including two calls on the same line. The Kimchi 1.26.0 measurement is 29
+roots and 583 caller rows. Enumeration reads the fact independently of verdicts;
+it neither searches for extra network calls nor infers execution conditions.
 
 Each request claim has exactly four nonblank string members:
 
@@ -62,9 +62,11 @@ canonical repository-relative `src/...` paths. `symbol` is a chain of
 `[name, ordinal]` pairs: function names/bindings, class names, method/accessor
 names, constructor names and object property keys that bind functions. Prefixes
 such as `function:`, `class:` and `method:` are owned by this code, not
-TypeScript enum names. Equal names under the same named parent receive lexical
-ordinals. Anonymous functions and control-flow statements do not add owner
-segments; a top-level request uses the file owner, `[]`.
+TypeScript enum names. Only functions with bodies and class-like nodes establish
+named owners; type-only signatures and annotations do not consume ordinals.
+Equal names under the same named parent receive lexical ordinals. Anonymous
+functions and control-flow statements do not add owner segments; a top-level
+request uses the file owner, `[]`.
 
 The callee key includes call/new form and syntax spelling, without invocation
 arguments or nested function/class bodies. Its zero-based ordinal counts
@@ -112,8 +114,8 @@ Site coordinates match exact token starts. The top-level sentinel resolves to
 the file owner. Closed shape and primitive type validation happens before
 adaptation; the adapter does not revalidate reachability, distance ranges or
 reason consistency. Unmatched coordinates stop the entire input through the
-existing failure path. Missing or unreadable fact files produce
-`REQUEST_LOCATION`; missing or unreadable citation files produce
+existing failure path. Missing or unreadable source files named by fact rows
+produce `REQUEST_LOCATION`; missing or unreadable citation files produce
 `ANCHOR_MISSING` with an incomplete packet. Both retain the usual diagnostics
 and artifacts.
 
