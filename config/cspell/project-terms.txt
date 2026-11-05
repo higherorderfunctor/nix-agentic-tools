@@ -399,6 +399,7 @@ prio
 procps
 pthread
 purpleclay
+pushurl
 pycache
 pythonnousersite
 qiiiiii
