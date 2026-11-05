@@ -398,9 +398,18 @@ export async function requests(value, tree, ts, display) {
     "REQUEST_FACT_INPUT",
   );
   const files = new Map();
-  const load = async (path) => {
+  const load = async (path, field, citation) => {
     if (files.has(path)) return files.get(path);
-    const parsed = syntax(await readFile(join(tree, path)), ts, path, display);
+    const bytes = await readFile(join(tree, path)).catch((error) =>
+      refuse(
+        field ? "REQUEST_LOCATION" : "ANCHOR_MISSING",
+        field
+          ? `cannot adapt requestCallers location at ${field}: cannot read source ${path} (${error.code}); regenerate facts against the pinned source`
+          : `missing anchor ${canonical(citation)}: cannot read source ${path} (${error.code})`,
+        citation,
+      ),
+    );
+    const parsed = syntax(bytes, ts, path, display);
     const { source, sourceError, coordinates, locate, slice } = parsed;
     const children = (n) =>
       n
@@ -480,11 +489,18 @@ export async function requests(value, tree, ts, display) {
       locate(n, { anchor: { role, symbol: symbols.get(owner.get(n)) }, path });
     const peers = (n, predicate) =>
       nodes.filter((p) => owner.get(p) === owner.get(n) && predicate(p));
-    const callAddress = (n) =>
+    const callKey = (n, contextual) => {
+      const literal = contextual && n.arguments?.find(ts.isStringLiteral);
+      return callee(n) + (literal ? `:${JSON.stringify(literal.text)}` : "");
+    };
+    const callAddress = (n, contextual = false) =>
       address(n, {
-        callee: callee(n),
+        callee: callKey(n, contextual),
         kind: "call",
-        ordinal: peers(n, (p) => call(p) && callee(p) === callee(n)).indexOf(n),
+        ordinal: peers(
+          n,
+          (p) => call(p) && callKey(p, contextual) === callKey(n, contextual),
+        ).indexOf(n),
       });
     const tokens = nodes.filter(
       (n) => !children(n).length && n.getWidth(source) > 0,
@@ -504,9 +520,30 @@ export async function requests(value, tree, ts, display) {
         (v) => v !== undefined,
       );
     };
-    const functionStarts = new Set(
-      nodes.filter(ts.isFunctionLike).flatMap(starts),
+    const functionStarts = new Map(
+      nodes
+        .filter(ts.isFunctionLike)
+        .flatMap((n) => starts(n).map((p) => [p, n])),
     );
+    const tokenKey = (n) => {
+      const fn = functionStarts.get(n.getStart(source));
+      if (!fn || named(fn)) return n.getText(source);
+      const context = [];
+      for (
+        let child = fn, p = fn.parent;
+        p && !broad(p);
+        child = p, p = p.parent
+      ) {
+        if (p.name) context.push(spelling(p.name));
+        if (call(p))
+          return canonical([
+            callAddress(p, true).anchor.role,
+            p.arguments?.indexOf(child) ?? -1,
+            ...context,
+          ]);
+      }
+      return n.getText(source);
+    };
     const at = (p, target, field) => {
       const matches = nodes.filter((n) => {
         const start = n.getStart(source, false),
@@ -558,13 +595,9 @@ export async function requests(value, tree, ts, display) {
         ? "list"
         : ts.isBlock(n)
           ? "block"
-          : ts.isFunctionLike(n)
-            ? "function"
-            : ts.isClassLike(n)
-              ? "class"
-              : !children(n).length
-                ? `token:${spelling(n)}`
-                : "node";
+          : children(n).length
+            ? "node"
+            : "token";
     };
     const resolve = (citation) => {
       const { symbol, role } = citation.anchor;
@@ -589,8 +622,8 @@ export async function requests(value, tree, ts, display) {
           .slice(role.ordinal, role.ordinal + 1);
       if (matches.length !== 1)
         refuse(
-          matches.length ? "ANCHOR_AMBIGUOUS" : "ANCHOR_MISSING",
-          `${matches.length ? "ambiguous" : "missing"} anchor ${canonical(citation)}: expected one match, found ${matches.length}${matches.length ? `; candidates=${canonical(matches.map((n) => coordinates(n.getStart(source))))}` : ""}`,
+          "ANCHOR_MISSING",
+          `missing anchor ${canonical(citation)}: expected one match, found 0`,
           citation,
         );
       let node = matches[0];
@@ -626,9 +659,9 @@ export async function requests(value, tree, ts, display) {
         call(invocation) &&
         n.getEnd() <= invocation.expression.getEnd()
       )
-        return callAddress(invocation);
+        return callAddress(invocation, true);
       return address(n, {
-        key: n.getText(source),
+        key: tokenKey(n),
         kind: functionStarts.has(n.getStart(source))
           ? "function-start"
           : "token",
@@ -638,7 +671,7 @@ export async function requests(value, tree, ts, display) {
             tokens.includes(p) &&
             functionStarts.has(p.getStart(source)) ===
               functionStarts.has(n.getStart(source)) &&
-            p.getText(source) === n.getText(source),
+            tokenKey(p) === tokenKey(n),
         ).indexOf(n),
       });
     };
@@ -660,7 +693,7 @@ export async function requests(value, tree, ts, display) {
   const roots = new Map();
   for (const [i, row] of value.requestCallers.entries()) {
     const path = `/requestCallers/${i}`,
-      requestFile = await load(row.callSite.file.slice(7));
+      requestFile = await load(row.callSite.file.slice(7), `${path}/callSite`);
     const { library, ...position } = row.callSite;
     const node = requestFile.at(position, "request call", `${path}/callSite`),
       request = requestFile.callAddress(node);
@@ -670,8 +703,11 @@ export async function requests(value, tree, ts, display) {
       },
       key = rootKey(selector);
     if (!roots.has(key)) roots.set(key, { rows: [], selector });
-    const fn = await load(row.functionSite.file.slice(7)),
-      use = await load(row.site.file.slice(7));
+    const fn = await load(
+        row.functionSite.file.slice(7),
+        `${path}/functionSite`,
+      ),
+      use = await load(row.site.file.slice(7), `${path}/site`);
     const functionNode =
       canonical(row.functionSite) === canonical(position) &&
       !requestFile.hasFunction(node)
@@ -688,7 +724,8 @@ export async function requests(value, tree, ts, display) {
     });
   }
   return {
-    resolve: async (citation) => (await load(citation.path)).resolve(citation),
+    resolve: async (citation) =>
+      (await load(citation.path, undefined, citation)).resolve(citation),
     roots,
   };
 }

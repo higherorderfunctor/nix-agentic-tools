@@ -1073,6 +1073,40 @@
   },
   {
     "base": "requests/base",
+    "codes": ["ANCHOR_MISSING"],
+    "details": [
+      "cannot read source src/does-not-exist.ts (ENOENT)",
+      "Evidence hash: old=",
+      "new=unresolved",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a"],
+    "incomplete": true,
+    "name": "request-citation-file-missing",
+    "rejects": "uncaught filesystem errors that skip citation diagnostics and packet artifacts",
+    "unchanged": ["request-b"],
+    "verdictsFile": "requests/invalid/missing-file.json"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["ANCHOR_MISSING"],
+    "details": [
+      "cannot read source src/policy.ts/child.ts (ENOTDIR)",
+      "Evidence hash: old=",
+      "new=unresolved",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a"],
+    "incomplete": true,
+    "name": "request-citation-file-unreadable",
+    "rejects": "uncaught non-ENOENT source read errors that skip citation diagnostics and artifacts",
+    "unchanged": ["request-b"],
+    "verdictsFile": "requests/invalid/unreadable-file.json"
+  },
+  {
+    "base": "requests/base",
     "changed": [],
     "codes": [],
     "edits": [
@@ -1976,6 +2010,86 @@
   {
     "base": "requests/base",
     "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
+    "details": [
+      "at /requestCallers/0/callSite: cannot read source src/gone.ts (ENOENT)",
+      "Evidence hash: old=",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a", "request-b"],
+    "name": "request-location-file-missing-call",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/file",
+        "value": "kimchi/src/gone.ts"
+      }
+    ],
+    "rejects": "uncaught filesystem errors for callSite that skip whole-input diagnostics and artifacts"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
+    "details": [
+      "at /requestCallers/0/functionSite: cannot read source src/gone.ts (ENOENT)",
+      "Evidence hash: old=",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a", "request-b"],
+    "name": "request-location-file-missing-function",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/functionSite/file",
+        "value": "kimchi/src/gone.ts"
+      }
+    ],
+    "rejects": "uncaught filesystem errors for functionSite that skip whole-input diagnostics and artifacts"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
+    "details": [
+      "at /requestCallers/0/site: cannot read source src/gone.ts (ENOENT)",
+      "Evidence hash: old=",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a", "request-b"],
+    "name": "request-location-file-missing-site",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/file",
+        "value": "kimchi/src/gone.ts"
+      }
+    ],
+    "rejects": "uncaught filesystem errors for site that skip whole-input diagnostics and artifacts"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
+    "details": [
+      "at /requestCallers/0/site: cannot read source src/policy.ts/child.ts (ENOTDIR)",
+      "Evidence hash: old=",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a", "request-b"],
+    "name": "request-location-file-unreadable",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/file",
+        "value": "kimchi/src/policy.ts/child.ts"
+      }
+    ],
+    "rejects": "uncaught non-ENOENT fact source read errors that skip the failure envelope"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
     "expect": {
       "current.json": {},
       "diff.json": {}
@@ -2784,6 +2898,138 @@
     "unchanged": ["request-b"]
   },
   {
+    "base": "requests/stability",
+    "changed": [],
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "function deliverEvents() {\n",
+        "to": "function deliverEvents() {\n  const unrelatedIds = [1, 2].map((n) => n * 2);\n"
+      }
+    ],
+    "facts": {
+      "regionRegistry": {
+        "fields": []
+      },
+      "requestCallers": [
+        {
+          "callSite": {
+            "column": 12,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 4
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 28,
+            "file": "kimchi/src/requests.ts",
+            "line": 3
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 28,
+            "file": "kimchi/src/requests.ts",
+            "line": 3
+          }
+        },
+        {
+          "callSite": {
+            "column": 42,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 10
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 10
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 10
+          }
+        },
+        {
+          "callSite": {
+            "column": 42,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 10
+          },
+          "distance": 1,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 10
+          },
+          "kind": "callback",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 3,
+            "file": "kimchi/src/requests.ts",
+            "line": 8
+          }
+        },
+        {
+          "callSite": {
+            "column": 41,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 11
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 11
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 11
+          }
+        },
+        {
+          "callSite": {
+            "column": 41,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 11
+          },
+          "distance": 1,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 11
+          },
+          "kind": "callback",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 3,
+            "file": "kimchi/src/requests.ts",
+            "line": 8
+          }
+        }
+      ]
+    },
+    "name": "request-unrelated-arrow-insertion",
+    "rejects": "same-token function-start ordinals that shift a deliverEvents callback after an unrelated map arrow",
+    "unchanged": true
+  },
+  {
     "base": "requests/base",
     "changed": [],
     "codes": [],
@@ -2796,6 +3042,138 @@
     ],
     "name": "request-unrelated-caller-edited",
     "rejects": "fingerprinting unrelated caller bodies",
+    "unchanged": true
+  },
+  {
+    "base": "requests/stability",
+    "changed": [],
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "function loginExtension(pi) {\n",
+        "to": "function loginExtension(pi) {\n  pi.on(\"session_shutdown\", () => {});\n"
+      }
+    ],
+    "facts": {
+      "regionRegistry": {
+        "fields": []
+      },
+      "requestCallers": [
+        {
+          "callSite": {
+            "column": 12,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 3
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 28,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 28,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          }
+        },
+        {
+          "callSite": {
+            "column": 42,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 10
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 10
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 10
+          }
+        },
+        {
+          "callSite": {
+            "column": 42,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 10
+          },
+          "distance": 1,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 10
+          },
+          "kind": "callback",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 3,
+            "file": "kimchi/src/requests.ts",
+            "line": 8
+          }
+        },
+        {
+          "callSite": {
+            "column": 41,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 11
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 11
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 11
+          }
+        },
+        {
+          "callSite": {
+            "column": 41,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 11
+          },
+          "distance": 1,
+          "functionSite": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 11
+          },
+          "kind": "callback",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 3,
+            "file": "kimchi/src/requests.ts",
+            "line": 8
+          }
+        }
+      ]
+    },
+    "name": "request-unrelated-event-insertion",
+    "rejects": "same-callee call ordinals that shift billing and budget caller rows after a different pi.on event",
     "unchanged": true
   },
   {

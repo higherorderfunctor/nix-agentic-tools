@@ -7,7 +7,7 @@
         "disable": "Unknown: disabling controls have not been judged.",
         "trigger": "Unknown: triggering behavior has not been judged."
       },
-      "evidenceHash": "sha256:0860cc0d15b023779582e6e76f18616bf177c29ddd4f0c65a65fe5e230b11764",
+      "evidenceHash": "sha256:f9b3b9e4c892d78cd1d34688de9af9154720711f4cca226726919fd3ee5a3716",
       "id": "request-anonymous-one",
       "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
       "packet": {
@@ -30,7 +30,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "key": "(",
+                  "key": "[{\"callee\":\"call:register\",\"kind\":\"call\",\"ordinal\":0},0]",
                   "kind": "function-start",
                   "ordinal": 0
                 },
@@ -87,7 +87,7 @@
         "disable": "Unknown: disabling controls have not been judged.",
         "trigger": "Unknown: triggering behavior has not been judged."
       },
-      "evidenceHash": "sha256:64874b074690c8a8c0dfba8675c69e0f85f168cd4adb72757dd324052b3c6f50",
+      "evidenceHash": "sha256:30844cd277b58745a71d10c0b78f439cbb648d035da8d3a25be4642cd706eedd",
       "id": "request-anonymous-two",
       "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
       "packet": {
@@ -110,9 +110,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "key": "(",
+                  "key": "[{\"callee\":\"call:register\",\"kind\":\"call\",\"ordinal\":1},0]",
                   "kind": "function-start",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:owner", 0]]
               },
@@ -541,7 +541,7 @@
         "disable": "Unknown: disabling controls have not been judged.",
         "trigger": "Unknown: triggering behavior has not been judged."
       },
-      "evidenceHash": "sha256:4b0c132fe49119b3f57a0fca850b75061d7e065193ed176fdc35eb742b09678c",
+      "evidenceHash": "sha256:3f063e38fcadcafbc67ce5e2d176a009e177e8e65aa424038973ef8808cc49b6",
       "id": "request-immediate",
       "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
       "packet": {
@@ -564,7 +564,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "key": "(",
+                  "key": "[{\"callee\":\"call:function:\",\"kind\":\"call\",\"ordinal\":0},-1]",
                   "kind": "function-start",
                   "ordinal": 0
                 },
@@ -701,7 +701,7 @@
         "disable": "Unknown: disabling controls have not been judged.",
         "trigger": "Unknown: triggering behavior has not been judged."
       },
-      "evidenceHash": "sha256:72358ab4babbd4fcfd6bbe3e60c3f52c3811c83e292a96c72f64615001853395",
+      "evidenceHash": "sha256:86b3379dc8f04e2b8ccba605f30058e62486e47c99bd356435718ccecea6496a",
       "id": "request-module",
       "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
       "packet": {
@@ -724,7 +724,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:fetch",
+                  "callee": "call:fetch:\"https://module.example\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -1101,7 +1101,7 @@
         "disable": "Unknown: disabling controls have not been judged.",
         "trigger": "Unknown: triggering behavior has not been judged."
       },
-      "evidenceHash": "sha256:ae0018cab0778a0c8964ee8214ccad64324fb510d18c1548d873bbb2a7f79d5e",
+      "evidenceHash": "sha256:755eecc260fed1dceccea9b5fa429fed94ca2d82d9c3252fa6fb9a7b394e5776",
       "id": "request-returned",
       "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
       "packet": {
@@ -1126,7 +1126,7 @@
                 "role": {
                   "key": "(",
                   "kind": "function-start",
-                  "ordinal": 2
+                  "ordinal": 0
                 },
                 "symbol": [["function:owner", 0]]
               },
