@@ -22,8 +22,11 @@ GOARCH
 GOTOOLCHAIN
 GOWORK
 hardlinks
+interprocedural
+intraprocedural
 libxcb
 Menlo
+nonliteral
 NOSYSTEM
 NPROCESSORS
 nullish

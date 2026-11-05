@@ -292,6 +292,9 @@
       "goHosts": "scan.mjs: regex over tools/proxy-helper Go source",
       "hosts": "network fact: target hosts and unattributed URL literals",
       "networkCallSites": "network fact: call sites",
+      "regionRegistry": "regionRegistry fact: exported region fields and default with source locations",
+      "requestGuards": "requestGuards fact: necessary intraprocedural conditions joined to network call sites",
+      "resourceDefinitions": "resourceDefinitions fact: static resource ids, defaults and restart declarations",
       "spawnCallSites": "scan.mjs: TypeScript AST over Kimchi's tree",
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
@@ -4095,6 +4098,1682 @@
           "value": "https://registry.npmjs.org"
         }
       ]
+    }
+  ],
+  "regionRegistry": {
+    "defaultRegion": [
+      {
+        "file": "src/regions.ts",
+        "line": 59,
+        "value": "us"
+      }
+    ],
+    "fields": [
+      {
+        "field": "castApiUrl",
+        "file": "src/regions.ts",
+        "line": 36,
+        "region": "eu",
+        "value": "https://api.eu.cast.ai"
+      },
+      {
+        "field": "id",
+        "file": "src/regions.ts",
+        "line": 32,
+        "region": "eu",
+        "value": "eu"
+      },
+      {
+        "field": "label",
+        "file": "src/regions.ts",
+        "line": 33,
+        "region": "eu",
+        "value": "Europe"
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 35,
+        "region": "eu",
+        "value": "https://llm.eu.kimchi.dev"
+      },
+      {
+        "field": "webAppUrl",
+        "file": "src/regions.ts",
+        "line": 34,
+        "region": "eu",
+        "value": "https://app.eu.kimchi.dev"
+      },
+      {
+        "field": "castApiUrl",
+        "file": "src/regions.ts",
+        "line": 49,
+        "region": "self-hosted",
+        "value": ""
+      },
+      {
+        "field": "id",
+        "file": "src/regions.ts",
+        "line": 45,
+        "region": "self-hosted",
+        "value": "self-hosted"
+      },
+      {
+        "field": "label",
+        "file": "src/regions.ts",
+        "line": 46,
+        "region": "self-hosted",
+        "value": "Self-hosted"
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 48,
+        "region": "self-hosted",
+        "value": ""
+      },
+      {
+        "field": "webAppUrl",
+        "file": "src/regions.ts",
+        "line": 47,
+        "region": "self-hosted",
+        "value": ""
+      },
+      {
+        "field": "castApiUrl",
+        "file": "src/regions.ts",
+        "line": 29,
+        "region": "us",
+        "value": "https://api.cast.ai"
+      },
+      {
+        "field": "id",
+        "file": "src/regions.ts",
+        "line": 25,
+        "region": "us",
+        "value": "us"
+      },
+      {
+        "field": "label",
+        "file": "src/regions.ts",
+        "line": 26,
+        "region": "us",
+        "value": "United States"
+      },
+      {
+        "field": "llmBaseUrl",
+        "file": "src/regions.ts",
+        "line": 28,
+        "region": "us",
+        "value": "https://llm.kimchi.dev"
+      },
+      {
+        "field": "webAppUrl",
+        "file": "src/regions.ts",
+        "line": 27,
+        "region": "us",
+        "value": "https://app.kimchi.dev"
+      }
+    ]
+  },
+  "requestGuards": [
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-agent-core/dist/proxy.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 72,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+      "guards": [],
+      "library": "sdk:@anthropic-ai/sdk",
+      "line": 789,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+      "guards": [],
+      "library": "sdk:@anthropic-ai/sdk",
+      "line": 804,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+      "guards": [],
+      "library": "sdk:@anthropic-ai/sdk",
+      "line": 833,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+      "guards": [],
+      "library": "sdk:@anthropic-ai/sdk",
+      "line": 845,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/azure-openai-responses.js",
+      "guards": [],
+      "library": "sdk:openai",
+      "line": 124,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/bedrock-converse-stream.js",
+      "guards": [],
+      "library": "sdk:@aws-sdk/client-bedrock-runtime",
+      "line": 131,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/classifier-shared.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 51,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/google-generative-ai.js",
+      "guards": [],
+      "library": "sdk:@google/genai",
+      "line": 280,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/google-vertex.js",
+      "guards": [],
+      "library": "sdk:@google/genai",
+      "line": 276,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/google-vertex.js",
+      "guards": [],
+      "library": "sdk:@google/genai",
+      "line": 286,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/llama-cpp-classify.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 191,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/mistral-conversations.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 180,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/openai-codex-responses.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 268,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/openai-codex-responses.js",
+      "guards": [],
+      "library": "websocket",
+      "line": 812,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "guards": [],
+      "library": "sdk:openai",
+      "line": 560,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/openai-responses.js",
+      "guards": [],
+      "library": "sdk:openai",
+      "line": 231,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/openrouter-images.js",
+      "guards": [],
+      "library": "sdk:openai",
+      "line": 74,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/api/pi-messages.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 270,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/anthropic.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 70,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 107,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 147,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 51,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 118,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 186,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/meta.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 62,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/meta.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 96,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/meta.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 133,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-chatgpt.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 111,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 83,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 126,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/openrouter.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 62,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/radius.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 26,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/radius.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 72,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/radius.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 145,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/auth/oauth/xai.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 44,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/providers/openrouter.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 25,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-ai/dist/providers/radius-config.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 54,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic-messages-UIH6DSZT.js",
+      "guards": [],
+      "library": "sdk:PiAnthropic",
+      "line": 6,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 75,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/azure-openai-responses-KZZFKCXW.js",
+      "guards": [],
+      "library": "sdk:AzureOpenAI",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/@smithy/fetch-http-handler/dist-cjs/index.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 25,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/@aws-sdk/middleware-websocket/dist-cjs/index.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+      "guards": [],
+      "library": "websocket",
+      "line": 25,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/@smithy/credential-provider-imds/dist-cjs/index.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+      "guards": [],
+      "library": "node-http",
+      "line": 36,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/@smithy/node-http-handler/dist-cjs/index.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+      "guards": [],
+      "library": "node-http",
+      "line": 39,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+      "guards": [],
+      "library": "sdk:@aws-sdk/client-bedrock-runtime",
+      "line": 86,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/gaxios/build/cjs/src/gaxios.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-2LOB3CBH.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 3,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/ws/lib/websocket.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-2LOB3CBH.js",
+      "guards": [],
+      "library": "node-http",
+      "line": 31,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/ws/lib/permessage-deflate.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-2LOB3CBH.js",
+      "guards": [],
+      "library": "websocket",
+      "line": 31,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/ws/lib/websocket-server.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-2LOB3CBH.js",
+      "guards": [],
+      "library": "websocket",
+      "line": 31,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/ws/lib/websocket.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-2LOB3CBH.js",
+      "guards": [],
+      "library": "websocket",
+      "line": 31,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-2LOB3CBH.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 41,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-2LOB3CBH.js",
+      "guards": [],
+      "library": "websocket",
+      "line": 43,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-5GTPJSRI.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 7,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/undici/index.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "undici",
+      "line": 130,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": "node_modules/undici/index.js",
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "undici",
+      "line": 133,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "undici",
+      "line": 271,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 485,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 493,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 550,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 949,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 977,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 1109,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 1117,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 1143,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-DOST5PQW.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 4,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-DOST5PQW.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 78,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-F5ZABL6Z.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 6,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-F5ZABL6Z.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 20,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-H3QXYIF7.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 6,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-H3QXYIF7.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 31,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-XIX7LUWI.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/github-copilot.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/kimi-coding.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/llama-cpp-classify-FYN623RH.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 20,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/meta.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/mistral-conversations-AMQJ43DD.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-chatgpt.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 75,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex-responses-ZYGHVE5B.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex-responses-ZYGHVE5B.js",
+      "guards": [],
+      "library": "websocket",
+      "line": 10,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 75,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-completions-BGCEXFAB.js",
+      "guards": [],
+      "library": "sdk:OpenAI",
+      "line": 3,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-responses-KCCCXI3B.js",
+      "guards": [],
+      "library": "sdk:OpenAI",
+      "line": 3,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openrouter-images-DUPG5DZO.js",
+      "guards": [],
+      "library": "sdk:OpenAI",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openrouter.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 75,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/pi-messages-V27DSLVC.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 8,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/radius.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 75,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/src-UK77SYZE.js",
+      "guards": [],
+      "library": "node-http",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/xai.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 2,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/core/bug-report-upload.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 9,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/core/http-dispatcher.js",
+      "guards": [],
+      "library": "undici",
+      "line": 56,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/core/http-dispatcher.js",
+      "guards": [],
+      "library": "undici",
+      "line": 63,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/extensions/llama/client.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 131,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/extensions/llama/client.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 186,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/extensions/llama/huggingface.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 55,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/extensions/mcp/oauth.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 167,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+      "guards": [
+        {
+          "callSite": {
+            "bundledModule": null,
+            "column": 14,
+            "file": "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+            "library": "fetch",
+            "line": 1021
+          },
+          "conditionOutcome": false,
+          "guardSite": {
+            "column": 9,
+            "file": "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+            "line": 1015
+          },
+          "key": "PI_OFFLINE",
+          "outcome": "falsy",
+          "scope": "intraprocedural",
+          "sourceKind": "env"
+        }
+      ],
+      "library": "fetch",
+      "line": 1021,
+      "readBy": "pi",
+      "status": "necessary local conditions at the listed call columns; not sufficient for execution"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/session-share.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 109,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/package-manager-cli.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 46,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "@earendil-works/pi-coding-agent/dist/utils/management-http.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 28,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/http-ca.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 44,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/http-ca.js",
+      "guards": [],
+      "library": "undici",
+      "line": 79,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/jev-client.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 279,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/jev-client.js",
+      "guards": [],
+      "library": "sdk:TypeSafeClient",
+      "line": 295,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/mcp-auth-fetch.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 67,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/mcp-probe.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 126,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/request-headers-command.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 296,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/server-manager.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 170,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/server-manager.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 193,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/server-manager.js",
+      "guards": [],
+      "library": "fetch",
+      "line": 1421,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/server-manager.js",
+      "guards": [],
+      "library": "sdk:@modelcontextprotocol/client",
+      "line": 1442,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/dist/server-manager.js",
+      "guards": [],
+      "library": "sdk:@modelcontextprotocol/client",
+      "line": 1443,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/http-ca.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 42,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/http-ca.ts",
+      "guards": [],
+      "library": "undici",
+      "line": 77,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/jev-client.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 245,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/jev-client.ts",
+      "guards": [],
+      "library": "sdk:TypeSafeClient",
+      "line": 257,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/mcp-auth-fetch.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 81,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/mcp-probe.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 159,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/request-headers-command.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 318,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/server-manager.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 307,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/server-manager.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 335,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/server-manager.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 1756,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/server-manager.ts",
+      "guards": [],
+      "library": "sdk:@modelcontextprotocol/client",
+      "line": 1775,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "pi-mcp-adapter/server-manager.ts",
+      "guards": [],
+      "library": "sdk:@modelcontextprotocol/client",
+      "line": 1776,
+      "readBy": "pi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/cli-auth/oauth.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 171,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/cli-auth/oauth.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 308,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/billing/status.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 189,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/billing/status.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 225,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/ide-adapter/mcp-client.ts",
+      "guards": [],
+      "library": "websocket",
+      "line": 74,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/memory/backend.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 119,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/memory/backend.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 171,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/memory/backend.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 186,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/memory/backend.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 187,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/memory/backend.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 192,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/pr-cost-reporting/worker.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 259,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/pr-cost-reporting/worker.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 416,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/pr-cost-reporting/worker.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 480,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/pull-request-status/provider-api.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 265,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/session-name.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 189,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/telemetry/transport.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 218,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/teleport/pty/websocket-transport.ts",
+      "guards": [],
+      "library": "websocket",
+      "line": 158,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/work-attribution/cost-sync.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 331,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/http/proxy.ts",
+      "guards": [],
+      "library": "undici",
+      "line": 48,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/models.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 207,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/ollama.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 197,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/ollama.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 247,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/sandbox/cloud/http.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 21,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/sandbox/cloud/readiness.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 69,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/sandbox/worker/acp-client.ts",
+      "guards": [],
+      "library": "websocket",
+      "line": 498,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/sandbox/worker/client.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 194,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/self-hosted-discovery.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 91,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/utils/http.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 90,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    }
+  ],
+  "resourceDefinitions": [
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.agents",
+      "line": 80,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.bash-tool-guard",
+      "line": 121,
+      "restartRequired": null
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.claude-code-hook-adapter",
+      "line": 129,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.claude-code-skills",
+      "line": 137,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.cost-per-pr",
+      "line": 153,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.dap",
+      "line": 113,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.ferment",
+      "line": 88,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.ferment-v2",
+      "line": 188,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.lsp",
+      "line": 104,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.memory",
+      "line": 197,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.pi-package-lookup",
+      "line": 162,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.pii-redaction",
+      "line": 216,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.side-chat",
+      "line": 206,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.todos",
+      "line": 96,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.workflows",
+      "line": 145,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "hooks.bash",
+      "line": 57,
+      "restartRequired": null
+    },
+    {
+      "defaultEnabled": false,
+      "file": "src/resources/definitions.ts",
+      "id": "plugins.kimchi-mcp-gateway",
+      "line": 178,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "plugins.mcp-apps",
+      "line": 170,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.docx",
+      "line": 39,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.pdf",
+      "line": 30,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.pptx",
+      "line": 21,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "skills.xlsx",
+      "line": 48,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "tools.web_fetch",
+      "line": 72,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "tools.web_search",
+      "line": 64,
+      "restartRequired": true
     }
   ],
   "spawnCallSites": [

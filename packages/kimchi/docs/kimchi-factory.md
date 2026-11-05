@@ -6,7 +6,8 @@
 > `delete` target is not a read; pi 1.3 settings follow reexports and inherited
 > TypeBox properties through lock-pinned declaration entrypoints; scope follows
 > settings accessors, with unread JSON Schema metadata explicitly ignored. The
-> sidecar carries CodeQL environment and network facts on x86_64-linux.
+> sidecar carries CodeQL environment, network, resource definition, region
+> registry and request guard facts on x86_64-linux.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from

@@ -1,0 +1,16 @@
+[
+  {
+    "defaultEnabled": true,
+    "file": "src/resources/definitions.ts",
+    "id": "hooks.local",
+    "line": 6,
+    "restartRequired": null
+  },
+  {
+    "defaultEnabled": false,
+    "file": "src/resources/definitions.ts",
+    "id": "tools.search",
+    "line": 5,
+    "restartRequired": true
+  }
+]

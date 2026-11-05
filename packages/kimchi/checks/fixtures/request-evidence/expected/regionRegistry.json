@@ -1,0 +1,53 @@
+{
+  "defaultRegion": [
+    {
+      "file": "src/regions.ts",
+      "line": 6,
+      "value": "local"
+    }
+  ],
+  "fields": [
+    {
+      "field": "id",
+      "file": "src/regions.ts",
+      "line": 3,
+      "region": "eu",
+      "value": "eu"
+    },
+    {
+      "field": "label",
+      "file": "src/regions.ts",
+      "line": 3,
+      "region": "eu",
+      "value": "Europe"
+    },
+    {
+      "field": "webAppUrl",
+      "file": "src/regions.ts",
+      "line": 3,
+      "region": "eu",
+      "value": "https://eu.example"
+    },
+    {
+      "field": "id",
+      "file": "src/regions.ts",
+      "line": 4,
+      "region": "local",
+      "value": "local"
+    },
+    {
+      "field": "label",
+      "file": "src/regions.ts",
+      "line": 4,
+      "region": "local",
+      "value": "Local"
+    },
+    {
+      "field": "webAppUrl",
+      "file": "src/regions.ts",
+      "line": 4,
+      "region": "local",
+      "value": ""
+    }
+  ]
+}

@@ -470,10 +470,10 @@ export -f curl nix
     def test_codeql_assertion_requires_every_engine_source_and_database(self):
         script = ci_step_script("Assert no CodeQL engine or database is published")
         # Two engines, each with its source, the Kimchi release database, and
-        # the network check with its fixture database and customized engine.
-        # MODE drops one source, every engine, the fixture database or the
-        # customized engine, or fails an evaluation; PUBLISHED names the hash
-        # whose narinfo answers 200.
+        # the network and request-evidence checks with their fixture databases
+        # and customized engine. MODE drops one source, every engine, a fixture
+        # database or the customized engine, or fails an evaluation; PUBLISHED
+        # names the hash whose narinfo answers 200.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 nix() {
@@ -489,6 +489,10 @@ nix() {
       printf '%s' /nix/store/g-kimchi-codeql-network-check.drv
       return
       ;;
+    *kimchi-codeql-request-evidence.drvPath*)
+      printf '%s' /nix/store/j-kimchi-codeql-request-evidence-check.drv
+      return
+      ;;
   esac
   printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv
 }
@@ -496,8 +500,10 @@ nix-store() {
   case "$2:$3" in
     --requisites:*/f-kimchi-codeql-database-1.drv)
       printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/f-kimchi-codeql-database-1.drv \
-        /nix/store/g-kimchi-codeql-network-check.drv /nix/store/e-glibc-1.drv
+        /nix/store/g-kimchi-codeql-network-check.drv /nix/store/j-kimchi-codeql-request-evidence-check.drv \
+        /nix/store/e-glibc-1.drv
       [ "$MODE" = no-fixture ] || printf '%s\n' /nix/store/h-kimchi-codeql-database-network-fixture.drv
+      [ "$MODE" = no-request-fixture ] || printf '%s\n' /nix/store/k-kimchi-codeql-database-request-evidence-fixture.drv
       [ "$MODE" = no-customized ] || printf '%s\n' /nix/store/i-codeql-javascript-customized-1.drv
       ;;
     --requisites:*)
@@ -526,12 +532,14 @@ export -f curl nix nix-store
                 ("nodb", "404", "", False, False),
                 ("no-check", "404", "", False, False),
                 ("no-fixture", "404", "", False, False),
+                ("no-request-fixture", "404", "", False, False),
                 ("no-customized", "404", "", False, False),
                 ("complete", "404", "", True, True),
                 ("complete", "200", "", False, True),
-                # The fixture database or the customized engine alone published.
+                # A fixture database or the customized engine alone published.
                 ("complete", "404", "h", False, True),
                 ("complete", "404", "i", False, True),
+                ("complete", "404", "k", False, True),
             ):
                 with self.subTest(mode=mode, http_code=http_code, published=published):
                     queries.unlink(missing_ok=True)
@@ -543,10 +551,10 @@ export -f curl nix nix-store
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
                     if success:
-                        # Four engine derivations, the release and fixture
-                        # databases, the check and the customized engine; the
-                        # engine the check needs again is asked once.
-                        self.assertEqual(len(queries.read_text().splitlines()), 8)
+                        # Four engine derivations, the release and both fixture
+                        # databases, both checks and the customized engine; the
+                        # engine the checks need again is asked once.
+                        self.assertEqual(len(queries.read_text().splitlines()), 10)
 
 class CheckBundlesTest(unittest.TestCase):
     def bundle(self, rows):

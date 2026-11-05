@@ -84,6 +84,7 @@
   };
   # The `network` fact: ../../../lib/network.nix.
   network = import ../../../lib/network.nix {inherit codeql pkgs;};
+  requestEvidence = import ../../../lib/request-evidence.nix {inherit codeql network pkgs;};
   # The `environment` surface (../../../extract/environment.nix) and the
   # `network` fact come from the database; extract.mjs reads declarations
   # from the release source. scan.mjs adds egressScan over the original pinned
@@ -93,6 +94,9 @@
   codeqlFacts = {
     environment = (import ../../../extract/environment.nix {inherit codeql pkgs;}).surface;
     network = network.fact;
+    regionRegistry = "${requestEvidence.facts}/regionRegistry.json";
+    requestGuards = "${requestEvidence.facts}/requestGuards.json";
+    resourceDefinitions = "${requestEvidence.facts}/resourceDefinitions.json";
   };
   # scan.mjs and the report.mjs it imports, without generate.mjs: a
   # generator-only edit must not rebuild the extraction.
@@ -382,7 +386,7 @@ in
 
     passthru =
       {
-        inherit codeql externalizedExtensions externalizeExtensions fixPnpmDepsHash goFloor goModPath network proxyHelper;
+        inherit codeql externalizedExtensions externalizeExtensions fixPnpmDepsHash goFloor goModPath network proxyHelper requestEvidence;
         inherit (goUpdate) fixGoFloor fixVendorHash;
         extractedRules = import ../../../extract/rules.nix {
           inherit extractedLib pkgs;

@@ -18,9 +18,10 @@
       src = ../ql/models + "/${name}";
     }) ["sdk" "undici"];
 
+  resultsOf = name: on: codeql.runQueries {inherit models name on queries;};
   # `factOf name on`: the fact of `on`, a `databaseOf` result, as JSON.
   factOf = name: on: let
-    results = codeql.runQueries {inherit models name on queries;};
+    results = resultsOf name on;
   in
     pkgs.runCommand "kimchi-codeql-${name}-fact" {nativeBuildInputs = [pkgs.jq];} ''
       set -euETo pipefail
@@ -28,6 +29,6 @@
       jq --sort-keys -f ${./network.jq} ${results}/NetworkCallSites.json > "$out"
     '';
 in {
-  inherit factOf;
+  inherit factOf resultsOf;
   fact = factOf "network" codeql.database;
 }

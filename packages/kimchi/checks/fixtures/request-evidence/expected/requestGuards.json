@@ -1,0 +1,135 @@
+[
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 5,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 9
+    },
+    "conditionOutcome": true,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 8
+    },
+    "key": "tools.search",
+    "outcome": "truthy",
+    "scope": "intraprocedural",
+    "sourceKind": "resource"
+  },
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 17
+    },
+    "conditionOutcome": false,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 16
+    },
+    "key": "tools.search",
+    "outcome": "truthy",
+    "scope": "intraprocedural",
+    "sourceKind": "resource"
+  },
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 24
+    },
+    "conditionOutcome": false,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 23
+    },
+    "key": "tools.search",
+    "outcome": "falsy",
+    "scope": "intraprocedural",
+    "sourceKind": "resource"
+  },
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 31
+    },
+    "conditionOutcome": false,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 30
+    },
+    "key": "TOKEN",
+    "outcome": "truthy",
+    "scope": "intraprocedural",
+    "sourceKind": "env"
+  },
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 5,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 40
+    },
+    "conditionOutcome": true,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 39
+    },
+    "key": "telemetry.enabled",
+    "outcome": "truthy",
+    "scope": "intraprocedural",
+    "sourceKind": "config"
+  },
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 5,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 57
+    },
+    "conditionOutcome": true,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 56
+    },
+    "key": "ONLY_FIRST",
+    "outcome": "truthy",
+    "scope": "intraprocedural",
+    "sourceKind": "env"
+  },
+  {
+    "callSite": {
+      "bundledModule": null,
+      "column": 5,
+      "file": "kimchi/src/requests.ts",
+      "library": "fetch",
+      "line": 119
+    },
+    "conditionOutcome": true,
+    "guardSite": {
+      "column": 3,
+      "file": "kimchi/src/requests.ts",
+      "line": 118
+    },
+    "key": "tools.search",
+    "outcome": "truthy",
+    "scope": "intraprocedural",
+    "sourceKind": "resource"
+  }
+]

@@ -10,6 +10,9 @@
     egressScan = extracted.get aggregate "egressScan";
     environment.variables = extracted.children aggregate "environment.variables.<name>";
     network = extracted.get aggregate "network";
+    regionRegistry = extracted.get aggregate "regionRegistry";
+    requestGuards = extracted.get aggregate "requestGuards";
+    resourceDefinitions = extracted.get aggregate "resourceDefinitions";
   };
   kimchi = ../../packages/kimchi;
   scripts = ../../packages/kimchi/extract/egress;
