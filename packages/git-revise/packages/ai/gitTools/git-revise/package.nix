@@ -17,12 +17,12 @@
   inherit (pkgs) fetchFromGitHub;
   vu = packageLib;
 
-  rev = "a5bdbe420521a7784dd16c8f22b374b2f1d2d167";
+  rev = "accaee404333cab88029f81e4c5f5d72d72318f5";
   src = fetchFromGitHub {
     owner = "mystor";
     repo = "git-revise";
     inherit rev;
-    hash = "sha256-D3MicmtruCNiW/WI37y18XDXAl7J9oJdJnDY4Ohj+rE=";
+    hash = "sha256-c0C+q4BH9o26K86DUREDh5kod+d8o8Pw0ccG16WB93c=";
   };
 
   extraction = gitToolExtraction {inherit pkgs;};
