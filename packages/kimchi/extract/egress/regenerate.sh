@@ -9,5 +9,5 @@ system="$(nix eval --raw --impure --expr builtins.currentSystem)"
 facts="$(mktemp)"
 trap 'rm -f "$facts"' EXIT
 nix eval --json ".#checks.${system}.kimchi-egress-report.passthru.facts" >"$facts"
-node dev/skills/kimchi-egress-report/scripts/generate.mjs --facts "$facts"
+node packages/kimchi/extract/egress/generate.mjs --facts "$facts"
 treefmt packages/kimchi/egress-report.json

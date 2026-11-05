@@ -12,7 +12,7 @@
     network = extracted.get aggregate "network";
   };
   kimchi = ../../packages/kimchi;
-  scripts = ../../dev/skills/kimchi-egress-report/scripts;
+  scripts = ../../packages/kimchi/extract/egress;
 in {
   checks.kimchi-egress-report = pkgs.runCommand "kimchi-egress-report-check" {passthru = {inherit facts;};} ''
     set -euETo pipefail
@@ -35,7 +35,7 @@ in {
         (($a[0].header + $b[0].header | keys[]) as $field
           | select($a[0].header[$field] != $b[0].header[$field]) | "header.\($field)")' >&2
       echo "Regenerate from the repository root:" >&2
-      echo "  dev/skills/kimchi-egress-report/scripts/regenerate.sh" >&2
+      echo "  packages/kimchi/extract/egress/regenerate.sh" >&2
       exit 1
     fi
     echo "ok: the egress report matches its facts" >"$out"
