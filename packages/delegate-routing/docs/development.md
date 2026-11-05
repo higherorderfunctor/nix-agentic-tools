@@ -232,8 +232,9 @@ consumers attach it to a runtime through that runtime's usage techniques.
 
 Usage helpers print one JSON document per account with `pool`, `account`
 (`auth_index`, `name`, `plan`), `windows`, `balances` and `bonuses`. Each window
-has `usedPercent`, `remainingPercent`, a UTC RFC 3339 `resetsAt`, `status` and
-`windowSeconds`; names derive from the duration (`5h`, `7d`, otherwise
+has `usedPercent`, `remainingPercent`, a UTC RFC 3339 `resetsAt` (null only for
+an unstarted window at 0%, which z.ai reports without a reset time), `status`
+and `windowSeconds`; names derive from the duration (`5h`, `7d`, otherwise
 `<seconds>s`, with `:<model>` for scoped windows); missing windows are absent,
 and balances and bonuses are arrays. Codex reset credits carry expiry dates when
 available; if the extra proxy request fails, the helper still reports their

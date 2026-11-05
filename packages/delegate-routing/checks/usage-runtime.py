@@ -205,7 +205,10 @@ class UsageTests(unittest.TestCase):
             self.assertIsInstance(window["usedPercent"], (int, float))
             self.assertEqual(window["remainingPercent"], 100 - window["usedPercent"])
             self.assertTrue(window["status"] is None or isinstance(window["status"], str))
-            self.assert_utc(window["resetsAt"])
+            if window["resetsAt"] is None:
+                self.assertEqual(window["usedPercent"], 0)
+            else:
+                self.assert_utc(window["resetsAt"])
         for field, amount in [("balances", "remaining"), ("bonuses", "count")]:
             self.assertIsInstance(value[field], list)
             for entry in value[field]:
@@ -760,6 +763,23 @@ print({json.dumps(json.dumps(ZAI))})
                 windows = json.loads(result.stdout)["windows"]
                 self.assertEqual(set(windows), {name})
                 self.assertEqual(windows[name]["windowSeconds"], seconds)
+
+    def test_zai_unstarted_window_has_no_reset(self):
+        self.configs["claude"] = [{"base-url": "https://api.z.ai/api/anthropic",
+                                    "keys": [{"api-key": "unstarted-fixture", "auth_index": "z1"}]}]
+        self.usage["zai"]["data"]["limits"] = [
+            {"unit": 3, "number": 5, "percentage": 0},
+            {"unit": 6, "number": 1, "percentage": 18, "nextResetTime": 1900000000123}]
+        result = self.run_helper("zai")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        windows = json.loads(result.stdout)["windows"]
+        self.assertEqual(windows["5h"], {"usedPercent": 0, "remainingPercent": 100, "resetsAt": None,
+                                         "status": None, "windowSeconds": 18000})
+        self.assertEqual(windows["7d"]["resetsAt"], RESET)
+        self.usage["zai"]["data"]["limits"][0]["percentage"] = 4
+        result = self.run_helper("zai")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid vendor usage response", result.stderr)
 
     def test_claude_windows_spend_and_optional_promo(self):
         value = json.loads(self.run_helper("claude").stdout)
