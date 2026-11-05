@@ -66,7 +66,7 @@
       ++ lib.optional (row.primitive != "notApplicable" && supportAbsences ? ${cell}) supportAbsences.${cell};
   in
     row
-    // {inputOptions = facts.inputOptions row.surface row.ecosystem;}
+    // {inputOptions = facts.inputOptions row.surface row.ecosystem row.mode;}
     // lib.optionalAttrs (children != []) {additionalWriters = children;};
   rows = schema.validateRows (lib.sort (a: b: key a < key b) (map assemble (derivedRows ++ handRows)));
   definitions = lib.foldl' (acc: row:

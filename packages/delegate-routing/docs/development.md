@@ -201,8 +201,9 @@ map-case comments beside each Kiro modes value. Introspection has no modes
 field.
 
 Kiro takes `trustedMcpTools` only as `permissions.yaml` rules: Home Manager
-writes them and drops bare tokens such as `use_aws`, while devenv cannot place
-the file under `~/.kiro` and warns.
+merges them into `~/.kiro/settings/permissions.yaml` and drops bare tokens such
+as `use_aws`, while devenv has no such option: it cannot place the file under
+`~/.kiro` and defines no root of its own.
 
 The backend modules pass `"hm"` or `"devenv"` to the common module, which
 imports `mkSkillPackageModule` once for the supported runtimes. The factory

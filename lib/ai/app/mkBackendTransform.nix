@@ -12,7 +12,8 @@
 # record's `sharedAgentsMd` callback returns. This body reads `<backend>`
 # for those three and ignores the other backend's spec: `installPackage` and
 # `migrationConfig` fall back to the record-level field, while `options` is
-# merged over the record's shared `options` rather than replacing them.
+# merged recursively into the record's shared `options` rather than replacing
+# them, so a backend can add one option beside its siblings in a shared group.
 #
 # Returns: a module function `{config, ...}: { options; config; }`
 # that can be imported into `lib.evalModules` alongside
@@ -326,7 +327,7 @@
   # launcher keeps its switch at the root.
   enablePath = namespaces.enable checkedRecord;
   harnessSwitched = enablePath != ["enable"];
-  runtimeOptions = (appRecord.options or {}) // backendOptions;
+  runtimeOptions = lib.recursiveUpdate (appRecord.options or {}) backendOptions;
   # A runtime's own options may already declare `native.*` (settings), so the
   # native agent option joins that attrset rather than replacing it.
   nativeOptions =

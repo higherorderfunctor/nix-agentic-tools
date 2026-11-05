@@ -34,7 +34,8 @@
 # There is no `--trust-tools` injection. Under v3 no process hands the flag to
 # KAS, which reads tool policy only from `permissions.yaml`; the bare-launch
 # parser rejects it, and `acp --agent-engine=v3` rejects it with a conflict.
-# `trustedMcpTools` lowers to `settings/permissions.yaml` in mkKiro.nix.
+# `trustedMcpTools` lowers to `settings/permissions.yaml` in mkKiro.nix, on
+# Home Manager only.
 #
 # See packages/kiro-cli/docs/launcher-argv.md for the measurements.
 {

@@ -832,18 +832,18 @@
 
   # Kiro carries tool trust only as v3 permission rules, read from
   # `~/.kiro/settings/` and `~/.kiro/workspace-roots/<hash>/` (acp-server.js
-  # policy loader). Both sit outside the devenv root, so only Home Manager
-  # writes them.
+  # policy loader). Both sit outside the devenv root, and a devenv shell must
+  # not define a new root (no KIRO_HOME) to reach them, so only Home Manager
+  # writes them. The options that exist only to feed them
+  # (`ai.kiro.cli.trustedMcpTools`, `ai.kiro.permissions`) are declared under
+  # the record's `hm.options` and do not exist on devenv.
   kiroRulesDelivered = backend: backend == "hm";
-  # The generic MCP `toolPolicy` in Kiro's spelling. Where rules are
-  # delivered, `auto` joins the trusted tools (an allow rule through
+  # The generic MCP `toolPolicy` in Kiro's spelling, defined only where rules
+  # are delivered. `auto` joins the trusted tools (an allow rule through
   # mkPermissionRules) and `prompt` and `disabled` become ask and deny rules,
   # which Kiro resolves by restrictiveness (deny > ask > allow). An empty list
   # contributes no definition, so a consumer's own defaults survive.
-  kiroToolPolicy = {
-    backend,
-    mergedServers,
-  }: let
+  kiroToolPolicy = mergedServers: let
     policy = aiCommon.mcpToolPolicy mergedServers;
     rule = effect: rows:
       lib.optional (rows != []) {
@@ -851,16 +851,15 @@
         inherit effect;
         match = map (row: "${row.server}/${row.tool}") rows;
       };
-    delivered = kiroRulesDelivered backend;
-    trusted = lib.optionals delivered (map (row: "@${row.server}/${row.tool}") policy.auto);
-    rules = lib.optionals delivered (rule "ask" policy.prompt ++ rule "deny" policy.disabled);
+    trusted = map (row: "@${row.server}/${row.tool}") policy.auto;
+    rules = rule "ask" policy.prompt ++ rule "deny" policy.disabled;
   in
     lib.mkMerge [
       (lib.mkIf (trusted != []) {ai.kiro.cli.trustedMcpTools = trusted;})
       (lib.mkIf (rules != []) {ai.kiro.permissions = rules;})
     ];
-  # The `auto`, `prompt` and `disabled` tools no delivered Kiro surface
-  # carries on this backend.
+  # The `auto`, `prompt` and `disabled` tools this backend cannot deliver:
+  # every one on devenv, none on Home Manager.
   kiroUndeliveredTools = {
     backend,
     path,
@@ -1160,7 +1159,7 @@ in
           each = true;
           path = ["toolPolicy"];
           when = args: kiroUndeliveredTools args != [];
-          reason = args: "Kiro reads tool policy only from permission rules under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/), outside the devenv root, so only Home Manager delivers it and these tools keep Kiro's default: ${lib.concatStringsSep ", " (kiroUndeliveredTools args)}.";
+          reason = args: "Kiro reads tool policy only from permission rules under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/), outside the devenv root, which neither writes there nor defines a new root, so only Home Manager delivers it and these tools keep Kiro's default: ${lib.concatStringsSep ", " (kiroUndeliveredTools args)}.";
         }
       ];
       proxy = {};
@@ -1369,14 +1368,6 @@ in
           '';
         };
         sandbox.enable = lib.mkEnableOption "local sandbox availability. Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
-        # MCP tools to auto-approve, lowered to v3 allow rules in
-        # `settings/permissions.yaml` (mkPermissionRules).
-        trustedMcpTools = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [];
-          description = "MCP tool patterns to auto-approve. Each `@server` or `@server/tool` entry, and `subagent`, becomes an allow rule merged into `<configDir>/settings/permissions.yaml`, the only place the v3 engine reads tool trust; other bare names warn and are dropped. Home Manager only: Kiro reads that file from ~/.kiro, outside the devenv root, so devenv warns and delivers nothing.";
-          example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
-        };
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
         # bundle from the pinned release, without changing its prompt bytes.
@@ -1433,29 +1424,6 @@ in
         type = lib.types.str;
         default = ".kiro";
         description = "Config directory relative to HOME / devenv root.";
-      };
-      # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
-      # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
-      # exclude). The `trustedMcpTools` list is also translated and merged in
-      # (see mkPermissionRules). HM-only: Kiro reads
-      # permissions only from `~/.kiro/settings/` (global) or
-      # `~/.kiro/workspace-roots/<hash>/`, never project `.kiro/`.
-      permissions = lib.mkOption {
-        type = lib.types.listOf kiroPermissionRule;
-        default = [];
-        description = ''
-          V3 capability-based permission rules, rendered to
-          `<configDir>/settings/permissions.yaml` as `{ rules = [...]; }`
-          (mirrors Kiro's schema). `trustedMcpTools` is translated and
-          merged. HM only.
-        '';
-        example = [
-          {
-            capability = "mcp";
-            effect = "allow";
-            match = ["context7-mcp/*" "git-intel-mcp/hotspots"];
-          }
-        ];
       };
       # -- Hooks -----------------------------------------------------------
       # Typed as `kiroHookRecord`; raw hook envelopes go in `hooksJson`. Kiro
@@ -1524,6 +1492,42 @@ in
         '';
       };
     };
+    # Home Manager only: Kiro reads tool policy only from permission rules
+    # under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/).
+    # A devenv shell never writes outside the project and must not define a
+    # new root to reach them, so these options do not exist there at all:
+    # setting one under `ai.kiro.*` on devenv is an unknown-option error, not
+    # a warning. The shared `ai.mcpServers.<name>.toolPolicy` surface warns
+    # there through `surfaceSupport.mcpServers`.
+    hm.options = {
+      cli.trustedMcpTools = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "MCP tool patterns to auto-approve. Each `@server` or `@server/tool` entry, and `subagent`, becomes an allow rule merged into `~/.kiro/settings/permissions.yaml` (under `configDir`), the only place the v3 engine reads tool trust; other bare names warn and are dropped. Home Manager only: Kiro reads that file from the user's home, and a devenv shell neither writes outside the project nor defines a new root, so this option does not exist on devenv.";
+        example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
+      };
+      # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
+      # exclude). The `trustedMcpTools` list is translated and merged in
+      # (see mkPermissionRules).
+      permissions = lib.mkOption {
+        type = lib.types.listOf kiroPermissionRule;
+        default = [];
+        description = ''
+          V3 capability-based permission rules, rendered to
+          `<configDir>/settings/permissions.yaml` as `{ rules = [...]; }`
+          (mirrors Kiro's schema). `trustedMcpTools` is translated and
+          merged. Home Manager only: this option does not exist on devenv,
+          because Kiro reads permissions only from the user's home.
+        '';
+        example = [
+          {
+            capability = "mcp";
+            effect = "allow";
+            match = ["context7-mcp/*" "git-intel-mcp/hotspots"];
+          }
+        ];
+      };
+    };
     config = {
       backend,
       cfg,
@@ -1561,12 +1565,6 @@ in
             (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
           ignored)
         )) (builtins.attrNames cfg.hooks);
-      # The list reaches Kiro only as permissions.yaml rules, which devenv
-      # cannot place (see `kiroRulesDelivered`).
-      trustToolsWarnings = lib.optional (cfg.cli.trustedMcpTools
-        != []
-        && !kiroRulesDelivered backend)
-      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Kiro reads tool trust only from permission rules under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/), outside the devenv root, so devenv does not deliver this list; set it through Home Manager.");
       nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
@@ -1659,7 +1657,7 @@ in
         inherit (kiroSecrets) urlSecretEnv;
       };
       flatSettings = flatNativeSettings cfg;
-      permissionRules = mkPermissionRules cfg;
+      permissionRules = lib.optionals isHm (mkPermissionRules cfg);
       steeringEmitters = mkSteeringEmitters {
         inherit cfg mergedContext hasMergedContext mergedRules;
         sharedAgentsMd = !isHm;
@@ -1670,7 +1668,9 @@ in
           (lib.mkIf (isHm && cfg.cli.package != null) {
             ai.kiro.cli.native.settings.app.disableAutoupdates = lib.mkDefault true;
           })
-          (kiroToolPolicy {inherit backend mergedServers;})
+          # optionalAttrs, not mkIf: a definition of an undeclared option errors
+          # even under a false mkIf, and devenv declares neither option.
+          (lib.optionalAttrs (kiroRulesDelivered backend) (kiroToolPolicy mergedServers))
           (lib.optionalAttrs (!isHm && options ? enterShell) {
             enterShell = lib.concatStrings (lib.mapAttrsToList (name: setting:
               lib.optionalString (cfg.cli.${name}.enable && needsGlobalNotice setting) ''
@@ -1693,7 +1693,6 @@ in
             warnings =
               packageWarnings
               ++ hookWarnings
-              ++ trustToolsWarnings
               ++ (openKeys.inspect {
                 known = nativeSettingsKnown;
                 value = flatSettings;
@@ -1756,7 +1755,7 @@ in
               {
                 # Kiro reads permissions from ~/.kiro only; trust answers
                 # cannot replace this store link.
-                "${settingsDir}/permissions.yaml" = lib.mkIf (isHm && permissionRules != []) {
+                "${settingsDir}/permissions.yaml" = lib.mkIf (permissionRules != []) {
                   content.source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
                     rules = permissionRules;
                   };

@@ -198,7 +198,6 @@ in {
         ["package"]
         ["sandbox"]
         ["shell"]
-        ["trustedMcpTools"]
         ["tweaks"]
         ["useFhsSandbox"]
         ["workflows"]
@@ -208,7 +207,7 @@ in {
         tree = result.options.ai.kiro;
       in
         lib.all (path: !lib.hasAttrByPath path tree && lib.hasAttrByPath (["cli"] ++ path) tree) moved
-        && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "mcpServers" "permissions" "rules" "skills"]
+        && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "mcpServers" "rules" "skills"]
         && tree.cli ? enable
         && tree.enable.readOnly
         && !(builtins.tryEval (evaluate {ai.kiro = {package = null;};}).config).success;
@@ -1498,18 +1497,18 @@ in {
     );
 
     # `trustedMcpTools` lowers to v3 allow rules in permissions.yaml, the only
-    # trust KAS reads. Home Manager renders the translated rules (compared by
-    # the YAML generator's store path, so a dropped or mistranslated entry
-    # changes it); devenv cannot place the file under ~/.kiro, so it writes
-    # none and warns rather than dropping the list silently.
-    module-kiro-permissions-trusted-tools-per-backend = mkTest "kiro-permissions-trusted-tools-per-backend" (
+    # trust KAS reads, and Home Manager is the only backend that declares it:
+    # the YAML generator's store path changes if an entry is dropped or
+    # mistranslated. That devenv has no such option is asserted by
+    # `ai-warnings-kiro-tool-trust`.
+    module-kiro-hm-permissions-trusted-tools = mkTest "kiro-hm-permissions-trusted-tools" (
       let
-        config.ai.kiro.cli = {
-          enable = true;
-          trustedMcpTools = ["@openmemory" "@git-intel-mcp/hotspots" "subagent"];
+        hm = evalHm {
+          ai.kiro.cli = {
+            enable = true;
+            trustedMcpTools = ["@openmemory" "@git-intel-mcp/hotspots" "subagent"];
+          };
         };
-        hm = evalHm config;
-        devenv = evalDevenv config;
         expected = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
           rules = [
             {
@@ -1527,9 +1526,6 @@ in {
         toString hm.config.ai.kiro._generatedFiles.".kiro/settings/permissions.yaml".content.source
         == toString expected
         && hm.config.home.file ? ".kiro/settings/permissions.yaml"
-        && !(devenv.config.ai.kiro.files ? ".kiro/settings/permissions.yaml")
-        && lib.any (lib.hasInfix "devenv does not deliver this list") devenv.config.warnings
-        && !(lib.any (lib.hasInfix "devenv does not deliver this list") hm.config.warnings)
     );
 
     # HM: keyed rule steering entries with Kiro transformer frontmatter.

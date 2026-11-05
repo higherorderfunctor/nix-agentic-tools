@@ -113,10 +113,17 @@ KAS:
   exit 2, measured in CI), and `acp --agent-engine=v3` conflicts with it.
 
 `trustedMcpTools` therefore lowers to allow rules merged into
-`settings/permissions.yaml` (`mkPermissionRules` in `lib/mkKiro.nix`). Home
-Manager writes that file under `~/.kiro`. devenv cannot: both files KAS reads
-sit outside the devenv root, which the files layer refuses, so devenv writes
-nothing and warns on `ai.kiro.cli.trustedMcpTools` and on MCP `toolPolicy`.
+`settings/permissions.yaml` (`mkPermissionRules` in `lib/mkKiro.nix`). **Tool
+trust is Home Manager only**: Home Manager merges that file into
+`~/.kiro/settings/`. devenv cannot deliver it. Both files KAS reads sit outside
+the devenv root, which the files layer refuses, and giving devenv a root of its
+own (a `KIRO_HOME`) would hide the user's real Kiro configuration instead of
+extending it. So `ai.kiro.cli.trustedMcpTools` and `ai.kiro.permissions` are
+declared under the record's `hm.options` and do not exist on devenv: setting
+either there is an unknown-option error. The shared
+`ai.mcpServers.<name>.toolPolicy` surface still evaluates on devenv and warns
+through Kiro's `surfaceSupport` (`mcpServers` gap), naming the tools that keep
+Kiro's default.
 
 > **Probing v3 policy:** read the packaged KAS JavaScript at
 > `kiro-cli.kas/node_modules/@kiro/agent/dist/server/acp-server.js`. The Rust
@@ -359,8 +366,11 @@ parse rejection from an accepted flag.
   realized upstream Linux command wrapper, shared launcher, init, dispatcher and
   profile, without executing bubblewrap inside the Nix build sandbox.
 - `packages/kiro-cli/checks/module-eval.nix` — the generated bash shape, the
-  removed `ai.kiro.cli.v3` option, and `permissions.yaml` per backend
-  (`module-kiro-permissions-trusted-tools-per-backend`).
+  removed `ai.kiro.cli.v3` option, and the Home Manager `permissions.yaml`
+  (`module-kiro-hm-permissions-trusted-tools`).
+- `checks/ai-warnings/default.nix` (`ai-warnings-kiro-tool-trust`) — the trust
+  and permissions options exist on Home Manager only, and devenv warns on MCP
+  `toolPolicy`.
 
 ## Do not break the exec line
 
