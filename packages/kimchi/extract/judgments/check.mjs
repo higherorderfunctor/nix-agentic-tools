@@ -10,7 +10,9 @@ import {
   factRows,
   hash,
   packet,
+  requests,
   resolver,
+  rootKey,
   schemaPrefix,
   verdicts,
 } from "./packet.mjs";
@@ -31,6 +33,8 @@ const actions = {
   FACT_INPUT: `Correct the regionRegistry producer or source pin, run nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then investigate and rejudge ${verdictFile}.`,
   RECORDED_HASH: `Inspect the recorded packet edit and current evidence, then deliberately update the reviewed record in ${verdictFile}.`,
   REMOVED_ROOT: `Inspect the removed evidence and remove this judgment by hand from ${verdictFile}.`,
+  REQUEST_FACT_INPUT: `Correct the requestCallers producer or source pin, run nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then investigate and rejudge ${verdictFile}.`,
+  REQUEST_LOCATION: `Align requestCallers with the pinned source using nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then inspect the candidate packets and rejudge ${verdictFile}.`,
   SOURCE_INPUT: `Correct the pinned source or structural resolver, regenerate facts if the source changed, then investigate and rejudge ${verdictFile}.`,
   UNCLASSIFIED_ROOT: `Review the candidate packet and add one scoped judgment or explicit unknown record to ${verdictFile}.`,
   VERDICT_INPUT: `Correct the verdict file at the named path in ${verdictFile} and rerun the check; a record's packet will be emitted once it is valid.`,
@@ -53,7 +57,14 @@ function fail(
 ) {
   const id = typeof judgment.id === "string" ? judgment.id : unavailable.id;
   const claim =
-    typeof judgment.claim === "string" ? judgment.claim : unavailable.claim;
+    typeof judgment.claim === "string"
+      ? judgment.claim
+      : judgment.claim &&
+          ["default", "destination", "disable", "trigger"].every(
+            (key) => typeof judgment.claim[key] === "string",
+          )
+        ? canonical(judgment.claim)
+        : unavailable.claim;
   failures.push({
     id,
     claim,
@@ -104,15 +115,17 @@ async function evaluate() {
       );
     }
   }
-  let rows, resolve;
+  let rows, resolve, requestEvidence;
   try {
-    rows = factRows(JSON.parse(await readFile(args.facts, "utf8")));
+    const facts = JSON.parse(await readFile(args.facts, "utf8"));
+    rows = factRows(facts);
     const ts = (await import(pathToFileURL(args.typescript).href)).default;
     resolve = resolver(
       await readFile(join(args.tree, "src/regions.ts")),
       ts,
       display,
     );
+    requestEvidence = await requests(facts, args.tree, ts, display);
   } catch (error) {
     if (!(error instanceof EvidenceError)) throw error;
     for (const judgment of valid.length ? valid : [unavailable]) {
@@ -121,41 +134,57 @@ async function evaluate() {
     }
     return;
   }
-  const roots = [
-    ...new Set(rows.filter((row) => row.value !== "").map((row) => row.region)),
-  ].sort();
-  // A malformed record only suppresses coverage for its recoverable root.
-  const recordedRoots = new Set(
-    records.map(
-      ({ judgment }) => judgment?.packet?.selector?.fact?.where?.region,
-    ),
-  );
-  const candidates = roots
-    .filter((root) => !recordedRoots.has(root))
-    .map((region) => ({
-      id: `<unclassified:${region}>`,
-      claim: `No claim is recorded for hosted gateway ${region}.`,
-      packet: {
-        selector: {
+  const roots = new Map(
+    [
+      ...new Set(
+        rows.filter((row) => row.value !== "").map((row) => row.region),
+      ),
+    ]
+      .sort()
+      .map((region) => {
+        const selector = {
           fact: {
             kind: "regionRegistry.fields",
             where: { field: "llmBaseUrl", region },
           },
           sources: [],
-        },
-      },
-    }));
+        };
+        return [rootKey(selector), { selector, rows }];
+      }),
+  );
+  for (const [key, root] of requestEvidence.roots) roots.set(key, root);
+  // A malformed record only suppresses coverage for its recoverable root.
+  const recordedRoots = new Set(
+    records.map(({ judgment }) => rootKey(judgment?.packet?.selector)),
+  );
+  const candidates = [...roots]
+    .filter(([key]) => !recordedRoots.has(key))
+    .map(([, { selector }]) => {
+      const { region, request } = selector.fact.where,
+        label = request ? `request:${canonical(request)}` : region;
+      return {
+        id: `<unclassified:${label}>`,
+        claim: request
+          ? `No four-part claim is recorded for request ${canonical(request)}.`
+          : `No claim is recorded for hosted gateway ${region}.`,
+        packet: { selector },
+      };
+    });
   for (const judgment of [...valid, ...candidates]) {
     const { id, evidenceHash: old = "absent" } = judgment;
     const recorded = judgment.evidenceHash ? judgment.packet : null;
     const selector = judgment.packet.selector,
-      root = selector.fact.where.region;
-    if (!roots.includes(root)) {
+      root = selector.fact.where.request
+        ? canonical(selector.fact.where.request)
+        : selector.fact.where.region,
+      request = selector.fact.kind === "requestCallers",
+      key = rootKey(selector);
+    if (!roots.has(key)) {
       if (!invalidHashes.has(id))
         fail(
           judgment,
           "REMOVED_ROOT",
-          `removed root ${root}: no nonempty llmBaseUrl declaration remains; removed rows=${canonical(recorded.rows)}`,
+          `removed ${request ? "request root" : "root"} ${root}: ${request ? "no requestCallers occurrence remains" : "no nonempty llmBaseUrl declaration remains"}; removed rows=${canonical(recorded.rows)}`,
           old,
           "absent",
         );
@@ -171,7 +200,11 @@ async function evaluate() {
       counts.roots++;
       counts[judgment.verdict]++;
     }
-    const result = packet(selector, rows, resolve);
+    const result = await packet(
+      selector,
+      roots.get(key).rows,
+      request ? requestEvidence.resolve : resolve,
+    );
     current[id] = result;
     diff[id] = {
       recorded: recorded ? old : null,
@@ -183,7 +216,7 @@ async function evaluate() {
       fail(
         judgment,
         "UNCLASSIFIED_ROOT",
-        `unclassified root ${root}: a nonempty llmBaseUrl declaration has no judgment; added rows=${canonical((result.packet ?? result.incomplete).rows)}`,
+        `unclassified ${request ? "request root" : "root"} ${root}: ${request ? "a requestCallers occurrence" : "a nonempty llmBaseUrl declaration"} has no judgment; added rows=${canonical((result.packet ?? result.incomplete).rows)}`,
         old,
         result.evidenceHash ?? "unresolved",
       );
