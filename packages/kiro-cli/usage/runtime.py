@@ -237,43 +237,56 @@ def wait_command(command, arguments, environment):
             signal.signal(number, handler)
 
 
+# Launcher globals consumed before the subcommand: the value options take the next token, the flags take none.
+# Unknown options are not guessed at, so the first one ends the scan as the subcommand.
+LAUNCH_VALUE_OPTIONS = ("--agent", "--agent-engine", "--model", "--repo", "--resume-id")
+LAUNCH_FLAG_OPTIONS = ("--classic", "--cloud", "--list", "--resume", "--resume-picker", "--tui", "--v2", "--v3", "--verbose", "-r", "-v")
+ADMINISTRATIVE_COMMANDS = (
+    "agent", "dashboard", "debug", "diagnostic", "doctor", "help", "init",
+    "integrations", "issue", "launch", "login", "logout", "mcp", "powers",
+    "profile", "quit", "restart", "settings", "setup", "theme", "update",
+    "user", "whoami",
+)
+
+
+def launch_options(arguments):
+    """The arguments before the literal `--`, which ends option parsing."""
+    return arguments[:arguments.index("--")] if "--" in arguments else arguments
+
+
+def launch_subcommand(options):
+    """The first token that is neither a launcher global nor its value, or None for a bare launch."""
+    leading = iter(options)
+    for option in leading:
+        if option in LAUNCH_VALUE_OPTIONS:
+            next(leading, None)
+        elif option in LAUNCH_FLAG_OPTIONS or option.partition("=")[0] in LAUNCH_VALUE_OPTIONS:
+            continue
+        else:
+            return option
+    return None
+
+
 def exec_command(path, port, warn_bytes, arguments, theme=None):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
         raise ValueError("usage: kiro-usage exec [--] COMMAND [ARG ...]")
     command, *tail = arguments
-    if Path(command).name == "kiro-cli":
-        # Pin the v3 engine as the managed launcher does: prepend `--v3`
-        # unless an option before argv's `--` boundary already is one.
-        options = tail[:tail.index("--")] if "--" in tail else tail
-        if "--v3" not in options:
-            tail.insert(0, "--v3")
     tracked = Path(command).name == "kiro-cli"
     if tracked:
-        options = tail[:tail.index("--")] if "--" in tail else tail
-        if any(option in ("--help", "--help-all", "--version", "-h", "-V") for option in options):
-            tracked = False
-        else:
-            # Consume known launcher globals before checking the subcommand;
-            # unknown options keep tracking rather than guessing their arity.
-            value_options = ("--agent", "--agent-engine", "--model", "--repo", "--resume-id")
-            flag_options = ("--classic", "--cloud", "--list", "--resume", "--resume-picker", "--tui", "--v2", "--v3", "--verbose", "-r", "-v")
-            leading = iter(options)
-            administrative = (
-                "agent", "dashboard", "debug", "diagnostic", "doctor", "help", "init",
-                "integrations", "issue", "launch", "login", "logout", "mcp", "powers",
-                "profile", "quit", "restart", "settings", "setup", "theme", "update",
-                "user", "whoami",
-            )
-            for option in leading:
-                if option in value_options:
-                    next(leading, None)
-                elif option in flag_options or option.partition("=")[0] in value_options:
-                    continue
-                else:
-                    tracked = option not in administrative
-                    break
+        # Pin the v3 engine as the managed launcher does: prepend `--v3` unless
+        # an option before argv's `--` boundary already is one.
+        if "--v3" not in launch_options(tail):
+            tail.insert(0, "--v3")
+        options = launch_options(tail)
+        subcommand = launch_subcommand(options)
+        # `acp` ignores the global `--v3`; it resolves its engine from its own
+        # `--agent-engine`, so name it before `--` unless the caller already did.
+        if subcommand == "acp" and not any(option.partition("=")[0] == "--agent-engine" for option in options):
+            tail.insert(len(options), "--agent-engine=v3")
+        tracked = not any(option in ("--help", "--help-all", "--version", "-h", "-V") for option in options) \
+            and subcommand not in ADMINISTRATIVE_COMMANDS
     nested = bool(os.environ.get("KIRO_USAGE_INVOCATION"))
     invocation = (os.environ.get("KIRO_USAGE_INVOCATION") or uuid.uuid4().hex) if tracked else None
     child_environment = launch_environment(path, port, refuse_conflicts=False, invocation=invocation)

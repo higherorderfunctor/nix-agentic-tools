@@ -27,9 +27,11 @@
 # --agent-engine`, then the `acp.agentEngine` setting, then a default that is
 # v2 whenever `--agent`, `--model`, `--effort`, `--trust-all-tools` or
 # `--trust-tools` is given or the initialize names a client on the binary's
-# built-in v2 list (`acp-smoke` is one). So `--agent-engine=v3` is appended to
-# `acp` unless an `--agent-engine` token is already there; the caller's own
-# selector is left to upstream. `kiro-kas-dispatch` measures both facts.
+# built-in v2 list (`acp-smoke` is one). So `--agent-engine=v3` is added to
+# `acp` unless an `--agent-engine` token is already there, placed before an
+# end-of-options `--` when one is present (a token past it is a positional);
+# the caller's own selector is left to upstream. `kiro-kas-dispatch` measures
+# both facts.
 #
 # There is no `--trust-tools` injection. Under v3 no process hands the flag to
 # KAS, which reads tool policy only from `permissions.yaml`; the bare-launch
@@ -158,7 +160,8 @@ in {
       flags = ["--v3"];
       position = "prepend";
     };
-    # Appended: `--agent-engine` is an `acp` option, not a global.
+    # Placed after `acp` and before an end-of-options `--`: `--agent-engine` is
+    # an `acp` option, not a global, and a token past `--` is a positional.
     acpEngineBlock =
       gateOnSubcommand {
         subcommands = ["acp"];
@@ -168,7 +171,16 @@ in {
           flag = "--agent-engine";
           var = "nat_engine";
         })
-        "if [ \"$nat_engine\" = 0 ]; then set -- \"$@\" --agent-engine=v3; fi"
+        "if [ \"$nat_engine\" = 0 ]; then"
+        "  nat_argv=()"
+        "  nat_placed=0"
+        "  for nat_arg in \"$@\"; do"
+        "    if [ \"$nat_placed\" = 0 ] && [ \"$nat_arg\" = -- ]; then nat_argv+=(--agent-engine=v3); nat_placed=1; fi"
+        "    nat_argv+=(\"$nat_arg\")"
+        "  done"
+        "  if [ \"$nat_placed\" = 0 ]; then nat_argv+=(--agent-engine=v3); fi"
+        "  set -- \"\${nat_argv[@]}\""
+        "fi"
       ]);
 
     # A strict-mode wrapper: bake env, inject the engine selectors, exec the

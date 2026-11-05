@@ -81,7 +81,7 @@
       ];
     };
     # kiro-wrapper: the argv contract of the generated kiro-cli launcher —
-    # where `--v3` and `acp --agent-engine=v3` land, why the `acp` append is
+    # where `--v3` and `acp --agent-engine=v3` land, why the `acp` selector is
     # gated rather than unconditional, and how to
     # re-measure on a version bump. Kept OUT of the `kiro-cli` category (whose
     # fragment is the ~300-line auto-memory map) so an edit to the wrapper

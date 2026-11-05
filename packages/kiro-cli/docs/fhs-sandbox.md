@@ -81,8 +81,8 @@ tool. A version-sensitive step changes behavior instead of failing.
 The same ordering applies to Kiro's own command: the synthesized `/usr/bin`
 holds the payload's `kiro-cli`, ahead of any same-named entry later on the
 inherited PATH. The module's launcher (the `--v3` prepend, the `acp`
-`--agent-engine=v3` append and every export) runs before bubblewrap and reaches
-that command through argv and the inherited environment.
+`--agent-engine=v3` selector and every export) runs before bubblewrap and
+reaches that command through argv and the inherited environment.
 
 ## Supplying missing tools
 

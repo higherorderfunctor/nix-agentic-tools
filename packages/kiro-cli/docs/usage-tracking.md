@@ -162,9 +162,11 @@ exits.
 bypass variables only for that invocation and its descendants, replacing
 conflicting inherited values. Your shell environment stays unchanged. For
 commands named `kiro-cli`, it prepends `--v3` unless already present before
-`--`. Other command names receive arguments unchanged; callers must ensure those
-programs use the Node trust path. Use `kiro-usage exec -- COMMAND ...` when an
-explicit command boundary is useful.
+`--`, and for the `acp` subcommand it adds `--agent-engine=v3` before `--` (last
+without one) unless an `--agent-engine` is already there. Other command names
+receive arguments unchanged; callers must ensure those programs use the Node
+trust path. Use `kiro-usage exec -- COMMAND ...` when an explicit command
+boundary is useful.
 
 For a standalone devenv-managed collector, start `kiro-usage` through the
 process supervisor with `devenv up kiro-usage`. Home Manager on Darwin emits the

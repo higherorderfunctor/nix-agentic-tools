@@ -143,10 +143,14 @@
       # A conflicting option still reaches upstream, which refuses it under v3.
       expect "acp --model keeps its engine and its option" \
         '--v3|acp|--model|x|--agent-engine=v3'                            "$V" acp --model x
-      # A selector past `--` is a positional, so the append still happens;
-      # `acp` takes no positionals, so this argv fails upstream either way.
-      expect "-- ends the engine scan" \
-        '--v3|acp|--|--agent-engine=v3|--agent-engine=v3'                 "$V" acp -- --agent-engine=v3
+      # A selector past `--` is a positional, so the scan stops there and the
+      # engine goes in front of the marker, where `acp` parses it as an option.
+      expect "-- ends the engine scan and the engine goes before it" \
+        '--v3|acp|--agent-engine=v3|--|--agent-engine=v3'                 "$V" acp -- --agent-engine=v3
+      expect "acp -- gets its engine before the marker" \
+        '--v3|acp|--agent-engine=v3|--'                                   "$V" acp --
+      expect "acp option then -- gets its engine before the marker" \
+        '--v3|acp|--model|x|--agent-engine=v3|--|y'                       "$V" acp --model x -- y
 
       # ── an option VALUE is never read as the subcommand ─────────────────────
       # Reading `acp` as the subcommand in `--agent acp` would append

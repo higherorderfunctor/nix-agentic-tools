@@ -327,7 +327,7 @@
   # launcher keeps its switch at the root.
   enablePath = namespaces.enable checkedRecord;
   harnessSwitched = enablePath != ["enable"];
-  runtimeOptions = lib.recursiveUpdate (appRecord.options or {}) backendOptions;
+  runtimeOptions = mergeOptionTrees (appRecord.options or {}) backendOptions;
   # A runtime's own options may already declare `native.*` (settings), so the
   # native agent option joins that attrset rather than replacing it.
   nativeOptions =
@@ -434,7 +434,9 @@
     (lib.setAttrByPath enablePath (lib.mkEnableOption appRecord.name))
     (lib.optionalAttrs (launcherOwnOptions != {}) (lib.setAttrByPath launcherPath launcherOwnOptions));
   # Option attrsets merge by key, but an option itself is a leaf: a runtime's
-  # own option at a pool's key replaces the builder's, as `//` would.
+  # own option at a pool's key replaces the builder's, as `//` would, and a
+  # backend's option declaration replaces the record's at the same path rather
+  # than merging its `default` or `type` fields.
   mergeOptionTrees = lib.recursiveUpdateUntil (_: lhs: rhs: !(builtins.isAttrs lhs && builtins.isAttrs rhs) || lib.isOption lhs || lib.isOption rhs);
   # The per-runtime pool options, placed at the record's pools namespace.
   poolDeclarations =

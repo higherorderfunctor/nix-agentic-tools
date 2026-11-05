@@ -3,10 +3,11 @@
 <!-- cspell:ignore avante codecompanion cutover -->
 
 > **Last verified:** 2026-11-05 — Kiro CLI 3.0.0 ships one `kiro-cli` binary.
-> The wrapper always prepends `--v3` and appends `--agent-engine=v3` on `acp`
-> unless the caller passed an `--agent-engine`; it injects no trust flag. The
-> 3.0.0 facts below are read from the binary and asserted by
-> `kiro-kas-dispatch`; 2.x measurements are labelled as such.
+> The wrapper always prepends `--v3` and adds `--agent-engine=v3` to `acp`
+> (before an end-of-options `--`, else last) unless the caller passed an
+> `--agent-engine`; it injects no trust flag. The 3.0.0 facts below are read
+> from the binary and asserted by `kiro-kas-dispatch`; 2.x measurements are
+> labelled as such.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -20,10 +21,10 @@
 
 ## What is injected where
 
-| Flag                | Position    | Applies to                                        |
-| ------------------- | ----------- | ------------------------------------------------- |
-| `--v3`              | **prepend** | every subcommand + bare, unless already present   |
-| `--agent-engine=v3` | **append**  | `acp`, when the caller passed no `--agent-engine` |
+| Flag                | Position                     | Applies to                                        |
+| ------------------- | ---------------------------- | ------------------------------------------------- |
+| `--v3`              | **prepend**                  | every subcommand + bare, unless already present   |
+| `--agent-engine=v3` | **after `acp`**, before `--` | `acp`, when the caller passed no `--agent-engine` |
 
 Both live in `lib/wrapPackage.nix`. Do not "make them consistent": `--v3` is a
 launcher-global option, while `--agent-engine` belongs to `acp`.
@@ -74,10 +75,13 @@ binary, not from help text):
 Top-level `--v3` and `KIRO_AGENT_ENGINE` are **not inputs**. CI measured, on the
 stock binary: `--v3 acp` and `acp` start KAS for `nix-check` and for EOF, but an
 `acp-smoke` initialize gets the v2 engine; `acp --agent-engine=v3` starts KAS
-for all three. So the wrapper appends `--agent-engine=v3` to `acp` unless an
+for all three. So the wrapper adds `--agent-engine=v3` to `acp` unless an
 `--agent-engine` token, in either spelling, is already before `--`. The scan
 reads presence only; a caller's own selector, whatever its value, is left to
-upstream.
+upstream. The selector goes in front of an end-of-options `--` (a token past it
+is a positional) and last when argv has no `--`: `acp --` becomes
+`acp --agent-engine=v3 --`. `kiro-usage exec` applies the same rule to a command
+named `kiro-cli`, reusing its launcher-global scan to find `acp`.
 
 `kiro-kas-dispatch` asserts both halves: the raw `acp --agent-engine=v3` start
 for EOF, `nix-check` and `acp-smoke`, and, through the wrapper, KAS starting for
