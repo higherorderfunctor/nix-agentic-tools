@@ -116,11 +116,15 @@
         # offset; stripping would rewrite it for no benefit.
         dontStrip = true;
 
+        # The header is scoped to a subshell: stdenv runs every phase in one
+        # shell, and versionCheckHook's installCheck reads unset variables.
         installPhase = ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
           runHook preInstall
-          install -Dm755 bin/kiro-cli -t "$out/bin"
+          (
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            install -Dm755 bin/kiro-cli -t "$out/bin"
+          )
           runHook postInstall
         '';
 
