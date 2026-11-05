@@ -121,16 +121,15 @@ there beyond the environment guard comes from the user's global settings.
 
 Both package commands default `KIRO_NO_AUTO_UPDATE=1`. On devenv or with the
 package alone, set it to `0`, `false`, `off`, `no` (case-insensitive), or empty
-to re-enable checks. The guard exports private `NAT_KIRO_AUTO_UPDATE=on` and
-unsets `KIRO_NO_AUTO_UPDATE`. Each command is a direct last hop to the binary,
-so it also clears the private marker before Kiro starts and child launchers
-apply their own defaults. An inherited marker keeps an opt-in an outer guard
-already normalized. Any global `app.disableAutoupdates = true` must also be
-released. This handles presence-based consumers too. The binary's exact
-update-path semantics remain unverified: isolated `--version` and
-unauthenticated probes reached only version output or the authentication prompt.
-The stub-based `kiro-autoupdate-wrapper-chain` check runs both commands'
-wrappers without running Kiro.
+to re-enable checks. The guard unsets `KIRO_NO_AUTO_UPDATE` for those values and
+sets it to `1` for anything else. Each command is a direct last hop to the
+binary, so the guard runs once per launch. Any global
+`app.disableAutoupdates = true` must also be released. This handles
+presence-based consumers too. The binary's exact update-path semantics remain
+unverified: isolated `--version` and unauthenticated probes reached only version
+output or the authentication prompt. The stub-based
+`kiro-autoupdate-wrapper-chain` check runs both commands' wrappers without
+running Kiro.
 
 3.0.0 also carries a hidden legacy sweep
 (`kiro-cli _ cleanup-autocomplete-artifacts`) that removes leftovers of the
@@ -286,7 +285,10 @@ that advertises an unwrapped payload but cannot recompose it.
 
 **Upstream's reason is NOT that v3 replaced the flag.** Under v3, `chat` still
 honours it. `--trust-tools` is a **client-side** knob: kiro's own TUI
-(`~/.local/share/kiro-cli/tui.js`) re-emits it onto the downstream ACP argv.
+(`~/.local/share/kiro-cli/tui.js`) re-emits it onto the downstream ACP argv only
+for the v2 child (`kiro-cli acp --agent-engine=v2 ...`). It never reaches the
+KAS argv: KAS reads tool policy only from `permissions.yaml`, so under v3
+`mkPermissionRules` is the trust delivery that works.
 
 Do not over-read that. The TUI's auto-answer — selecting `allow_always` on an
 `approval_request`, with an explicit branch for the v3 (`kas`) engine — is real

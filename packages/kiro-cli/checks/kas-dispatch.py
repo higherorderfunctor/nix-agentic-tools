@@ -1,7 +1,8 @@
 """Real native dispatch through both commands: package binding beats old caches.
 
-The `trusted` variant also proves, on the real binary, that the wrapper's
-`--trust-tools` gate matches what the engine accepts, and the stock variant's
+The `trusted` variant also proves, on the real binary, that KAS starts with the
+wrapper's `--trust-tools` gate in place and never receives the grant in its own
+argv in either mode, and the stock variant's
 raw measurements pin the binary behavior that gate is built on.
 """
 
@@ -82,12 +83,11 @@ for name, variant in variants.items():
                     assert variant["server"] in argv, (name, stale, args, argv)
                     # KAS starting at all is the proof that the engine accepted
                     # the wrapper's argv: a `--trust-tools` conflict exits first.
-                    # On `acp` the effective engine is v3 (injected `--v3` for
-                    # kiro-cli, explicit `--agent-engine v3` for the alias), so
-                    # the grant must be withheld; on `chat` it is forwarded.
+                    # 3.0.0 KAS takes no trust flag (acp-server.js reads tool
+                    # policy only from permissions.yaml); the grant stays with
+                    # the ACP client, so it must never appear in the KAS argv.
                     if variant["trust"] is not None:
-                        forwarded = any(variant["trust"] in token for token in argv)
-                        assert forwarded == (mode == "chat"), (name, stale, args, argv)
+                        assert not any(variant["trust"] in token for token in argv), (name, stale, args, argv)
                     assert list(home.glob("**/kas/*/node_modules/@kiro/agent/dist/server/acp-server.js")) == ([old] if stale else []), "unexpected cache extraction"
     # Explicit inherited override remains available only in the stock variant.
     with tempfile.TemporaryDirectory() as tmp:
@@ -128,6 +128,7 @@ assert "only supported with --agent-engine=v3" in result.stderr and CONFLICT not
 result, started = raw(binary, ["--v3", "--trust-tools=fs_read", "--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"])
 assert started, ("bare v3 launch with trust", result.returncode, result.stderr)
 # `acp` with no engine selector does not apply the v3 conflict at parse time.
-result, _ = raw(binary, ["acp", "--trust-tools=fs_read"])
-assert CONFLICT not in result.stderr, ("unselected acp trust", result.returncode, result.stderr)
+result, started = raw(binary, ["acp", "--trust-tools=fs_read"])
+# Parsing must accept the flag: no engine conflict and no other parse rejection.
+assert CONFLICT not in result.stderr and "unexpected argument" not in result.stderr and (started or result.returncode != 2), ("unselected acp trust", result.returncode, result.stderr)
 print("PASS: raw: v3 acp conflict, explicit engine precedence, bare v3 trust, unselected acp", flush=True)

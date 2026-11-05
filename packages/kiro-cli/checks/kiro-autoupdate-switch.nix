@@ -8,7 +8,6 @@ in {
       shopt -s inherit_errexit 2>/dev/null || :
       for command in kiro-cli kiro-cli-chat; do
         ${pkgs.gnugrep}/bin/grep -qF 'set -euETo pipefail; shopt -s inherit_errexit' "${package}/bin/$command"
-        ${pkgs.gnugrep}/bin/grep -qF 'export NAT_KIRO_AUTO_UPDATE=on' "${package}/bin/$command"
         ${pkgs.gnugrep}/bin/grep -qF '*) export KIRO_NO_AUTO_UPDATE=1' "${package}/bin/$command"
       done
       ${pkgs.gnugrep}/bin/grep -aqF 'KIRO_NO_AUTO_UPDATE' \
@@ -33,7 +32,6 @@ in {
         #!${pkgs.bash}/bin/bash
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        test -z "''${NAT_KIRO_AUTO_UPDATE+x}"
         printf '%s\n' "''${KIRO_NO_AUTO_UPDATE-unset}"
         EOF
         cat > "$out/bin/reexport" <<EOF
@@ -47,7 +45,7 @@ in {
         for command in kiro-cli kiro-cli-chat; do
           makeWrapper "$out/bin/binary" "$out/bin/$command" ${package.autoUpdateWrapperFlags}
         done
-        unset KIRO_NO_AUTO_UPDATE NAT_KIRO_AUTO_UPDATE
+        unset KIRO_NO_AUTO_UPDATE
         for command in kiro-cli kiro-cli-chat; do
           test "$("$out/bin/$command")" = 1
           for value in "" 0 false FALSE False off OFF no NO; do
@@ -56,14 +54,11 @@ in {
           for value in 1 true on yes; do
             test "$(KIRO_NO_AUTO_UPDATE="$value" "$out/bin/$command")" = 1
           done
-          # An inherited private marker means an outer guard already
-          # normalized an opt-in: it is kept, and cleared before Kiro starts.
-          test "$(NAT_KIRO_AUTO_UPDATE=on "$out/bin/$command")" = unset
           # A module wrapper re-exporting the opt-in in front of either
           # command is normalized the same way.
           test "$("$out/bin/reexport" "$out/bin/$command")" = unset
         done
-        echo 'PASS: default and opt-in hold on both direct commands; each clears the private marker; module re-export is normalized'
+        echo 'PASS: default and opt-in hold on both direct commands; module re-export is normalized'
       '';
   };
 }

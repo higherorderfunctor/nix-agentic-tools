@@ -50,21 +50,15 @@
     kas = mkKas bundlePatches;
     managedKas = (bundlePatches.replace or []) != [];
     # Defaults updates off and normalizes an explicit opt-in. Each packaged
-    # command is a direct last hop to the binary, so it clears the private
-    # marker before Kiro starts and child launchers apply their own defaults.
+    # command is a direct last hop to the binary, so the guard runs once per
+    # launch and needs no state passed to another guard.
     autoUpdateGuard = pkgs.lib.escapeShellArg ''
-      if [ -n "''${KIRO_NO_AUTO_UPDATE+x}" ] || [ "''${NAT_KIRO_AUTO_UPDATE-}" != on ]; then
-        nat_kiro_no_auto_update="''${KIRO_NO_AUTO_UPDATE-1}"
-        case "''${nat_kiro_no_auto_update,,}" in
-          ""|0|false|off|no)
-            export NAT_KIRO_AUTO_UPDATE=on
-            unset KIRO_NO_AUTO_UPDATE
-            ;;
-          *) export KIRO_NO_AUTO_UPDATE=1 ;;
-        esac
-        unset nat_kiro_no_auto_update
-      fi
-      unset NAT_KIRO_AUTO_UPDATE
+      nat_kiro_no_auto_update="''${KIRO_NO_AUTO_UPDATE-1}"
+      case "''${nat_kiro_no_auto_update,,}" in
+        ""|0|false|off|no) unset KIRO_NO_AUTO_UPDATE ;;
+        *) export KIRO_NO_AUTO_UPDATE=1 ;;
+      esac
+      unset nat_kiro_no_auto_update
     '';
     autoUpdateWrapperFlags = "--run 'set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :' --run ${autoUpdateGuard}";
     wrapperFlags = "--set-default TERM xterm-256color ${autoUpdateWrapperFlags} ${
@@ -123,6 +117,8 @@
         dontStrip = true;
 
         installPhase = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           runHook preInstall
           install -Dm755 bin/kiro-cli -t "$out/bin"
           runHook postInstall
