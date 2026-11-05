@@ -1,8 +1,8 @@
 # Sandbox Git identities
 
-> **Last verified:** 2026-11-01 — identity option inheritance, URL selection,
-> and session-only relay lowering on Home Manager and devenv. Runtime launchers
-> select an identity before boot; signing consumption comes later.
+> **Last verified:** 2026-11-02 — signer services and session-only relay wiring
+> are checked on Home Manager and devenv. Real guest boots verify signed and
+> unsigned identity launches; see [signing](sandbox-signing.md).
 
 `ai.sandbox.git.identities` supplies author details and explicit push keys:
 
@@ -31,7 +31,9 @@ definitions do not flow back to the root.
 
 `user.name`, `user.email`, and `push.key` are required. `push.key` has the
 relay's `redact.types.secretFile` type, so plaintext keys are refused without
-printing their contents.
+printing their contents. `signing.key` accepts the same reference type or null
+(default). A non-null signing key creates one dedicated signer per routed
+runtime and identity. Null means unsigned commits and no signing door.
 
 Each `remotes.<token>.forge` defaults to `<token>`. The token is the host
 exactly as written in the remote URL, including case and SSH aliases. For
@@ -120,14 +122,15 @@ daemon and forwarding hooks use its resolved config and current pins. A
 `git ls-remote` probe of the new session must succeed before boot; failures name
 the instance's `port` option. Start the relay first (`devenv up` on devenv).
 
-The guest receives only a port-9418 door to that relay and a launch-time Git
-config through fw_cfg. The random session URL never enters the store or kernel
-command line. After cloning the object seed, its final config include supplies
-`user.name`, `user.email`, unsigned commit/tag settings, and the session's
-`remote.origin.url`. Fetch and push share that URL, `remote.origin.prune` is
-false, and an attached or unborn branch tracks its same-named origin branch.
-Detached HEAD remains detached. The final include overrides consumer identity
-settings; no operator identity, key or agent is inherited.
+The guest receives a port-9418 door to that relay and a launch-time Git config
+through fw_cfg; a signing identity also gets a dedicated agent door. The random
+session URL never enters the store or kernel command line. After cloning the
+object seed, its final config include supplies `user.name`, `user.email`,
+commit/tag signing settings, and the session's `remote.origin.url`. Fetch and
+push share that URL, `remote.origin.prune` is false, and an attached or unborn
+branch tracks its same-named origin branch. Detached HEAD remains detached. The
+final include overrides consumer identity settings; no operator identity, key or
+agent is inherited.
 
 The relay session borrows only the seed's copied history: its alternates name
 `SANDBOX_SEED_OBJECTS`, a link the factory points at the seed's object directory
