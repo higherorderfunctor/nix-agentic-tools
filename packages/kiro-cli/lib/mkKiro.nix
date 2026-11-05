@@ -1490,7 +1490,11 @@ in
           default = false;
           description = ''
             Append `--v3` (next-generation Kiro agent) to the kiro-cli
-            launcher wrapper. Applied by both backends.
+            launcher wrapper. Kiro 3.0.0 `acp` does not read that flag, so the
+            wrapper also appends `--agent-engine=v3` there unless the caller
+            passes its own `--agent-engine`; `acp --model`, `--agent` and
+            `--effort` then fail upstream's v3 conflict check. Applied by both
+            backends.
 
             Required by the friendly feature switches and raw rollout patches:
             those features are surfaced by the v3 (`kas`) engine.

@@ -26,6 +26,9 @@
 # argument found" — the flag was in the wrong argv POSITION, not unsupported by
 # `acp`. Prepended, every subcommand accepts it.
 #
+# On 3.0.0 `acp` does not read that global at all, so `--agent-engine=v3` is
+# appended on `acp` as well; see `acpEngineBlock` below.
+#
 # `--trust-tools` is different in kind: it belongs to the chat arguments of
 # `chat`, `acp` and the bare launch, not to every subcommand, so it is appended
 # and gated. Do not "make these consistent" — they are opposite cases.
@@ -189,10 +192,11 @@
     '';
 
     # `--v3` is injected for EVERY subcommand, because it is a top-level option
-    # and selects the v3 engine for `chat`, `acp` and the bare launch alike. A
-    # caller's explicit `--agent-engine=vN` still wins — upstream resolves
-    # that, so this wrapper implements no precedence of its own beyond the
-    # trust gate below, which mirrors it.
+    # and selects the v3 engine for `chat` and the bare launch. `acp` ignores
+    # it on 3.0.0 (see `acpEngineBlock`). A caller's explicit
+    # `--agent-engine=vN` still wins — upstream resolves that, so this wrapper
+    # implements no precedence of its own beyond the gates below, which mirror
+    # it.
     v3Block = lib.optionalString hasV3 (idempotentFlagBlock {
       flags = ["--v3"];
       position = "prepend";
@@ -203,7 +207,23 @@
     # file for the measurements behind that. Since 3.0.0 `kiro-cli` runs the
     # chat implementation itself rather than dispatching to a chat binary, so
     # its wrapper carries the trust grant too, after the `--v3` prepend.
-    launcherInjection = lib.concatStringsSep "\n" (lib.filter (block: block != "") [v3Block trustInjection]);
+    #
+    # 3.0.0 `acp` never reads the top-level `--v3`. It takes `acp
+    # --agent-engine`, then the `acp.agentEngine` setting, then a default that
+    # is v2 whenever --agent/--model/--effort/--trust-all-tools/--trust-tools
+    # is given or the initialize names a client on the built-in v2 list. So
+    # `ai.kiro.cli.v3` names the engine on `acp` itself, unless the caller
+    # chose one. It is appended: `--agent-engine` is an `acp` option, not a
+    # global. It runs before `trustInjection`, whose scan then sees it and
+    # withholds the grant.
+    acpEngineBlock = lib.optionalString hasV3 (gateOnSubcommand {
+        subcommands = ["acp"];
+        valueFlags = launchValueFlags;
+      } (lib.concatStringsSep "\n" [
+        engineScan
+        "if [ -z \"$nat_engine\" ]; then set -- \"$@\" --agent-engine=v3; fi"
+      ]));
+    launcherInjection = lib.concatStringsSep "\n" (lib.filter (block: block != "") [v3Block acpEngineBlock trustInjection]);
 
     # `--trust-tools`: appended, and gated to `chat`, `acp` and the bare
     # launch. Not idempotence-guarded — repeating it is accepted rather than
@@ -214,17 +234,19 @@
     #
     # `acp` is conditional: an explicit `--agent-engine=v3` rejects
     # `--trust-tools` there with "the following arguments are not supported
-    # with --agent-engine=v3"; under `--v3` it parses but has no carrier,
-    # because KAS takes none. On
-    # `acp` kiro-cli IS the agent and the external ACP client owns the
-    # approval answer, so the flag has nothing agent-side to bind to.
+    # with --agent-engine=v3", and KAS takes no trust flag anyway. On `acp`
+    # kiro-cli IS the agent and the external ACP client owns the approval
+    # answer, so the flag has nothing agent-side to bind to. Appending it to an
+    # `acp` with no engine selector would also flip upstream's default engine
+    # to v2, so the grant is withheld whenever the engine is v3.
     #
     # The deciding fact is the EFFECTIVE engine, which only argv knows: the
-    # last `--agent-engine` before `--` wins; otherwise an exact `--v3` token
-    # (injected by the `kiro-cli` wrapper or typed by the caller) selects v3;
-    # otherwise the engine is a sentinel, never a guess at the binary's own
-    # default. Both directions are real and were measured on 2.x, and are
-    # re-asserted against the 3.0.0 binary by `kiro-kas-dispatch`:
+    # last `--agent-engine` before `--` wins, including the one `acpEngineBlock`
+    # appended; otherwise an exact `--v3` token (injected by the `kiro-cli`
+    # wrapper or typed by the caller) selects v3; otherwise the engine is a
+    # sentinel, never a guess at the binary's own default. Both directions are
+    # real and were measured on 2.x; `kiro-kas-dispatch` re-asserts the v3
+    # conflict and the unselected `acp` parse against the 3.0.0 binary:
     #
     #   kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x   -> runs (v2)
     #   kiro-cli acp --agent-engine=v3 --trust-tools=x        -> CONFLICT
@@ -260,7 +282,8 @@
         ''}
       '';
     trustAppend = "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}";
-    # Scans run here, after any `--v3` prepend, so an injected `--v3` counts.
+    # Scans run here, after the `--v3` prepend and the `acp` engine append, so
+    # both injected selectors count.
     trustInjection = lib.optionalString hasTrust (
       lib.concatStringsSep "\n" [
         engineScan
@@ -347,7 +370,8 @@ in {
     # Re-compose the upstream Linux FHS package around a trust-wrapped
     # payload, so --trust-tools lives at the root's /usr/bin command paths.
     # The inner wrapper is built with `v3 = false`; it still withholds on
-    # `acp` because the outer wrapper's `--v3` prepend reaches it in argv.
+    # `acp` because the outer wrapper's `--v3` prepend and `--agent-engine=v3`
+    # append reach it in argv.
     # Other exports remain outside: they are inherited across bubblewrap and
     # retain their established precedence.
     placeTrustInsideFhs =

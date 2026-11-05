@@ -1,12 +1,14 @@
 # kiro-cli wrapper: the argv contract
 
-<!-- cspell:ignore cutover -->
+<!-- cspell:ignore avante codecompanion cutover -->
 
 > **Last verified:** 2026-11-05 — Kiro CLI 3.0.0 ships one `kiro-cli` binary;
-> its wrapper carries `--trust-tools`, gated on the effective engine from
-> `--agent-engine` or `--v3`. `kiro-cli-chat` is a temporary package alias. The
-> 3.0.0 argv facts below are asserted by `kiro-kas-dispatch`; 2.x measurements
-> are labelled as such.
+> its wrapper appends `--agent-engine=v3` on `acp` and carries `--trust-tools`,
+> gated on the effective engine from `--agent-engine` or `--v3`. `kiro-cli-chat`
+> is a temporary package alias. The 3.0.0 argv facts below are asserted by
+> `kiro-kas-dispatch`; the `acp` engine resolution order is read from the binary
+> and measured by that check's `MEASURE` rows; 2.x measurements are labelled as
+> such.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -42,14 +44,53 @@ cost a release: the wrapper used to _append_ these flags, which broke `acp`,
 
 So the wrapper **prepends** them. Prepended, every subcommand accepts them.
 
-## `--v3` selects the engine for `acp` too
+## `acp` takes its engine from `acp`, not from `--v3`
 
 Since 3.0.0 the release ships one `kiro-cli` binary that runs the chat
 implementation itself; nothing dispatches to a separate chat binary through
-`PATH`. A top-level `--v3` therefore reaches `acp`, `chat` and the bare launch
-directly. On 2.x the launcher instead rewrote `--v3 acp` into
-`acp --agent-engine v3` for a separate `kiro-cli-chat` (measured on 2.15.2);
-that rewrite no longer exists.
+`PATH`. A top-level `--v3` reaches `chat` and the bare launch, but **not
+`acp`**. On 2.x the launcher rewrote `--v3 acp` into `acp --agent-engine v3` for
+a separate `kiro-cli-chat` (measured on 2.15.2); that rewrite no longer exists.
+
+3.0.0 resolves the `acp` engine from three inputs, in this order (read from the
+binary, not from help text):
+
+1. `acp --agent-engine <v1|v2|v3>`. The binary's alias table also accepts `rust`
+   for v2 and `kas` for v3.
+2. The `acp.agentEngine` setting, matched case-insensitively against the same
+   aliases. An unrecognized value is logged and ignored.
+3. A default. It is **v2** whenever one of `--agent`, `--model`, `--effort`,
+   `--trust-all-tools` or `--trust-tools` was given (the same five flags the v3
+   conflict below names). Otherwise it is v3, provided the host's glibc is 2.28
+   or newer (or `ldd` cannot say). A v3 default that did not come from the flag
+   or the setting then reads the client's `initialize`, and a client on the
+   binary's built-in list of 1080 names runs **v2** instead. The list includes
+   `acp-smoke`, `agent-shell`, `avante.nvim`, `codecompanion.nvim`, `Xcode`,
+   `vscode-acp`, `windsurf` and the JetBrains `air-plugin*` entries; `zed` and
+   `nix-check` are not on it.
+
+Top-level `--v3` and `KIRO_AGENT_ENGINE` are **not inputs** to that order. The
+help text for `--agent-engine` ("v2 when neither is set") is stale. The evidence
+is a CI run of `--v3 acp --trust-tools=fs_read`: it exited 0 with empty stderr
+and never started KAS, because `--trust-tools` made the default v2, and the v2
+engine answered the initialize itself. The host exports `KIRO_AGENT_ENGINE` to
+the TUI child process; it is not an `acp` input, and the matrix below carries a
+`KIRO_AGENT_ENGINE=v3 acp` row to show it.
+
+So the wrapper cannot rely on `--v3` for `acp`. With `ai.kiro.cli.v3 = true` it
+appends `--agent-engine=v3` on `acp` when the caller gave no `--agent-engine`
+(`acpEngineBlock` in `lib/wrapPackage.nix`). That keeps every client on v3,
+including listed ones, and keeps usage tracking's v3 assumption true. Two
+consequences:
+
+- Under v3, `kiro-cli acp --model/--agent/--effort/-a` now fails with upstream's
+  conflict error (exit 2) where on 3.0.0 without the selector it silently ran
+  v2. This is the same trade as on 2.x, under
+  [the v3 + `acp` conflict](#the-v3--acp-conflict).
+- The trust gate must withhold `--trust-tools` on `acp` whenever the engine is
+  v3. The gate is also load-bearing for another reason: appending
+  `--trust-tools` to an `acp` with no selector would flip upstream's default to
+  v2. The selector is added first, so the gate sees it.
 
 An explicit `--agent-engine=v3` makes `--trust-tools` conflict on `acp`:
 
@@ -60,31 +101,42 @@ error: the following arguments are not supported with --agent-engine=v3: --trust
 
 On 2.x the same error appeared for `--v3 acp --trust-tools=fs_read`, and it
 named `--agent-engine=v3` although the user never typed it. On 3.0.0 `--v3` does
-not reach that check: the flag parses and KAS starts. KAS takes no trust flag,
-so the gate withholds the grant there and drops nothing.
+not reach that check. KAS takes no trust flag, so withholding the grant drops
+nothing.
 
-So `ai.kiro.cli.v3 = true` gives an ACP session the v3 engine with **no
-`--agent-engine` translation in this repo**. Do not add one.
+**A caller's explicit `--agent-engine` wins.** The wrapper appends nothing when
+one is present, in either spelling, so `kiro-cli acp --agent-engine=v2` runs v2
+and gets the grant. A caller's `--v3 acp --agent-engine=v2` runs v2 as well. The
+trust gate mirrors that order and implements no other precedence.
 
-**A caller's explicit `--agent-engine` wins, upstream.**
-`kiro-cli --v3 acp --agent-engine=v2` runs v2 — no error, and no "cannot be used
-multiple times". The trust gate mirrors that order and implements no other
-precedence.
+`kiro-kas-dispatch` prints a `MEASURE` row for every cell of this matrix on the
+3.0.0 stock binary (no managed argv injection), each with three inputs (EOF, an
+`initialize` from `nix-check`, one from `acp-smoke`), before it asserts
+anything. The table is what the reading above predicts; a measured row that
+disagrees is a finding, not a flake:
 
-`kiro-kas-dispatch` asserts both facts against the 3.0.0 binary on both
-platforms, with no managed argv injection, after an ACP initialize: the explicit
-`--agent-engine=v3` conflict (exit 2, KAS not started), that
-`--v3 acp --trust-tools=fs_read` is accepted and starts KAS, that `--v3 acp`
-from a client on the v2 client list still starts KAS, and that
+| argv                                             | Expected                                          |
+| ------------------------------------------------ | ------------------------------------------------- |
+| `--v3 acp` and `acp` (identical)                 | KAS starts, except for a listed client (v2 reply) |
+| `acp --agent-engine=v3`                          | KAS starts for every client                       |
+| `--v3 acp --trust-tools` and `acp --trust-tools` | v2 engine, KAS not started, exit 0                |
+| `acp --agent-engine=v3 --trust-tools`            | exit 2, conflict, KAS not started                 |
+| `KIRO_AGENT_ENGINE=v3 acp`                       | same as `acp`                                     |
+
+The assertions that follow cover the explicit `--agent-engine=v3` start for all
+three inputs, its `--trust-tools` conflict, that an unselected
+`acp --trust-tools` is not rejected at parse time, that
 `--v3 acp --agent-engine=v2 --auth-method client` fails on `--auth-method`, not
-on `--trust-tools`.
+on `--trust-tools`, and that the bare `--v3` launch with the grant reaches KAS.
+Through the wrapper, every variant also starts KAS for an `acp-smoke` client.
 
 ## What is injected where
 
-| Command                     | Flag             | Position    | Applies to                                                  |
-| --------------------------- | ---------------- | ----------- | ----------------------------------------------------------- |
-| `kiro-cli`                  | `--v3`           | **prepend** | every subcommand + bare                                     |
-| `kiro-cli`, `kiro-cli-chat` | `--trust-tools=` | **append**  | `chat` and the bare launch always; `acp` unless engine = v3 |
+| Command                     | Flag                | Position    | Applies to                                                  |
+| --------------------------- | ------------------- | ----------- | ----------------------------------------------------------- |
+| `kiro-cli`                  | `--v3`              | **prepend** | every subcommand + bare                                     |
+| `kiro-cli`                  | `--agent-engine=v3` | **append**  | `acp`, when the caller passed no `--agent-engine`           |
+| `kiro-cli`, `kiro-cli-chat` | `--trust-tools=`    | **append**  | `chat` and the bare launch always; `acp` unless engine = v3 |
 
 `kiro-cli-chat` is a temporary package alias for the same binary, kept for
 consumers that still invoke it. It receives no `--v3`: an invocation through it
@@ -92,12 +144,16 @@ selects its engine itself.
 
 The `acp` condition is resolved from **argv at runtime**, not from the Nix
 config — see [the effective engine](#is-the-engine-v3-is-a-runtime-question).
-The gate runs after the `--v3` prepend, so an injected `--v3` counts.
+The gate runs after the `--v3` prepend and the `acp` engine append, so both
+injected selectors count.
 
-Two different rules, for two different reasons — do not "make them consistent":
+Three different rules, for different reasons — do not "make them consistent":
 
 - **`--v3` is global and wanted everywhere**, since it selects the engine for
-  `chat` and `acp` alike.
+  `chat` and the bare launch.
+- **`--agent-engine=v3` is an `acp` option**, appended and only on `acp`,
+  because `acp` does not read the global. It is skipped when the caller chose an
+  engine.
 - **`--trust-tools` belongs to the chat arguments**: `chat`, `acp` and the bare
   launch. Other subcommands reject it. It is appended and gated.
 
@@ -257,20 +313,20 @@ expression around a trust-wrapped payload, so the root's `/usr/bin/kiro-cli` and
 
 ```
 kiro-cli acp
-  -> outer wrapper     prepends --v3
+  -> outer wrapper     prepends --v3, appends --agent-engine=v3
   -> command wrapper   selects kiro-cli on the shared FHS launcher
   -> FHS /init         prepends the synthesized command directories
   -> dispatcher        execs the selected command
-  -> /usr/bin/kiro-cli payload trust wrapper: sees --v3, withholds on acp
+  -> /usr/bin/kiro-cli payload trust wrapper: sees v3, withholds on acp
   -> kiro-cli binary
 ```
 
 The inner trust wrapper is built without a v3 setting of its own; it reads the
-outer wrapper's `--v3` in argv, so injected and explicit selectors behave the
-same. `kiro-wrapper-argv` drives this composition with a stub FHS package (no
-bubblewrap) and `kiro-fhs-contract` pins the real launcher, init, dispatcher and
-root commands. Home Manager's declarative permissions translation remains an
-independent v3 path.
+outer wrapper's `--v3` and `--agent-engine=v3` in argv, so injected and explicit
+selectors behave the same. `kiro-wrapper-argv` drives this composition with a
+stub FHS package (no bubblewrap) and `kiro-fhs-contract` pins the real launcher,
+init, dispatcher and root commands. Home Manager's declarative permissions
+translation remains an independent v3 path.
 
 All other configuration remains outside the FHS package. Static and secret
 environment exports, `extraPackages`, and `--v3` are inherited across bubblewrap
@@ -382,13 +438,14 @@ this Nix config bakes in. The configured `--v3` only exists in argv when the
 measured the chat binary's default as `v1`, not the `v2` this fragment once
 claimed; a sentinel cannot go stale when upstream moves the default again.
 
-3.0.0 adds a client-dependent default for `acp` with no selector: the strings
-describe a v3 default from which listed ACP clients stay on v2 after reading
-`initialize`. `kiro-kas-dispatch` asserts that an unselected `acp --trust-tools`
-is not rejected at parse time; the gate keeps the grant there.
-`chat.agentEngine`, `acp.agentEngine` and `KIRO_AGENT_ENGINE` also select an
-engine. The gate reads none of them; `ai.kiro.cli.v3` delivers v3 only as `--v3`
-argv.
+3.0.0 has a client-dependent default for an `acp` with no selector (see
+[above](#acp-takes-its-engine-from-acp-not-from---v3)). `kiro-kas-dispatch`
+asserts that an unselected `acp --trust-tools` is not rejected at parse time;
+the gate keeps the grant there, so with v3 not configured it is the appended
+`--trust-tools` that makes such an `acp` default to v2. `acp.agentEngine` also
+selects the `acp` engine, and `chat.agentEngine` the chat one. The gate reads
+neither setting, so `ai.kiro.cli.v3` delivers v3 as argv only: `--v3`, plus
+`--agent-engine=v3` on `acp`.
 
 ## The v3 + `acp` conflict
 
@@ -422,14 +479,15 @@ On 2.x, `acp` rejected a conflicting option before it read any input; the 3.0.0
 `acp` probes in `kiro-kas-dispatch` therefore send an ACP initialize.
 
 **Consequence for a consumer:** with `ai.kiro.cli.v3 = true`, an invocation like
-`kiro-cli acp --model auto` fails with upstream's conflict error. That is
-deliberate. The alternative — withholding `--v3` whenever a conflicting option
-appears — would silently downgrade the engine the user asked for, and would
-require this repo to carry a hand-curated conflict list that rots on every
-upstream release.
+`kiro-cli acp --model auto` fails with upstream's conflict error, because the
+wrapper appends `--agent-engine=v3`. That is deliberate. The alternative —
+withholding the selector whenever a conflicting option appears — would silently
+downgrade the engine the user asked for (upstream's own default does exactly
+that on 3.0.0), and would require this repo to carry a hand-curated conflict
+list that rots on every upstream release.
 
 Nothing is made unreachable: the caller opts out per-invocation with
-`--agent-engine=v2`, which upstream honours over the injected `--v3`:
+`--agent-engine=v2`, which the wrapper leaves alone and upstream honours:
 
 ```console
 $ kiro-cli acp --agent-engine=v2 --model auto     # runs
@@ -482,8 +540,9 @@ K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.unw
 "$KB" --tui --v3 whoami >/dev/null && echo "prepend ok"
 "$KB" whoami --tui --v3 2>&1 | grep -q "unexpected argument" && echo "append still fails"
 
-# 2. --v3 still selects v3 for acp (error text names the resolved engine)
-"$KB" --v3 acp --trust-tools=x </dev/null 2>&1 | grep -q "agent-engine=v3" && echo "translation intact"
+# 2. acp still ignores the global --v3: a trust flag does not conflict
+"$KB" --v3 acp --trust-tools=x </dev/null 2>&1 | grep -q "agent-engine=v3" \
+  && echo "CHANGED: --v3 reaches acp again, drop acpEngineBlock" || echo "acp still ignores --v3"
 
 # 3. a caller's engine still wins over the injected --v3
 "$KB" --v3 acp --agent-engine=v2 --model auto </dev/null 2>&1 | grep -q "not supported" \

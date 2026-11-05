@@ -82,8 +82,8 @@ holds the payload's `kiro-cli` and `kiro-cli-chat`, ahead of any same-named
 entry later on the inherited PATH. When `trustedMcpTools` is non-empty, this
 repo re-composes nixpkgs' FHS package around a trust-wrapped payload, so both
 root commands are the configured wrapper. The outer `kiro-cli` wrapper keeps the
-`--v3` prepend, which the inner wrapper reads in argv to withhold the grant on
-v3 `acp`.
+`--v3` prepend and the `acp` `--agent-engine=v3` append, which the inner wrapper
+reads in argv to withhold the grant on v3 `acp`.
 
 ## Supplying missing tools
 
