@@ -10,10 +10,17 @@
   versionCheckHook,
 }: let
   inherit (pkgs.ai.generic) mcp;
-  inherit (python3.pkgs) buildPythonPackage;
+  # One package set keeps a single httpx2 and httpcore2 in the closure: mcp pins
+  # its own, and nixpkgs' huggingface-hub (via model2vec) would add another.
+  python = python3.override {
+    self = python;
+    packageOverrides = _: _: {inherit (mcp) httpcore2 httpx2;};
+  };
+  ps = python.pkgs;
+  inherit (ps) buildPythonPackage;
   customization = import ../../../lib/customization.nix {inherit lib;};
   defaultConfig = pkgs.writeText "semble-config.json" (builtins.toJSON customization.defaultConfig);
-  buildSystem = with python3.pkgs; [setuptools setuptools-scm];
+  buildSystem = with ps; [setuptools setuptools-scm];
   sourcesFiles = {
     model2vec = ../../../model2vec-sources.json;
     semble = ../../../sources.json;
@@ -88,7 +95,7 @@
 
     env.SETUPTOOLS_SCM_PRETEND_VERSION = version;
 
-    dependencies = with python3.pkgs; [
+    dependencies = with ps; [
       jinja2
       joblib
       numpy
@@ -124,7 +131,7 @@
 
     env.SETUPTOOLS_SCM_PRETEND_VERSION = version;
 
-    dependencies = with python3.pkgs; [
+    dependencies = with ps; [
       numpy
       orjson
       tqdm
@@ -153,7 +160,7 @@
 
     src = pkgs.fetchurl {inherit (grammarSources.${pkgs.stdenv.hostPlatform.system}) url hash;};
 
-    dependencies = with python3.pkgs; [
+    dependencies = with ps; [
       tree-sitter
     ];
 
@@ -168,7 +175,7 @@
     };
   };
 in
-  python3.pkgs.buildPythonApplication (finalAttrs: {
+  ps.buildPythonApplication (finalAttrs: {
     pname = "semble";
     inherit (sembleSources) version;
     pyproject = true;
@@ -210,7 +217,7 @@ in
     # Ship the [mcp] extra unconditionally — Nix users get one closure either
     # way, and exposing both binaries (`semble` and `semble-mcp`) is cleaner
     # than gating MCP behind a separate derivation.
-    dependencies = with python3.pkgs; [
+    dependencies = with ps; [
       mcp
       model2vec
       numpy
