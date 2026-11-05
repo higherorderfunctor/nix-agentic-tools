@@ -212,8 +212,10 @@
     # curated list that would drift every release, so it is treated as a
     # subcommand and the grant is withheld; `kiro-cli chat <prompt>` gets it.
     #
-    # `acp` is conditional: the v3 engine rejects `--trust-tools` there with
-    # "the following arguments are not supported with --agent-engine=v3". On
+    # `acp` is conditional: an explicit `--agent-engine=v3` rejects
+    # `--trust-tools` there with "the following arguments are not supported
+    # with --agent-engine=v3"; under `--v3` it parses but has no carrier,
+    # because KAS takes none. On
     # `acp` kiro-cli IS the agent and the external ACP client owns the
     # approval answer, so the flag has nothing agent-side to bind to.
     #
@@ -225,7 +227,7 @@
     # re-asserted against the 3.0.0 binary by `kiro-kas-dispatch`:
     #
     #   kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x   -> runs (v2)
-    #   kiro-cli --v3 acp --trust-tools=x                     -> CONFLICT
+    #   kiro-cli acp --agent-engine=v3 --trust-tools=x        -> CONFLICT
     #
     # Under home-manager `trustedMcpTools` is ALSO translated into
     # `settings/permissions.yaml` (`mkPermissionRules`), which the v3 agent

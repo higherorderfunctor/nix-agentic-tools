@@ -51,15 +51,17 @@ directly. On 2.x the launcher instead rewrote `--v3 acp` into
 `acp --agent-engine v3` for a separate `kiro-cli-chat` (measured on 2.15.2);
 that rewrite no longer exists.
 
-`--trust-tools` conflicts with the v3 engine on `acp`:
+An explicit `--agent-engine=v3` makes `--trust-tools` conflict on `acp`:
 
 ```console
-$ kiro-cli --v3 acp --trust-tools=fs_read
+$ kiro-cli acp --agent-engine=v3 --trust-tools=fs_read
 error: the following arguments are not supported with --agent-engine=v3: --trust-tools
 ```
 
-The error names `--agent-engine=v3`, a flag the user never typed. That is how
-clap prints the resolved engine, not the argv that was passed.
+On 2.x the same error appeared for `--v3 acp --trust-tools=fs_read`, and it
+named `--agent-engine=v3` although the user never typed it. On 3.0.0 `--v3` does
+not reach that check: the flag parses and KAS starts. KAS takes no trust flag,
+so the gate withholds the grant there and drops nothing.
 
 So `ai.kiro.cli.v3 = true` gives an ACP session the v3 engine with **no
 `--agent-engine` translation in this repo**. Do not add one.
@@ -70,7 +72,10 @@ multiple times". The trust gate mirrors that order and implements no other
 precedence.
 
 `kiro-kas-dispatch` asserts both facts against the 3.0.0 binary on both
-platforms, with no managed argv injection: the conflict (exit 2) and that
+platforms, with no managed argv injection, after an ACP initialize: the explicit
+`--agent-engine=v3` conflict (exit 2, KAS not started), that
+`--v3 acp --trust-tools=fs_read` is accepted and starts KAS, that `--v3 acp`
+from a client on the v2 client list still starts KAS, and that
 `--v3 acp --agent-engine=v2 --auth-method client` fails on `--auth-method`, not
 on `--trust-tools`.
 
@@ -413,7 +418,8 @@ this table forward. This wrapper is unaffected either way — it injects
 A `chat` probe needs input supplied. Without it, `--no-interactive` reports
 "Input must be supplied when running in non-interactive mode" before any
 engine-conflict check, so it cannot tell an accepted flag from a rejected one.
-`acp` rejects a conflicting option before it reads any input.
+On 2.x, `acp` rejected a conflicting option before it read any input; the 3.0.0
+`acp` probes in `kiro-kas-dispatch` therefore send an ACP initialize.
 
 **Consequence for a consumer:** with `ai.kiro.cli.v3 = true`, an invocation like
 `kiro-cli acp --model auto` fails with upstream's conflict error. That is

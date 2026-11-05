@@ -36,15 +36,20 @@ def offline_env(root, bin_dir, node):
             "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
 
 
-def raw(binary, arguments):
-    """Run the stock binary's own wrapper with no managed argv injection."""
+def raw(binary, arguments, stdin=""):
+    """Run the stock binary's own wrapper with no managed argv injection.
+
+    An `acp` probe passes one ACP initialize as `stdin`, so an engine resolved
+    from the client is resolved before the run ends; the capture node exits at
+    once, so a started KAS ends the run too.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         capture, node = capture_node(root)
         work = root / "work"
         work.mkdir()
         result = subprocess.run([binary, *arguments], env=offline_env(root, str(Path(binary).parent), node),
-                                cwd=work, input="", capture_output=True, text=True, timeout=30)
+                                cwd=work, input=stdin, capture_output=True, text=True, timeout=30)
         return result, capture.exists()
 
 
@@ -118,17 +123,26 @@ for name, variant in variants.items():
 # Raw measurements on the stock payload, with no managed argv injection. Each
 # pins a binary behavior the trust gate in lib/wrapPackage.nix depends on.
 binary = variants["stock"]["unwrapped"] + "/bin/kiro-cli"
-# v3 rejects `--trust-tools` on `acp`, so the gate must withhold there.
-result, _ = raw(binary, ["--v3", "acp", "--trust-tools=fs_read"])
-assert result.returncode == 2 and CONFLICT in result.stderr, ("v3 acp trust", result.returncode, result.stderr)
+initialize = smoke.request()
+# An explicit `--agent-engine=v3` rejects `--trust-tools` on `acp` before KAS
+# starts, so the gate must withhold there.
+result, started = raw(binary, ["acp", "--agent-engine=v3", "--trust-tools=fs_read"], initialize)
+assert result.returncode == 2 and CONFLICT in result.stderr and not started, ("explicit v3 acp trust", result.returncode, result.stderr, started)
+# 3.0.0 `--v3` does not reach that check: the flag parses and KAS starts. KAS
+# takes no trust flag, so the gate's withholding there drops nothing.
+result, started = raw(binary, ["--v3", "acp", "--trust-tools=fs_read"], initialize)
+assert started and CONFLICT not in result.stderr, ("--v3 acp trust", result.returncode, result.stderr, started)
+# `--v3` beats the per-client v2 list, so the gate's `--v3` rule selects v3.
+result, started = raw(binary, ["--v3", "acp"], smoke.request("acp-smoke"))
+assert started, ("--v3 acp from a v2-listed client", result.returncode, result.stderr)
 # An explicit `--agent-engine` beats `--v3`, so the gate resolves it first.
 result, _ = raw(binary, ["--v3", "acp", "--agent-engine=v2", "--auth-method", "client", "--trust-tools=fs_read"])
 assert "only supported with --agent-engine=v3" in result.stderr and CONFLICT not in result.stderr, ("engine precedence", result.stderr)
 # The bare launch accepts `--trust-tools` under v3 and reaches KAS.
 result, started = raw(binary, ["--v3", "--trust-tools=fs_read", "--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"])
 assert started, ("bare v3 launch with trust", result.returncode, result.stderr)
-# `acp` with no engine selector does not apply the v3 conflict at parse time.
-result, started = raw(binary, ["acp", "--trust-tools=fs_read"])
+# `acp` with no engine selector does not apply the v3 conflict, measured after its initialize.
+result, started = raw(binary, ["acp", "--trust-tools=fs_read"], initialize)
 # Parsing must accept the flag: no engine conflict and no other parse rejection.
 assert CONFLICT not in result.stderr and "unexpected argument" not in result.stderr and (started or result.returncode != 2), ("unselected acp trust", result.returncode, result.stderr)
-print("PASS: raw: v3 acp conflict, explicit engine precedence, bare v3 trust, unselected acp", flush=True)
+print("PASS: raw: explicit v3 acp conflict, --v3 acp accepted, v2-listed client under --v3, explicit engine precedence, bare v3 trust, unselected acp", flush=True)
