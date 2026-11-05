@@ -305,6 +305,1588 @@
       ]
     }
   },
+  "egressScan": {
+    "commands": {
+      "cliSubcommands": [
+        "bridge",
+        "claude",
+        "codex",
+        "config",
+        "cursor",
+        "gsd2",
+        "login",
+        "mcp",
+        "memory",
+        "openclaw",
+        "opencode",
+        "resources",
+        "setup",
+        "setup-tools",
+        "update",
+        "version"
+      ],
+      "kimchiRegistered": [
+        "agents",
+        "branch",
+        "btw",
+        "budget",
+        "bug",
+        "cc-spinner",
+        "cc-theme",
+        "cc-tools",
+        "clear",
+        "customize-status-line",
+        "exit",
+        "ferment",
+        "ferment-v2",
+        "help",
+        "hooks",
+        "idle-probe",
+        "memory",
+        "memory-residency",
+        "multi-model",
+        "permissions",
+        "phase",
+        "plugins",
+        "pr-reporting",
+        "processes",
+        "remote-run",
+        "remote-sessions",
+        "resources",
+        "seed-remote-completion",
+        "session-costs",
+        "ssh-config",
+        "stats",
+        "status",
+        "strip-images",
+        "sync",
+        "tags",
+        "teleport",
+        "terminal",
+        "theme",
+        "thinking-steps",
+        "tips",
+        "todos",
+        "update",
+        "work"
+      ],
+      "piBuiltInSlash": [
+        "bug",
+        "changelog",
+        "clone",
+        "compact",
+        "copy",
+        "export",
+        "fork",
+        "hotkeys",
+        "import",
+        "login",
+        "logout",
+        "model",
+        "name",
+        "new",
+        "quit",
+        "reload",
+        "resume",
+        "scoped-models",
+        "session",
+        "settings",
+        "share",
+        "thinking",
+        "tree",
+        "trust"
+      ],
+      "resourceIds": [
+        "extensions.agents",
+        "extensions.bash-tool-guard",
+        "extensions.claude-code-hook-adapter",
+        "extensions.claude-code-skills",
+        "extensions.cost-per-pr",
+        "extensions.dap",
+        "extensions.ferment",
+        "extensions.ferment-v2",
+        "extensions.lsp",
+        "extensions.memory",
+        "extensions.pi-package-lookup",
+        "extensions.pii-redaction",
+        "extensions.side-chat",
+        "extensions.todos",
+        "extensions.workflows",
+        "hooks.bash",
+        "plugins.kimchi-mcp-gateway",
+        "plugins.mcp-apps",
+        "skills.docx",
+        "skills.pdf",
+        "skills.pptx",
+        "skills.xlsx",
+        "tools.web_fetch",
+        "tools.web_search"
+      ]
+    },
+    "dependencies": {
+      "kimchiDirect": {
+        "@agentclientprotocol/sdk": "1.9.0",
+        "@bulkhead-ai/core": "^0.7.0",
+        "@cantoo/pdf-lib": "^2.11.1",
+        "@clack/prompts": "^1.3.0",
+        "@earendil-works/pi-codemode": "1.3.0",
+        "@earendil-works/pi-coding-agent": "1.3.0",
+        "@earendil-works/pi-tui": "1.3.0",
+        "@hyzyla/pdfium": "^3.0.0",
+        "@kimchi-dev/kimchi-workflows": "0.0.10",
+        "@modelcontextprotocol/client": "2.3.1",
+        "@modelcontextprotocol/ext-apps": "^1.7.1",
+        "@modelcontextprotocol/sdk": "^1.32.0",
+        "@napi-rs/keyring": "1.3.0",
+        "@pdf-lib/fontkit": "^1.1.1",
+        "@shikijs/cli": "^4.0.2",
+        "@types/proper-lockfile": "^4.1.4",
+        "@types/ssh2": "^1.15.5",
+        "@xmldom/xmldom": "^0.9.12",
+        "@xterm/headless": "^6.0.0",
+        "better-sqlite3": "link:shims/better-sqlite3",
+        "chokidar": "^5.0.0",
+        "diff": "^9.0.0",
+        "docx": "9.13.0",
+        "jszip": "^3.10.2",
+        "marked": "^18.1.0",
+        "mem0ai": "3.1.8",
+        "micromatch": "^4.0.8",
+        "natural": "link:shims/natural",
+        "open": "^10.2.0",
+        "pi-mcp-adapter": "5.3.1",
+        "pptxgenjs": "4.0.1",
+        "proper-lockfile": "^4.1.2",
+        "quickjs-wasi": "3.6.2",
+        "shell-quote": "1.12.0",
+        "shiki": "^4.0.2",
+        "ssh2": "^1.17.0",
+        "strip-json-comments": "5.0.3",
+        "tar": "^7.5.19",
+        "typebox": "1.3.7",
+        "undici": "^8.12.2",
+        "unpdf": "^1.9.1",
+        "uuid": "^14.0.0",
+        "wcwidth": "^1.0.1",
+        "yaml": "^2.8.4",
+        "yauzl": "^3.4.0",
+        "zod": "^4.6.6"
+      },
+      "piPackages": {
+        "@earendil-works/pi-agent-core": "1.3.0",
+        "@earendil-works/pi-ai": "1.3.0",
+        "@earendil-works/pi-coding-agent": "1.3.0",
+        "@earendil-works/pi-tui": "1.3.0"
+      }
+    },
+    "goCallSites": [
+      {
+        "callee": "websocket.Dial",
+        "category": "websocket",
+        "file": "kimchi/tools/proxy-helper/cmd/proxy/proxy.go",
+        "target": "wsURL"
+      },
+      {
+        "callee": "http.NewRequestWithContext",
+        "category": "http",
+        "file": "kimchi/tools/proxy-helper/pkg/cast/cast.go",
+        "target": "u"
+      }
+    ],
+    "goHosts": [
+      {
+        "files": ["kimchi/tools/proxy-helper/pkg/cast/cast.go"],
+        "value": "api.cast.ai"
+      }
+    ],
+    "header": {
+      "scan": {
+        "kimchiSourceHash": "sha256-xFVchFYxqy9e/5xCV/NxY4EdHyOHYi55Qg8M+/ZoLMY=",
+        "kimchiVersion": "1.26.0",
+        "piVersion": "1.3.0",
+        "scannerVersion": "2.0.0"
+      }
+    },
+    "spawnCallSites": [
+      {
+        "callee": "execFileSync",
+        "category": "spawn",
+        "file": "kimchi/resources/skills/kimchi-tmux/scripts/harness-live.mjs",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execFileSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/behaviours/session-context.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/ferment/git-init.ts",
+        "target": "\"git init\""
+      },
+      {
+        "callee": "execSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/ferment/git-init.ts",
+        "target": "\"git rev-parse --is-inside-work-tree\""
+      },
+      {
+        "callee": "spawnSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/ferment/phase-evidence.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/ferment/worktree.ts",
+        "target": "\"git rev-parse --abbrev-ref HEAD\""
+      },
+      {
+        "callee": "spawnSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/memory/scope.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/prompt-construction/prompt-enrichment.ts",
+        "target": "\"git remote get-url origin\""
+      },
+      {
+        "callee": "exec",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/remote-run/git-workflow.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "exec",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/remote-run/sandbox-git.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execFileSync",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/work-attribution/commits.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execFile",
+        "category": "spawn",
+        "file": "kimchi/src/extensions/work-attribution/file-transitions.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execSync",
+        "category": "spawn",
+        "file": "kimchi/src/ferment/store.ts",
+        "target": "\"git rev-parse --abbrev-ref HEAD\""
+      },
+      {
+        "callee": "execSync",
+        "category": "spawn",
+        "file": "kimchi/src/ferment/store.ts",
+        "target": "\"git rev-parse HEAD\""
+      },
+      {
+        "callee": "execFile",
+        "category": "spawn",
+        "file": "kimchi/src/utils.ts",
+        "target": "\"git\""
+      },
+      {
+        "callee": "execSync",
+        "category": "spawn",
+        "file": "kimchi/src/utils.ts",
+        "target": "\"git symbolic-ref --short HEAD\""
+      },
+      {
+        "callee": "execFileSync",
+        "category": "spawn",
+        "file": "kimchi/tests/e2e/tui/support/kimchi-fixture.ts",
+        "target": "\"git\""
+      }
+    ],
+    "urlPathLiterals": [
+      {
+        "files": [
+          "pi/dist/bundle/chunks/anthropic.js",
+          "pi/dist/bundle/chunks/chunk-DOST5PQW.js",
+          "pi/dist/bundle/chunks/openai-chatgpt.js",
+          "pi/dist/bundle/chunks/openai-codex.js",
+          "pi/dist/bundle/chunks/openrouter.js"
+        ],
+        "value": "/2000/svg"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/browser.ts"],
+        "value": "/Applications/Chromium.app/Contents/MacOS/Chromium"
+      },
+      {
+        "files": ["kimchi/src/integrations/cursor.ts"],
+        "value": "/Applications/Cursor.app"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/soffice.ts"],
+        "value": "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/daemon/spawn.ts",
+          "pi/dist/bundle/chunks/chunk-3ZATHNCK.js",
+          "pi/dist/bundle/chunks/chunk-5GTPJSRI.js",
+          "pi/dist/utils/shell.js"
+        ],
+        "value": "/F"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/pdf-fonts.ts"],
+        "value": "/Library/Fonts"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/daemon/spawn.ts",
+          "pi/dist/bundle/chunks/chunk-3ZATHNCK.js",
+          "pi/dist/utils/shell.js"
+        ],
+        "value": "/PID"
+      },
+      {
+        "files": ["kimchi/src/extensions/hook-adapters/adapter.ts"],
+        "value": "/SKILL.md"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/pdf-fonts.ts"],
+        "value": "/System/Library/Fonts"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/pdf-fonts.ts"],
+        "value": "/System/Library/Fonts/Supplemental"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/daemon/spawn.ts",
+          "pi/dist/bundle/chunks/chunk-3ZATHNCK.js",
+          "pi/dist/bundle/chunks/chunk-5GTPJSRI.js",
+          "pi/dist/utils/shell.js"
+        ],
+        "value": "/T"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/agents"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/agents/environments/templates"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/agents/sessions"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-openai-server.ts"],
+        "value": "/ai-optimizer/v1beta/api-keys:verify"
+      },
+      {
+        "files": ["kimchi/tools/proxy-helper/pkg/cast/cast.go"],
+        "value": "/ai-optimizer/v1beta/workspace-tokens:exchange"
+      },
+      {
+        "files": ["kimchi/tools/proxy-helper/pkg/cast/cast.go"],
+        "value": "/ai-optimizer/v1beta/workspace-tokens:verifyKey"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/anthropic"
+      },
+      { "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"], "value": "/api" },
+      {
+        "files": ["pi/dist/bundle/chunks/openai-chatgpt.js"],
+        "value": "/api/accounts/authorize"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/openai-chatgpt.js"],
+        "value": "/api/accounts/oauth/token"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/api/coding/paas/v4"
+      },
+      {
+        "files": ["kimchi/src/sandbox/worker/git-identity.ts"],
+        "value": "/api/gitidentity"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/package-manager-cli.js"
+        ],
+        "value": "/api/installer/releases"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/utils/version-check.js"
+        ],
+        "value": "/api/latest-version"
+      },
+      {
+        "files": ["kimchi/src/sandbox/worker/secrets.ts"],
+        "value": "/api/secrets"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-ollama-server.ts"],
+        "value": "/api/show"
+      },
+      {
+        "files": ["kimchi/src/sandbox/worker/status.ts"],
+        "value": "/api/status"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-ollama-server.ts"],
+        "value": "/api/tags"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/api/v1"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/openrouter.js"],
+        "value": "/api/v1/auth/keys"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/llama-cpp-classify-FYN623RH.js"],
+        "value": "/apply-template"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/assistants"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/async-invoke"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/async-invoke/{invocationArn}"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/audio/speech"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/audio/transcriptions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/audio/translations"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/openai-codex-responses-ZYGHVE5B.js",
+          "pi/dist/bundle/chunks/openai-codex.js",
+          "pi/dist/bundle/chunks/openrouter.js"
+        ],
+        "value": "/auth"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/openai-chatgpt.js",
+          "pi/dist/bundle/chunks/openai-codex.js"
+        ],
+        "value": "/auth/callback"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/auth/cloud-platform"
+      },
+      {
+        "files": [
+          "kimchi/scripts/mcp-live-probe.mjs",
+          "kimchi/src/oauth-config.ts",
+          "kimchi/tests/e2e/mcp/fixture-server.mjs",
+          "pi/dist/bundle/chunks/chunk-DOST5PQW.js"
+        ],
+        "value": "/authorize"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/aws/aws-sdk-js-v3.git"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/aws/aws-sdk-js-v3/tree/main/packages/nested-clients"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/bundle/chunks/openai-codex-responses-ZYGHVE5B.js"
+        ],
+        "value": "/backend-api"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/batches"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/bedrock/latest/userguide/data-retention.html"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-3ZATHNCK.js",
+          "pi/dist/utils/shell.js"
+        ],
+        "value": "/bin/bash"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/jiti-loader-C3NU2SDH.js"],
+        "value": "/bin/jsh"
+      },
+      { "files": ["kimchi/src/update/install.ts"], "value": "/bin/sh" },
+      {
+        "files": [
+          "kimchi/src/extensions/daemon/spawn.ts",
+          "kimchi/src/extensions/hook-adapters/adapter.ts",
+          "pi/dist/bundle/chunks/chunk-WJUNYZC5.js"
+        ],
+        "value": "/c"
+      },
+      {
+        "files": [
+          "kimchi/scripts/mcp-live-google-lifecycle.mjs",
+          "kimchi/scripts/mcp-live-probe.mjs",
+          "kimchi/src/cli-auth/callback-server.ts",
+          "kimchi/tests/e2e/mcp/fixture-server.mjs",
+          "pi/dist/bundle/chunks/anthropic.js",
+          "pi/dist/bundle/chunks/chunk-DOST5PQW.js",
+          "pi/dist/core/mcp-servers.js",
+          "pi/dist/extensions/mcp/oauth.js"
+        ],
+        "value": "/callback"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/modes/interactive/interactive-mode.js"
+        ],
+        "value": "/changelog"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/chat/completions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/chatkit/sessions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/chatkit/threads"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/client/v4/accounts/%7BCLOUDFLARE_ACCOUNT_ID%7D/ai"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/client/v4/accounts/%7BCLOUDFLARE_ACCOUNT_ID%7D/ai/v1"
+      },
+      {
+        "files": ["kimchi/src/extensions/side-chat/panel.ts"],
+        "value": "/close"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/coding/v1"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/modes/interactive/theme/theme-schema.js"
+        ],
+        "value": "/colors"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/compatible-mode/v1"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/llama-cpp-classify-FYN623RH.js"],
+        "value": "/completion"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/completions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/computeMetadata/v1"
+      },
+      {
+        "files": ["kimchi/src/integrations/opencode.ts"],
+        "value": "/config.json"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/containers"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/content_provenance_checks"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/conversations"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/hook-adapters/adapter.ts",
+          "pi/dist/bundle/chunks/chunk-WJUNYZC5.js"
+        ],
+        "value": "/d"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/bash-tool-guard.ts",
+          "kimchi/src/extensions/ferment/phase-evidence.ts",
+          "kimchi/src/extensions/permissions/taxonomy.ts"
+        ],
+        "value": "/dev/null"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/bash-tool-guard.ts",
+          "kimchi/src/extensions/permissions/taxonomy.ts"
+        ],
+        "value": "/dev/stderr"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/bash-tool-guard.ts",
+          "kimchi/src/extensions/permissions/taxonomy.ts"
+        ],
+        "value": "/dev/stdout"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/doc/2011-06-15/"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/docs/authentication/provide-credentials-adc"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/ooxml/xml.ts"],
+        "value": "/drawingml/2006/chart"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/documents/editors/pptx.ts",
+          "kimchi/src/extensions/documents/extractors/docx.ts",
+          "kimchi/src/extensions/documents/ooxml/xml.ts",
+          "kimchi/src/extensions/documents/writers/template.ts"
+        ],
+        "value": "/drawingml/2006/main"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/migrations.js"
+        ],
+        "value": "/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/migrations.js"
+        ],
+        "value": "/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/memory/backend.ts",
+          "pi/dist/bundle/chunks/chunk-H3QXYIF7.js"
+        ],
+        "value": "/embeddings"
+      },
+      {
+        "files": ["kimchi/src/self-hosted-discovery.ts"],
+        "value": "/env/endpoints.json"
+      },
+      { "files": ["kimchi/scripts/mcp-live-probe.mjs"], "value": "/error" },
+      {
+        "files": ["kimchi/src/extensions/pr-cost-reporting/machine.ts"],
+        "value": "/etc/machine-id"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/evals"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/ledger-driver.ts"],
+        "value": "/example/repo/pull/1"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/modes/interactive/interactive-mode.js"
+        ],
+        "value": "/export"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/federation/credentials"
+      },
+      { "files": ["kimchi/src/components/logo.ts"], "value": "/ferment" },
+      {
+        "files": ["kimchi/src/extensions/ferment/index.ts"],
+        "value": "/ferment-new"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/files"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/fine_tuning/alpha/graders/run"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/fine_tuning/alpha/graders/validate"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/fine_tuning/jobs"
+      },
+      {
+        "files": ["kimchi/src/extensions/bug-report.ts"],
+        "value": "/getkimchi/kimchi/issues/new"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/googleapis/google-cloud-node-core.git"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/googleapis/google-cloud-node-core/tree/main/packages/gaxios"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/guardrail-checks/invoke"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/guardrail/{guardrailIdentifier}/version/{guardrailVersion}/apply"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/teleport/provisioning/constants.ts",
+          "kimchi/src/sandbox/worker/acp-client.ts",
+          "kimchi/src/utils/sandbox.ts"
+        ],
+        "value": "/home/sandbox"
+      },
+      {
+        "files": ["kimchi/src/extensions/remote-run/index.ts"],
+        "value": "/home/sandbox/acp-e2e"
+      },
+      {
+        "files": ["kimchi/tests/e2e/fixtures/remote-completion-extension.js"],
+        "value": "/home/sandbox/acp-test"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/iap/verify/public_key"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/images/edits"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/images/generations"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/images/variations"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/modes/interactive/interactive-mode.js"
+        ],
+        "value": "/import"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/jiti-loader-C3NU2SDH.js"],
+        "value": "/index"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/inference"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/inference/go"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/inference/go/v1"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/inference/v1"
+      },
+      {
+        "files": ["kimchi/src/integrations/openclaw.ts"],
+        "value": "/install.sh"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/latest/api/token"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/latest/meta-data/iam/security-credentials/"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/latest/meta-data/placement/region"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/live/sessions"
+      },
+      {
+        "files": ["kimchi/src/extensions/telemetry/otlp-test-utils.ts"],
+        "value": "/logs"
+      },
+      {
+        "files": [
+          "kimchi/scripts/mcp-live-probe.mjs",
+          "kimchi/scripts/mcp-live-public.mjs",
+          "kimchi/src/extensions/mcp/gateway.ts",
+          "kimchi/tests/e2e/mcp/fixture-server.mjs",
+          "pi/dist/bundle/chunks/chunk-DOST5PQW.js",
+          "pi/dist/extensions/mcp/config.js",
+          "pi/dist/extensions/mcp/runtime.js"
+        ],
+        "value": "/mcp"
+      },
+      {
+        "files": ["kimchi/scripts/mcp-live-google-lifecycle.mjs"],
+        "value": "/mcp/v1"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/media/"
+      },
+      {
+        "files": ["kimchi/tests/e2e/mcp/fixture-server.mjs"],
+        "value": "/messages"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/model/{modelId}/converse"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/model/{modelId}/converse-stream"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/model/{modelId}/count-tokens"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/model/{modelId}/invoke"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/model/{modelId}/invoke-with-bidirectional-stream"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/model/{modelId}/invoke-with-response-stream"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/bundle/chunks/chunk-H3QXYIF7.js",
+          "pi/dist/extensions/llama/client.js"
+        ],
+        "value": "/models"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/moderations"
+      },
+      { "files": ["pi/dist/bundle/chunks/meta.js"], "value": "/muse-code/key" },
+      {
+        "files": ["pi/dist/bundle/chunks/src-UK77SYZE.js"],
+        "value": "/node-fetch/node-fetch/issues/1000%20(response)"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/src-UK77SYZE.js"],
+        "value": "/node-fetch/node-fetch/issues/1167"
+      },
+      {
+        "files": [
+          "kimchi/scripts/mcp-live-probe.mjs",
+          "kimchi/tests/e2e/mcp/fixture-server.mjs",
+          "pi/dist/bundle/chunks/chunk-2LOB3CBH.js"
+        ],
+        "value": "/o/oauth2/v2/auth"
+      },
+      { "files": ["pi/dist/extensions/mcp/oauth.js"], "value": "/oauth" },
+      {
+        "files": ["pi/dist/bundle/chunks/anthropic.js"],
+        "value": "/oauth/authorize"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/radius.js"],
+        "value": "/oauth/callback"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/anthropic.js"],
+        "value": "/oauth/code/callback"
+      },
+      {
+        "files": [
+          "kimchi/src/oauth-config.ts",
+          "pi/dist/bundle/chunks/chunk-H3QXYIF7.js"
+        ],
+        "value": "/oauth/token"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/xai.js"],
+        "value": "/oauth2/device/code"
+      },
+      { "files": ["pi/dist/bundle/chunks/xai.js"], "value": "/oauth2/token" },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/oauth2/v1/certs"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/oauth2/v3/certs"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/documents/extractors/docx.ts",
+          "kimchi/src/extensions/documents/extractors/xlsx.ts",
+          "kimchi/src/extensions/documents/fixtures/builders.ts",
+          "kimchi/src/extensions/documents/ooxml/xml.ts",
+          "kimchi/src/extensions/documents/writers/template.ts"
+        ],
+        "value": "/officeDocument/2006/relationships"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/editors/docx.ts"],
+        "value": "/officeDocument/2006/relationships/comments"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/writers/template.ts"],
+        "value": "/officeDocument/2006/relationships/slide"
+      },
+      {
+        "files": [
+          "kimchi/tests/smoke/harness.ts",
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js"
+        ],
+        "value": "/openai/v1"
+      },
+      {
+        "files": [
+          "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
+          "kimchi/tests/e2e/tui/support/wire-requests.ts"
+        ],
+        "value": "/openai/v1/chat/completions"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/soffice.ts"],
+        "value": "/opt"
+      },
+      { "files": ["kimchi/src/update/paths.ts"], "value": "/opt/homebrew" },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/admin_api_keys"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/audit_logs"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/certificates"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/certificates/activate"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/certificates/deactivate"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/costs"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/data_retention"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/groups"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/invites"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/projects"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/roles"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/spend_alerts"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/spend_limit"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/audio_speeches"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/audio_transcriptions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/code_interpreter_sessions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/completions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/embeddings"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/file_search_calls"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/images"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/moderations"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/vector_stores"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/usage/web_search_calls"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/organization/users"
+      },
+      { "files": ["kimchi/scripts/mcp-live-probe.mjs"], "value": "/other" },
+      {
+        "files": ["pi/dist/bundle/chunks/jiti-loader-C3NU2SDH.js"],
+        "value": "/package.json"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/documents/ooxml/xml.ts",
+          "kimchi/src/extensions/documents/writers/template.ts"
+        ],
+        "value": "/package/2006/content-types"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/documents/ooxml/xml.ts",
+          "kimchi/src/extensions/documents/writers/template.ts"
+        ],
+        "value": "/package/2006/relationships"
+      },
+      { "files": ["pi/dist/bundle/chunks/chunk-5GTPJSRI.js"], "value": "/pid" },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/modes/interactive/components/earendil-announcement.js"
+        ],
+        "value": "/posts/2026-04-08-ive-sold-out/"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/documents/ooxml/xml.ts",
+          "kimchi/src/extensions/documents/writers/template.ts"
+        ],
+        "value": "/presentationml/2006/main"
+      },
+      {
+        "files": [
+          "pi/dist/bun/restore-sandbox-env.js",
+          "pi/dist/bundle/chunks/anthropic.js",
+          "pi/dist/bundle/chunks/bedrock-converse-stream.js",
+          "pi/dist/bundle/chunks/chunk-DRQDKNXA.js",
+          "pi/dist/bundle/chunks/kimi-coding.js",
+          "pi/dist/bundle/chunks/openai-codex.js",
+          "pi/dist/bundle/chunks/openrouter.js",
+          "pi/dist/core/package-manager.js"
+        ],
+        "value": "/proc/self/environ"
+      },
+      {
+        "files": [
+          "kimchi/src/utils/os-metadata.ts",
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/utils/wsl.js"
+        ],
+        "value": "/proc/version"
+      },
+      {
+        "files": ["kimchi/src/extensions/bash-background/bash-display.ts"],
+        "value": "/processes"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/kimchi-fixture.ts"],
+        "value": "/quit"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/realtime/sessions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/realtime/transcription_sessions"
+      },
+      {
+        "files": [
+          "kimchi/tests/e2e/mcp/fixture-server.mjs",
+          "pi/dist/bundle/chunks/chunk-DOST5PQW.js"
+        ],
+        "value": "/register"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/utils/tools-manager.js"
+        ],
+        "value": "/releases/tag/"
+      },
+      {
+        "files": ["kimchi/src/extensions/teleport/ui/help-modal.ts"],
+        "value": "/remote-sessions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/responses"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/responses/compact"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/responses/input_tokens"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/revoke"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/hook-adapters/adapter.ts",
+          "pi/dist/bundle/chunks/chunk-WJUNYZC5.js"
+        ],
+        "value": "/s"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/sdk-for-javascript/"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
+        "value": "/sdkref/latest/guide/feature-static-credentials.html"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/sdkref/latest/guide/standardized-credentials.html"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-WJUNYZC5.js",
+          "pi/dist/config.js"
+        ],
+        "value": "/session/"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/modes/interactive/interactive-mode.js"
+        ],
+        "value": "/settings"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/openai-responses-KCCCXI3B.js"],
+        "value": "/settings/usage"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-openai-server.ts"],
+        "value": "/settings:resolve"
+      },
+      { "files": ["kimchi/scripts/mcp-live-probe.mjs"], "value": "/signin" },
+      {
+        "files": [
+          "kimchi/src/modes/acp/skill-commands.ts",
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/core/agent-session.js"
+        ],
+        "value": "/skill:"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/skills"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/browser.ts"],
+        "value": "/snap/bin/chromium"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/soffice.ts"],
+        "value": "/snap/bin/libreoffice"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/documents/extractors/xlsx.ts",
+          "kimchi/src/extensions/documents/fixtures/builders.ts",
+          "kimchi/src/extensions/documents/ooxml/xml.ts"
+        ],
+        "value": "/spreadsheetml/2006/main"
+      },
+      { "files": ["kimchi/tests/e2e/mcp/fixture-server.mjs"], "value": "/sse" },
+      {
+        "files": ["kimchi/tools/proxy-helper/cmd/proxy/proxy.go"],
+        "value": "/ssh"
+      },
+      {
+        "files": ["kimchi/src/extensions/teleport/ui/help-modal.ts"],
+        "value": "/sync"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/sys/class/dmi/id/bios_date"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/sys/class/dmi/id/bios_vendor"
+      },
+      {
+        "files": ["kimchi/src/extensions/teleport/ui/help-modal.ts"],
+        "value": "/terminal"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/threads"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/threads/runs"
+      },
+      {
+        "files": ["kimchi/src/extensions/activity.ts"],
+        "value": "/tmp/kimchi"
+      },
+      {
+        "files": ["kimchi/src/extensions/context-budget-tools.ts"],
+        "value": "/tmp/kimchi-context-budget"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-6MWTY2OB.js"],
+        "value": "/tmp/tui"
+      },
+      {
+        "files": [
+          "kimchi/tests/e2e/mcp/fixture-server.mjs",
+          "pi/dist/bundle/chunks/bedrock-converse-stream.js",
+          "pi/dist/bundle/chunks/chunk-2LOB3CBH.js",
+          "pi/dist/bundle/chunks/chunk-DOST5PQW.js"
+        ],
+        "value": "/token"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/tokeninfo"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/llama-cpp-classify-FYN623RH.js"],
+        "value": "/tokenize"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/typesafe/v1"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/uploads"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/browser.ts"],
+        "value": "/usr/bin/chromium"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/browser.ts"],
+        "value": "/usr/bin/chromium-browser"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/browser.ts"],
+        "value": "/usr/bin/google-chrome"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/browser.ts"],
+        "value": "/usr/bin/google-chrome-stable"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/browser.ts"],
+        "value": "/usr/bin/microsoft-edge"
+      },
+      {
+        "files": ["kimchi/src/utils/clipboard-read.ts"],
+        "value": "/usr/bin/osascript"
+      },
+      {
+        "files": ["kimchi/src/extensions/mcp/keyring-require-bridge.ts"],
+        "value": "/usr/bin/security"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/soffice.ts"],
+        "value": "/usr/bin/soffice"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/soffice.ts"],
+        "value": "/usr/lib/libreoffice/program/soffice"
+      },
+      { "files": ["kimchi/src/update/paths.ts"], "value": "/usr/local" },
+      {
+        "files": ["kimchi/src/extensions/documents/soffice.ts"],
+        "value": "/usr/local/bin/soffice"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/pdf-fonts.ts"],
+        "value": "/usr/local/share/fonts"
+      },
+      {
+        "files": ["kimchi/src/extensions/pr-cost-reporting/machine.ts"],
+        "value": "/usr/sbin/ioreg"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/pdf-fonts.ts"],
+        "value": "/usr/share/fonts"
+      },
+      {
+        "files": ["kimchi/src/extensions/pr-cost-reporting/machine.ts"],
+        "value": "/v"
+      },
+      {
+        "files": [
+          "kimchi/tests/e2e/tui/support/ledger-driver.ts",
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/bundle/chunks/chunk-H3QXYIF7.js",
+          "pi/dist/bundle/chunks/openai-chatgpt.js",
+          "pi/dist/bundle/chunks/openai-responses-KCCCXI3B.js"
+        ],
+        "value": "/v1"
+      },
+      { "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"], "value": "/v1/" },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/v1/%7BCLOUDFLARE_ACCOUNT_ID%7D/%7BCLOUDFLARE_GATEWAY_ID%7D/anthropic"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/v1/%7BCLOUDFLARE_ACCOUNT_ID%7D/%7BCLOUDFLARE_GATEWAY_ID%7D/compat"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/v1/%7BCLOUDFLARE_ACCOUNT_ID%7D/%7BCLOUDFLARE_GATEWAY_ID%7D/openai"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/modes/interactive/session-share.js"
+        ],
+        "value": "/v1/artifacts"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-openai-server.ts"],
+        "value": "/v1/budget"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
+          "pi/dist/core/bug-report-upload.js"
+        ],
+        "value": "/v1/bug-reports"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-ollama-server.ts"],
+        "value": "/v1/chat/completions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-F5ZABL6Z.js"],
+        "value": "/v1/complete"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/v1/config"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-openai-server.ts"],
+        "value": "/v1/credits"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-F5ZABL6Z.js"],
+        "value": "/v1/files"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-F5ZABL6Z.js"],
+        "value": "/v1/messages"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-F5ZABL6Z.js"],
+        "value": "/v1/messages/batches"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-F5ZABL6Z.js"],
+        "value": "/v1/messages/count_tokens"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-F5ZABL6Z.js"],
+        "value": "/v1/models"
+      },
+      {
+        "files": ["kimchi/tests/e2e/tui/support/fake-openai-server.ts"],
+        "value": "/v1/models/metadata"
+      },
+      { "files": ["pi/dist/bundle/chunks/radius.js"], "value": "/v1/oauth" },
+      {
+        "files": ["pi/dist/bundle/chunks/radius.js"],
+        "value": "/v1/oauth/device"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/anthropic.js",
+          "pi/dist/bundle/chunks/radius.js"
+        ],
+        "value": "/v1/oauth/token"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/v1/oauthtoken"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
+        "value": "/v1/projects/"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-F5ZABL6Z.js"],
+        "value": "/v1/skills"
+      },
+      {
+        "files": [
+          "pi/dist/bundle/chunks/bedrock-converse-stream.js",
+          "pi/dist/bundle/chunks/chunk-2LOB3CBH.js"
+        ],
+        "value": "/v1/token"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
+        "value": "/v1beta"
+      },
+      {
+        "files": ["kimchi/src/extensions/pr-cost-reporting/machine.ts"],
+        "value": "/var/lib/dbus/machine-id"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/soffice.ts"],
+        "value": "/var/lib/flatpak/exports/bin/org.libreoffice.LibreOffice"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/vaults"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/vector_stores"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/videos"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/videos/characters"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/videos/edits"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/videos/extensions"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/webhook_endpoints"
+      },
+      {
+        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "value": "/webhook_event_types"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/editors/docx.ts"],
+        "value": "/word/comments.xml"
+      },
+      {
+        "files": [
+          "kimchi/src/extensions/documents/extractors/docx.ts",
+          "kimchi/src/extensions/documents/fixtures/builders.ts",
+          "kimchi/src/extensions/documents/ooxml/xml.ts"
+        ],
+        "value": "/wordprocessingml/2006/main"
+      },
+      {
+        "files": ["kimchi/src/extensions/side-chat/panel.ts"],
+        "value": "/wrap"
+      },
+      {
+        "files": ["kimchi/src/extensions/documents/fixtures/builders.ts"],
+        "value": "/xl/worksheets"
+      }
+    ]
+  },
   "environment": {
     "variables": {
       "AC_APPCIRCLE": {

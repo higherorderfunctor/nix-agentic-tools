@@ -85,20 +85,45 @@
   # The `network` fact: ../../../lib/network.nix.
   network = import ../../../lib/network.nix {inherit codeql pkgs;};
   # The `environment` surface (../../../extract/environment.nix) and the
-  # `network` fact come from the database, the rest from extract.mjs over the
-  # same release source. The engine runs on x86_64-linux only, which is the
+  # `network` fact come from the database; extract.mjs reads declarations
+  # from the release source. scan.mjs adds egressScan over the original pinned
+  # Kimchi and pi trees below. The engine runs on x86_64-linux only, which is the
   # one system every facts.json row declares, so the raw exists on that
   # system alone.
   codeqlFacts = {
     environment = (import ../../../extract/environment.nix {inherit codeql pkgs;}).surface;
     network = network.fact;
   };
+  # scan.mjs and the report.mjs it imports, without generate.mjs: a
+  # generator-only edit must not rebuild the extraction.
+  egressScanner = let
+    dir = ../../../../../dev/skills/kimchi-egress-report/scripts;
+  in
+    lib.fileset.toSource {
+      root = dir;
+      fileset = lib.fileset.unions [(dir + "/report.mjs") (dir + "/scan.mjs")];
+    };
+  # The pins scan.mjs reads; build-only fields such as vendorHash stay out
+  # so editing them does not rebuild the extraction.
+  scannerPins = pkgs.writeText "kimchi-scanner-pins.json" (builtins.toJSON {
+    inherit extraction;
+    inherit (sources) version;
+  });
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
-      nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
+      nativeBuildInputs = [(lib.getBin pkgs.nix) pkgs.nodejs pkgs.typescript_5];
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      # scan.mjs verifies both tree pins with `nix hash path`, which needs
+      # no store or daemon but is an experimental command.
+      export NIX_CONFIG="experimental-features = nix-command"
+      ${pkgs.nodejs}/bin/node ${egressScanner}/scan.mjs \
+        --tree ${extractionSources.kimchi} \
+        --pi ${extractionSources.pi} \
+        --sources ${scannerPins} \
+        --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
+        --out egress-scan.json
       ${pkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json
       ${pkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
         --annotations ${../../../extract/annotations.json} \
@@ -113,7 +138,7 @@
         --pi-tui-package ${piTuiPackage} \
         --typebox-package ${typeboxPackage} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
-        | ${pkgs.jq}/bin/jq -S ${lib.concatStrings (lib.mapAttrsToList (name: fact: "--slurpfile ${name} ${fact} ") codeqlFacts)}'. + ($ARGS.named | map_values(.[0]))' > "$out"
+        | ${pkgs.jq}/bin/jq -S ${lib.concatStrings (lib.mapAttrsToList (name: fact: "--slurpfile ${name} ${fact} ") codeqlFacts)}--slurpfile egressScan egress-scan.json '. + ($ARGS.named | map_values(.[0]))' > "$out"
     '';
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this

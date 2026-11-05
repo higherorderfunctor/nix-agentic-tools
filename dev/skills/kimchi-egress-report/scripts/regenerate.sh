@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rewrites the egress report's fact fields from the committed facts. Run from
+# Rewrites the complete egress report from the committed facts. Run from
 # the repository root. It evaluates the facts through lib.extracted, which
 # builds nothing, then runs generate.mjs and formats the report.
 set -euETo pipefail

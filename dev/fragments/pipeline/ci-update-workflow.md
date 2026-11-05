@@ -295,11 +295,15 @@ limiting fact-writing passes to Linux then Darwin regardless of owner count. An
 update sweep may drop a CI facts commit and CI records it again; a human or LLM
 fix freezes the branch under existing ownership checks.
 
-Kimchi's delta includes its egress report. Fork heads, pushes and dispatches
-upload delta artifacts and fail on changed facts; follow the diagnostic's
-scratch-directory download and patch commands to avoid GitHub CLI overwriting
-checkout files. CI names owner directories; the drift library chooses the fact
-file.
+Kimchi's extraction runs `scan.mjs` on the original pinned Kimchi and pi trees
+and merges commands, dependencies, Go sites and hosts, spawned executables, path
+literals and `header.scan` as the `egressScan` fact. Its delta includes the
+complete egress report regenerated from `egressScan`, `network` and
+`environment` through `lib.extracted`, so CI keeps scanner fields fresh too.
+Fork heads, pushes and dispatches upload delta artifacts and fail on changed
+facts; follow the diagnostic's scratch-directory download and patch commands to
+avoid GitHub CLI overwriting checkout files. CI names owner directories; the
+drift library chooses the fact file.
 
 The internal `kiro-cli-rollout-canary` patches every feature whose aggregate
 vendor state needs a patch and whose measured patchability is true. Its scope
