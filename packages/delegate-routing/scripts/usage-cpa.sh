@@ -17,7 +17,9 @@ usage_project() {
     def window($seconds; $used; $reset; $status):
       if ($used | type) != "number" then error("usage percent") else
         {usedPercent: $used, remainingPercent: (100 - $used),
-         resetsAt: ($reset | utc), status: $status, windowSeconds: $seconds} end;
+         # z.ai omits the reset time of a window that has not started yet.
+         resetsAt: (if $reset == null and $used == 0 then null else ($reset | utc) end),
+         status: $status, windowSeconds: $seconds} end;
     def duration:
       if . == 604800 then "7d" elif . == 18000 then "5h" else "\(.)s" end;
     def named_window($seconds; $scope; $used; $reset; $status):
@@ -79,7 +81,7 @@ usage_project() {
         if .code != 200 then error("z.ai envelope") else . end
         | [.data.limits[]? | select(.unit == 3 or .unit == 6)
           | named_window(((if .unit == 3 then 3600 else 604800 end) * .number); null;
-              .percentage; (.nextResetTime / 1000); null)] as $windows
+              .percentage; (.nextResetTime | if . == null then null else . / 1000 end); null)] as $windows
         | if $windows == [] then error("z.ai windows") else
             $base + {account: ($base.account + {plan: .data.level}), windows: ($windows | from_entries)} end
       end
