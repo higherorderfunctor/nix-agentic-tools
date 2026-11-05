@@ -71,9 +71,13 @@
     package = routes.${name};
     args = {
       exe = lib.getExe package;
+      # The guest's system git configuration (modules/git.nix), delivered as
+      # a file because the libgit2 tools read files only; the system scope
+      # is the one `safe.directory` is honored in.
+      gitConfig = cfg.git._config;
       memory = cfg.vm.memory;
       outName = commandName name;
-      packages = cfg.extraPackages;
+      packages = cfg.extraPackages ++ cfg.git._packages;
       vcpus = cfg.vm.vcpus;
     };
   in

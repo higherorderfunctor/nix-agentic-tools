@@ -179,6 +179,13 @@ in {
           jobs = 0;
           strategy = "working-copy";
         }
+        # An explicit working-copy strategy at the lowest scope is one
+        # contradiction, not that and a second "needs worktree" failure.
+        && builtins.length (failedAssertions (evalHm (test {
+          jobs = 4;
+          strategy = "working-copy";
+        })))
+        == 1
         && !(hmFails {jobs = 1;})
         && !(hmFails {
           jobs = 4;

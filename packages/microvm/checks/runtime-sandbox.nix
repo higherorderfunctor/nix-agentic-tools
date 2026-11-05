@@ -44,9 +44,19 @@
   # git.nix's settings and tool leaves have their own checks (checks/git.nix);
   # these compare the rest of the tree, identities and forges included.
   onlyIdentities = sandbox: sandbox // {git = {inherit (sandbox.git) forges identities;};};
-  expected = runtime:
+  # The guest's git configuration written out here: the fixture sets no Git
+  # settings, so the file is the guest-fixed keys alone. Only the no-ssh
+  # script's store path is read back from the module.
+  expectedGitConfig = result: runtime: let
+    text = result.config.ai.${runtime}.sandbox.git._config;
+    sshCommand = builtins.head (lib.splitString "\"" (builtins.elemAt (lib.splitString "sshCommand = \"" text) 1));
+  in "[core]\n\tsshCommand = \"${sshCommand}\"\n\n[safe]\n\tdirectory = \"\"\n\tdirectory = \"/mnt/seed\"\n";
+  # The factory call common.nix makes for a runtime guest, with the expected
+  # git configuration and package list.
+  expected = result: runtime:
     factory {
       exe = lib.getExe pkgs.hello;
+      gitConfig = expectedGitConfig result runtime;
       memory =
         if runtime == "codex"
         then 4096
@@ -141,7 +151,7 @@ in {
     in
       map (package: package.meta.mainProgram) actual
       == ["claude-sandbox" "codex-sandbox"]
-      && map (package: package.drvPath) actual == map (runtime: (expected runtime).drvPath) routed
+      && map (package: package.drvPath) actual == map (runtime: (expected result runtime).drvPath) routed
       && lib.all (package: builtins.elem package.drvPath (map (p: p.drvPath) (api.packages result))) actual
       && result.config.ai.claims.command
       == {

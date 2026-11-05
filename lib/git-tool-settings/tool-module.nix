@@ -12,6 +12,21 @@
 # to `programs.git.settings`, devenv renders it into a repository-local
 # include. So this is the only renderer; nothing lowers a typed value twice.
 #
+# Lowering (`lower` below):
+#   - a null scalar and an empty `<name>` family write nothing, so git (and
+#     the tool) fall through to a lower configuration scope, key by key;
+#   - every other leaf is written with the PRIORITY it was defined at,
+#     `mkOverride opt.highestPrio opt.value`. A value a preset set with
+#     `mkDefault` therefore stays a default next to a raw `git.settings` /
+#     `programs.git.settings` value, while an explicit typed value that
+#     disagrees with a raw one is a loud definition conflict rather than a
+#     silent shadow. A family carries one priority for the whole map: the
+#     highest-priority definition of the map as a value.
+#   - the key path becomes git's `section.subsection.key` shape: everything
+#     between the section and the key is one dotted subsection, and a family
+#     is a subsection of its own (`branchless."test.alias".<name>`), the only
+#     shape Home Manager's type admits (./ini-type.nix).
+#
 # The factory is parameterized by where the tree mounts and where its two
 # outputs go, so ONE invocation serves every consumer of a tool's options: the
 # host backends mount at `root = ["git"]`, lower into `sink = ["settings"]` and
@@ -58,13 +73,20 @@
   # the sandbox's shared root is lowered per runtime with each definition's
   # priority (packages/microvm/modules/git.nix), not into a sink of its own.
   sink ? ["settings"],
+  # Checks this mount evaluates in place of the owner's `settings.assertions`,
+  # in the same `{cfg; optionPath}` shape; null keeps the owner's. Home Manager
+  # passes git-branchless's `lowestScopeAssertions` (its user-global file is
+  # the lowest layer that flake writes, so an unset leaf there is upstream's
+  # default) and so does the sandbox (its system file is the guest's lowest
+  # scope); repository-local scopes pass null, because a higher scope may
+  # still supply the leaf.
+  assertions ? null,
 }: {
   config,
   lib,
   options,
   ...
 }: let
-  lower = import ./lower.nix {inherit lib;};
   cfg = lib.getAttrFromPath (root ++ [section]) config;
   typed = (lib.getAttrFromPath (root ++ [section]) options).settings;
   toolPackage = package config.ai.internal.packages;
@@ -74,11 +96,23 @@
   enableDefault = lib.optionalAttrs (enableFrom != null) {
     default = lib.getAttrFromPath enableFrom config;
   };
-  lowered = lib.mkMerge (
-    lib.concatMap
-    (leaf: lower.lower leaf (lib.getAttrFromPath (lib.tail leaf.path) typed))
-    settings.leaves
-  );
+
+  # ["branchless" "core" "mainBranch"] → ["branchless" "core" "mainBranch"];
+  # ["branchless" "a" "b" "key"]       → ["branchless" "a.b" "key"];
+  # family ["branchless" "test" "alias"] → ["branchless" "test.alias"].
+  iniPath = leaf: let
+    rest = lib.tail leaf.path;
+  in
+    if leaf.family
+    then [(lib.head leaf.path) (lib.concatStringsSep "." rest)]
+    else [(lib.head leaf.path)] ++ lib.optional (lib.length rest > 1) (lib.concatStringsSep "." (lib.init rest)) ++ [(lib.last rest)];
+
+  lower = leaf: let
+    opt = lib.getAttrFromPath (lib.tail leaf.path) typed;
+  in
+    lib.optional (opt.value != null && opt.value != {})
+    (lib.setAttrByPath (iniPath leaf) (lib.mkOverride opt.highestPrio opt.value));
+  lowered = lib.mkMerge (lib.concatMap lower settings.leaves);
 in {
   options = lib.setAttrByPath (root ++ [section]) {
     enable =
@@ -93,17 +127,23 @@ in {
   # the per-runtime trees, which do install.
   config = lib.mkMerge (
     [
-      # The per-tool checks the owner's generator result carries, evaluated
-      # wherever the tree mounts; `optionPath` names the mounted root so the
-      # messages stay true at every root.
+      # The per-tool checks: the owner's generator result carries them, unless
+      # this mount's scope replaces them. They are evaluated wherever the tree
+      # mounts; `optionPath` names the mounted root so the messages stay true
+      # at every root.
       {
-        assertions = map (
-          check:
-            check {
-              inherit cfg;
-              optionPath = lib.concatStringsSep "." (root ++ [section]);
-            }
-        ) (settings.assertions or []);
+        assertions =
+          map (
+            check:
+              check {
+                inherit cfg;
+                optionPath = lib.concatStringsSep "." (root ++ [section]);
+              }
+          ) (
+            if assertions == null
+            then settings.assertions or []
+            else assertions
+          );
       }
     ]
     ++ lib.optional (sink != null) (lib.setAttrByPath (root ++ sink) lowered)
