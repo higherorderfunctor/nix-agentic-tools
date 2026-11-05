@@ -41,6 +41,9 @@
         };
       };
     };
+  # git.nix's settings and tool leaves have their own checks (checks/git.nix);
+  # these compare the rest of the tree, identities and forges included.
+  onlyIdentities = sandbox: sandbox // {git = {inherit (sandbox.git) forges identities;};};
   expected = runtime:
     factory {
       exe = lib.getExe pkgs.hello;
@@ -91,8 +94,8 @@ in {
       && cfg.codex.sandbox.extraPackages == [pkgs.ripgrep]
       && cfg.sandbox.vm.memory == 8192
       && cfg.sandbox.extraPackages == [pkgs.fd]
-      && defaultReplaced.config.ai.codex.sandbox == replacement
-      && replaced.config.ai.codex.sandbox == replacement
+      && onlyIdentities replaced.config.ai.codex.sandbox == replacement
+      && onlyIdentities defaultReplaced.config.ai.codex.sandbox == replacement
       && map (package: package.meta.mainProgram) replaced.config.ai.internal.sandboxPackages == ["claude-sandbox"])
     // forBackends "defaults" (api: let
       result = api.eval {};
@@ -105,7 +108,7 @@ in {
       partial = api.eval {ai.sandbox.vm.memory = 8192;};
     in
       lib.all (runtime:
-        result.config.ai.${runtime}.sandbox
+        onlyIdentities result.config.ai.${runtime}.sandbox
         == {
           enable = false;
           extraPackages = [];
