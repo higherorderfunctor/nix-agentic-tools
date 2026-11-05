@@ -80,4 +80,21 @@ with tempfile.TemporaryDirectory() as root:
     teardown = {name: json.loads(out)[name]["teardown"] for name in ("configured", "control")}
     expect(not any(record["harness_kill"] for record in teardown.values()), f"a clean exit must record no kill: {teardown}", err)
 
-print("teardown-contract: all four teardown branches behave")
+    # 5. Kiro 3.0.0's v3 relay ends every session the harness closes with
+    #    status 1 and the stdin-closed marker as its last stderr line. That
+    #    exact shape is the clean shutdown.
+    code, out, err = drive("v3-closed", kiro, workspace)
+    expect(code == 0, f"the v3 relay's stdin-closed exit must pass (exit {code})", err)
+
+    # 6-8. Every looser reading fails: status 1 without the marker, the marker
+    #      followed by another line, and the marker with a different status.
+    for teardown_mode, description in (
+        ("1", "status 1 without the stdin-closed marker"),
+        ("v3-closed-then-line", "the marker followed by another stderr line"),
+        ("v3-closed-status-2", "the marker with a status other than 1"),
+    ):
+        code, out, err = drive(teardown_mode, kiro, workspace)
+        expect(code != 0, f"{description} must still fail the check", err)
+        expect("on its own" in err, f"{description} must be named an autonomous exit", err)
+
+print("teardown-contract: all eight teardown branches behave")

@@ -79,4 +79,12 @@ elif teardown == "signal":
     # failure -- `harness_kill` stays false because it sent nothing.
     os.kill(os.getpid(), signal.SIGTERM)
     time.sleep(HANG_SECONDS)
+elif teardown.startswith("v3-closed"):
+    # Kiro 3.0.0's v3 relay on stdin EOF. `v3-closed` is the real shape (status
+    # 1, the marker as the last stderr line); each suffix breaks one part of it.
+    status = 2 if teardown == "v3-closed-status-2" else 1
+    print("error: the v3 engine's stdin is closed", file=sys.stderr, flush=True)
+    if teardown == "v3-closed-then-line":
+        print("error: a later failure", file=sys.stderr, flush=True)
+    sys.exit(status)
 sys.exit(int(teardown))
