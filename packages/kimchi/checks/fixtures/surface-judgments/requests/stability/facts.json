@@ -1,0 +1,117 @@
+{
+  "regionRegistry": {
+    "fields": []
+  },
+  "requestCallers": [
+    {
+      "callSite": {
+        "column": 12,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 3
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 28,
+        "file": "kimchi/src/requests.ts",
+        "line": 2
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 28,
+        "file": "kimchi/src/requests.ts",
+        "line": 2
+      }
+    },
+    {
+      "callSite": {
+        "column": 42,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 9
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/requests.ts",
+        "line": 9
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 1,
+        "file": "kimchi/src/requests.ts",
+        "line": 9
+      }
+    },
+    {
+      "callSite": {
+        "column": 42,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 9
+      },
+      "distance": 1,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/requests.ts",
+        "line": 9
+      },
+      "kind": "callback",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 3,
+        "file": "kimchi/src/requests.ts",
+        "line": 7
+      }
+    },
+    {
+      "callSite": {
+        "column": 41,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 10
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/requests.ts",
+        "line": 10
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 1,
+        "file": "kimchi/src/requests.ts",
+        "line": 10
+      }
+    },
+    {
+      "callSite": {
+        "column": 41,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 10
+      },
+      "distance": 1,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/requests.ts",
+        "line": 10
+      },
+      "kind": "callback",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 3,
+        "file": "kimchi/src/requests.ts",
+        "line": 7
+      }
+    }
+  ]
+}

@@ -725,7 +725,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:a33fbf86384be9cac788d3f9d02d7b3fc360c4cb2b8f02b6a4702c057913dfdc",
+      "evidenceHash": "sha256:6f7a25fddb982c348c556f1ad8232a075a9e6be975c2b1832f1266fe05d75974",
       "id": "request-extensions-billing-status-refresh-billing-status-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -1051,7 +1051,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"session_start\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -1327,7 +1327,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "new:OAuthSelectorComponent",
+                  "callee": "new:OAuthSelectorComponent:\"logout\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -1384,7 +1384,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:710d8053da2e94c11b180a511b0f0f457337021016fd7770e335d436928fe817",
+      "evidenceHash": "sha256:5fb88e3091f08372d6991d39778ca163d526edf2c1066334f05fabb227ffe47b",
       "id": "request-extensions-billing-status-refresh-budget-status-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -1710,7 +1710,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"session_start\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -1986,7 +1986,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "new:OAuthSelectorComponent",
+                  "callee": "new:OAuthSelectorComponent:\"logout\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -2043,7 +2043,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:9b384f4347ec6a31939a66d0a3df3cac6b69f274f57220e91185a725fae3ba7d",
+      "evidenceHash": "sha256:b20965fb4828f597e7539e740d42ed161ca67976bfa4cffdf91f0eae93f405f1",
       "id": "request-extensions-ide-adapter-mcp-client-ide-web-socket-transport-start-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -2069,7 +2069,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "key": "(",
+                  "key": "[{\"callee\":\"new:Promise\",\"kind\":\"call\",\"ordinal\":0},0]",
                   "kind": "function-start",
                   "ordinal": 0
                 },
@@ -3341,7 +3341,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:bb785210b50b8989060e007f9e33d6a7c542f6b7ce626b075a92688cb0f491fe",
+      "evidenceHash": "sha256:829cd7190a34c42e5625b78a96dcbf45b824a056369d7084c00c4679a44e3630",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -3364,9 +3364,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "key": "(",
+                  "key": "[{\"callee\":\"call:withReportingConsent\",\"kind\":\"call\",\"ordinal\":1},1]",
                   "kind": "function-start",
-                  "ordinal": 5
+                  "ordinal": 0
                 },
                 "symbol": [["function:deliverEvents", 0]]
               },
@@ -4139,7 +4139,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:8497dd983772ef712b0f70766d1b43d40f60f657e24be98890c22d7f0fe08408",
+      "evidenceHash": "sha256:8c9ac0b19d05c5d96dafbcce862b8254725cbe61d1b1803ee9c8178622dade4b",
       "id": "request-extensions-pull-request-status-provider-api-request-json-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -4663,7 +4663,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:runChannel",
+                  "callee": "call:runChannel:\"pull-requests\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -4747,7 +4747,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:ebe24a05acd809d13d32fd4a54bfaa2f869addaaad9cd3d7e2c20b153becb6be",
+      "evidenceHash": "sha256:565a40e90a627194d31a1a4e3f7f2a5fcb98f9ae14547f6288b3429eca535c73",
       "id": "request-extensions-session-name-suggest-session-name-fetch-impl-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -4860,9 +4860,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"turn_end\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:sessionNameExtension", 0]]
               },
@@ -4887,9 +4887,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"turn_end\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:sessionNameExtension", 0]]
               },
@@ -6305,7 +6305,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:bc6853890e1c809e0e537e42a43717fa8a23bccb3cdbb291ec87bae6028e4404",
+      "evidenceHash": "sha256:e64a2a8814ae6be22e9bee4d80203bd6d09eaf9ee7fb87960c9e451a91f74c36",
       "id": "request-extensions-work-attribution-cost-sync-reconcile-work-costs-fetch-bounded-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -6481,9 +6481,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:runChannel",
+                  "callee": "call:runChannel:\"costs\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:scan", 0]]
               },
@@ -6840,7 +6840,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:34e5a0c2cbc1416cfd2fdba2a0459e0f5aa415e466076bdafe8d36b2428423b5",
+      "evidenceHash": "sha256:8139df07b7ab795502c21a198a1a1f23e5f966c454d5dccb531563ce0f2d3b42",
       "id": "request-models-fetch-available-models-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -7574,7 +7574,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:prepareTool",
+                  "callee": "call:prepareTool:\"claudecode\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -7601,7 +7601,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:prepareTool",
+                  "callee": "call:prepareTool:\"codex\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -7628,7 +7628,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:prepareTool",
+                  "callee": "call:prepareTool:\"cursor\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -7655,7 +7655,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:prepareTool",
+                  "callee": "call:prepareTool:\"gsd2\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -7682,7 +7682,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:prepareTool",
+                  "callee": "call:prepareTool:\"openclaw\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -7709,7 +7709,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:prepareTool",
+                  "callee": "call:prepareTool:\"opencode\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -8574,7 +8574,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:03558c6187f5f3dbf1123c2e1d1aaa517550c7b0693ab25307ee1f35ac715ca5",
+      "evidenceHash": "sha256:20f96c78b42ff6f42f7b92f07915a13da880326e8eafa12e5817d0afd6ce1c1b",
       "id": "request-sandbox-cloud-http-fetch-with-timeout-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -9877,9 +9877,9 @@
                 "role": {
                   "callee": "call:manager.spawn",
                   "kind": "call",
-                  "ordinal": 0
+                  "ordinal": 1
                 },
-                "symbol": []
+                "symbol": [["function:execute", 0]]
               },
               "path": "src/extensions/agents/index.ts"
             }
@@ -9902,11 +9902,11 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:manager.spawn",
+                  "callee": "call:manager.spawn:\"Remote-Runner\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
-                "symbol": [["function:execute", 0]]
+                "symbol": []
               },
               "path": "src/extensions/agents/index.ts"
             }
@@ -13604,7 +13604,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:b2f00797fa75ad62a8813940f0d952c04b5edfbd99348e0e0c72ab4e9045007a",
+      "evidenceHash": "sha256:1fd5544299a35ede2f818011c68f64c91d44ff05e8e4f893e570192bf7bd7506",
       "id": "request-utils-http-fetch-with-retry-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "packet": {
@@ -16012,7 +16012,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"before_agent_start\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -16045,7 +16045,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"before_agent_start\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -16414,9 +16414,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:initOrgPolicy",
+                  "callee": "call:initOrgPolicy:\"\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:setOrgPolicyForTests", 0]]
               },
@@ -16522,9 +16522,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"turn_end\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:sessionNameExtension", 0]]
               },
@@ -16549,9 +16549,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"turn_end\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:sessionNameExtension", 0]]
               },
@@ -17669,9 +17669,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:runChannel",
+                  "callee": "call:runChannel:\"costs\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:scan", 0]]
               },
@@ -17696,7 +17696,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:sendPreSessionEvent",
+                  "callee": "call:sendPreSessionEvent:\"app_started\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -17723,7 +17723,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:sendPreSessionEvent",
+                  "callee": "call:sendPreSessionEvent:\"config_changed\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -17750,63 +17750,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:sendPreSessionEvent",
+                  "callee": "call:sendPreSessionEvent:\"harness_launched\"",
                   "kind": "call",
                   "ordinal": 0
-                },
-                "symbol": [["function:runSetup", 0]]
-              },
-              "path": "src/commands/setup.ts"
-            }
-          },
-          {
-            "distance": 4,
-            "functionSite": {
-              "anchor": {
-                "role": {
-                  "kind": "owner"
-                },
-                "symbol": [["function:sendPreSessionEvent", 0]]
-              },
-              "path": "src/extensions/telemetry/pre-session.ts"
-            },
-            "kind": "boundary",
-            "library": "fetch",
-            "property": null,
-            "reason": "depth",
-            "site": {
-              "anchor": {
-                "role": {
-                  "callee": "call:sendPreSessionEvent",
-                  "kind": "call",
-                  "ordinal": 0
-                },
-                "symbol": [["function:runSetupTools", 0]]
-              },
-              "path": "src/commands/setup-tools.ts"
-            }
-          },
-          {
-            "distance": 4,
-            "functionSite": {
-              "anchor": {
-                "role": {
-                  "kind": "owner"
-                },
-                "symbol": [["function:sendPreSessionEvent", 0]]
-              },
-              "path": "src/extensions/telemetry/pre-session.ts"
-            },
-            "kind": "boundary",
-            "library": "fetch",
-            "property": null,
-            "reason": "depth",
-            "site": {
-              "anchor": {
-                "role": {
-                  "callee": "call:sendPreSessionEvent",
-                  "kind": "call",
-                  "ordinal": 1
                 },
                 "symbol": [["function:cliMain", 0]]
               },
@@ -17831,9 +17777,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:sendPreSessionEvent",
+                  "callee": "call:sendPreSessionEvent:\"setup_aborted\"",
                   "kind": "call",
-                  "ordinal": 1
+                  "ordinal": 0
                 },
                 "symbol": [["function:runSetup", 0]]
               },
@@ -17858,7 +17804,88 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:sendPreSessionEvent",
+                  "callee": "call:sendPreSessionEvent:\"setup_completed\"",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:runSetup", 0]]
+              },
+              "path": "src/commands/setup.ts"
+            }
+          },
+          {
+            "distance": 4,
+            "functionSite": {
+              "anchor": {
+                "role": {
+                  "kind": "owner"
+                },
+                "symbol": [["function:sendPreSessionEvent", 0]]
+              },
+              "path": "src/extensions/telemetry/pre-session.ts"
+            },
+            "kind": "boundary",
+            "library": "fetch",
+            "property": null,
+            "reason": "depth",
+            "site": {
+              "anchor": {
+                "role": {
+                  "callee": "call:sendPreSessionEvent:\"tool_configured\"",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:runSetupTools", 0]]
+              },
+              "path": "src/commands/setup-tools.ts"
+            }
+          },
+          {
+            "distance": 4,
+            "functionSite": {
+              "anchor": {
+                "role": {
+                  "kind": "owner"
+                },
+                "symbol": [["function:sendPreSessionEvent", 0]]
+              },
+              "path": "src/extensions/telemetry/pre-session.ts"
+            },
+            "kind": "boundary",
+            "library": "fetch",
+            "property": null,
+            "reason": "depth",
+            "site": {
+              "anchor": {
+                "role": {
+                  "callee": "call:sendPreSessionEvent:\"tools_setup_aborted\"",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:runSetupTools", 0]]
+              },
+              "path": "src/commands/setup-tools.ts"
+            }
+          },
+          {
+            "distance": 4,
+            "functionSite": {
+              "anchor": {
+                "role": {
+                  "kind": "owner"
+                },
+                "symbol": [["function:sendPreSessionEvent", 0]]
+              },
+              "path": "src/extensions/telemetry/pre-session.ts"
+            },
+            "kind": "boundary",
+            "library": "fetch",
+            "property": null,
+            "reason": "depth",
+            "site": {
+              "anchor": {
+                "role": {
+                  "callee": "call:sendPreSessionEvent:\"tools_setup_aborted\"",
                   "kind": "call",
                   "ordinal": 1
                 },
@@ -17885,36 +17912,9 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:sendPreSessionEvent",
+                  "callee": "call:sendPreSessionEvent:\"tools_setup_completed\"",
                   "kind": "call",
-                  "ordinal": 2
-                },
-                "symbol": [["function:runSetupTools", 0]]
-              },
-              "path": "src/commands/setup-tools.ts"
-            }
-          },
-          {
-            "distance": 4,
-            "functionSite": {
-              "anchor": {
-                "role": {
-                  "kind": "owner"
-                },
-                "symbol": [["function:sendPreSessionEvent", 0]]
-              },
-              "path": "src/extensions/telemetry/pre-session.ts"
-            },
-            "kind": "boundary",
-            "library": "fetch",
-            "property": null,
-            "reason": "depth",
-            "site": {
-              "anchor": {
-                "role": {
-                  "callee": "call:sendPreSessionEvent",
-                  "kind": "call",
-                  "ordinal": 3
+                  "ordinal": 0
                 },
                 "symbol": [["function:runSetupTools", 0]]
               },
@@ -17942,7 +17942,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.registerCommand",
+                  "callee": "call:pi.registerCommand:\"session-costs\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -17972,7 +17972,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.registerCommand",
+                  "callee": "call:pi.registerCommand:\"session-costs\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -18002,7 +18002,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.registerCommand",
+                  "callee": "call:pi.registerCommand:\"status\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -18032,7 +18032,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.registerCommand",
+                  "callee": "call:pi.registerCommand:\"status\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -18059,7 +18059,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"session_start\"",
                   "kind": "call",
                   "ordinal": 0
                 },
@@ -18086,7 +18086,7 @@
             "site": {
               "anchor": {
                 "role": {
-                  "callee": "call:pi.on",
+                  "callee": "call:pi.on:\"session_start\"",
                   "kind": "call",
                   "ordinal": 0
                 },

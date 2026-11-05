@@ -12,11 +12,10 @@ unchanged. Their selected facts now explicitly contain `requestCallers: []`.
 ## Frozen evidence
 
 `base/` contains independent requests A and B. A cites only `enabled = true`
-from `src/policy.ts`; B has no additional citation. `shapes/` contains 17
-request occurrences, including anonymous functions within named owners, a nested
-named function, constructors and methods, module code, duplicate names in
-different blocks, same-line calls, a shared statement, and chained receiving
-members.
+from `src/policy.ts`; B has no additional citation. `shapes/` contains request
+occurrences, including anonymous functions within named owners, a nested named
+function, constructors and methods, module code, duplicate names in different
+blocks, same-line calls, a shared statement, and chained receiving members.
 
 `citations/` supplies alternative frozen verdict inputs using the same base
 facts and source tree. Each selects one narrow registration argument, keyed
@@ -26,11 +25,11 @@ Each has separate baseline, selected-edit, and adjacent-edit cases.
 Packets and diagnostics were observed from the production checker and frozen as
 literal JSON. No request expectation is calculated with imported production
 hashing or resolution functions during the test. Independent Python
-`hashlib.sha256` checks verified 41 stored packet hashes and 38 successful span
-hashes against literal source bytes. The five `invalid/broad-*` records are
-intentional forbidden-citation inputs: their packet hashes were constructed
-independently so rejection reaches the source resolver instead of stopping at
-recorded-hash validation.
+`hashlib.sha256` checks verify stored packet hashes and successful spans against
+literal source bytes. The `invalid/` records are intentional forbidden or
+unreadable citation inputs: their packet hashes were constructed independently
+so rejection reaches the source resolver instead of stopping at recorded-hash
+validation.
 
 ## Behavior coverage
 
@@ -64,3 +63,19 @@ reachability validator. Typed distance, kind, and reason changes therefore
 invalidate only A; malformed primitive types are whole-input refusals. The
 boundary and callback cases use the ordinary producer meanings, including
 `stored`, `onStart`, and the recorded distance.
+
+`stability/` contains a request in a `deliverEvents` callback and billing/budget
+requests reached by a `loginExtension` event registration. The cases
+`request-unrelated-arrow-insertion` and `request-unrelated-event-insertion`
+insert `[1, 2].map((n) => n * 2)` and `pi.on("session_shutdown", () => {})`
+respectively. Matching fact coordinates move, but every packet must equal its
+frozen baseline. These reject global function-start-token ordinals and
+same-callee-only caller site ordinals.
+
+`request-citation-file-missing` requires an incomplete packet and the full
+`ANCHOR_MISSING` envelope for an absent file. The three
+`request-location-file-missing-*` cases require whole-input `REQUEST_LOCATION`
+failures for absent call, function and site files. The corresponding
+`*-file-unreadable` cases use a regular file as a path component (`ENOTDIR`) to
+exercise non-ENOENT read failures without depending on OS permission privileges.
+All run through the ordinary artifact and verdict-immutability assertions.

@@ -47,12 +47,13 @@ Each request claim has exactly four nonblank string members:
 - `disable`: the controls and precedence that prevent it.
 - `trigger`: the runtime event and prerequisites that cause it.
 
-There is one overall verdict and evidence hash. The initial 29 records are
-explicitly `unknown`: `missingEvidence` names the unreviewed defaults,
-destinations, disabling controls and triggers. Their packets contain observed
-statements and bounded caller evidence, without asserting runtime behavior.
-Unknown records pass coverage but must remain current. Runtime judgments belong
-in a later data-only change after reviewing explicit evidence spans.
+There is one overall verdict and evidence hash. An `unknown` record leaves
+runtime behavior unresolved: `missingEvidence` names the unreviewed defaults,
+destinations, disabling controls and triggers. Its packet contains observed
+statements and bounded caller evidence. Unknown records pass coverage but must
+remain current. Judging a request means reviewing source evidence for all four
+claim parts, citing the relevant spans, and recording the resulting verdict,
+rationale, packet and evidence hash.
 
 A request selector has `fact: {kind: "requestCallers", where: {request}}` and an
 explicit `sources` array. The request citation is
@@ -87,12 +88,21 @@ are replaced by structural `functionSite` and `site` identities. `library`,
 per-row request anchor is omitted because the selector already names that
 request. Function sites use the same named-owner chain and
 `role: {kind: "owner"}`; anonymous functions inherit their named owner. Sites
-use a callee role when the reported token is in a call's callee; otherwise they
-use its token spelling and same-spelling ordinal in that named owner.
-Function-start tokens use a separate `function-start` role so unrelated
-parentheses cannot shift anonymous starts. Ordinary tokens use `token`. Adding
-indistinguishable same-role tokens can shift ordinals; this is a structural
-address change, not a whitespace-only shift.
+use a callee role when the reported token is in a call's callee. Its key
+includes callee spelling and the first string-literal argument, when present.
+The ordinal counts only calls with that entire key. Thus adding
+`pi.on("session_shutdown", ...)` does not move a `pi.on("session_start", ...)`
+site.
+
+Function-start tokens use `function-start`. An anonymous callback's key includes
+its containing call's site role, argument position, and intervening property
+names; an unrelated arrow passed to another call cannot shift it. Named starts
+use their token spelling within their named owner. Other tokens use `token` and
+their spelling. Residual ordinals remain for identical call keys, same-spelling
+ordinary tokens, and anonymous starts without a containing call (for example a
+returned arrow). Inserting an identical key earlier in the same named owner can
+still move those rows and requires review. Same-name owners have the same limit.
+These identities contain no source coordinates.
 
 Facts must match the pinned source revision. Request coordinates match exact
 call starts, choosing the innermost call when a chain shares a start. Function
@@ -102,20 +112,24 @@ Site coordinates match exact token starts. The top-level sentinel resolves to
 the file owner. Closed shape and primitive type validation happens before
 adaptation; the adapter does not revalidate reachability, distance ranges or
 reason consistency. Unmatched coordinates stop the entire input through the
-existing failure path.
+existing failure path. Missing or unreadable fact files produce
+`REQUEST_LOCATION`; missing or unreadable citation files produce
+`ANCHOR_MISSING` with an incomplete packet. Both retain the usual diagnostics
+and artifacts.
 
 Explicit request citations use
 `{path, anchor: {symbol, role: {kind: "node", steps}}}`. Each `[key, ordinal]`
 step selects a direct syntax child of the previous node, starting at the named
 owner. Keys include `name:<spelling>`, callee keys, `bindings:<names>`, keyed
-object entries `entry:id:<spelling>` or `entry:name:<spelling>`,
-`token:<spelling>`, and the fixed labels `block`, `class`, `function`, `list`
-and `node`. JSDoc children are skipped. These steps can select registration
-arguments, resource entries, properties, return statements and precedence
-conditions. Final files, blocks, functions, classes and their direct SyntaxList
-children are refused as broad evidence. Intermediate broad nodes are allowed
-when navigating to narrow evidence. No TypeScript enum aliases enter persisted
-identities.
+object entries `entry:id:<spelling>` or `entry:name:<spelling>`, and the fixed
+labels `block`, `list`, `node` and `token` (all leaf tokens). JSDoc children are
+skipped. These steps can select registration arguments, resource entries,
+properties, return statements and precedence conditions. Final files, blocks,
+functions, classes and their direct SyntaxList children are refused.
+Intermediate nodes of those kinds are allowed. This is a node-kind restriction,
+not a size guarantee: an accepted statement such as an `if` can still cover most
+of a function. Reviewers choose spans proportional to the claim; there is no
+byte limit. No TypeScript enum aliases enter persisted identities.
 
 Editing statement/citation bytes, adding/removing a caller/callback/boundary
 row, or changing selected metadata invalidates that request's packet. Caller
@@ -271,6 +285,13 @@ inspection command:
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `REQUEST_FACT_INPUT` | `invalid requestCallers input at <path>: <reason>`                                                                                               | Correct the requestCallers producer or source pin, run `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then investigate and rejudge `packages/kimchi/surface-judgments.json`.              |
 | `REQUEST_LOCATION`   | `cannot adapt requestCallers location at <path>: expected one <target> at <location>, found <count>; regenerate facts against the pinned source` | Align requestCallers with the pinned source using `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then inspect the candidate packets and rejudge `packages/kimchi/surface-judgments.json`. |
+
+A request source read failure has Changed text
+`cannot adapt requestCallers location at <path>: cannot read source <source-path> (<filesystem-code>); regenerate facts against the pinned source`
+under `REQUEST_LOCATION`, or
+`missing anchor <anchor>: cannot read source <source-path> (<filesystem-code>); span old=<old-span-hash>; new=unresolved`
+under `ANCHOR_MISSING`. The existing Fix text for each code applies. Request
+anchors select at most one node, so only gateway anchors can be ambiguous.
 
 Request fact reasons are `missing field`, `unknown field` and
 `invalid type or value`. Location targets are `request call`,
