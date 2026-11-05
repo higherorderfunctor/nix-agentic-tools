@@ -79,7 +79,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:3c9c0963f952d3ea79cd89d5322692756050fe08ea118a9da6e0fb6f7441a066",
+      "evidenceHash": "sha256:deddd0617b7c5a77255458476f63fcf9e1906072f1f52eca2ea5922f0cc73417",
       "id": "request-cli-auth-oauth-list-user-organizations-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -105,6 +105,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:5d58d6b542e4d9a4162952a747e7460d61174537570cdc81dc5d5d79cfe3127b",
+        "root": "sha256:3cb4608571069a5e5b6a012ea3eddbe8b6f8032f6e6f354341eb18184b531880",
         "rows": [
           "sha256:1a1b249e14b1cbe4446bcacf1e5d949a7d7cd1ee447965910fc043a50b35f386",
           "sha256:20bd665ae7355d0e7b8ef85d750cf48fba182831660a648d56b8b648a921b3c9",
@@ -126,7 +128,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:5c874b8f5f81ec627f9595ad5a7e08b4c75d3a115457a0981135bd92bb601c82",
+      "evidenceHash": "sha256:d6fa19a98665d1129a16199d89ca4dcabafa8b4f71c5be1b189eb37f8270a08f",
       "id": "request-cli-auth-oauth-post-token-request-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -152,6 +154,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:a5e47b94fcd2a511488b519a151de3a77d20a0be6bce7b67c7fae2a35b7c9bf7",
+        "root": "sha256:df8f17d6e56d7dc6680bc556645d914884af40db57d65f6a3b9d011bb68a1d09",
         "rows": [
           "sha256:0a9dcd0371e97935defd89e6069a6f25b70cc26e53142f7202d38c00a856c969",
           "sha256:1a1b249e14b1cbe4446bcacf1e5d949a7d7cd1ee447965910fc043a50b35f386",
@@ -176,7 +180,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:7c0041b7f794554613c0a76c00ddcbf70b613cc5c473199a99f4152140e46170",
+      "evidenceHash": "sha256:48639e7f367b2fcec94fef24b2d5bc5ebd504b06b6150fb082a851c49c6e42a8",
       "id": "request-extensions-billing-status-refresh-billing-status-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -202,6 +206,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:e5a5bbcf598b84e968bc2b7946146174f6a0eba79b61ecb215e04a1ca867fac3",
+        "root": "sha256:f8d792ac059565bbd418060eaedbfadea72ebdf2289d590eb8561d4d8477f369",
         "rows": [
           "sha256:074692446292a9cc1f72dc3e9cd38a2d771f1e72132c687d32d70698a8acf29e",
           "sha256:08e3f50218abb96d973c7b116633a834b343a9b7e0a8bde03405a670771b8cbe",
@@ -237,7 +243,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:315ace6d35ed5ff533bd52ea161e05fc5ac7c470f857607afb95a831954e6285",
+      "evidenceHash": "sha256:344adbaf72a10e129d26ecf6d121c77707c4159058f4a14209fddb651ee3e111",
       "id": "request-extensions-billing-status-refresh-budget-status-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -263,6 +269,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:0dea8f80e8c1dd2135901ae12748007b882bf217bf2400b407100704b816ca9a",
+        "root": "sha256:61cf536ae96d193d56fd9bf0f2e4a7bd34d6e22f1dc1e0c55fc604ce217a5be6",
         "rows": [
           "sha256:074692446292a9cc1f72dc3e9cd38a2d771f1e72132c687d32d70698a8acf29e",
           "sha256:08e3f50218abb96d973c7b116633a834b343a9b7e0a8bde03405a670771b8cbe",
@@ -298,7 +306,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:59724258081631320c6d358a26bd7130df93f6828adf0b07afdf4e8771312290",
+      "evidenceHash": "sha256:68aef051be985d3f288816867e51c0a21e49844a88e2cb3774d9e2c3c9755224",
       "id": "request-extensions-ide-adapter-mcp-client-ide-web-socket-transport-start-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -327,6 +335,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:a63e00cc0448f209e490e66e19819b6ff94950baf4d1cad0dc5a18565f1d4f55",
+        "root": "sha256:d0c01e2a21d874eb981f3746834c7b39512f5384d0452153607d29303466280e",
         "rows": [
           "sha256:704506c4aebd20bc9024cfb5bea4e5ab4caa4f54db788f3cf98740fd70bdb80e",
           "sha256:731a42730bf642b5ba7e6bd9494585f6b6b031fbf4d9f6a1c7298caa137761ed",
@@ -343,7 +353,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:ec7c8e2bcf29c7bb55e2560608af7e2d44a528a5198709feac0debdf13b7d4a6",
+      "evidenceHash": "sha256:5515f85d08d6bb2050be70bf1d647734843463d4acaaa0016d43fd67448041b1",
       "id": "request-extensions-memory-backend-fetch-available-model-ids-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -369,6 +379,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:7c453f6d223800d65eef006a1cbc118c71177516fb51c385b602d7f4ebbaa71b",
+        "root": "sha256:17379de51f174afd4fd99616ebfa020f4f43fc5cfd9c94ccb99cbbadd6e2cc7e",
         "rows": [
           "sha256:1fd613f1aab93ccb67d9dab5c2f67870e5455c622ebc9e0d9387dcd4b07d9ce2",
           "sha256:46300a4790bec97f89979362bd0e38d324f74f55b83432ad7292400297c346cc",
@@ -388,7 +400,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:830d69a8af2b55d42f63fad430f08d531894100f7de4b26ae5d8e63292e2bea5",
+      "evidenceHash": "sha256:fd38b5d75657ffdeb0999774280f8897d12be7fe2f9cda2881370a6e71e47174",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -417,6 +429,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:203253ba0f1f29a715586eec68e341c50da1ec2d276fccce1bf6e6efb7546884",
+        "root": "sha256:a01cd3880cc86311dbe81a4adc74999ada5453e1e5508f5f254d4ee92a938f66",
         "rows": [
           "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
           "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
@@ -434,7 +448,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:f8e0969b4dd2548dc9fd67cabd7ed1192ccd5b31aa9fb63445901753f2666bce",
+      "evidenceHash": "sha256:f9f47f313f586583c76f52281a29ea34a4ccbfd37b8e5c76a5e4296dba30244e",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-1",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -463,6 +477,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:2acbe57ebd77b2012b57547b83990d191cfc0d604470b3fcf6bc1329b315f584",
+        "root": "sha256:c1427ad8cb6de274c92a49a0fb5ac1d5a28f696cb9bbf85316ac4bb17a23250e",
         "rows": [
           "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
           "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
@@ -480,7 +496,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:f8e0969b4dd2548dc9fd67cabd7ed1192ccd5b31aa9fb63445901753f2666bce",
+      "evidenceHash": "sha256:68bab89b32266d2e401eecf6b7b1ba1eed756a38723ce0fd8b75eb973b699029",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-2",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -509,6 +525,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:522e6921e9b0cac55ab879d9769a52794931d2af7c668d92cb3fbd7affdc6185",
+        "root": "sha256:1576b08f3335dd963747e104886501376f2ebb857d1a883ece2e23d719043fa8",
         "rows": [
           "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
           "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
@@ -526,7 +544,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:8f0a250235c5490bfb0d0239703fc0b1fc4de95ffd2a39381d3e95559ca4d9d3",
+      "evidenceHash": "sha256:198f95202c201af735c82d799b90361ac7deae815458f1a54e9a6040326beb94",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-3",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -555,6 +573,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:a48403471d8610196f5e70a3569c5d5804b1638a13c302ddece5d87e03f58dbc",
+        "root": "sha256:bf5d713c8fae983fd298f4766dc27c81a999e1b986512a578ee1ef09b228a5fb",
         "rows": [
           "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
           "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
@@ -572,7 +592,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:8f0a250235c5490bfb0d0239703fc0b1fc4de95ffd2a39381d3e95559ca4d9d3",
+      "evidenceHash": "sha256:5b64dfffa94d8932975d1dcca7c1e30d211ec9649894c25582e23dce54161a56",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-4",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -601,6 +621,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:203253ba0f1f29a715586eec68e341c50da1ec2d276fccce1bf6e6efb7546884",
+        "root": "sha256:fc4d5ec9d5f0960dcf0907f23c6e130c11909113f20ab5ab9c7b999ef1214e00",
         "rows": [
           "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
           "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
@@ -618,7 +640,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:fc49859b52da9f37936965345e6b6dd734fb105c7ef2ee93f11218e2a48a87c7",
+      "evidenceHash": "sha256:d959fb0d5a41c8de78068f8cba3e1ee1a1fff34c4c69994a03fc5b2c5f208176",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -644,6 +666,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:e814c09b6f20f0df179f9b97e683b50cf16885d7d9e4538b44591fa414b912be",
+        "root": "sha256:ecad9d791f23bda3a0bb0fc81b8621b88e6b58519ac7c1bc28c834e69c7b765d",
         "rows": [
           "sha256:2dc40e3a74fc5a8f4833fde0a592a0806237b35b4382d464a46262568565e9a4",
           "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
@@ -663,7 +687,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:132b03af258e6c918c022fad18876bd79f7c67f084777e5a41c1c3eb6871b4cf",
+      "evidenceHash": "sha256:52bbcf2257c456bfeef656524e58998ee69195b6e697df6c8c64f015dbf64a35",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-fetch-bounded-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -692,6 +716,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:b577f64cde8bdb941d723d1bdb49e63c24f40990c7b3ba32d96b51b1339b74f8",
+        "root": "sha256:e7efd4b4a814b283c820336e01d21c9ce2c70ad5885c3bf551e25f350d772286",
         "rows": [
           "sha256:0ac7347e1f5e67eee4bafe044e614290c39300c4d6aea78f148001802f9ed255",
           "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
@@ -712,7 +738,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:a0c201747f0ae1e88ae5b53800f866b2c8bf7f68a31070162ba07943bd76d254",
+      "evidenceHash": "sha256:8386dc9d774f838a8b5c8f12235922d98141a54d2d22880bbf88e3e6eba057e4",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-snapshots-fetch-bounded-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -741,6 +767,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:b577f64cde8bdb941d723d1bdb49e63c24f40990c7b3ba32d96b51b1339b74f8",
+        "root": "sha256:113f374642e3e6cf35f55fe8e983dc359ec25ec3e88e6b93ab9535085630613e",
         "rows": [
           "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
           "sha256:425f2a0a7635356bef66dbaf133f77ce83f5da5aff2c3b9fae6bd37c6abcf312",
@@ -762,7 +790,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:cc8b7a00a9f21bf6057b19b92de864c2da32791f59d84241946d41660b3bc915",
+      "evidenceHash": "sha256:087e92bd308d59a4db3b2ccd63eb92a9ed48e4126d76970e8a5a803280d2ecc6",
       "id": "request-extensions-pull-request-status-provider-api-request-json-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -788,6 +816,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:eb92e5ca2d75f9111ac3cad6e878aa26bca9e4ea65b4c0e92be590e4a8b20082",
+        "root": "sha256:5640cf5554bb72fa7e048ea3b4d70151e5e473b4ebebaa0d738f9d68c030f9b1",
         "rows": [
           "sha256:102e97d06c5372ad353db5a0c77447fc9580b2944a3ec70039a5bd64996bee41",
           "sha256:14fb1f0e1b6bd50bb65983f703a47670306fef72dad6b34aad47fb8e7aefe722",
@@ -821,7 +851,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:fdb39e814a48cea3c143591351ac38f7946c54fa5c94d4cc98d7f0f6f36469c4",
+      "evidenceHash": "sha256:f6bdf073e115820ea365a45aec2353405698416a4c3040d763785e8dcc414c47",
       "id": "request-extensions-session-name-suggest-session-name-fetch-impl-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -850,6 +880,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:9dbaf118fd0c096ba6f620a222fdf43f9218d68a7ee848139eea7756fd61ddcb",
+        "root": "sha256:befe261f60c440951a5d1a91ec311ed77719b7afc965770bc665030951c038da",
         "rows": [
           "sha256:03300566e3352f952f9a54cbed762e52a69b29620ae83171592b59de7a5f0444",
           "sha256:45611fcfabdf5e74f43337c89db3e7a5a8a7f876e6269a05a3a2185b0d712dff",
@@ -868,7 +900,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:baf214510f33dcca5c4d2b7b76595fc3bf4c795dd800b035119da34b7ee7b9a5",
+      "evidenceHash": "sha256:20fdfa7a7b8a777ad291f6bafd1d88d41bb15d08f9c3d2db7bf25f582a0a5e1c",
       "id": "request-extensions-telemetry-transport-send-metrics-fetch-impl-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -897,6 +929,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:47b3fdaa8f8a92b90d2b3b4c69df429371808e0643abc51ad53bbdb2b4d6a2cf",
+        "root": "sha256:7b2207a8bf35f5cb8cb9a3bec939d56433c11d8e99c052ac4e81c670f8d22d71",
         "rows": [
           "sha256:682207b7dfd8caf442d8c0678ed3c104a2ba0ef7b9bbe95085156ed2a4b123e3",
           "sha256:80f19e6f0827b6a3f3c00b141d4b28df36198c00c01b3b3bea301c0741704383",
@@ -915,7 +949,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:f4c0b3fd066e5dec0b14a757f6f530dba4cad99665624756dfda3341b3630f1a",
+      "evidenceHash": "sha256:474548889a812015111be28351947709be4675d58309d8af496f9e015ef50855",
       "id": "request-extensions-teleport-pty-websocket-transport-web-socket-transport-open-socket-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -944,6 +978,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:9abe7aef4c6922fa8a67111e75dae4bf250e5b93eb7187c0649ee78f76806ba5",
+        "root": "sha256:12b1ce7885d234fb6ff767ca1028bf9aa4dc4b3326d6ec90208935042cf19a26",
         "rows": [
           "sha256:02d356ebaa5e1ae57cb0cc46537583cf71d0874787785dc1f7d5867f08178436",
           "sha256:0530ef7eb21302d99793d1848dfa127d787aab32616ac0aa252cc75a1e508e90",
@@ -992,7 +1028,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:e0fc03817fe5335edb53e9064d895c2b9a7328038ef0b3a667a82b018b42dce1",
+      "evidenceHash": "sha256:0c62e5ee55badb2448991448fab0f6db5c2d301322f6571e6befb36a86565ff0",
       "id": "request-extensions-work-attribution-cost-sync-reconcile-work-costs-fetch-bounded-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1021,6 +1057,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:31aebc271366df5ae0af43be7ae477152553828121478858a15d7a52f67c15f0",
+        "root": "sha256:806f431524eca0d3e27a9843aa2262af2f3e59a334c183832c3fb256659c3b47",
         "rows": [
           "sha256:050bbc001e593f5749ee38a6f3c3d48ab2e24b31e5aa019db2e5fd297c9d4ae9",
           "sha256:2c7bcd2f2fd2a080ec0f1a44c0428bb88bf8220459365aa8fbeefd797d90dd24",
@@ -1045,7 +1083,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:818e2c4c8b8ca4e610001b039f34635c9cfe235fd84d81ddb1de66af81b33f12",
+      "evidenceHash": "sha256:ca23863de19370884400a456d10102f8ca895f48f67ccac853336634f15086e3",
       "id": "request-http-proxy-create-dispatcher-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1071,6 +1109,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:e78c430966125e46dd5507c895d22ce04613706574905b8fad9193cb15ed5c47",
+        "root": "sha256:6fe4af8be35edbe9af372143e184359a6e87ef771c078eb5fae8a6d92fbf20a0",
         "rows": [
           "sha256:5110b91ea10a4fc0032d3f5839b394a64ea13d92343b55fa110517e28cd71c69",
           "sha256:7ace9dc7810560db439446cda32b5a982af7e9dbda0e2cffa6fd1fc4c35ba681",
@@ -1088,7 +1128,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:fa3cfb94e39f37f5da7cae5fc41b9678dddccaa4647cb099b33b8f30385b917a",
+      "evidenceHash": "sha256:835a954193aa2360b4211bdb157fef3b40c2cf86d5297def0b9b3c6dfe7eeb07",
       "id": "request-models-fetch-available-models-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1114,6 +1154,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:001dc9ed93a390f0fc7cac97d8d7d30dff49d50c4c5d7d3f241c80bb18fdf5ed",
+        "root": "sha256:04f74274fc1e81b015d6d842495daa5096cf9f7a36550fcf22ec712678d0a8b9",
         "rows": [
           "sha256:01bba2f9883bd793c1ad91e3f9714e5d7479482952303b73f681232f745c3f45",
           "sha256:067ef2f5af24e0b928e8ec7d7855a6cc72dcd7107ebb11d740694efdbaff20a8",
@@ -1170,7 +1212,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:233aebdf3ecfc98977818e37995c3a58973cee5cbb55c01bf98c7263564b07b4",
+      "evidenceHash": "sha256:83d7fa2c61cc64b0802f1fa55028d5e28fd6bf875f816a074287c78a3789cd96",
       "id": "request-ollama-enrich-from-show-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1196,6 +1238,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:3feeb3d49473f1a4c41b67779598e26bbac94564c22227f1f5f5de1af5bbd92a",
+        "root": "sha256:87cc7ee270442a1b0e45286ab4766f830338f843981600174b06db8f8b7fd209",
         "rows": [
           "sha256:62767ac499ee6c743da0e4dd6c82fd84506bf1181a336aa05531b493d3153664",
           "sha256:9745acd7bcd413d1d75733be7f8d039cebed47ccd9cedd0712f0aa4aa020172f",
@@ -1212,7 +1256,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:dcedc8893d794a4bebabc79992891384d1f7bc040d2dfb1b9f4f920b31cb2a3c",
+      "evidenceHash": "sha256:6bae53e4943afde92da46b23d483b2d0460dffa33ba2c929d5afbfc85cc17582",
       "id": "request-ollama-probe-ollama-models-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1238,6 +1282,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:fb4531aa19fb6258bd1dd268e92da68bbb455413b7b67e8b080ba33b481a6459",
+        "root": "sha256:e311b11cab98ed8e9cc6cdbcac3050c273188bf8bf8750f4b6cab100fa6c1021",
         "rows": [
           "sha256:344e8134d39dd2b0c588886a45f402bb70f21b728d9911f740e32fd8d734d473",
           "sha256:3c1b537bf12736a72e622ec52f9c7a4402383dfa154690c218694ddbc2a0d239",
@@ -1263,7 +1309,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:3fc56418ca4a43d3161583655be94d3389e25ca6b07eb04fcb39b3412c29d1e8",
+      "evidenceHash": "sha256:4e291569f751ce8cf031eabb09d7c463776c5b3274e8699e766c2f22a6d76fe1",
       "id": "request-sandbox-cloud-http-fetch-with-timeout-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1289,6 +1335,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:42c7ebfe564f5b8a6c541fbe9527e32103f809b130337b156fa97572436b3fcf",
+        "root": "sha256:4345c92bc80138484e63106f7f59fbba68ec3a3183366e544757d2f986d83b53",
         "rows": [
           "sha256:04cf32da9bc8d4f0d056e7029b93547138579ebe53c9f9290b2626ea17230efe",
           "sha256:04e07879d850ead4c750e7f3569b2f2e2de99476567329dccfcb07136913e5b4",
@@ -1404,7 +1452,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:238263526fbc594fc281744c0a09c10fc75bbd8e2545672e1e0ff337dd343c2a",
+      "evidenceHash": "sha256:06226a870d212d24d67a0417114654df1046f06c404f6d23748a7edc10249fbe",
       "id": "request-sandbox-cloud-readiness-probe-ready-once-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1430,6 +1478,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:66c43816b465d04d87b833f16e0055ada4e8f11a9b3b0d87566bef168b326ea0",
+        "root": "sha256:98c8832a3db0d9441a551995255956c6bc01f8eb25d22bf705b0dacce4ce4ab3",
         "rows": [
           "sha256:04e79eea6c5911ec577302dc22b07561867f571710514cf8759ffa33f7f80298",
           "sha256:196c51db43692d1a25d30503da8319b0f6418a0b813714525c7e4a25e51f3c98",
@@ -1467,7 +1517,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:eb1d0e8acb81c33dab2b88d17d768b4795def05c1df3bdcc145006f81f63ffcf",
+      "evidenceHash": "sha256:c37ca8fe9671dd51dcbfa7836a2086296318e1a7c2b1446450b4fcc20fc8938d",
       "id": "request-sandbox-worker-acp-client-acp-session-client-connect-web-socket-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1496,6 +1546,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:0cd3a9a5d52526e21e16a7048a2a5390ddd60c7ccd645fb43117e18d5be502a6",
+        "root": "sha256:b93d66a9de24abb6ab860d443cc6698ac3823450e7cf8ae690917fc6849a2333",
         "rows": [
           "sha256:1578a12dfd391dac8bbb1f42a8d4f066033e3283677d9fc8235ce1e2e314ba28",
           "sha256:1aab1dafba68d3b1278397daf8399618088cc8f376a880a790d5768b39826814",
@@ -1537,7 +1589,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:3a27fa70f69ea1fffcfacd39074bdfd1f8b6b248fe7a89417c10ac0b08754b6c",
+      "evidenceHash": "sha256:c9a092ec745eb7ed8e189ff701df013b91615dc7e06e173835b8844ac98b8cd3",
       "id": "request-sandbox-worker-client-fetch-with-timeout-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1563,6 +1615,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:42c7ebfe564f5b8a6c541fbe9527e32103f809b130337b156fa97572436b3fcf",
+        "root": "sha256:68ba352e9ea5719b44c81dc39a92e1fa15fbdb78bfa5d51536f820e83258df28",
         "rows": [
           "sha256:600d43bb055ca20324e135d9bad8bb793d5e3eba988e52aabd9a582eeb921681",
           "sha256:6ca4ce85271a5b42a6b67f6db2700bdc14049fba3a096494716a04b9a90f36a7",
@@ -1589,7 +1643,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:72526c02528a9cafd56516fe0552079fbc34beb94a9496b6ccb49e3e20d643c2",
+      "evidenceHash": "sha256:21a0825cbdb8b5a0d3ef2c1eca61883aaaf97a9f007a8f617f1c084fb7ab5bcd",
       "id": "request-self-hosted-discovery-fetch-self-hosted-endpoints-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1615,6 +1669,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:c9cbb82128e7164103ce230f762d2e83e3fc4ddaa2318ff7c5f9d3e606c9c337",
+        "root": "sha256:c5329a8f8874486321c8880879385d07c2dccfc48b002648da7eb5f0986cb09c",
         "rows": [
           "sha256:63a368e58a54ea2c9cda8ad08425ef527ceb3c9c1e397d8ecb1ec16b2873c4c7",
           "sha256:66fdaf4c999c76027f5cd4044e18a65ffcf7847a3eb85a1f5c11c28af42fa65b",
@@ -1633,7 +1689,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:b439c10235b40ec3364cef885cdfc2454027bc3d421436361543c4220a516ad8",
+      "evidenceHash": "sha256:fee950f012c0018aaaae54c4c7b6e64671c36f3a47e53673d0f4f250ec164e46",
       "id": "request-utils-http-fetch-with-retry-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1659,6 +1715,8 @@
         "sources": []
       },
       "evidence": {
+        "call": "sha256:34608e52e687849c3333007c5c535bd426c63813c1e7e5d9073da172206b450a",
+        "root": "sha256:187c8c7a2f678916f9a854ec8a7cf9d7f8293e8291854a12a76d2499f4577382",
         "rows": [
           "sha256:0011e1604d196a6c73166ed83435e2b04572b1800959506104130a21b9666414",
           "sha256:00d9ba51936fe7ca0c252de38ca123ca6a68c4fe4e323a757c6d78edeb52b894",

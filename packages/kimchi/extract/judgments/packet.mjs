@@ -156,7 +156,11 @@ function selector(value, path) {
 const packetShape = {
   rows: Array.isArray,
   schemaVersion: version,
-  selector,
+  selector: (value, path) => {
+    if (isRequest(value))
+      schema("VERDICT_INPUT", path, "invalid type or value");
+    selector(value, path);
+  },
   spans: Array.isArray,
 };
 export const judgmentSelector = (judgment) =>
@@ -188,6 +192,8 @@ export function verdicts(value) {
           ...(request
             ? {
                 evidence: {
+                  call: digest,
+                  root: digest,
                   rows: [digest],
                   spans: [{ ...sourceSite, sha256: digest }],
                   statement: digest,
@@ -777,6 +783,7 @@ export async function packet(selector, rows, resolve) {
     [
       ...(request
         ? [
+            request,
             {
               ...request,
               anchor: {
@@ -807,8 +814,10 @@ export async function packet(selector, rows, resolve) {
     : null;
   const evidence = request
     ? {
+        call: spans.find((span) => span.anchor.role.kind === "call")?.sha256,
+        root: hash(canonical(request)),
         rows: rowEntries.map(([digest]) => digest).sort(),
-        spans: spans.filter((span) => span.anchor.role.kind !== "statement"),
+        spans: spans.filter((span) => span.anchor.role.kind === "node"),
         statement: spans.find((span) => span.anchor.role.kind === "statement")
           ?.sha256,
       }
@@ -848,6 +857,9 @@ export function differences(recorded, current) {
   };
   const spanMap = (packet) =>
     new Map([
+      ...(packet?.call
+        ? [["request call", { site: "request call", hash: packet.call }]]
+        : []),
       ...(packet?.spans ?? []).map((span) => {
         const { sha256, ...site } = span ?? {};
         return [canonical(site), { site, hash: sha256 }];
