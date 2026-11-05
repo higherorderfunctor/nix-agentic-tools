@@ -63,10 +63,7 @@ if (!flags["--isolation-child"]) {
     rmSync(temporary, { recursive: true, force: true });
   }
 }
-const messages = {
-  ...read("expected/diagnostics.json"),
-  ...read("requests/diagnostics.json"),
-};
+const messages = read("expected/diagnostics.json");
 const cases = [...read("cases.json"), ...read("requests/cases.json")];
 for (const script of ["packet.mjs", "check.mjs"])
   assert.doesNotMatch(
@@ -82,7 +79,12 @@ for (const test of cases) {
   const temporary = mkdtempSync(join(tmpdir(), "kimchi-judgments-"));
   try {
     const base = test.base ?? "base";
-    const records = read(test.verdictsFile ?? `${base}/verdicts.json`);
+    if (test.base)
+      assert.ok(
+        test.base === "requests/base" && !test.facts && !test.verdictsFile,
+        `${test.name}: request cases patch the shared baseline`,
+      );
+    const records = read(`${base}/verdicts.json`);
     const baseline = Object.fromEntries(
       records.judgments.map(({ id, packet, evidenceHash }) => [
         id,
@@ -93,7 +95,7 @@ for (const test of cases) {
       ...(test.base
         ? read(`${base}/sources.json`)
         : { source: read("base/source.json") }),
-      facts: JSON.stringify(test.facts ?? read(`${base}/facts.json`)),
+      facts: JSON.stringify(read(`${base}/facts.json`)),
       verdicts: JSON.stringify(records),
     };
     if (test.hiddenRegion)
@@ -208,8 +210,10 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
         ? Object.keys(baseline)
         : test.unchanged)
         assert.deepEqual(
-          artifacts["current.json"][id],
-          baseline[id],
+          test.base
+            ? artifacts["current.json"][id]?.evidenceHash
+            : artifacts["current.json"][id],
+          test.base ? baseline[id].evidenceHash : baseline[id],
           `${test.name}: rejects ${test.rejects}`,
         );
     if (test.changed)

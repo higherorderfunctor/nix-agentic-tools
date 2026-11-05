@@ -25,10 +25,10 @@ initial EU judgment is unknown because the client-derived URL does not establish
 server availability. The US judgment supports direct URL construction only,
 excluding effective configuration, callers, execution and availability.
 
-The file's closed schema is `{schemaVersion: 1, judgments: [...]}`. Each record
-requires `id`, `claim`, `scope`, `packet`, `evidenceHash`, `verdict` and
-`rationale`. IDs are unique descriptive lowercase kebab-case. Verdicts are
-`supported`, `refuted` or `unknown`. Unknown requires nonblank
+The file's closed schema is `{schemaVersion: 1, judgments: [...]}`. Each
+hosted-gateway record requires `id`, `claim`, `scope`, `packet`, `evidenceHash`,
+`verdict` and `rationale`. IDs are unique descriptive lowercase kebab-case.
+Verdicts are `supported`, `refuted` or `unknown`. Unknown requires nonblank
 `missingEvidence`; other dispositions forbid it. Selectors and citations live in
 the packet, without duplicate metadata fields. Unknown fields and versions are
 refused.
@@ -49,11 +49,26 @@ Each request claim has exactly four nonblank string members:
 
 There is one overall verdict and evidence hash. An `unknown` record leaves
 runtime behavior unresolved: `missingEvidence` names the unreviewed defaults,
-destinations, disabling controls and triggers. Its packet contains observed
-statements and bounded caller evidence. Unknown records pass coverage but must
-remain current. Judging a request means reviewing source evidence for all four
-claim parts, citing the relevant spans, and recording the resulting verdict,
-rationale, packet and evidence hash.
+destinations, disabling controls and triggers. Unknown records pass coverage but
+must remain current. Judging a request means reviewing source evidence for all
+four claim parts, citing the relevant spans, and recording the resulting
+verdict, rationale and evidence summary.
+
+A request record contains `claim`, `evidence`, `evidenceHash`, `id`,
+`rationale`, `scope`, `selector` and `verdict`, plus `missingEvidence` for
+unknowns. It stores neither a packet nor decoded statement text. Its compact
+`evidence` contains:
+
+- `rows`: one SHA-256 digest of each normalized caller row's canonical JSON,
+  sorted, preserving duplicates.
+- `spans`: each explicit source citation's `{path, anchor, sha256}`, sorted by
+  identity.
+- `statement`: the request statement's original-byte SHA-256 hash.
+
+`evidenceHash` hashes the canonical JSON of that summary. CI recomputes it from
+the current facts and pinned tree. Request summary fields have a closed schema;
+row digests and span/statement hashes must be lowercase SHA-256 values. The
+hosted-gateway records keep their full packets and existing hash rules.
 
 A request selector has `fact: {kind: "requestCallers", where: {request}}` and an
 explicit `sources` array. The request citation is
@@ -76,19 +91,22 @@ root identity. Renaming an owner removes the old root and discovers a new one.
 Adding indistinguishable same-callee calls or same-name owners can change
 ordinals and requires review. There is no line-based or similarity fallback.
 
-Request packets add `statement`, the exact decoded UTF-8 bytes of the containing
-statement, to the four common packet fields. The statement's span also carries
-its hash, so diagnostics report old/new statement hashes. The resolver stops at
-the nearest statement before crossing a function, class or file. A return inside
-an if selects that return; a request in an if condition selects the if. Concise
-arrow bodies are refused rather than expanding to a surrounding declaration. Two
+The current request packet artifact includes `statement`, the exact decoded
+UTF-8 bytes of the containing statement, and its span identity and hash.
+Recorded evidence keeps only the statement hash; diagnostics report its old/new
+hashes under `site: "request statement"`. The resolver stops at the nearest
+statement before crossing a function, class or file. A return inside an if
+selects that return; a request in an if condition selects the if. Concise arrow
+bodies are refused rather than expanding to a surrounding declaration. Two
 requests in the same statement necessarily share those evidence bytes.
 
-Every selected caller row is retained, including duplicates. Numeric locations
-are replaced by structural `functionSite` and `site` identities. `library`,
-`distance`, `kind`, `property` and `reason` remain evidence. The redundant
-per-row request anchor is omitted because the selector already names that
-request. Function sites use the same named-owner chain and
+Every selected caller row contributes a digest, including duplicates. The
+current packet's `rows` object maps each digest to the full normalized row;
+identical rows share one entry while the summary preserves their multiplicity.
+Numeric locations are replaced by structural `functionSite` and `site`
+identities. `library`, `distance`, `kind`, `property` and `reason` remain
+evidence. The redundant per-row request anchor is omitted because the selector
+already names that request. Function sites use the same named-owner chain and
 `role: {kind: "owner"}`; anonymous functions inherit their named owner. Sites
 use a callee role when the reported token is in a call's callee. Its key
 includes callee spelling and the first string-literal argument, when present.
@@ -141,14 +159,15 @@ of a function. Reviewers choose spans proportional to the claim; there is no
 byte limit. No TypeScript enum aliases enter persisted identities.
 
 Editing statement/citation bytes, adding/removing a caller/callback/boundary
-row, or changing selected metadata invalidates that request's packet. Caller
+row, or changing selected metadata invalidates that request's summary. Caller
 bodies are not implicit spans. Unrelated requests, caller bodies and source
 edits do not change other packets unless they share selected statement/citation
 bytes or change a selected structural identity. Line shifts outside evidence
 only update display coordinates after facts are regenerated. The original source
-buffers, canonical JSON, duplicate-preserving row sort and sha256 rules below
-apply to both families. Release hashes, absolute paths, timestamps and numeric
-coordinates never enter request packets.
+buffers, canonical JSON and sha256 rules below apply to both families. Request
+row digests sort lexically; gateway rows sort by canonical JSON. Both preserve
+multiplicity. Release hashes, absolute paths, timestamps and numeric coordinates
+never enter request packets.
 
 ## Evidence packet
 
@@ -207,11 +226,12 @@ sort by the canonical `{path, anchor}` identity; property `keys` stay ordered.
 Canonical JSON recursively sorts object keys with locale-independent string
 ordering and uses UTF-8 `JSON.stringify`, without insignificant whitespace or a
 trailing newline. SHA-256 is written as `sha256:` plus lowercase hexadecimal.
-The stored packet's own hash is validated before comparison with current
-evidence. Recorded `rows`, `selector.sources` and `spans` must already be in
-canonical order; otherwise `VERDICT_INPUT` names the judgment and array.
-Recorded row and span contents are checked by their hash and current-evidence
-comparison, without a separate structural schema.
+The stored gateway packet's own hash is validated before comparison with current
+evidence, as is the recorded summary hash for requests. Recorded `rows`,
+`selector.sources` and `spans` must already be in canonical order; otherwise
+`VERDICT_INPUT` names the judgment and array. Gateway row and span contents are
+checked by their hash and current-evidence comparison, without a separate
+structural schema.
 
 Changing a selected value, adding a matching fact row, renaming a cited symbol,
 or editing or reformatting bytes inside a cited span invalidates evidence. For
@@ -236,10 +256,14 @@ candidates, or explicit incomplete results without a complete hash), `diff.json`
 (old/current hashes, row multiset changes and span changes), `display.json`
 (one-based current numeric citations, exclusive ends), `diagnostics.txt` and
 `status.json` (classification counts and ordered failure codes). Missing
-baselines are `recorded: null`. Valid classified unknowns are counted
-separately. Failures sort by judgment id, then code; invalid records suppress
-dependent errors while independent records continue. Whole-input failures emit
-diagnostics and status without placeholder current packets or differences.
+baselines are `recorded: null`. For requests, `current.json` also contains the
+compact `evidence` summary; full rows live at `packet.rows[<digest>]`. Request
+row changes in `diff.json` and diagnostics list added/removed digests, including
+duplicate counts, rather than repeating row bodies. Valid classified unknowns
+are counted separately. Failures sort by judgment id, then code; invalid records
+suppress dependent errors while independent records continue. Whole-input
+failures emit diagnostics and status without placeholder current packets or
+differences.
 
 Every failure uses this envelope. Substitutions containing newlines are JSON
 escaped; hashes are complete, or `absent`, `unavailable` or `unresolved`:
@@ -323,8 +347,20 @@ UTF-8 and parse errors, reasons are
 `request call has no supported containing statement at <citation>` and
 `unsupported broad evidence node at <citation>`. Statement/citation failures
 have `new=unresolved` and produce incomplete packets without evidence hashes.
-Missing explicit anchors and all schema, evidence-change and recorded-hash
-failures use the existing catalogue and fixes.
+Missing explicit anchors and schema failures use the existing catalogue and
+fixes. Request evidence failures specialize these messages:
+
+| Code               | `Changed:` detail                                                                                             | `Fix:` action                                                                                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EVIDENCE_CHANGED` | `selected evidence changed: rows removed=<digests>; rows added=<digests>; spans=<span-differences>`           | Investigate every listed span hash and caller-row digest in `current.json`, then update the claim, scope, rationale, verdict, recorded evidence summary and evidenceHash as warranted in `packages/kimchi/surface-judgments.json`. |
+| `RECORDED_HASH`    | `recorded evidence summary hashes to <computed-recorded-hash>, not its recorded evidenceHash <recorded-hash>` | Inspect the recorded evidence summary edit and current evidence, then deliberately update the reviewed record in `packages/kimchi/surface-judgments.json`.                                                                         |
+
+For request coverage failures, `<rows>` in the messages above likewise contains
+row digests. Every span difference names its citation identity (or
+`request statement`) and its old/new hash; absent sides are null. Read
+added/current rows by digest from `current.json`. A removed digest may have no
+current row body; inspect the previous artifact or the source/fact diff to
+investigate it.
 
 ## Investigating and rejudging
 
@@ -362,7 +398,8 @@ edits only `packages/kimchi/surface-judgments.json`. The fixture suite uses its
 own gateway and request verdict baselines under
 `checks/fixtures/surface-judgments/` and local expectations, which do not change
 when live claims or verdicts are reviewed. Deliberately edit the live verdict
-file, copying a current packet and hash only as part of that review. There is no
+file, copying the current request selector, evidence summary and hash (or the
+hosted-gateway packet and hash) only as part of that review. There is no
 accept/update operation. Then run:
 
 ```bash

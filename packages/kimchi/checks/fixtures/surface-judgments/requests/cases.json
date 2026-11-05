@@ -1,711 +1,26 @@
 [
   {
     "base": "requests/base",
-    "changed": [
-      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestC\",0]]},\"path\":\"src/requests.ts\"}>"
-    ],
     "codes": ["UNCLASSIFIED_ROOT"],
     "edits": [
       {
         "file": "src/requests.ts",
-        "from": "function unrelatedCaller() { return \"before\"; }\n",
-        "to": "function unrelatedCaller() { return \"before\"; }\nfunction requestC() { return fetch(\"https://c.example\"); }\n"
+        "from": "  return fetch(\"https://a.example\");",
+        "to": "  return fetch(\"https://a.example\"); fetch(\"https://c.example\");"
       }
     ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 4,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 4
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 2
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 2
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 4,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 4
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 2
-          },
-          "kind": "caller",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 29,
-            "file": "kimchi/src/requests.ts",
-            "line": 9
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 7,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 7
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          }
-        },
-        {
-          "callSite": {
-            "column": 30,
-            "endColumn": 55,
-            "endLine": 14,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 14
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 14
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 14
-          }
-        }
-      ]
-    },
     "failureIds": [
-      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestC\",0]]},\"path\":\"src/requests.ts\"}>"
+      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":1},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}>"
     ],
     "name": "request-added",
-    "rejects": "enumerating verdicts only, a hard-coded root count, or a global request inventory hash",
-    "unchanged": true
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "name": "request-anchor-shapes",
-    "rejects": "one anonymous bucket, unnamed synthetic owners, numeric SyntaxKind keys, or lost class qualification",
-    "unchanged": true
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "function owner() {\n",
-        "to": "function owner() {\n  if (true) {} for (const value of []) {} try {} catch {}\n"
-      }
-    ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 27,
-            "endColumn": 64,
-            "endLine": 3,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 3
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 12,
-            "file": "kimchi/src/requests.ts",
-            "line": 3
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 12,
-            "file": "kimchi/src/requests.ts",
-            "line": 3
-          }
-        },
-        {
-          "callSite": {
-            "column": 55,
-            "endColumn": 92,
-            "endLine": 4,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 4
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 12,
-            "file": "kimchi/src/requests.ts",
-            "line": 4
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 12,
-            "file": "kimchi/src/requests.ts",
-            "line": 4
-          }
-        },
-        {
-          "callSite": {
-            "column": 30,
-            "endColumn": 60,
-            "endLine": 5,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 5
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 5
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 5
-          }
-        },
-        {
-          "callSite": {
-            "column": 25,
-            "endColumn": 57,
-            "endLine": 6,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 6
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 10,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 10,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          }
-        },
-        {
-          "callSite": {
-            "column": 30,
-            "endColumn": 59,
-            "endLine": 8,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 8
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 15,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 15,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          }
-        },
-        {
-          "callSite": {
-            "column": 19,
-            "endColumn": 55,
-            "endLine": 10,
-            "file": "kimchi/src/requests.ts",
-            "library": "WebSocket",
-            "line": 10
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          }
-        },
-        {
-          "callSite": {
-            "column": 19,
-            "endColumn": 49,
-            "endLine": 11,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 11
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          }
-        },
-        {
-          "callSite": {
-            "column": 34,
-            "endColumn": 64,
-            "endLine": 13,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 13
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 18,
-            "file": "kimchi/src/requests.ts",
-            "line": 13
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 18,
-            "file": "kimchi/src/requests.ts",
-            "line": 13
-          }
-        },
-        {
-          "callSite": {
-            "column": 1,
-            "endColumn": 31,
-            "endLine": 14,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 14
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 14
-          },
-          "kind": "boundary",
-          "property": null,
-          "reason": "unreferenced",
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 14
-          }
-        },
-        {
-          "callSite": {
-            "column": 21,
-            "endColumn": 50,
-            "endLine": 15,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 15
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 15
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 15
-          }
-        },
-        {
-          "callSite": {
-            "column": 53,
-            "endColumn": 83,
-            "endLine": 15,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 15
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 15
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 15
-          }
-        },
-        {
-          "callSite": {
-            "column": 44,
-            "endColumn": 71,
-            "endLine": 16,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 16
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 16
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 16
-          }
-        },
-        {
-          "callSite": {
-            "column": 75,
-            "endColumn": 101,
-            "endLine": 16,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 16
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 16
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 16
-          }
-        },
-        {
-          "callSite": {
-            "column": 27,
-            "endColumn": 56,
-            "endLine": 17,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 17
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 17
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 17
-          }
-        },
-        {
-          "callSite": {
-            "column": 27,
-            "endColumn": 56,
-            "endLine": 17,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 17
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 17
-          },
-          "kind": "callback",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 58,
-            "file": "kimchi/src/requests.ts",
-            "line": 17
-          }
-        },
-        {
-          "callSite": {
-            "column": 27,
-            "endColumn": 56,
-            "endLine": 17,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 17
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 17
-          },
-          "kind": "callback",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 72,
-            "file": "kimchi/src/requests.ts",
-            "line": 17
-          }
-        },
-        {
-          "callSite": {
-            "column": 30,
-            "endColumn": 63,
-            "endLine": 20,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 20
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 5,
-            "file": "kimchi/src/requests.ts",
-            "line": 20
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 5,
-            "file": "kimchi/src/requests.ts",
-            "line": 20
-          }
-        },
-        {
-          "callSite": {
-            "column": 30,
-            "endColumn": 63,
-            "endLine": 21,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 21
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 5,
-            "file": "kimchi/src/requests.ts",
-            "line": 21
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 5,
-            "file": "kimchi/src/requests.ts",
-            "line": 21
-          }
-        },
-        {
-          "callSite": {
-            "column": 47,
-            "endColumn": 80,
-            "endLine": 24,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 24
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 4,
-            "file": "kimchi/src/requests.ts",
-            "line": 24
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 4,
-            "file": "kimchi/src/requests.ts",
-            "line": 24
-          }
-        }
-      ]
-    },
-    "name": "request-anonymous-owner-call-free-insertion",
-    "rejects": "counting if/for/try punctuation or anonymous statement-list positions in identities",
-    "unchanged": true
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "const unrelated = \"before\";",
-        "to": "const unrelated = \"after!\";"
-      }
-    ],
-    "name": "request-anonymous-owner-unrelated-edit",
-    "rejects": "fingerprinting anonymous callback or IIFE bodies",
-    "unchanged": true
-  },
-  {
-    "base": "requests/chained-fetch",
-    "codes": ["REQUEST_FACT_INPUT"],
-    "failureIds": ["request-chained-fetch"],
-    "name": "request-bad-end-column",
     "patches": [
       {
         "file": "facts",
-        "path": "requestCallers/0/callSite/endColumn",
-        "value": 0
-      }
-    ],
-    "rejects": "accepting missing or invalid request ends, ignoring end lines, or rounding an end onto a nearby invocation"
-  },
-  {
-    "base": "requests/chained-fetch",
-    "codes": ["REQUEST_FACT_INPUT"],
-    "failureIds": ["request-chained-fetch"],
-    "name": "request-bad-end-line",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endLine",
-        "value": 0
-      }
-    ],
-    "rejects": "accepting missing or invalid request ends, ignoring end lines, or rounding an end onto a nearby invocation"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:043a5d64555cf4da070509a2f5cb2c64bc96234cf89ef035947c6eb0749804b4",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [
-            {
-              "distance": 0,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "boundary",
-              "library": "fetch",
-              "property": null,
-              "reason": "stored",
-              "site": {
-                "anchor": {
-                  "role": {
-                    "key": "requestA",
-                    "kind": "token",
-                    "ordinal": 1
-                  },
-                  "symbol": []
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ],
-          "removed": []
-        },
-        "spans": []
-      },
-      "diff.json/request-a/rows/added/length": 1,
-      "diff.json/request-a/rows/removed/length": 0
-    },
-    "failureIds": ["request-a"],
-    "name": "request-boundary-added",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/3",
+        "path": "requestCallers/8",
         "value": {
           "callSite": {
-            "column": 10,
-            "endColumn": 35,
+            "column": 38,
+            "endColumn": 63,
             "endLine": 4,
             "file": "kimchi/src/requests.ts",
             "library": "fetch",
@@ -717,151 +32,42 @@
             "file": "kimchi/src/requests.ts",
             "line": 2
           },
-          "kind": "boundary",
+          "kind": "enclosing",
           "property": null,
-          "reason": "stored",
+          "reason": null,
           "site": {
-            "column": 16,
-            "file": "kimchi/src/requests.ts",
-            "line": 12
-          }
-        }
-      }
-    ],
-    "rejects": "dropping caller, callback, boundary, duplicate, or alternate-library rows; changing other requests",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:30b0e8e66e920ee04f3f00c86b09c714c47e21ee2930c81bf0313791eace2c61",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [
-            {
-              "distance": 1,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "callback",
-              "library": "fetch",
-              "property": "onStart",
-              "reason": null,
-              "site": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:register",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": []
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ],
-          "removed": []
-        },
-        "spans": []
-      },
-      "diff.json/request-a/rows/added/length": 1,
-      "diff.json/request-a/rows/removed/length": 0
-    },
-    "failureIds": ["request-a"],
-    "name": "request-callback-added",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/3",
-        "value": {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 4,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 4
-          },
-          "distance": 1,
-          "functionSite": {
             "column": 8,
             "file": "kimchi/src/requests.ts",
             "line": 2
-          },
-          "kind": "callback",
-          "property": "onStart",
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
           }
         }
       }
     ],
-    "rejects": "dropping caller, callback, boundary, duplicate, or alternate-library rows; changing other requests",
-    "unchanged": ["request-b"]
+    "rejects": "enumerating verdicts only, merging same-line calls, or hashing all requests in one owner together",
+    "unchanged": true
   },
   {
     "base": "requests/base",
-    "changed": ["request-a"],
     "codes": ["EVIDENCE_CHANGED"],
     "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:8e2fa913e951aae6a81e1994afdfe80c06934b9efa08418af1b1b4de29d50b98",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [
-            {
-              "distance": 1,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "caller",
-              "library": "fetch",
-              "property": null,
-              "reason": null,
-              "site": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:requestA",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:nextCaller", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ],
-          "removed": []
-        },
-        "spans": []
-      },
-      "diff.json/request-a/rows/added/length": 1,
-      "diff.json/request-a/rows/removed/length": 0
+      "diff.json/request-a/rows/added": [
+        "sha256:05374205f26a73d66737af6a09d37efc3f02725c0ab03bc65566ed9843f9514b",
+        "sha256:14d05d31e40f34c6aac6a630688e97969f771356283329737c8bd5ccc9c5938d",
+        "sha256:392f5009dffc00f0ec0e6441143c504cf3ed6e921d1649d3c9c7ef0cc92a3f5b",
+        "sha256:6d1ff75a8ad929cbf0834a94bad7764a4f84d822deaee1e093988a02199f62e1",
+        "sha256:d40d596c682883271f0603ef555543b8f544bfe3ff79b84ab4ce688519b35ad7"
+      ],
+      "diff.json/request-a/rows/removed": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+      ],
+      "diff.json/request-a/spans": []
     },
     "failureIds": ["request-a"],
     "name": "request-caller-added",
     "patches": [
       {
         "file": "facts",
-        "path": "requestCallers/3",
+        "path": "requestCallers/8",
         "value": {
           "callSite": {
             "column": 10,
@@ -886,1771 +92,10 @@
             "line": 10
           }
         }
-      }
-    ],
-    "rejects": "dropping caller, callback, boundary, duplicate, or alternate-library rows; changing other requests",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:f535e4271f643b455ebcdb8f33caa1fc9d6bbac63d788f66008cb60dc7980bef",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [],
-          "removed": [
-            {
-              "distance": 1,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "caller",
-              "library": "fetch",
-              "property": null,
-              "reason": null,
-              "site": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:requestA",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:callerA", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ]
-        },
-        "spans": []
-      },
-      "diff.json/request-a/rows/added/length": 0,
-      "diff.json/request-a/rows/removed/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-caller-removed",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/1",
-        "remove": true
-      }
-    ],
-    "rejects": "append-only freshness checks",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "function callerA",
-        "to": "function renamed"
-      }
-    ],
-    "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:e6c4b982015e3461e4c9dead7815aa5d7c030c57948c1d27b685ff7fbbe27f0f",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [
-            {
-              "distance": 1,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "caller",
-              "library": "fetch",
-              "property": null,
-              "reason": null,
-              "site": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:requestA",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:renamed", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ],
-          "removed": [
-            {
-              "distance": 1,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "caller",
-              "library": "fetch",
-              "property": null,
-              "reason": null,
-              "site": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:requestA",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:callerA", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ]
-        },
-        "spans": []
-      },
-      "diff.json/request-a/rows/added/length": 1,
-      "diff.json/request-a/rows/removed/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-caller-renamed",
-    "rejects": "normalizing a caller to only its callee name",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/chained-fetch",
-    "changed": [],
-    "codes": [],
-    "expect": {
-      "current.json/request-chained-fetch/packet/selector/fact/where/request": {
-        "anchor": {
-          "role": {
-            "callee": "call:fetch",
-            "kind": "call",
-            "ordinal": 0
-          },
-          "symbol": [["function:chained", 0]]
-        },
-        "path": "src/requests.ts"
-      },
-      "current.json/request-chained-fetch/packet/statement": "return fetch(u).then(cb);"
-    },
-    "name": "request-chained-fetch",
-    "rejects": "choosing the outermost call at a shared start or adding one to the CodeQL inclusive end column",
-    "unchanged": true
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "name": "request-chained-request-innermost",
-    "rejects": "choosing the outer then call at a shared start instead of the smallest network call",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "return value;",
-        "to": "return other;"
-      }
-    ],
-    "name": "request-citation-condition-adjacent",
-    "rejects": "hashing adjacent condition nodes or an entire helper/registration/resource file",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/condition.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "name": "request-citation-condition-baseline",
-    "rejects": "omitting or widening the selected condition bytes",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/condition.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "value !== undefined",
-        "to": "value === undefined"
-      }
-    ],
-    "expect": {
-      "diff.json/request-a/rows/added": [],
-      "diff.json/request-a/rows/removed": [],
-      "diff.json/request-a/spans/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-citation-condition-selected",
-    "rejects": "ignoring the selected condition node",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/citations/condition.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "const enabled = true;",
-        "to": "const enabled = false;"
-      }
-    ],
-    "failureIds": ["request-a"],
-    "name": "request-citation-edited",
-    "rejects": "ignoring explicit narrow source citations",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "id: \"other\", enabled: false",
-        "to": "id: \"other\", enabled: true"
-      }
-    ],
-    "name": "request-citation-entry-adjacent",
-    "rejects": "hashing adjacent entry nodes or an entire helper/registration/resource file",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/entry.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "name": "request-citation-entry-baseline",
-    "rejects": "omitting or widening the selected entry bytes",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/entry.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "id: \"chosen\", enabled: true",
-        "to": "id: \"chosen\", enabled: false"
-      }
-    ],
-    "expect": {
-      "diff.json/request-a/rows/added": [],
-      "diff.json/request-a/rows/removed": [],
-      "diff.json/request-a/spans/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-citation-entry-selected",
-    "rejects": "ignoring the selected entry node",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/citations/entry.json"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["ANCHOR_MISSING"],
-    "details": [
-      "cannot read source src/does-not-exist.ts (ENOENT)",
-      "Evidence hash: old=",
-      "new=unresolved",
-      "Packets:",
-      "Fix:"
-    ],
-    "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-citation-file-missing",
-    "rejects": "uncaught filesystem errors that skip citation diagnostics and packet artifacts",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/invalid/missing-file.json"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["ANCHOR_MISSING"],
-    "details": [
-      "cannot read source src/policy.ts/child.ts (ENOTDIR)",
-      "Evidence hash: old=",
-      "new=unresolved",
-      "Packets:",
-      "Fix:"
-    ],
-    "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-citation-file-unreadable",
-    "rejects": "uncaught non-ENOENT source read errors that skip citation diagnostics and artifacts",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/invalid/unreadable-file.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "const enabled = true;",
-        "to": "const enabled = false;"
-      }
-    ],
-    "name": "request-citation-initializer-adjacent",
-    "rejects": "hashing adjacent initializer nodes or an entire helper/registration/resource file",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/initializer.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "name": "request-citation-initializer-baseline",
-    "rejects": "omitting or widening the selected initializer bytes",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/initializer.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "enabled: true, label: \"option\"",
-        "to": "enabled: false, label: \"option\""
-      }
-    ],
-    "expect": {
-      "diff.json/request-a/rows/added": [],
-      "diff.json/request-a/rows/removed": [],
-      "diff.json/request-a/spans/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-citation-initializer-selected",
-    "rejects": "ignoring the selected initializer node",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/citations/initializer.json"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["ANCHOR_MISSING"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "const enabled = true;",
-        "to": "const renamed = true;"
-      }
-    ],
-    "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-citation-missing",
-    "rejects": "retargeting an explicit citation by byte position",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "label: \"selected\"",
-        "to": "label: \"adjacent\""
-      }
-    ],
-    "name": "request-citation-property-adjacent",
-    "rejects": "hashing adjacent property nodes or an entire helper/registration/resource file",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/property.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "name": "request-citation-property-baseline",
-    "rejects": "omitting or widening the selected property bytes",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/property.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "id: \"chosen\", enabled: true",
-        "to": "id: \"chosen\", enabled: false"
-      }
-    ],
-    "expect": {
-      "diff.json/request-a/rows/added": [],
-      "diff.json/request-a/rows/removed": [],
-      "diff.json/request-a/spans/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-citation-property-selected",
-    "rejects": "ignoring the selected property node",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/citations/property.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "register(\"request\",",
-        "to": "register(\"different\","
-      }
-    ],
-    "name": "request-citation-registration-adjacent",
-    "rejects": "hashing adjacent registration nodes or an entire helper/registration/resource file",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/registration.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "name": "request-citation-registration-baseline",
-    "rejects": "omitting or widening the selected registration bytes",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/registration.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "register(\"request\", { enabled: true })",
-        "to": "register(\"request\", { enabled: false })"
-      }
-    ],
-    "expect": {
-      "diff.json/request-a/rows/added": [],
-      "diff.json/request-a/rows/removed": [],
-      "diff.json/request-a/spans/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-citation-registration-selected",
-    "rejects": "ignoring the selected registration node",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/citations/registration.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "return value;",
-        "to": "return other;"
-      }
-    ],
-    "name": "request-citation-return-adjacent",
-    "rejects": "hashing adjacent return nodes or an entire helper/registration/resource file",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/return.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "name": "request-citation-return-baseline",
-    "rejects": "omitting or widening the selected return bytes",
-    "unchanged": true,
-    "verdictsFile": "requests/citations/return.json"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "return enabled;",
-        "to": "return false;"
-      }
-    ],
-    "expect": {
-      "diff.json/request-a/rows/added": [],
-      "diff.json/request-a/rows/removed": [],
-      "diff.json/request-a/spans/length": 1
-    },
-    "failureIds": ["request-a"],
-    "name": "request-citation-return-selected",
-    "rejects": "ignoring the selected return node",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/citations/return.json"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["VERDICT_INPUT"],
-    "failureIds": ["request-a"],
-    "name": "request-claim-blank-part",
-    "patches": [
-      {
-        "file": "verdicts",
-        "path": "judgments/0/claim/trigger",
-        "value": "  "
-      }
-    ],
-    "rejects": "accepting an incomplete, blank, extra-field claim or unknown without missingEvidence",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "codes": ["VERDICT_INPUT"],
-    "failureIds": ["request-a"],
-    "name": "request-claim-extra-part",
-    "patches": [
-      {
-        "file": "verdicts",
-        "path": "judgments/0/claim/conditions",
-        "value": "unknown"
-      }
-    ],
-    "rejects": "accepting an incomplete, blank, extra-field claim or unknown without missingEvidence",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "codes": ["VERDICT_INPUT"],
-    "failureIds": ["request-a"],
-    "name": "request-claim-missing-part",
-    "patches": [
-      {
-        "file": "verdicts",
-        "path": "judgments/0/claim/disable",
-        "remove": true
-      }
-    ],
-    "rejects": "accepting an incomplete, blank, extra-field claim or unknown without missingEvidence",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": [
-      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:renamedA\",0]]},\"path\":\"src/requests.ts\"}>",
-      "request-a"
-    ],
-    "codes": ["UNCLASSIFIED_ROOT", "REMOVED_ROOT"],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "function requestA",
-        "to": "function renamedA"
-      }
-    ],
-    "failureIds": [
-      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:renamedA\",0]]},\"path\":\"src/requests.ts\"}>",
-      "request-a"
-    ],
-    "name": "request-enclosing-function-renamed",
-    "rejects": "line-based identity or automatic record retargeting",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/chained-fetch",
-    "codes": ["REQUEST_LOCATION"],
-    "failureIds": ["request-chained-fetch"],
-    "name": "request-end-after-close",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endColumn",
-        "value": 18
-      }
-    ],
-    "rejects": "accepting missing or invalid request ends, ignoring end lines, or rounding an end onto a nearby invocation"
-  },
-  {
-    "base": "requests/chained-fetch",
-    "codes": ["REQUEST_LOCATION"],
-    "failureIds": ["request-chained-fetch"],
-    "name": "request-end-before-close",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endColumn",
-        "value": 16
-      }
-    ],
-    "rejects": "accepting missing or invalid request ends, ignoring end lines, or rounding an end onto a nearby invocation"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_FACT_INPUT", "REQUEST_FACT_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-fact-bad-column",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/column",
-        "value": 0
-      }
-    ],
-    "rejects": "defaulting absent facts to empty or silently dropping malformed rows"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_FACT_INPUT", "REQUEST_FACT_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-fact-bad-distance",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/distance",
-        "value": "5"
-      }
-    ],
-    "rejects": "defaulting absent facts to empty or silently dropping malformed rows"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_FACT_INPUT", "REQUEST_FACT_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-fact-bad-kind",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/kind",
-        "value": false
-      }
-    ],
-    "rejects": "defaulting absent facts to empty or silently dropping malformed rows"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_FACT_INPUT", "REQUEST_FACT_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-fact-bad-path",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/file",
-        "value": "kimchi/src/../requests.ts"
-      }
-    ],
-    "rejects": "defaulting absent facts to empty or silently dropping malformed rows"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_FACT_INPUT", "REQUEST_FACT_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-fact-bad-reason",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/reason",
-        "value": []
-      }
-    ],
-    "rejects": "defaulting absent facts to empty or silently dropping malformed rows"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_FACT_INPUT", "REQUEST_FACT_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-fact-extra-field",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/extra",
-        "value": true
-      }
-    ],
-    "rejects": "defaulting absent facts to empty or silently dropping malformed rows"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_FACT_INPUT", "REQUEST_FACT_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-fact-missing",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers",
-        "remove": true
-      }
-    ],
-    "rejects": "defaulting absent facts to empty or silently dropping malformed rows"
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "const bound = ",
-        "to": "const bound: () => Promise<Response> = "
-      }
-    ],
-    "name": "request-function-type-annotation",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/4/callSite/column",
-        "value": 55
       },
       {
         "file": "facts",
-        "path": "requestCallers/4/functionSite/column",
-        "value": 40
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/4/site/column",
-        "value": 40
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/4/callSite/endColumn",
-        "value": 84
-      }
-    ],
-    "rejects": "counting a variable function-type annotation as function:bound ordinal 0 and assigning its runtime arrow ordinal 1",
-    "unchanged": true
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "\"before\"; return fetch(\"https://immediate.example\")",
-        "to": "\"after!\"; return fetch(\"https://immediate.example\")"
-      }
-    ],
-    "name": "request-immediate-owner-unrelated-edit",
-    "rejects": "embedding an immediately invoked arrow body into its enclosing owner or callee identity",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "export function requestA()",
-        "to": "/** added docs */\nexport function requestA()"
-      }
-    ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 5,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 5
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 3
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 3
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 5,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 5
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 3
-          },
-          "kind": "caller",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 29,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 8,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 8
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 7
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 7
-          }
-        }
-      ]
-    },
-    "name": "request-jsdoc-inserted",
-    "rejects": "counting JSDoc AST children in node addresses or using declaration fullStart",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "\n",
-        "to": ""
-      }
-    ],
-    "expect": {
-      "display.json": {
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 36,
-            "line": 3
-          },
-          "start": {
-            "column": 10,
-            "line": 3
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 36,
-            "line": 6
-          },
-          "start": {
-            "column": 10,
-            "line": 6
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"statement\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 37,
-            "line": 3
-          },
-          "start": {
-            "column": 3,
-            "line": 3
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"statement\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 37,
-            "line": 6
-          },
-          "start": {
-            "column": 3,
-            "line": 6
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:requestA\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:callerA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 39,
-            "line": 8
-          },
-          "start": {
-            "column": 29,
-            "line": 8
-          }
-        },
-        "{\"anchor\":{\"role\":{\"key\":\"function\",\"kind\":\"function-start\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 16,
-            "line": 1
-          },
-          "start": {
-            "column": 8,
-            "line": 1
-          }
-        },
-        "{\"anchor\":{\"role\":{\"key\":\"function\",\"kind\":\"function-start\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 16,
-            "line": 5
-          },
-          "start": {
-            "column": 8,
-            "line": 5
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"node\",\"steps\":[[\"list\",0],[\"bindings:enabled\",0],[\"node\",0],[\"list\",0],[\"name:enabled\",0]]},\"symbol\":[]},\"path\":\"src/policy.ts\"}": {
-          "end": {
-            "column": 21,
-            "line": 1
-          },
-          "start": {
-            "column": 7,
-            "line": 1
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"owner\"},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 2,
-            "line": 4
-          },
-          "start": {
-            "column": 1,
-            "line": 1
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"owner\"},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 2,
-            "line": 7
-          },
-          "start": {
-            "column": 1,
-            "line": 5
-          }
-        }
-      }
-    },
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 3,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 3
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 1
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 1
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 3,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 3
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 1
-          },
-          "kind": "caller",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 29,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 6,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 6
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 5
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 5
-          }
-        }
-      ]
-    },
-    "name": "request-lines-deleted",
-    "rejects": "hashing source coordinates or failing backward relocation",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "\n",
-        "to": "\n\n\n"
-      }
-    ],
-    "expect": {
-      "display.json": {
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 36,
-            "line": 6
-          },
-          "start": {
-            "column": 10,
-            "line": 6
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 36,
-            "line": 9
-          },
-          "start": {
-            "column": 10,
-            "line": 9
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"statement\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 37,
-            "line": 6
-          },
-          "start": {
-            "column": 3,
-            "line": 6
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"statement\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 37,
-            "line": 9
-          },
-          "start": {
-            "column": 3,
-            "line": 9
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:requestA\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:callerA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 39,
-            "line": 11
-          },
-          "start": {
-            "column": 29,
-            "line": 11
-          }
-        },
-        "{\"anchor\":{\"role\":{\"key\":\"function\",\"kind\":\"function-start\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 16,
-            "line": 4
-          },
-          "start": {
-            "column": 8,
-            "line": 4
-          }
-        },
-        "{\"anchor\":{\"role\":{\"key\":\"function\",\"kind\":\"function-start\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 16,
-            "line": 8
-          },
-          "start": {
-            "column": 8,
-            "line": 8
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"node\",\"steps\":[[\"list\",0],[\"bindings:enabled\",0],[\"node\",0],[\"list\",0],[\"name:enabled\",0]]},\"symbol\":[]},\"path\":\"src/policy.ts\"}": {
-          "end": {
-            "column": 21,
-            "line": 1
-          },
-          "start": {
-            "column": 7,
-            "line": 1
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"owner\"},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 2,
-            "line": 7
-          },
-          "start": {
-            "column": 1,
-            "line": 4
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"owner\"},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 2,
-            "line": 10
-          },
-          "start": {
-            "column": 1,
-            "line": 8
-          }
-        }
-      }
-    },
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 6,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 6
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 4
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 4
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 6,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 6
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 4
-          },
-          "kind": "caller",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 29,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 9,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 9
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          }
-        }
-      ]
-    },
-    "name": "request-lines-inserted",
-    "rejects": "hashing source coordinates or failing backward relocation",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-location-call",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/column",
-        "value": 11
-      }
-    ],
-    "rejects": "nearest-line matching, silently skipped coordinates, or reporting stale facts as root deletion"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
-    "details": [
-      "at /requestCallers/0/callSite: cannot read source src/gone.ts (ENOENT)",
-      "Evidence hash: old=",
-      "Packets:",
-      "Fix:"
-    ],
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-location-file-missing-call",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/file",
-        "value": "kimchi/src/gone.ts"
-      }
-    ],
-    "rejects": "uncaught filesystem errors for callSite that skip whole-input diagnostics and artifacts"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
-    "details": [
-      "at /requestCallers/0/functionSite: cannot read source src/gone.ts (ENOENT)",
-      "Evidence hash: old=",
-      "Packets:",
-      "Fix:"
-    ],
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-location-file-missing-function",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/functionSite/file",
-        "value": "kimchi/src/gone.ts"
-      }
-    ],
-    "rejects": "uncaught filesystem errors for functionSite that skip whole-input diagnostics and artifacts"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
-    "details": [
-      "at /requestCallers/0/site: cannot read source src/gone.ts (ENOENT)",
-      "Evidence hash: old=",
-      "Packets:",
-      "Fix:"
-    ],
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-location-file-missing-site",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/site/file",
-        "value": "kimchi/src/gone.ts"
-      }
-    ],
-    "rejects": "uncaught filesystem errors for site that skip whole-input diagnostics and artifacts"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
-    "details": [
-      "at /requestCallers/0/site: cannot read source src/policy.ts/child.ts (ENOTDIR)",
-      "Evidence hash: old=",
-      "Packets:",
-      "Fix:"
-    ],
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-location-file-unreadable",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/site/file",
-        "value": "kimchi/src/policy.ts/child.ts"
-      }
-    ],
-    "rejects": "uncaught non-ENOENT fact source read errors that skip the failure envelope"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-location-function",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/functionSite/column",
-        "value": 10
-      }
-    ],
-    "rejects": "nearest-line matching, silently skipped coordinates, or reporting stale facts as root deletion"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["REQUEST_LOCATION", "REQUEST_LOCATION"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-location-token",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/1/site/column",
-        "value": 30
-      }
-    ],
-    "rejects": "nearest-line matching, silently skipped coordinates, or reporting stale facts as root deletion"
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "name": "request-member-chain-sites",
-    "rejects": "mapping both receiving members to the first or outermost call in a chain",
-    "unchanged": true
-  },
-  {
-    "base": "requests/chained-fetch",
-    "codes": ["REQUEST_FACT_INPUT"],
-    "failureIds": ["request-chained-fetch"],
-    "name": "request-missing-end-column",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endColumn",
-        "remove": true
-      }
-    ],
-    "rejects": "accepting missing or invalid request ends, ignoring end lines, or rounding an end onto a nearby invocation"
-  },
-  {
-    "base": "requests/chained-fetch",
-    "codes": ["REQUEST_FACT_INPUT"],
-    "failureIds": ["request-chained-fetch"],
-    "name": "request-missing-end-line",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endLine",
-        "remove": true
-      }
-    ],
-    "rejects": "accepting missing or invalid request ends, ignoring end lines, or rounding an end onto a nearby invocation"
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "  const unrelated = \"before\";",
-        "to": "  const inserted = 0; const unrelated = \"before\";"
-      }
-    ],
-    "name": "request-named-owner-call-free-insertion",
-    "rejects": "including enclosing statement positions or anonymous callback text in identity",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "expect": {
-      "display.json": {
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 36,
-            "line": 4
-          },
-          "start": {
-            "column": 10,
-            "line": 4
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 36,
-            "line": 7
-          },
-          "start": {
-            "column": 10,
-            "line": 7
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"statement\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 37,
-            "line": 4
-          },
-          "start": {
-            "column": 3,
-            "line": 4
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"statement\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 37,
-            "line": 7
-          },
-          "start": {
-            "column": 3,
-            "line": 7
-          }
-        },
-        "{\"anchor\":{\"role\":{\"callee\":\"call:requestA\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:callerA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 39,
-            "line": 9
-          },
-          "start": {
-            "column": 29,
-            "line": 9
-          }
-        },
-        "{\"anchor\":{\"role\":{\"key\":\"function\",\"kind\":\"function-start\",\"ordinal\":0},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 16,
-            "line": 2
-          },
-          "start": {
-            "column": 8,
-            "line": 2
-          }
-        },
-        "{\"anchor\":{\"role\":{\"key\":\"function\",\"kind\":\"function-start\",\"ordinal\":0},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 16,
-            "line": 6
-          },
-          "start": {
-            "column": 8,
-            "line": 6
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"node\",\"steps\":[[\"list\",0],[\"bindings:enabled\",0],[\"node\",0],[\"list\",0],[\"name:enabled\",0]]},\"symbol\":[]},\"path\":\"src/policy.ts\"}": {
-          "end": {
-            "column": 21,
-            "line": 1
-          },
-          "start": {
-            "column": 7,
-            "line": 1
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"owner\"},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 2,
-            "line": 5
-          },
-          "start": {
-            "column": 1,
-            "line": 2
-          }
-        },
-        "{\"anchor\":{\"role\":{\"kind\":\"owner\"},\"symbol\":[[\"function:requestB\",0]]},\"path\":\"src/requests.ts\"}": {
-          "end": {
-            "column": 2,
-            "line": 8
-          },
-          "start": {
-            "column": 1,
-            "line": 6
-          }
-        }
-      },
-      "status.json/counts": {
-        "refuted": 0,
-        "roots": 2,
-        "supported": 0,
-        "unknown": 2
-      }
-    },
-    "name": "request-read-only-and-repeatable",
-    "rejects": "rewriting verdicts, timestamps, absolute-tree paths, or noncanonical packet hashing",
-    "repeat": true,
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["REMOVED_ROOT"],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "return fetch(\"https://a.example\");",
-        "to": "return undefined;"
-      }
-    ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 7,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 7
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          }
-        }
-      ]
-    },
-    "failureIds": ["request-a"],
-    "name": "request-removed",
-    "rejects": "silently dropping an orphan judgment",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "return fetch(\"https://a.example\");",
-        "to": "return undefined;"
-      }
-    ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 7,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 7
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          }
-        }
-      ]
-    },
-    "name": "request-removed-record-by-hand",
-    "patches": [
-      {
-        "file": "verdicts",
-        "path": "judgments/0",
-        "remove": true
-      }
-    ],
-    "rejects": "retaining a removed request after its record is explicitly removed",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/returned-fetch",
-    "changed": [],
-    "codes": [],
-    "expect": {
-      "current.json/request-returned-fetch/packet/selector/fact/where/request": {
-        "anchor": {
-          "role": {
-            "callee": "call:getFetch()",
-            "kind": "call",
-            "ordinal": 0
-          },
-          "symbol": [["function:returned", 0]]
-        },
-        "path": "src/requests.ts"
-      },
-      "current.json/request-returned-fetch/packet/statement": "return getFetch()(\n    url\n  );"
-    },
-    "name": "request-returned-fetch",
-    "rejects": "choosing the innermost call at a shared start, ignoring the end line, or treating the inclusive end column as exclusive",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:3561ce1b680c5d56e2948d2d6c326f2b4b86b45b59bbea8055cd88732f4b26bb",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [
-            {
-              "distance": 1,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "caller",
-              "library": "fetch",
-              "property": null,
-              "reason": null,
-              "site": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:requestA",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:callerA", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ],
-          "removed": []
-        },
-        "spans": []
-      },
-      "diff.json/request-a/rows/added/length": 1,
-      "diff.json/request-a/rows/removed/length": 0
-    },
-    "failureIds": ["request-a"],
-    "name": "request-row-multiplicity",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/3",
+        "path": "requestCallers/9",
         "value": {
           "callSite": {
             "column": 10,
@@ -2666,80 +111,47 @@
             "file": "kimchi/src/requests.ts",
             "line": 2
           },
-          "kind": "caller",
-          "property": null,
+          "kind": "callback",
+          "property": "onStart",
           "reason": null,
           "site": {
-            "column": 29,
+            "column": 1,
             "file": "kimchi/src/requests.ts",
-            "line": 9
+            "line": 11
           }
         }
-      }
-    ],
-    "rejects": "dropping caller, callback, boundary, duplicate, or alternate-library rows; changing other requests",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "name": "request-row-order",
-    "rejects": "input-order-sensitive hashing",
-    "reverseFacts": true,
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:78ce086c7c54e6eb6e0ed574a4dd937d578bf8b28d323ccb640acfc3a35b0d4f",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [
-            {
-              "distance": 0,
-              "functionSite": {
-                "anchor": {
-                  "role": {
-                    "kind": "owner"
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              },
-              "kind": "enclosing",
-              "library": "other-fetch-model",
-              "property": null,
-              "reason": null,
-              "site": {
-                "anchor": {
-                  "role": {
-                    "key": "function",
-                    "kind": "function-start",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          ],
-          "removed": []
-        },
-        "spans": []
       },
-      "diff.json/request-a/rows/added/length": 1,
-      "diff.json/request-a/rows/removed/length": 0
-    },
-    "failureIds": ["request-a"],
-    "name": "request-same-call-second-library",
-    "patches": [
       {
         "file": "facts",
-        "path": "requestCallers/3",
+        "path": "requestCallers/10",
+        "value": {
+          "callSite": {
+            "column": 10,
+            "endColumn": 35,
+            "endLine": 4,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 4
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "boundary",
+          "property": null,
+          "reason": "stored",
+          "site": {
+            "column": 16,
+            "file": "kimchi/src/requests.ts",
+            "line": 12
+          }
+        }
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/11",
         "value": {
           "callSite": {
             "column": 10,
@@ -2764,127 +176,492 @@
             "line": 2
           }
         }
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/distance",
+        "value": 7
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/kind",
+        "value": "measured-kind"
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/reason",
+        "value": "measured-reason"
       }
     ],
-    "rejects": "dropping caller, callback, boundary, duplicate, or alternate-library rows; changing other requests",
+    "rejects": "dropping caller, callback, boundary, alternate-library rows, or typed metadata from request evidence",
     "unchanged": ["request-b"]
   },
   {
     "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
+    "codes": ["EVIDENCE_CHANGED"],
+    "expect": {
+      "diff.json/request-a/rows/added": [],
+      "diff.json/request-a/rows/removed": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+      ]
+    },
+    "failureIds": ["request-a"],
+    "name": "request-caller-removed",
+    "patches": [
       {
-        "file": "src/requests.ts",
-        "from": "const unrelated = \"before\";",
-        "to": "const unrelated = \"after\";"
+        "file": "facts",
+        "path": "requestCallers/1",
+        "remove": true
       }
     ],
-    "name": "request-same-function-unrelated-edit",
-    "rejects": "fingerprinting the enclosing function or cliMain body",
+    "rejects": "append-only freshness checks",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "expect": {
+      "diff.json/request-b/rows/added": [],
+      "diff.json/request-b/rows/removed": [],
+      "diff.json/request-b/spans/0/new": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+      "diff.json/request-b/spans/0/old": null,
+      "diff.json/request-b/spans/0/site/path": "src/policy.ts"
+    },
+    "failureIds": ["request-b"],
+    "name": "request-citation-added",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/1/selector/sources/0",
+        "value": {
+          "anchor": {
+            "role": {
+              "kind": "node",
+              "steps": [
+                ["list", 0],
+                ["bindings:enabled", 0],
+                ["node", 0],
+                ["list", 0],
+                ["name:enabled", 0]
+              ]
+            },
+            "symbol": []
+          },
+          "path": "src/policy.ts"
+        }
+      }
+    ],
+    "rejects": "ignoring newly selected explicit citations when comparing request evidence",
+    "unchanged": ["request-a"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "src/policy.ts",
+        "from": "const enabled = true;",
+        "to": "const enabled = false;"
+      }
+    ],
+    "expect": {
+      "diff.json/request-a/rows/added": [],
+      "diff.json/request-a/rows/removed": [],
+      "diff.json/request-a/spans/0/new": "sha256:cde083d92431a8f400067e09d9c16998a54a7d69d8cd70fa21476ccf15e7a3ed",
+      "diff.json/request-a/spans/0/old": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+      "diff.json/request-a/spans/0/site/path": "src/policy.ts"
+    },
+    "failureIds": ["request-a"],
+    "name": "request-citation-edited",
+    "rejects": "ignoring explicit narrow source citations",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["ANCHOR_MISSING"],
+    "details": [
+      "cannot read source src/does-not-exist.ts (ENOENT)",
+      "Evidence hash: old=",
+      "new=unresolved",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a"],
+    "incomplete": true,
+    "name": "request-citation-file-missing",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidence/spans/0/path",
+        "value": "src/does-not-exist.ts"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidenceHash",
+        "value": "sha256:9d12be6561c92843c391ff5675f0f2467c4cf9b8adc4591f6d95b903df50cb46"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/0/selector/sources/0/path",
+        "value": "src/does-not-exist.ts"
+      }
+    ],
+    "rejects": "uncaught filesystem errors that skip citation diagnostics and packet artifacts",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "failureIds": ["request-a"],
+    "name": "request-claim-blank-part",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/claim/trigger",
+        "value": "  "
+      }
+    ],
+    "rejects": "accepting a blank request trigger claim",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-end-after-close",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/6/callSite/endColumn",
+        "value": 18
+      }
+    ],
+    "rejects": "accepting the dot after a closing parenthesis as the inclusive call end"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-fact-bad-distance",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/distance",
+        "value": "5"
+      }
+    ],
+    "rejects": "accepting a string as a request caller distance"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-fact-missing",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers",
+        "remove": true
+      }
+    ],
+    "rejects": "defaulting the absent requestCallers fact array to an empty inventory"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-location-call",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/column",
+        "value": 11
+      }
+    ],
+    "rejects": "rounding a request start inside a token to the nearest call"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
+    "details": [
+      "at /requestCallers/0/site: cannot read source src/policy.ts/child.ts (ENOTDIR)",
+      "Evidence hash: old=",
+      "Packets:",
+      "Fix:"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-location-file-unreadable",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/file",
+        "value": "kimchi/src/policy.ts/child.ts"
+      }
+    ],
+    "rejects": "uncaught non-ENOENT fact source read errors that skip the failure envelope"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-missing-end-column",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/6/callSite/endColumn",
+        "remove": true
+      }
+    ],
+    "rejects": "accepting request facts without the required inclusive endColumn"
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "expect": {
+      "current.json/request-a/evidence/rows": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9",
+        "sha256:c12fe4cc4408ddbe45b1589b00dd8e32dee3564c7527bab90df40d341c52163e"
+      ],
+      "current.json/request-a/evidence/spans/0/sha256": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+      "current.json/request-a/packet/rows/sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9/kind": "caller",
+      "current.json/request-a/packet/statement": "return fetch(\"https://a.example\");",
+      "current.json/request-chained-fetch/packet/statement": "return fetch(u).then(cb);",
+      "current.json/request-returned-fetch/packet/statement": "return getFetch()(\n    url\n  );"
+    },
+    "name": "request-read-only-and-repeatable",
+    "rejects": "hashing fact order, selecting the wrong nested call, losing current row detail, or rewriting verdicts",
+    "repeat": true,
+    "reverseFacts": true,
     "unchanged": true
   },
   {
     "base": "requests/base",
-    "codes": ["SOURCE_INPUT"],
+    "codes": ["VERDICT_INPUT"],
+    "details": ["/judgments/0/evidence/rows: non-canonical rows array"],
     "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-source-broad-block-list-refused",
-    "rejects": "allowing broad block-list evidence, including SyntaxList bypasses",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/invalid/broad-block-list.json"
+    "name": "request-recorded-row-digests-unsorted",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidence/rows",
+        "value": [
+          "sha256:c12fe4cc4408ddbe45b1589b00dd8e32dee3564c7527bab90df40d341c52163e",
+          "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+        ]
+      }
+    ],
+    "rejects": "accepting unsorted request row digest lists",
+    "unchanged": ["request-b"]
   },
   {
     "base": "requests/base",
-    "codes": ["SOURCE_INPUT"],
+    "codes": ["RECORDED_HASH"],
+    "details": ["recorded evidence summary", "Evidence hash: old="],
     "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-source-broad-block-refused",
-    "rejects": "allowing broad block evidence, including SyntaxList bypasses",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/invalid/broad-block.json"
+    "name": "request-recorded-summary-tampered",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidence/statement",
+        "value": "sha256:d121be3103007b41edf96f8262925f8c7d61894afe9a041843b631f69445bc57"
+      }
+    ],
+    "rejects": "trusting the recorded evidenceHash after summary bytes change",
+    "unchanged": ["request-b"]
   },
   {
     "base": "requests/base",
-    "codes": ["SOURCE_INPUT"],
-    "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-source-broad-file-list-refused",
-    "rejects": "allowing broad file-list evidence, including SyntaxList bypasses",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/invalid/broad-file-list.json"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["SOURCE_INPUT"],
-    "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-source-broad-file-refused",
-    "rejects": "allowing broad file evidence, including SyntaxList bypasses",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/invalid/broad-file.json"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["SOURCE_INPUT"],
-    "failureIds": ["request-a"],
-    "incomplete": true,
-    "name": "request-source-broad-function-refused",
-    "rejects": "allowing broad function evidence, including SyntaxList bypasses",
-    "unchanged": ["request-b"],
-    "verdictsFile": "requests/invalid/broad-function.json"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["SOURCE_INPUT"],
+    "codes": ["REMOVED_ROOT"],
     "edits": [
       {
         "file": "src/requests.ts",
-        "from": "export function requestA() {\n  const unrelated = \"before\";\n  return fetch(\"https://a.example\");\n}",
-        "to": "export const requestA = () => fetch(\"https://a.example\");\n\n\n"
+        "from": "return fetch(\"https://a.example\");",
+        "to": "return undefined;"
       }
     ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
+    "failureIds": ["request-a"],
+    "name": "request-removed",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/1",
+        "remove": true
       },
-      "requestCallers": [
-        {
+      {
+        "file": "facts",
+        "path": "requestCallers/0",
+        "remove": true
+      }
+    ],
+    "rejects": "silently dropping an orphan judgment",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "return fetch(\"https://a.example\");",
+        "to": "return undefined;"
+      }
+    ],
+    "name": "request-removed-record-by-hand",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0",
+        "remove": true
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1",
+        "remove": true
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0",
+        "remove": true
+      }
+    ],
+    "rejects": "retaining a removed request after its record is explicitly removed",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "expect": {
+      "diff.json/request-a/rows/added": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+      ],
+      "diff.json/request-a/rows/removed": []
+    },
+    "failureIds": ["request-a"],
+    "name": "request-row-multiplicity",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/8",
+        "value": {
           "callSite": {
-            "column": 31,
-            "endColumn": 56,
-            "endLine": 2,
+            "column": 10,
+            "endColumn": 35,
+            "endLine": 4,
             "file": "kimchi/src/requests.ts",
             "library": "fetch",
-            "line": 2
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 25,
-            "file": "kimchi/src/requests.ts",
-            "line": 2
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 25,
-            "file": "kimchi/src/requests.ts",
-            "line": 2
-          }
-        },
-        {
-          "callSite": {
-            "column": 31,
-            "endColumn": 56,
-            "endLine": 2,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 2
+            "line": 4
           },
           "distance": 1,
           "functionSite": {
-            "column": 25,
+            "column": 8,
             "file": "kimchi/src/requests.ts",
             "line": 2
           },
@@ -2896,127 +673,112 @@
             "file": "kimchi/src/requests.ts",
             "line": 9
           }
-        },
-        {
-          "callSite": {
-            "column": 10,
-            "endColumn": 35,
-            "endLine": 7,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 7
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 8,
-            "file": "kimchi/src/requests.ts",
-            "line": 6
-          }
         }
-      ]
-    },
+      }
+    ],
+    "rejects": "deduplicating repeated caller rows before hashing or comparing request evidence",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["SOURCE_INPUT"],
+    "failureIds": ["request-a"],
+    "incomplete": true,
+    "name": "request-source-broad-function-refused",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/selector/sources/0",
+        "value": {
+          "anchor": {
+            "role": {
+              "kind": "node",
+              "steps": []
+            },
+            "symbol": [["function:requestA", 0]]
+          },
+          "path": "src/requests.ts"
+        }
+      }
+    ],
+    "rejects": "accepting a whole function as a narrow explicit source citation",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["SOURCE_INPUT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "export function requestA() {\n  const unrelated = \"before\";\n  return fetch(\"https://a.example\");\n}",
+        "to": "export const requestA = () => fetch(\"https://a.example\");\n\n\n"
+      }
+    ],
     "failureIds": ["request-a"],
     "incomplete": true,
     "name": "request-source-concise-arrow-refused",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/column",
+        "value": 31
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/endColumn",
+        "value": 56
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/endLine",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/line",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/functionSite/column",
+        "value": 25
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/column",
+        "value": 25
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/column",
+        "value": 31
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/endColumn",
+        "value": 56
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/endLine",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/line",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/functionSite/column",
+        "value": 25
+      }
+    ],
     "rejects": "hashing an enclosing variable declaration around a concise arrow",
     "unchanged": ["request-b"]
   },
   {
     "base": "requests/base",
-    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "function requestA()",
-        "to": "function requestA("
-      }
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "name": "request-source-invalid-syntax",
-    "rejects": "recovering from parser errors"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": ["request-a", "request-b"],
-    "invalidUtf8": "src/requests.ts",
-    "name": "request-source-invalid-utf8",
-    "rejects": "replacement-character parsing of invalid bytes"
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "https://a.example",
-        "to": "https://edited.example"
-      }
-    ],
-    "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:a425fccee39e2cff506d1287d3f61fc5c5bcdca8494553945929f1183dc39119",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [],
-          "removed": []
-        },
-        "spans": [
-          {
-            "new": "sha256:b0866eb2980738085ca6f244965f2c7527c808e38f30defeddde8b19f14c824c",
-            "old": "sha256:86cb1fdd4692e6e05352dcd383038775e8704857b1478f85fdb79c260ce8a0ea",
-            "site": {
-              "anchor": {
-                "role": {
-                  "callee": "call:fetch",
-                  "kind": "statement",
-                  "ordinal": 0
-                },
-                "symbol": [["function:requestA", 0]]
-              },
-              "path": "src/requests.ts"
-            }
-          }
-        ]
-      }
-    },
-    "failureIds": ["request-a"],
-    "name": "request-statement-edited",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endColumn",
-        "value": 40
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/1/callSite/endColumn",
-        "value": 40
-      }
-    ],
-    "rejects": "hashing only callee tokens or the whole source file",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
     "codes": ["EVIDENCE_CHANGED"],
     "edits": [
       {
@@ -3026,31 +788,11 @@
       }
     ],
     "expect": {
-      "diff.json/request-a": {
-        "current": "sha256:837174cc5f276335b5bf620b8a91555b4855f818c834e23797c180179c7897ab",
-        "recorded": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-        "rows": {
-          "added": [],
-          "removed": []
-        },
-        "spans": [
-          {
-            "new": "sha256:32aa4e874bad6a708f2f1cb90ad68087550f6c8d75b912976a1d1ab095bb3388",
-            "old": "sha256:86cb1fdd4692e6e05352dcd383038775e8704857b1478f85fdb79c260ce8a0ea",
-            "site": {
-              "anchor": {
-                "role": {
-                  "callee": "call:fetch",
-                  "kind": "statement",
-                  "ordinal": 0
-                },
-                "symbol": [["function:requestA", 0]]
-              },
-              "path": "src/requests.ts"
-            }
-          }
-        ]
-      }
+      "diff.json/request-a/rows/added": [],
+      "diff.json/request-a/rows/removed": [],
+      "diff.json/request-a/spans/0/new": "sha256:32aa4e874bad6a708f2f1cb90ad68087550f6c8d75b912976a1d1ab095bb3388",
+      "diff.json/request-a/spans/0/old": "sha256:86cb1fdd4692e6e05352dcd383038775e8704857b1478f85fdb79c260ce8a0ea",
+      "diff.json/request-a/spans/0/site": "request statement"
     },
     "failureIds": ["request-a"],
     "name": "request-statement-wrapper-edited",
@@ -3058,114 +800,28 @@
     "unchanged": ["request-b"]
   },
   {
-    "base": "requests/shapes",
-    "changed": ["request-conditional-no", "request-conditional-yes"],
-    "codes": ["EVIDENCE_CHANGED", "EVIDENCE_CHANGED"],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "https://yes.example",
-        "to": "https://now.example"
-      }
-    ],
-    "failureIds": ["request-conditional-no", "request-conditional-yes"],
-    "name": "request-two-in-one-statement",
-    "rejects": "collapsing shared-statement calls or hashing each call separately"
-  },
-  {
-    "base": "requests/shapes",
-    "changed": [],
-    "codes": [],
-    "name": "request-two-on-one-line",
-    "rejects": "deduplicating request roots by file, line, library, or statement hash",
-    "unchanged": true
-  },
-  {
     "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "\n",
-        "to": "interface TypeOnly { requestA(): void }\n\n"
-      }
-    ],
-    "name": "request-type-only-interface-insertion",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/line",
-        "value": 5
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/0/functionSite/line",
-        "value": 3
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/0/site/line",
-        "value": 3
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/1/callSite/line",
-        "value": 5
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/1/functionSite/line",
-        "value": 3
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/1/site/line",
-        "value": 10
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/2/callSite/line",
-        "value": 8
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/2/functionSite/line",
-        "value": 7
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/2/site/line",
-        "value": 7
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endLine",
-        "value": 5
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/1/callSite/endLine",
-        "value": 5
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/2/callSite/endLine",
-        "value": 8
-      }
-    ],
-    "rejects": "counting interface method signatures as named runtime owners and shifting requestA to ordinal 1",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
     "codes": [],
     "edits": [
       {
         "file": "src/requests.ts",
         "from": "\n",
         "to": "declare function requestA(): Promise<Response>;\n\n"
+      },
+      {
+        "file": "src/requests.ts",
+        "from": "const unrelated = \"before\"",
+        "to": "const unrelated = \"edited\""
+      },
+      {
+        "file": "src/requests.ts",
+        "from": "function unrelatedCaller() { return \"before\"; }",
+        "to": "function unrelatedCaller() { return \"edited\"; }"
+      },
+      {
+        "file": "src/policy.ts",
+        "from": "label: \"selected\"",
+        "to": "label: \"adjacent\""
       }
     ],
     "name": "request-type-only-overload-insertion",
@@ -3231,413 +887,35 @@
         "value": 8
       }
     ],
-    "rejects": "counting overload declarations without bodies as named runtime owners and shifting requestA to ordinal 1",
+    "rejects": "hashing line coordinates, unrelated bodies or adjacent uncited bytes, or counting type-only declarations as runtime owners",
     "unchanged": true
   },
   {
     "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "failureIds": ["request-a"],
-    "name": "request-typed-distance-preserved",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/distance",
-        "value": 5
-      }
-    ],
-    "rejects": "dropping or interpreting typed caller metadata",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "failureIds": ["request-a"],
-    "name": "request-typed-kind-preserved",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/kind",
-        "value": "future-kind"
-      }
-    ],
-    "rejects": "dropping or interpreting typed caller metadata",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "changed": ["request-a"],
-    "codes": ["EVIDENCE_CHANGED"],
-    "failureIds": ["request-a"],
-    "name": "request-typed-reason-preserved",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/reason",
-        "value": "future-reason"
-      }
-    ],
-    "rejects": "dropping or interpreting typed caller metadata",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
-    "codes": [],
-    "expect": {
-      "status.json/counts": {
-        "refuted": 0,
-        "roots": 2,
-        "supported": 0,
-        "unknown": 2
-      }
-    },
-    "name": "request-unknown-four-claim-parts",
-    "rejects": "treating unknown as supported",
-    "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "codes": ["VERDICT_INPUT"],
-    "failureIds": ["request-a"],
-    "name": "request-unknown-missing-evidence",
-    "patches": [
-      {
-        "file": "verdicts",
-        "path": "judgments/0/missingEvidence",
-        "remove": true
-      }
-    ],
-    "rejects": "accepting an incomplete, blank, extra-field claim or unknown without missingEvidence",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/stability",
-    "changed": [],
     "codes": [],
     "edits": [
       {
-        "file": "src/requests.ts",
+        "file": "src/stability.ts",
         "from": "function deliverEvents() {\n",
-        "to": "function deliverEvents() {\n  const unrelatedIds = [1, 2].map((n) => n * 2);\n"
+        "to": "function deliverEvents() { const unrelatedIds = [1, 2].map((n) => n * 2);\n"
       }
     ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 12,
-            "endColumn": 42,
-            "endLine": 4,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 4
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 28,
-            "file": "kimchi/src/requests.ts",
-            "line": 3
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 28,
-            "file": "kimchi/src/requests.ts",
-            "line": 3
-          }
-        },
-        {
-          "callSite": {
-            "column": 42,
-            "endColumn": 73,
-            "endLine": 10,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 10
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          }
-        },
-        {
-          "callSite": {
-            "column": 42,
-            "endColumn": 73,
-            "endLine": 10,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 10
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          },
-          "kind": "callback",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          }
-        },
-        {
-          "callSite": {
-            "column": 41,
-            "endColumn": 71,
-            "endLine": 11,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 11
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          }
-        },
-        {
-          "callSite": {
-            "column": 41,
-            "endColumn": 71,
-            "endLine": 11,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 11
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          },
-          "kind": "callback",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          }
-        }
-      ]
-    },
     "name": "request-unrelated-arrow-insertion",
     "rejects": "same-token function-start ordinals that shift a deliverEvents callback after an unrelated map arrow",
     "unchanged": true
   },
   {
     "base": "requests/base",
-    "changed": [],
     "codes": [],
     "edits": [
       {
-        "file": "src/requests.ts",
-        "from": "function unrelatedCaller() { return \"before\"; }",
-        "to": "function unrelatedCaller() { return \"after\"; }"
-      }
-    ],
-    "name": "request-unrelated-caller-edited",
-    "rejects": "fingerprinting unrelated caller bodies",
-    "unchanged": true
-  },
-  {
-    "base": "requests/stability",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/requests.ts",
+        "file": "src/stability.ts",
         "from": "function loginExtension(pi) {\n",
-        "to": "function loginExtension(pi) {\n  pi.on(\"session_shutdown\", () => {});\n"
+        "to": "function loginExtension(pi) { pi.on(\"session_shutdown\", () => {});\n"
       }
     ],
-    "facts": {
-      "regionRegistry": {
-        "fields": []
-      },
-      "requestCallers": [
-        {
-          "callSite": {
-            "column": 12,
-            "endColumn": 42,
-            "endLine": 3,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 3
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 28,
-            "file": "kimchi/src/requests.ts",
-            "line": 2
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 28,
-            "file": "kimchi/src/requests.ts",
-            "line": 2
-          }
-        },
-        {
-          "callSite": {
-            "column": 42,
-            "endColumn": 73,
-            "endLine": 10,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 10
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          }
-        },
-        {
-          "callSite": {
-            "column": 42,
-            "endColumn": 73,
-            "endLine": 10,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 10
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 10
-          },
-          "kind": "callback",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          }
-        },
-        {
-          "callSite": {
-            "column": 41,
-            "endColumn": 71,
-            "endLine": 11,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 11
-          },
-          "distance": 0,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          },
-          "kind": "enclosing",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          }
-        },
-        {
-          "callSite": {
-            "column": 41,
-            "endColumn": 71,
-            "endLine": 11,
-            "file": "kimchi/src/requests.ts",
-            "library": "fetch",
-            "line": 11
-          },
-          "distance": 1,
-          "functionSite": {
-            "column": 1,
-            "file": "kimchi/src/requests.ts",
-            "line": 11
-          },
-          "kind": "callback",
-          "property": null,
-          "reason": null,
-          "site": {
-            "column": 3,
-            "file": "kimchi/src/requests.ts",
-            "line": 8
-          }
-        }
-      ]
-    },
     "name": "request-unrelated-event-insertion",
-    "rejects": "same-callee call ordinals that shift billing and budget caller rows after a different pi.on event",
+    "rejects": "same-callee call ordinals that shift billing caller rows after a different pi.on event",
     "unchanged": true
-  },
-  {
-    "base": "requests/base",
-    "changed": [],
-    "codes": [],
-    "edits": [
-      {
-        "file": "src/policy.ts",
-        "from": "id: \"other\", enabled: false",
-        "to": "id: \"other\", enabled: true"
-      }
-    ],
-    "name": "request-unrelated-source-edited",
-    "rejects": "fingerprinting a whole source file or array",
-    "unchanged": true
-  },
-  {
-    "base": "requests/chained-fetch",
-    "codes": ["REQUEST_LOCATION"],
-    "failureIds": ["request-chained-fetch"],
-    "name": "request-wrong-end-line",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/0/callSite/endLine",
-        "value": 3
-      }
-    ],
-    "rejects": "accepting missing or invalid request ends, ignoring end lines, or rounding an end onto a nearby invocation"
   }
 ]

@@ -7,116 +7,12 @@
         "disable": "Unknown: disabling controls have not been judged.",
         "trigger": "Unknown: triggering behavior has not been judged."
       },
-      "evidenceHash": "sha256:876ec7d9728ac98d74d631024cec6b332ecf3e34a2bc8e32ca29cda2a2e7816e",
-      "id": "request-a",
-      "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
-      "packet": {
+      "evidence": {
         "rows": [
-          {
-            "distance": 0,
-            "functionSite": {
-              "anchor": {
-                "role": {
-                  "kind": "owner"
-                },
-                "symbol": [["function:requestA", 0]]
-              },
-              "path": "src/requests.ts"
-            },
-            "kind": "enclosing",
-            "library": "fetch",
-            "property": null,
-            "reason": null,
-            "site": {
-              "anchor": {
-                "role": {
-                  "key": "function",
-                  "kind": "function-start",
-                  "ordinal": 0
-                },
-                "symbol": [["function:requestA", 0]]
-              },
-              "path": "src/requests.ts"
-            }
-          },
-          {
-            "distance": 1,
-            "functionSite": {
-              "anchor": {
-                "role": {
-                  "kind": "owner"
-                },
-                "symbol": [["function:requestA", 0]]
-              },
-              "path": "src/requests.ts"
-            },
-            "kind": "caller",
-            "library": "fetch",
-            "property": null,
-            "reason": null,
-            "site": {
-              "anchor": {
-                "role": {
-                  "callee": "call:requestA",
-                  "kind": "call",
-                  "ordinal": 0
-                },
-                "symbol": [["function:callerA", 0]]
-              },
-              "path": "src/requests.ts"
-            }
-          }
+          "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9",
+          "sha256:c12fe4cc4408ddbe45b1589b00dd8e32dee3564c7527bab90df40d341c52163e"
         ],
-        "schemaVersion": 1,
-        "selector": {
-          "fact": {
-            "kind": "requestCallers",
-            "where": {
-              "request": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:fetch",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:requestA", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          },
-          "sources": [
-            {
-              "anchor": {
-                "role": {
-                  "kind": "node",
-                  "steps": [
-                    ["list", 0],
-                    ["bindings:enabled", 0],
-                    ["node", 0],
-                    ["list", 0],
-                    ["name:enabled", 0]
-                  ]
-                },
-                "symbol": []
-              },
-              "path": "src/policy.ts"
-            }
-          ]
-        },
         "spans": [
-          {
-            "anchor": {
-              "role": {
-                "callee": "call:fetch",
-                "kind": "statement",
-                "ordinal": 0
-              },
-              "symbol": [["function:requestA", 0]]
-            },
-            "path": "src/requests.ts",
-            "sha256": "sha256:86cb1fdd4692e6e05352dcd383038775e8704857b1478f85fdb79c260ce8a0ea"
-          },
           {
             "anchor": {
               "role": {
@@ -135,10 +31,49 @@
             "sha256": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
           }
         ],
-        "statement": "return fetch(\"https://a.example\");"
+        "statement": "sha256:86cb1fdd4692e6e05352dcd383038775e8704857b1478f85fdb79c260ce8a0ea"
       },
+      "evidenceHash": "sha256:d2cc2e0e9d5447461ada46255c106532a35fa132d36595d657853b6c81a8bdb6",
+      "id": "request-a",
+      "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
       "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
       "scope": "The selected request occurrence and explicitly cited source bytes.",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:requestA", 0]]
+              },
+              "path": "src/requests.ts"
+            }
+          }
+        },
+        "sources": [
+          {
+            "anchor": {
+              "role": {
+                "kind": "node",
+                "steps": [
+                  ["list", 0],
+                  ["bindings:enabled", 0],
+                  ["node", 0],
+                  ["list", 0],
+                  ["name:enabled", 0]
+                ]
+              },
+              "symbol": []
+            },
+            "path": "src/policy.ts"
+          }
+        ]
+      },
       "verdict": "unknown"
     },
     {
@@ -148,31 +83,27 @@
         "disable": "Unknown: disabling controls have not been judged.",
         "trigger": "Unknown: triggering behavior has not been judged."
       },
-      "evidenceHash": "sha256:5fae883fc3fab4df1186002b2ce3e1ae11e0676ec36667a7f79a18a8073631ed",
+      "evidence": {
+        "rows": [
+          "sha256:a419c33e34cc052b007140b4b2464cfffc12251474043edfe58316dbfc1d3e99"
+        ],
+        "spans": [],
+        "statement": "sha256:896dd7a6f436d373a969dcdb490ad09804c873a6f5e8474dbdfd2e7ae6318158"
+      },
+      "evidenceHash": "sha256:7a8c87b7effc40852f23c0d8b03b269e1c18ecc22931e4bb4c1441bc95057d29",
       "id": "request-b",
       "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
-      "packet": {
-        "rows": [
-          {
-            "distance": 0,
-            "functionSite": {
+      "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+      "scope": "The selected request occurrence and explicitly cited source bytes.",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
               "anchor": {
                 "role": {
-                  "kind": "owner"
-                },
-                "symbol": [["function:requestB", 0]]
-              },
-              "path": "src/requests.ts"
-            },
-            "kind": "enclosing",
-            "library": "fetch",
-            "property": null,
-            "reason": null,
-            "site": {
-              "anchor": {
-                "role": {
-                  "key": "function",
-                  "kind": "function-start",
+                  "callee": "call:fetch",
+                  "kind": "call",
                   "ordinal": 0
                 },
                 "symbol": [["function:requestB", 0]]
@@ -180,45 +111,170 @@
               "path": "src/requests.ts"
             }
           }
-        ],
-        "schemaVersion": 1,
-        "selector": {
-          "fact": {
-            "kind": "requestCallers",
-            "where": {
-              "request": {
-                "anchor": {
-                  "role": {
-                    "callee": "call:fetch",
-                    "kind": "call",
-                    "ordinal": 0
-                  },
-                  "symbol": [["function:requestB", 0]]
-                },
-                "path": "src/requests.ts"
-              }
-            }
-          },
-          "sources": []
         },
-        "spans": [
-          {
-            "anchor": {
-              "role": {
-                "callee": "call:fetch",
-                "kind": "statement",
-                "ordinal": 0
-              },
-              "symbol": [["function:requestB", 0]]
-            },
-            "path": "src/requests.ts",
-            "sha256": "sha256:896dd7a6f436d373a969dcdb490ad09804c873a6f5e8474dbdfd2e7ae6318158"
-          }
-        ],
-        "statement": "return fetch(\"https://b.example\");"
+        "sources": []
       },
+      "verdict": "unknown"
+    },
+    {
+      "claim": {
+        "default": "Unknown: default behavior has not been judged.",
+        "destination": "Unknown: effective destination has not been judged.",
+        "disable": "Unknown: disabling controls have not been judged.",
+        "trigger": "Unknown: triggering behavior has not been judged."
+      },
+      "evidence": {
+        "rows": [
+          "sha256:68bc4c7d7b9c38d7340680f0b3a84120d67632a9529af80a65c6c88b92ad576f",
+          "sha256:c30530d90eee56706bb64889eca6235fb5e9d793a94b3066e5412a8ebb345926"
+        ],
+        "spans": [],
+        "statement": "sha256:b6be292c6ef5b0b03ac8f325d4e50fa597fa0ea0389b15143e2aff88c245f44e"
+      },
+      "evidenceHash": "sha256:145a07de887679968759e407131e1409b9485f3fd2001ad94fe8abccfd01bf88",
+      "id": "request-billing",
+      "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
       "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
       "scope": "The selected request occurrence and explicitly cited source bytes.",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:refreshBillingStatus", 0]]
+              },
+              "path": "src/stability.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "verdict": "unknown"
+    },
+    {
+      "claim": {
+        "default": "Unknown: default behavior has not been judged.",
+        "destination": "Unknown: effective destination has not been judged.",
+        "disable": "Unknown: disabling controls have not been judged.",
+        "trigger": "Unknown: triggering behavior has not been judged."
+      },
+      "evidence": {
+        "rows": [
+          "sha256:be36a739d40eecb0f05cd9a97e82509b2f85535383687469dbe5c8be7f480c0f"
+        ],
+        "spans": [],
+        "statement": "sha256:29772afba1190648b9e385bbb98296df19c1fa733075ca24f480f09d2ebc89bb"
+      },
+      "evidenceHash": "sha256:64a41d796ca250c9e95f05405ea298a12514e95ef3ce7bed9e6d986f0c8c310e",
+      "id": "request-chained-fetch",
+      "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+      "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+      "scope": "The selected request occurrence and explicitly cited source bytes.",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:chained", 0]]
+              },
+              "path": "src/chained-fetch.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "verdict": "unknown"
+    },
+    {
+      "claim": {
+        "default": "Unknown: default behavior has not been judged.",
+        "destination": "Unknown: effective destination has not been judged.",
+        "disable": "Unknown: disabling controls have not been judged.",
+        "trigger": "Unknown: triggering behavior has not been judged."
+      },
+      "evidence": {
+        "rows": [
+          "sha256:ce1961e723fa0ee44d7d829afed129e7da1be5e0d3a03992cb244b055ff6329f"
+        ],
+        "spans": [],
+        "statement": "sha256:77d0e23830f26a3ef4048bb408f32087434aee604f14850da24d98d8a2317a42"
+      },
+      "evidenceHash": "sha256:1796a40dd78cc21df7f13eb350b4ec76dfc48c0aa10d373ad2167abc62bf1837",
+      "id": "request-events",
+      "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+      "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+      "scope": "The selected request occurrence and explicitly cited source bytes.",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:deliverEvents", 0]]
+              },
+              "path": "src/stability.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "verdict": "unknown"
+    },
+    {
+      "claim": {
+        "default": "Unknown: default behavior has not been judged.",
+        "destination": "Unknown: effective destination has not been judged.",
+        "disable": "Unknown: disabling controls have not been judged.",
+        "trigger": "Unknown: triggering behavior has not been judged."
+      },
+      "evidence": {
+        "rows": [
+          "sha256:ea95c1ea53f7286bb0fbbcf77f34008a51ab517b223063f5c4013f083815305e"
+        ],
+        "spans": [],
+        "statement": "sha256:ee8f2594b0cf2780c7ff9c8052e31b90f30f1240538af3bcf17efa2ba755b557"
+      },
+      "evidenceHash": "sha256:e7e4d04d944193e8ff05ca1fbfb70fe901c29903eae7cd72346bffea372ee6bd",
+      "id": "request-returned-fetch",
+      "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+      "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+      "scope": "The selected request occurrence and explicitly cited source bytes.",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:getFetch()",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:returned", 0]]
+              },
+              "path": "src/returned-fetch.ts"
+            }
+          }
+        },
+        "sources": []
+      },
       "verdict": "unknown"
     }
   ],

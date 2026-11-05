@@ -9,6 +9,7 @@ import {
   escapeText,
   factRows,
   hash,
+  judgmentSelector,
   packet,
   requestClaimParts,
   requests,
@@ -39,6 +40,10 @@ const actions = {
   SOURCE_INPUT: `Correct the pinned source or structural resolver, regenerate facts if the source changed, then investigate and rejudge ${verdictFile}.`,
   UNCLASSIFIED_ROOT: `Review the candidate packet and add one scoped judgment or explicit unknown record to ${verdictFile}.`,
   VERDICT_INPUT: `Correct the verdict file at the named path in ${verdictFile} and rerun the check; a record's packet will be emitted once it is valid.`,
+};
+const requestActions = {
+  EVIDENCE_CHANGED: `Investigate every listed span hash and caller-row digest in current.json, then update the claim, scope, rationale, verdict, recorded evidence summary and evidenceHash as warranted in ${verdictFile}.`,
+  RECORDED_HASH: `Inspect the recorded evidence summary edit and current evidence, then deliberately update the reviewed record in ${verdictFile}.`,
 };
 const failures = [],
   current = {},
@@ -73,6 +78,10 @@ function fail(
     detail,
     old,
     fresh,
+    action:
+      judgmentSelector(judgment)?.fact?.kind === "requestCallers"
+        ? requestActions[code]
+        : undefined,
   });
 }
 async function json(path) {
@@ -104,13 +113,13 @@ async function evaluate() {
     .map((record) => record.judgment);
   const invalidHashes = new Set();
   for (const judgment of valid) {
-    const computed = hash(canonical(judgment.packet));
+    const computed = hash(canonical(judgment.evidence ?? judgment.packet));
     if (computed !== judgment.evidenceHash) {
       invalidHashes.add(judgment.id);
       fail(
         judgment,
         "RECORDED_HASH",
-        `recorded packet hashes to ${computed}, not its recorded evidenceHash ${judgment.evidenceHash}`,
+        `recorded ${judgment.evidence ? "evidence summary" : "packet"} hashes to ${computed}, not its recorded evidenceHash ${judgment.evidenceHash}`,
         judgment.evidenceHash,
         computed,
       );
@@ -156,7 +165,7 @@ async function evaluate() {
   for (const [key, root] of requestEvidence.roots) roots.set(key, root);
   // A malformed record only suppresses coverage for its recoverable root.
   const recordedRoots = new Set(
-    records.map(({ judgment }) => rootKey(judgment?.packet?.selector)),
+    records.map(({ judgment }) => rootKey(judgmentSelector(judgment))),
   );
   const candidates = [...roots]
     .filter(([key]) => !recordedRoots.has(key))
@@ -173,8 +182,10 @@ async function evaluate() {
     });
   for (const judgment of [...valid, ...candidates]) {
     const { id, evidenceHash: old = "absent" } = judgment;
-    const recorded = judgment.evidenceHash ? judgment.packet : null;
-    const selector = judgment.packet.selector,
+    const recorded = judgment.evidenceHash
+      ? (judgment.evidence ?? judgment.packet)
+      : null;
+    const selector = judgmentSelector(judgment),
       root = selector.fact.where.request
         ? canonical(selector.fact.where.request)
         : selector.fact.where.region,
@@ -210,14 +221,17 @@ async function evaluate() {
     diff[id] = {
       recorded: recorded ? old : null,
       current: result.evidenceHash ?? null,
-      ...differences(recorded, result.packet ?? result.incomplete),
+      ...differences(
+        recorded,
+        result.evidence ?? result.packet ?? result.incomplete,
+      ),
     };
     if (invalidHashes.has(id)) continue;
     if (!recorded)
       fail(
         judgment,
         "UNCLASSIFIED_ROOT",
-        `unclassified ${request ? "request root" : "root"} ${root}: ${request ? "a requestCallers occurrence" : "a nonempty llmBaseUrl declaration"} has no judgment; added rows=${canonical((result.packet ?? result.incomplete).rows)}`,
+        `unclassified ${request ? "request root" : "root"} ${root}: ${request ? "a requestCallers occurrence" : "a nonempty llmBaseUrl declaration"} has no judgment; added rows=${canonical((result.evidence ?? result.packet ?? result.incomplete).rows)}`,
         old,
         result.evidenceHash ?? "unresolved",
       );
@@ -259,7 +273,7 @@ Changed: ${escapeText(f.detail)}
 Evidence hash: old=${f.old}; new=${f.fresh}
 Packets: nix build .#checks.${args.system}.kimchi-surface-judgments.passthru.packets --out-link /tmp/kimchi-judgment-packets
 Inspect: /tmp/kimchi-judgment-packets/current.json; /tmp/kimchi-judgment-packets/diff.json; /tmp/kimchi-judgment-packets/display.json
-Fix: ${actions[f.code]}
+Fix: ${f.action ?? actions[f.code]}
 A red check means: ask a session to investigate and rejudge. CI does not update verdicts or hashes.
 `,
       )
