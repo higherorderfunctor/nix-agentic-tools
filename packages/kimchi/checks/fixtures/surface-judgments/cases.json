@@ -769,8 +769,12 @@
     "unchanged": true
   },
   {
-    "codes": ["EVIDENCE_CHANGED"],
-    "details": ["eu-search-service-availability", "<unresolved>"],
+    "codes": ["ANCHOR_AMBIGUOUS"],
+    "details": [
+      "eu-search-service-availability",
+      "ambiguous anchor",
+      "found 2"
+    ],
     "edits": [
       {
         "file": "source",
@@ -783,41 +787,8 @@
         "to": "{\"field\":\"llmBaseUrl\",\"file\":\"src/regions.ts\",\"line\":8,\"region\":\"eu\",\"value\":\"https://llm.eu.kimchi.dev\"},{\"field\":\"llmBaseUrl\",\"file\":\"src/regions.ts\",\"line\":9,\"region\":\"eu\",\"value\":\"<unresolved>\"}"
       }
     ],
-    "expect": {
-      "current.json/eu-search-service-availability/packet/rows": [
-        {
-          "field": "llmBaseUrl",
-          "region": "eu",
-          "site": {
-            "anchor": {
-              "role": {
-                "keys": ["eu", "llmBaseUrl"],
-                "kind": "property"
-              },
-              "symbol": "REGIONS"
-            },
-            "path": "src/regions.ts"
-          },
-          "value": "<unresolved>"
-        },
-        {
-          "field": "llmBaseUrl",
-          "region": "eu",
-          "site": {
-            "anchor": {
-              "role": {
-                "keys": ["eu", "llmBaseUrl"],
-                "kind": "property"
-              },
-              "symbol": "REGIONS"
-            },
-            "path": "src/regions.ts"
-          },
-          "value": "https://llm.eu.kimchi.dev"
-        }
-      ]
-    },
+    "incomplete": true,
     "name": "eu-getter-overrides-literal",
-    "rejects": "ignoring an unresolved getter that overrides the selected literal"
+    "rejects": "hashing only the literal when a same-named getter can override it"
   }
 ]

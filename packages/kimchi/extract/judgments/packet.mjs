@@ -291,10 +291,11 @@ export function resolver(bytes, ts, display) {
       node = unwrap(match(registries, citation).initializer);
       for (const [index, key] of role.keys.entries()) {
         if (!node || !ts.isObjectLiteralExpression(node)) shape(citation);
+        // A same-named accessor or method beside the assignment can override
+        // it at runtime, so every same-named member counts toward uniqueness.
+        const named = [...node.properties].filter((p) => name(p) === key);
         node = match(
-          [...node.properties].filter(
-            (p) => ts.isPropertyAssignment(p) && name(p) === key,
-          ),
+          named.length > 1 ? named : named.filter(ts.isPropertyAssignment),
           citation,
         );
         if (index === 0) node = node.initializer;

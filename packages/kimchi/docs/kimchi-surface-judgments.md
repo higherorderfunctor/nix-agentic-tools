@@ -64,8 +64,10 @@ and these structural roles are produced:
   Named methods, shorthand properties and accessors are allowed: the measured
   query includes their named fields, using `<unresolved>` for nonliteral values.
   Resolving a selected property still requires a direct property assignment.
-  This scan includes regions without measured gateway rows, so unsupported
-  registry structure cannot hide a root.
+  Every same-named member counts toward uniqueness, so an assignment beside a
+  same-named accessor or method, which can override it at runtime, is ambiguous.
+  A lone accessor or method is missing. This scan includes regions without
+  measured gateway rows, so unsupported registry structure cannot hide a root.
 - `searchUrl :: declaration` selects the complete top-level exported named
   function. All same-name declarations count, including overload signatures: an
   overloaded name is ambiguous.
