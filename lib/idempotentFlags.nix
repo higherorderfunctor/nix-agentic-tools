@@ -115,6 +115,24 @@
       "done"
     ];
 
+  # Sets shell variable `var` to 1 when boolean `flag` occurs as an EXACT argv
+  # token before any literal `--`, else 0. A token past `--` is a positional
+  # the wrapped CLI will not honour, so neither does this; an exact match keeps
+  # a prompt that merely mentions the flag from counting.
+  flagPresenceBlock = {
+    flag,
+    var,
+  }:
+    lib.concatStringsSep "\n" [
+      "${var}=0"
+      "for nat_arg in \"$@\"; do"
+      "  case \"$nat_arg\" in"
+      "    --) break ;;"
+      "    ${lib.escapeShellArg flag}) ${var}=1 ;;"
+      "  esac"
+      "done"
+    ];
+
   # flags    : boolean flag strings, e.g. [ "--tui" "--v3" ].
   # position : "prepend" for a CLI-global option (before any subcommand);
   #            "append" for one the target subcommand itself declares.
@@ -152,7 +170,7 @@
         )
     );
 in {
-  inherit idempotentFlagBlock optionValueBlock subcommandBlock;
+  inherit flagPresenceBlock idempotentFlagBlock optionValueBlock subcommandBlock;
 
   # The `subcommands` entry standing for an invocation that carries NO
   # subcommand — `kiro-cli` on its own. Named rather than written as a bare ""

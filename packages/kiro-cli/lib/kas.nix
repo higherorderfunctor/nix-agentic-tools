@@ -15,8 +15,7 @@ in
     inherit src sourceRoot version;
     nativeBuildInputs =
       [pkgs.nodejs pkgs.python3]
-      ++ lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.autoPatchelfHook
-      ++ lib.optional pkgs.stdenv.hostPlatform.isDarwin pkgs.undmg;
+      ++ lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.autoPatchelfHook;
     buildInputs = lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.stdenv.cc.cc.lib;
     dontConfigure = true;
     dontBuild = true;

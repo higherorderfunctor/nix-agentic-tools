@@ -93,8 +93,9 @@
         "packages/kiro-cli/checks/kiro-fhs-contract.nix"
         "packages/kiro-cli/checks/kiro-wrapper-argv.nix"
         "lib/idempotentFlags.nix"
-        # The overlay's wrapProgram calls carry the darwin argv0
-        # bundle-discovery fix, which is part of this argv contract.
+        # The overlay's postFixup wrappers (package-bound KAS, the update
+        # guard, the temporary kiro-cli-chat alias) are part of this argv
+        # contract.
         "packages/${facetOwner}/packages/ai/kiro-cli/package.nix"
         "packages/${facetOwner}/lib/**"
       ];

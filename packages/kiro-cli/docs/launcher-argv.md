@@ -1,12 +1,12 @@
 # kiro-cli wrapper: the argv contract
 
-<!-- cspell:ignore figterm -->
+<!-- cspell:ignore cutover -->
 
-> **Last verified:** 2026-10-30 — MCP header exports resolve redact references
-> at launch and abort on failure; URL references resolve at activation. KAS
-> 0.66.43 (Kiro 2.32.0) ships no image module, so the drift check loads ONNX
-> alone. The package-bound KAS and argv dispatch contracts below are otherwise
-> unchanged.
+> **Last verified:** 2026-11-05 — Kiro CLI 3.0.0 ships one `kiro-cli` binary;
+> its wrapper carries `--trust-tools`, gated on the effective engine from
+> `--agent-engine` or `--v3`. `kiro-cli-chat` is a temporary package alias. The
+> 3.0.0 argv facts below are asserted by `kiro-kas-dispatch`; 2.x measurements
+> are labelled as such.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -42,97 +42,105 @@ cost a release: the wrapper used to _append_ these flags, which broke `acp`,
 
 So the wrapper **prepends** them. Prepended, every subcommand accepts them.
 
-## `--v3` reaches `acp` for free
+## `--v3` selects the engine for `acp` too
 
-The launcher translates its own global `--v3` into an `--agent-engine` option —
-**for `acp` only.** Measured directly, by putting a `kiro-cli-chat` that prints
-its argv first on `PATH`:
+Since 3.0.0 the release ships one `kiro-cli` binary that runs the chat
+implementation itself; nothing dispatches to a separate chat binary through
+`PATH`. A top-level `--v3` therefore reaches `acp`, `chat` and the bare launch
+directly. On 2.x the launcher instead rewrote `--v3 acp` into
+`acp --agent-engine v3` for a separate `kiro-cli-chat` (measured on 2.15.2);
+that rewrite no longer exists.
 
-```console
-$ kiro-cli --v3 acp        # kiro-cli-chat actually received:
-acp --agent-engine v3
-
-$ kiro-cli --v3 chat       # NOT translated — forwarded verbatim:
-chat --v3
-
-$ kiro-cli --v3 mcp list   # dropped entirely:
-mcp list
-```
-
-`chat` needs no translation because the chat binary declares its own `--v3`;
-`mcp`/`agent` do not take an engine at all. Do not generalize the `acp` row to
-the others.
-
-Note the **two-token** form. The error text below renders it
-`--agent-engine=v3`, but that is how clap prints an option in a diagnostic, not
-the argv that was passed — so a probe grepping forwarded argv for the `=`
-spelling finds nothing and wrongly concludes the translation is gone.
-`optionValueBlock` accepts both spellings for exactly this reason.
+`--trust-tools` conflicts with the v3 engine on `acp`:
 
 ```console
 $ kiro-cli --v3 acp --trust-tools=fs_read
 error: the following arguments are not supported with --agent-engine=v3: --trust-tools
 ```
 
+The error names `--agent-engine=v3`, a flag the user never typed. That is how
+clap prints the resolved engine, not the argv that was passed.
+
 So `ai.kiro.cli.v3 = true` gives an ACP session the v3 engine with **no
 `--agent-engine` translation in this repo**. Do not add one.
 
 **A caller's explicit `--agent-engine` wins, upstream.**
 `kiro-cli --v3 acp --agent-engine=v2` runs v2 — no error, and no "cannot be used
-multiple times". The wrapper therefore implements no precedence of its own.
+multiple times". The trust gate mirrors that order and implements no other
+precedence.
+
+`kiro-kas-dispatch` asserts both facts against the 3.0.0 binary on both
+platforms, with no managed argv injection: the conflict (exit 2) and that
+`--v3 acp --agent-engine=v2 --auth-method client` fails on `--auth-method`, not
+on `--trust-tools`.
 
 ## What is injected where
 
-| Binary          | Flag             | Position    | Applies to                                   |
-| --------------- | ---------------- | ----------- | -------------------------------------------- |
-| `kiro-cli`      | `--v3`           | **prepend** | every subcommand + bare                      |
-| `kiro-cli-chat` | `--trust-tools=` | **append**  | `chat` always; `acp` unless the engine is v3 |
+| Command                     | Flag             | Position    | Applies to                                                  |
+| --------------------------- | ---------------- | ----------- | ----------------------------------------------------------- |
+| `kiro-cli`                  | `--v3`           | **prepend** | every subcommand + bare                                     |
+| `kiro-cli`, `kiro-cli-chat` | `--trust-tools=` | **append**  | `chat` and the bare launch always; `acp` unless engine = v3 |
+
+`kiro-cli-chat` is a temporary package alias for the same binary, kept for
+consumers that still invoke it. It receives no `--v3`: an invocation through it
+selects its engine itself.
 
 The `acp` condition is resolved from **argv at runtime**, not from the Nix
-config — see
-[the post-split dispatch section](#post-split-linux-does-not-compose-the-outer-wrappers).
+config — see [the effective engine](#is-the-engine-v3-is-a-runtime-question).
+The gate runs after the `--v3` prepend, so an injected `--v3` counts.
 
 Two different rules, for two different reasons — do not "make them consistent":
 
 - **`--v3` is global and wanted everywhere**, since it selects the engine for
   `chat` and `acp` alike.
-- **`--trust-tools` is genuinely per-subcommand.** The chat binary declares it
-  on `chat` and `acp` and **not** at top level, so a bare
-  `kiro-cli-chat --trust-tools=…` is an "unexpected argument". It is appended
-  and gated.
+- **`--trust-tools` belongs to the chat arguments**: `chat`, `acp` and the bare
+  launch. Other subcommands reject it. It is appended and gated.
+
+A prompt passed to a bare launch (`kiro-cli "explain this"`) gets **no**
+`--trust-tools`. Its first positional cannot be told apart from an unknown
+subcommand without a curated subcommand list that would drift with every
+release, so the gate treats it as a subcommand and declines.
+`kiro-cli chat "explain this"` carries the grant. `kiro-wrapper-argv` pins both
+rows.
 
 ### Package-bound KAS and selected prompt patches
 
 The native package's ordinary `makeWrapper` setup binds `KIRO_KAS_SERVER_PATH`
-and `KIRO_KAS_NODE_PATH` for both `kiro-cli` and `kiro-cli-chat`. KAS comes from
-that CLI release's fetched input, never from the user's unpacked cache. Fresh
-launches and launches with an older cache therefore use the same selected store
-tree. Darwin's launcher still receives its app-bundle argv0, and its raw chat
-sibling inherits these exports. Linux FHS and direct payloads share them.
+and `KIRO_KAS_NODE_PATH` for both `kiro-cli` and the `kiro-cli-chat` alias. KAS
+comes from that CLI release's fetched input, never from the user's unpacked
+cache. Fresh launches and launches with an older cache therefore use the same
+selected store tree. Linux FHS and direct payloads share them.
 
 Home Manager defaults `ai.kiro.cli.native.settings.app.disableAutoupdates` to
 `true` in the global settings file it already owns when `cli.package` is
 non-null. With `cli.package = null`, no updater default is added. Set it to
 `false` to re-enable checks; the managed launcher also releases the package's
 environment guard. An explicit `cli.environmentVariables.KIRO_NO_AUTO_UPDATE`
-still wins. The global setting covers `kiro-cli-term` (figterm), which does not
-read `KIRO_NO_AUTO_UPDATE`. Devenv cannot write this global-only setting, so any
-terminal update policy there comes from the user's global settings.
+still wins. Devenv cannot write this global-only setting, so any update policy
+there beyond the environment guard comes from the user's global settings.
 
-Both package launchers default `KIRO_NO_AUTO_UPDATE=1`. On devenv or with the
+Both package commands default `KIRO_NO_AUTO_UPDATE=1`. On devenv or with the
 package alone, set it to `0`, `false`, `off`, `no` (case-insensitive), or empty
 to re-enable checks. The guard exports private `NAT_KIRO_AUTO_UPDATE=on` and
-unsets `KIRO_NO_AUTO_UPDATE`. On Linux, the inner chat wrapper preserves that
-opt-in and clears the private marker before starting chat, so child launchers
-apply their own defaults; direct `kiro-cli-chat` calls also clear it. On Darwin,
-bundle discovery bypasses the chat wrapper, so the marker remains set after an
-opt-in. This only makes nested launchers keep the opt-in. Any global
-`app.disableAutoupdates = true` must also be released. This handles
-presence-based consumers too. The binary's exact update-path semantics remain
-unverified: isolated `--version` and unauthenticated probes reached only version
-output or the authentication prompt. The stub-based
-`kiro-autoupdate-wrapper-chain` check tests the Linux wrapper composition
-without running Kiro.
+unsets `KIRO_NO_AUTO_UPDATE`. Each command is a direct last hop to the binary,
+so it also clears the private marker before Kiro starts and child launchers
+apply their own defaults. An inherited marker keeps an opt-in an outer guard
+already normalized. Any global `app.disableAutoupdates = true` must also be
+released. This handles presence-based consumers too. The binary's exact
+update-path semantics remain unverified: isolated `--version` and
+unauthenticated probes reached only version output or the authentication prompt.
+The stub-based `kiro-autoupdate-wrapper-chain` check runs both commands'
+wrappers without running Kiro.
+
+3.0.0 also carries a hidden legacy sweep
+(`kiro-cli _ cleanup-autocomplete-artifacts`) that removes leftovers of the
+bundled pre-3.0 distribution from `~/.local/bin`, shell rc files and desktop
+autostart entries, and a standalone cutover that can install into
+`~/.local/bin`. The vendor installer runs the sweep explicitly; whether a first
+launch of a store-path binary triggers either is not readable from the binary's
+strings and is unmeasured. The package adds no guard for them;
+`KIRO_NO_AUTO_UPDATE` and `app.disableAutoupdates` stay the only update
+controls.
 
 `lib/kas.nix` extracts the complete runtime through `extract/embedded-kas.py`.
 The extractor first selects the target CPU slice of a universal Mach-O (the
@@ -186,16 +194,18 @@ at evaluation from a derivation output.
 refusals. `kiro-bundle-patch` covers strict selected-anchor refusal and decoded
 synthetic JavaScript behavior. `kiro-bundle-patch-drift` checks every vendor
 selection, the real native ONNX module, WASM solving, shipped ripgrep, and ACP
-initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
-CLI/ACP, fresh/stale homes, override precedence and explicit V2 selection. The
-FHS contract check separately inspects the command paths inside the synthesized
-root; nested bubblewrap execution is not portable inside a Nix build sandbox.
+initialization. `kiro-kas-dispatch` exercises the real `kiro-cli` and
+`kiro-cli-chat` commands, CLI/ACP, fresh/stale homes, override precedence,
+explicit V2 selection and a `trustedMcpTools` wrapper, plus raw argv
+measurements on the stock binary. The FHS contract check separately inspects the
+command paths inside the synthesized root; nested bubblewrap execution is not
+portable inside a Nix build sandbox.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 
 `ai.kiro.cli.extraPackages` adds one more environment-only injection to both the
-launcher and direct chat wrappers. Their store-backed `bin` directories are
-prepended after ordinary and secret environment exports, so an explicit
+`kiro-cli` and `kiro-cli-chat` wrappers. Their store-backed `bin` directories
+are prepended after ordinary and secret environment exports, so an explicit
 `ai.kiro.cli.environmentVariables.PATH` becomes the base and the requested
 packages are first at that wrapper boundary. With no explicit PATH, the caller's
 inherited value remains after the prefix. Setting the Kiro-specific PATH entry
@@ -217,7 +227,7 @@ On Linux this crosses the upstream FHS visibility boundary because `/nix` is
 mounted and PATH is preserved; it does not merge packages into the synthesized
 root. See [`fhs-sandbox.md`](fhs-sandbox.md) for why that distinction matters.
 
-## POST-SPLIT LINUX NEEDS CHAT CONFIGURATION INSIDE THE FHS PAYLOAD
+## LINUX PLACES THE TRUST WRAPPER INSIDE THE FHS PAYLOAD
 
 > **Linux gained an FHS layer on post-split nixpkgs.** Since f13ff45a, the
 > public package wraps `kiro-cli-unwrapped` in `buildFHSEnv`. nixpkgs 9ddfd8a
@@ -225,141 +235,54 @@ root. See [`fhs-sandbox.md`](fhs-sandbox.md) for why that distinction matters.
 > environment: `$out/bin/*` are thin wrappers selecting a command,
 > `$out/libexec/kiro-cli/kiro-cli-wrapper` enters bubblewrap, and `/init`
 > delegates through a three-line dispatcher before the selected command runs in
-> the FHS root. Our wrapProgram shims live on `passthru.unwrapped`. Flags and
-> environment pass through every layer, so the contract in this document holds.
-> PATH is **preserved** inside, but `/etc/profile` prepends
-> `/run/wrappers/bin:/usr/bin:/usr/sbin`. Because the FHS root's `/usr/bin`
-> already contains `kiro-cli-chat`, launcher dispatch selects that command
-> before the inherited profile PATH can reach an outer chat wrapper. The factory
-> therefore re-composes upstream's FHS expression around a chat-only wrapped
-> payload when `trustedMcpTools` is configured. A decoy under `$HOME` is visible
-> but cannot displace that same-named FHS command; one in `/usr/local/bin` is
-> absent entirely. See [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule,
-> shadowed set, and loader trap. Darwin is unaffected — upstream returns the
-> unwrapped derivation and builds no FHS layer.
+> the FHS root. This repo supplies its own pinned payload to that expression;
+> our wrapProgram shims live on `passthru.unwrapped`. Flags and environment pass
+> through every layer, so the contract in this document holds. PATH is
+> **preserved** inside, but `/etc/profile` prepends
+> `/run/wrappers/bin:/usr/bin:/usr/sbin`, so the root's own `/usr/bin` commands
+> win over same-named entries later on PATH. See
+> [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule, shadowed set, and loader
+> trap. Darwin is unaffected — upstream returns the payload directly and builds
+> no FHS layer. nixpkgs' FHS expression still lists `kiro-cli-term`, which 3.0.0
+> no longer ships, so that one command wrapper fails with "command not found".
 
-**The pre-split launcher resolved `kiro-cli-chat` through PATH.** Dropping the
-wrapped bin directory made it fail rather than fall back, and a leading decoy
-was invoked (measured 2026-08-04, store 2.16.0). That measurement does not prove
-the current post-split chain: the FHS profile ordering above now resolves the
-raw rootfs command first.
-
-### Darwin bundle discovery must reach the packaged app
-
-The same decoy — `command -v` confirmed resolving to it — is **never invoked**
-on darwin, tested with both the .app binary and the wrapped launcher via
-`mcp list`, a subcommand the forwarding table shows dispatching. Instead the
-historical Darwin launcher probes associated successful dispatch with
-`…/Kiro CLI.app/Contents/MacOS` as argv0's parent. Failed discovery falls back
-to `$HOME/.local/bin/kiro-cli-chat` — on any Mac that has run the DMG installer,
-an unpatched build. There is no `KIRO_*` env override for the chat path.
-
-Measured on one machine, `--v3`, all `KIRO_*` stripped (store 2.16.0, DMG
-2.16.1):
-
-| entry point                                | chat resolved to   | features                    |
-| ------------------------------------------ | ------------------ | --------------------------- |
-| `.app/Contents/MacOS/kiro-cli` (real path) | store .app sibling | `["workflows","tangent"]` ✓ |
-| `<store>/bin/kiro-cli` (wrapProgram shim)  | `~/.local/bin`     | `["tangent"]` ✗             |
-| symlink → .app binary                      | `~/.local/bin`     | `["tangent"]` ✗             |
-| hand-written `exec -a "$APP" "$APP"`       | store .app sibling | `["workflows","tangent"]` ✓ |
-
-The historical measurements above established the argv0 workaround for those
-releases. Native 2.29.1 CI later demonstrated that the same wrapper, with an
-app-shaped argv0 but `bin/.kiro-cli-wrapped` as its executable filename, still
-fell back to the empty home's `.local/bin`. That failure occurs before KAS
-starts. Static ARM64 disassembly of that release identifies the chat chooser
-calling `macos_utils::get_bundle_path_for_executable`, which obtains
-`NSBundle.mainBundle.bundleURL` and appends `Contents/MacOS/kiro-cli-chat`. An
-absent bundle result selects the home fallback. This chooser does not read
-argv0; the historical argv0 explanation was too strong.
-
-The package now removes only upstream's `bin/kiro-cli` symlink and uses
-`makeWrapper` with the real app binary as its target, retaining that same path
-as `--argv0`. Both executable filename and argv0 therefore identify the packaged
-app. It preserves the native launcher's dispatch and leaves the app binary in
-place. The fresh-home native dispatch check must pass without installing a
-fallback binary. Direct chat keeps its existing wrapper.
-
-**Standing decision, made explicitly rather than inherited:** post-fix, the
-darwin launcher resolves the RAW .app-sibling chat binary — never this repo's
-chat WRAPPER — so the two-wrapper composition below does not exist on darwin and
-`--trust-tools` is unreachable via `kiro-cli` there. That was equally true
-before the fix (the DMG fallback skipped the wrapper too), so nothing regressed;
-it is the accepted cost of keeping the launcher's own dispatch rewrites instead
-of reimplementing them. Under v3 the effective grant is `permissions.yaml`
-(home-manager translates `trustedMcpTools` into it; the TUI's auto-answer keys
-on `--trust-all-tools`, not `--trust-tools`), so the practical loss is confined
-to v2-engine sessions launched via `kiro-cli` on darwin.
-
-In a current **Linux** profile with `trustedMcpTools` and `v3`, a
-launcher-mediated call uses an outer launcher wrapper for launcher-wide
-configuration and an inner chat wrapper for the chat-only grant:
+When `trustedMcpTools` is configured, the factory re-composes upstream's FHS
+expression around a trust-wrapped payload, so the root's `/usr/bin/kiro-cli` and
+`/usr/bin/kiro-cli-chat` carry the grant. In a Linux profile with
+`trustedMcpTools` and `v3`:
 
 ```
 kiro-cli acp
-  -> launcher wrapper  prepends --v3
+  -> outer wrapper     prepends --v3
   -> command wrapper   selects kiro-cli on the shared FHS launcher
   -> FHS /init         prepends the synthesized command directories
   -> dispatcher        execs the selected command
-  -> launcher          finds the package's /usr/bin/kiro-cli-chat first
-  -> payload wrapper   appends --trust-tools when the engine accepts it
-  -> chat binary
+  -> /usr/bin/kiro-cli payload trust wrapper: sees --v3, withholds on acp
+  -> kiro-cli binary
 ```
 
-The same payload wrapper is reached by the public `kiro-cli-chat` command, so
-there is one trust injection rather than an outer-plus-inner duplicate. The
-wrapper's v3/acp withholding still sees the launcher's rewritten argv and keeps
-the existing engine-sensitive behavior. Home Manager's declarative permissions
-translation remains an independent v3 path; devenv no longer depends on an
-equivalent file writer to recover a wrapper the FHS root skipped.
+The inner trust wrapper is built without a v3 setting of its own; it reads the
+outer wrapper's `--v3` in argv, so injected and explicit selectors behave the
+same. `kiro-wrapper-argv` drives this composition with a stub FHS package (no
+bubblewrap) and `kiro-fhs-contract` pins the real launcher, init, dispatcher and
+root commands. Home Manager's declarative permissions translation remains an
+independent v3 path.
 
 All other configuration remains outside the FHS package. Static and secret
 environment exports, `extraPackages`, and `--v3` are inherited across bubblewrap
-and keep their established ordering. Moving only the shadowed chat-specific
-injection is what limits the behavioral change.
+and keep their established ordering.
+
+On Darwin the outer `kiro-cli` wrapper carries `--trust-tools` itself. Before
+3.0.0 the Darwin launcher resolved a separate chat binary by app-bundle
+discovery and skipped this repo's chat wrapper, so `--trust-tools` never reached
+a `kiro-cli` launch there; it now does.
 
 `ai.kiro.cli.useFhsSandbox = false` skips this package-composition layer
 entirely and applies the ordinary wrappers to `passthru.unwrapped`. That is an
 explicit compatibility tradeoff, not the default; see
 [`fhs-sandbox.md`](fhs-sandbox.md) for the extracted-`bun` risk. Module
 assertions inspect the rollout-resolved package and reject a custom FHS package
-that advertises an unwrapped payload but cannot recompose it, because accepting
-that shape would recreate the same unreachable outer trust wrapper.
-
-**What the launcher forwarded in the pre-split measurement**, captured with a
-`kiro-cli-chat` decoy first on PATH. The wrapper test continues to pin these
-transformations, but the table is not evidence that current FHS dispatch reaches
-the outer chat wrapper. The launcher does not merely relay argv — it injects,
-rewrites and strips:
-
-| Invocation                            | `kiro-cli-chat` receives |
-| ------------------------------------- | ------------------------ |
-| `kiro-cli`                            | `chat`                   |
-| `kiro-cli --`                         | `chat`                   |
-| `kiro-cli --agent acp`                | `chat --agent acp`       |
-| `kiro-cli --tui`                      | `chat --tui`             |
-| `kiro-cli --tui --v3`                 | `chat --tui --v3`        |
-| `kiro-cli --tui chat`                 | `chat`                   |
-| `kiro-cli --tui --v3 chat`            | `chat --v3`              |
-| `kiro-cli acp`                        | `acp`                    |
-| `kiro-cli --tui acp`                  | `acp`                    |
-| `kiro-cli --v3 acp`                   | `acp --agent-engine v3`  |
-| `kiro-cli --v3 acp --agent-engine=v2` | `acp --agent-engine=v2`  |
-| `kiro-cli --v3 mcp list`              | `mcp list`               |
-| `kiro-cli settings all`               | `settings list`          |
-| `kiro-cli whoami`                     | _(kept in-process)_      |
-
-Five consequences worth holding on to. A **bare launch is dispatched too**, with
-`chat` injected — so the outer chat wrapper's `chat` gate fires whenever that
-wrapper is actually traversed. The **subcommand leads**: the launcher re-emits
-it first and the surviving globals after, so `--v3 chat` arrives as `chat --v3`.
-**`--agent`'s value is not a subcommand**: `--agent acp` forwards as a bare
-launch, which is why both `subcommandBlock` and the check's launcher stub skip a
-value-taking option's value. **`--` is stripped**, so past the launcher it can
-never reach the chat binary's own scan. And **`--v3` is translated only for
-`acp`** — forwarded verbatim to `chat`/bare, dropped entirely for `mcp`/`agent`,
-and suppressed outright when the caller supplied their own `--agent-engine`.
+that advertises an unwrapped payload but cannot recompose it.
 
 **Upstream's reason is NOT that v3 replaced the flag.** Under v3, `chat` still
 honours it. `--trust-tools` is a **client-side** knob: kiro's own TUI
@@ -429,9 +352,10 @@ availability only. Typed `cli.native.settings.chat.keybindings` declarations
 follow the extracted registry; background execution can be rebound with
 `moveToBackground` in the global settings.
 
-**"Is the engine v3" is a RUNTIME question.** A caller's `--agent-engine`
-overrides the injected `--v3`, so an eval-time `hasV3` gets it wrong in both
-directions, and both are measured:
+### "Is the engine v3" is a RUNTIME question
+
+A caller's `--agent-engine` overrides `--v3`, so an eval-time `hasV3` gets it
+wrong in both directions, and both were measured on 2.x:
 
 ```console
 $ kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x     # runs — v2, so trust is valid
@@ -439,30 +363,25 @@ $ kiro-cli      acp --agent-engine=v3 --trust-tools=x     # CONFLICT — v3, eve
 ```
 
 Gating on `hasV3` alone would silently drop trust in the first case and break
-the command in the second. So the wrapper resolves the engine from argv — the
-caller's `--agent-engine` if present (either spelling), otherwise **the chat
-binary's own clap default** — and withholds only when that resolves to `v3`.
+the command in the second. So the gate resolves the engine from argv before any
+`--`: the last `--agent-engine` value (either spelling) if present; otherwise v3
+if an exact `--v3` token is present, whether the `kiro-cli` wrapper injected it
+or the caller typed it; otherwise a sentinel. It withholds only when that
+resolves to `v3`.
 
-That default is **`v1`** on 2.16.0, not the `v2` this fragment claimed for a
-long time. Measured: `kiro-cli-chat chat --tui` fails with
-`--tui cannot be used with --agent-engine=v1`. Nothing turns on the difference
-here — the withhold fires only on `v3`, and neither v1 nor v2 is v3 — but a
-reader reasoning about engine defaults from this page would have been wrong.
+The fallback is deliberately a sentinel, not the binary's default and not what
+this Nix config bakes in. The configured `--v3` only exists in argv when the
+`kiro-cli` wrapper put it there, so reading argv is exact. On 2.x a bare `--tui`
+measured the chat binary's default as `v1`, not the `v2` this fragment once
+claimed; a sentinel cannot go stale when upstream moves the default again.
 
-The fallback is deliberately NOT what this Nix config bakes in. The chat wrapper
-cannot know whether the launcher wrapper is in the chain, and
-`kiro-cli-chat acp` invoked directly runs the **v2** engine however `v3 = true`
-is set — so a v3 fallback silently stripped `--trust-tools` from a session that
-would have accepted it. Nothing is lost on the normal path, because the launcher
-rewrites argv: `kiro-cli --v3 acp` arrives here as an explicit
-`acp --agent-engine v3`, so the withhold fires on the token, never on a guess.
-
-**The lesson generalizes past this flag.** Each wrapper was individually correct
-and the pair was not, so any new injection has to be reasoned about against what
-the OTHER wrapper adds on the same code path.
-`packages/kiro-cli/checks/kiro-wrapper-argv.nix` now covers this with a launcher
-stub that dispatches through `PATH`; testing the two binaries in isolation
-cannot see it, which is exactly how this reached a release.
+3.0.0 adds a client-dependent default for `acp` with no selector: the strings
+describe a v3 default from which listed ACP clients stay on v2 after reading
+`initialize`. `kiro-kas-dispatch` asserts that an unselected `acp --trust-tools`
+is not rejected at parse time; the gate keeps the grant there.
+`chat.agentEngine`, `acp.agentEngine` and `KIRO_AGENT_ENGINE` also select an
+engine. The gate reads none of them; `ai.kiro.cli.v3` delivers v3 only as `--v3`
+argv.
 
 ## The v3 + `acp` conflict
 
@@ -516,13 +435,13 @@ confusing on first contact and worth repeating in user-facing docs.
 `subcommandBlock` walks argv left to right and stops at the first token that is
 neither an option nor an option's **value**:
 
-- **Value-taking options must be listed.** `--agent <AGENT>` and
-  `--resume-id <SESSION_ID>` are the launcher's only ones (`kiro-cli-chat` has
-  just `--resume-id` — no top-level `--agent`). Without the skip,
+- **Value-taking options must be listed.** `launchValueFlags` in
+  `wrapPackage.nix` lists the 3.0.0 top-level ones (`--agent`, `--model`,
+  `--agent-engine`, `--resume-id` and others), sourced from the binary's
+  chat-argument strings and the TUI's launch-flag table. Without the skip,
   `kiro-cli --agent acp` reads as the `acp` subcommand and a bare launch
-  silently loses the injection. (With `--tui` gone the LAUNCHER no longer gates
-  on the subcommand at all — `--v3` is unconditional — so this now matters only
-  for the chat binary's `--trust-tools` gate.) The `--opt=value` form needs no
+  silently loses the grant. An unlisted value flag fails safe: its value reads
+  as a subcommand and the grant is withheld. The `--opt=value` form needs no
   entry: one token, handled by the `-*` arm.
 - **`--` parks on a sentinel** no gate matches, so gated injection declines
   rather than guessing.
@@ -533,36 +452,29 @@ be used multiple times"), so it is injected only when absent as an **exact argv
 token** — not a substring scan of `"$*"`, so `kiro-cli chat 'explain --v3'`
 still gets the real flag.
 
+`flagPresenceBlock` answers "is `--v3` present" with the same exact-token rule,
+stopping at `--`.
+
 `--trust-tools` is not idempotence-guarded: repeating it is _accepted_ by both
-`chat` and `acp` (measured), unlike the boolean flags.
+`chat` and `acp` (measured on 2.x), unlike the boolean flags.
 
 ## Re-measuring on a version bump
 
 Run against the **unwrapped** binary out of `nix build` — a bare `PATH` lookup
 finds the wrapper, which is the thing under test.
 
-On **darwin**, add two probes the PATH recipe cannot express: confirm the
-generated launcher shim names the real app binary as both its `exec` target and
-`-a` argv0, and confirm a session launched via `kiro-cli` still resolves the
-STORE's chat sibling rather than `~/.local/bin`. The native CI fixture
-deliberately has no home-installed fallback, so failed discovery fails the
-check. The decoy-on-PATH probe is meaningless there.
-
-Pinning `$KB` is necessary but **not sufficient for the launcher** on Linux: it
-re-resolves `kiro-cli-chat` through `PATH` at runtime, so a wrapped
-`kiro-cli-chat` earlier on `PATH` still lands in the chain. For anything about
-`acp`/`chat` parsing, invoke `$K/bin/kiro-cli-chat` directly; to measure what
-the launcher FORWARDS, put a `kiro-cli-chat` that prints its argv first on
-`PATH` on purpose.
+Since 3.0.0 there is one binary on both platforms and no `PATH` dispatch, so the
+recipe is the same on darwin. Invoke `$K/bin/kiro-cli` from `passthru.unwrapped`
+for raw parse results; the module's wrappers are the thing under test.
 
 ```bash
-K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli); KB="$K/bin/kiro-cli"
+K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.unwrapped); KB="$K/bin/kiro-cli"
 
 # 1. globals still parse BEFORE a subcommand, and still fail after it
 "$KB" --tui --v3 whoami >/dev/null && echo "prepend ok"
 "$KB" whoami --tui --v3 2>&1 | grep -q "unexpected argument" && echo "append still fails"
 
-# 2. --v3 still means --agent-engine=v3 (error text names the translated flag)
+# 2. --v3 still selects v3 for acp (error text names the resolved engine)
 "$KB" --v3 acp --trust-tools=x </dev/null 2>&1 | grep -q "agent-engine=v3" && echo "translation intact"
 
 # 3. a caller's engine still wins over the injected --v3
@@ -577,12 +489,12 @@ K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli); K
 #    starts the server and exits 0 when stdin closes:
 for opt in "" "--auth-method cli" "--agent x" "--model auto" "--effort low" \
   "--trust-tools=x" "-a" "--trust-all-tools"; do
-  out=$("$K/bin/kiro-cli-chat" acp --agent-engine v3 $opt </dev/null 2>&1)
+  out=$("$KB" acp --agent-engine v3 $opt </dev/null 2>&1)
   echo "[$opt] $? ${out%%$'\n'*}"
 done
 #    the inverse case: expect "--auth-method is only supported with
 #    --agent-engine=v3" (exit 2)
-"$K/bin/kiro-cli-chat" acp --agent-engine v2 --auth-method cli </dev/null 2>&1 | head -1
+"$KB" acp --agent-engine v2 --auth-method cli </dev/null 2>&1 | head -1
 #    chat needs input, and an invalid model id, so the call parses but never
 #    generates. Accepted means it reaches the server and reports the model as
 #    "not available"; a conflict is the same "not supported with
@@ -592,7 +504,7 @@ done
 #    means accepted. Repeat under --v3 and --agent-engine=v3.
 for opt in "" "--agent x" "--effort low" "--trust-tools=x" "-a" \
   "--trust-all-tools"; do
-  out=$("$K/bin/kiro-cli-chat" chat --agent-engine v3 --no-interactive $opt \
+  out=$("$KB" chat --agent-engine v3 --no-interactive $opt \
     --model zz-not-a-model 'Reply OK' </dev/null 2>&1)
   echo "[$opt] $? $(grep -m1 -oE 'is not available|not supported with --agent-engine=v3.*' <<<"$out")"
 done
@@ -610,13 +522,15 @@ parse rejection from an accepted flag.
   realized upstream Linux command wrappers, shared launcher, init, dispatcher,
   and profile. It pins the `/nix` bind and inherited PATH bridge that
   `extraPackages` depends on, then realizes a configured FHS payload and proves
-  the selected rootfs chat command carries `trustedMcpTools`, without claiming
-  to execute bubblewrap inside the Nix build sandbox.
+  the rootfs `kiro-cli` and `kiro-cli-chat` commands carry `trustedMcpTools`,
+  without claiming to execute bubblewrap inside the Nix build sandbox.
 - `packages/kiro-cli/checks/kiro-wrapper-argv.nix` — the real wrapper against a
-  stub package that prints its argv. Covers which SIDE of the subcommand each
-  flag lands on, the absence of `--tui`, the value-flag skip, `--`, idempotence,
-  and the env/PATH export paths. String-matching the generated bash cannot catch
-  a flag emitted on the wrong side; running it can.
+  stub package that prints its argv, on both platforms. Covers which SIDE of the
+  subcommand each flag lands on, the absence of `--tui`, the value-flag skip,
+  `--`, idempotence, the trust gate under injected and explicit `--v3` and
+  `--agent-engine`, the Linux FHS composition through a stub FHS package, and
+  the env/PATH export paths. String-matching the generated bash cannot catch a
+  flag emitted on the wrong side; running it can.
 - `packages/kiro-cli/checks/module-eval.nix` (`module-kiro-wrapper-*`) — pins
   the SHAPE of the generated bash and the wrapper trigger conditions.
 
@@ -627,11 +541,9 @@ the real binary by reading the line back out of the generated wrapper is how you
 probe the unwrapped CLI at all (see the re-measure recipe above), and
 `packages/kiro-cli/checks/kiro-wrapper-argv.nix` asserts on it.
 
-This governs THIS module's wrappers only. The darwin OVERLAY shim
-(`packages/kiro-cli/packages/ai/kiro-cli/package.nix`) deliberately ends in
-`exec -a "<bundle path>" "<bundle path>"` to keep dispatch in the packaged app —
-and the check never reads that shim, so no carve-out is needed there. Do not
-"fix" its argv0 back to `"$0"`.
+This governs THIS module's wrappers only. The package's own `kiro-cli-chat`
+alias ends in `exec -a kiro-cli`, so the binary sees a `kiro-cli` launch; the
+check never reads that wrapper.
 
 An earlier revision credited "probe scripts under `docs/plans/`" with depending
 on this. Nothing there does — `grep -rl 'exec -a' docs/plans` is empty — so the
@@ -643,15 +555,15 @@ check is the only thing pinning it.
 Before either public Kiro launcher executes its real binary, it rejects a non-v3
 `--agent-engine` override and requires the private usage service's CA and
 loopback listener, rejects inherited proxy conflicts, and exports the local
-HTTP(S) proxy and Node extra CA only for Kiro's process tree. A direct
-`kiro-cli-chat` call must select v3 with `--agent-engine v3` or `--v3`; the
-configured `cli.v3` injection belongs only to `kiro-cli`. These exports remain
-outside the FHS package and are inherited across it, like the existing static
-environment. The disabled path keeps the existing wrapper behavior. The same
-wrapper package installs `kiro-usage` for explicit indexing, session queries,
-and unpacking. Its `exec` command reuses the same readiness and environment
-preparation for a PATH-selected command, explicitly replaces inherited
-conflicts, and composes with the managed wrapper. Named `kiro-cli` commands
-receive an idempotent `--v3`; generic commands keep their arguments. See
+HTTP(S) proxy and Node extra CA only for Kiro's process tree. A `kiro-cli-chat`
+call must select v3 with `--agent-engine v3` or `--v3`; the configured `cli.v3`
+injection belongs only to `kiro-cli`. These exports remain outside the FHS
+package and are inherited across it, like the existing static environment. The
+disabled path keeps the existing wrapper behavior. The same wrapper package
+installs `kiro-usage` for explicit indexing, session queries, and unpacking. Its
+`exec` command reuses the same readiness and environment preparation for a
+PATH-selected command, explicitly replaces inherited conflicts, and composes
+with the managed wrapper. Named `kiro-cli` commands receive an idempotent
+`--v3`; generic commands keep their arguments. See
 [usage-tracking.md](usage-tracking.md) for options, service lifecycle, scope,
 and limitations.

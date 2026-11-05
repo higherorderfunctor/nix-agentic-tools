@@ -57,120 +57,6 @@
       ln -s ${echoArgv} "$out/bin/kiro-cli-chat"
     '';
 
-    # A launcher stub that DISPATCHES, preserving the measured pre-split
-    # forwarding contract and exercising how the two wrappers interact when PATH
-    # dispatch traverses both. Current Linux buildFHSEnv startup instead finds its
-    # raw /usr/bin/kiro-cli-chat before the inherited outer wrapper, so this stub
-    # is not a model of that FHS resolution boundary.
-    #
-    # Testing each binary alone cannot see that: it is what let a `--v3` prepend
-    # and a `--trust-tools` append meet on `acp` and abort the command.
-    #
-    # The launcher does NOT relay argv — it injects, translates and drops. Every
-    # row below was measured pre-split by putting a printing `kiro-cli-chat` first
-    # on PATH and reading the argv it received from the real 2.15.2 launcher:
-    #
-    #   kiro-cli                      ->  chat
-    #   kiro-cli --                   ->  chat
-    #   kiro-cli --agent acp          ->  chat --agent acp
-    #   kiro-cli --tui                ->  chat --tui
-    #   kiro-cli --tui --v3           ->  chat --tui --v3
-    #   kiro-cli --v3                 ->  chat --v3
-    #   kiro-cli --tui chat           ->  chat
-    #   kiro-cli --tui --v3 chat      ->  chat --v3
-    #   kiro-cli acp                  ->  acp
-    #   kiro-cli --tui acp            ->  acp
-    #   kiro-cli --v3 acp             ->  acp --agent-engine v3
-    #   kiro-cli --tui --v3 acp       ->  acp --agent-engine v3
-    #   kiro-cli --v3 acp --agent-engine=v2  ->  acp --agent-engine=v2
-    #   kiro-cli --v3 mcp list        ->  mcp list
-    #   kiro-cli settings all         ->  settings list
-    #   kiro-cli whoami               ->  (kept in-process, never dispatched)
-    #
-    # Four rules fall out, and the stub implements all four:
-    #
-    #  1. ALWAYS dispatch, injecting `chat` when no subcommand is present. A
-    #     value-taking option's VALUE is not a subcommand, exactly as in
-    #     `subcommandBlock` — `--agent acp` is a bare launch.
-    #  2. `--tui` survives ONLY on a bare launch. Give the invocation an explicit
-    #     subcommand — `chat` included — and the launcher drops it. So injecting
-    #     `--tui` on an explicit `chat` is a no-op upstream, and its inertness on
-    #     `acp` is structural rather than an observed no-op.
-    #  3. `--v3` is TRANSLATED to `--agent-engine v3` for `acp`, forwarded
-    #     verbatim for `chat`/bare, and DROPPED for everything else.
-    #  4. A caller's own `--agent-engine` suppresses the translation.
-    #
-    # Rule 3 is why the chat wrapper's engine fallback must be the chat binary's
-    # own default rather than this config's: on the real chain the engine arrives
-    # as an EXPLICIT token, so the wrapper never needs to guess, and a stub that
-    # skipped the translation would have let a wrong guess look correct.
-    #
-    # `settings all -> settings list` and the in-process `whoami` are the two
-    # rows left unimplemented; no assertion turns on either.
-    dispatchLauncher = pkgs.writeShellScript "kiro-cli-stub-launcher" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-
-      # Pass 1 — classify, skipping the value of a value-taking global.
-      nat_sub=""
-      nat_skip=0
-      nat_v3=0
-      nat_engine=0
-      for nat_a in "$@"; do
-        if [ "$nat_skip" = 1 ]; then nat_skip=0; continue; fi
-        case "$nat_a" in
-          --v3) nat_v3=1 ;;
-          --agent-engine|--agent-engine=*) nat_engine=1 ;;
-          --agent|--resume-id) nat_skip=1 ;;
-          --) ;;
-          -*) ;;
-          *) if [ -z "$nat_sub" ]; then nat_sub="$nat_a"; fi ;;
-        esac
-      done
-
-      # Pass 2 — rebuild "$@" by rotating: shift each original off the front and
-      # push the survivors onto the back, so relative order is preserved. The
-      # subcommand token is pulled OUT here and re-emitted at the front below,
-      # because the launcher leads with it: `--v3 chat` arrives as `chat --v3`.
-      nat_n=$#
-      nat_i=0
-      nat_took_sub=0
-      while [ "$nat_i" -lt "$nat_n" ]; do
-        nat_a="$1"
-        shift
-        case "$nat_a" in
-          --) ;;
-          --tui)
-            if [ -z "$nat_sub" ]; then set -- "$@" --tui; fi
-            ;;
-          --v3)
-            if [ -z "$nat_sub" ] || [ "$nat_sub" = chat ]; then set -- "$@" --v3; fi
-            ;;
-          *)
-            if [ "$nat_took_sub" = 0 ] && [ -n "$nat_sub" ] && [ "$nat_a" = "$nat_sub" ]; then
-              nat_took_sub=1
-            else
-              set -- "$@" "$nat_a"
-            fi
-            ;;
-        esac
-        nat_i=$((nat_i + 1))
-      done
-
-      if [ "$nat_sub" = acp ] && [ "$nat_v3" = 1 ] && [ "$nat_engine" = 0 ]; then
-        set -- "$@" --agent-engine v3
-      fi
-      if [ -n "$nat_sub" ]; then set -- "$nat_sub" "$@"; else set -- chat "$@"; fi
-      exec kiro-cli-chat "$@"
-    '';
-    chainPackage = pkgs.runCommandLocal "kiro-cli-chain-stub" {} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      mkdir -p "$out/bin"
-      ln -s ${dispatchLauncher} "$out/bin/kiro-cli"
-      ln -s ${echoArgv} "$out/bin/kiro-cli-chat"
-    '';
-
     wrap = args:
       wrapKiroPackage ({
           package = stubPackage;
@@ -178,27 +64,66 @@
           trustedMcpTools = [];
         }
         // args);
-    wrapChain = args:
-      wrapKiroPackage ({
-          package = chainPackage;
-          v3 = false;
-          trustedMcpTools = [];
-        }
-        // args);
 
-    # The consumer shape that broke: v3 active AND trustedMcpTools non-empty.
-    chainTrustV3 = wrapChain {
-      v3 = true;
-      trustedMcpTools = ["fs_read"];
-    };
-    # Same, without v3 — `--trust-tools` must still reach acp there.
-    chainTrustV2 = wrapChain {trustedMcpTools = ["fs_read"];};
+    # Production's Linux shape, without bubblewrap: an FHS package whose
+    # `bin/kiro-cli` reaches the payload's command the way the synthesized
+    # root's /usr/bin does, and which exposes the same `unwrapped` /
+    # `withFhsPayload` seam as the overlay. The module therefore places the
+    # trust wrapper inside the payload and keeps the `--v3` prepend outside,
+    # exactly as it does for the real package. Nested user namespaces are not
+    # portable in a build sandbox; kiro-fhs-contract pins the real launcher,
+    # init and dispatcher literals this stub stands in for.
+    fhsStubFor = payload:
+      pkgs.runCommandLocal "kiro-cli-fhs-stub" {
+        passthru = {
+          unwrapped = fhsPayloadStub;
+          withFhsPayload = fhsStubFor;
+        };
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        mkdir -p "$out/bin"
+        for nat_command in kiro-cli kiro-cli-chat; do
+          {
+            printf '#!%s\n' ${lib.escapeShellArg pkgs.runtimeShell}
+            printf '%s\n' 'set -euETo pipefail' 'shopt -s inherit_errexit 2>/dev/null || :'
+            printf 'exec %s/bin/%s "$@"\n' ${lib.escapeShellArg "${payload}"} "$nat_command"
+          } > "$out/bin/$nat_command"
+          chmod +x "$out/bin/$nat_command"
+        done
+      '';
+    # The module's inner trust package inherits `meta` and `version` from
+    # `unwrapped`, as nixpkgs' FHS expression does from its payload.
+    fhsPayloadStub = stubPackage.overrideAttrs (_: {version = "0-stub";});
+    fhsStub = fhsStubFor fhsPayloadStub;
+    # Linux places trust inside the payload; elsewhere the seam is not used
+    # and the outer wrapper carries it. The argv each command receives is the
+    # same either way, which is what the `F*` expectations below pin.
+    trustInsideFhs = pkgs.stdenv.hostPlatform.isLinux;
 
     # v3 ⇒ --v3 everywhere. There is no `tui` option any more: it injected
     # `--tui` and implied `--v3`, and `--tui` is redundant under v3.
     v3Wrapped = wrap {v3 = true;};
-    # trustedMcpTools ⇒ --trust-tools=… appended on the chat binary.
+    # trustedMcpTools ⇒ --trust-tools=… appended on both commands.
     trustWrapped = wrap {trustedMcpTools = ["fs_read" "@srv"];};
+    # The default consumer shape: v3 injected AND trustedMcpTools non-empty.
+    trustV3Wrapped = wrap {
+      v3 = true;
+      trustedMcpTools = ["fs_read"];
+    };
+    # Same, without v3 — the caller's own `--v3` must still withhold on acp.
+    trustV2Wrapped = wrap {trustedMcpTools = ["fs_read"];};
+    # The FHS composition under the same two configurations.
+    fhsTrustV3 = wrapKiroPackage {
+      package = fhsStub;
+      v3 = true;
+      trustedMcpTools = ["fs_read"];
+    };
+    fhsTrustV2 = wrapKiroPackage {
+      package = fhsStub;
+      v3 = false;
+      trustedMcpTools = ["fs_read"];
+    };
     # env only: the wrapper exists to export, and must inject nothing at all.
     envWrapped = wrap {environmentVariables.KIRO_WRAPPER_TEST = "baked";};
     # extraPackages only: the wrapper prepends its bins without discarding the
@@ -237,6 +162,10 @@
 
       V=${v3Wrapped}/bin/kiro-cli
       T=${trustWrapped}/bin/kiro-cli-chat
+      LV=${trustV3Wrapped}/bin/kiro-cli
+      L2=${trustV2Wrapped}/bin/kiro-cli
+      FV=${fhsTrustV3}/bin/kiro-cli
+      F2=${fhsTrustV2}/bin/kiro-cli
       E=${envWrapped}/bin/kiro-cli
       EC=${envWrapped}/bin/kiro-cli-chat
       P=${pathWrapped}/bin/kiro-cli
@@ -299,12 +228,14 @@
       # ── `--` parks the scan; --v3 is global so it still leads ───────────────
       expect "-- still gets --v3"           '--v3|--'                   "$V" --
 
-      # ── chat binary: --trust-tools is APPENDED, chat/acp only ───────────────
-      # Opposite case to the globals: the chat binary declares --trust-tools on
-      # those two subcommands and NOT at top level.
+      # ── --trust-tools is APPENDED, for chat/acp/bare only ───────────────────
+      # Opposite case to the globals: --trust-tools belongs to the chat
+      # arguments, which other subcommands do not declare. The temporary
+      # `kiro-cli-chat` alias runs the same 3.0.0 binary as `kiro-cli`, so its
+      # bare launch is a `kiro-cli` bare launch and gets the grant too.
       expect "chat gets --trust-tools"      'chat|--trust-tools=fs_read,@srv'  "$T" chat
       expect "acp gets --trust-tools"       'acp|--trust-tools=fs_read,@srv'   "$T" acp
-      expect "bare chat binary gets none"   ""                                 "$T"
+      expect "bare alias gets --trust-tools" '--trust-tools=fs_read,@srv'      "$T"
       expect "mcp gets no --trust-tools"    'mcp|list'                         "$T" mcp list
       expect "whoami gets no --trust-tools" 'whoami'                           "$T" whoami
 
@@ -339,105 +270,106 @@
       expect "extraPackages-only launcher transparent" 'acp' "$P" acp
       expect "extraPackages-only chat transparent" 'mcp|list' "$PC" mcp list
 
-      # ── the two wrappers composed at the wrapper layer ──────────────────────
-      # This pins their argv contract when PATH dispatch traverses both wrappers.
-      # Current Linux buildFHSEnv startup puts its raw /usr/bin/kiro-cli-chat
-      # ahead of the inherited outer wrapper, so this is deliberately not an FHS
-      # integration assertion. When both do run, their injections meet in one
-      # argv. Under v3 that pairing is fatal on `acp`:
-      # upstream declares --agent-engine=v3 mutually exclusive with --trust-tools,
-      # so `kiro-cli acp` died with "not supported with --agent-engine=v3".
-      # Under home-manager little is lost by withholding it — trustedMcpTools is
-      # also expressed in settings/permissions.yaml — though that translation is
-      # HM-only, so the devenv backend does not recover the grant declaratively.
-      chain() {
-        local wrapped="$1"
-        shift
-        PATH="$wrapped/bin:$PATH" "$wrapped/bin/kiro-cli" "$@" \
-          | sed -n 's/^ARG=//p' | paste -sd'|' -
-      }
-      chain_expect() {
-        local label="$1" want="$2" got
-        shift 2
-        got="$(chain "$@")"
-        if [ "$got" = "$want" ]; then
-          ok "$label"
-        else
-          bad "$label: want [$want] got [$got]"
-        fi
-      }
-
-      # The withhold fires through the TRANSLATED token: the launcher hands the
-      # chat wrapper `acp --agent-engine v3`, not the `--v3` the caller typed.
-      chain_expect "v3+trust: acp gets NO --trust-tools" \
-        'acp|--agent-engine|v3' ${chainTrustV3} acp
-      # An EXPLICIT subcommand makes the launcher drop `--tui`, so the wrapper's
-      # injection of it on `chat` is a no-op upstream (it survives only bare).
-      chain_expect "v3+trust: chat still gets --trust-tools" \
-        'chat|--v3|--trust-tools=fs_read' ${chainTrustV3} chat
-      chain_expect "no v3: acp still gets --trust-tools" \
-        'acp|--trust-tools=fs_read' ${chainTrustV2} acp
-      chain_expect "no v3: chat still gets --trust-tools" \
-        'chat|--trust-tools=fs_read' ${chainTrustV2} chat
-
-      # ── the launcher's own scan: a VALUE is not a subcommand ────────────────
-      # The real launcher forwards `kiro-cli --agent acp` as `chat --agent acp` —
-      # a bare launch. If the stub dispatched on `acp` instead, the chat wrapper
-      # would read it as the acp subcommand, the v3 gate would fire, and
-      # --trust-tools would be withheld from what is really a chat launch.
-      chain_expect "value skip: --agent VALUE is a bare launch" \
-        'chat|--v3|--agent|acp|--trust-tools=fs_read' \
-        ${chainTrustV3} --agent acp
-      # A bare launch is dispatched too, with `chat` injected as the subcommand,
-      # so the chat-side gate fires on it.
-      chain_expect "bare launch dispatches as chat" \
-        'chat|--v3|--trust-tools=fs_read' \
-        ${chainTrustV3}
-
-      # ── the EFFECTIVE engine decides, and only argv knows it ────────────────
-      # A caller's --agent-engine overrides the injected --v3 — upstream drops the
-      # injected flag outright, measured: `kiro-cli --v3 acp --agent-engine=v2`
-      # forwards `acp --agent-engine=v2`. Both directions are real against the
-      # binary: `--v3 acp --agent-engine=v2 --trust-tools=x` RUNS, while
-      # `acp --agent-engine=v3 --trust-tools=x` CONFLICTS.
-      chain_expect "v3 config, caller opts out -> trust returns" \
-        'acp|--agent-engine=v2|--trust-tools=fs_read' \
-        ${chainTrustV3} acp --agent-engine=v2
-      chain_expect "v3 config, caller opts out (two-token form)" \
-        'acp|--agent-engine|v2|--trust-tools=fs_read' \
-        ${chainTrustV3} acp --agent-engine v2
-      chain_expect "v3 config, caller re-asks for v3 -> still withheld" \
-        'acp|--agent-engine=v3' \
-        ${chainTrustV3} acp --agent-engine=v3
-      chain_expect "no-v3 config, caller opts IN -> withheld" \
-        'acp|--agent-engine=v3' \
-        ${chainTrustV2} acp --agent-engine=v3
-      chain_expect "no-v3 config, caller picks v1 -> trust kept" \
-        'acp|--agent-engine=v1|--trust-tools=fs_read' \
-        ${chainTrustV2} acp --agent-engine=v1
-      # chat is unconditional: v3 + chat + --trust-tools parses fine.
-      chain_expect "chat is unaffected by the engine" \
-        'chat|--v3|--agent-engine=v3|--trust-tools=fs_read' \
-        ${chainTrustV3} chat --agent-engine=v3
-
-      # ── the chat binary reached DIRECTLY, with the launcher out of the chain ─
-      # This is what forces the fallback to be the chat binary's own default and
-      # not the Nix config's. `kiro-cli-chat acp` runs the v2 engine no matter
-      # what `v3 = true` says — there is no launcher to translate anything — so
-      # withholding --trust-tools here would strip a grant the session accepts.
-      expect "direct chat binary under a v3 config keeps --trust-tools" \
-        'acp|--trust-tools=fs_read' \
-        ${chainTrustV3}/bin/kiro-cli-chat acp
-
-      # A `--` ends the engine scan. Past it a flag-looking token is a positional
-      # the CLI will not honour, so neither do we. Measured on the direct
-      # kiro-cli-chat path: `acp -- --agent-engine=v3` is "unexpected argument",
-      # i.e. NOT an engine selection. (Through the launcher the point is moot —
-      # it strips `--` before forwarding — so this only ever relaxes, never
-      # tightens, what the launcher path sees.)
+      # ── kiro-cli carries the grant, gated on the EFFECTIVE engine ───────────
+      # 3.0.0 runs the chat implementation inside `kiro-cli`, so its wrapper
+      # appends --trust-tools after its own --v3 prepend. v3 rejects the flag on
+      # `acp` ("not supported with --agent-engine=v3"), so the gate withholds
+      # there when the last --agent-engine before `--` says v3, or, with no
+      # --agent-engine, when an exact --v3 token is present — injected or typed.
+      # A caller's --agent-engine beats --v3, as the binary resolves it.
+      expect "v3+trust: acp withheld (injected --v3)"  '--v3|acp'                     "$LV" acp
+      expect "v3+trust: chat gets it"                  '--v3|chat|--trust-tools=fs_read' "$LV" chat
+      expect "v3+trust: bare launch gets it"           '--v3|--trust-tools=fs_read'   "$LV"
+      expect "v3+trust: mcp gets none"                 '--v3|mcp|list'                "$LV" mcp list
+      expect "v3+trust: caller opts out -> trust returns" \
+        '--v3|acp|--agent-engine=v2|--trust-tools=fs_read' "$LV" acp --agent-engine=v2
+      expect "v3+trust: caller opts out (two-token form)" \
+        '--v3|acp|--agent-engine|v2|--trust-tools=fs_read' "$LV" acp --agent-engine v2
+      expect "v3+trust: caller re-asks for v3 -> withheld" \
+        '--v3|acp|--agent-engine|v3' "$LV" acp --agent-engine v3
+      expect "v3+trust: chat is unaffected by the engine" \
+        '--v3|chat|--agent-engine=v3|--trust-tools=fs_read' "$LV" chat --agent-engine=v3
+      # The scan is the same one the gate uses for both selectors: a --v3 or
+      # --agent-engine past `--` is a positional, not an engine selection.
+      expect "v3+trust: -- ends the scan, injected --v3 still counts" \
+        '--v3|acp|--|--agent-engine=v3' "$LV" acp -- --agent-engine=v3
       expect "-- ends the engine scan" \
-        'acp|--|--agent-engine=v3|--trust-tools=fs_read,@srv' \
-        ${trustWrapped}/bin/kiro-cli-chat acp -- --agent-engine=v3
+        'acp|--|--agent-engine=v3|--trust-tools=fs_read' "$L2" acp -- --agent-engine=v3
+      expect "-- ends the --v3 scan" \
+        'acp|--|--v3|--trust-tools=fs_read' "$L2" acp -- --v3
+
+      # ── an option VALUE is never read as the subcommand ─────────────────────
+      # `--agent acp` is a bare launch: reading `acp` as the subcommand would
+      # withhold the grant from what is really a chat launch.
+      expect "value skip: --agent VALUE is a bare launch" \
+        '--v3|--agent|acp|--trust-tools=fs_read' "$LV" --agent acp
+      expect "value skip: --model VALUE is a bare launch" \
+        '--v3|--model|m|--trust-tools=fs_read' "$LV" --model m
+      expect "value skip: --agent-engine VALUE then acp" \
+        '--v3|--agent-engine|v2|acp|--trust-tools=fs_read' "$LV" --agent-engine v2 acp
+
+      # ── a prompt passed to a bare launch is WITHHELD, by design ─────────────
+      # A first positional that is not a subcommand cannot be told from an
+      # unknown subcommand without a curated subcommand list, so the gate
+      # treats it as one and appends nothing; `kiro-cli chat <prompt>` is the
+      # form that carries the grant. Pinned so a change to this is deliberate.
+      expect "bare launch with a prompt gets none" \
+        '--v3|offline prompt' "$LV" 'offline prompt'
+      expect "chat with a prompt gets it" \
+        '--v3|chat|offline prompt|--trust-tools=fs_read' "$LV" chat 'offline prompt'
+
+      # ── an EXPLICIT --v3 withholds without any v3 config ────────────────────
+      expect "no-v3 config: acp keeps trust"           'acp|--trust-tools=fs_read'    "$L2" acp
+      expect "no-v3 config: caller's --v3 withholds"   '--v3|acp'                     "$L2" --v3 acp
+      expect "no-v3 config: caller's --agent-engine=v3 withholds" \
+        'acp|--agent-engine=v3' "$L2" acp --agent-engine=v3
+      expect "no-v3 config: caller picks v1 -> trust kept" \
+        'acp|--agent-engine=v1|--trust-tools=fs_read' "$L2" acp --agent-engine=v1
+      expect "no-v3 config: --agent-engine v2 beats --v3" \
+        '--v3|acp|--agent-engine=v2|--trust-tools=fs_read' "$L2" --v3 acp --agent-engine=v2
+
+      # ── the alias under a v3 config is NOT given --v3 ───────────────────────
+      # The configured --v3 belongs to `kiro-cli`; an alias invocation selects
+      # its engine itself, so with no selector the grant stays.
+      expect "v3 config: alias acp keeps --trust-tools" \
+        'acp|--trust-tools=fs_read' ${trustV3Wrapped}/bin/kiro-cli-chat acp
+      expect "v3 config: alias with explicit --v3 acp withholds" \
+        '--v3|acp' ${trustV3Wrapped}/bin/kiro-cli-chat --v3 acp
+
+      # ── the Linux composition: --v3 outside the FHS root, trust inside ──────
+      # The outer wrapper prepends --v3, the FHS command reaches the payload's
+      # trust wrapper, and that wrapper (built with v3 = false) sees the
+      # injected token in argv and withholds on acp. Same argv as the
+      # direct-wrapper rows above, which is the point.
+      expect "fhs v3+trust: acp withheld (injected --v3)" '--v3|acp'                       "$FV" acp
+      expect "fhs v3+trust: chat gets it"                 '--v3|chat|--trust-tools=fs_read' "$FV" chat
+      expect "fhs v3+trust: bare launch gets it"          '--v3|--trust-tools=fs_read'     "$FV"
+      expect "fhs v3+trust: caller opts out -> trust returns" \
+        '--v3|acp|--agent-engine=v2|--trust-tools=fs_read' "$FV" acp --agent-engine=v2
+      expect "fhs v3+trust: alias acp keeps --trust-tools" \
+        'acp|--trust-tools=fs_read' ${fhsTrustV3}/bin/kiro-cli-chat acp
+      expect "fhs no-v3: acp keeps trust"                 'acp|--trust-tools=fs_read'      "$F2" acp
+      expect "fhs no-v3: caller's --v3 withholds"         '--v3|acp'                       "$F2" --v3 acp
+      expect "fhs no-v3: caller's --agent-engine v3 withholds" \
+        'acp|--agent-engine|v3' "$F2" acp --agent-engine v3
+      ${
+        if trustInsideFhs
+        then ''
+          # Linux: the grant must live in the payload, not the outer wrapper.
+          if grep -qF -- '--trust-tools=' "$(readlink -f "$FV")"; then
+            bad "fhs: outer kiro-cli wrapper carries --trust-tools; the payload should"
+          else
+            ok "fhs: outer kiro-cli wrapper leaves --trust-tools to the payload"
+          fi
+        ''
+        else ''
+          if grep -qF -- '--trust-tools=' "$(readlink -f "$FV")"; then
+            ok "fhs seam unused off Linux: outer kiro-cli wrapper carries --trust-tools"
+          else
+            bad "fhs seam unused off Linux, yet the outer wrapper lacks --trust-tools"
+          fi
+        ''
+      }
 
       # ── the exec line's shape is depended on outside this repo's Nix ─────────
       # Probe scripts recover the real binary by reading it back out of the

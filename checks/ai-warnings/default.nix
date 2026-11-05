@@ -633,12 +633,9 @@ in {
   imports = [./runtime.nix];
   checks = {
     ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
-      # Withheld: Darwin under either engine, and the v3 `acp` arm anywhere.
+      # Withheld: the v3 `acp` arm, on either platform. The `kiro-cli` wrapper
+      # carries the grant itself, so Darwin no longer differs from Linux.
       contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "hm";
-        darwin = true;
-      })
-      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "devenv";
         darwin = true;
         v3 = true;
@@ -652,6 +649,16 @@ in {
         backend = "hm";
         darwin = true;
         v3 = true;
+      }
+      == []
+      && trustWarnings {
+        backend = "hm";
+        darwin = true;
+      }
+      == []
+      && trustWarnings {
+        backend = "devenv";
+        darwin = true;
       }
       == []
       && trustWarnings {

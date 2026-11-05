@@ -104,6 +104,24 @@ in {
           && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
       );
 
+      # The `--v3` presence scan behind the trust gate: an exact per-token
+      # match (a substring scan of "$*" would let a prompt that mentions the
+      # flag count), defaulting to 0, and stopping at `--` like the engine scan.
+      module-kiro-wrapper-flag-presence = mkTest "kiro-wrapper-flag-presence" (
+        let
+          b = idempotentFlags.flagPresenceBlock {
+            flag = "--v3";
+            var = "nat_v3";
+          };
+        in
+          lib.hasPrefix "nat_v3=0\n" b
+          && lib.hasInfix ''for nat_arg in "$@"; do'' b
+          && lib.hasInfix ''case "$nat_arg" in'' b
+          && lib.hasInfix "--) break ;;" b
+          && lib.hasInfix "--v3) nat_v3=1 ;;" b
+          && !(lib.hasInfix "$*" b)
+      );
+
       # The gate wraps the injection in a `case` over the accepted set.
       # `bareInvocation` is the empty string, so a gate covering the bare
       # launch emits a `''`-quoted alternative ahead of the named ones.
@@ -1173,12 +1191,13 @@ in {
           asserts != [] && (builtins.head asserts).assertion == true
       );
 
-      # The supported pre-split topology is already unwrapped. Its explicit false
-      # marker makes opt-out a valid no-op instead of confusing the public
-      # `unwrapped` route with evidence that an FHS composition seam is missing.
-      module-kiro-fhs-opt-out-accepts-pre-split-contract = mkTest "kiro-fhs-opt-out-accepts-pre-split-contract" (
+      # A direct-payload package (the overlay's darwin shape) is already
+      # unwrapped. Its explicit false marker makes opt-out a valid no-op instead
+      # of confusing the public `unwrapped` route with evidence that an FHS
+      # composition seam is missing.
+      module-kiro-fhs-opt-out-accepts-direct-payload-contract = mkTest "kiro-fhs-opt-out-accepts-direct-payload-contract" (
         let
-          preSplitPackage = pkgs.hello.overrideAttrs (attrs: {
+          directPackage = pkgs.hello.overrideAttrs (attrs: {
             passthru =
               (attrs.passthru or {})
               // {
@@ -1190,7 +1209,7 @@ in {
             ai.kiro = {
               cli = {
                 enable = true;
-                package = preSplitPackage;
+                package = directPackage;
                 useFhsSandbox = false;
               };
             };

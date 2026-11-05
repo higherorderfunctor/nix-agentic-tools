@@ -695,11 +695,10 @@
         message = ''
           ai.kiro.cli: `trustedMcpTools` with the Linux FHS sandbox needs the
           resolved `package` to expose both `passthru.unwrapped` and
-          `passthru.withFhsPayload`. Without that composition seam the FHS
-          launcher's `/usr/bin/kiro-cli-chat` shadows the outer trust wrapper,
-          so the grant would be silently lost. Use `pkgs.ai.kiro-cli` from this
-          flake's overlay, preserve both passthru attributes in custom rollout
-          variants, or set `useFhsSandbox = false`.
+          `passthru.withFhsPayload`, the composition seam that places the trust
+          wrapper at the FHS root's `/usr/bin` commands. Use `pkgs.ai.kiro-cli`
+          from this flake's overlay, preserve both passthru attributes in
+          custom rollout variants, or set `useFhsSandbox = false`.
         '';
       }
       {
@@ -1151,7 +1150,7 @@ in
     # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
-    executables = ["kiro-cli" "kiro-cli-chat" "kiro-cli-term"];
+    executables = ["kiro-cli" "kiro-cli-chat"];
     optionNamespaces.launcher = ["cli"];
     # The native agent layer (see mkRuntime.nix): each normalized agent
     # lowers into `ai.kiro.native.agents.<name>`, a typed agent record.
@@ -1415,13 +1414,15 @@ in
           '';
         };
         sandbox.enable = lib.mkEnableOption "local sandbox availability (requires cli.v3). Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
-        # MCP tools to auto-approve — appends `--trust-tools=<csv>`
-        # to `kiro-cli-chat`. Eliminates the need for a bespoke
-        # symlinkJoin wrapper in the consumer.
+        # MCP tools to auto-approve — appends `--trust-tools=<csv>` to
+        # `kiro-cli` and `kiro-cli-chat` for `chat`, `acp` and the bare launch,
+        # withheld on `acp` when the effective engine is v3 (an
+        # `--agent-engine` value, else `--v3`). Eliminates the need for a
+        # bespoke symlinkJoin wrapper in the consumer.
         trustedMcpTools = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [];
-          description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (both backends).";
+          description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli and kiro-cli-chat (both backends). Appended for `chat`, `acp` and the bare launch; withheld on `acp` when the effective engine is v3, because that engine rejects the flag there.";
           example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
         };
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
@@ -1632,21 +1633,19 @@ in
             (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
           ignored)
         )) (builtins.attrNames cfg.hooks);
-      # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
-      # withhold test rather than a platform test. Two argv paths drop the flag:
-      # Darwin's launcher resolves the chat binary by app-bundle discovery and never
-      # runs the wrapper that appends it, and the `acp` subcommand rejects it under
-      # the v3 engine (packages/kiro-cli/lib/wrapPackage.nix:194-256). Exactly one
-      # composition recovers the grant declaratively — Home Manager with v3, where
-      # mkPermissionRules also writes it into settings/permissions.yaml
-      # (packages/kiro-cli/lib/mkKiro.nix:707-742) — so that is the only case
-      # suppressed, and the devenv half that the wrapper's own comment says is not
-      # recovered declaratively now reports instead of staying silent.
+      # `--trust-tools` reaches `kiro-cli` and `kiro-cli-chat` on BOTH backends
+      # and platforms, so this is a withhold test rather than a platform test.
+      # One argv path drops the flag: the `acp` subcommand rejects it under the
+      # v3 engine (the trust gate in packages/kiro-cli/lib/wrapPackage.nix).
+      # Exactly one composition recovers the grant declaratively — Home Manager
+      # with v3, where mkPermissionRules also writes it into
+      # settings/permissions.yaml — so that is the only case suppressed, and the
+      # devenv half reports instead of staying silent.
       trustToolsWarnings = lib.optional (cfg.cli.trustedMcpTools
         != []
-        && (pkgs.stdenv.hostPlatform.isDarwin || cfg.cli.v3)
+        && cfg.cli.v3
         && !kiroRulesDelivered backend cfg)
-      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
+      (message ["ai" "kiro" "cli" "trustedMcpTools"] "The `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on that argv path; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
       nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;

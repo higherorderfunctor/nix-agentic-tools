@@ -1,15 +1,19 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-13 — package-bound KAS/Node paths and selected
-> prompt patches follow the native payload through FHS and direct launch. The
-> recorded upstream sandbox measurements below are unchanged.
+> **Last verified:** 2026-11-05 — the 3.0.0 payload ships `kiro-cli` plus a
+> temporary `kiro-cli-chat` alias; trust wrappers sit at both root commands. The
+> recorded upstream sandbox measurements below predate 3.0.0 and are otherwise
+> unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
 **This is not Kiro's sandbox.** It is an upstream nixpkgs wrapper: since the
-package split, `pkgs.ai.kiro-cli` on Linux routes all three commands through one
+package split, `pkgs.ai.kiro-cli` on Linux routes its commands through one
 shared `buildFHSEnv` sandbox. `$out/bin/*` are thin command-selecting wrappers;
-`$out/libexec/kiro-cli/kiro-cli-wrapper` is the bubblewrap launcher.
+`$out/libexec/kiro-cli/kiro-cli-wrapper` is the bubblewrap launcher. nixpkgs
+still lists three commands; the 3.0.0 payload supplies `kiro-cli` and the
+temporary `kiro-cli-chat` alias, so the `kiro-cli-term` command wrapper finds
+nothing to run.
 
 **It is also a different axis from Kiro's own workspace-root allowlist** (see
 `dev/references/kiro-workflow-ref.md`). The discriminator is cheap: bwrap has no
@@ -17,10 +21,9 @@ concept of a workspace root and would never mention `additionalDirectories`. An
 error naming an allowed root is the other axis; this one produces "command not
 found" and loader failures.
 
-**None of it applies to darwin**, where upstream returns
-`kiro-cli-unwrapped.overrideAttrs` and builds no FHS layer at all — verified
-byte-identical across every unwrapped-era nixpkgs checkout in the store. A Mac
-sees no change from this wrapper, Homebrew included.
+**None of it applies to darwin**, where upstream returns the payload through
+`kiro-cli-unwrapped.overrideAttrs` and builds no FHS layer at all. A Mac sees no
+change from this wrapper, Homebrew included.
 
 ## The bind rule
 
@@ -74,13 +77,13 @@ dead or pointing elsewhere:
 The second row is the dangerous one: no error, a different build of the same
 tool. A version-sensitive step changes behavior instead of failing.
 
-The same ordering affects Kiro's own dispatch. With no chat-specific
-configuration, the synthesized `/usr/bin` contains the raw `kiro-cli-chat`, so a
-normal `kiro-cli` launch finds it before the inherited profile PATH reaches any
-outer wrapper. When `trustedMcpTools` is non-empty, this repo re-composes
-nixpkgs' FHS package around a chat-only wrapped payload instead. The command at
-that same `/usr/bin` path is then the configured wrapper, so launcher-dispatched
-devenv sessions do not silently lose `--trust-tools`.
+The same ordering applies to Kiro's own commands: the synthesized `/usr/bin`
+holds the payload's `kiro-cli` and `kiro-cli-chat`, ahead of any same-named
+entry later on the inherited PATH. When `trustedMcpTools` is non-empty, this
+repo re-composes nixpkgs' FHS package around a trust-wrapped payload, so both
+root commands are the configured wrapper. The outer `kiro-cli` wrapper keeps the
+`--v3` prepend, which the inner wrapper reads in argv to withhold the grant on
+v3 `acp`.
 
 ## Supplying missing tools
 
@@ -132,17 +135,14 @@ build-time KAS selection, and argv injection still use the same overlay payload
 and wrapper helpers. A custom `ai.kiro.cli.package` must expose
 `passthru.unwrapped` on every rollout-resolved variant; otherwise evaluation
 fails with a named assertion instead of silently retaining the sandbox. Direct
-package consumers can make the same choice with `pkgs.ai.kiro-cli.unwrapped`.
-The overlay exposes that route even on pre-split nixpkgs (reachable only when a
-consumer sets `follows` or lands on the overlay's fallback), where it selects
-the already-direct package and is therefore a no-op.
+package consumers can make the same choice with `pkgs.ai.kiro-cli.unwrapped`. On
+darwin that route selects the already-direct package and is therefore a no-op.
 
 With the sandbox enabled, a custom FHS package used with `trustedMcpTools` must
-also expose `passthru.withFhsPayload`. Without it the FHS command shadows the
-outer chat wrapper and silently drops the grant, so the module rejects that
-detectable package shape. A package that is already direct can state that
-explicitly with `passthru.kiroFhsSandbox = false`; the overlay does so for
-darwin and pre-split nixpkgs.
+also expose `passthru.withFhsPayload`, the seam the module uses to place the
+trust wrapper inside the root; the module rejects a detectable FHS package
+without it. A package that is already direct can state that explicitly with
+`passthru.kiroFhsSandbox = false`; the overlay does so for darwin.
 
 The cost is real. nixpkgs added the FHS environment because Kiro dynamically
 extracts a generic-glibc `bun`; without the compatibility root, that path may
@@ -155,17 +155,17 @@ shell merely because the FHS root contains bash and may hide a host zsh. Set
 of FHS when preserving host namespace behavior is the intended tradeoff.
 
 `packages/kiro-cli/checks/kiro-fhs-contract.nix` guards the upstream assumptions
-behind this behavior. It verifies that all three public command wrappers select
-the shared FHS launcher, then inspects that launcher and fails if bubblewrap
-stops binding `/nix`, adds a known PATH-clearing or replacement argument,
-changes how the generated `/etc` is mounted, moves `/etc/profile` sourcing after
-Kiro's exec, changes the shared command dispatcher, adds another
+behind this behavior. It verifies that all three upstream command wrappers
+select the shared FHS launcher, then inspects that launcher and fails if
+bubblewrap stops binding `/nix`, adds a known PATH-clearing or replacement
+argument, changes how the generated `/etc` is mounted, moves `/etc/profile`
+sourcing after Kiro's exec, changes the shared command dispatcher, adds another
 init/profile/dispatcher PATH mutation, or removes the incoming PATH from the
 profile assignment. It also builds a `trustedMcpTools` configuration and proves
-the synthesized `/usr/bin/kiro-cli-chat` resolves to the trust wrapper. Those
-structural changes therefore force this document and the implementation to be
-re-measured instead of silently invalidating `extraPackages` or the devenv trust
-grant.
+the synthesized `/usr/bin/kiro-cli` and `/usr/bin/kiro-cli-chat` resolve to the
+trust wrapper. Those structural changes therefore force this document and the
+implementation to be re-measured instead of silently invalidating
+`extraPackages` or the devenv trust grant.
 
 The check is deliberately structural. It does not execute bubblewrap inside a
 Nix build sandbox, where nested user-namespace support is not portable. The
@@ -213,10 +213,10 @@ binding _over_ an entry the rootfs already has works fine (measured —
 
 This is where the sandbox actually bites, and it is not a path problem.
 
-- The FHS `/usr/bin` holds **exactly 233 entries** — coreutils, shadow, glibc,
-  gawk, gnused, gnugrep, gnutar, diffutils, findutils, less, the compressors,
-  wl-clipboard, and the three `kiro-cli*` binaries. There is **no `node`, no
-  `python3`, no `perl`.**
+- The FHS `/usr/bin` held **exactly 233 entries** when measured on a pre-3.0
+  payload — coreutils, shadow, glibc, gawk, gnused, gnugrep, gnutar, diffutils,
+  findutils, less, the compressors, wl-clipboard, and the three `kiro-cli*`
+  binaries of that release. There is **no `node`, no `python3`, no `perl`.**
 - A repo-local `node_modules/.bin/<tool>` **does** run — measured,
   `pnpm --version` → `10.27.0` — but only because its `#!/usr/bin/env node`
   found node in the user's nix profile. The same tree with an apt-installed
@@ -242,5 +242,5 @@ no sandbox.
 # Does the package expose the shared bwrap path? Then these rules apply.
 K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli)
 readlink -f "$K/libexec/kiro-cli/kiro-cli-wrapper"
-ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole world
+ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # the whole world (233 pre-3.0)
 ```

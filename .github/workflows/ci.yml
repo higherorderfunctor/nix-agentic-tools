@@ -290,9 +290,9 @@ jobs:
       # should not pay for a 621 MiB build on two runners.
       #
       # The raw Kiro recipe, release sidecar, and owner packaging helpers
-      # determine the patched build. Shared facet assembly supplies the
-      # active package set. HM/devenv module-only changes do not alter the
-      # raw binary derivation.
+      # determine the patched build, or the checks this job builds. Shared
+      # facet assembly supplies the active package set. HM/devenv module-only
+      # changes do not alter the raw binary derivation.
       - name: Scope
         id: scope
         env:
@@ -322,12 +322,17 @@ jobs:
                   lib/extracted/* | \
                   lib/facets.nix | \
                   lib/facets/* | \
+                  lib/idempotentFlags.nix | \
                   lib/packaging.nix | \
                   packages/kiro-cli/checks.nix | \
                   packages/kiro-cli/checks/* | \
                   packages/kiro-cli/extract/* | \
                   packages/kiro-cli/extracted/* | \
+                  packages/kiro-cli/lib/kas.nix | \
+                  packages/kiro-cli/lib/kiro-bundle-patch.py | \
                   packages/kiro-cli/lib/packaging.nix | \
+                  packages/kiro-cli/lib/usageTracking.nix | \
+                  packages/kiro-cli/lib/wrapPackage.nix | \
                   packages/kiro-cli/packages/* | \
                   packages/kiro-cli/rollout-canary.nix | \
                   packages/kiro-cli/sources.json)
@@ -417,8 +422,8 @@ jobs:
           systems: ${{ matrix.system }}
 
       # Flake check on ubuntu omits Darwin. Exercise extracted metadata and
-      # packaged KAS patching, native resources, ACP and dispatch on both
-      # Kiro-supported platforms here.
+      # packaged KAS patching, native resources, ACP, dispatch and the
+      # wrapper argv on both Kiro-supported platforms here.
       - name: Check extracted metadata and packaged KAS
         if: needs.kiro-scope.outputs.needed == 'true'
         run: |
@@ -429,6 +434,7 @@ jobs:
             ".#.checks.${{ matrix.system }}.kiro-bundle-patch-drift" \
             ".#.checks.${{ matrix.system }}.kiro-kas-dispatch" \
             ".#.checks.${{ matrix.system }}.kiro-kas-extraction" \
+            ".#.checks.${{ matrix.system }}.kiro-wrapper-argv" \
             --no-link
 
       - name: Build patched Kiro without the project cache

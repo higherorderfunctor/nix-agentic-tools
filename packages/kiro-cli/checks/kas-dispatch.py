@@ -1,4 +1,9 @@
-"""Real native launcher/direct-chat dispatch: package binding beats old caches."""
+"""Real native dispatch through both commands: package binding beats old caches.
+
+The `trusted` variant also proves, on the real binary, that the wrapper's
+`--trust-tools` gate matches what the engine accepts, and the stock variant's
+raw measurements pin the binary behavior that gate is built on.
+"""
 
 import importlib.util
 import json
@@ -18,6 +23,31 @@ def capture_node(root):
     node.write_text("#!" + sys.executable + "\nimport json,sys\nfrom pathlib import Path\nPath(" + repr(str(capture)) + ").write_text(json.dumps(sys.argv))\n")
     node.chmod(0o755)
     return capture, node
+
+
+def offline_env(root, bin_dir, node):
+    home = root / "home"
+    home.mkdir(exist_ok=True)
+    return {"PATH": bin_dir + ":" + os.environ["PATH"],
+            "HOME": str(home), "CFFIXED_USER_HOME": str(home),
+            "XDG_CACHE_HOME": str(root / "cache"), "XDG_CONFIG_HOME": str(root / "config"),
+            "KIRO_KAS_NODE_PATH": str(node), "KIRO_DISABLE_TELEMETRY": "1",
+            "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
+
+
+def raw(binary, arguments):
+    """Run the stock binary's own wrapper with no managed argv injection."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        capture, node = capture_node(root)
+        work = root / "work"
+        work.mkdir()
+        result = subprocess.run([binary, *arguments], env=offline_env(root, str(Path(binary).parent), node),
+                                cwd=work, input="", capture_output=True, text=True, timeout=30)
+        return result, capture.exists()
+
+
+CONFLICT = "not supported with --agent-engine=v3"
 
 
 for name, variant in variants.items():
@@ -50,6 +80,14 @@ for name, variant in variants.items():
                     assert capture.exists(), (name, stale, args, result.returncode, result.stderr)
                     argv = json.loads(capture.read_text())
                     assert variant["server"] in argv, (name, stale, args, argv)
+                    # KAS starting at all is the proof that the engine accepted
+                    # the wrapper's argv: a `--trust-tools` conflict exits first.
+                    # On `acp` the effective engine is v3 (injected `--v3` for
+                    # kiro-cli, explicit `--agent-engine v3` for the alias), so
+                    # the grant must be withheld; on `chat` it is forwarded.
+                    if variant["trust"] is not None:
+                        forwarded = any(variant["trust"] in token for token in argv)
+                        assert forwarded == (mode == "chat"), (name, stale, args, argv)
                     assert list(home.glob("**/kas/*/node_modules/@kiro/agent/dist/server/acp-server.js")) == ([old] if stale else []), "unexpected cache extraction"
     # Explicit inherited override remains available only in the stock variant.
     with tempfile.TemporaryDirectory() as tmp:
@@ -75,4 +113,21 @@ for name, variant in variants.items():
         del env["KIRO_KAS_NODE_PATH"]
         del env["KIRO_KAS_SERVER_PATH"]
         smoke.initialize([variant["package"] + "/bin/kiro-cli", "acp"], env)
-    print(f"PASS: {name}: launcher/direct chat, CLI/ACP, fresh/stale cache, explicit overrides/v2, real ACP initialize", flush=True)
+    print(f"PASS: {name}: kiro-cli/kiro-cli-chat, CLI/ACP, fresh/stale cache, explicit overrides/v2, real ACP initialize", flush=True)
+
+# Raw measurements on the stock payload, with no managed argv injection. Each
+# pins a binary behavior the trust gate in lib/wrapPackage.nix depends on.
+binary = variants["stock"]["unwrapped"] + "/bin/kiro-cli"
+# v3 rejects `--trust-tools` on `acp`, so the gate must withhold there.
+result, _ = raw(binary, ["--v3", "acp", "--trust-tools=fs_read"])
+assert result.returncode == 2 and CONFLICT in result.stderr, ("v3 acp trust", result.returncode, result.stderr)
+# An explicit `--agent-engine` beats `--v3`, so the gate resolves it first.
+result, _ = raw(binary, ["--v3", "acp", "--agent-engine=v2", "--auth-method", "client", "--trust-tools=fs_read"])
+assert "only supported with --agent-engine=v3" in result.stderr and CONFLICT not in result.stderr, ("engine precedence", result.stderr)
+# The bare launch accepts `--trust-tools` under v3 and reaches KAS.
+result, started = raw(binary, ["--v3", "--trust-tools=fs_read", "--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"])
+assert started, ("bare v3 launch with trust", result.returncode, result.stderr)
+# `acp` with no engine selector does not apply the v3 conflict at parse time.
+result, _ = raw(binary, ["acp", "--trust-tools=fs_read"])
+assert CONFLICT not in result.stderr, ("unselected acp trust", result.returncode, result.stderr)
+print("PASS: raw: v3 acp conflict, explicit engine precedence, bare v3 trust, unselected acp", flush=True)

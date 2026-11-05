@@ -44,7 +44,7 @@ Linux, `.dmg` on Darwin):
 
 Examples:
 
-- `kiro-cli`: `kiro-cli-sources.json` with Linux tarball + Darwin `.dmg`
+- `kiro-cli`: `sources.json` with per-platform release tarballs
 - `copilot-cli`: `copilot-cli-sources.json` with per-platform GitHub release
   tarballs
 
