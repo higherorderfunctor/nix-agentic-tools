@@ -18,7 +18,7 @@ usage_project() {
       if ($used | type) != "number" then error("usage percent") else
         {usedPercent: $used, remainingPercent: (100 - $used),
          # z.ai omits the reset time of a window that has not started yet.
-         resetsAt: (if $reset == null and $used == 0 then null else $reset | utc end),
+         resetsAt: (if $reset == null and $used == 0 then null else ($reset | utc) end),
          status: $status, windowSeconds: $seconds} end;
     def duration:
       if . == 604800 then "7d" elif . == 18000 then "5h" else "\(.)s" end;
