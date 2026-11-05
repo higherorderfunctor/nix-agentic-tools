@@ -698,7 +698,6 @@ in {
             kiro.cli = {
               enable = true;
               package = null;
-              v3 = true;
             };
             proxy.instance = "main";
           };
