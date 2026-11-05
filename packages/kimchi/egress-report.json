@@ -4715,28 +4715,6 @@
         "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
         "line": 91
       },
-      "kind": "boundary",
-      "property": "reconnect",
-      "reason": "registration",
-      "site": {
-        "column": 22,
-        "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
-        "line": 76
-      }
-    },
-    {
-      "callSite": {
-        "column": 14,
-        "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
-        "library": "websocket",
-        "line": 158
-      },
-      "distance": 3,
-      "functionSite": {
-        "column": 15,
-        "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
-        "line": 91
-      },
       "kind": "callback",
       "property": "reconnect",
       "reason": null,
@@ -4876,6 +4854,28 @@
         "column": 2,
         "file": "kimchi/src/extensions/teleport/overlay/tab-manager.ts",
         "line": 75
+      }
+    },
+    {
+      "callSite": {
+        "column": 14,
+        "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
+        "library": "websocket",
+        "line": 158
+      },
+      "distance": 3,
+      "functionSite": {
+        "column": 2,
+        "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
+        "line": 63
+      },
+      "kind": "boundary",
+      "property": null,
+      "reason": "stored",
+      "site": {
+        "column": 2,
+        "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
+        "line": 63
       }
     },
     {
@@ -11234,6 +11234,28 @@
         "column": 23,
         "file": "kimchi/src/commands/setup.ts",
         "line": 7
+      }
+    },
+    {
+      "callSite": {
+        "column": 21,
+        "file": "kimchi/src/models.ts",
+        "library": "fetch",
+        "line": 207
+      },
+      "distance": 4,
+      "functionSite": {
+        "column": 8,
+        "file": "kimchi/src/setup-wizard/index.ts",
+        "line": 36
+      },
+      "kind": "boundary",
+      "property": null,
+      "reason": "depth",
+      "site": {
+        "column": 33,
+        "file": "kimchi/src/cli.ts",
+        "line": 617
       }
     },
     {

@@ -13599,17 +13599,17 @@
       },
       "distance": 3,
       "functionSite": {
-        "column": 15,
+        "column": 2,
         "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
-        "line": 91
+        "line": 63
       },
       "kind": "boundary",
-      "property": "reconnect",
-      "reason": "registration",
+      "property": null,
+      "reason": "stored",
       "site": {
-        "column": 22,
+        "column": 2,
         "file": "kimchi/src/extensions/teleport/pty/websocket-transport.ts",
-        "line": 76
+        "line": 63
       }
     },
     {
@@ -15071,6 +15071,24 @@
         "file": "kimchi/src/login-command-patch.ts",
         "line": 495
       }
+    },
+    {
+      "callSite": {
+        "column": 21,
+        "file": "kimchi/src/models.ts",
+        "library": "fetch",
+        "line": 207
+      },
+      "distance": 4,
+      "functionSite": {
+        "column": 8,
+        "file": "kimchi/src/setup-wizard/index.ts",
+        "line": 36
+      },
+      "kind": "boundary",
+      "property": null,
+      "reason": "depth",
+      "site": { "column": 33, "file": "kimchi/src/cli.ts", "line": 617 }
     },
     {
       "callSite": {
