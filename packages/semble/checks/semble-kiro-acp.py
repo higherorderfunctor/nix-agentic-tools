@@ -242,7 +242,7 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
 
 def main() -> None:
     if len(sys.argv) != 5:
-        sys.exit("usage: semble-kiro-acp.py <kiro-cli-chat> <agent> <control> <workspace>")
+        sys.exit("usage: semble-kiro-acp.py <kiro-cli> <agent> <control> <workspace>")
 
     configured = run(sys.argv[1], sys.argv[2], sys.argv[4])
     control = run(sys.argv[1], sys.argv[3], sys.argv[4])

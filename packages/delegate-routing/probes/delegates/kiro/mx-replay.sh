@@ -32,7 +32,7 @@ summarize() {
   sum="$r/summary.txt"
 }
 
-# run <id> <case> <comma-separated markers> [VAR=value ...] -- <kiro-cli-chat args...>
+# run <id> <case> <comma-separated markers> [VAR=value ...] -- <kiro-cli args...>
 run() {
   local id=$1 case=$2 marks=$3 envs=()
   shift 3

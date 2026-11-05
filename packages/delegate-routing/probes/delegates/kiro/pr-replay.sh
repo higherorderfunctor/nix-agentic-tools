@@ -21,7 +21,7 @@ WF=(SETTINGS='{"chat.enableWorkflows":true}' CASE_ENV="KIRO_ENABLED_FEATURES=wor
 fails=0
 sum=""
 
-# run <id> <case> [VAR=value ...] -- <kiro-cli-chat args...>
+# run <id> <case> [VAR=value ...] -- <kiro-cli args...>
 run() {
   local id=$1 case=$2 envs=()
   shift 2

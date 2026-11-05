@@ -261,7 +261,7 @@ def kiro(work):
     bullets = [
         "harness: Kiro CLI (`kiro-cli`), v3 engine",
         f"pinned version: {version} (KAS {kas})",
-        f"launcher: `kiro-cli-chat {' '.join(argv[:-1])} \"{user}\"` in an empty network"
+        f"launcher: `kiro-cli {' '.join(argv[:-1])} \"{user}\"` in an empty network"
         " namespace against the offline capture server (`probes/delegates/kiro/wire2.sh`)",
         f"capture case: `{case}` (headless main session, the binary's default agent)",
     ]

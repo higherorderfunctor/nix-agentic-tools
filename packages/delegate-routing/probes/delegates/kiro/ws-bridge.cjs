@@ -1,5 +1,5 @@
-// stdio <-> WebSocket bridge for `kiro-cli-chat serve`, so acpctl.py can drive the v3 WebSocket server.
-// usage (as wire2.sh WRAP): node ws-bridge.cjs <kiro-cli-chat> serve --port <port> [args...]
+// stdio <-> WebSocket bridge for `kiro-cli serve`, so acpctl.py can drive the v3 WebSocket server.
+// usage (as wire2.sh WRAP): node ws-bridge.cjs <kiro-cli> serve --port <port> [args...]
 // Starts the server, waits for the port, then relays one JSON-RPC frame per stdin line / WebSocket message.
 "use strict";
 const { spawn } = require("node:child_process");

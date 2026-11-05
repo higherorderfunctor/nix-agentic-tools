@@ -1052,11 +1052,11 @@ in {
           cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
 
           validate_status=0
-          # Drive the unwrapped chat binary that implements `kiro-cli agent
-          # validate` directly. The exported Linux package is a buildFHSEnv
+          # Drive the unwrapped binary that implements `kiro-cli agent validate`
+          # directly. The exported Linux package is a buildFHSEnv
           # bubblewrap launcher, and nested user namespaces are not portable across
           # Nix build sandboxes; validation itself does not need the FHS root.
-          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
+          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
             --path "$HOME/.kiro/agents/semble-search.json" \
             >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
             || validate_status=$?
@@ -1070,7 +1070,7 @@ in {
           }
 
           invalid_status=0
-          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
+          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
             --path "$HOME/.kiro/agents/invalid-search.json" \
             >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
             || invalid_status=$?
@@ -1086,11 +1086,12 @@ in {
             exit 1
           }
 
-          # Invoke the chat binary directly and omit --agent-engine: this is Kiro's
-          # v2 ACP path. The driver sends only initialize and session/new, never a
+          # Invoke the unwrapped binary directly and omit --agent-engine: on 3.0.0
+          # `acp --agent` resolves to Kiro's v2 ACP path, which the v3 engine
+          # rejects `--agent` on. The driver sends only initialize and session/new, never a
           # model-bearing session/prompt request.
           python3 ${./semble-kiro-acp.py} \
-            ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat \
+            ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli \
             semble-search \
             control-search \
             "$TMPDIR/workspace" \
@@ -1107,7 +1108,7 @@ in {
     # The check above SIGKILLs a child that outlives its post-stdin-EOF budget
     # and then reads its exit status. Nothing exercised those branches, so a
     # harness kill was reported as a product crash for five weeks. The real
-    # `kiro-cli-chat` cannot be asked to hang, to panic, or to take a
+    # `kiro-cli` cannot be asked to hang, to panic, or to take a
     # third-party signal, so the contract is proved against a fake server that
     # can -- including that an autonomous non-zero exit still FAILS, which is
     # the assertion the fix had to keep.

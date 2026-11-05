@@ -3,7 +3,7 @@
 It answers exactly the three exchanges the real driver performs -- initialize,
 session/new, and one commands/available notification -- and then does whatever
 FAKE_TEARDOWN says once stdin reaches EOF. That last part is the point: the real
-`kiro-cli-chat` gives no way to ask for a hang, a panic, or a third-party
+`kiro-cli` gives no way to ask for a hang, a panic, or a third-party
 signal, so the teardown branches were unreachable by any test and stayed wrong
 for weeks.
 

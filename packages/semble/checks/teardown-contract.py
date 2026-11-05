@@ -19,14 +19,14 @@ DRIVER, FAKE = sys.argv[1], sys.argv[2]
 
 
 def shim(directory):
-    """An executable stand-in for `kiro-cli-chat`.
+    """An executable stand-in for `kiro-cli`.
 
     The driver spawns its argv[1] directly, so the fake has to be executable
     with a shebang. Keeping the fixture a plain module and wrapping it here
     means the same file runs identically under Nix, where store sources are
     not executable, and from a checkout.
     """
-    path = Path(directory) / "kiro-cli-chat"
+    path = Path(directory) / "kiro-cli"
     path.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(FAKE)} "$@"\n')
     path.chmod(0o755)
     return str(path)
