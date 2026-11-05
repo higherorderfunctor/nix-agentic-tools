@@ -175,6 +175,6 @@ in
     passthru =
       (old.passthru or {})
       // {
-        inherit updateScript;
+        inherit httpcore2 httpx2 updateScript;
       };
   })
