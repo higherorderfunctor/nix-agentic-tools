@@ -59,6 +59,8 @@ A request record contains `claim`, `evidence`, `evidenceHash`, `id`,
 unknowns. It stores neither a packet nor decoded statement text. Its compact
 `evidence` contains:
 
+- `call`: the request call expression's original-byte SHA-256 hash.
+- `root`: the SHA-256 hash of the request root's canonical JSON identity.
 - `rows`: one SHA-256 digest of each normalized caller row's canonical JSON,
   sorted, preserving duplicates.
 - `spans`: each explicit source citation's `{path, anchor, sha256}`, sorted by
@@ -67,8 +69,9 @@ unknowns. It stores neither a packet nor decoded statement text. Its compact
 
 `evidenceHash` hashes the canonical JSON of that summary. CI recomputes it from
 the current facts and pinned tree. Request summary fields have a closed schema;
-row digests and span/statement hashes must be lowercase SHA-256 values. The
-hosted-gateway records keep their full packets and existing hash rules.
+row/root digests and call/span/statement hashes must be lowercase SHA-256
+values. The hosted-gateway records keep their full packets and existing hash
+rules.
 
 A request selector has `fact: {kind: "requestCallers", where: {request}}` and an
 explicit `sources` array. The request citation is
@@ -98,7 +101,9 @@ hashes under `site: "request statement"`. The resolver stops at the nearest
 statement before crossing a function, class or file. A return inside an if
 selects that return; a request in an if condition selects the if. Concise arrow
 bodies are refused rather than expanding to a surrounding declaration. Two
-requests in the same statement necessarily share those evidence bytes.
+requests in the same statement share those statement bytes; the call hash binds
+each summary to its invocation bytes and the root digest distinguishes records
+even when all other evidence is identical.
 
 Every selected caller row contributes a digest, including duplicates. The
 current packet's `rows` object maps each digest to the full normalized row;
@@ -158,16 +163,16 @@ not a size guarantee: an accepted statement such as an `if` can still cover most
 of a function. Reviewers choose spans proportional to the claim; there is no
 byte limit. No TypeScript enum aliases enter persisted identities.
 
-Editing statement/citation bytes, adding/removing a caller/callback/boundary
-row, or changing selected metadata invalidates that request's summary. Caller
-bodies are not implicit spans. Unrelated requests, caller bodies and source
-edits do not change other packets unless they share selected statement/citation
-bytes or change a selected structural identity. Line shifts outside evidence
-only update display coordinates after facts are regenerated. The original source
-buffers, canonical JSON and sha256 rules below apply to both families. Request
-row digests sort lexically; gateway rows sort by canonical JSON. Both preserve
-multiplicity. Release hashes, absolute paths, timestamps and numeric coordinates
-never enter request packets.
+Editing call/statement/citation bytes, adding/removing a
+caller/callback/boundary row, or changing selected metadata invalidates that
+request's summary. Caller bodies are not implicit spans. Unrelated requests,
+caller bodies and source edits do not change other packets unless they share
+selected statement/citation bytes or change a selected structural identity. Line
+shifts outside evidence only update display coordinates after facts are
+regenerated. The original source buffers, canonical JSON and sha256 rules below
+apply to both families. Request row digests sort lexically; gateway rows sort by
+canonical JSON. Both preserve multiplicity. Release hashes, absolute paths,
+timestamps and numeric coordinates never enter request packets.
 
 ## Evidence packet
 
@@ -350,17 +355,18 @@ have `new=unresolved` and produce incomplete packets without evidence hashes.
 Missing explicit anchors and schema failures use the existing catalogue and
 fixes. Request evidence failures specialize these messages:
 
-| Code               | `Changed:` detail                                                                                             | `Fix:` action                                                                                                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EVIDENCE_CHANGED` | `selected evidence changed: rows removed=<digests>; rows added=<digests>; spans=<span-differences>`           | Investigate every listed span hash and caller-row digest in `current.json`, then update the claim, scope, rationale, verdict, recorded evidence summary and evidenceHash as warranted in `packages/kimchi/surface-judgments.json`. |
-| `RECORDED_HASH`    | `recorded evidence summary hashes to <computed-recorded-hash>, not its recorded evidenceHash <recorded-hash>` | Inspect the recorded evidence summary edit and current evidence, then deliberately update the reviewed record in `packages/kimchi/surface-judgments.json`.                                                                         |
+| Code               | `Changed:` detail                                                                                             | `Fix:` action                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EVIDENCE_CHANGED` | `selected evidence changed: rows removed=<digests>; rows added=<digests>; spans=<span-differences>`           | Investigate every listed change, then update the claim, scope, rationale, verdict, recorded evidence summary and evidenceHash as warranted in `packages/kimchi/surface-judgments.json`. Read current rows in `current.json`; read removed rows in the previous commit's packet artifact or use the recorded digest list and git history of the facts. |
+| `RECORDED_HASH`    | `recorded evidence summary hashes to <computed-recorded-hash>, not its recorded evidenceHash <recorded-hash>` | Inspect the recorded evidence summary edit and current evidence, then deliberately update the reviewed record in `packages/kimchi/surface-judgments.json`.                                                                                                                                                                                            |
 
 For request coverage failures, `<rows>` in the messages above likewise contains
 row digests. Every span difference names its citation identity (or
-`request statement`) and its old/new hash; absent sides are null. Read
-added/current rows by digest from `current.json`. A removed digest may have no
-current row body; inspect the previous artifact or the source/fact diff to
-investigate it.
+`request call` or `request statement`) and its old/new hash; absent sides are
+null. Both request `EVIDENCE_CHANGED` and `REMOVED_ROOT` fixes direct sessions
+to read current rows by digest from `current.json` and removed rows from the
+previous commit's packet artifact, or use the recorded digest list and git
+history of the facts. Removed row bodies are not stored in the current packet.
 
 ## Investigating and rejudging
 
@@ -414,4 +420,6 @@ Producer commit-back paths remain exactly `packages/${OWNER}/extracted` and, for
 Kimchi, `packages/kimchi/egress-report.json`; the collector applies those facts
 patches. Verdicts and packet artifacts are read-only check inputs and diagnostic
 outputs respectively, never commit-back outputs. This mechanism does not migrate
-the census, replace its report or broaden fact queries.
+the census or replace its report. It extends `requestCallers.callSite` with
+`endLine` and `endColumn` so the resolver matches each request by its exact call
+range.

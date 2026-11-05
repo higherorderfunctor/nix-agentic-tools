@@ -28,22 +28,24 @@ const { values: args } = parseArgs({
   ),
 });
 const verdictFile = "packages/kimchi/surface-judgments.json";
-const actions = {
-  ANCHOR_AMBIGUOUS: `Make the structural citation unique without line offsets, then rejudge ${verdictFile}.`,
-  ANCHOR_MISSING: `Inspect the source change; correct the citation only after reviewing its meaning, then rejudge ${verdictFile}.`,
-  EVIDENCE_CHANGED: `Investigate every listed change, then update the claim, scope, rationale, verdict, recorded packet and evidenceHash as warranted in ${verdictFile}.`,
-  FACT_INPUT: `Correct the regionRegistry producer or source pin, run nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then investigate and rejudge ${verdictFile}.`,
-  RECORDED_HASH: `Inspect the recorded packet edit and current evidence, then deliberately update the reviewed record in ${verdictFile}.`,
-  REMOVED_ROOT: `Inspect the removed evidence and remove this judgment by hand from ${verdictFile}.`,
-  REQUEST_FACT_INPUT: `Correct the requestCallers producer or source pin, run nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then investigate and rejudge ${verdictFile}.`,
-  REQUEST_LOCATION: `Align requestCallers with the pinned source using nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then inspect the candidate packets and rejudge ${verdictFile}.`,
-  SOURCE_INPUT: `Correct the pinned source or structural resolver, regenerate facts if the source changed, then investigate and rejudge ${verdictFile}.`,
-  UNCLASSIFIED_ROOT: `Review the candidate packet and add one scoped judgment or explicit unknown record to ${verdictFile}.`,
-  VERDICT_INPUT: `Correct the verdict file at the named path in ${verdictFile} and rerun the check; a record's packet will be emitted once it is valid.`,
-};
-const requestActions = {
-  EVIDENCE_CHANGED: `Investigate every listed span hash and caller-row digest in current.json, then update the claim, scope, rationale, verdict, recorded evidence summary and evidenceHash as warranted in ${verdictFile}.`,
-  RECORDED_HASH: `Inspect the recorded evidence summary edit and current evidence, then deliberately update the reviewed record in ${verdictFile}.`,
+const actions = (request) => {
+  const recorded = request ? "evidence summary" : "packet";
+  const rows = request
+    ? " Read current rows in current.json; read removed rows in the previous commit's packet artifact or use the recorded digest list and git history of the facts."
+    : "";
+  return {
+    ANCHOR_AMBIGUOUS: `Make the structural citation unique without line offsets, then rejudge ${verdictFile}.`,
+    ANCHOR_MISSING: `Inspect the source change; correct the citation only after reviewing its meaning, then rejudge ${verdictFile}.`,
+    EVIDENCE_CHANGED: `Investigate every listed change, then update the claim, scope, rationale, verdict, recorded ${recorded} and evidenceHash as warranted in ${verdictFile}.${rows}`,
+    FACT_INPUT: `Correct the regionRegistry producer or source pin, run nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then investigate and rejudge ${verdictFile}.`,
+    RECORDED_HASH: `Inspect the recorded ${recorded} edit and current evidence, then deliberately update the reviewed record in ${verdictFile}.`,
+    REMOVED_ROOT: `Inspect the removed evidence and remove this judgment by hand from ${verdictFile}.${rows}`,
+    REQUEST_FACT_INPUT: `Correct the requestCallers producer or source pin, run nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then investigate and rejudge ${verdictFile}.`,
+    REQUEST_LOCATION: `Align requestCallers with the pinned source using nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate, then inspect the candidate packets and rejudge ${verdictFile}.`,
+    SOURCE_INPUT: `Correct the pinned source or structural resolver, regenerate facts if the source changed, then investigate and rejudge ${verdictFile}.`,
+    UNCLASSIFIED_ROOT: `Review the candidate packet and add one scoped judgment or explicit unknown record to ${verdictFile}.`,
+    VERDICT_INPUT: `Correct the verdict file at the named path in ${verdictFile} and rerun the check; a record's packet will be emitted once it is valid.`,
+  };
 };
 const failures = [],
   current = {},
@@ -78,10 +80,9 @@ function fail(
     detail,
     old,
     fresh,
-    action:
-      judgmentSelector(judgment)?.fact?.kind === "requestCallers"
-        ? requestActions[code]
-        : undefined,
+    action: actions(
+      judgmentSelector(judgment)?.fact?.kind === "requestCallers",
+    )[code],
   });
 }
 async function json(path) {
@@ -273,7 +274,7 @@ Changed: ${escapeText(f.detail)}
 Evidence hash: old=${f.old}; new=${f.fresh}
 Packets: nix build .#checks.${args.system}.kimchi-surface-judgments.passthru.packets --out-link /tmp/kimchi-judgment-packets
 Inspect: /tmp/kimchi-judgment-packets/current.json; /tmp/kimchi-judgment-packets/diff.json; /tmp/kimchi-judgment-packets/display.json
-Fix: ${f.action ?? actions[f.code]}
+Fix: ${f.action}
 A red check means: ask a session to investigate and rejudge. CI does not update verdicts or hashes.
 `,
       )

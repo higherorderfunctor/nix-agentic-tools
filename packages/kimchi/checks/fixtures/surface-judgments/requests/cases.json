@@ -1,5 +1,34 @@
 [
   {
+    "codes": ["UNCLASSIFIED_ROOT", "VERDICT_INPUT"],
+    "details": ["/judgments/0/packet/selector: invalid type or value"],
+    "failureIds": ["<unclassified:eu>", "eu-search-service-availability"],
+    "name": "gateway-record-request-selector",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/packet/selector/fact",
+        "value": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": []
+              },
+              "path": "src/requests.ts"
+            }
+          }
+        }
+      }
+    ],
+    "rejects": "accepting a gateway-shaped record with a request selector until evidence comparison"
+  },
+  {
     "base": "requests/base",
     "codes": ["UNCLASSIFIED_ROOT"],
     "edits": [
@@ -298,7 +327,7 @@
       {
         "file": "verdicts",
         "path": "judgments/0/evidenceHash",
-        "value": "sha256:9d12be6561c92843c391ff5675f0f2467c4cf9b8adc4591f6d95b903df50cb46"
+        "value": "sha256:36fd8a37bba94a44b880d0e637db71bf9a975c54a645b5d59740bbbea61383fa"
       },
       {
         "file": "verdicts",
@@ -323,6 +352,221 @@
     ],
     "rejects": "accepting a blank request trigger claim",
     "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED", "EVIDENCE_CHANGED", "REMOVED_ROOT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "\nexport function requestA() {\n  const unrelated = \"before\";\n  return fetch(\"https://a.example\");\n}\nexport function requestB() {\n  return fetch(\"https://b.example\");\n}\nfunction callerA() { return requestA(); }\nfunction nextCaller() { return requestA(); }\nregister({ onStart: requestA });\nconst stored = requestA;\nfunction unrelatedCaller() { return \"before\"; }\n",
+        "to": "function intercepted() {\n\n  return ready ? original(second) : original(third);\n}\n"
+      }
+    ],
+    "expect": {
+      "diff.json/rebind-1/rows": {
+        "added": [],
+        "removed": []
+      },
+      "diff.json/rebind-1/spans": [
+        {
+          "new": "sha256:c3dac454dd28ae26c79abda7029d1b7a6cfc6710a9e0dab01c731cf742364ee7",
+          "old": "sha256:636f376d38e737bca5b607b45df88fdfb94e3e8cecc4c6e58d541acc1f0e3a83",
+          "site": "request call"
+        }
+      ]
+    },
+    "failureIds": ["rebind-0", "rebind-1", "rebind-2"],
+    "name": "request-earlier-call-deleted-rebind",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers",
+        "value": [
+          {
+            "callSite": {
+              "column": 18,
+              "endColumn": 33,
+              "endLine": 3,
+              "file": "kimchi/src/requests.ts",
+              "library": "fetch",
+              "line": 3
+            },
+            "distance": 0,
+            "functionSite": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            },
+            "kind": "enclosing",
+            "property": null,
+            "reason": null,
+            "site": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            }
+          },
+          {
+            "callSite": {
+              "column": 37,
+              "endColumn": 51,
+              "endLine": 3,
+              "file": "kimchi/src/requests.ts",
+              "library": "fetch",
+              "line": 3
+            },
+            "distance": 0,
+            "functionSite": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            },
+            "kind": "enclosing",
+            "property": null,
+            "reason": null,
+            "site": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments",
+        "value": [
+          {
+            "claim": {
+              "default": "Unknown: default behavior has not been judged.",
+              "destination": "Unknown: effective destination has not been judged.",
+              "disable": "Unknown: disabling controls have not been judged.",
+              "trigger": "Unknown: triggering behavior has not been judged."
+            },
+            "evidence": {
+              "call": "sha256:f38c930f77b7b0403f73dfdd1f16b769dc3a0c808a983c6971578a5e70cd009a",
+              "root": "sha256:8b9c5ff21e0b74630541263a8fcd6d4d29b109813e4ad7d36aff2b976eda7892",
+              "rows": [
+                "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
+              ],
+              "spans": [],
+              "statement": "sha256:0ad66e0a3da85dc3ae1ecb80625854420d37be5dd189538e76c18ae18e813ff9"
+            },
+            "evidenceHash": "sha256:a876c21a335651de7a0d30f594e573a27b80c0ea5d05da186cbba3715bac9b93",
+            "id": "rebind-0",
+            "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+            "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+            "scope": "The selected request occurrence and explicitly cited source bytes.",
+            "selector": {
+              "fact": {
+                "kind": "requestCallers",
+                "where": {
+                  "request": {
+                    "anchor": {
+                      "role": {
+                        "callee": "call:original",
+                        "kind": "call",
+                        "ordinal": 0
+                      },
+                      "symbol": [["function:intercepted", 0]]
+                    },
+                    "path": "src/requests.ts"
+                  }
+                }
+              },
+              "sources": []
+            },
+            "verdict": "unknown"
+          },
+          {
+            "claim": {
+              "default": "Unknown: default behavior has not been judged.",
+              "destination": "Unknown: effective destination has not been judged.",
+              "disable": "Unknown: disabling controls have not been judged.",
+              "trigger": "Unknown: triggering behavior has not been judged."
+            },
+            "evidence": {
+              "call": "sha256:636f376d38e737bca5b607b45df88fdfb94e3e8cecc4c6e58d541acc1f0e3a83",
+              "root": "sha256:75db7a3ca7731b5632100ee447ffd230d7bd63e0705492f6957e9059617151a5",
+              "rows": [
+                "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
+              ],
+              "spans": [],
+              "statement": "sha256:e301fb86dcd7416fecffc7837eaa62c7c0943b93590c865ba36e250aa4e6a684"
+            },
+            "evidenceHash": "sha256:fc20cb0f3f0e9585e64b6a3863c88e802d8a202f5c6c1ae337ec6d5ac789f3c6",
+            "id": "rebind-1",
+            "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+            "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+            "scope": "The selected request occurrence and explicitly cited source bytes.",
+            "selector": {
+              "fact": {
+                "kind": "requestCallers",
+                "where": {
+                  "request": {
+                    "anchor": {
+                      "role": {
+                        "callee": "call:original",
+                        "kind": "call",
+                        "ordinal": 1
+                      },
+                      "symbol": [["function:intercepted", 0]]
+                    },
+                    "path": "src/requests.ts"
+                  }
+                }
+              },
+              "sources": []
+            },
+            "verdict": "unknown"
+          },
+          {
+            "claim": {
+              "default": "Unknown: default behavior has not been judged.",
+              "destination": "Unknown: effective destination has not been judged.",
+              "disable": "Unknown: disabling controls have not been judged.",
+              "trigger": "Unknown: triggering behavior has not been judged."
+            },
+            "evidence": {
+              "call": "sha256:c3dac454dd28ae26c79abda7029d1b7a6cfc6710a9e0dab01c731cf742364ee7",
+              "root": "sha256:5438b563dea5a2900a0decb65d6842405939ed3d430858332ef705311a3f3dc7",
+              "rows": [
+                "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
+              ],
+              "spans": [],
+              "statement": "sha256:e301fb86dcd7416fecffc7837eaa62c7c0943b93590c865ba36e250aa4e6a684"
+            },
+            "evidenceHash": "sha256:035220e06d35ba9c938454c340022bc469abd42ca73919def57d44fc58ff1f94",
+            "id": "rebind-2",
+            "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+            "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+            "scope": "The selected request occurrence and explicitly cited source bytes.",
+            "selector": {
+              "fact": {
+                "kind": "requestCallers",
+                "where": {
+                  "request": {
+                    "anchor": {
+                      "role": {
+                        "callee": "call:original",
+                        "kind": "call",
+                        "ordinal": 2
+                      },
+                      "symbol": [["function:intercepted", 0]]
+                    },
+                    "path": "src/requests.ts"
+                  }
+                }
+              },
+              "sources": []
+            },
+            "verdict": "unknown"
+          }
+        ]
+      }
+    ],
+    "rejects": "silently rebinding a same-callee ordinal to another call sharing its statement and caller rows"
   },
   {
     "base": "requests/base",
@@ -521,6 +765,24 @@
       }
     ],
     "rejects": "accepting request facts without the required inclusive endColumn"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["UNCLASSIFIED_ROOT", "REMOVED_ROOT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "function requestB()",
+        "to": "function renamedB()"
+      }
+    ],
+    "failureIds": [
+      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:renamedB\",0]]},\"path\":\"src/requests.ts\"}>",
+      "request-b"
+    ],
+    "name": "request-owner-renamed",
+    "rejects": "retaining a request judgment after its enclosing function is renamed",
+    "unchanged": ["request-a"]
   },
   {
     "base": "requests/base",

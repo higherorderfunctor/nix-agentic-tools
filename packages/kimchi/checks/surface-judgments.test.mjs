@@ -81,7 +81,7 @@ for (const test of cases) {
     const base = test.base ?? "base";
     if (test.base)
       assert.ok(
-        test.base === "requests/base" && !test.facts && !test.verdictsFile,
+        test.base === "requests/base",
         `${test.name}: request cases patch the shared baseline`,
       );
     const records = read(`${base}/verdicts.json`);
@@ -156,9 +156,7 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(
         target,
-        test.invalidUtf8 === path || (!test.base && test.invalidUtf8)
-          ? Buffer.from([0xff])
-          : source,
+        !test.base && test.invalidUtf8 ? Buffer.from([0xff]) : source,
       );
     }
     for (const name of ["facts", "verdicts"])
@@ -216,15 +214,6 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
           test.base ? baseline[id].evidenceHash : baseline[id],
           `${test.name}: rejects ${test.rejects}`,
         );
-    if (test.changed)
-      assert.deepEqual(
-        Object.entries(artifacts["diff.json"])
-          .filter(([, value]) => value.current !== value.recorded)
-          .map(([id]) => id)
-          .sort(),
-        test.changed,
-        `${test.name}: changed judgment isolation`,
-      );
     for (const [pointer, expected] of Object.entries(test.expect ?? {}))
       assert.deepEqual(
         pointer.split("/").reduce((value, key) => value[key], artifacts),
