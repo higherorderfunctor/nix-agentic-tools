@@ -1509,6 +1509,38 @@
     "edits": [
       {
         "file": "src/requests.ts",
+        "from": "const bound = ",
+        "to": "const bound: () => Promise<Response> = "
+      }
+    ],
+    "name": "request-function-type-annotation",
+    "rejects": "counting a variable function-type annotation as function:bound ordinal 0 and assigning its runtime arrow ordinal 1",
+    "unchanged": true,
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/4/callSite/column",
+        "value": 55
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/4/functionSite/column",
+        "value": 40
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/4/site/column",
+        "value": 40
+      }
+    ]
+  },
+  {
+    "base": "requests/shapes",
+    "changed": [],
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
         "from": "\"before\"; return fetch(\"https://immediate.example\")",
         "to": "\"after!\"; return fetch(\"https://immediate.example\")"
       }
@@ -2818,6 +2850,130 @@
     "name": "request-two-on-one-line",
     "rejects": "deduplicating request roots by file, line, library, or statement hash",
     "unchanged": true
+  },
+  {
+    "base": "requests/base",
+    "changed": [],
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "\n",
+        "to": "interface TypeOnly { requestA(): void }\n\n"
+      }
+    ],
+    "name": "request-type-only-interface-insertion",
+    "rejects": "counting interface method signatures as named runtime owners and shifting requestA to ordinal 1",
+    "unchanged": true,
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/line",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/functionSite/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/line",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/functionSite/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/site/line",
+        "value": 10
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/callSite/line",
+        "value": 8
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/functionSite/line",
+        "value": 7
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/site/line",
+        "value": 7
+      }
+    ]
+  },
+  {
+    "base": "requests/base",
+    "changed": [],
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "\n",
+        "to": "declare function requestA(): Promise<Response>;\n\n"
+      }
+    ],
+    "name": "request-type-only-overload-insertion",
+    "rejects": "counting overload declarations without bodies as named runtime owners and shifting requestA to ordinal 1",
+    "unchanged": true,
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/line",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/functionSite/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/line",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/functionSite/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/site/line",
+        "value": 10
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/callSite/line",
+        "value": 8
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/functionSite/line",
+        "value": 7
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/site/line",
+        "value": 7
+      }
+    ]
   },
   {
     "base": "requests/base",

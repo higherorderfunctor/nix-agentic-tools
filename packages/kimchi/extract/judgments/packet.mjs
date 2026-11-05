@@ -12,6 +12,12 @@ export const canonical = (value) =>
         )
       : item,
   );
+export const requestClaimParts = [
+  "default",
+  "destination",
+  "disable",
+  "trigger",
+];
 export const hash = (value) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const ordered = (items) =>
@@ -166,12 +172,9 @@ export function verdicts(value) {
         judgment,
         {
           claim: isRequest(judgment?.packet?.selector)
-            ? {
-                default: nonblank,
-                destination: nonblank,
-                disable: nonblank,
-                trigger: nonblank,
-              }
+            ? Object.fromEntries(
+                requestClaimParts.map((key) => [key, nonblank]),
+              )
             : nonblank,
           evidenceHash: digest,
           id: (v) => string(v) && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(v),
@@ -440,8 +443,8 @@ export async function requests(value, tree, ts, display) {
     const callee = (n) =>
       `${ts.isNewExpression(n) ? "new" : "call"}:${spelling(n.expression)}`;
     const named = (n) => {
+      if (!(ts.isFunctionLike(n) && n.body) && !ts.isClassLike(n)) return null;
       if (ts.isConstructorDeclaration(n)) return "constructor:constructor";
-      if (!ts.isFunctionLike(n) && !ts.isClassLike(n)) return null;
       let binding = n.parent;
       while (
         binding &&
