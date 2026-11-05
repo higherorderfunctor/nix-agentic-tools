@@ -27,27 +27,29 @@
         [ -f "$nat_entrypoint" ] || nat_fail "kiro-cli no longer resolves to a generated launcher"
 
         # nixpkgs 9ddfd8a consolidated the three per-command FHS environments
-        # into one shared environment. Its public commands are now thin
+        # into one shared environment. Its public commands are thin
         # makeWrapper scripts, so readlink -f on bin/kiro-cli stops one layer
-        # before the bubblewrap launcher. Keep accepting the older direct
-        # launcher while it remains in the compatibility range.
+        # before the bubblewrap launcher. This package pins that topology:
+        # bin/kiro-cli must dispatch through the shared launcher.
         nat_entrypoint_root="''${nat_entrypoint%/bin/kiro-cli}"
         nat_shared_launcher="$nat_entrypoint_root/libexec/kiro-cli/kiro-cli-wrapper"
-        if [ -e "$nat_shared_launcher" ]; then
-          for nat_command in kiro-cli; do
-            nat_command_wrapper="$(${pkgs.coreutils}/bin/readlink -f ${kiroPackage}/bin/$nat_command)"
-            [ -f "$nat_command_wrapper" ] \
-              || nat_fail "$nat_command no longer resolves to a generated command wrapper"
-            ${pkgs.gnugrep}/bin/grep -Eq \
-              "^exec \"$nat_shared_launcher\"[[:space:]]+$nat_command[[:space:]]+\"\\\$@\"[[:space:]]*$" \
-              "$nat_command_wrapper" \
-              || nat_fail "$nat_command no longer dispatches through the shared FHS launcher"
-          done
-          nat_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_shared_launcher")"
-        else
-          nat_launcher="$nat_entrypoint"
-        fi
+        [ -e "$nat_shared_launcher" ] \
+          || nat_fail "the shared FHS launcher is missing; re-measure the wrapper topology"
+        ${pkgs.gnugrep}/bin/grep -Eq \
+          "^exec \"$nat_shared_launcher\"[[:space:]]+kiro-cli[[:space:]]+\"\\\$@\"[[:space:]]*$" \
+          "$nat_entrypoint" \
+          || nat_fail "kiro-cli no longer dispatches through the shared FHS launcher"
+        nat_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_shared_launcher")"
         [ -f "$nat_launcher" ] || nat_fail "could not locate the generated FHS launcher"
+
+        # 3.0.0 ships one command. nixpkgs' FHS expression also wraps
+        # kiro-cli-chat and kiro-cli-term; package.nix removes them, so every
+        # selected variant exposes exactly kiro-cli.
+        for nat_package in ${kiroPackage} ${selectedKiroPackage}; do
+          nat_bin_entries="$(${pkgs.coreutils}/bin/ls -A "$nat_package/bin")"
+          [ "$nat_bin_entries" = "kiro-cli" ] \
+            || nat_fail "$nat_package/bin must contain exactly kiro-cli, found: $nat_bin_entries"
+        done
 
         ${pkgs.gnugrep}/bin/grep -qF -- '--bind /nix /nix' "$nat_launcher" \
           || nat_fail "FHS launcher no longer bind-mounts /nix; re-measure extraPackages visibility"

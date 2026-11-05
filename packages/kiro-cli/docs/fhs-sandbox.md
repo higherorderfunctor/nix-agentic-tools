@@ -11,8 +11,10 @@
 package split, `pkgs.ai.kiro-cli` on Linux routes its commands through one
 shared `buildFHSEnv` sandbox. `$out/bin/*` are thin command-selecting wrappers;
 `$out/libexec/kiro-cli/kiro-cli-wrapper` is the bubblewrap launcher. nixpkgs
-still lists three commands; the 3.0.0 payload supplies only `kiro-cli`, so the
-`kiro-cli-chat` and `kiro-cli-term` command wrappers find nothing to run.
+makes a wrapper for each of three commands; the 3.0.0 payload supplies only
+`kiro-cli`, so `package.nix` removes the `kiro-cli-chat` and `kiro-cli-term`
+wrappers in its `extraInstallCommands`, and `bin/` holds exactly `kiro-cli` on
+both platforms (asserted by `kiro-fhs-contract`).
 
 **It is also a different axis from Kiro's own workspace-root allowlist** (see
 `dev/references/kiro-workflow-ref.md`). The discriminator is cheap: bwrap has no

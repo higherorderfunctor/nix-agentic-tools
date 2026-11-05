@@ -216,6 +216,17 @@
             unwrapped = pinned;
           };
       }
+      # nixpkgs' FHS expression makes one thin wrapper per command it lists,
+      # `kiro-cli-chat` and `kiro-cli-term` among them, which 3.0.0 does not
+      # ship: they would exec a command the payload lacks. They are created in
+      # `extraInstallCommands`, so they are removed there, leaving `bin/` with
+      # exactly `kiro-cli` on Linux as on Darwin.
+      // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+        extraInstallCommands = ''
+          ${joinAttrs.extraInstallCommands or ""}
+          rm "$out/bin/kiro-cli-chat" "$out/bin/kiro-cli-term"
+        '';
+      }
       # Expose version for mkKiro.nix, which reads (resolvePackage cfg).version.
       # Conditional, because re-asserting it where present trips nixpkgs'
       # "overridden with `version` but not `src`" lint on the darwin build.

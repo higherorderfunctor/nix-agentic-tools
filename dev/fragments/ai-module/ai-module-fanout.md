@@ -139,13 +139,13 @@ own.
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
 `jail`, `shell`, `extraPackages`, `native.settings`, `trustedMcpTools` (Home
-Manager only), `tweaks`, `features.<name>.enable`, `useFhsSandbox` and `v3`,
-plus the friendly `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and
-`workflows` switches. Rollout names and typed `native.settings.chat.keybindings`
-keys come from the extracted registry. Friendly workflows select the GA stock
-package and imply their global client setting on Home Manager; Code-to-Spec also
-implies its global setting there. Devenv warns when either requested global
-setting is missing, and refuses explicit project-only writes of global keys. The
+Manager only), `tweaks`, `features.<name>.enable`, and `useFhsSandbox`, plus the
+friendly `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows`
+switches. Rollout names and typed `native.settings.chat.keybindings` keys come
+from the extracted registry. Friendly workflows select the GA stock package and
+imply their global client setting on Home Manager; Code-to-Spec also implies its
+global setting there. Devenv warns when either requested global setting is
+missing, and refuses explicit project-only writes of global keys. The
 environment, jail and shell folds live at `cli.normalized.environmentVariables`,
 `cli.normalized.jail` and `cli.normalized.shell`. All other normalized pools,
 native agents, permissions, hooks, MCP, files and activation remain shared under

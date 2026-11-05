@@ -292,8 +292,8 @@ delegates through a three-line dispatcher. This repo supplies its own pinned
 payload to that expression; its `wrapProgram` shim lives on
 `passthru.unwrapped`. The module's launcher sits outside the FHS package, and
 argv and environment pass through every layer. nixpkgs' FHS expression still
-lists `kiro-cli-chat` and `kiro-cli-term`, which 3.0.0 does not ship, so those
-upstream command wrappers fail with "command not found". See
+wraps `kiro-cli-chat` and `kiro-cli-term`, which 3.0.0 does not ship;
+`package.nix` removes those two wrappers, so only `bin/kiro-cli` is shipped. See
 [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule, shadowed set and loader
 trap. Darwin builds no FHS layer.
 
