@@ -392,15 +392,20 @@ in
           inherit extractedLib pkgs;
           inherit ((extractedLib {inherit pkgs;}).load {dir = ../../../extracted;}) aggregate;
         };
-        # Report generation selects this owner without rebuilding extraction or
+        # Report and judgment inputs select this owner without rebuilding extraction or
         # depending on the committed facts/report that CI writes back.
         extractedSelectionInput = lib.fileset.toSource {
           root = ../../../../..;
           fileset = lib.fileset.unions [
             ../../../../../checks/references/kimchi-egress-report.nix
+            ../../../checks/fixtures/surface-judgments
+            ../../../checks/kimchi-surface-judgments.nix
+            ../../../checks/surface-judgments.test.mjs
             ../../../extract/egress/generate.mjs
             ../../../extract/egress/regenerate.sh
             ../../../extract/egress/report.mjs
+            ../../../extract/judgments
+            ../../../surface-judgments.json
           ];
         };
         inherit extractionSources;

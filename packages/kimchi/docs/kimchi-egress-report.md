@@ -100,6 +100,16 @@ select Kimchi even when extraction is unchanged. This input excludes docs, other
 owners' files and committed `extracted.json` and `egress-report.json`; CI's
 commit-back alone does not reselect the owner.
 
+The same selection input includes `surface-judgments.json`, the judgment
+packet/check scripts, Nix check and fixtures. The
+[surface judgment mechanism](kimchi-surface-judgments.md) checks fingerprints
+for the declared hosted LLM gateways after report validation and before patch
+creation. A failure prevents facts upload while preserving a separate
+`kimchi-judgments-${SYSTEM}` diagnostic artifact. CI never commits verdicts or
+packet artifacts; its allowed patch paths remain the extracted facts and this
+report. An unknown judgment is classified evidence, without becoming support for
+its claim.
+
 The generator refuses a missing `egressScan`, missing scanner fields and env
 targets without an `environment` row. It reads no fields from the committed
 report. The Kimchi extraction runs the scanner with pinned Node and TypeScript

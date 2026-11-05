@@ -87,6 +87,23 @@
         }
       ];
     };
+    # Fingerprinted claims over declared hosted gateways and their source spans.
+    kimchi-surface-judgments = {
+      scopes = [
+        "packages/${facetOwner}/checks/fixtures/surface-judgments/**"
+        "packages/${facetOwner}/checks/kimchi-surface-judgments.nix"
+        "packages/${facetOwner}/checks/surface-judgments.test.mjs"
+        "packages/${facetOwner}/extract/judgments/**"
+        "packages/${facetOwner}/surface-judgments.json"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "kimchi-surface-judgments";
+          dir = facetOwner;
+        }
+      ];
+    };
   };
   # The package update script refreshes the pinned Kimchi and pi extraction
   # sources; PR CI regenerates packages/kimchi/extracted/ facts, including
