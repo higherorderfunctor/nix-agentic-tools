@@ -36,7 +36,11 @@ private predicate callback(Expr value, InvokeExpr call, string property) {
 private predicate edge(Function fn, InvokeExpr call, string kind, string property) {
   owned(fn) and owned(call) and
   (
-    fn = boundFunction(call.getCallee()) and kind = "caller" and property = ""
+    (
+      fn = boundFunction(call.getCallee())
+      or
+      fn = boundClass(call.(NewExpr).getCallee()).getConstructor().getInit()
+    ) and kind = "caller" and property = ""
     or
     exists(Expr value |
       callback(value, call, property) and fn = boundFunction(value) and kind = "callback"
@@ -96,7 +100,10 @@ private predicate row(ClientRequest request, AstNode fn, string kind, AstNode si
     reached(request, fn, depth, a, b, c, d) and
     (
       exists(InvokeExpr call, string edgeKind |
-        edge(fn, call, edgeKind, property) and site = call and
+        edge(fn, call, edgeKind, property) and
+        (if call.getCallee().getUnderlyingValue() instanceof PropAccess
+         then site = call.getCallee().getUnderlyingValue().(PropAccess).getPropertyNameExpr()
+         else site = call) and
         (
           depth < 4 and kind = edgeKind and reason = "" and distance = depth + 1
           or
@@ -131,7 +138,7 @@ private predicate row(ClientRequest request, AstNode fn, string kind, AstNode si
 
 from ClientRequest request, AstNode fn, string kind, AstNode site, string property, string reason, int distance
 where
-  owned(request.asExpr()) and exists(requestLibrary(request)) and exists(requestTarget(request)) and
+  owned(request.asExpr()) and eligibleRequest(request) and
   row(request, fn, kind, site, property, reason, _) and
   distance = min(int d | row(request, fn, kind, site, property, reason, d) | d)
 select request.getFile().getRelativePath() as file, request.getLocation().getStartLine() as line,

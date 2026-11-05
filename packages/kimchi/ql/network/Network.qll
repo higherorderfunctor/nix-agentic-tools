@@ -170,6 +170,11 @@ DataFlow::Node requestTarget(ClientRequest r) {
   result = r.getUrl().getALocalSource().getAPropertyWrite(["host", "hostname", "origin", "href", "url"]).getRhs()
 }
 
+/** Requests with both a classified library and a target qualify for request evidence. */
+predicate eligibleRequest(ClientRequest request) {
+  exists(requestLibrary(request)) and exists(requestTarget(request))
+}
+
 /** `new URL(x, base)` and reads of a URL's string forms. */
 predicate urlStep(DataFlow::Node pred, DataFlow::Node succ) {
   exists(DataFlow::NewNode n | n = DataFlow::globalVarRef("URL").getAnInstantiation() |

@@ -15,7 +15,10 @@ and `distance`. Locations retain the database's repository-relative `kimchi/`
 prefix. Unused properties and reasons are null. Rows are deduplicated and sorted
 by request location/library, distance, function location, kind, site, property
 and reason. Each edge or boundary keeps its minimum distance across chains;
-paths are never emitted.
+paths are never emitted. For a receiving member call, `site` starts at the
+called property name (`then` in `f().then(cb)`), or the property expression
+inside brackets. Other calls use the call's start. This also applies to
+boundaries at receiving calls, keeping calls within one chain distinct.
 
 - `enclosing`: `functionSite` and `site` identify the request's enclosing
   function; distance is zero.
@@ -25,7 +28,10 @@ paths are never emitted.
   receiving call. `property` names an inline object argument's property, or is
   null for a direct argument. A computed property is `"<computed>"`.
 - `boundary`: `functionSite` is the reached function; `site` identifies the
-  stopping use or function, and `reason` explains the stop.
+  stopping use or function, and `reason` explains the stop. At a callback use,
+  `property` retains the inline object property's name (or `"<computed>"`),
+  including at depth, recursion and registration boundaries; otherwise it is
+  null.
 
 Binding resolution follows function declarations, named imports (including
 renaming) and immutable const aliases. Namespace member calls such as `ns.f()`
@@ -36,10 +42,11 @@ directly to a variable. These forms resolve exported function declarations and
 const function values without matching names across unrelated modules. Methods
 resolve on object literals and const aliases of those objects, on a const-bound
 `new` instance whose class binding resolves, and on `this` in that class's
-methods. These are declaration bindings, never a search for matching function
-names. The shared helpers live in `DeclarationValues.qll`; literal strings still
-follow only named imports and const aliases, through the same const-initializer
-helper as function values.
+methods. A `new C(...)` call also resolves to the constructor function when `C`
+resolves to a source class through `boundClass`. These are declaration bindings,
+never a search for matching function names. The shared helpers live in
+`DeclarationValues.qll`; literal strings still follow only named imports and
+const aliases, through the same const-initializer helper as function values.
 
 Callbacks are syntax only: an arrow, function expression or binding-resolved
 identifier directly in an argument, or as a property value in an inline object
@@ -60,9 +67,9 @@ stored and unresolved escapes use the distance of the reached function.
 
 At Kimchi 1.26.0, `src/models.ts:207:21` reaches `runWizard` at
 `src/setup-wizard/index.ts:36:8` at distance four. Its dynamically imported call
-at `src/cli.ts:617:33` must produce a `boundary` row with reason `depth`,
-distance `4`, and null property, using those request, function and call
-locations with the `kimchi/` prefix. It does not produce a fifth caller edge.
+at `src/cli.ts:617:33` produces a `boundary` row with reason `depth`, distance
+`4`, and null property, using those request, function and call locations with
+the `kimchi/` prefix. It does not produce a fifth caller edge.
 
 Boundary reasons:
 
@@ -114,10 +121,11 @@ rows. Source comments name the incorrect implementation each case rejects.
 The expected rows were authored from fixture source, never from the query. They
 cover distinct columns, two callers with different local guards, renamed,
 namespace and destructured dynamic imports, const aliases, a same-named negative
-module, source constructor callbacks, callback properties versus stored
-properties, registration, module storage, mutual recursion, depth, exported
-entries, inline arrows/function expressions, object/class methods, minimum
-distances and unsupported returned functions. See the adjacent
+module, source constructor callers and callbacks, distinct chained call sites,
+callback properties versus stored properties, registration, module storage,
+mutual recursion, depth, exported entries, inline arrows/function expressions,
+object/class methods, minimum distances and unsupported returned functions. See
+the adjacent
 [expected row ledger](../checks/fixtures/request-callers/expected/rows.md) for
 every exact location and row. Function declaration locations exclude the
 `export` keyword, as the pinned extractor's `fixExports` does.

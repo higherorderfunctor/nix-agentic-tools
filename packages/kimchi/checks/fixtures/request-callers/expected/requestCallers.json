@@ -82,7 +82,7 @@
     "property": null,
     "reason": "registration",
     "site": {
-      "column": 1,
+      "column": 4,
       "file": "kimchi/src/callbacks.ts",
       "line": 11
     }
@@ -126,7 +126,7 @@
     "property": null,
     "reason": null,
     "site": {
-      "column": 1,
+      "column": 4,
       "file": "kimchi/src/callbacks.ts",
       "line": 11
     }
@@ -302,7 +302,7 @@
     "property": null,
     "reason": null,
     "site": {
-      "column": 3,
+      "column": 12,
       "file": "kimchi/src/namespace-import.ts",
       "line": 4
     }
@@ -415,6 +415,160 @@
       "column": 8,
       "file": "kimchi/src/namespace-import.ts",
       "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/chain.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/chain.ts",
+      "line": 2
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 1,
+      "file": "kimchi/src/chain.ts",
+      "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/chain.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/chain.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "registration",
+    "site": {
+      "column": 13,
+      "file": "kimchi/src/chain.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/chain.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/chain.ts",
+      "line": 2
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "registration",
+    "site": {
+      "column": 27,
+      "file": "kimchi/src/chain.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/chain.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/chain.ts",
+      "line": 2
+    },
+    "kind": "callback",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 13,
+      "file": "kimchi/src/chain.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/chain.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/chain.ts",
+      "line": 2
+    },
+    "kind": "callback",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 27,
+      "file": "kimchi/src/chain.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/chain.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 1,
+      "file": "kimchi/src/chain.ts",
+      "line": 2
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/chain.ts",
+      "line": 6
+    }
+  },
+  {
+    "callSite": {
+      "column": 10,
+      "file": "kimchi/src/chain.ts",
+      "library": "fetch",
+      "line": 3
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/chain.ts",
+      "line": 5
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/chain.ts",
+      "line": 5
     }
   },
   {
@@ -478,7 +632,7 @@
     "property": null,
     "reason": null,
     "site": {
-      "column": 5,
+      "column": 10,
       "file": "kimchi/src/class.ts",
       "line": 7
     }
@@ -522,7 +676,7 @@
     "property": null,
     "reason": null,
     "site": {
-      "column": 3,
+      "column": 10,
       "file": "kimchi/src/class.ts",
       "line": 12
     }
@@ -635,6 +789,94 @@
       "column": 8,
       "file": "kimchi/src/columns.ts",
       "line": 2
+    }
+  },
+  {
+    "callSite": {
+      "column": 5,
+      "file": "kimchi/src/construction.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/construction.ts",
+      "line": 3
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "stored",
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/construction.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 5,
+      "file": "kimchi/src/construction.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 0,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/construction.ts",
+      "line": 3
+    },
+    "kind": "enclosing",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/construction.ts",
+      "line": 3
+    }
+  },
+  {
+    "callSite": {
+      "column": 5,
+      "file": "kimchi/src/construction.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 3,
+      "file": "kimchi/src/construction.ts",
+      "line": 3
+    },
+    "kind": "caller",
+    "property": null,
+    "reason": null,
+    "site": {
+      "column": 3,
+      "file": "kimchi/src/construction.ts",
+      "line": 9
+    }
+  },
+  {
+    "callSite": {
+      "column": 5,
+      "file": "kimchi/src/construction.ts",
+      "library": "fetch",
+      "line": 4
+    },
+    "distance": 1,
+    "functionSite": {
+      "column": 8,
+      "file": "kimchi/src/construction.ts",
+      "line": 8
+    },
+    "kind": "boundary",
+    "property": null,
+    "reason": "unreferenced",
+    "site": {
+      "column": 8,
+      "file": "kimchi/src/construction.ts",
+      "line": 8
     }
   },
   {
@@ -1226,7 +1468,7 @@
     "property": null,
     "reason": null,
     "site": {
-      "column": 3,
+      "column": 10,
       "file": "kimchi/src/method.ts",
       "line": 8
     }
