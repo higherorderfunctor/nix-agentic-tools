@@ -31,6 +31,11 @@ SHUTDOWN_BUDGET_SECONDS = 8
 # those lines are the only diagnostic left, so dropping them wastes the one
 # signal available; replaying all of them would bury it.
 STDERR_TAIL_LINES = 8
+# Kiro 3.0.0's v3 relay ends its own process with status 1 and exactly this
+# stderr line when the client closes stdin, which is how this harness ends
+# every session. Only that status with that last line is the clean shutdown.
+V3_STDIN_CLOSED_STATUS = 1
+V3_STDIN_CLOSED = "error: the v3 engine's stdin is closed"
 
 
 def exit_description(returncode):
@@ -240,7 +245,10 @@ def run(kiro: str, agent: str, workspace: str, *, wait_for_semble: bool) -> dict
     # never. Guessing one reinstates the same wall-clock flake further out.
     # `teardown` below records the measurement instead, so a cap can later be
     # set from data rather than from a number someone liked.
-    if not harness_kill and proc.returncode != 0:
+    clean_v3_shutdown = (
+        proc.returncode == V3_STDIN_CLOSED_STATUS and errors and errors[-1] == V3_STDIN_CLOSED
+    )
+    if not harness_kill and proc.returncode != 0 and not clean_v3_shutdown:
         raise RuntimeError(
             f"{agent}: ACP {exit_description(proc.returncode)} on its own, "
             f"{shutdown_seconds:.2f}s after stdin EOF, harness sent no signal: "
