@@ -1,0 +1,85 @@
+{
+  "judgments": [
+    {
+      "claim": {
+        "default": "Unknown: default behavior has not been judged.",
+        "destination": "Unknown: effective destination has not been judged.",
+        "disable": "Unknown: disabling controls have not been judged.",
+        "trigger": "Unknown: triggering behavior has not been judged."
+      },
+      "evidenceHash": "sha256:653d500f6b36de41fee1bd358fe4e7c11a34239d21ec03ce7a33a06832cbe167",
+      "id": "request-returned-fetch",
+      "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+      "packet": {
+        "rows": [
+          {
+            "distance": 0,
+            "functionSite": {
+              "anchor": {
+                "role": {
+                  "kind": "owner"
+                },
+                "symbol": [["function:returned", 0]]
+              },
+              "path": "src/requests.ts"
+            },
+            "kind": "enclosing",
+            "library": "fetch",
+            "property": null,
+            "reason": null,
+            "site": {
+              "anchor": {
+                "role": {
+                  "key": "function",
+                  "kind": "function-start",
+                  "ordinal": 0
+                },
+                "symbol": [["function:returned", 0]]
+              },
+              "path": "src/requests.ts"
+            }
+          }
+        ],
+        "schemaVersion": 1,
+        "selector": {
+          "fact": {
+            "kind": "requestCallers",
+            "where": {
+              "request": {
+                "anchor": {
+                  "role": {
+                    "callee": "call:getFetch()",
+                    "kind": "call",
+                    "ordinal": 0
+                  },
+                  "symbol": [["function:returned", 0]]
+                },
+                "path": "src/requests.ts"
+              }
+            }
+          },
+          "sources": []
+        },
+        "spans": [
+          {
+            "anchor": {
+              "role": {
+                "callee": "call:getFetch()",
+                "kind": "statement",
+                "ordinal": 0
+              },
+              "symbol": [["function:returned", 0]]
+            },
+            "path": "src/requests.ts",
+            "sha256": "sha256:ee8f2594b0cf2780c7ff9c8052e31b90f30f1240538af3bcf17efa2ba755b557"
+          }
+        ],
+        "statement": "return getFetch()(\n    url\n  );"
+      },
+      "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+      "scope": "The selected request occurrence and explicitly cited source bytes.",
+      "verdict": "unknown"
+    }
+  ],
+  "schemaVersion": 1
+}

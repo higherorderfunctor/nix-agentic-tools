@@ -8,7 +8,9 @@
         "column": 10,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 4
+        "line": 4,
+        "endLine": 4,
+        "endColumn": 35
       },
       "distance": 0,
       "functionSite": {
@@ -30,7 +32,9 @@
         "column": 10,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 4
+        "line": 4,
+        "endLine": 4,
+        "endColumn": 35
       },
       "distance": 1,
       "functionSite": {
@@ -52,7 +56,9 @@
         "column": 10,
         "file": "kimchi/src/requests.ts",
         "library": "fetch",
-        "line": 7
+        "line": 7,
+        "endLine": 7,
+        "endColumn": 35
       },
       "distance": 0,
       "functionSite": {
