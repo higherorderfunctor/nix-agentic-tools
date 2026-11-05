@@ -8,22 +8,22 @@
   bun = pkgs.ai.generic.bun;
   vu = packageLib;
 
-  rev = "54855ec7464a2b348b37c9712811e7e852b203df";
+  rev = "e091ba5760b011c22be5629a6b6653a26b5aba50";
   src = fetchgit {
     url = "https://github.com/zereight/gitlab-mcp.git";
     inherit rev;
-    hash = "sha256-jX2dPVB+WiXFMHPT84YLL7OZ/k26icyux5EwSPjKvIY=";
+    hash = "sha256-Li9I+jT3iBrjEagxNTPIblw2fhREiX1NtnDe53zEXCE=";
   };
 in
   buildNpmPackage {
     pname = "gitlab-mcp";
     version = vu.mkVersion {
       # upstream: readPackageJsonVersion @ package.json
-      upstream = "2.3.21";
+      upstream = "2.3.22";
       inherit rev;
     };
     inherit src;
-    npmDepsHash = "sha256-ofrAMIsVtrGJ5T/lU9BZLIKKH4hZHT7FU8MfP046rnM=";
+    npmDepsHash = "sha256-hAvEhZmcxqTw1GqGNjarr3qLDhp2c55r204VW5bVJJ8=";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall
