@@ -1415,14 +1415,15 @@ in
         };
         sandbox.enable = lib.mkEnableOption "local sandbox availability (requires cli.v3). Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
         # MCP tools to auto-approve — appends `--trust-tools=<csv>` to
-        # `kiro-cli` and `kiro-cli-chat` for `chat`, `acp` and the bare launch,
-        # withheld on `acp` when the effective engine is v3 (an
-        # `--agent-engine` value, else `--v3`). Eliminates the need for a
-        # bespoke symlinkJoin wrapper in the consumer.
+        # `kiro-cli` and `kiro-cli-chat` for `chat` and `acp`, withheld on `acp`
+        # when the effective engine is v3 (an `--agent-engine` value, else
+        # `--v3`) and never added to a bare launch, whose 3.0.0 top-level
+        # parser rejects the flag. Eliminates the need for a bespoke
+        # symlinkJoin wrapper in the consumer.
         trustedMcpTools = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [];
-          description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli and kiro-cli-chat (both backends). Appended for `chat`, `acp` and the bare launch; withheld on `acp` when the effective engine is v3, because that engine rejects the flag there.";
+          description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli and kiro-cli-chat (both backends). Appended for `chat` and `acp`; withheld on `acp` when the effective engine is v3, because that engine rejects the flag there, and never added to a bare launch (no subcommand), because the 3.0.0 top-level parser rejects it. Under v3 a bare launch is trusted through settings/permissions.yaml (Home Manager).";
           example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
         };
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults

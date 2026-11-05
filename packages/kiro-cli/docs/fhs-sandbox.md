@@ -1,9 +1,10 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
 > **Last verified:** 2026-11-05 — the 3.0.0 payload ships `kiro-cli` plus a
-> temporary `kiro-cli-chat` alias; trust wrappers sit at both root commands. The
-> recorded upstream sandbox measurements below predate 3.0.0 and are otherwise
-> unchanged.
+> temporary `kiro-cli-chat` alias; trust wrappers sit at both root commands and
+> grant only `chat` and `acp`, never a bare launch (the 3.0.0 top-level parser
+> rejects `--trust-tools`, measured in `kiro-kas-dispatch`). The recorded
+> upstream sandbox measurements below predate 3.0.0 and are otherwise unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -83,7 +84,9 @@ entry later on the inherited PATH. When `trustedMcpTools` is non-empty, this
 repo re-composes nixpkgs' FHS package around a trust-wrapped payload, so both
 root commands are the configured wrapper. The outer `kiro-cli` wrapper keeps the
 `--v3` prepend and the `acp` `--agent-engine=v3` append, which the inner wrapper
-reads in argv to withhold the grant on v3 `acp`.
+reads in argv to withhold the grant on v3 `acp`. A bare launch gets no grant
+from either wrapper: the 3.0.0 top-level parser rejects `--trust-tools`
+(measured in `kiro-kas-dispatch`); `chat` carries it.
 
 ## Supplying missing tools
 

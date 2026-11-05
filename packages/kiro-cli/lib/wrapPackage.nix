@@ -30,8 +30,9 @@
 # appended on `acp` as well; see `acpEngineBlock` below.
 #
 # `--trust-tools` is different in kind: it belongs to the chat arguments of
-# `chat`, `acp` and the bare launch, not to every subcommand, so it is appended
-# and gated. Do not "make these consistent" — they are opposite cases.
+# `chat` and `acp`, not to every subcommand and not to the top-level parser, so
+# it is appended and gated. Do not "make these consistent" — they are opposite
+# cases.
 #
 # ── Why there is no `--tui` here ────────────────────────────────────────────
 # There used to be an `ai.kiro.tui` option that injected `--tui` and implied
@@ -65,7 +66,6 @@
 }: let
   inherit
     (import ../../../lib/idempotentFlags.nix {inherit lib;})
-    bareInvocation
     flagPresenceBlock
     gateOnSubcommand
     idempotentFlagBlock
@@ -78,7 +78,9 @@
   # subcommand: `kiro-cli --agent acp` is a bare launch, not the `acp`
   # subcommand. Sourced from the 3.0.0 binary's chat-argument strings and the
   # TUI's launch-flag table. An unlisted value flag makes its value look like a
-  # subcommand, which only withholds `--trust-tools` (fails safe).
+  # subcommand: an arbitrary value only withholds `--trust-tools`, but a value
+  # spelled `chat` or `acp` would append it to a bare launch, which the
+  # top-level parser rejects.
   launchValueFlags = [
     "--agent"
     "--agent-engine"
@@ -225,12 +227,22 @@
       ]));
     launcherInjection = lib.concatStringsSep "\n" (lib.filter (block: block != "") [v3Block acpEngineBlock trustInjection]);
 
-    # `--trust-tools`: appended, and gated to `chat`, `acp` and the bare
-    # launch. Not idempotence-guarded — repeating it is accepted rather than
-    # fatal. A first positional that is not a subcommand (a prompt passed to a
-    # bare launch) cannot be told apart from an unknown subcommand without a
-    # curated list that would drift every release, so it is treated as a
-    # subcommand and the grant is withheld; `kiro-cli chat <prompt>` gets it.
+    # `--trust-tools`: appended, and gated to `chat` and `acp`. Not
+    # idempotence-guarded — repeating it is accepted rather than fatal.
+    #
+    # A bare launch (no subcommand) never gets it: the 3.0.0 top-level parser
+    # does not declare the flag. Measured in `kiro-kas-dispatch`:
+    #
+    #   kiro-cli --v3 --trust-tools=fs_read --no-interactive "<prompt>"
+    #     -> exit 2, "error: unexpected argument '--trust-tools' found"
+    #
+    # Appending there would break every plain `kiro-cli` launch whenever
+    # `trustedMcpTools` is set. Under v3 the grant for a bare launch is
+    # `settings/permissions.yaml` (home-manager). A first positional that is not
+    # a subcommand (a prompt passed to a bare launch) cannot be told apart from
+    # an unknown subcommand without a curated list that would drift every
+    # release, so it is also treated as no `chat`/`acp` and withheld;
+    # `kiro-cli chat <prompt>` gets it.
     #
     # `acp` is conditional: an explicit `--agent-engine=v3` rejects
     # `--trust-tools` there with "the following arguments are not supported
@@ -254,8 +266,8 @@
     # Under home-manager `trustedMcpTools` is ALSO translated into
     # `settings/permissions.yaml` (`mkPermissionRules`), which the v3 agent
     # reads; that translation is home-manager-only, so on the devenv backend
-    # the withheld grant is not recovered declaratively. `chat` and the bare
-    # launch are unconditional.
+    # the withheld grant is not recovered declaratively. `chat` is
+    # unconditional.
     engineScan = optionValueBlock {
       flag = "--agent-engine";
       var = "nat_engine";
@@ -291,7 +303,7 @@
         "nat_trust_engine=\"$nat_engine\""
         "if [ -z \"$nat_trust_engine\" ] && [ \"$nat_v3\" = 1 ]; then nat_trust_engine=v3; fi"
         (gateOnSubcommand {
-            subcommands = ["acp" "chat" bareInvocation];
+            subcommands = ["acp" "chat"];
             valueFlags = launchValueFlags;
           } (lib.concatStringsSep "\n" [
             "if [ \"$nat_sub\" != acp ] || [ \"\${nat_trust_engine:-unspecified}\" != v3 ]; then"

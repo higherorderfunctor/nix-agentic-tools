@@ -174,7 +174,10 @@ assert CONFLICT not in row["stderr"] and "unexpected argument" not in row["stder
 # An explicit `--agent-engine` beats `--v3`, so the gate resolves it first.
 row = raw(binary, ["--v3", "acp", "--agent-engine=v2", "--auth-method", "client", TRUST])
 assert "only supported with --agent-engine=v3" in row["stderr"] and CONFLICT not in row["stderr"], ("engine precedence", row)
-# The bare launch accepts `--trust-tools` under v3 and reaches KAS.
+# The top-level parser does not declare `--trust-tools`, so a bare launch with it
+# exits 2 before KAS starts. This is why the trust gate never appends there.
+# `chat` accepts it under v3: the `trusted` variant above starts KAS through the
+# wrapper's `chat --trust-tools` for both commands.
 row = raw(binary, ["--v3", TRUST, "--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"])
-assert row["started"], ("bare v3 launch with trust", row)
-print("PASS: raw: explicit v3 acp for every client, explicit v3 acp trust conflict, unselected acp trust, explicit engine precedence, bare v3 trust", flush=True)
+assert row["returncode"] == 2 and "unexpected argument '--trust-tools'" in row["stderr"] and not row["started"], ("bare v3 launch with trust", row)
+print("PASS: raw: explicit v3 acp for every client, explicit v3 acp trust conflict, unselected acp trust, explicit engine precedence, bare launch rejects trust", flush=True)

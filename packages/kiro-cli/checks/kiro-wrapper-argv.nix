@@ -261,14 +261,17 @@
       expect "v3: acp --model keeps its engine and its option" \
         '--v3|acp|--model|x|--agent-engine=v3'                            "$V" acp --model x
 
-      # ── --trust-tools is APPENDED, for chat/acp/bare only ───────────────────
+      # ── --trust-tools is APPENDED, for chat and acp only ────────────────────
       # Opposite case to the globals: --trust-tools belongs to the chat
-      # arguments, which other subcommands do not declare. The temporary
-      # `kiro-cli-chat` alias runs the same 3.0.0 binary as `kiro-cli`, so its
-      # bare launch is a `kiro-cli` bare launch and gets the grant too.
+      # arguments, which other subcommands and the 3.0.0 top-level parser do
+      # not declare. The temporary `kiro-cli-chat` alias runs the same binary as
+      # `kiro-cli`, so its bare launch is a `kiro-cli` bare launch: no grant.
       expect "chat gets --trust-tools"      'chat|--trust-tools=fs_read,@srv'  "$T" chat
       expect "acp gets --trust-tools"       'acp|--trust-tools=fs_read,@srv'   "$T" acp
-      expect "bare alias gets --trust-tools" '--trust-tools=fs_read,@srv'      "$T"
+      # A gate still covering the bare launch appends here, and the real 3.0.0
+      # top-level parser exits 2 "unexpected argument '--trust-tools'"
+      # (pinned raw in kiro-kas-dispatch), breaking every plain launch.
+      expect "bare alias gets no --trust-tools" ""                             "$T"
       expect "mcp gets no --trust-tools"    'mcp|list'                         "$T" mcp list
       expect "whoami gets no --trust-tools" 'whoami'                           "$T" whoami
 
@@ -314,7 +317,9 @@
       expect "v3+trust: acp --model withheld, engine kept" \
         '--v3|acp|--model|x|--agent-engine=v3' "$LV" acp --model x
       expect "v3+trust: chat gets it"                  '--v3|chat|--trust-tools=fs_read' "$LV" chat
-      expect "v3+trust: bare launch gets it"           '--v3|--trust-tools=fs_read'   "$LV"
+      # A gate still covering the bare launch appends the grant after `--v3`,
+      # which the 3.0.0 top-level parser rejects (pinned raw in kiro-kas-dispatch).
+      expect "v3+trust: bare launch gets none"         '--v3'                         "$LV"
       expect "v3+trust: mcp gets none"                 '--v3|mcp|list'                "$LV" mcp list
       expect "v3+trust: caller opts out -> trust returns" \
         '--v3|acp|--agent-engine=v2|--trust-tools=fs_read' "$LV" acp --agent-engine=v2
@@ -336,20 +341,25 @@
         'acp|--|--v3|--trust-tools=fs_read' "$L2" acp -- --v3
 
       # ── an option VALUE is never read as the subcommand ─────────────────────
-      # `--agent acp` is a bare launch: reading `acp` as the subcommand would
-      # withhold the grant from what is really a chat launch.
+      # `--agent chat` is a bare launch: reading its value as the `chat`
+      # subcommand would append the grant the top-level parser rejects.
+      # `--agent a chat` is a real `chat`: reading `a` as the subcommand would
+      # withhold the grant from it.
+      expect "value skip: --agent VALUE chat is a bare launch" \
+        '--v3|--agent|chat'                               "$LV" --agent chat
       expect "value skip: --agent VALUE is a bare launch" \
-        '--v3|--agent|acp|--trust-tools=fs_read' "$LV" --agent acp
+        '--v3|--agent|acp'                                "$LV" --agent acp
       expect "value skip: --model VALUE is a bare launch" \
-        '--v3|--model|m|--trust-tools=fs_read' "$LV" --model m
+        '--v3|--model|m'                                  "$LV" --model m
+      expect "value skip: --agent VALUE then chat gets it" \
+        '--v3|--agent|a|chat|--trust-tools=fs_read'       "$LV" --agent a chat
       expect "value skip: --agent-engine VALUE then acp" \
         '--v3|--agent-engine|v2|acp|--trust-tools=fs_read' "$LV" --agent-engine v2 acp
 
-      # ── a prompt passed to a bare launch is WITHHELD, by design ─────────────
-      # A first positional that is not a subcommand cannot be told from an
-      # unknown subcommand without a curated subcommand list, so the gate
-      # treats it as one and appends nothing; `kiro-cli chat <prompt>` is the
-      # form that carries the grant. Pinned so a change to this is deliberate.
+      # ── a prompt passed to a bare launch gets none, like every bare launch ──
+      # A bare launch takes no grant (the top-level parser rejects the flag), and
+      # `kiro-cli chat <prompt>` is the form that carries it. A gate that
+      # appended on any first positional would break the prompt launch here.
       expect "bare launch with a prompt gets none" \
         '--v3|offline prompt' "$LV" 'offline prompt'
       expect "chat with a prompt gets it" \
@@ -382,7 +392,9 @@
       expect "fhs v3+trust: acp withheld (injected engine)" \
         '--v3|acp|--agent-engine=v3' "$FV" acp
       expect "fhs v3+trust: chat gets it"                 '--v3|chat|--trust-tools=fs_read' "$FV" chat
-      expect "fhs v3+trust: bare launch gets it"          '--v3|--trust-tools=fs_read'     "$FV"
+      # The inner payload wrapper must withhold on a bare launch as well; a copy
+      # of the old gate there appends after `--v3` and breaks the launch.
+      expect "fhs v3+trust: bare launch gets none"        '--v3'                           "$FV"
       expect "fhs v3+trust: caller opts out -> trust returns" \
         '--v3|acp|--agent-engine=v2|--trust-tools=fs_read' "$FV" acp --agent-engine=v2
       expect "fhs v3+trust: alias acp keeps --trust-tools" \

@@ -3,12 +3,12 @@
 <!-- cspell:ignore avante codecompanion cutover -->
 
 > **Last verified:** 2026-11-05 — Kiro CLI 3.0.0 ships one `kiro-cli` binary;
-> its wrapper appends `--agent-engine=v3` on `acp` and carries `--trust-tools`,
-> gated on the effective engine from `--agent-engine` or `--v3`. `kiro-cli-chat`
-> is a temporary package alias. The 3.0.0 argv facts below are asserted by
-> `kiro-kas-dispatch`; the `acp` engine resolution order is read from the binary
-> and measured by that check's `MEASURE` rows; 2.x measurements are labelled as
-> such.
+> its wrapper appends `--agent-engine=v3` on `acp` and carries `--trust-tools`
+> on `chat` and `acp` only, gated on the effective engine from `--agent-engine`
+> or `--v3`; a bare launch carries none. `kiro-cli-chat` is a temporary package
+> alias. The 3.0.0 argv facts below are asserted by `kiro-kas-dispatch`; the
+> `acp` engine resolution order is read from the binary and measured by that
+> check's `MEASURE` rows; 2.x measurements are labelled as such.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -112,10 +112,10 @@ trust gate mirrors that order and implements no other precedence.
 `kiro-kas-dispatch` prints a `MEASURE` row for every cell of this matrix on the
 3.0.0 stock binary (no managed argv injection), each with three inputs (EOF, an
 `initialize` from `nix-check`, one from `acp-smoke`), before it asserts
-anything. The table is what the reading above predicts; a measured row that
-disagrees is a finding, not a flake:
+anything. The table is measured in `kiro-kas-dispatch` on the real 3.0.0 binary;
+a row that later disagrees is a finding, not a flake:
 
-| argv                                             | Expected                                          |
+| argv                                             | Measured in `kiro-kas-dispatch`                   |
 | ------------------------------------------------ | ------------------------------------------------- |
 | `--v3 acp` and `acp` (identical)                 | KAS starts, except for a listed client (v2 reply) |
 | `acp --agent-engine=v3`                          | KAS starts for every client                       |
@@ -127,16 +127,18 @@ The assertions that follow cover the explicit `--agent-engine=v3` start for all
 three inputs, its `--trust-tools` conflict, that an unselected
 `acp --trust-tools` is not rejected at parse time, that
 `--v3 acp --agent-engine=v2 --auth-method client` fails on `--auth-method`, not
-on `--trust-tools`, and that the bare `--v3` launch with the grant reaches KAS.
-Through the wrapper, every variant also starts KAS for an `acp-smoke` client.
+on `--trust-tools`, and that a bare launch with the grant is rejected (see
+[the bare launch](#a-bare-launch-carries-no-trust-tools)). Through the wrapper,
+every variant also starts KAS for an `acp-smoke` client and for `chat` with the
+grant appended.
 
 ## What is injected where
 
-| Command                     | Flag                | Position    | Applies to                                                  |
-| --------------------------- | ------------------- | ----------- | ----------------------------------------------------------- |
-| `kiro-cli`                  | `--v3`              | **prepend** | every subcommand + bare                                     |
-| `kiro-cli`                  | `--agent-engine=v3` | **append**  | `acp`, when the caller passed no `--agent-engine`           |
-| `kiro-cli`, `kiro-cli-chat` | `--trust-tools=`    | **append**  | `chat` and the bare launch always; `acp` unless engine = v3 |
+| Command                     | Flag                | Position    | Applies to                                                   |
+| --------------------------- | ------------------- | ----------- | ------------------------------------------------------------ |
+| `kiro-cli`                  | `--v3`              | **prepend** | every subcommand + bare                                      |
+| `kiro-cli`                  | `--agent-engine=v3` | **append**  | `acp`, when the caller passed no `--agent-engine`            |
+| `kiro-cli`, `kiro-cli-chat` | `--trust-tools=`    | **append**  | `chat` always; `acp` unless engine = v3; never a bare launch |
 
 `kiro-cli-chat` is a temporary package alias for the same binary, kept for
 consumers that still invoke it. It receives no `--v3`: an invocation through it
@@ -154,15 +156,27 @@ Three different rules, for different reasons — do not "make them consistent":
 - **`--agent-engine=v3` is an `acp` option**, appended and only on `acp`,
   because `acp` does not read the global. It is skipped when the caller chose an
   engine.
-- **`--trust-tools` belongs to the chat arguments**: `chat`, `acp` and the bare
-  launch. Other subcommands reject it. It is appended and gated.
+- **`--trust-tools` belongs to the chat arguments**: `chat` and `acp`. Other
+  subcommands and the top-level parser reject it. It is appended and gated.
 
-A prompt passed to a bare launch (`kiro-cli "explain this"`) gets **no**
-`--trust-tools`. Its first positional cannot be told apart from an unknown
-subcommand without a curated subcommand list that would drift with every
-release, so the gate treats it as a subcommand and declines.
-`kiro-cli chat "explain this"` carries the grant. `kiro-wrapper-argv` pins both
-rows.
+### A bare launch carries no `--trust-tools`
+
+The 3.0.0 top-level parser does not declare the flag. Measured in
+`kiro-kas-dispatch` on the real binary:
+
+```console
+$ kiro-cli --v3 --trust-tools=fs_read --no-interactive --model nix-no-such-model "offline dispatch fixture"
+error: unexpected argument '--trust-tools' found
+```
+
+(exit 2). Appending it to a bare launch would break every plain `kiro-cli`
+launch whenever `trustedMcpTools` is set, so the gate covers only `chat` and
+`acp`. Under v3 the TUI ignores per-tool trust anyway; the grant for a bare
+launch is `settings/permissions.yaml` (`mkPermissionRules`, home-manager).
+
+A prompt passed to a bare launch (`kiro-cli "explain this"`) is a bare launch
+too, and `kiro-cli chat "explain this"` carries the grant. `kiro-wrapper-argv`
+pins both rows, including the temporary alias and the FHS payload wrapper.
 
 ### Package-bound KAS and selected prompt patches
 
@@ -335,7 +349,9 @@ and keep their established ordering.
 On Darwin the outer `kiro-cli` wrapper carries `--trust-tools` itself. Before
 3.0.0 the Darwin launcher resolved a separate chat binary by app-bundle
 discovery and skipped this repo's chat wrapper, so `--trust-tools` never reached
-a `kiro-cli` launch there; it now does.
+a `kiro-cli` launch there; it now reaches `kiro-cli chat` and `acp` (a bare
+launch carries none, see
+[the bare launch](#a-bare-launch-carries-no-trust-tools)).
 
 `ai.kiro.cli.useFhsSandbox = false` skips this package-composition layer
 entirely and applies the ordinary wrappers to `passthru.unwrapped`. That is an
