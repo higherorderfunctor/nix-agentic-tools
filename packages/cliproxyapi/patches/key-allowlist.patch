@@ -6,7 +6,7 @@ Applied with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md.
 
 diff --git a/cmd/server/main.go b/cmd/server/main.go
-index 960d5e5..9bac730 100644
+index 960d5e53..9bac7306 100644
 --- a/cmd/server/main.go
 +++ b/cmd/server/main.go
 @@ -598,7 +598,7 @@ func main() {
@@ -20,7 +20,7 @@ index 960d5e5..9bac730 100644
  		cfg = &config.Config{}
 diff --git a/internal/access/config_access/key_allowlist_test.go b/internal/access/config_access/key_allowlist_test.go
 new file mode 100644
-index 0000000..7dea5e5
+index 00000000..7dea5e5a
 --- /dev/null
 +++ b/internal/access/config_access/key_allowlist_test.go
 @@ -0,0 +1,256 @@
@@ -281,7 +281,7 @@ index 0000000..7dea5e5
 +	}
 +}
 diff --git a/internal/config/config_load.go b/internal/config/config_load.go
-index baca01e..d218b56 100644
+index c4ea79e5..240f1867 100644
 --- a/internal/config/config_load.go
 +++ b/internal/config/config_load.go
 @@ -239,6 +239,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
@@ -295,13 +295,13 @@ index baca01e..d218b56 100644
  	// Hash remote management key if plaintext is detected (nested)
  	// We consider a value to be already hashed if it looks like a bcrypt hash ($2a$, $2b$, or $2y$ prefix).
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 68bd7d9..6fbec04 100644
+index b484a47d..f43f7270 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -73,7 +73,7 @@ func buildV8Paths() []configPath {
+@@ -76,7 +76,7 @@ func buildV8Paths() []configPath {
  		{"host", "server.host"}, {"port", "server.port"}, {"max-request-body-bytes", "server.max-request-body-bytes"}, {"trusted-proxies", "server.trusted-proxies"},
  		{"github-token", "server.github-token"},
- 		{"tls", "server.tls"}, {"commercial-mode", "server.commercial-mode"}, {"discovery", "server.discovery"},
+ 		{"tls", "server.tls"}, {"commercial-mode", "server.commercial-mode"}, {"discovery", "server.discovery"}, {"kv-store", "server.kv-store"},
 -		{"remote-management", "management"}, {"api-keys", "access.api-keys"},
 +		{"remote-management", "management"}, {"api-keys", "access.api-keys"}, {"key-allowlist", "access.key-allowlist"},
  		{"credential-concurrency", "credentials.concurrency"}, {"credential-in-flight", "credentials.in-flight"},
@@ -309,7 +309,7 @@ index 68bd7d9..6fbec04 100644
  		{"request-retry", "routing.retry.request-retry"}, {"max-retry-credentials", "routing.retry.max-retry-credentials"},
 diff --git a/internal/config/key_allowlist.go b/internal/config/key_allowlist.go
 new file mode 100644
-index 0000000..ef56d03
+index 00000000..ef56d034
 --- /dev/null
 +++ b/internal/config/key_allowlist.go
 @@ -0,0 +1,72 @@
@@ -386,7 +386,7 @@ index 0000000..ef56d03
 +	return fmt.Errorf("access.key-allowlist: %s have the same api-key after trimming; give each client key one entry, since entries sharing a key would merge their credential rules", strings.Join(duplicates, "; "))
 +}
 diff --git a/internal/config/parse.go b/internal/config/parse.go
-index c3442be..13a949f 100644
+index bf12a836..c3252ce3 100644
 --- a/internal/config/parse.go
 +++ b/internal/config/parse.go
 @@ -58,6 +58,9 @@ func ParseConfigBytes(data []byte) (*Config, error) {
@@ -400,10 +400,10 @@ index c3442be..13a949f 100644
  		cfg.Discovery.ServiceType = DefaultDiscoveryServiceType
  	}
 diff --git a/internal/config/sdk_config.go b/internal/config/sdk_config.go
-index 1c52dc2..5a0b45d 100644
+index 45919170..d25b055e 100644
 --- a/internal/config/sdk_config.go
 +++ b/internal/config/sdk_config.go
-@@ -93,6 +93,10 @@ type SDKConfig struct {
+@@ -99,6 +99,10 @@ type SDKConfig struct {
  	// APIKeys is a list of keys for authenticating clients to this proxy server.
  	APIKeys []string `yaml:"api-keys" json:"api-keys"`
  
@@ -416,7 +416,7 @@ index 1c52dc2..5a0b45d 100644
  	PassthroughHeaders bool `yaml:"passthrough-headers" json:"passthrough-headers"`
 diff --git a/internal/watcher/key_allowlist_test.go b/internal/watcher/key_allowlist_test.go
 new file mode 100644
-index 0000000..c6771d7
+index 00000000..c6771d77
 --- /dev/null
 +++ b/internal/watcher/key_allowlist_test.go
 @@ -0,0 +1,56 @@
@@ -477,10 +477,10 @@ index 0000000..c6771d7
 +	assertState(2, "key-c")
 +}
 diff --git a/sdk/api/handlers/handlers_interceptors.go b/sdk/api/handlers/handlers_interceptors.go
-index b7aa2a5..670d553 100644
+index 16203c44..ea189383 100644
 --- a/sdk/api/handlers/handlers_interceptors.go
 +++ b/sdk/api/handlers/handlers_interceptors.go
-@@ -691,6 +691,17 @@ func (h *BaseAPIHandler) WriteModelListResponse(c *gin.Context, sourceFormat str
+@@ -733,6 +733,17 @@ func (h *BaseAPIHandler) WriteModelListResponse(c *gin.Context, sourceFormat str
  		}
  	}
  
@@ -500,7 +500,7 @@ index b7aa2a5..670d553 100644
  		var catalog struct {
 diff --git a/sdk/api/handlers/key_allowlist_models.go b/sdk/api/handlers/key_allowlist_models.go
 new file mode 100644
-index 0000000..7ba133d
+index 00000000..7ba133df
 --- /dev/null
 +++ b/sdk/api/handlers/key_allowlist_models.go
 @@ -0,0 +1,62 @@
@@ -568,7 +568,7 @@ index 0000000..7ba133d
 +}
 diff --git a/sdk/api/handlers/key_allowlist_models_test.go b/sdk/api/handlers/key_allowlist_models_test.go
 new file mode 100644
-index 0000000..cc91257
+index 00000000..cc91257e
 --- /dev/null
 +++ b/sdk/api/handlers/key_allowlist_models_test.go
 @@ -0,0 +1,185 @@
@@ -758,10 +758,10 @@ index 0000000..cc91257
 +	}
 +}
 diff --git a/sdk/cliproxy/auth/conductor.go b/sdk/cliproxy/auth/conductor.go
-index 3baead9..94d51f5 100644
+index 3f485fcf..0c7a6759 100644
 --- a/sdk/cliproxy/auth/conductor.go
 +++ b/sdk/cliproxy/auth/conductor.go
-@@ -221,6 +221,8 @@ type Manager struct {
+@@ -224,6 +224,8 @@ type Manager struct {
  	// runtimeConfig stores the latest application config for request-time decisions.
  	// It is initialized in NewManager; never Load() before first Store().
  	runtimeConfig atomic.Value
@@ -770,7 +770,7 @@ index 3baead9..94d51f5 100644
  
  	// Optional HTTP RoundTripper provider injected by host.
  	rtProvider RoundTripperProvider
-@@ -276,6 +278,7 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
+@@ -279,6 +281,7 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
  		manager.ApplyHomeInFlightPublisherConfig(defaultInFlightConfig)
  	}
  	manager.scheduler = newAuthScheduler(selector)
@@ -779,10 +779,10 @@ index 3baead9..94d51f5 100644
  }
  
 diff --git a/sdk/cliproxy/auth/conductor_cooldown.go b/sdk/cliproxy/auth/conductor_cooldown.go
-index 2bed6ce..a856619 100644
+index 93034394..b78059a9 100644
 --- a/sdk/cliproxy/auth/conductor_cooldown.go
 +++ b/sdk/cliproxy/auth/conductor_cooldown.go
-@@ -161,6 +161,7 @@ func (m *Manager) setConfigSnapshotLocked(cfg *internalconfig.Config) bool {
+@@ -173,6 +173,7 @@ func (m *Manager) setConfigSnapshotLocked(cfg *internalconfig.Config) bool {
  		m.homeSessionAliases.clear()
  	}
  	m.runtimeConfig.Store(cfg)
@@ -791,10 +791,10 @@ index 2bed6ce..a856619 100644
  	if clearedCooldowns && oldCooldownStore != nil {
  		m.mu.Lock()
 diff --git a/sdk/cliproxy/auth/conductor_home.go b/sdk/cliproxy/auth/conductor_home.go
-index 1810c78..3204c2a 100644
+index d6474210..55adc626 100644
 --- a/sdk/cliproxy/auth/conductor_home.go
 +++ b/sdk/cliproxy/auth/conductor_home.go
-@@ -952,6 +952,11 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
+@@ -1001,6 +1001,11 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
  	if m == nil {
  		return nil, &Error{Code: "auth_not_found", Message: "no auth available"}
  	}
@@ -806,7 +806,7 @@ index 1810c78..3204c2a 100644
  	if ctx == nil {
  		ctx = context.Background()
  	}
-@@ -1281,12 +1286,18 @@ func (m *Manager) findAllAntigravityCreditsCandidateAuths(ctx context.Context, r
+@@ -1340,12 +1345,18 @@ func (m *Manager) findAllAntigravityCreditsCandidateAuths(ctx context.Context, r
  		return nil, nil
  	}
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
@@ -826,7 +826,7 @@ index 1810c78..3204c2a 100644
  			continue
  		}
 diff --git a/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go b/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go
-index 4704918..b6476ab 100644
+index 4704918f..b6476abe 100644
 --- a/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go
 +++ b/sdk/cliproxy/auth/conductor_issue7017_review_r4_test.go
 @@ -25,7 +25,7 @@ func issue7017WaitSetup(t *testing.T, auth *Auth, model string) (*Manager, authS
@@ -839,10 +839,10 @@ index 4704918..b6476ab 100644
  
  func TestIssue7017SiblingQuotaDoesNotBlockTransientZeroWait(t *testing.T) {
 diff --git a/sdk/cliproxy/auth/conductor_selection.go b/sdk/cliproxy/auth/conductor_selection.go
-index 7cdacb7..a68a87c 100644
+index 80e6c1de..2a44d3fa 100644
 --- a/sdk/cliproxy/auth/conductor_selection.go
 +++ b/sdk/cliproxy/auth/conductor_selection.go
-@@ -86,6 +86,9 @@ type authSelectionEligibility struct {
+@@ -87,6 +87,9 @@ type authSelectionEligibility struct {
  	requiredKind     string
  	credentialPolicy string
  	disallowFreeAuth bool
@@ -852,7 +852,7 @@ index 7cdacb7..a68a87c 100644
  }
  
  func withRequiredAuthKind(ctx context.Context, requiredKind string) context.Context {
-@@ -104,8 +107,9 @@ func credentialPolicyFromContext(ctx context.Context) string {
+@@ -105,8 +108,9 @@ func credentialPolicyFromContext(ctx context.Context) string {
  	return policy
  }
  
@@ -863,7 +863,7 @@ index 7cdacb7..a68a87c 100644
  	if ctx != nil {
  		eligibility.requiredKind, _ = ctx.Value(requiredAuthKindContextKey{}).(string)
  		eligibility.credentialPolicy, _ = ctx.Value(credentialPolicyContextKey{}).(string)
-@@ -123,6 +127,9 @@ func (e authSelectionEligibility) allows(auth *Auth) bool {
+@@ -124,6 +128,9 @@ func (e authSelectionEligibility) allows(auth *Auth) bool {
  	if e.credentialPolicy != "" && !credentialPolicyAllows(e.credentialPolicy, auth) {
  		return false
  	}
@@ -873,16 +873,16 @@ index 7cdacb7..a68a87c 100644
  	return !e.disallowFreeAuth || !isFreeCodexAuth(auth)
  }
  
-@@ -1416,7 +1423,7 @@ func (m *Manager) shouldRetryAfterErrorWithAttempted(ctx context.Context, opts c
+@@ -1511,7 +1518,7 @@ func (m *Manager) shouldRetryAfterErrorWithAttempted(ctx context.Context, opts c
  		}
  		return *retryAfter, true
  	}
 -	eligibility := authSelectionEligibilityForRequest(ctx, opts)
 +	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
- 	if !isRequestRetryRoundError(err) || !m.retryAllowed(attempt, providers, model, eligibility, pinnedAuthID, defaultRequestRetry) {
+ 	if !isRequestRetryRoundError(err) || !m.retryAllowedForRequest(ctx, attempt, providers, model, eligibility, pinnedAuthID, defaultRequestRetry, opts.Headers) {
  		return 0, false
-@@ -1825,7 +1832,7 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
+@@ -1929,7 +1936,7 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
  	opts.Metadata[cliproxyexecutor.SessionAffinityProviderMetadataKey] = provider
  
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
@@ -891,16 +891,25 @@ index 7cdacb7..a68a87c 100644
  	pluginScheduler, schedulerAcross := m.snapshotPluginScheduler()
  
  	m.mu.RLock()
-@@ -2097,7 +2104,7 @@ func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cli
+@@ -2202,7 +2209,7 @@ func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cli
  	if m.hasPluginScheduler() || !m.useSchedulerFastPath() {
  		return m.pickNextLegacy(ctx, provider, model, opts, tried)
  	}
 -	eligibility := authSelectionEligibilityForRequest(ctx, opts)
 +	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
- 	if strings.TrimSpace(model) != "" {
+ 	targetKey := canonicalSchedulingProvider(provider)
+ 	if strings.TrimSpace(model) != "" || targetKey == "codex" {
  		m.mu.RLock()
- 		targetKey := canonicalSchedulingProvider(provider)
-@@ -2155,7 +2162,7 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
+@@ -2277,7 +2284,7 @@ func (m *Manager) HasAlternativeTargetForModel(ctx context.Context, providers []
+ 	if len(providerSet) == 0 {
+ 		return false
+ 	}
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	modelKey := canonicalModelKey(model)
+ 	registryRef := registry.GetGlobalRegistry()
+ 
+@@ -2328,7 +2335,7 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
  	opts.Metadata[cliproxyexecutor.SessionAffinityProviderMetadataKey] = "mixed"
  
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
@@ -909,16 +918,16 @@ index 7cdacb7..a68a87c 100644
  
  	providerSet := make(map[string]struct{}, len(providers))
  	for _, provider := range providers {
-@@ -2302,7 +2309,7 @@ func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model s
+@@ -2476,7 +2483,7 @@ func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model s
  	if len(eligibleProviders) == 0 {
  		return nil, nil, "", &Error{Code: "auth_not_found", Message: "no auth available"}
  	}
 -	eligibility := authSelectionEligibilityForRequest(ctx, opts)
 +	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
- 	if strings.TrimSpace(model) != "" {
- 		providerSet := make(map[string]struct{}, len(eligibleProviders))
- 		for _, providerKey := range eligibleProviders {
-@@ -2406,7 +2413,7 @@ func (m *Manager) warnLogAuthUnavailable(ctx context.Context, providers []string
+ 	providerSet := make(map[string]struct{}, len(eligibleProviders))
+ 	for _, providerKey := range eligibleProviders {
+ 		providerSet[providerKey] = struct{}{}
+@@ -2581,7 +2588,7 @@ func (m *Manager) warnLogAuthUnavailable(ctx context.Context, providers []string
  	now := time.Now()
  	m.mu.RLock()
  	defer m.mu.RUnlock()
@@ -928,7 +937,7 @@ index 7cdacb7..a68a87c 100644
  	providerSet := make(map[string]struct{}, len(providers))
  	for _, p := range providers {
 diff --git a/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go b/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go
-index d942147..0c7f9f0 100644
+index d9421478..0c7f9f0d 100644
 --- a/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go
 +++ b/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go
 @@ -226,7 +226,7 @@ func TestClosestCooldownWaitWithAttempted_ExpiredCooldownDoesNotTriggerZeroWaitF
@@ -951,7 +960,7 @@ index d942147..0c7f9f0 100644
  	wait, found := manager.closestCooldownWaitWithAttempted([]string{"openai-compatibility"}, model, 0, eligibility, "", 5, http.StatusTooManyRequests, attempted)
 diff --git a/sdk/cliproxy/auth/key_allowlist.go b/sdk/cliproxy/auth/key_allowlist.go
 new file mode 100644
-index 0000000..9387f80
+index 00000000..9387f80f
 --- /dev/null
 +++ b/sdk/cliproxy/auth/key_allowlist.go
 @@ -0,0 +1,131 @@
@@ -1088,7 +1097,7 @@ index 0000000..9387f80
 +}
 diff --git a/sdk/cliproxy/auth/key_allowlist_test.go b/sdk/cliproxy/auth/key_allowlist_test.go
 new file mode 100644
-index 0000000..233e2b1
+index 00000000..233e2b12
 --- /dev/null
 +++ b/sdk/cliproxy/auth/key_allowlist_test.go
 @@ -0,0 +1,397 @@
@@ -1490,7 +1499,7 @@ index 0000000..233e2b1
 +	}
 +}
 diff --git a/sdk/cliproxy/auth/scheduler.go b/sdk/cliproxy/auth/scheduler.go
-index 752a52d..6b1ae71 100644
+index 752a52d7..6b1ae715 100644
 --- a/sdk/cliproxy/auth/scheduler.go
 +++ b/sdk/cliproxy/auth/scheduler.go
 @@ -50,6 +50,8 @@ type authScheduler struct {
