@@ -388,6 +388,17 @@ in
           inherit extractedLib pkgs;
           inherit ((extractedLib {inherit pkgs;}).load {dir = ../../../extracted;}) aggregate;
         };
+        # Report generation selects this owner without rebuilding extraction or
+        # depending on the committed facts/report that CI writes back.
+        extractedSelectionInput = lib.fileset.toSource {
+          root = ../../../../..;
+          fileset = lib.fileset.unions [
+            ../../../../../checks/references/kimchi-egress-report.nix
+            ../../../../../dev/skills/kimchi-egress-report/scripts/generate.mjs
+            ../../../../../dev/skills/kimchi-egress-report/scripts/regenerate.sh
+            ../../../../../dev/skills/kimchi-egress-report/scripts/report.mjs
+          ];
+        };
         inherit extractionSources;
         extractionSourceUrls.kimchi = extraction.kimchiSource.url;
         goUpdateExtract = goUpdate.extract;

@@ -74,6 +74,11 @@ jobs:
           if [ "$OWNER" = kimchi ]; then
             nix shell --inputs-from . nixpkgs#nodejs ".#.formatter.${SYSTEM}" \
               --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh
+            if ! nix build ".#.checks.${SYSTEM}.kimchi-egress-report" --no-link; then
+              echo "::error::Kimchi's regenerated egress report failed checks.${SYSTEM}.kimchi-egress-report; no patch will be uploaded." >&2
+              echo "Fix the report generator/check, then run: nix run .#.checks.${SYSTEM}.kimchi-extracted.passthru.regenerate && nix shell --inputs-from . nixpkgs#nodejs .#.formatter.${SYSTEM} --command bash dev/skills/kimchi-egress-report/scripts/regenerate.sh && nix build .#.checks.${SYSTEM}.kimchi-egress-report --no-link" >&2
+              exit 1
+            fi
             paths+=(packages/kimchi/egress-report.json)
           fi
           git add -- "${paths[@]}"

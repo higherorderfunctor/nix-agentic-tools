@@ -274,6 +274,16 @@ immutable base revision (see `dev/fragments/extracted/facts-contract.md`). A
 shared `lib/extracted/` change or unavailable base comparison schedules every
 selected HEAD owner.
 
+Owners can declare `passthru.extractedSelectionInput` on their package for
+inputs that require fact/report regeneration without rebuilding extraction.
+`ciExtractedFacts` compares it as the non-system `selectionInput` key alongside
+handled derivations; matrices still contain owner names only. Kimchi declares a
+fileset of `generate.mjs`, `report.mjs`, `regenerate.sh` and
+`checks/references/kimchi-egress-report.nix`. Changes to these report generator
+inputs select Kimchi, as `scan.mjs` changes already do through its extraction
+derivation. Kimchi docs, other owners' files and committed `extracted.json` or
+`egress-report.json` changes alone do not change this selection input.
+
 Linux waits for package shards' Cachix finalization but runs even after shard
 failure: stale facts must not prevent their own repair. Each owner keeps its
 60-minute native budget; Darwin owners run serially to share the four macOS
@@ -300,10 +310,13 @@ and merges commands, dependencies, Go sites and hosts, spawned executables, path
 literals and `header.scan` as the `egressScan` fact. Its delta includes the
 complete egress report regenerated from `egressScan`, `network` and
 `environment` through `lib.extracted`, so CI keeps scanner fields fresh too.
-Fork heads, pushes and dispatches upload delta artifacts and fail on changed
-facts; follow the diagnostic's scratch-directory download and patch commands to
-avoid GitHub CLI overwriting checkout files. CI names owner directories; the
-drift library chooses the fact file.
+After regeneration, the producer builds `checks.<system>.kimchi-egress-report`
+before writing the delta patch. A rejected report stops the owner before
+artifact upload or commit-back; `checks.<system>.kimchi-extracted` also gates
+upload. Fork heads, pushes and dispatches upload delta artifacts and fail on
+changed facts; follow the diagnostic's scratch-directory download and patch
+commands to avoid GitHub CLI overwriting checkout files. CI names owner
+directories; the drift library chooses the fact file.
 
 The internal `kiro-cli-rollout-canary` patches every feature whose aggregate
 vendor state needs a patch and whose measured patchability is true. Its scope

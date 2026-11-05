@@ -44,11 +44,23 @@ pi dependency against `sources.json` before producing `egressScan`.
 `lib.extracted.get` and `children`. `regenerate.sh` evaluates it with
 `nix eval`, runs the generator, then formats with installed `treefmt`. Kimchi's
 PR CI producer calls it after fact regeneration and commits its delta with the
-facts. The check compares parsed JSON with the committed report and prints a
-diff and the changed field names on drift, including `header.scan`, with the
+facts. Before writing the delta patch, the producer builds
+`checks.<system>.kimchi-egress-report`; a failure prevents artifact upload and
+commit-back. The extracted-facts check also gates upload. The report check
+compares parsed JSON with the committed report and prints a diff and the changed
+field names on drift, including `header.scan`, with the
 `dev/skills/kimchi-egress-report/scripts/regenerate.sh` fix command. No
 generator reads `extracted.json` directly, as required by
 `checks.extracted-contract-guard`.
+
+The extracted-facts planner selects Kimchi when its extraction derivation
+changes, including edits to `scan.mjs`. Kimchi's package also declares
+`passthru.extractedSelectionInput`, a fileset containing
+`dev/skills/kimchi-egress-report/scripts/generate.mjs`, `report.mjs`,
+`regenerate.sh` and `checks/references/kimchi-egress-report.nix`, so changes to
+report generation select Kimchi even when extraction is unchanged. This input
+excludes docs, other owners' files and committed `extracted.json` and
+`egress-report.json`; CI's commit-back alone does not reselect the owner.
 
 The generator refuses a missing `egressScan`, missing scanner fields and env
 targets without an `environment` row. It reads no fields from the committed

@@ -519,7 +519,6 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          python3 dev/scripts/test-ci-packages.py
           python3 dev/scripts/test-ci-cache.py
           python3 dev/scripts/test-update-matrix.py
       - uses: ./.github/actions/install-nix
@@ -567,6 +566,14 @@ jobs:
         uses: ./.github/actions/warm-ifd
         with:
           systems: x86_64-linux aarch64-darwin
+
+      # After Nix and the IFD warm: the extracted-fact selection tests
+      # evaluate the real flake's ciExtractedFacts.
+      - name: Test CI package and extracted-fact gates
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          python3 dev/scripts/test-ci-packages.py
 
       # TRIPWIRE for the CodeQL engines (packages/codeql), the outcome
       # assertion the kiro-patched job makes for the patched Kiro: the GitHub
