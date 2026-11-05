@@ -243,31 +243,18 @@ def exec_command(path, port, warn_bytes, arguments, theme=None):
     if not arguments:
         raise ValueError("usage: kiro-usage exec [--] COMMAND [ARG ...]")
     command, *tail = arguments
-    if Path(command).name in ("kiro-cli", "kiro-cli-chat"):
-        # Match the managed launcher's exact-token scan and stop at argv's
-        # boundary. Do not interpret prompt text or generic command options.
+    if Path(command).name == "kiro-cli":
+        # Pin the v3 engine as the managed launcher does: prepend `--v3`
+        # unless an option before argv's `--` boundary already is one.
         options = tail[:tail.index("--")] if "--" in tail else tail
-        has_v3 = "--v3" in options
-        for index, option in enumerate(options):
-            if option == "--agent-engine":
-                engine = next(iter(options[index + 1:index + 2]), "")
-            elif option.startswith("--agent-engine="):
-                engine = option.split("=", 1)[1]
-            else:
-                continue
-            if engine != "v3":
-                raise ValueError("usage tracking requires the v3 engine; remove the non-v3 --agent-engine override")
-            has_v3 = True
-        if Path(command).name == "kiro-cli" and "--v3" not in options:
+        if "--v3" not in options:
             tail.insert(0, "--v3")
-        elif not has_v3:
-            raise ValueError("kiro-cli-chat requires explicit --v3 or --agent-engine v3")
-    tracked = Path(command).name in ("kiro-cli", "kiro-cli-chat")
+    tracked = Path(command).name == "kiro-cli"
     if tracked:
         options = tail[:tail.index("--")] if "--" in tail else tail
         if any(option in ("--help", "--help-all", "--version", "-h", "-V") for option in options):
             tracked = False
-        elif Path(command).name == "kiro-cli":
+        else:
             # Consume known launcher globals before checking the subcommand;
             # unknown options keep tracking rather than guessing their arity.
             value_options = ("--agent", "--agent-engine", "--model", "--repo", "--resume-id")

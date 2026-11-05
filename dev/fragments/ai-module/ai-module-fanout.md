@@ -254,11 +254,9 @@ The ai module fans out TWO kinds of configuration:
   rollout-resolved package, so custom factories must preserve that route.
   Packages without it fail a named assertion. This is runtime-specific package
   selection, not a normalized sandbox pool.
-- A custom Linux FHS package used with `trustedMcpTools` must expose both
-  `passthru.unwrapped` and `passthru.withFhsPayload`, the seam the module uses
-  to place the trust wrapper at the synthesized root's `/usr/bin` commands; the
-  module rejects the configuration otherwise. Direct payload packages may
-  declare `passthru.kiroFhsSandbox = false`; the overlay does this for darwin.
+- `ai.kiro.cli.trustedMcpTools` lowers to v3 allow rules in
+  `settings/permissions.yaml`, written by Home Manager only; devenv cannot place
+  that `~/.kiro` file and warns.
 - `ai.codex.native.settings` — typed stable keys plus a TOML-compatible native
   freeform tail. The module sets neither model nor reasoning effort unless the
   consumer declares one, leaving Codex's lower config layers or built-in

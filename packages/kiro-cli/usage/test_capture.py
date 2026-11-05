@@ -994,9 +994,6 @@ class RuntimeTests(unittest.TestCase):
                     self.assertNotIn(name, environment)
                 self.assertEqual(os.environ["NO_PROXY"], "conflict")
                 connect.assert_called_with(("127.0.0.1", 19001), timeout=0.5)
-                for arguments in (["kiro-cli", "--agent-engine=v2"], ["kiro-cli-chat"]):
-                    with self.assertRaisesRegex(ValueError, "v3"):
-                        runtime.exec_command(state, 19001, 1 << 30, arguments)
                 runtime.exec_command(state, 19001, 1 << 30, ["kiro-cli", "--v3"])
                 self.assertEqual(wait.call_args.args[1], ["--v3"])
                 execute.side_effect = FileNotFoundError()

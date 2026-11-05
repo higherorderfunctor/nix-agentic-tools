@@ -180,33 +180,29 @@ names to its defaults.
 ## Delivery and previews
 
 When an enabled runtime reaches Kiro, as the session runtime or through
-`extraRuntimes` or `manualExternalDelegates`, the program sets `ai.kiro.cli.v3`
-with `mkDefault` only when `ai.kiro.cli.package != null`. The skill's Kiro
-evidence covers the v3 engine only. A consumer's own `ai.kiro.cli.v3 = false`
-still wins and emits a mismatch warning. Every reached runtime must be enabled.
-With a managed package, Kiro's wrapper carries `--v3` to interactive and
-delegate launches alike; with `package = null`, there is no wrapper, v3 is left
-unset and the mismatch warning fires. A consumer without the Kiro module is
-untouched.
+`extraRuntimes` or `manualExternalDelegates`, the program changes Kiro's
+configuration only as below. Kiro's managed wrapper always launches the v3
+engine, which the skill's Kiro evidence covers. Every reached runtime must be
+enabled. A consumer without the Kiro module is untouched.
 
-The same reach test defaults `cli.tweaks.relativeFileCheckPaths` and
+The reach test defaults `cli.tweaks.relativeFileCheckPaths` and
 `cli.tweaks.stripVendorWorktreeSteering` to true only when
 `cli.workflows.enable` is true and the CLI package is managed. Explicit false
 wins.
 
-Kiro's `run_workflow` appears only with `cli.workflows.enable`, v3, and no
-explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's null
-setting leaves the external global prerequisite to its shell-entry warning. A
-raw rollout request alone does not opt into advertising the technique. The
-effective rendering view applies this gate even over an explicit technique
-enable; the acceptance inventory uses the same helper in
-`lib/select-families.nix` and excludes disabled nodes. Workflow modes are
-interactive, headless and ACP, with map-case comments beside each Kiro modes
-value. Introspection has no modes field.
+Kiro's `run_workflow` appears only with `cli.workflows.enable` and no explicit
+false for `cli.native.settings.chat.enableWorkflows`. Devenv's null setting
+leaves the external global prerequisite to its shell-entry warning. A raw
+rollout request alone does not opt into advertising the technique. The effective
+rendering view applies this gate even over an explicit technique enable; the
+acceptance inventory uses the same helper in `lib/select-families.nix` and
+excludes disabled nodes. Workflow modes are interactive, headless and ACP, with
+map-case comments beside each Kiro modes value. Introspection has no modes
+field.
 
-Reaching Kiro on devenv withholds `trustedMcpTools` from `kiro acp` (warned),
-while Home Manager drops bare tokens such as `use_aws` from the
-`permissions.yaml` translation.
+Kiro takes `trustedMcpTools` only as `permissions.yaml` rules: Home Manager
+writes them and drops bare tokens such as `use_aws`, while devenv cannot place
+the file under `~/.kiro` and warns.
 
 The backend modules pass `"hm"` or `"devenv"` to the common module, which
 imports `mkSkillPackageModule` once for the supported runtimes. The factory

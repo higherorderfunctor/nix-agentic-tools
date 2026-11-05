@@ -5,7 +5,6 @@
   ...
 }: let
   policy = import ../../config/ai-delivery.nix {inherit lib;};
-  proxyLib = import ../../lib/ai/proxy.nix {inherit lib;};
   reasonsFor = import ../../lib/ai/app/supportReasons.nix;
   settingsProbes = import ../../lib/testing/normalized-settings-probes.nix {inherit lib;};
   # lib/testing/module-harness.nix declares `warnings` in both backend stubs,
@@ -128,18 +127,9 @@
         then ["args" "package" "settings"]
         else ["settings"]
       )) [false true]
-    ++ map (field: {
-      runtime = "kiro";
-      surface = "proxy";
-      gapPath = [field];
-      path = ["ai" "proxy" field];
-      warningPath = ["ai" "kiro" "proxy" field];
-      value = sample.proxy.http;
-      # Pin the v2 delivery gap even if Kiro's default engine changes.
-      extra.ai.kiro.cli.v3 = false;
-    })
-    proxyLib.fields
-    # A tool policy value with no surface on the runtime or backend.
+    # A tool policy value with no surface on the runtime or backend. Kiro
+    # delivers it as Home Manager permissions.yaml rules, so its Home Manager
+    # case asserts silence instead.
     ++ map (runtime: {
       inherit runtime;
       surface = "mcpServers";
@@ -149,7 +139,20 @@
         command = "probe";
         toolPolicy.probe = "disabled";
       };
-    }) ["kimchi" "kiro"]
+    }) ["kimchi"]
+    ++ map (mode: {
+      inherit mode;
+      runtime = "kiro";
+      silent = mode == "hm";
+      surface = "mcpServers";
+      gapPath = ["toolPolicy"];
+      path = ["ai" "mcpServers" "probe"];
+      value = {
+        command = "probe";
+        toolPolicy.probe = "disabled";
+      };
+    })
+    policy.modes
     ++ [
       {
         runtime = "claude";
@@ -489,10 +492,13 @@
     evaluation = evalConfig mode (lib.recursiveUpdate enabled input);
     messages = evaluation.warnings;
   in
-    present messages
-    && (!(case ? count) || builtins.length messages == case.count)
-    && !present emptyCaseWarnings.${mode}.${case.runtime}
-    && evaluate mode input == [];
+    if case.silent or false
+    then !(lib.any (lib.hasInfix (lib.showOption warningPath)) messages)
+    else
+      present messages
+      && (!(case ? count) || builtins.length messages == case.count)
+      && !present emptyCaseWarnings.${mode}.${case.runtime}
+      && evaluate mode input == [];
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
     {
       ai = {
@@ -588,35 +594,10 @@
       {url = "https://example.invalid";}
       {command = "probe";}
     ];
-  # `isDarwin` is forced in BOTH directions rather than left to the host: this
-  # check runs on x86_64-linux and aarch64-darwin, so reading the real platform
-  # would make the non-Darwin arms assert nothing on the Darwin runner.
   trustWarnings = {
     backend,
-    darwin ? false,
     trustedMcpTools ? ["@probe"],
-    v3 ? false,
-  }: let
-    declaration = {
-      ai.kiro = {
-        cli.enable = true;
-        cli = {inherit trustedMcpTools v3;};
-      };
-    };
-    platformPkgs =
-      pkgs
-      // {
-        stdenv =
-          pkgs.stdenv
-          // {
-            hostPlatform = pkgs.stdenv.hostPlatform // {isDarwin = darwin;};
-          };
-      };
-    record = import ../../packages/kiro-cli/lib/mkKiro.nix {
-      lib = harness.hmLib;
-      pkgs = platformPkgs;
-    };
-  in
+  }:
     (lib.evalModules {
       modules = [
         harness.aiBase.sharedOptions
@@ -625,50 +606,32 @@
           then harness.hmStubs
           else harness.devenvStubs
         )
-        (harness.aiBase.app.${backend + "Transform"} record)
-        {config = declaration;}
+        (harness.aiBase.app.${backend + "Transform"} (import ../../packages/kiro-cli/lib/mkKiro.nix {
+          lib = harness.hmLib;
+          inherit pkgs;
+        }))
+        {
+          config.ai.kiro.cli = {
+            enable = true;
+            inherit trustedMcpTools;
+          };
+        }
       ];
     }).config.warnings;
 in {
   imports = [./runtime.nix];
   checks = {
-    ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
-      # Withheld: the v3 `acp` arm, on either platform. The `kiro-cli` wrapper
-      # carries the grant itself, so Darwin no longer differs from Linux.
-      contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "devenv";
-        darwin = true;
-        v3 = true;
-      })
-      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "devenv";
-        v3 = true;
-      })
-      # Recovered, or never withheld.
-      && trustWarnings {
-        backend = "hm";
-        darwin = true;
-        v3 = true;
-      }
-      == []
-      && trustWarnings {
-        backend = "hm";
-        darwin = true;
-      }
-      == []
+    # `trustedMcpTools` reaches Kiro only as permissions.yaml rules under
+    # ~/.kiro, which devenv cannot place: devenv warns, Home Manager writes the
+    # file and stays quiet, and an empty list warns nowhere.
+    ai-warnings-kiro-trust = harness.mkTest "ai-warnings-kiro-trust" (
+      contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {backend = "devenv";})
+      && trustWarnings {backend = "hm";} == []
       && trustWarnings {
         backend = "devenv";
-        darwin = true;
-      }
-      == []
-      && trustWarnings {
-        backend = "hm";
-        darwin = true;
         trustedMcpTools = [];
       }
       == []
-      && trustWarnings {backend = "devenv";} == []
-      && trustWarnings {backend = "hm";} == []
     );
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.assertMsg settingsFieldsSilent "existing and declared normalized settings consumers must stay supported and quiet"

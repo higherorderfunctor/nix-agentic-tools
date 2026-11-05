@@ -1,10 +1,9 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-11-05 — the 3.0.0 payload ships `kiro-cli` plus a
-> temporary `kiro-cli-chat` alias; trust wrappers sit at both root commands and
-> grant only `chat` and `acp`, never a bare launch (the 3.0.0 top-level parser
-> rejects `--trust-tools`, measured in `kiro-kas-dispatch`). The recorded
-> upstream sandbox measurements below predate 3.0.0 and are otherwise unchanged.
+> **Last verified:** 2026-11-05 — the 3.0.0 payload ships only `kiro-cli`; the
+> module's launcher sits outside the FHS package and nothing is placed inside
+> it. The recorded upstream sandbox measurements below predate 3.0.0 and are
+> otherwise unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -12,9 +11,8 @@
 package split, `pkgs.ai.kiro-cli` on Linux routes its commands through one
 shared `buildFHSEnv` sandbox. `$out/bin/*` are thin command-selecting wrappers;
 `$out/libexec/kiro-cli/kiro-cli-wrapper` is the bubblewrap launcher. nixpkgs
-still lists three commands; the 3.0.0 payload supplies `kiro-cli` and the
-temporary `kiro-cli-chat` alias, so the `kiro-cli-term` command wrapper finds
-nothing to run.
+still lists three commands; the 3.0.0 payload supplies only `kiro-cli`, so the
+`kiro-cli-chat` and `kiro-cli-term` command wrappers find nothing to run.
 
 **It is also a different axis from Kiro's own workspace-root allowlist** (see
 `dev/references/kiro-workflow-ref.md`). The discriminator is cheap: bwrap has no
@@ -78,15 +76,11 @@ dead or pointing elsewhere:
 The second row is the dangerous one: no error, a different build of the same
 tool. A version-sensitive step changes behavior instead of failing.
 
-The same ordering applies to Kiro's own commands: the synthesized `/usr/bin`
-holds the payload's `kiro-cli` and `kiro-cli-chat`, ahead of any same-named
-entry later on the inherited PATH. When `trustedMcpTools` is non-empty, this
-repo re-composes nixpkgs' FHS package around a trust-wrapped payload, so both
-root commands are the configured wrapper. The outer `kiro-cli` wrapper keeps the
-`--v3` prepend and the `acp` `--agent-engine=v3` append, which the inner wrapper
-reads in argv to withhold the grant on v3 `acp`. A bare launch gets no grant
-from either wrapper: the 3.0.0 top-level parser rejects `--trust-tools`
-(measured in `kiro-kas-dispatch`); `chat` carries it.
+The same ordering applies to Kiro's own command: the synthesized `/usr/bin`
+holds the payload's `kiro-cli`, ahead of any same-named entry later on the
+inherited PATH. The module's launcher (the `--v3` prepend, the `acp`
+`--agent-engine=v3` append and every export) runs before bubblewrap and reaches
+that command through argv and the inherited environment.
 
 ## Supplying missing tools
 
@@ -141,12 +135,6 @@ fails with a named assertion instead of silently retaining the sandbox. Direct
 package consumers can make the same choice with `pkgs.ai.kiro-cli.unwrapped`. On
 darwin that route selects the already-direct package and is therefore a no-op.
 
-With the sandbox enabled, a custom FHS package used with `trustedMcpTools` must
-also expose `passthru.withFhsPayload`, the seam the module uses to place the
-trust wrapper inside the root; the module rejects a detectable FHS package
-without it. A package that is already direct can state that explicitly with
-`passthru.kiroFhsSandbox = false`; the overlay does so for darwin.
-
 The cost is real. nixpkgs added the FHS environment because Kiro dynamically
 extracts a generic-glibc `bun`; without the compatibility root, that path may
 fail on NixOS or another non-FHS host. This is why the option is default-on and
@@ -158,17 +146,16 @@ shell merely because the FHS root contains bash and may hide a host zsh. Set
 of FHS when preserving host namespace behavior is the intended tradeoff.
 
 `packages/kiro-cli/checks/kiro-fhs-contract.nix` guards the upstream assumptions
-behind this behavior. It verifies that all three upstream command wrappers
-select the shared FHS launcher, then inspects that launcher and fails if
+behind this behavior. It verifies that the upstream `kiro-cli` command wrapper
+selects the shared FHS launcher, then inspects that launcher and fails if
 bubblewrap stops binding `/nix`, adds a known PATH-clearing or replacement
 argument, changes how the generated `/etc` is mounted, moves `/etc/profile`
 sourcing after Kiro's exec, changes the shared command dispatcher, adds another
 init/profile/dispatcher PATH mutation, or removes the incoming PATH from the
-profile assignment. It also builds a `trustedMcpTools` configuration and proves
-the synthesized `/usr/bin/kiro-cli` and `/usr/bin/kiro-cli-chat` resolve to the
-trust wrapper. Those structural changes therefore force this document and the
+profile assignment. It also proves a rollout and prompt-patched payload keeps
+its own KAS path. Those structural changes therefore force this document and the
 implementation to be re-measured instead of silently invalidating
-`extraPackages` or the devenv trust grant.
+`extraPackages`.
 
 The check is deliberately structural. It does not execute bubblewrap inside a
 Nix build sandbox, where nested user-namespace support is not portable. The

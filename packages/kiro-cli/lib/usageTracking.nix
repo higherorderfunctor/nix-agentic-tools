@@ -90,10 +90,6 @@ in {
         message = "ai.kiro.cli.usageTracking requires a managed ai.kiro.cli.package.";
       }
       {
-        assertion = cfg.cli.v3;
-        message = "ai.kiro.cli.usageTracking requires ai.kiro.cli.v3 for the Node CA trust path.";
-      }
-      {
         assertion = lib.intersectLists proxyNames (builtins.attrNames environment) == [];
         message = "ai.kiro.cli.usageTracking owns HTTP(S)/ALL/NO_PROXY (both cases) and NODE_EXTRA_CA_CERTS; remove conflicting ai.environmentVariables / ai.kiro.cli.environmentVariables entries, or opt out of ai.proxy with ai.kiro.proxy = {http = null; https = null;}.";
       }

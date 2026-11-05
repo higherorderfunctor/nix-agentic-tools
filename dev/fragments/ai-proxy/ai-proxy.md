@@ -72,13 +72,13 @@ warning for a populated root request; they never accept a silent no-op.
 
 ### Runtime delivery
 
-| Runtime | Home Manager                                          | devenv                                            | Why this tier                                                                                                                                                                                 |
-| ------- | ----------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude  | Tier 1: `native.settings.env` in user `settings.json` | Tier 1: project `.claude/settings.json`           | Claude applies settings `env` to its process, overriding ambient uppercase variables; each lowered variable is `mkDefault`, so the same native key wins.                                      |
-| Codex   | Tier 2: launcher environment defaults                 | Tier 2: launcher environment defaults             | Its outbound HTTP client reads proxy environment variables. `shell_environment_policy` and sandbox `permissions.network.proxy_url` configure spawned commands, not the CLI's own HTTP client. |
-| Copilot | Unsupported; warns                                    | Unsupported; warns                                | This runtime record is github.com Copilot and ships no launcher. Repository files do not configure its process environment.                                                                   |
-| Kimchi  | Tier 2: launcher environment defaults                 | Tier 2: launcher environment defaults             | Environment delivery covers both backends without relying on the unverified ACP reader of native `httpProxy`. A user's native `httpProxy` suppresses wrapper defaults.                        |
-| Kiro    | Tier 2 for v3; v2 warns for nonempty proxy fields     | Tier 2 for v3; v2 warns for nonempty proxy fields | KAS's model-request handler reads standard proxy variables. The default v2 engine's model-request consumption is unverified, so `!cfg.cli.v3` declares a delivery gap.                        |
+| Runtime | Home Manager                                          | devenv                                  | Why this tier                                                                                                                                                                                 |
+| ------- | ----------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude  | Tier 1: `native.settings.env` in user `settings.json` | Tier 1: project `.claude/settings.json` | Claude applies settings `env` to its process, overriding ambient uppercase variables; each lowered variable is `mkDefault`, so the same native key wins.                                      |
+| Codex   | Tier 2: launcher environment defaults                 | Tier 2: launcher environment defaults   | Its outbound HTTP client reads proxy environment variables. `shell_environment_policy` and sandbox `permissions.network.proxy_url` configure spawned commands, not the CLI's own HTTP client. |
+| Copilot | Unsupported; warns                                    | Unsupported; warns                      | This runtime record is github.com Copilot and ships no launcher. Repository files do not configure its process environment.                                                                   |
+| Kimchi  | Tier 2: launcher environment defaults                 | Tier 2: launcher environment defaults   | Environment delivery covers both backends without relying on the unverified ACP reader of native `httpProxy`. A user's native `httpProxy` suppresses wrapper defaults.                        |
+| Kiro    | Tier 2: launcher environment defaults                 | Tier 2: launcher environment defaults   | KAS's model-request handler reads standard proxy variables, and the managed launcher runs only the v3 engine.                                                                                 |
 
 Wrapper defaults fill a variable only when both its uppercase and lowercase
 names are unset, preserving even an explicitly empty ambient value. They run
@@ -136,22 +136,8 @@ runtimes inherit the root proxy, set
   protocol through `QSt` and `JCn`, reading lowercase then uppercase proxy
   environment variables. Its line 17354 constructs `KiroRuntimeClient` with
   `requestHandler: c_e(S, f)`, reaching that resolver through `SY`. This is the
-  model request path, not an unrelated bundled SDK reader. This proves v3 only.
-  The pinned 2.35.2 v2 `bin/.kiro-cli-chat-wrapped` contains `HTTP_PROXY` /
-  `HTTPS_PROXY` at bytes 95900838 / 95900858 and `aws-smithy-http-client-1.5.0`
-  connector strings near 6199676 / 6201467, but those strings do not establish
-  that `GenerateAssistantResponse` uses the proxy-aware connector. V2 remains
-  unverified and warns. Matching source with that call chain, or an isolated
-  local proxy observation of a v2 model request, would settle it; no login or
-  provider request was performed.
-
-Kiro v2 warns once per nonempty effective proxy field, naming the most specific
-input: `ai.kiro.proxy.http` or `ai.kiro.proxy.https`, including for inherited
-root requests. Runtime-only requests warn the same way. Setting only `http` also
-defaults `https`, so both fields warn unless `https = null`. V3 and
-explicit-null opt-outs stay quiet. Null blocks generated delivery; an empty
-string is refused by the option type. Kiro v2 exports no generated proxy
-variables.
+  model request path, not an unrelated bundled SDK reader. The Kiro wrapper
+  launches no other engine (`packages/kiro-cli/docs/launcher-argv.md`).
 
 `module-ai-proxy` checks protocol resolution order and null opt-outs across
 runtimes and both backends. `airlock-instances` checks registration, root and

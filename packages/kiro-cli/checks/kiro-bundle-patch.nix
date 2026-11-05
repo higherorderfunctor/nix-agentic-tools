@@ -3,36 +3,26 @@
   patched = package.withBundlePatches {
     replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   };
-  wrap = trustedMcpTools: package:
+  wrap = package:
     (import ../lib/wrapPackage.nix {
       inherit pkgs;
       inherit (pkgs) lib;
     }).wrapPackage {
-      inherit package trustedMcpTools;
+      inherit package;
       useFhsSandbox = false;
-      v3 = true;
     };
-  # `trust` names the `--trust-tools` value the wrapper appends, or null.
-  # `unwrapped` is the stock payload the raw argv measurements run against.
+  # `unwrapped` is the stock payload the raw argv measurement runs against.
   variants = pkgs.writeText "kiro-cli-kas-dispatch.json" (builtins.toJSON {
     stock = {
-      package = wrap [] package;
+      package = wrap package;
       server = server package.kas;
       managed = false;
-      trust = null;
       unwrapped = "${package.unwrapped}";
     };
     patched = {
-      package = wrap [] patched;
+      package = wrap patched;
       server = server patched.kas;
       managed = true;
-      trust = null;
-    };
-    trusted = {
-      package = wrap ["fs_read"] package;
-      server = server package.kas;
-      managed = false;
-      trust = "fs_read";
     };
   });
   server = kas: "${kas}/node_modules/@kiro/agent/dist/server/acp-server.js";

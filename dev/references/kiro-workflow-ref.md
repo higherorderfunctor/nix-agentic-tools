@@ -78,11 +78,11 @@ below describe their recorded releases; current enablement follows
 
 ### Enabling it
 
-Current workflows need the v3 (`kas`) engine and the global
-`chat.enableWorkflows` client setting, with no rollout patch:
+Current workflows need the v3 (`kas`) engine, which the managed launcher always
+runs, and the global `chat.enableWorkflows` client setting, with no rollout
+patch:
 
 ```nix
-ai.kiro.cli.v3 = true;
 ai.kiro.cli.workflows.enable = true;
 ```
 

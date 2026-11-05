@@ -712,7 +712,6 @@
     ai.kiro = {
       cli = {
         enable = true;
-        v3 = true;
         workflows.enable = true;
       };
       # cli.package = null; # keep shared files without installing the CLI
@@ -720,7 +719,7 @@
     ```
 
     Package, process environment, shell, extra packages, native CLI settings,
-    trust flags, tweaks, rollout features and FHS selection all use `cli`.
+    trusted tools, tweaks, rollout features and FHS selection all use `cli`.
     Agents, hooks, permissions, MCP, context, rules and skills stay shared.
     Workflows are generally available since Kiro 2.26.0; the switch selects
     the v3 engine's client setting without a binary patch. Friendly switches

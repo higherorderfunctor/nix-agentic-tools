@@ -46,7 +46,7 @@
   };
   canonFeatures = fs: pkgs.lib.sort (a: b: a < b) (pkgs.lib.unique fs);
 
-  mkKiroCliWithPayload = rawFeatures: bundlePatches: fhsPayload: let
+  mkKiroCliWithPayload = rawFeatures: bundlePatches: let
     kas = mkKas bundlePatches;
     managedKas = (bundlePatches.replace or []) != [];
     # Defaults updates off and normalizes an explicit opt-in. Each packaged
@@ -131,13 +131,6 @@
         postFixup =
           ''
             wrapProgram "$out/bin/kiro-cli" ${wrapperFlags}
-            # TEMPORARY alias for consumers that still invoke `kiro-cli-chat`,
-            # which 3.0.0 no longer ships. The PR "refactor(kiro-cli): collapse
-            # the wrappers and remove the kiro-cli-chat alias" deletes it
-            # together with the module's chat wrapper. `--argv0` keeps the
-            # binary's view identical to a `kiro-cli` launch.
-            makeWrapper "$out/bin/.kiro-cli-wrapped" "$out/bin/kiro-cli-chat" \
-              --argv0 kiro-cli ${wrapperFlags}
           ''
           # Deliberately AFTER the wrappers: the patcher finds the binary by
           # content, so it is indifferent to how wrappers renamed it, and
@@ -171,16 +164,8 @@
           releaseUrls;
 
           inherit autoUpdateWrapperFlags kas;
-          withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches null;
-          withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches null;
-
-          # Re-compose the public Linux FHS package around a configured
-          # payload without reimplementing nixpkgs' buildFHSEnv expression.
-          # The module uses this to place the trust wrapper INSIDE the
-          # synthesized root. Like withRolloutFeatures, the result is
-          # unguarded but can only be reached through the guarded public
-          # package.
-          withFhsPayload = mkKiroCliWithPayload rawFeatures bundlePatches;
+          withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches;
+          withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches;
         };
 
         meta = {
@@ -207,20 +192,14 @@
   in
     # Re-wrap through upstream's own expression rather than reimplementing it,
     # so the Linux FHS sandbox (and whatever upstream adds to that wrapper
-    # next) comes along for free. `fhsPayload` is normally null, which
-    # preserves the default pinned payload. The module supplies a wrapped
-    # payload only when trust configuration must live inside the synthesized
-    # root.
+    # next) comes along for free.
     #
     # `passthru` is NOT a derivation input, so re-attaching ours to the
     # wrapper moves neither `drvPath` nor `outPath`. Merge on top of
     # upstream's rather than replacing it: the Linux wrapper carries
     # `unwrapped` and `tests`.
     (pkgs.kiro-cli.override {
-      kiro-cli-unwrapped =
-        if fhsPayload == null
-        then pinned
-        else fhsPayload;
+      kiro-cli-unwrapped = pinned;
     }).overrideAttrs
     (joinAttrs:
       {
@@ -234,13 +213,6 @@
           (joinAttrs.passthru or {})
           // pinned.passthru
           // {
-            # Module validation uses this explicit marker to distinguish an
-            # actual FHS wrapper from darwin, whose public package is already
-            # the direct payload. A custom package that exposes `unwrapped`
-            # without the marker is treated conservatively as an FHS wrapper
-            # and must also expose `withFhsPayload` before trust configuration
-            # is accepted.
-            kiroFhsSandbox = pkgs.stdenv.hostPlatform.isLinux;
             unwrapped = pinned;
           };
       }
@@ -262,6 +234,6 @@
         else {name = "kiro-cli-${rolloutSuffix}-${sources.version}";}
       ));
 
-  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {} null;
+  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {};
 in
   mkKiroCli []

@@ -19,13 +19,10 @@
     shopt -s inherit_errexit 2>/dev/null || :
     mkdir -p "$out/bin"
     ln -s ${stubBin} "$out/bin/kiro-cli"
-    ln -s ${stubBin} "$out/bin/kiro-cli-chat"
   '';
   wrap = secretEnv:
     (import ../../packages/kiro-cli/lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage {
       package = stub;
-      v3 = false;
-      trustedMcpTools = [];
       inherit secretEnv;
       secretOptionPaths.PROBE = "ai.kiro.mcpServers.probe.headers.Authorization";
     };
@@ -58,19 +55,15 @@ in {
   checks.ai-warnings-kiro-feature-wired = harness.mkTest "ai-warnings-kiro-feature-wired" (
     lib.hasInfix "workflows" (featureWarning {
       workflows.enable = true;
-      v3 = true;
     })
     && !(lib.hasInfix "global-feature" (featureWarning {
       features.workflows.enable = true;
-      v3 = true;
     }))
     && lib.hasInfix "codeToSpec" (featureWarning {
       codeToSpec.enable = true;
-      v3 = true;
     })
     && !(lib.hasInfix "global-feature" (featureWarning {
       features.c2s.enable = true;
-      v3 = true;
     }))
     && !(lib.hasInfix "workflows" (featureWarning {}))
   );

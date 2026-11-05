@@ -68,14 +68,11 @@ in {
         kiro = "kiro-cli";
       };
       fixtureFor = runtime: let
-        package =
-          (pkgs.writeShellScriptBin binaries.${runtime} ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            exit 0
-          '').overrideAttrs (_: {
-            passthru.kiroFhsSandbox = false;
-          });
+        package = pkgs.writeShellScriptBin binaries.${runtime} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exit 0
+        '';
         configFor = package:
           lib.setAttrByPath (lib.init (optionPaths.launcher runtime "package"))
           ({inherit package;} // lib.optionalAttrs (runtime == "kiro") {useFhsSandbox = false;});

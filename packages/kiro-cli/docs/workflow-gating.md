@@ -6,14 +6,14 @@
 
 Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
 rollout state is 100% for all users with no channel restriction, so enabling
-workflows does not patch the binary. Two gates remain: the v3 (`kas`) engine and
-the global `chat.enableWorkflows` client setting.
+workflows does not patch the binary. The remaining gate is the global
+`chat.enableWorkflows` client setting; the managed launcher always runs the v3
+(`kas`) engine the feature lives in.
 
 ```nix
 ai.kiro = {
   cli = {
     enable = true;
-    v3 = true;
     workflows.enable = true;
   };
 };
@@ -29,11 +29,11 @@ workflow choice per session.
 
 ### Friendly switches
 
-Every friendly switch requires `cli.v3 = true`. The switches share declarations
-and package selection across Home Manager and devenv; client settings are
-implied only where the pinned client honors them. A friendly switch implies its
-raw feature at default priority. Explicitly disabling that raw feature while
-leaving the friendly switch enabled fails an assertion on both backends.
+The switches share declarations and package selection across Home Manager and
+devenv; client settings are implied only where the pinned client honors them. A
+friendly switch implies its raw feature at default priority. Explicitly
+disabling that raw feature while leaving the friendly switch enabled fails an
+assertion on both backends.
 
 | `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                                                                                              |
 | ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -67,7 +67,7 @@ state table because it adds no human judgment. A single predicate in
 and internal treatment for all users on the stable channel preserves the stock
 derivation; omitted internal treatment follows public treatment, and absent or
 null segment and channel fields mean all and stable. Unknown state fields fail
-evaluation at this reader. Restricted features require v3 and a package exposing
+evaluation at this reader. Restricted features require a package exposing
 `passthru.withRolloutFeatures`. The CI rollout canary patches every measured
 patchable feature that still needs a patch to prove byte feasibility, matching
 consumer package selection. The package constructor sorts and deduplicates

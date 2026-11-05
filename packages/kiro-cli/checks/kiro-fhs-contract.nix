@@ -11,16 +11,9 @@
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     kiro-fhs-contract = let
       kiroPackage = pkgs.ai.kiro-cli;
-      wrapKiroPackage =
-        (import ../lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage;
       selectedKiroPackage = (kiroPackage.withBundlePatches {
         replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
       }).withRolloutFeatures ["background_execution"];
-      trustedKiroPackage = wrapKiroPackage {
-        package = selectedKiroPackage;
-        trustedMcpTools = ["fs_read"];
-        v3 = false;
-      };
     in
       pkgs.runCommandLocal "kiro-fhs-contract-check" {} ''
         set -euETo pipefail
@@ -41,7 +34,7 @@
         nat_entrypoint_root="''${nat_entrypoint%/bin/kiro-cli}"
         nat_shared_launcher="$nat_entrypoint_root/libexec/kiro-cli/kiro-cli-wrapper"
         if [ -e "$nat_shared_launcher" ]; then
-          for nat_command in kiro-cli kiro-cli-chat kiro-cli-term; do
+          for nat_command in kiro-cli; do
             nat_command_wrapper="$(${pkgs.coreutils}/bin/readlink -f ${kiroPackage}/bin/$nat_command)"
             [ -f "$nat_command_wrapper" ] \
               || nat_fail "$nat_command no longer resolves to a generated command wrapper"
@@ -144,39 +137,10 @@
           "$nat_profile" \
           || nat_fail "FHS profile no longer preserves inherited PATH as its tail"
 
-        # Production-shaped trust injection: the configured wrapper is part of
-        # the FHS payload itself, so the root's /usr/bin commands carry the
-        # grant. Follow both the consolidated shared launcher and the older
-        # per-command launcher to the synthesized root, then inspect the
-        # command paths dispatch actually selects: `kiro-cli` and the
-        # temporary `kiro-cli-chat` alias.
-        nat_trusted_entrypoint="$(${pkgs.coreutils}/bin/readlink -f ${trustedKiroPackage}/bin/kiro-cli)"
-        nat_trusted_entrypoint_root="''${nat_trusted_entrypoint%/bin/kiro-cli}"
-        nat_trusted_shared_launcher="$nat_trusted_entrypoint_root/libexec/kiro-cli/kiro-cli-wrapper"
-        if [ -e "$nat_trusted_shared_launcher" ]; then
-          nat_trusted_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_trusted_shared_launcher")"
-        else
-          nat_trusted_launcher="$nat_trusted_entrypoint"
-        fi
-        nat_trusted_rootfs="$(${pkgs.gnused}/bin/sed -n \
-          's#^for i in \(/nix/store/[^ ]*-fhsenv-rootfs\)/\*; do$#\1#p' \
-          "$nat_trusted_launcher")"
-        [ -d "$nat_trusted_rootfs" ] \
-          || nat_fail "could not locate the configured FHS root; trustedMcpTools composition is unverified"
-        for nat_command in kiro-cli kiro-cli-chat; do
-          nat_trusted_command="$(${pkgs.coreutils}/bin/readlink -f "$nat_trusted_rootfs/usr/bin/$nat_command")"
-          [ -f "$nat_trusted_command" ] \
-            || nat_fail "configured FHS root no longer supplies $nat_command"
-          ${pkgs.gnugrep}/bin/grep -qF -- '--trust-tools=fs_read' "$nat_trusted_command" \
-            || nat_fail "trustedMcpTools wrapper is not inside the FHS $nat_command path"
-          ${pkgs.gnugrep}/bin/grep -qF -- "${selectedKiroPackage.unwrapped}/bin/$nat_command" "$nat_trusted_command" \
-            || nat_fail "FHS $nat_command trust wrapper lost the selected rollout/prompt payload"
-        done
-        for nat_command in kiro-cli kiro-cli-chat; do
-          ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.kas}/node_modules/@kiro/agent/dist/server/acp-server.js' \
-            "${selectedKiroPackage.unwrapped}/bin/$nat_command" \
-            || nat_fail "selected native command lost its fixed KAS path"
-        done
+        # A rollout and prompt-patched payload still binds its own KAS.
+        ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.kas}/node_modules/@kiro/agent/dist/server/acp-server.js' \
+          "${selectedKiroPackage.unwrapped}/bin/kiro-cli" \
+          || nat_fail "selected native command lost its fixed KAS path"
         touch "$out"
       '';
   };

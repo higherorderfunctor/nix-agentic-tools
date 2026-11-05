@@ -473,11 +473,10 @@ Each runtime spells it in its existing surface and never in the server entry:
 Claude `permissions.allow|ask|deny` with `mcp__plugin_hm_<server>__<tool>` (Home
 Manager personal plugin) or `mcp__<server>__<tool>` (project `.mcp.json`); Codex
 per-server `tools.<tool>.approval_mode` (`approve`, `prompt`) and
-`disabled_tools`, where a native `codex.tools` entry wins; Kiro `auto` as a
-trusted `@<server>/<tool>`, `prompt` and `disabled` as v3 ask/deny rules, which
-only Home Manager writes. Every value a runtime or backend cannot carry warns
-through its `surfaceSupport.mcpServers` gap (Kiro's undelivered rules, Kimchi
-always).
+`disabled_tools`, where a native `codex.tools` entry wins; Kiro `auto`, `prompt`
+and `disabled` as v3 allow/ask/deny rules, which only Home Manager writes. Every
+value a runtime or backend cannot carry warns through its
+`surfaceSupport.mcpServers` gap (Kiro's undelivered rules, Kimchi always).
 
 ### Gotchas
 

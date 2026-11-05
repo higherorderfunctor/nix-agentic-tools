@@ -84,42 +84,14 @@
       ]
     );
 
-  # Captures the VALUE a caller passed for `flag` into shell variable `var`, or
-  # leaves it empty when the flag is absent. Both spellings are handled —
-  # `--flag value` (two tokens) and `--flag=value` (one) — and the LAST
-  # occurrence wins, matching how a CLI that tolerates repetition resolves it.
-  #
-  # This exists because some injections depend on what the caller ASKED for, not
-  # only on what the Nix config baked in. kiro's `--agent-engine` is the case:
-  # a caller's engine overrides an injected `--v3`, so whether a second flag
-  # conflicts can only be resolved from the actual argv, at runtime.
-  # A literal `--` ends the scan, matching `subcommandBlock` and ordinary CLI
-  # semantics: past it, a token that merely LOOKS like the flag is a positional
-  # and the wrapped CLI will not honour it, so neither should this. The
-  # `nat_val_next` check runs first, so a `--` that is genuinely the flag's own
-  # VALUE is still consumed as one rather than ending the scan.
-  optionValueBlock = {
-    flag,
-    var,
-  }:
-    lib.concatStringsSep "\n" [
-      "${var}=\"\""
-      "nat_val_next=0"
-      "for nat_arg in \"$@\"; do"
-      "  if [ \"$nat_val_next\" = 1 ]; then ${var}=\"$nat_arg\"; nat_val_next=0; continue; fi"
-      "  case \"$nat_arg\" in"
-      "    --) break ;;"
-      "    ${lib.escapeShellArg flag}) nat_val_next=1 ;;"
-      "    ${lib.escapeShellArg flag}=*) ${var}=\"\${nat_arg#${flag}=}\" ;;"
-      "  esac"
-      "done"
-    ];
-
-  # Sets shell variable `var` to 1 when boolean `flag` occurs as an EXACT argv
-  # token before any literal `--`, else 0. A token past `--` is a positional
-  # the wrapped CLI will not honour, so neither does this; an exact match keeps
-  # a prompt that merely mentions the flag from counting.
-  flagPresenceBlock = {
+  # Sets shell variable `var` to 1 when option `flag` occurs before any
+  # literal `--`, in either spelling — the exact token `--flag` (its value is
+  # the next token) or one token `--flag=value` — else 0. Only presence is
+  # read, never the value: the caller decides whether to inject, and the
+  # wrapped CLI resolves what the caller asked for. A token past `--` is a
+  # positional the wrapped CLI will not honour, so neither does this; an exact
+  # match keeps a prompt that merely mentions the flag from counting.
+  optionPresenceBlock = {
     flag,
     var,
   }:
@@ -128,7 +100,7 @@
       "for nat_arg in \"$@\"; do"
       "  case \"$nat_arg\" in"
       "    --) break ;;"
-      "    ${lib.escapeShellArg flag}) ${var}=1 ;;"
+      "    ${lib.escapeShellArg flag}|${lib.escapeShellArg flag}=*) ${var}=1 ;;"
       "  esac"
       "done"
     ];
@@ -170,7 +142,7 @@
         )
     );
 in {
-  inherit flagPresenceBlock idempotentFlagBlock optionValueBlock subcommandBlock;
+  inherit idempotentFlagBlock optionPresenceBlock subcommandBlock;
 
   # The `subcommands` entry standing for an invocation that carries NO
   # subcommand — `kiro-cli` on its own. Named rather than written as a bare ""

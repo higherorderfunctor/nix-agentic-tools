@@ -42,14 +42,14 @@
     then hmCodexSettings evaluated
     else evaluated.config.ai.codex.files.".codex/config.toml".content.value;
   kiroRule = rule: {inherit (rule) capability effect match;};
-  # The repository supports Kiro's v3 engine only; v2 is untested.
   kiroCase = backend: let
-    evaluated = evalWith backend "kiro" {ai.kiro.cli.v3 = true;};
+    evaluated = evalWith backend "kiro" {};
     inherit (evaluated.config.ai) kiro;
     rulesDelivered = backend == "hm";
     warnings = policyWarnings evaluated;
   in
-    builtins.elem "@probe/a" kiro.cli.trustedMcpTools
+    kiro.cli.trustedMcpTools
+    == lib.optionals rulesDelivered ["@probe/a"]
     && map kiroRule kiro.permissions
     == lib.optionals rulesDelivered [
       {
@@ -69,7 +69,7 @@
       else
         builtins.length warnings
         == 1
-        && lib.hasSuffix "keep Kiro's default: b, c.)" (builtins.head warnings)
+        && lib.hasSuffix "keep Kiro's default: a, b, c.)" (builtins.head warnings)
     );
   # A consumer's own lower-priority trust and rules, with no policy declared.
   kiroExistingRule = {
@@ -116,12 +116,12 @@ in {
           d.approval_mode = "prompt";
         };
       }))
-    # Kiro: `auto` is a trusted tool everywhere; ask and deny rules exist only
-    # where they reach permissions.yaml (Home Manager with v3); whatever a
-    # backend cannot carry is named in one warning.
+    # Kiro: allow, ask and deny rules exist only where they reach
+    # permissions.yaml (Home Manager); whatever a backend cannot carry is named
+    # in one warning.
     (perBackend "kiro" (backend:
       kiroCase backend
-      && (backend == "devenv" || (evalWith backend "kiro" {ai.kiro.cli.v3 = true;}).config.home.file ? ".kiro/settings/permissions.yaml")))
+      && (backend == "devenv" || (evalWith backend "kiro" {}).config.home.file ? ".kiro/settings/permissions.yaml")))
     # Kiro with no policy: a consumer's mkDefault trust and rules survive.
     (perBackend "kiro-defaults" (backend: let
       inherit

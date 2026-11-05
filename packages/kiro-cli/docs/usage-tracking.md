@@ -11,7 +11,6 @@ contains private request and response payloads.
 ai.kiro = {
   cli = {
     enable = true;
-    v3 = true;
     usageTracking = {
       enable = true;
       # Optional absolute directory. Null uses the runtime XDG state root.
@@ -69,15 +68,15 @@ contributor project's configuration. Wrapping the already tracked Home Manager
 launcher is also supported: the identical proxy and CA environment passes its
 conflict checks. No second collector starts.
 
-After `kiro-usage exec kiro-cli` or `kiro-usage exec kiro-cli-chat` exits, the
-tool prints what that run captured to standard error: for each root session the
-run touched, model and conversation tables (requests, credits, input, output and
-cached tokens, cache hit). Kiro inherits the terminal's input and output
-directly; the summary leaves standard output, exit status, and signals intact.
-Tracked chat runs as a child of the summary supervisor, with its own process ID
-and the same terminal descriptors. Explicit help, version, login, and
-administrative commands skip the summary, including when recognized global
-options precede them. Other commands run without a Kiro summary.
+After `kiro-usage exec kiro-cli` exits, the tool prints what that run captured
+to standard error: for each root session the run touched, model and conversation
+tables (requests, credits, input, output and cached tokens, cache hit). Kiro
+inherits the terminal's input and output directly; the summary leaves standard
+output, exit status, and signals intact. Tracked chat runs as a child of the
+summary supervisor, with its own process ID and the same terminal descriptors.
+Explicit help, version, login, and administrative commands skip the summary,
+including when recognized global options precede them. Other commands run
+without a Kiro summary.
 
 `usageTracking.summary` styles that summary. Null options keep the runtime
 defaults (`color = "auto"`: styled only on a terminal without `NO_COLOR`;
@@ -162,12 +161,10 @@ exits.
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
 conflicting inherited values. Your shell environment stays unchanged. For
-commands named `kiro-cli`, it prepends `--v3` unless already present; named Kiro
-commands reject explicit non-v3 `--agent-engine` overrides before `--`. Direct
-`kiro-cli-chat` needs explicit `--v3` or `--agent-engine v3`. Other command
-names receive arguments unchanged; callers must ensure those programs use the
-Node trust path. Use `kiro-usage exec -- COMMAND ...` when an explicit command
-boundary is useful.
+commands named `kiro-cli`, it prepends `--v3` unless already present before
+`--`. Other command names receive arguments unchanged; callers must ensure those
+programs use the Node trust path. Use `kiro-usage exec -- COMMAND ...` when an
+explicit command boundary is useful.
 
 For a standalone devenv-managed collector, start `kiro-usage` through the
 process supervisor with `devenv up kiro-usage`. Home Manager on Darwin emits the
@@ -191,14 +188,10 @@ the operating system trust store. Tools spawned by Kiro inherit these
 environment variables too; their own TLS implementations may have different
 trust requirements.
 
-A managed Kiro package and `cli.v3 = true` are required. Tracked launches reject
-an explicit non-v3 `--agent-engine` override. Direct `kiro-cli-chat` launches
-also require an explicit `--agent-engine v3` or `--v3`, because `cli.v3` injects
-its flag only into `kiro-cli` and does not establish the chat binary's default
-engine. This configures the v3 Node trust path; it does not verify every
-upstream transport implementation. Local tests use fake Kiro and proxy
-processes, and no live Kiro launch or provider request forms part of the check
-suite.
+A managed Kiro package is required; its launcher runs the v3 engine. This
+configures the v3 Node trust path; it does not verify every upstream transport
+implementation. Local tests use fake Kiro and proxy processes, and no live Kiro
+launch or provider request forms part of the check suite.
 
 Stopping the service while tracking remains enabled makes subsequent tracked
 launches fail. Disable `usageTracking.enable`, apply the configuration, then use

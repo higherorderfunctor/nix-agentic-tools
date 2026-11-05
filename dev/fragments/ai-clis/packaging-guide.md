@@ -289,13 +289,10 @@ The earlier thin `overrideAttrs` shape degraded to a SILENT no-op — not an err
 — when nixpkgs f13ff45a split `kiro-cli` into `kiro-cli-unwrapped` plus a public
 FHS wrapper: the public derivation has no `src`, and its `buildCommand` never
 reaches the unwrapped package's `fixupPhase`, so the pin AND the `postFixup`
-both evaporated while the build stayed green. The public passthru also exposes
-`withFhsPayload` so module configuration that must be visible inside the FHS
-root can use that same upstream expression. The public package-selection
-contract is topology-stable: `unwrapped` always names the direct payload, and
-`kiroFhsSandbox` says whether selecting it actually removes an FHS layer
-(`false` on darwin). `useFhsSandbox = false` selects that payload explicitly
-instead of changing the public package's default meaning.
+both evaporated while the build stayed green. The public package-selection
+contract is topology-stable: `unwrapped` always names the direct payload (a
+valid no-op selection on darwin), and `useFhsSandbox = false` selects that
+payload explicitly instead of changing the public package's default meaning.
 
 Read the "When the attribute stops being the derivation" section of the
 overlay-pattern fragment before adding another `overrideAttrs` package — it

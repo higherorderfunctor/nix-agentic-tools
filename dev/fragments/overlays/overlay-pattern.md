@@ -521,16 +521,12 @@ hands it to upstream's wrapper through the same seam:
 # … pinned = pkgs.stdenv.mkDerivation { … sourceRoot = "kirocli"; … } …
 # then hand it back to upstream's wrapper, preserving the FHS sandbox and the
 # route in both directions (metadata/name handling omitted here):
-rewrap = payload:
-  (pkgs.kiro-cli.override {kiro-cli-unwrapped = payload;}).overrideAttrs
-  (attrs: {
-    passthru = (attrs.passthru or {}) // pinned.passthru // {
-      kiroFhsSandbox = pkgs.stdenv.hostPlatform.isLinux;
-      unwrapped = pinned;
-      withFhsPayload = rewrap;
-    };
-  });
-in rewrap pinned
+(pkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}).overrideAttrs
+(attrs: {
+  passthru = (attrs.passthru or {}) // pinned.passthru // {
+    unwrapped = pinned;
+  };
+})
 ```
 
 Two properties of that shape are deliberate:
@@ -545,12 +541,8 @@ Two properties of that shape are deliberate:
 - **Merge `passthru` onto the wrapper, do not replace it.** `passthru` is not a
   derivation input, so re-attaching ours moves neither `drvPath` nor `outPath`,
   and the wrapper's `unwrapped` key is the only supported route from the public
-  attribute back to the real binaries. `withFhsPayload` is the corresponding
-  route forward: it places a configured payload inside upstream's wrapper while
-  retaining the pinned package's metadata and passthru contract.
-  `kiroFhsSandbox` disambiguates that contract on darwin, where the public
-  package is already direct and `unwrapped` is a valid no-op selection rather
-  than evidence of an FHS layer.
+  attribute back to the real binaries. On darwin, where the public package is
+  already direct, `unwrapped` is a valid no-op selection.
 
 **How to detect this class before it costs a release.** A silent-drop split
 produces no error anywhere; the only tell is that the package's own facts stop
