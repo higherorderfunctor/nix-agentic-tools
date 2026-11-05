@@ -9,7 +9,7 @@ replace a measured fact.
 
 ## Declared hosted LLM gateways
 
-The bounded family is the distinct `region` keys in measured
+The hosted-gateway family is the distinct `region` keys in measured
 `regionRegistry.fields` rows whose `field` is `llmBaseUrl` and whose value is
 anything except `""`. This includes `<unresolved>`: a session can classify that
 root with an explicit unknown record. The empty self-hosted placeholder is
@@ -33,15 +33,109 @@ requires `id`, `claim`, `scope`, `packet`, `evidenceHash`, `verdict` and
 the packet, without duplicate metadata fields. Unknown fields and versions are
 refused.
 
+## Network request occurrences
+
+Every distinct request occurrence in `requestCallers` is a separate judgment
+root, including two calls on the same line. At Kimchi 1.26.0 there are 29 roots
+and 583 caller rows. Enumeration reads the fact independently of verdicts; it
+neither searches for extra network calls nor infers execution conditions.
+
+Each request claim has exactly four nonblank string members:
+
+- `default`: whether the request executes with the default configuration.
+- `destination`: where it goes, including configuration and overrides.
+- `disable`: the controls and precedence that prevent it.
+- `trigger`: the runtime event and prerequisites that cause it.
+
+There is one overall verdict and evidence hash. The initial 29 records are
+explicitly `unknown`: `missingEvidence` names the unreviewed defaults,
+destinations, disabling controls and triggers. Their packets contain observed
+statements and bounded caller evidence, without asserting runtime behavior.
+Unknown records pass coverage but must remain current. Runtime judgments belong
+in a later data-only change after reviewing explicit evidence spans.
+
+A request selector has `fact: {kind: "requestCallers", where: {request}}` and an
+explicit `sources` array. The request citation is
+`{path, anchor: {symbol, role: {kind: "call", callee, ordinal}}}`. Paths are
+canonical repository-relative `src/...` paths. `symbol` is a chain of
+`[name, ordinal]` pairs: function names/bindings, class names, method/accessor
+names, constructor names and object property keys that bind functions. Prefixes
+such as `function:`, `class:` and `method:` are owned by this code, not
+TypeScript enum names. Equal names under the same named parent receive lexical
+ordinals. Anonymous functions and control-flow statements do not add owner
+segments; a top-level request uses the file owner, `[]`.
+
+The callee key includes call/new form and syntax spelling, without invocation
+arguments or nested function/class bodies. Its zero-based ordinal counts
+same-callee calls in the nearest named owner, through anonymous callbacks but
+excluding other named owners. Thus unrelated call-free statements do not change
+root identity. Renaming an owner removes the old root and discovers a new one.
+Adding indistinguishable same-callee calls or same-name owners can change
+ordinals and requires review. There is no line-based or similarity fallback.
+
+Request packets add `statement`, the exact decoded UTF-8 bytes of the containing
+statement, to the four common packet fields. The statement's span also carries
+its hash, so diagnostics report old/new statement hashes. The resolver stops at
+the nearest statement before crossing a function, class or file. A return inside
+an if selects that return; a request in an if condition selects the if. Concise
+arrow bodies are refused rather than expanding to a surrounding declaration. Two
+requests in the same statement necessarily share those evidence bytes.
+
+Every selected caller row is retained, including duplicates. Numeric locations
+are replaced by structural `functionSite` and `site` identities. `library`,
+`distance`, `kind`, `property` and `reason` remain evidence. The redundant
+per-row request anchor is omitted because the selector already names that
+request. Function sites use the same named-owner chain and
+`role: {kind: "owner"}`; anonymous functions inherit their named owner. Sites
+use a callee role when the reported token is in a call's callee; otherwise they
+use its token spelling and same-spelling ordinal in that named owner.
+Function-start tokens use a separate `function-start` role so unrelated
+parentheses cannot shift anonymous starts. Ordinary tokens use `token`. Adding
+indistinguishable same-role tokens can shift ordinals; this is a structural
+address change, not a whitespace-only shift.
+
+Facts must match the pinned source revision. Request coordinates match exact
+call starts, choosing the innermost call when a chain shares a start. Function
+coordinates match the original start or the start after export/default
+modifiers, skipping JSDoc children and retaining async/visibility modifiers.
+Site coordinates match exact token starts. The top-level sentinel resolves to
+the file owner. Closed shape and primitive type validation happens before
+adaptation; the adapter does not revalidate reachability, distance ranges or
+reason consistency. Unmatched coordinates stop the entire input through the
+existing failure path.
+
+Explicit request citations use
+`{path, anchor: {symbol, role: {kind: "node", steps}}}`. Each `[key, ordinal]`
+step selects a direct syntax child of the previous node, starting at the named
+owner. Keys include `name:<spelling>`, callee keys, `bindings:<names>`, keyed
+object entries `entry:id:<spelling>` or `entry:name:<spelling>`,
+`token:<spelling>`, and the fixed labels `block`, `class`, `function`, `list`
+and `node`. JSDoc children are skipped. These steps can select registration
+arguments, resource entries, properties, return statements and precedence
+conditions. Final files, blocks, functions, classes and their direct SyntaxList
+children are refused as broad evidence. Intermediate broad nodes are allowed
+when navigating to narrow evidence. No TypeScript enum aliases enter persisted
+identities.
+
+Editing statement/citation bytes, adding/removing a caller/callback/boundary
+row, or changing selected metadata invalidates that request's packet. Caller
+bodies are not implicit spans. Unrelated requests, caller bodies and source
+edits do not change other packets unless they share selected statement/citation
+bytes or change a selected structural identity. Line shifts outside evidence
+only update display coordinates after facts are regenerated. The original source
+buffers, canonical JSON, duplicate-preserving row sort and sha256 rules below
+apply to both families. Release hashes, absolute paths, timestamps and numeric
+coordinates never enter request packets.
+
 ## Evidence packet
 
-A packet contains exactly `schemaVersion: 1`, `selector`, `rows` and `spans`.
-The selector accepts only `regionRegistry.fields`, one nonempty region key and
-`field: "llmBaseUrl"`, plus an explicit `sources` list of declaration citations.
-It returns **all** matching rows and preserves multiplicity. It cannot filter by
-value, line, position or historical row count. Newly discovered roots get
-candidate packets with `sources: []`; the mechanism does not invent a claim or
-verdict.
+A hosted-gateway packet contains exactly `schemaVersion: 1`, `selector`, `rows`
+and `spans`. The selector accepts only `regionRegistry.fields`, one nonempty
+region key and `field: "llmBaseUrl"`, plus an explicit `sources` list of
+declaration citations. It returns **all** matching rows and preserves
+multiplicity. It cannot filter by value, line, position or historical row count.
+Newly discovered roots get candidate packets with `sources: []`; the mechanism
+does not invent a claim or verdict.
 
 Each selected row preserves `region`, `field` and `value`, replacing `file` and
 `line` with `site: {path, anchor}`. The closed relevant-row schema refuses new
@@ -97,13 +191,13 @@ Recorded row and span contents are checked by their hash and current-evidence
 comparison, without a separate structural schema.
 
 Changing a selected value, adding a matching fact row, renaming a cited symbol,
-or editing or reformatting bytes inside a cited span invalidates evidence.
-Inserting or deleting lines outside spans updates `display.json` coordinates
-without changing hashes, even if fact lines have not yet been refreshed.
-Unselected rows, unrelated requests, unrelated source bytes, release identity,
-tool versions, absolute paths, timestamps, root inventory, judgment prose and
-numeric coordinates are excluded. Adding a root fails coverage while existing
-packets remain current.
+or editing or reformatting bytes inside a cited span invalidates evidence. For
+hosted gateways, inserting or deleting lines outside spans updates
+`display.json` coordinates without changing hashes, even if fact lines have not
+yet been refreshed. Unselected rows, unrelated requests, unrelated source bytes,
+release identity, tool versions, absolute paths, timestamps, root inventory,
+judgment prose and numeric coordinates are excluded. Adding a root fails
+coverage while existing packets remain current.
 
 ## Diagnostics and artifacts
 
@@ -170,6 +264,38 @@ A file-level verdict failure uses id `<verdict-file>` and claim
 `new=unresolved`. `RECORDED_HASH` compares the stored hash with the recomputed
 recorded-packet hash.
 
+Request input adds two codes to the same envelope and uses the same packet
+inspection command:
+
+| Code                 | `Changed:` detail                                                                                                                                | `Fix:` action                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REQUEST_FACT_INPUT` | `invalid requestCallers input at <path>: <reason>`                                                                                               | Correct the requestCallers producer or source pin, run `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then investigate and rejudge `packages/kimchi/surface-judgments.json`.              |
+| `REQUEST_LOCATION`   | `cannot adapt requestCallers location at <path>: expected one <target> at <location>, found <count>; regenerate facts against the pinned source` | Align requestCallers with the pinned source using `nix run .#checks.x86_64-linux.kimchi-extracted.passthru.regenerate`, then inspect the candidate packets and rejudge `packages/kimchi/surface-judgments.json`. |
+
+Request fact reasons are `missing field`, `unknown field` and
+`invalid type or value`. Location targets are `request call`,
+`enclosing function` and `source token`. These whole-input failures have
+`new=unavailable`.
+
+Request coverage reuses `REMOVED_ROOT` with
+`removed request root <root>: no requestCallers occurrence remains; removed rows=<rows>`
+and `UNCLASSIFIED_ROOT` with
+`unclassified request root <root>: a requestCallers occurrence has no judgment; added rows=<rows>`.
+The existing fixes apply. Candidate ids are
+`<unclassified:request:<canonical-root>>`; their claim is
+`No four-part claim is recorded for request <root>.`. Valid recorded request
+claims render as canonical JSON on the `Claim:` line. Removed records must be
+deleted by hand.
+
+Request sources reuse `SOURCE_INPUT` with
+`cannot resolve source evidence in <path>: <reason>`. In addition to invalid
+UTF-8 and parse errors, reasons are
+`request call has no supported containing statement at <citation>` and
+`unsupported broad evidence node at <citation>`. Statement/citation failures
+have `new=unresolved` and produce incomplete packets without evidence hashes.
+Missing explicit anchors and all schema, evidence-change and recorded-hash
+failures use the existing catalogue and fixes.
+
 ## Investigating and rejudging
 
 PR CI regenerates facts, regenerates and checks the report, builds packets,
@@ -198,13 +324,16 @@ cat /tmp/kimchi-judgment-packets/display.json
 ```
 
 Investigate every changed row and span against the original pinned source.
-Review the exact proposition and its boundary; name missing evidence for an
-unknown. Rejudging edits only `packages/kimchi/surface-judgments.json`. The
-fixture suite uses its own
-`checks/fixtures/surface-judgments/base/verdicts.json` and local expectations,
-which do not change when live claims or verdicts are reviewed. Deliberately edit
-the live verdict file, copying a current packet and hash only as part of that
-review. There is no accept/update operation. Then run:
+Review the exact proposition and its boundary; for requests, review all four
+claim parts and add narrow source citations for their evidence. Name each
+unresolved part in missingEvidence and keep the overall verdict unknown. An
+observed packet is evidence freshness, not a supported runtime claim. Rejudging
+edits only `packages/kimchi/surface-judgments.json`. The fixture suite uses its
+own gateway and request verdict baselines under
+`checks/fixtures/surface-judgments/` and local expectations, which do not change
+when live claims or verdicts are reviewed. Deliberately edit the live verdict
+file, copying a current packet and hash only as part of that review. There is no
+accept/update operation. Then run:
 
 ```bash
 set -euETo pipefail

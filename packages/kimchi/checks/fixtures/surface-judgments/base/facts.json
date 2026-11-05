@@ -23,5 +23,6 @@
         "value": "https://llm.kimchi.dev"
       }
     ]
-  }
+  },
+  "requestCallers": []
 }
