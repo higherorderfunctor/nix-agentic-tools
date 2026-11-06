@@ -1,4 +1,4 @@
-# cspell:ignore walways
+# cspell:ignore vwalways walways
 # Behavioral test for packages/kiro-cli/lib/wrapPackage.nix — the argv the
 # kiro-cli wrapper actually forwards.
 #
@@ -211,6 +211,21 @@
         '--v3|chat|-w|always|--mode=spec|--require-mcp-startup'           "$O" chat -w always
       expect "caller's attached -walways is the --wrap option" \
         '--v3|chat|-walways|--mode=spec|--require-mcp-startup'            "$O" chat -walways
+      # A short option inside a cluster is the option (clap reads `-vw always` as
+      # `-v -w always`, and `-wv` as `-w` with the value `v`), so injecting beside
+      # it repeats the option and aborts (measured). A scan that matched whole
+      # tokens only fails these; so does one that read on after a value.
+      expect "caller's clustered -vw is the --wrap option" \
+        '--v3|chat|-vw|always|--mode=spec|--require-mcp-startup'          "$O" chat -vw always
+      expect "caller's clustered -vwalways is the --wrap option" \
+        '--v3|chat|-vwalways|--mode=spec|--require-mcp-startup'           "$O" chat -vwalways
+      expect "-wv is --wrap with the value v" \
+        '--v3|chat|-wv|--mode=spec|--require-mcp-startup'                 "$O" chat -wv
+      # `-d` takes a value, so the `w` after it is its value: no --wrap passed.
+      expect "-dw is --delete-session with the value w" \
+        '--v3|chat|-dw|--mode=spec|--require-mcp-startup|--wrap=never'    "$O" chat -dw
+      expect "-v alone is not --wrap" \
+        '--v3|chat|-v|--mode=spec|--require-mcp-startup|--wrap=never'     "$O" chat -v
       expect "caller's --require-mcp-startup is not doubled" \
         '--v3|chat|--require-mcp-startup|--mode=spec|--wrap=never'        "$O" chat --require-mcp-startup
       expect "caller's acp --authMethod alias is the --auth-method option" \
@@ -246,6 +261,12 @@
       expect "-V is not rewritten"             '--v3|-V'                  "$O" -V
       expect "--help is not rewritten"         '--v3|--help'              "$O" --help
       expect "-h is not rewritten"             '--v3|-h'                  "$O" -h
+      # Clustered one-offs: `-rv` is `-r -v`, both once-per-invocation, so the
+      # launch is not rewritten. A scan that matched whole tokens only turns
+      # `-rv` into `chat -rv`.
+      expect "-v alone is not rewritten"       '--v3|-v'                  "$O" -v
+      expect "-rv is not rewritten"            '--v3|-rv'                 "$O" -rv
+      expect "-vr is not rewritten"            '--v3|-vr'                 "$O" -vr
       expect "--help-all is not rewritten"     '--v3|--help-all'          "$O" --help-all
       expect "--resume-id VALUE is not rewritten" \
         '--v3|--resume-id|x'                                              "$O" --resume-id x

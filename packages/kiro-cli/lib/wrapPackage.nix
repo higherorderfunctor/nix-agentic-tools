@@ -59,6 +59,7 @@
     gateOnSubcommand
     idempotentFlagBlock
     injectOptionsBlock
+    injectOptionsWith
     ;
 
   cliOptions = import ./cliOptions.nix {inherit lib;};
@@ -179,14 +180,17 @@ in {
       } (lib.concatStringsSep "\n" [
         (anyOptionBlock {
           options = cliOptions.oneOffTopOptions;
+          shorts = cliOptions.shortOptions.top;
           var = "nat_once";
         })
         "if [ \"$nat_once\" = 0 ] && [ \"$nat_skip\" = 0 ]; then set -- \"$@\" chat; fi"
       ]));
+    # `chat` has a short name for a setting (`-w`), so its scan reads clusters
+    # (`-vw`); no `acp` setting has one.
     chatBlock = gateOnSubcommand {
       subcommands = ["chat"];
       valueFlags = launchValueFlags;
-    } (injectOptionsBlock injections.chat);
+    } (injectOptionsWith {shorts = cliOptions.shortOptions.chat;} injections.chat);
     # Placed after `acp` and before an end-of-options `--`: `--agent-engine` is
     # an `acp` option, not a global, and a token past `--` is a positional.
     acpBlock =

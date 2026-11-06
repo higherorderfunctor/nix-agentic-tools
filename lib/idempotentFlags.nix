@@ -1,3 +1,4 @@
+# cspell:ignore vwalways
 # Generic shell-wrapper helpers: bash blocks that let a wrapper inject launch
 # flags into "$@" without breaking the CLI it wraps. Binary-agnostic; the first
 # consumer is packages/kiro-cli.
@@ -22,6 +23,8 @@
 #     times". Each flag is injected only when absent as an EXACT argv token. The
 #     exact-token match (a per-arg `case`, not a substring scan of "$*") means a
 #     prompt like `chat "explain --tui"` never suppresses the real flag.
+#     Given the CLI's short options (`anyOptionBlock`), a single-dash token is
+#     also read as a cluster, `-vw` being `-v -w`.
 #
 #  3. WRONG SUBCOMMAND — a genuinely per-subcommand option (as opposed to a
 #     global one that was merely misplaced) must not reach subcommands that do
@@ -87,18 +90,66 @@
       ]
     );
 
-  # The `case` patterns matching one option in argv: every long name (`flag` and
-  # its `aliases`) as `--name` or `--name=value`, and the short name as `-x`,
-  # plus the attached form (`-x` directly followed by its value) when the option
-  # takes a value. A short option inside a cluster (`-vw`) is not matched.
-  optionPatterns = {
+  # The `case` patterns matching one option's long spellings in argv: `flag`
+  # and its `aliases`, as `--name` or `--name=value`.
+  longPatterns = {
     flag,
     aliases ? [],
+    ...
+  }:
+    lib.concatMap (name: [(lib.escapeShellArg name) "${lib.escapeShellArg name}=*"]) ([flag] ++ aliases);
+
+  # The `case` patterns matching one option in argv: `longPatterns`, and the
+  # short name as `-x`, plus the attached form (`-x` directly followed by its
+  # value) when the option takes a value. A short option inside a cluster
+  # (`-vw`) is not matched; `anyOptionBlock` reads clusters when it is given
+  # the CLI's `shorts`.
+  optionPatterns = {
     short ? null,
     takesValue ? true,
-  }:
-    lib.concatMap (name: [(lib.escapeShellArg name) "${lib.escapeShellArg name}=*"]) ([flag] ++ aliases)
+    ...
+  } @ option:
+    longPatterns option
     ++ lib.optional (short != null) (lib.escapeShellArg short + lib.optionalString takesValue "*");
+
+  # The shell that reads one token as a cluster of short options, clap's way: the
+  # characters after the single dash are short options read left to right; a
+  # character taking a value ends the cluster, the rest of the token (when
+  # there is any) being its value and otherwise the next token (`nat_value` is
+  # then 1). `matched` are the characters that set `var`; `shorts` maps every
+  # short character the CLI declares to whether it takes a value. A character
+  # in neither ends the scan of the token: nothing is guessed about it.
+  clusterArm = {
+    matched,
+    shorts,
+    var,
+  }: let
+    table = shorts // lib.mapAttrs (_: option: option.takesValue or true) matched;
+    arm = char: takesValue: let
+      commands =
+        lib.optional (matched ? ${char}) "${var}=1"
+        ++ lib.optional takesValue "if [ -z \"$nat_rest\" ]; then nat_value=1; fi; break";
+    in
+      "          ${lib.escapeShellArg char}) "
+      + lib.optionalString (commands != []) (lib.concatStringsSep "; " commands + " ")
+      + ";;";
+  in
+    lib.concatStringsSep "\n" (
+      [
+        "    -?*)"
+        "      nat_rest=\"\${nat_arg#-}\""
+        "      while [ -n \"$nat_rest\" ]; do"
+        "        nat_short=\"\${nat_rest:0:1}\""
+        "        nat_rest=\"\${nat_rest:1}\""
+        "        case \"$nat_short\" in"
+      ]
+      ++ lib.mapAttrsToList arm table
+      ++ [
+        "          *) break ;;"
+        "        esac"
+        "      done ;;"
+      ]
+    );
 
   # Sets shell variable `var` to 1 when any of `options` (records for
   # `optionPatterns`) occurs before any literal `--`, else 0. Only presence is
@@ -106,40 +157,78 @@
   # CLI resolves what the caller asked for. A token past `--` is a positional
   # the wrapped CLI will not honour, so neither does this; an exact match keeps
   # a prompt that merely mentions the option from counting.
+  #
+  # `shorts` (null: not read) is the CLI's table of short options for the
+  # subcommand scanned, `{<char> = takesValue;}` without the dash, as measured
+  # from its `--help`. Given, a single-dash token is read as a cluster
+  # (`clusterArm`) and the options' short names are matched there, so `-vw`,
+  # `-vwalways` and `-wv` are each read as clap reads them; a value-taking short
+  # leaves the next token unread as its value. Without it the short names are
+  # matched as whole tokens only (`optionPatterns`).
   anyOptionBlock = {
     options,
     var,
+    shorts ? null,
   }:
-    lib.concatStringsSep "\n" [
-      "${var}=0"
-      "for nat_arg in \"$@\"; do"
-      "  case \"$nat_arg\" in"
-      "    --) break ;;"
-      "    ${lib.concatStringsSep "|" (lib.concatMap optionPatterns options)}) ${var}=1 ;;"
-      "  esac"
-      "done"
-    ];
+    lib.concatStringsSep "\n" (
+      if shorts == null
+      then [
+        "${var}=0"
+        "for nat_arg in \"$@\"; do"
+        "  case \"$nat_arg\" in"
+        "    --) break ;;"
+        "    ${lib.concatStringsSep "|" (lib.concatMap optionPatterns options)}) ${var}=1 ;;"
+        "  esac"
+        "done"
+      ]
+      else [
+        "${var}=0"
+        "nat_value=0"
+        "for nat_arg in \"$@\"; do"
+        "  if [ \"$nat_value\" = 1 ]; then nat_value=0; continue; fi"
+        "  case \"$nat_arg\" in"
+        "    --) break ;;"
+        "    ${lib.concatStringsSep "|" (lib.concatMap longPatterns options)}) ${var}=1 ;;"
+        "    --*) ;;"
+        (clusterArm {
+          inherit shorts var;
+          matched = lib.listToAttrs (map (option: lib.nameValuePair (lib.removePrefix "-" option.short) option) (lib.filter (option: (option.short or null) != null) options));
+        })
+        "  esac"
+        "done"
+      ]
+    );
 
-  # `anyOptionBlock` for one option: `{flag, aliases?, short?, takesValue?, var}`.
-  optionPresenceBlock = {var, ...} @ option:
+  # `anyOptionBlock` for one option: `{flag, aliases?, short?, takesValue?, var}`,
+  # with the optional `shorts` of `anyOptionBlock`.
+  optionPresenceBlock = {
+    var,
+    shorts ? null,
+    ...
+  } @ option:
     anyOptionBlock {
-      inherit var;
-      options = [(removeAttrs option ["var"])];
+      inherit shorts var;
+      options = [(removeAttrs option ["shorts" "var"])];
     };
 
   # Adds the argv word `token` of each option that the caller has not already
-  # passed (see `optionPatterns` for the spellings), just before an
-  # end-of-options `--` when argv has one — a token past it is a positional —
-  # and last otherwise. `options` are `optionPatterns` records plus `token`;
-  # injected words keep the list's order. An empty list yields "".
-  injectOptionsBlock = options:
+  # passed (see `optionPatterns` for the spellings, `anyOptionBlock` for
+  # `shorts`), just before an end-of-options `--` when argv has one — a token
+  # past it is a positional — and last otherwise. `options` are
+  # `optionPatterns` records plus `token`; injected words keep the list's
+  # order. An empty list yields "".
+  injectOptionsWith = {shorts ? null}: options:
     if options == []
     then ""
     else
       lib.concatStringsSep "\n" (
         ["nat_inject=()"]
         ++ lib.concatMap (option: [
-          (optionPresenceBlock (removeAttrs option ["token"] // {var = flagVar option.flag;}))
+          (optionPresenceBlock (removeAttrs option ["token"]
+            // {
+              inherit shorts;
+              var = flagVar option.flag;
+            }))
           "if [ \"\$${flagVar option.flag}\" = 0 ]; then nat_inject+=(${lib.escapeShellArg option.token}); fi"
         ])
         options
@@ -194,7 +283,10 @@
         )
     );
 in {
-  inherit anyOptionBlock idempotentFlagBlock injectOptionsBlock optionPresenceBlock subcommandBlock;
+  inherit anyOptionBlock idempotentFlagBlock injectOptionsWith optionPresenceBlock subcommandBlock;
+
+  # `injectOptionsWith` with no `shorts`: short names matched as whole tokens.
+  injectOptionsBlock = injectOptionsWith {};
 
   # The `subcommands` entry standing for an invocation that carries NO
   # subcommand — `kiro-cli` on its own. Named rather than written as a bare ""

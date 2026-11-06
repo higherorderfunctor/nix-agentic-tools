@@ -151,6 +151,14 @@ in {
       }
     ];
 
+  # The short options of a tier's help table, `{<char> = takesValue;}` without
+  # the dash: what a scan needs to read a cluster such as `-vw` the way the
+  # parser does (`idempotentFlags.anyOptionBlock`'s `shorts`).
+  shortOptions = lib.mapAttrs (_: table:
+    lib.listToAttrs (lib.concatMap (record:
+        lib.optional (record.short != null) (lib.nameValuePair (lib.removePrefix "-" record.short) record.takesValue)) (lib.attrValues table)))
+  tables;
+
   # The argv words a configured `values` (`{<tier>.<name> = value;}`, as in
   # `cfg.cli`) adds, per tier, as records for `idempotentFlags.injectOptionsBlock`.
   # An unset or false option adds nothing.

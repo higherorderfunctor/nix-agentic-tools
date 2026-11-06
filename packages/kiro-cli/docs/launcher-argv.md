@@ -1,6 +1,6 @@
 # kiro-cli wrapper: the argv contract
 
-<!-- cspell:ignore avante codecompanion cutover walways wnever -->
+<!-- cspell:ignore avante codecompanion cutover vwalways walways wnever -->
 
 > **Last verified:** 2026-11-06 — Kiro CLI 3.0.0 ships one `kiro-cli` binary.
 > The wrapper always prepends `--v3` and adds `--agent-engine=v3` to `acp`
@@ -189,24 +189,25 @@ set, because they need the managed wrapper.
 
 A configured option becomes one `--name=value` word, added only when the caller
 passed none of its spellings before `--`: the long name and aliases as `--x v`
-or `--x=v`, the short name as `-w v` or `-wv`. A short option inside a cluster
-(`-vw`) is not recognized, so injecting beside it would repeat the option, which
-3.0.0 rejects ("cannot be used multiple times"). The word goes after the
-subcommand and any INPUT, in front of an end-of-options `--`, the same placement
-as `acp`'s engine selector.
+or `--x=v`, the short name as `-w v` or `-wv`, and the short name inside a
+cluster of short options (`-vw always`, `-vwalways`), read the way the parser
+reads it (see the scan below). The word goes after the subcommand and any INPUT,
+in front of an end-of-options `--`, the same placement as `acp`'s engine
+selector.
 
 **A bare launch becomes `chat`** when argv before `--` has no subcommand or
 other positional token, none of the once-per-invocation top-level options
 (`--help`, `--version`, `--resume`, `--resume-id`, `--resume-picker` and its
 `--list` alias, `--verbose`, all classified `one-off`, plus the hidden
-`--help-all`), no value option still waiting for its value, and at least one
-chat option adds a word. `chat` is appended after the top-level options, so
-`kiro-cli --agent a` becomes `--v3 --agent a chat ...`. Rejected by the rewrite:
-`chat` has no `-V`/`--version`, no `--list` alias and no `--help-all`, so
-rewriting those would swap a result for an error; and `kiro-cli --agent` would
-read the appended `chat` as the agent's name. `settings`, `login`, `acp`, `mcp`
-and every other subcommand are untouched, as is a bare launch with an INPUT,
-`--`, or no chat option set.
+`--help-all`), whether spelled long, short or inside a cluster (`-rv` is `-r`
+and `-v`, both one-off), no value option still waiting for its value, and at
+least one chat option adds a word. `chat` is appended after the top-level
+options, so `kiro-cli --agent a` becomes `--v3 --agent a chat ...`. Rejected by
+the rewrite: `chat` has no `-V`/`--version`, no `--list` alias and no
+`--help-all`, so rewriting those would swap a result for an error; and
+`kiro-cli --agent` would read the appended `chat` as the agent's name.
+`settings`, `login`, `acp`, `mcp` and every other subcommand are untouched, as
+is a bare launch with an INPUT, `--`, or no chat option set.
 
 Measured on the stock 3.0.0 binary (empty `HOME`, `KIRO_NO_AUTO_UPDATE=1`, stdin
 from `/dev/null`), with `--help` last so a parse failure in any earlier token
@@ -224,12 +225,38 @@ shows first:
 | `--v3 --version`, `--v3 -V`, `--v3 --help-all`, `--v3 --resume-id x --help` | 0    | version or `The Kiro CLI` help, argv not rewritten                      |
 | `--v3 chat --wrap never --wrap=always --help`                               | 2    | `the argument '--wrap <WRAP>' cannot be used multiple times`            |
 
+Short options in a cluster, same conditions. The `-w` rows show the parser
+reading `-vw always` and `-vwalways` as `-v -w always` (a repeat is refused),
+and `-wv` and `-dw` as a value-taking short that takes the rest of the token;
+the `-r` rows show `-rv` and `-vr` as `-r` plus `-v` (a second `--resume` is
+refused):
+
+| argv                                       | exit | first line                                                       |
+| ------------------------------------------ | ---- | ---------------------------------------------------------------- |
+| `--v3 chat -vw always --help`              | 0    | `AI assistant in your terminal`                                  |
+| `--v3 chat -vw always --wrap=never --help` | 2    | `the argument '--wrap <WRAP>' cannot be used multiple times`     |
+| `--v3 chat -vwalways --help`               | 0    | `AI assistant in your terminal`                                  |
+| `--v3 chat -vwalways --wrap=never --help`  | 2    | `the argument '--wrap <WRAP>' cannot be used multiple times`     |
+| `--v3 chat -wv --wrap=never --help`        | 2    | `invalid value 'v' for '--wrap <WRAP>'` (`-w` took `v` as value) |
+| `--v3 chat -dw --wrap=never --help`        | 0    | `AI assistant in your terminal` (`-d` took `w`; `--wrap` is new) |
+| `--v3 chat -v --wrap=never --help`         | 0    | `AI assistant in your terminal`                                  |
+| `--v3 -rv --help`                          | 0    | `The Kiro CLI`                                                   |
+| `--v3 -rv --resume --help`                 | 2    | `the argument '--resume' cannot be used multiple times`          |
+| `--v3 -vr --resume --help`                 | 2    | `the argument '--resume' cannot be used multiple times`          |
+
 `kiro-cli chat --help-all` is rejected (exit 2), which is why the rewrite spares
-`--help-all`. `kiro-usage exec kiro-cli ...` runs the PATH-selected `kiro-cli`,
-the managed wrapper, so these options are added once, there (`usage/runtime.py`,
-`exec_command`); its own `--v3` and `acp` selector mirror exists only to
-classify the launch for capture, and a bare launch is captured the same whether
-or not the wrapper then makes it `chat`.
+`--help-all`.
+
+`kiro-usage exec kiro-cli ...` runs the PATH-selected `kiro-cli`, the managed
+wrapper, and its own argv logic does insert two words before it: `--v3` unless a
+token before `--` is one (`usage/runtime.py:278`) and, for `acp`,
+`--agent-engine=v3` before `--` unless an `--agent-engine` is there
+(`usage/runtime.py:284`), and the result is what it executes (`os.execvpe` at
+`:292`, `wait_command` at `:295`). That is idempotent with the launcher: the
+launcher's scans find both selectors already present and add nothing, so each
+appears once. The four options of this section are injected only by the
+launcher; `exec` never adds one, and a bare launch is captured the same whether
+or not the launcher then makes it `chat`.
 
 ## How the scan decides (`lib/idempotentFlags.nix`)
 
@@ -250,6 +277,20 @@ stops at the first token that is neither an option nor an option's **value**:
   upstream rejects `kiro-cli --model acp` at the top level, so nothing launches
   and the scan reads `acp` as the subcommand. The `--opt=value` form needs no
   entry: one token, handled by the `-*` arm.
+- **Short options are read as clusters, from the same table.** The scan that
+  looks for a configured option (or a top-level one-off) is given the short
+  options of the subcommand's `--help` table (`shortOptions` in
+  `lib/cliOptions.nix`: `chat` has `-a -d -f -h -l -r -v -w`, of which `-d`,
+  `-f` and `-w` take a value; the top level has `-h -r -v -V`, none taking one).
+  A token `-abc` (one dash, not `--`, not `-` alone) is read left to right, as
+  the parser does: a short that takes a value ends the token, the rest of it
+  being the value or, when nothing follows, the next token; a character not in
+  the table ends the token without a guess. So `chat -vw always` and
+  `chat -vwalways` have `--wrap`, `chat -wv` has `-w` with the value `v`,
+  `chat -dw` has `-d` with the value `w` and no `--wrap`, and a bare `-rv` or
+  `-vr` has once-per-invocation options. Only callers that pass `shorts` read
+  clusters; the `acp` scan, which has no setting with a short name, and every
+  other caller keep whole-token matching.
 - **`--` parks on a sentinel** no gate matches, so gated injection declines
   rather than guessing.
 - **A dangling value option is visible.** `nat_skip` is 1 when the scan ends
@@ -464,10 +505,11 @@ from one source, so Darwin has no host-run job for them.
   selector, the absence of `--trust-tools`, and the env/PATH export paths.
 - `packages/kiro-cli/checks/kiro-wrapper-argv.nix` also covers the configured
   options: placement after `chat` and `acp`, the caller's `--wrap=never`,
-  `--wrap never`, `-w`, `-walways`, `--authMethod`, `--` with options after it,
-  the bare-launch rewrite and each argv it must leave alone (`--version`, `-V`,
-  `--help`, `-h`, `--help-all`, `--resume-id x`, `settings`, `login`, a prompt,
-  a dangling `--agent`), and that no trust flag or Kiro home appears.
+  `--wrap never`, `-w`, `-walways`, the clusters `-vw always`, `-vwalways`,
+  `-wv` and `-dw`, `--authMethod`, `--` with options after it, the bare-launch
+  rewrite and each argv it must leave alone (`--version`, `-V`, `--help`, `-h`,
+  `--help-all`, `-v`, `-rv`, `-vr`, `--resume-id x`, `settings`, `login`, a
+  prompt, a dangling `--agent`), and that no trust flag or Kiro home appears.
 - `packages/kiro-cli/checks/module-eval.nix` (`module-kiro-launch-option-*`,
   `module-kiro-{hm,devenv}-launch-options*`,
   `module-kiro-package-null-explicit-launch-options-warn`) — the classification
