@@ -102,10 +102,12 @@ in {
         && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
     );
 
-    # The measured top-level value options are exactly the three the 3.0.0
-    # parser takes a value for: a list that carried `--model` (chat-only) or the
-    # no-value `--resume-picker` alias `--list` would misread their neighbors.
-    # A value option's short name and aliases are skipped too.
+    # The measured top-level value options include the three the 3.0.0 parser
+    # takes a value for; membership, so an upstream addition clears by
+    # regeneration. A measurement that dropped one of them (the old hand list
+    # lacked `--repo`) would treat that option's value as the subcommand. The
+    # synthetic table below is exact: a `valueOptions` that skipped a value
+    # option's short name or aliases, or kept a no-value option, would differ.
     module-kiro-launch-value-options = mkTest "kiro-launch-value-options" (
       let
         launchValueOptions = import ../lib/launchValueOptions.nix {inherit lib;};
@@ -115,8 +117,7 @@ in {
           takesValue = true;
         };
       in
-        launchValueOptions.measured
-        == ["--agent" "--repo" "--resume-id"]
+        lib.all (name: lib.elem name launchValueOptions.measured) ["--agent" "--repo" "--resume-id"]
         && launchValueOptions.valueOptions {
           "--flag" =
             option

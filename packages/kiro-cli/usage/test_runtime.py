@@ -27,7 +27,19 @@ from mitm_addon import UsageCapture
 import runtime
 
 # The top-level options that take a value, as the packaged tool is handed them: the check exports the list measured from the binary's help.
-LAUNCH_VALUE_OPTIONS = tuple(os.environ["KIRO_LAUNCH_VALUE_OPTIONS"].split(","))
+def _launch_value_options():
+    measured = os.environ.get("KIRO_LAUNCH_VALUE_OPTIONS")
+    if not measured:
+        raise RuntimeError(
+            "KIRO_LAUNCH_VALUE_OPTIONS is unset. Export the measured list, comma separated, e.g. "
+            "KIRO_LAUNCH_VALUE_OPTIONS=\"$(nix eval --impure --raw --expr 'let lib = (builtins.getFlake \"nixpkgs\").lib; "
+            "in lib.concatStringsSep \",\" (import ./packages/kiro-cli/lib/launchValueOptions.nix {inherit lib;}).measured')\" "
+            "(see packages/kiro-cli/usage/README.md)"
+        )
+    return tuple(measured.split(","))
+
+
+LAUNCH_VALUE_OPTIONS = _launch_value_options()
 
 
 class SummaryTests(unittest.TestCase):
