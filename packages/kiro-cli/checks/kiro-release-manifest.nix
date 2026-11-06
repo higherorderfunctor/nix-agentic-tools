@@ -4,6 +4,7 @@
 {pkgs, ...}: let
   release = import ../lib/release.nix;
   select = release.mkSelectRelease pkgs;
+  decide = release.mkDecideUpdate pkgs;
   fixtures = ./fixtures/release-manifest;
 in {
   checks.kiro-release-manifest = pkgs.runCommand "kiro-release-manifest" {} ''
@@ -44,6 +45,26 @@ in {
     expect_refusal stale-download \
       '(.packages[] | select(.download == "3.1.0/kirocli-universal-darwin.tar.gz") | .download) = "3.0.0/kirocli-universal-darwin.tar.gz"' \
       aarch64-darwin 'is not under manifest version 3.1.0'
+
+    # Update decision, against sources.json pins written by hand. The pin
+    # equals the selection: skip. A same-version pin with one old URL must
+    # update; a decision on version alone would skip it. A pin at another
+    # version with equal URLs must update; a decision on URLs alone would skip
+    # it.
+    pin() {
+      "$jq" -n --arg v "$1" --arg l "$2" --arg d "$3" '{
+        version: $v,
+        "x86_64-linux": {url: $l, hash: "sha256-x"},
+        "aarch64-darwin": {url: $d, hash: "sha256-y"}
+      }' > "$4"
+    }
+    base=https://desktop-release.q.us-east-1.amazonaws.com
+    pin 3.1.0 $base/3.1.0/kirocli-x86_64-linux.tar.gz $base/3.1.0/kirocli-universal-darwin.tar.gz same.json
+    [ "$(${decide} selected.json same.json)" = skip ]
+    pin 3.1.0 $base/3.1.0/kirocli-x86_64-linux-old.tar.gz $base/3.1.0/kirocli-universal-darwin.tar.gz renamed.json
+    [ "$(${decide} selected.json renamed.json)" = update ]
+    pin 3.0.0 $base/3.1.0/kirocli-x86_64-linux.tar.gz $base/3.1.0/kirocli-universal-darwin.tar.gz bumped.json
+    [ "$(${decide} selected.json bumped.json)" = update ]
 
     touch "$out"
   '';

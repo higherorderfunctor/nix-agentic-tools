@@ -46,8 +46,24 @@ in rec {
       ''} "$1"
     '';
 
+  # `decide-kiro-update <selection.json> <sources.json>` prints `skip` when the
+  # selection's version and every selected URL equal what sources.json pins, and
+  # `update` otherwise. Comparing URLs as well as the version catches a manifest
+  # that renames an artifact without bumping its version.
+  mkDecideUpdate = pkgs:
+    pkgs.writeShellScript "decide-kiro-update" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${pkgs.jq}/bin/jq -r --slurpfile pinned "$2" \
+        ${pkgs.lib.escapeShellArg ''
+        $pinned[0] as $p
+        | if .version == $p.version and (.urls | to_entries | all($p[.key].url == .value))
+          then "skip" else "update" end
+      ''} "$1"
+    '';
+
   # passthru.updateScript: reads the manifest once, selects every system's
-  # entry from that document, and, when the version moved, prefetches each URL
+  # entry from that document, and, when the version or any selected URL moved, prefetches each URL
   # and writes version plus {url, hash} per system to sourcesFile. It is owner-
   # local because mkUpdateScript derives a URL from a version template, while
   # here the manifest names the file.
@@ -68,7 +84,7 @@ in rec {
 
       latest=$("$jq" -r '.version' "$work/selection.json")
       current=$("$jq" -r '.version' "${sourcesFile}")
-      if [ "$latest" = "$current" ]; then
+      if [ "$("${mkDecideUpdate pkgs}" "$work/selection.json" "${sourcesFile}")" = skip ]; then
         echo "kiro-cli: already at $current"
         exit 0
       fi
