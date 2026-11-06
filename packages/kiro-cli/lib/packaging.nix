@@ -282,6 +282,26 @@ rec {
       '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "$out"
   '';
 
+  # The option tables of `kiro-cli --help`, `chat --help` and `acp --help`
+  # merged into the static raw `static`, written to "$out". Unlike
+  # `mkKiroExtract` this EXECUTES the payload's binary, so it runs only where
+  # that binary does: clap compiles each platform's tables from one source, so
+  # one measurement on x86_64-linux stands for both, and no Darwin job is added
+  # (facts-architecture.md, One file, carried per host). `cli-help.py` runs it
+  # with an empty HOME, auto-update off and no stdin.
+  #   binary: the Linux payload's `kiro-cli`.
+  #   static: the static raw of the same release.
+  mkKiroHelpExtract = {
+    binary,
+    pkgs,
+    static,
+  }: ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${pkgs.python3}/bin/python3 ${../extract/cli-help.py} --binary ${binary} > help.json
+    ${pkgs.jq}/bin/jq -S -s '.[0] * .[1]' ${static} help.json > "$out"
+  '';
+
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to
   # `treatment_percent: 100` / `segment: "all"` with no `channel` gate.
   #

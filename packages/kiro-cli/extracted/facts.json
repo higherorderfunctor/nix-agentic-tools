@@ -1,4 +1,9 @@
 {
+  "cli.options.<name>.<name>": {
+    "source": "host-run",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
   "hookTriggerAliases": {
     "source": "static",
     "type": "object"
