@@ -34,6 +34,11 @@
     "systems": ["x86_64-linux"],
     "type": "object"
   },
+  "requestCallers": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "list"
+  },
   "requestGuards": {
     "source": "static",
     "systems": ["x86_64-linux"],

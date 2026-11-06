@@ -1,6 +1,6 @@
 ## Kimchi egress report
 
-> **Last verified:** 2026-11-03 — the producer-boundary fixture checks guard
+> **Last verified:** 2026-11-05 — the producer-boundary fixture checks guard
 > joins, explicit absence and preservation of legacy report fields. Scripts in
 > `packages/kimchi/extract/egress/` consume `egressScan`, `environment`,
 > `network`, `regionRegistry`, `requestGuards` and `resourceDefinitions` through
@@ -38,8 +38,8 @@ it reaches, empty for a literal no call site reads. File labels are the fact's
 own: `src/...` for Kimchi, and `@earendil-works/...` or `pi-mcp-adapter/...` for
 pi and its adapter. The scanner's fields keep its `kimchi/` and `pi/` labels.
 
-The three additional CodeQL fields come through `lib.extracted` in the same fact
-input. `resourceDefinitions` preserves declared defaults and restart
+The declaration and guard CodeQL fields come through `lib.extracted` in the same
+fact input. `resourceDefinitions` preserves declared defaults and restart
 requirements; missing restart declarations are null. `regionRegistry` preserves
 every modeled region field and the default-region declaration with source
 locations. Neither field describes effective enablement or override precedence.

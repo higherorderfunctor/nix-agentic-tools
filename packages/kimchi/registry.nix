@@ -29,14 +29,16 @@
     };
     # kimchi-codeql: the release's CodeQL database, its query runner, the
     # local query loop, and the environment, network, regionRegistry,
-    # requestGuards and resourceDefinitions facts the database produces.
+    # requestCallers, requestGuards and resourceDefinitions facts the database produces.
     kimchi-codeql = {
       scopes = [
         "packages/${facetOwner}/checks/fixtures/codeql-environment/**"
         "packages/${facetOwner}/checks/fixtures/network-expected.txt"
         "packages/${facetOwner}/checks/fixtures/network/**"
+        "packages/${facetOwner}/checks/fixtures/request-callers/**"
         "packages/${facetOwner}/checks/fixtures/request-evidence/**"
         "packages/${facetOwner}/checks/kimchi-codeql-network.nix"
+        "packages/${facetOwner}/checks/kimchi-codeql-request-callers.nix"
         "packages/${facetOwner}/checks/kimchi-codeql-request-evidence.nix"
         "packages/${facetOwner}/checks/kimchi-codeql.nix"
         "packages/${facetOwner}/extract/environment.jq"
@@ -44,6 +46,7 @@
         "packages/${facetOwner}/lib/codeql.nix"
         "packages/${facetOwner}/lib/network.jq"
         "packages/${facetOwner}/lib/network.nix"
+        "packages/${facetOwner}/lib/request-callers.jq"
         "packages/${facetOwner}/lib/request-evidence.nix"
         "packages/${facetOwner}/ql/**"
       ];
@@ -51,6 +54,11 @@
         {
           location = "package";
           name = "kimchi-codeql";
+          dir = facetOwner;
+        }
+        {
+          location = "package";
+          name = "kimchi-codeql-callers";
           dir = facetOwner;
         }
         {

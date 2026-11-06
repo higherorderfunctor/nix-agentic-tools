@@ -95,6 +95,7 @@
     environment = (import ../../../extract/environment.nix {inherit codeql pkgs;}).surface;
     network = network.fact;
     regionRegistry = "${requestEvidence.facts}/regionRegistry.json";
+    requestCallers = "${requestEvidence.facts}/requestCallers.json";
     requestGuards = "${requestEvidence.facts}/requestGuards.json";
     resourceDefinitions = "${requestEvidence.facts}/resourceDefinitions.json";
   };

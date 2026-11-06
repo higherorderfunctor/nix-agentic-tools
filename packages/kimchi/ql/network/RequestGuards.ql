@@ -68,8 +68,7 @@ from
   DataFlow::SourceNode source, string kind, string key, boolean condition,
   string outcome
 where
-  exists(requestLibrary(request)) and
-  exists(requestTarget(request)) and
+  eligibleRequest(request) and
   guardSource(source, kind, key) and
   source.getContainer() = request.getContainer() and
   test.getEnclosingFunction() = request.asExpr().getEnclosingFunction() and
