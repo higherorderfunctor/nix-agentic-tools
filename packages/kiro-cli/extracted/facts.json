@@ -4,6 +4,11 @@
     "systems": ["x86_64-linux"],
     "type": "object"
   },
+  "cli.options.<name>.<name>.possibleValues": {
+    "source": "host-run",
+    "systems": ["x86_64-linux"],
+    "type": "set"
+  },
   "hookTriggerAliases": {
     "source": "static",
     "type": "object"

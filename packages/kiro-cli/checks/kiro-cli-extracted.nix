@@ -156,33 +156,25 @@
             contains = "chat.enableTangentMode";
             key = "workspaceOverridableSettings";
           }
-          # The block form `Possible values:` and an alias on its own line.
-          (optionNeed "acp" "--auth-method" {
-            aliases = ["--authMethod"];
-            possibleValues = ["cli" "client"];
-            takesValue = true;
-            valueName = "METHOD";
-          })
-          # The inline form `[possible values: …]`, in printed order.
-          (optionNeed "acp" "--agent-engine" {
-            possibleValues = ["v2" "v1" "v3"];
-            takesValue = true;
-            valueName = "ENGINE";
-          })
-          (optionNeed "chat" "--format" {
-            possibleValues = ["plain" "json" "json-pretty"];
-            short = "-f";
-            takesValue = true;
-            valueName = "FORMAT";
-          })
-          # The compact top-level layout: an alias on a continuation line.
-          (optionNeed "top" "--resume-picker" {aliases = ["--list"];})
-          # `...` marks a count flag.
-          (optionNeed "top" "--verbose" {
-            count = true;
-            short = "-v";
-          })
-          # The top-level options that take a value.
+          # Vocabulary no code here consumes is pinned by membership, so an
+          # upstream addition shows only as drift of the committed raw.
+          # The inline form `[possible values: …]`; the launcher appends `v3`.
+          {
+            contains = "v3";
+            key = "cli.options.acp.--agent-engine.possibleValues";
+          }
+          # The block form `Possible values:`.
+          {
+            contains = "cli";
+            key = "cli.options.acp.--auth-method.possibleValues";
+          }
+          {
+            contains = "json";
+            key = "cli.options.chat.--format.possibleValues";
+          }
+          # The top-level options that take a value: the scan list of
+          # lib/launchValueOptions.nix is derived from this table, so these
+          # records are exact.
           (optionNeed "top" "--agent" {
             takesValue = true;
             valueName = "AGENT";
