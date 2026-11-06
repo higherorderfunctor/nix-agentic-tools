@@ -10,7 +10,7 @@
 # tools to either the inherited PATH or an explicit `environmentVariables.PATH`
 # without capturing the evaluator's PATH or replacing the caller's environment.
 #
-# On Linux the wrapper sits OUTSIDE nixpkgs' FHS package; every export it
+# On Linux the wrapper sits OUTSIDE this package's own FHS env; every export it
 # makes is inherited across bubblewrap. `useFhsSandbox = false` instead wraps
 # the same pinned `passthru.unwrapped` payload directly.
 #

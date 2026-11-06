@@ -278,7 +278,7 @@ inherited value remains after the prefix. Setting the Kiro-specific PATH entry
 to null suppresses a root `ai.environmentVariables.PATH`, restoring the ambient
 base before `extraPackages` is prepended.
 
-That is not final override precedence on Linux. The upstream FHS `/init` then
+That is not final override precedence on Linux. This package's FHS `/init` then
 sources `/etc/profile`, which puts `/run/wrappers/bin:/usr/bin:/usr/sbin` ahead
 of the inherited entries. The requested package remains visible, but a
 same-named command already in the synthesized root wins. This option is for
@@ -288,22 +288,17 @@ The empty list is inert. A non-empty list does not alter argv, and
 `packages/kiro-cli/checks/kiro-wrapper-argv.nix` runs the launcher to assert the
 prefix and inherited tail together.
 
-On Linux this crosses the upstream FHS visibility boundary because `/nix` is
-mounted and PATH is preserved; it does not merge packages into the synthesized
-root. See [`fhs-sandbox.md`](fhs-sandbox.md) for why that distinction matters.
+On Linux this crosses the FHS visibility boundary because `/nix` is mounted and
+PATH is preserved; it does not merge packages into the synthesized root. See
+[`fhs-sandbox.md`](fhs-sandbox.md) for why that distinction matters.
 
 ## Linux FHS layer
 
-Since f13ff45a the public Linux package wraps `kiro-cli-unwrapped` in
-`buildFHSEnv`. nixpkgs 9ddfd8a consolidated the per-command environments into
-one shared environment: `$out/bin/*` are thin wrappers selecting a command,
-`$out/libexec/kiro-cli/kiro-cli-wrapper` enters bubblewrap, and `/init`
-delegates through a three-line dispatcher. This repo supplies its own pinned
-payload to that expression; its `wrapProgram` shim lives on
-`passthru.unwrapped`. The module's launcher sits outside the FHS package, and
-argv and environment pass through every layer. nixpkgs' FHS expression still
-wraps `kiro-cli-chat` and `kiro-cli-term`, which 3.0.0 does not ship;
-`package.nix` removes those two wrappers, so only `bin/kiro-cli` is shipped. See
+The public Linux package is this repo's own `buildFHSEnv` around the pinned
+payload: `$out/bin/kiro-cli` is the bubblewrap launcher and `/init` execs the
+payload's `kiro-cli` directly, so only `bin/kiro-cli` is shipped. The payload's
+`wrapProgram` shim lives on `passthru.unwrapped`. The module's launcher sits
+outside the FHS package, and argv and environment pass through every layer. See
 [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule, shadowed set and loader
 trap. Darwin builds no FHS layer.
 
@@ -373,8 +368,9 @@ parse rejection from an accepted flag.
   3.0.0 binary through the wrapper, and the raw `acp --agent-engine=v3`
   measurement.
 - `packages/kiro-cli/checks/kiro-fhs-contract.nix` — structurally inspects the
-  realized upstream Linux command wrapper, shared launcher, init, dispatcher and
-  profile, without executing bubblewrap inside the Nix build sandbox.
+  realized Linux launcher, init and profile of the package's own FHS env, for
+  the default and a selected variant, without executing bubblewrap inside the
+  Nix build sandbox.
 - `packages/kiro-cli/checks/module-eval.nix` — the generated bash shape, the
   removed `ai.kiro.cli.v3` option, and the Home Manager `permissions.yaml`
   (`module-kiro-hm-permissions-trusted-tools`).

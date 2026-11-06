@@ -1,20 +1,20 @@
-# The nixpkgs FHS sandbox: what kiro can and cannot see
+# The FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-11-05 — the 3.0.0 payload ships only `kiro-cli`; the
-> module's launcher sits outside the FHS package and nothing is placed inside
-> it. The recorded upstream sandbox measurements below predate 3.0.0 and are
+> **Last verified:** 2026-11-06 — this package builds its own `buildFHSEnv`
+> around the 3.0.0 payload, which ships only `kiro-cli`; the module's launcher
+> sits outside the FHS package and nothing is placed inside it. The recorded
+> sandbox measurements below predate the move to this package's own env and are
 > otherwise unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
-**This is not Kiro's sandbox.** It is an upstream nixpkgs wrapper: since the
-package split, `pkgs.ai.kiro-cli` on Linux routes its commands through one
-shared `buildFHSEnv` sandbox. `$out/bin/*` are thin command-selecting wrappers;
-`$out/libexec/kiro-cli/kiro-cli-wrapper` is the bubblewrap launcher. nixpkgs
-makes a wrapper for each of three commands; the 3.0.0 payload supplies only
-`kiro-cli`, so `package.nix` removes the `kiro-cli-chat` and `kiro-cli-term`
-wrappers in its `extraInstallCommands`, and `bin/` holds exactly `kiro-cli` on
-both platforms (asserted by `kiro-fhs-contract`).
+**This is not Kiro's sandbox.** It is this package's own `buildFHSEnv`:
+`pkgs.ai.kiro-cli` on Linux is one environment whose `bin/kiro-cli` is the
+bubblewrap launcher and whose `/init` execs the pinned payload's `kiro-cli`
+directly. Its targets are the payload, `stdenv.cc.cc.lib` (libstdc++ and
+libgcc_s for the extracted `bun`) and `wl-clipboard` (Wayland clipboard). The
+3.0.0 payload supplies one command, so `bin/` holds exactly `kiro-cli` on both
+platforms (asserted by `kiro-fhs-contract`).
 
 **It is also a different axis from Kiro's own workspace-root allowlist** (see
 `dev/references/kiro-workflow-ref.md`). The discriminator is cheap: bwrap has no
@@ -22,9 +22,8 @@ concept of a workspace root and would never mention `additionalDirectories`. An
 error naming an allowed root is the other axis; this one produces "command not
 found" and loader failures.
 
-**None of it applies to darwin**, where upstream returns the payload through
-`kiro-cli-unwrapped.overrideAttrs` and builds no FHS layer at all. A Mac sees no
-change from this wrapper, Homebrew included.
+**None of it applies to darwin**, where the package is the payload itself and no
+FHS layer is built. A Mac sees no change from this wrapper, Homebrew included.
 
 ## The bind rule
 
@@ -114,7 +113,7 @@ same-named FHS command therefore wins over the added package on Linux.
 
 ## Opting out of the FHS wrapper
 
-The default stays upstream-compatible:
+The default keeps the FHS env:
 
 ```nix
 ai.kiro.cli.useFhsSandbox = true;
@@ -137,27 +136,27 @@ fails with a named assertion instead of silently retaining the sandbox. Direct
 package consumers can make the same choice with `pkgs.ai.kiro-cli.unwrapped`. On
 darwin that route selects the already-direct package and is therefore a no-op.
 
-The cost is real. nixpkgs added the FHS environment because Kiro dynamically
-extracts a generic-glibc `bun`; without the compatibility root, that path may
-fail on NixOS or another non-FHS host. This is why the option is default-on and
-opt-out rather than an automatic platform guess.
+The cost is real. The FHS environment exists because Kiro dynamically extracts a
+generic-glibc `bun`; without the compatibility root, that path may fail on NixOS
+or another non-FHS host. This is why the option is default-on and opt-out rather
+than an automatic platform guess.
 
 `ai.shell` remains `null` by default. The module does not silently choose a
 shell merely because the FHS root contains bash and may hide a host zsh. Set
 `ai.shell = pkgs.bashInteractive` for a store-backed explicit shell, or opt out
 of FHS when preserving host namespace behavior is the intended tradeoff.
 
-`packages/kiro-cli/checks/kiro-fhs-contract.nix` guards the upstream assumptions
-behind this behavior. It verifies that the upstream `kiro-cli` command wrapper
-selects the shared FHS launcher, then inspects that launcher and fails if
-bubblewrap stops binding `/nix`, adds a known PATH-clearing or replacement
-argument, changes how the generated `/etc` is mounted, moves `/etc/profile`
-sourcing after Kiro's exec, changes the shared command dispatcher, adds another
-init/profile/dispatcher PATH mutation, or removes the incoming PATH from the
-profile assignment. It also proves a rollout and prompt-patched payload keeps
-its own KAS path. Those structural changes therefore force this document and the
-implementation to be re-measured instead of silently invalidating
-`extraPackages`.
+`packages/kiro-cli/checks/kiro-fhs-contract.nix` guards the launcher shape
+behind this behavior. For the default package and a prompt- and rollout-patched
+variant it verifies that `bin/` holds exactly `kiro-cli`, then inspects that
+launcher and fails if bubblewrap stops binding `/nix`, adds a known
+PATH-clearing or replacement argument, changes how the generated `/etc` is
+mounted, moves `/etc/profile` sourcing after Kiro's exec, stops the init from
+running the pinned payload directly, adds another init/profile PATH mutation, or
+removes the incoming PATH from the profile assignment. It also proves the
+patched payload keeps its own KAS path. Those structural changes therefore force
+this document and the implementation to be re-measured instead of silently
+invalidating `extraPackages`.
 
 The check is deliberately structural. It does not execute bubblewrap inside a
 Nix build sandbox, where nested user-namespace support is not portable. The
@@ -231,8 +230,8 @@ no sandbox.
 ## Diagnostic
 
 ```bash
-# Does the package expose the shared bwrap path? Then these rules apply.
+# Is bin/kiro-cli the bwrap launcher? Then these rules apply.
 K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli)
-readlink -f "$K/libexec/kiro-cli/kiro-cli-wrapper"
+readlink -f "$K/bin/kiro-cli"
 ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # the whole world (233 pre-3.0)
 ```

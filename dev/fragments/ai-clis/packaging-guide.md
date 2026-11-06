@@ -1,10 +1,10 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-11-05 — Kiro 3.0.0's payload is owned here and
-> re-wrapped by nixpkgs' FHS package. Two native package shards per system
-> exclude patched Kiro; its required validation legs use Ubuntu when kiro-scope
-> finds no relevant changes. The committed devenv package lists contain no
-> kiro-cli entry with either CI setting; local runtime opt-ins are separate.
+> **Last verified:** 2026-11-06 — Kiro 3.0.0's payload and its Linux FHS env are
+> owned here. Two native package shards per system exclude patched Kiro; its
+> required validation legs use Ubuntu when kiro-scope finds no relevant changes.
+> The committed devenv package lists contain no kiro-cli entry with either CI
+> setting; local runtime opt-ins are separate.
 
 ### Overview
 
@@ -33,9 +33,10 @@ opt-in. Repository code reads them from `ciPackages.<system>`.
 
 ### Build Patterns
 
-**overrideAttrs binary** (kiro-cli): overrides nixpkgs' `kiro-cli-unwrapped`
-derivation to pin the version and `src` from a per-platform `sources.json`, then
-re-composes the public package through upstream's wrapper.
+**Owned payload binary** (kiro-cli): builds its own `stdenv.mkDerivation`
+payload from the per-platform release tarball pinned in `sources.json`, then on
+Linux wraps it in this package's own `buildFHSEnv` (see "Owning the payload and
+the Linux FHS env" below). Nothing is taken from nixpkgs' `kiro-cli`.
 
 **Source override** (chatgpt-codex): `pkgs.codex.override` swaps in
 `mkRustPlatform {inherit pkgs sources sourcesFile; pname = "chatgpt-codex"; sourceRoot = "codex-rs";}`,
@@ -218,16 +219,16 @@ Supporting properties:
   hash, which is exactly why one sat unnoticed in a cache listing. The patched
   build is now `kiro-cli-unwrapped-rollout-<features>-<version>`, gated inside
   `optionalAttrs (rolloutFeatures != [])` so the default derivation is
-  untouched. Darwin needs the rename re-applied in the OUTER `overrideAttrs`,
-  because upstream's `kiro-cli-unwrapped.overrideAttrs {pname = "kiro-cli";}`
-  clobbers it otherwise.
-- **The rename cannot reach the linux FHS intermediates.** Upstream originally
-  hardcoded one `pname = executableName` per environment and now hardcodes
-  `pname = "kiro-cli"` for the consolidated environment. Neither form consults
-  `kiro-cli-unwrapped.pname`, so `-bwrap` / `-fhsenv-rootfs` are identical
-  strings for both variants. They carry no proprietary bytes and are inert
-  without the unwrapped path — but it is why the filter is blunt rather than
-  surgical.
+  untouched. The exported package is renamed `kiro-cli-<rolloutSuffix>` as well:
+  on Linux through the `name` of the own `buildFHSEnv` (the rollout branch
+  only), on Darwin through the `pname` of the payload's `overrideAttrs`. The
+  default keeps `kiro-cli`.
+- **The FHS env's intermediates name themselves.** `-bwrap`, `-fhsenv-rootfs`
+  and `-init` come from `buildFHSEnv`, which names them from the env's
+  `pname`/`name`, not from the payload's `pname`. Their store paths already
+  differ per variant, because the rootfs and the init reference the selected
+  payload. Nothing asserts how they are named, which is why the filter matches
+  every kiro-named path rather than picking layers.
 
 Both knobs are configuration, so the `kiro-patched` job's "Assert the patched
 output is not published" step asserts the OUTCOME. It enumerates the patched
@@ -241,13 +242,13 @@ and a tripwire that can only pass is worse than none.
 Getting that step right took wrong versions, and each failure mode is worth
 keeping because none is specific to Kiro:
 
-- **Assert on the WHOLE patched closure, shared FHS pieces included.** The
-  dispatcher, `-init` script, and `-fhsenv-profile` tree are byte-identical
-  across both variants and share a store path. The step used to subtract the
-  unpatched closure so those paths, published before the filter reached
-  `ci.yml`, did not read as leaks. The operator purged them (2026-10-10, every
-  kiro path in the pinned closure answers 404), so the subtraction is gone and
-  any kiro path that answers 200 fails the step.
+- **Assert on the WHOLE patched closure, FHS pieces included.** The step used to
+  subtract the unpatched closure, because the FHS pieces of the earlier upstream
+  wrapper (dispatcher, `-init` script, `-fhsenv-profile` tree) were
+  byte-identical across variants and had been published before the filter
+  reached `ci.yml`, so they did not read as leaks. The operator purged them
+  (2026-10-10, every kiro path in the pinned closure answers 404), so the
+  subtraction is gone and any kiro path that answers 200 fails the step.
 - **An emptiness guard is not enough.** A large, well-formed, entirely useless
   list passes `[ -z ]` and makes the loop ask nothing. The step requires the
   patched closure listing to contain a kiro path, so a shape change is one loud
@@ -272,7 +273,7 @@ also covers that payload. Native package and KAS share the fetched source; KAS
 extracts directly from it, avoiding a dependency cycle. See the Kiro launcher
 fragment for archive validation, patch selection and runtime checks.
 
-### Owning the payload, re-wrapping upstream's FHS package
+### Owning the payload and the Linux FHS env
 
 kiro-cli no longer overrides nixpkgs' `kiro-cli-unwrapped`: since 3.0.0 the
 release ships one `kiro-cli` binary in a `kirocli/` tarball on both platforms,
@@ -280,8 +281,9 @@ while that derivation's install phase still names the pre-3.0 files
 (`kiro-cli-chat`, `kiro-cli-term`, a Darwin `.app` from a DMG).
 `packages/kiro-cli/packages/ai/kiro-cli/package.nix` therefore owns the payload
 with `stdenv.mkDerivation` (`sourceRoot = "kirocli"`, `versionCheckHook` with
-`doInstallCheck = true`) and hands it to nixpkgs' public `kiro-cli` through
-`.override {kiro-cli-unwrapped = …;}`, keeping upstream's Linux FHS sandbox. One
+`doInstallCheck = true`) and, on Linux, builds its own `pkgs.buildFHSEnv` around
+it (targets: the payload, `stdenv.cc.cc.lib`, `wl-clipboard`; the runScript
+execs the payload's `kiro-cli`), so `bin/` holds exactly one command. One
 `releaseUrls` table feeds both the fetched sources and the updater, so a build
 that fetches a platform's tarball proves the updater's URL for it.
 

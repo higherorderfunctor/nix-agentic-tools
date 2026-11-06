@@ -1,4 +1,4 @@
-# Kiro CLI — the pinned standalone release, wrapped by nixpkgs' public package.
+# Kiro CLI — the pinned standalone release, with its own FHS env on Linux.
 # Per-platform sources in sources.json, managed by updateScript.
 {
   pkgs,
@@ -181,69 +181,50 @@
       # An empty `postInstallCheck` would still land in the build env and fork
       # the default drvPath for every consumer who never enables a feature.
       // pkgs.lib.optionalAttrs (rolloutFeatures != []) {
-        # The proprietary binary the rollout patch rewrites. On linux this is
-        # the only layer the rename reaches: upstream's FHS wrapper hardcodes
-        # `pname = "kiro-cli"` for the shared environment, so its `-bwrap` /
-        # `-fhsenv-rootfs` intermediates keep stock names; they carry no
-        # proprietary bytes and are inert without this path.
+        # The proprietary binary the rollout patch rewrites.
         pname = "kiro-cli-unwrapped-${rolloutSuffix}";
         postInstallCheck = vu.kiroRolloutVerify;
       });
+    # `unwrapped` names the direct payload on both platforms, which the
+    # locator's failure text and `useFhsSandbox = false` rely on.
+    passthru = pinned.passthru // {unwrapped = pinned;};
+
+    # Rollout builds are renamed at the exported attribute as well as at the
+    # payload, so a patched build is identifiable where consumers install it.
+    # The default keeps its name, because renaming it would fork its drvPath
+    # for every consumer.
+    exportedName = "kiro-cli-${rolloutSuffix}";
   in
-    # Re-wrap through upstream's own expression rather than reimplementing it,
-    # so the Linux FHS sandbox (and whatever upstream adds to that wrapper
-    # next) comes along for free.
-    #
-    # `passthru` is NOT a derivation input, so re-attaching ours to the
-    # wrapper moves neither `drvPath` nor `outPath`. Merge on top of
-    # upstream's rather than replacing it: the Linux wrapper carries
-    # `unwrapped` and `tests`.
-    (pkgs.kiro-cli.override {
-      kiro-cli-unwrapped = pinned;
-    }).overrideAttrs
-    (joinAttrs:
-      {
-        # `unwrapped` is re-asserted because darwin's public package is
-        # `kiro-cli-unwrapped.overrideAttrs {pname = …;}`, which carries no
-        # such attr. Pinning it here makes the route from the public attribute
-        # back to the real binary hold on BOTH platforms — load-bearing,
-        # because the locator's own failure text tells the reader to check
-        # `passthru.unwrapped`.
-        passthru =
-          (joinAttrs.passthru or {})
-          // pinned.passthru
-          // {
-            unwrapped = pinned;
-          };
-      }
-      # nixpkgs' FHS expression makes one thin wrapper per command it lists,
-      # `kiro-cli-chat` and `kiro-cli-term` among them, which 3.0.0 does not
-      # ship: they would exec a command the payload lacks. They are created in
-      # `extraInstallCommands`, so they are removed there, leaving `bin/` with
-      # exactly `kiro-cli` on Linux as on Darwin.
-      // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-        extraInstallCommands = ''
-          ${joinAttrs.extraInstallCommands or ""}
-          rm "$out/bin/kiro-cli-chat" "$out/bin/kiro-cli-term"
-        '';
-      }
-      # Expose version for mkKiro.nix, which reads (resolvePackage cfg).version.
-      # Conditional, because re-asserting it where present trips nixpkgs'
-      # "overridden with `version` but not `src`" lint on the darwin build.
-      // pkgs.lib.optionalAttrs (!(joinAttrs ? version)) {
-        inherit (sources) version;
-      }
-      # Rename the EXPORTED package too, so a patched build is identifiable
-      # at the attribute consumers install — not only at the unwrapped layer
-      # underneath it. Linux's FHS wrapper is renamed through `name`; darwin's
-      # `kiro-cli-unwrapped.overrideAttrs {pname = "kiro-cli";}` would
-      # otherwise CLOBBER the rename applied to `pinned`. Ours runs last, so
-      # it wins.
-      // pkgs.lib.optionalAttrs (rolloutFeatures != []) (
-        if pkgs.stdenv.hostPlatform.isDarwin
-        then {pname = "kiro-cli-${rolloutSuffix}";}
-        else {name = "kiro-cli-${rolloutSuffix}-${sources.version}";}
-      ));
+    if pkgs.stdenv.hostPlatform.isLinux
+    then
+      # One minimal FHS env supplies the standard loader path and libstdc++/
+      # libgcc_s the generic-glibc `bun` that Kiro extracts at runtime needs, so
+      # the extracted asset is never patched. 3.0.0 ships one command, so the
+      # env's entry point execs it directly and `bin/` holds only `kiro-cli`.
+      pkgs.buildFHSEnv ({
+          pname = "kiro-cli";
+          inherit (sources) version;
+          runScript = "${pinned}/bin/kiro-cli";
+          # wl-clipboard: Kiro shells out to wl-copy/wl-paste on Wayland.
+          targetPkgs = p: [
+            pinned
+            p.stdenv.cc.cc.lib
+            p.wl-clipboard
+          ];
+          inherit passthru;
+          inherit (pinned) meta;
+        }
+        // pkgs.lib.optionalAttrs (rolloutFeatures != []) {
+          name = "${exportedName}-${sources.version}";
+        })
+    else
+      pinned.overrideAttrs (old: {
+        passthru = old.passthru // passthru;
+        pname =
+          if rolloutFeatures != []
+          then exportedName
+          else "kiro-cli";
+      });
 
   mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {};
 in
