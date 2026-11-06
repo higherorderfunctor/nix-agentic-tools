@@ -89,7 +89,7 @@
   # byte-identical or not.
   proxyServices = declarations:
     builtins.listToAttrs (map (declaration:
-      lib.nameValuePair "mcp-proxy-${declaration.key}" (mcpProxy.serviceFor declaration.key declaration.server))
+      lib.nameValuePair "mcp-proxy-${declaration.key}" (mcpProxy.serviceFor declaration.key declaration.server config.ai.services."mcp-proxy-${declaration.key}".runtimeDir))
     declarations);
   proxyValidationAssertions =
     lib.concatMap

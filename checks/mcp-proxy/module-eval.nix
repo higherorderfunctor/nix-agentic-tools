@@ -169,7 +169,7 @@ in {
 
       # An empty delete list renders an unfiltered global log, which writes
       # every request header to the journal, so the shared helper throws.
-      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (!(builtins.tryEval ((import ../../lib/ai/caddy.nix {inherit lib pkgs;}).globalBlock {logDeletes = [];})).success);
+      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (!(builtins.tryEval ((import ../../lib/ai/caddy.nix {inherit lib;}).globalBlock {logDeletes = [];})).success);
 
       # The proxy renders its Caddyfile from the shared lib/ai/caddy.nix
       # helpers. This pins the whole rendering to a copy taken before they
@@ -487,27 +487,51 @@ in {
           pkgs = pkgs // {inherit caddy;};
         };
         sample = proxySampleServer // {proxy = proxySampleServer.proxy // {headers = {};};};
-        launcher = name: url:
-          services.mkLauncher {
+        launcher = backend: name: url: let
+          serviceName = "mcp-proxy-${name}";
+          result =
+            (
+              if backend == "hm"
+              then harness.evalHmWithSpecialArgs
+              else harness.evalDevenvWithSpecialArgs
+            ) {pkgs = pkgs // {inherit caddy;};} {
+              ai.claude = {
+                enable = true;
+                mcpServers.${name} = sample // {inherit url;};
+              };
+            };
+        in
+          (services.mkLauncher {
             inherit pkgs;
-            name = "mcp-proxy-${name}";
-            entry = (proxyLib.serviceFor name (sample // {inherit url;})) // {files = {};};
-          };
-        secret = launcher "secret" (redact.command "${urlReader}/bin/mcp-proxy-test-url");
-        plain = launcher "plain" "https://upstream.example.test";
+            name = serviceName;
+            entry = result.config.ai.services.${serviceName};
+          })
+          // {runtimeCommand = builtins.head result.config.ai.services.${serviceName}.command;};
+        secret = launcher "hm" "secret" (redact.command "${urlReader}/bin/mcp-proxy-test-url");
+        plain = launcher "hm" "plain" "https://upstream.example.test";
+        project = launcher "devenv" "plain" "https://upstream.example.test";
         caddyfile = name: proxyLib.caddyfileFor (proxyLib.specFor name (sample // {url = "https://upstream.example.test";}));
       in
         pkgs.runCommandLocal "mcp-proxy-run-script-splits-url-and-isolates-state" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           export XDG_RUNTIME_DIR="$TMPDIR/runtime"
-          ${pkgs.coreutils}/bin/mkdir -p "$XDG_RUNTIME_DIR"
+          ${pkgs.coreutils}/bin/mkdir -m 0700 "$XDG_RUNTIME_DIR"
           ${secret}/bin/ai-service-mcp-proxy-secret > actual
           ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "proxy-url-expected" "MCP_PROXY_SECRET_ORIGIN=https://upstream.example.test\nMCP_PROXY_SECRET_PATH=/path\n"} <(${pkgs.coreutils}/bin/head -2 actual)
           ${plain}/bin/ai-service-mcp-proxy-plain > actual
-          printf '%s\n' MCP_PROXY_PLAIN_ORIGIN=https://upstream.example.test MCP_PROXY_PLAIN_PATH=/ "$XDG_RUNTIME_DIR/mcp-proxy-plain/config" "$XDG_RUNTIME_DIR/mcp-proxy-plain/data" 'run --config ${caddyfile "plain"} --adapter caddyfile' > expected
+          printf '%s\n' MCP_PROXY_PLAIN_ORIGIN=https://upstream.example.test MCP_PROXY_PLAIN_PATH=/ "$XDG_RUNTIME_DIR/ai-service-mcp-proxy-plain/config" "$XDG_RUNTIME_DIR/ai-service-mcp-proxy-plain/data" 'run --config ${caddyfile "plain"} --adapter caddyfile' > expected
           ${pkgs.diffutils}/bin/diff -u expected actual
-          test "$(${pkgs.coreutils}/bin/stat -c %a "$XDG_RUNTIME_DIR/mcp-proxy-plain")" = 700
+          test "$(${pkgs.coreutils}/bin/stat -c %a "$XDG_RUNTIME_DIR/ai-service-mcp-proxy-plain")" = 700
+          # Fails a Caddy script that recomputes its state from inherited XDG
+          # instead of consuming its service's evaluated devenv runtimeDir.
+          ${harness.devenvRuntimeSetup {
+            caddy = project.runtimeCommand;
+            proxy = "${project}/bin/ai-service-mcp-proxy-plain";
+          }}
+          "$devenvLaunchers/proxy" > actual
+          printf '%s\n' MCP_PROXY_PLAIN_ORIGIN=https://upstream.example.test MCP_PROXY_PLAIN_PATH=/ "$devenvRuntime/ai-service-mcp-proxy-plain/config" "$devenvRuntime/ai-service-mcp-proxy-plain/data" 'run --config ${caddyfile "plain"} --adapter caddyfile' > expected
+          ${pkgs.diffutils}/bin/diff -u expected actual
           if PROXY_READER_FAIL=1 ${secret}/bin/ai-service-mcp-proxy-secret > failed; then
             echo "a failed secret read started the proxy" >&2
             exit 1
@@ -661,12 +685,10 @@ in {
             };
           };
           unit = result.config.systemd.user.services.mcp-proxy-jira;
-          service = result.config.ai.services.mcp-proxy-jira;
         in
           lib.hasSuffix "/bin/ai-service-mcp-proxy-jira" unit.Service.ExecStart
           && unit.Unit.Description == "mcp-proxy-jira (ai.services)"
           && !(unit.Service ? Environment)
-          && service.command == [(lib.getExe (mcpProxyLib.runScriptFor (mcpProxyLib.specFor "jira" proxySampleServer)))]
           && result.config.ai.claims.service.mcp-proxy-jira == ["kiro"]
           && result.config.ai.claims.port."9501" == ["kiro:mcp-proxy-jira.ports.main"]
       );
