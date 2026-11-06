@@ -1,6 +1,6 @@
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-24 — the patch applies to CPA 8.0.41 with no fuzz;
+> **Last verified:** 2026-11-05 — both patches apply to CPA 8.0.56 with no fuzz;
 > loading rejects duplicate client keys and startup exits 1 on refusal. Hot
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
@@ -121,15 +121,16 @@ directly bypasses loading, so the Manager compiles duplicate entries into an
 allowlist granting no key any credential. Empty client keys bind no request.
 
 The eligibility predicate covers the legacy candidate loop, scheduler fast path,
-retry, and cooldown waits. `SelectAuth` always uses the legacy loop; mixed
-`Execute` with a built-in selector exercises the scheduler fast path. Plugin
-schedulers receive only surviving candidates. Two 8.0.40 paths bypass that
-predicate: Home dispatch, which is refused, and the Antigravity credits
-fallback, which checks the allowlist itself. The fallback matters when selection
-fails because a client key has no Antigravity rule. Plugin executors and
-`host.auth.get` bypass eligibility; this is why enabling plugins must be
-refused. `checks/key_allowlist_loops_test.go`, a go/types scan joined to the
-auth package, fails on a `range` over `Manager.auths` whose own body calls no
+the alternative-target check (`Manager.HasAlternativeTargetForModel`), retry,
+and cooldown waits. `SelectAuth` always uses the legacy loop; mixed `Execute`
+with a built-in selector exercises the scheduler fast path. Plugin schedulers
+receive only surviving candidates. Two 8.0.40 paths bypass that predicate: Home
+dispatch, which is refused, and the Antigravity credits fallback, which checks
+the allowlist itself. The fallback matters when selection fails because a client
+key has no Antigravity rule. Plugin executors and `host.auth.get` bypass
+eligibility; this is why enabling plugins must be refused.
+`checks/key_allowlist_loops_test.go`, a go/types scan joined to the auth
+package, fails on a `range` over `Manager.auths` whose own body calls no
 allowlist predicate, unless the function is on its commented exemption list. It
 does not see an indexed lookup (`m.auths[id]`), an alias of the map, the map
 passed to a helper, or a loop over a copy (`snapshotAuths`, `List`), so a bump
@@ -151,7 +152,7 @@ revocation and could fail open, so that reorder was rejected.
 ## Credential tool shims
 
 `patches/zai-tool-shims.patch` adds two opt-in credential settings for the
-pinned CPA 8.0.41. They repair measured z.ai compatibility failures without
+pinned CPA 8.0.56. They repair measured z.ai compatibility failures without
 changing credential selection. Named credentials with `vendor = "z-ai"` default
 both on: `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` and
 `apiKey.codexShellArgCleanup = true`. Set them to `{}` and `false` to disable

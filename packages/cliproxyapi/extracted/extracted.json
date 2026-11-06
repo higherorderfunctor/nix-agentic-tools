@@ -3162,6 +3162,21 @@
       "template": "Server host/interface to bind to. Default is empty (\"\") to bind all interfaces (IPv4 + IPv6).\nUse \"127.0.0.1\" or \"localhost\" to restrict access to local machine only.",
       "type": "string"
     },
+    "server.kv-store": {
+      "description": "KVStore configures the local bbolt key-value store.",
+      "template": "Local persistent KV store settings (bbolt). Ignored when Home mode is enabled.",
+      "type": "object"
+    },
+    "server.kv-store.disabled": {
+      "description": "Disabled turns off the local bbolt KV store when true (fallback to in-memory).\nDefaults to false (bbolt enabled by default in non-Home mode).",
+      "template": "Disable local bbolt KV persistence and fall back to in-memory maps (default: false).",
+      "type": "bool"
+    },
+    "server.kv-store.path": {
+      "description": "Path is the file system path to the bbolt database file.\nWhen empty, it defaults to \"<auth-dir>/kv.db\".",
+      "template": "File path for the bbolt database (default: \"<auth-dir>/kv.db\" when empty).",
+      "type": "string"
+    },
     "server.max-request-body-bytes": {
       "description": "MaxRequestBodyBytes limits the size (in bytes) of incoming HTTP request bodies.\nValues <= 0 disable the limit (default).",
       "template": "Maximum allowed size (in bytes) for incoming HTTP request bodies.\nRequests exceeding this limit are rejected with HTTP 413 Payload Too Large.\nDefault is 0 (disabled / no limit).",
@@ -3262,8 +3277,8 @@
       "type": "bool"
     },
     "upstream.claude.session-date-pin-days": {
-      "description": "SessionDatePinDays retains the cloaked currentDate pin per session for\nthis many days, independently of continuity expiry and credential\nswitches. A nil value (unset) defaults to 7 days; an explicit 0 keeps\nthe continuity-scoped pin (1h lifetime).",
-      "template": "Days to retain the cloaked currentDate pin per session, so an idle gap or a credential\nswitch cannot re-anchor the date and invalidate earlier thinking signatures and the\nprompt cache. Default 7; an explicit 0 keeps the continuity-scoped pin (1h lifetime).",
+      "description": "SessionDatePinDays retains the cloaked currentDate pin per session for\nthis many days in in-memory mode (server.kv-store.disabled: true without\nHome), independently of continuity expiry and credential switches. A nil\nvalue (unset) defaults to 7 days; an explicit 0 keeps the\ncontinuity-scoped pin (1h lifetime). When a KV store (local bbolt or Home\nKV) is active, session date pins are persisted permanently and\nsession-date-pin-days is ignored.",
+      "template": "Days to retain the cloaked currentDate pin per session in in-memory mode\n(server.kv-store.disabled: true without Home), so an idle gap or a credential\nswitch cannot re-anchor the date and invalidate earlier thinking signatures and the\nprompt cache. Default 7; an explicit 0 keeps the continuity-scoped pin (1h lifetime).\nWhen a KV store (local bbolt or Home KV) is active, session date pins are persisted\npermanently and session-date-pin-days is ignored.",
       "type": "int"
     },
     "upstream.claude.tool-search": {

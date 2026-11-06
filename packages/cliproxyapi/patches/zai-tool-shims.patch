@@ -127,7 +127,7 @@ index 00000000..cfbdc738
 +	}
 +}
 diff --git a/internal/config/config_load.go b/internal/config/config_load.go
-index d218b56c..5000784b 100644
+index 240f1867..b6764ef9 100644
 --- a/internal/config/config_load.go
 +++ b/internal/config/config_load.go
 @@ -239,6 +239,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
@@ -141,10 +141,10 @@ index d218b56c..5000784b 100644
  		return nil, errValidate
  	}
 diff --git a/internal/config/config_types.go b/internal/config/config_types.go
-index 788319ce..c3fa6e6e 100644
+index 7c77b7cd..d580462b 100644
 --- a/internal/config/config_types.go
 +++ b/internal/config/config_types.go
-@@ -662,6 +662,9 @@ type CloakConfig struct {
+@@ -709,6 +709,9 @@ type CloakConfig struct {
  // ClaudeKey represents the configuration for a Claude API key,
  // including the API key itself and an optional base URL for the API endpoint.
  type ClaudeKey struct {
@@ -154,7 +154,7 @@ index 788319ce..c3fa6e6e 100644
  	// APIKey is the authentication key for accessing Claude API services.
  	APIKey string `yaml:"api-key" json:"api-key"`
  
-@@ -1003,6 +1006,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
+@@ -1050,6 +1053,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
  // OpenAICompatibility represents the configuration for OpenAI API compatibility
  // with external providers, allowing model aliases to be routed through OpenAI API format.
  type OpenAICompatibility struct {
@@ -165,7 +165,7 @@ index 788319ce..c3fa6e6e 100644
  	Name string `yaml:"name" json:"name"`
  
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 94598710..dcdf962a 100644
+index f43f7270..377673fc 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
 @@ -381,6 +381,12 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
@@ -209,7 +209,7 @@ index 94598710..dcdf962a 100644
  					deleteYAMLPath(key, field)
  				}
 diff --git a/internal/config/parse.go b/internal/config/parse.go
-index 13a949f3..603338bc 100644
+index c3252ce3..130eea08 100644
 --- a/internal/config/parse.go
 +++ b/internal/config/parse.go
 @@ -58,6 +58,9 @@ func ParseConfigBytes(data []byte) (*Config, error) {
@@ -223,10 +223,10 @@ index 13a949f3..603338bc 100644
  		return nil, errValidate
  	}
 diff --git a/internal/runtime/executor/claude_executor_execute.go b/internal/runtime/executor/claude_executor_execute.go
-index c1c99f41..0bc70ce8 100644
+index 51c978f6..24c8ad06 100644
 --- a/internal/runtime/executor/claude_executor_execute.go
 +++ b/internal/runtime/executor/claude_executor_execute.go
-@@ -209,7 +209,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+@@ -212,7 +212,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  	// Extract betas from body and convert to header
  	var extraBetas []string
  	var oauthToolNamesReverseMap map[string]string
@@ -240,7 +240,7 @@ index c1c99f41..0bc70ce8 100644
  		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequestDoc(doc, mcpAliases)
  		if err != nil {
-@@ -367,7 +372,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+@@ -370,7 +375,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  		}
  		if msgID := claudeMessageIDFromSSE(data); msgID != "" {
  			commitClaudeContinuity(diagnosticsState, msgID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -251,7 +251,7 @@ index c1c99f41..0bc70ce8 100644
  		}
  		lines := bytes.Split(data, []byte("\n"))
  		var eventBuf bytes.Buffer
-@@ -397,7 +404,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+@@ -411,7 +418,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  	} else {
  		messageID := claudeMessageIDFromResponse(data)
  		commitClaudeContinuity(diagnosticsState, messageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -496,10 +496,10 @@ index 00000000..5edd0f7d
 +	}
 +}
 diff --git a/internal/runtime/executor/claude_executor_stream.go b/internal/runtime/executor/claude_executor_stream.go
-index aa42c030..f535d6df 100644
+index 171e94ef..8716f955 100644
 --- a/internal/runtime/executor/claude_executor_stream.go
 +++ b/internal/runtime/executor/claude_executor_stream.go
-@@ -206,7 +206,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -209,7 +209,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  	// Extract betas from body and convert to header
  	var extraBetas []string
  	var oauthToolNamesReverseMap map[string]string
@@ -513,7 +513,7 @@ index aa42c030..f535d6df 100644
  		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequestDoc(doc, mcpAliases)
  		if err != nil {
-@@ -458,7 +463,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -461,7 +466,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  			}
  			if upstreamCompleted {
  				commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -524,7 +524,7 @@ index aa42c030..f535d6df 100644
  			}
  			return
  		}
-@@ -561,7 +568,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -564,7 +571,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  		}
  		if upstreamCompleted {
  			commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -536,10 +536,10 @@ index aa42c030..f535d6df 100644
  	}()
  	result := &cliproxyexecutor.StreamResult{Headers: httpResp.Header.Clone(), Chunks: out}
 diff --git a/internal/runtime/executor/claude_executor_tokens.go b/internal/runtime/executor/claude_executor_tokens.go
-index 8db878fa..40cf4a8f 100644
+index 5fd9fd6b..b7c12c94 100644
 --- a/internal/runtime/executor/claude_executor_tokens.go
 +++ b/internal/runtime/executor/claude_executor_tokens.go
-@@ -62,6 +62,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
+@@ -64,6 +64,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
  	if rebuildMidSystemMessageEnabled(e.cfg, auth) {
  		rebuildMidSystemMessagesToTopLevelDoc(doc)
  	}
@@ -552,7 +552,7 @@ index 8db878fa..40cf4a8f 100644
  	sanitizeClaudeMessagesForClaudeUpstreamWithDebugDoc(ctx, doc, baseModel, helps.APIKeyModelIsCompat(req))
  	applyClaudePreservedThinkingBindingDoc(doc)
  	finalize := helps.NewPayloadFinalizer(e.cfg, e.Identifier(), baseModel, to.String(), "", originalTranslatedForPayload, req, opts)
-@@ -219,7 +225,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
+@@ -222,7 +228,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
  	extraBetas, _ := extractAndRemoveBetasDoc(doc)
  	// Claude Code 2.1.220's beta.messages.countTokens() always appends this beta.
  	extraBetas = append(extraBetas, claudeTokenCountingBeta)
@@ -567,7 +567,7 @@ index 8db878fa..40cf4a8f 100644
  		prepareClaudeOAuthToolNamesForUpstreamDoc(doc, mcpAliases)
  	}
 diff --git a/internal/runtime/executor/openai_compat_executor.go b/internal/runtime/executor/openai_compat_executor.go
-index 7b8b32cb..aa7d179d 100644
+index 17a06945..fe87d375 100644
 --- a/internal/runtime/executor/openai_compat_executor.go
 +++ b/internal/runtime/executor/openai_compat_executor.go
 @@ -22,6 +22,7 @@ import (
@@ -578,7 +578,7 @@ index 7b8b32cb..aa7d179d 100644
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
  	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
  	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
-@@ -232,6 +233,9 @@ func (e *OpenAICompatExecutor) executeWithCredentials(ctx context.Context, auth
+@@ -246,6 +247,9 @@ func (e *OpenAICompatExecutor) executeWithCredentials(ctx context.Context, auth
  	// Ensure we at least record the request even if upstream doesn't return usage
  	// Translate response back to source format when needed
  	var param any
@@ -588,16 +588,16 @@ index 7b8b32cb..aa7d179d 100644
  	out := sdktranslator.TranslateNonStream(ctx, to, responseFormat, req.Model, helps.ApplyPatchOriginalRequest(req, opts), translated, body, &param)
  	if helps.ApplyPatchTranslationError(param) != nil || len(out) == 0 {
  		return cliproxyexecutor.Response{}, statusErr{code: http.StatusBadGateway, msg: helps.ApplyPatchUpstreamErrorMessage}
-@@ -350,6 +354,9 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
+@@ -364,6 +368,9 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
  
  func (e *OpenAICompatExecutor) executeStreamWithCredentials(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, baseURL, apiKey string, compat *config.OpenAICompatibility) (_ *cliproxyexecutor.StreamResult, err error) {
  	ctx = helps.EnsureSessionContext(ctx, opts, req.Payload)
 +	if compat != nil && compat.CodexShellArgCleanup {
 +		ctx = responses.WithCodexShellArgCleanup(ctx)
 +	}
- 
- 	baseModel := thinking.ParseSuffix(req.Model).ModelName
- 
+ 	if opts.SourceFormat == sdktranslator.FormatOpenAIResponse && opts.Alt != "responses/compact" {
+ 		if errExpand := helps.ExpandResponsesCompactionCapsules(&req, &opts, e.Identifier()); errExpand != nil {
+ 			return nil, statusErr{code: http.StatusBadRequest, msg: errExpand.Error()}
 diff --git a/internal/runtime/executor/openai_compat_shell_args_test.go b/internal/runtime/executor/openai_compat_shell_args_test.go
 new file mode 100644
 index 00000000..2602d606
@@ -870,7 +870,7 @@ index 00000000..5ab621a3
 +	}
 +}
 diff --git a/internal/translator/openai/openai/responses/openai_openai-responses_response.go b/internal/translator/openai/openai/responses/openai_openai-responses_response.go
-index fbf04931..d5f5f1ec 100644
+index e3d2b42f..750b6d1c 100644
 --- a/internal/translator/openai/openai/responses/openai_openai-responses_response.go
 +++ b/internal/translator/openai/openai/responses/openai_openai-responses_response.go
 @@ -20,6 +20,7 @@ type oaiToResponsesStateReasoning struct {
@@ -881,7 +881,7 @@ index fbf04931..d5f5f1ec 100644
  	translatorcommon.ApplyPatchErrorState
  	ApplyPatchCalls map[string]*translatorcommon.ApplyPatchCallState
  	// RequestEcho holds the request fields echoed into the completed
-@@ -388,7 +389,7 @@ func buildResponsesCompletedEvent(st *oaiToResponsesState, nextSeq func() int) [
+@@ -392,7 +393,7 @@ func buildResponsesCompletedEvent(st *oaiToResponsesState, nextSeq func() int) [
  			itemDoc := ojson.NewDocString(`{"id":"","type":"function_call","status":"completed","arguments":"","call_id":"","name":""}`)
  			_ = itemDoc.Set("id", fmt.Sprintf("fc_%s", callID))
  			_ = itemDoc.Set("status", toolStatus)
@@ -890,7 +890,7 @@ index fbf04931..d5f5f1ec 100644
  			_ = itemDoc.Set("call_id", callID)
  			st.ToolIndex.applyIdentityDoc(itemDoc, name, "")
  			outputItems = append(outputItems, completedOutputItem{index: st.FuncOutputIx[key], raw: itemDoc.Bytes()})
-@@ -451,6 +452,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
+@@ -455,6 +456,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
  
  	rawJSON = bytes.TrimSpace(rawJSON)
  	if !st.RequestInitialized {
@@ -898,7 +898,7 @@ index fbf04931..d5f5f1ec 100644
  		requestRoot := util.ParseGJSONBytesNoCopy(bytes.Clone(pickRequestJSON(originalRequestRawJSON, requestRawJSON)))
  		st.ToolIndex = newResponsesToolIndex(requestRoot)
  		st.RequestEcho = extractResponsesRequestEcho(requestRoot)
-@@ -859,6 +861,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
+@@ -881,6 +883,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
  				st.FuncArgsDone[key] = true
  				continue
  			}
@@ -906,7 +906,7 @@ index fbf04931..d5f5f1ec 100644
  			fcDoneDoc := ojson.NewDocString(`{"type":"response.function_call_arguments.done","sequence_number":0,"item_id":"","output_index":0,"arguments":""}`)
  			_ = fcDoneDoc.Set("sequence_number", nextSeq())
  			_ = fcDoneDoc.Set("item_id", fmt.Sprintf("fc_%s", callID))
-@@ -1051,11 +1054,11 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
+@@ -1073,11 +1076,11 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
  
  // ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream builds a single Responses JSON
  // from a non-streaming OpenAI Chat Completions response.
@@ -920,7 +920,7 @@ index fbf04931..d5f5f1ec 100644
  	if param != nil {
  		*param = st
  	}
-@@ -1200,7 +1203,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream(_ context.Co
+@@ -1226,7 +1229,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream(_ context.Co
  						itemDoc := ojson.NewDocString(`{"id":"","type":"function_call","status":"completed","arguments":"","call_id":"","name":""}`)
  						_ = itemDoc.Set("id", fmt.Sprintf("fc_%s", callID))
  						_ = itemDoc.Set("status", toolStatus)
