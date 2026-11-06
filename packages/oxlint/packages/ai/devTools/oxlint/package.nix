@@ -22,12 +22,12 @@
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
-  rev = "2b432e0e55f5a0bd4af99347b661310e3633a250";
+  rev = "29daf901a1ea6b0a7a56c2b9d488bd2850d0abd4";
   unpatchedSrc = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-zqG7JmU6wYdDDFZnIYweRlwy32MyP3WhUURzkmjV7qs=";
+    hash = "sha256-hRwj1o55v0qKBrso0A5J/jhihmwyjOMSa3sJGb9Zqmg=";
   };
   # Keep pnpm responsible for patching every peer variant. A name-only key
   # follows upstream versions; context application and the behavioral probe
@@ -58,7 +58,7 @@
   };
   version = vu.mkVersion {
     # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
-    upstream = "1.91.0";
+    upstream = "1.92.0";
     inherit rev;
   };
 in
@@ -70,7 +70,7 @@ in
     passthru = (prev.passthru or {}) // rustPlatform.passthru;
     cargoDeps = rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-AL4VtFBUluVNp3dNFuaAg1MOHUvN+abYwnMsJK4xwzI=";
+      hash = "sha256-9WxqwPSYUmhitTeBw5mKS4ECeNqOSOLdOkzgGPJKm1k=";
     };
     pnpmDeps = pkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
