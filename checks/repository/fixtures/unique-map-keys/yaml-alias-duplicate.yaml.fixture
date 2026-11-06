@@ -1,0 +1,3 @@
+base: &base {a: 1, a: 2}
+first: *base
+second: *base

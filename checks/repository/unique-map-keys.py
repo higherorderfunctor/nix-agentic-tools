@@ -2,7 +2,6 @@
 """Reject repeated keys in repository data formats using the stock parsers."""
 
 import json
-import re
 import subprocess
 import sys
 import tomllib
@@ -16,9 +15,9 @@ FINDINGS: list[str] = []
 
 
 class Map:
-    def __init__(self, pairs, lines=None):
+    def __init__(self, pairs, lines=()):
         self.pairs = pairs
-        self.lines = lines if lines is not None else []
+        self.lines = lines
 
 
 def pointer(key):
@@ -34,32 +33,28 @@ def scan(value, path, filename, physical_line=None, visited=None):
     visited.add(marker)
 
     if isinstance(value, Map):
-        seen = []
+        seen = set()
         for index, (key, child) in enumerate(value.pairs):
             key_path = f"{path}/{pointer(key)}"
-            if any(key == previous for previous in seen):
-                line = (
-                    value.lines[index]
-                    if index < len(value.lines)
-                    else physical_line
-                )
+            if key in seen:
+                line = value.lines[index] if value.lines else physical_line
                 location = f" (line {line})" if line is not None else ""
-                finding = f"{filename}: duplicate key {key_path}{location}"
-                FINDINGS.append(finding)
+                FINDINGS.append(f"{filename}: duplicate key {key_path}{location}")
             else:
-                seen.append(key)
+                seen.add(key)
             scan(child, key_path, filename, physical_line, visited)
     elif isinstance(value, list):
         for index, child in enumerate(value):
             scan(child, f"{path}/{index}", filename, physical_line, visited)
 
 
-def parse_json_text(text, filename, label="", physical_line=None):
+def parse_json_text(text, filename, line=None):
     try:
         document = json.loads(text, object_pairs_hook=Map)
-        scan(document, "", filename, physical_line)
+        scan(document, "", filename, line)
     except ValueError as error:
-        FINDINGS.append(f"{filename}: parse error{label}: {error}")
+        where = f" on line {line}" if line is not None else ""
+        FINDINGS.append(f"{filename}: parse error{where}: {error}")
 
 
 def parse_json5(text, filename):
@@ -98,7 +93,7 @@ def parse_yaml_text(text, filename):
 
 
 def parse_markdown(text, filename):
-    lines = text.splitlines()
+    lines = text.removeprefix("\ufeff").splitlines()
     if not lines or lines[0].strip() != "---":
         return
     closings = [
@@ -119,25 +114,16 @@ def parse_toml_text(text, filename):
         FINDINGS.append(f"{filename}: {error}")
 
 
-def first_error(result):
-    lines = result.stderr.splitlines()
-    errors = [line for line in lines if line.startswith("error:")]
-    if errors:
-        return errors[0]
-    return lines[0] if lines else "nix-instantiate failed without a diagnostic"
-
-
-def nix_finding(filename, result):
-    message = first_error(result)
-    locations = re.findall(r" at (\S+):(\d+):(\d+)", result.stderr)
-    if not locations:
-        return f"{filename}: {message}"
-    location = locations[1] if len(locations) > 1 else locations[0]
-    message = re.sub(r"\s+at \S+:\d+:\d+\s*$", "", message)
-    return f"{filename}: {message} at {filename}:{location[1]}:{location[2]}"
+def nix_diagnostic(stderr, filenames):
+    lines = stderr.splitlines()[:2]
+    for filename in filenames:
+        lines = [line.replace(str(Path(filename).resolve()), filename) for line in lines]
+    return lines
 
 
 def parse_nix(files):
+    # Refuses an empty selection: with no file argument nix-instantiate parses
+    # ./default.nix, which is not a selected file.
     if not files:
         return
     batch = subprocess.run(
@@ -147,6 +133,7 @@ def parse_nix(files):
     )
     if batch.returncode == 0:
         return
+    before = len(FINDINGS)
     for filename in files:
         result = subprocess.run(
             [NIX_INSTANTIATE, "--parse", "--store", "dummy://", filename],
@@ -154,42 +141,44 @@ def parse_nix(files):
             text=True,
         )
         if result.returncode != 0:
-            FINDINGS.append(nix_finding(filename, result))
+            FINDINGS.extend(nix_diagnostic(result.stderr, [filename]))
+    if len(FINDINGS) == before:
+        FINDINGS.extend(nix_diagnostic(batch.stderr, files))
 
 
 def parse_jsonl(text, filename):
-    for number, line in enumerate(text.splitlines(), 1):
-        parse_json_text(line, filename, f" on line {number}", number)
+    for number, line in enumerate(text.split("\n"), 1):
+        if line:
+            parse_json_text(line, filename, number)
 
 
 PARSERS = {
-    ".json": parse_json_text,
-    ".jsonc": parse_json5,
-    ".json5": parse_json5,
-    ".jsonl": parse_jsonl,
-    ".yaml": parse_yaml_text,
-    ".yml": parse_yaml_text,
-    ".md": parse_markdown,
-    ".toml": parse_toml_text,
-    ".lock": parse_toml_text,
+    "json": parse_json_text,
+    "json5": parse_json5,
+    "jsonc": parse_json5,
+    "jsonl": parse_jsonl,
+    "lock": parse_toml_text,
+    "md": parse_markdown,
+    "toml": parse_toml_text,
+    "yaml": parse_yaml_text,
+    "yml": parse_yaml_text,
 }
 
 
 def main(argv):
     nix_files = []
     for filename in argv:
-        path = Path(filename)
-        suffix = path.suffix
+        extension = filename.rsplit(".", 1)[-1]
         try:
-            if suffix == ".nix":
+            if extension == "nix":
                 nix_files.append(filename)
                 continue
-            text = path.read_text()
-            if suffix == ".lock" and text.lstrip()[:1] == "{":
+            text = Path(filename).read_text()
+            if extension == "lock" and text.lstrip()[:1] == "{":
                 parse_json_text(text, filename)
             else:
-                PARSERS[suffix](text, filename)
-        except (OSError, ValueError) as error:
+                PARSERS[extension](text, filename)
+        except (ValueError, RecursionError) as error:
             FINDINGS.append(f"{filename}: parse error: {error}")
     parse_nix(nix_files)
     for finding in FINDINGS:

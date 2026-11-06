@@ -1,5 +1,7 @@
-# Fixture suite for `unique-map-keys`. Expected diagnostics are hand-written:
-# a parser regression must change the observed text, not merely echo input.
+# Fixture suite for `unique-map-keys`. Each `<name>.<extension>.fixture` input
+# is copied to `<name>.<extension>` and run through the exact validator
+# derivation. Expected diagnostics are hand-written: a parser regression must
+# change the observed text, not merely echo input.
 {
   lib,
   pkgs,
@@ -9,162 +11,62 @@
     uniqueMapKeys = import ./unique-map-keys.nix {inherit pkgs;};
     fixtures = ./fixtures/unique-map-keys;
 
+    extensionOf = name: let
+      fixture =
+        lib.findSingle (f: lib.hasPrefix "${name}." f)
+        "missing fixture" "several fixtures"
+        (builtins.attrNames (builtins.readDir fixtures));
+    in
+      lib.removePrefix "${name}." (lib.removeSuffix ".fixture" fixture);
+
     cases = {
-      frontmatter-duplicate = {
-        files = [{extension = "md";}];
-        expected = "case.md: duplicate key /nested/a (line 4)";
-        status = 1;
-      };
-      json-array-duplicate = {
-        files = [{extension = "json";}];
-        expected = "case.json: duplicate key /0/a";
-        status = 1;
-      };
-      json-duplicate = {
-        files = [{extension = "json";}];
-        expected = "case.json: duplicate key /nested/a";
-        status = 1;
-      };
-      json-multiple-findings = {
-        files = [{extension = "json";}];
-        expected = "case.json: duplicate key /first/a\ncase.json: duplicate key /second/b";
-        status = 1;
-      };
-      json-parse-error = {
-        files = [{extension = "json";}];
-        expected = "case.json: parse error: Expecting value: line 1 column 6 (char 5)";
-        status = 1;
-      };
-      json-pointer-escape = {
-        files = [{extension = "json";}];
-        expected = "case.json: duplicate key /nested/a~1b~0c";
-        status = 1;
-      };
-      json-sibling-mappings = {
-        files = [{extension = "json";}];
-        expected = "";
-        status = 0;
-      };
-      json5-duplicate = {
-        files = [{extension = "json5";}];
-        expected = "case.json5: duplicate key /nested/a";
-        status = 1;
-      };
-      jsonc-duplicate = {
-        files = [{extension = "jsonc";}];
-        expected = "case.jsonc: duplicate key /nested/a";
-        status = 1;
-      };
-      jsonl-duplicate = {
-        files = [{extension = "jsonl";}];
-        expected = "case.jsonl: duplicate key /0/a (line 2)";
-        status = 1;
-      };
-      lock-json = {
-        files = [{extension = "lock";}];
-        expected = "case.lock: duplicate key /nested/a";
-        status = 1;
-      };
-      lock-toml = {
-        files = [{extension = "lock";}];
-        expected = "case.lock: Cannot overwrite a value (at line 3, column 6)";
-        status = 1;
-      };
-      markdown-no-frontmatter = {
-        files = [{extension = "md";}];
-        expected = "";
-        status = 0;
-      };
-      markdown-thematic-break = {
-        files = [{extension = "md";}];
-        expected = "";
-        status = 0;
-      };
+      frontmatter-duplicate.expected = "frontmatter-duplicate.md: duplicate key /nested/a (line 4)";
+      json-array-duplicate.expected = "json-array-duplicate.json: duplicate key /0/a";
+      json-duplicate.expected = "json-duplicate.json: duplicate key /nested/a";
+      json-multiple-findings.expected = "json-multiple-findings.json: duplicate key /first/a\njson-multiple-findings.json: duplicate key /second/b";
+      json-parse-error.expected = "json-parse-error.json: parse error: Expecting value: line 1 column 6 (char 5)";
+      json-pointer-escape.expected = "json-pointer-escape.json: duplicate key /nested/a~1b~0c";
+      json-sibling-mappings.expected = "";
+      json5-duplicate.expected = "json5-duplicate.json5: duplicate key /nested/a";
+      jsonc-duplicate.expected = "jsonc-duplicate.jsonc: duplicate key /nested/a";
+      jsonl-duplicate.expected = "jsonl-duplicate.jsonl: duplicate key /0/a (line 2)";
+      lock-json.expected = "lock-json.lock: duplicate key /nested/a";
+      lock-toml.expected = "lock-toml.lock: Cannot overwrite a value (at line 3, column 6)";
+      markdown-no-frontmatter.expected = "";
+      markdown-thematic-break.expected = "";
       nix-batch = {
-        files = [
-          {
-            name = "nix-batch-clean";
-            extension = "nix";
-            target = "nix-batch-clean.nix";
-          }
-          {
-            name = "nix-batch-duplicate";
-            extension = "nix";
-            target = "nix-batch-duplicate.nix";
-          }
-          {
-            name = "nix-batch-syntax";
-            extension = "nix";
-            target = "nix-batch-syntax.nix";
-          }
-        ];
-        expected = ''
-          nix-batch-duplicate.nix: error: attribute 'a' already defined at nix-batch-duplicate.nix:1:10
-          nix-batch-syntax.nix: error: syntax error, unexpected end of file, expecting '.' or '=' at nix-batch-syntax.nix:2:1'';
-        status = 1;
+        files = ["nix-batch-clean" "nix-batch-duplicate" "nix-batch-syntax"];
+        # Nix's own first two diagnostic lines, path rewritten to the given filename.
+        expected = "error: attribute 'a' already defined at nix-batch-duplicate.nix:1:3\n       at nix-batch-duplicate.nix:1:10:\nerror: syntax error, unexpected end of file, expecting '.' or '='\n       at nix-batch-syntax.nix:2:1:";
       };
-      toml-array-tables = {
-        files = [{extension = "toml";}];
-        expected = "";
-        status = 0;
-      };
-      toml-direct = {
-        files = [{extension = "toml";}];
-        expected = "case.toml: Cannot overwrite a value (at line 2, column 6)";
-        status = 1;
-      };
-      toml-dotted = {
-        files = [{extension = "toml";}];
-        expected = "case.toml: Cannot overwrite a value (at line 2, column 8)";
-        status = 1;
-      };
-      toml-table = {
-        files = [{extension = "toml";}];
-        expected = "case.toml: Cannot declare ('table',) twice (at line 3, column 7)";
-        status = 1;
-      };
-      yaml-merge = {
-        files = [{extension = "yaml";}];
-        expected = "";
-        status = 0;
-      };
-      yaml-merge-sequence = {
-        files = [{extension = "yaml";}];
-        expected = "";
-        status = 0;
-      };
-      yaml-multi-document = {
-        files = [{extension = "yaml";}];
-        expected = "case.yaml: duplicate key /nested/a (line 5)";
-        status = 1;
-      };
-      yaml-quoted-key = {
-        files = [{extension = "yaml";}];
-        expected = "case.yaml: duplicate key /nested/a (line 3)\ncase.yaml: duplicate key /nested/a (line 4)";
-        status = 1;
-      };
-      yaml-sibling-mappings = {
-        files = [{extension = "yml";}];
-        expected = "";
-        status = 0;
-      };
+      toml-array-tables.expected = "";
+      toml-direct.expected = "toml-direct.toml: Cannot overwrite a value (at line 2, column 6)";
+      toml-dotted.expected = "toml-dotted.toml: Cannot overwrite a value (at line 2, column 8)";
+      toml-table.expected = "toml-table.toml: Cannot declare ('table',) twice (at line 3, column 7)";
+      yaml-alias-duplicate.expected = "yaml-alias-duplicate.yaml: duplicate key /base/a (line 1)";
+      yaml-merge.expected = "";
+      yaml-merge-sequence.expected = "";
+      yaml-multi-document.expected = "yaml-multi-document.yaml: duplicate key /nested/a (line 5)";
+      yaml-quoted-key.expected = "yaml-quoted-key.yaml: duplicate key /nested/a (line 3)\nyaml-quoted-key.yaml: duplicate key /nested/a (line 4)";
+      yaml-sibling-mappings.expected = "";
     };
 
     checkCase = name: case: let
-      copyOne = file: let
-        sourceName = file.name or name;
-        target = file.target or "case.${file.extension}";
-      in ''
-        cp --no-preserve=mode,ownership "${fixtures}/${sourceName}.${file.extension}.fixture" "$TMPDIR/${target}"
+      targets = map (file: "${file}.${extensionOf file}") (case.files or [name]);
+      status =
+        if case.expected == ""
+        then 0
+        else 1;
+      copyOne = target: ''
+        cp --no-preserve=mode,ownership "${fixtures}/${target}.fixture" "$TMPDIR/${target}"
       '';
-      targets = map (file: file.target or "case.${file.extension}") case.files;
     in ''
-      ${lib.concatStrings (map copyOne case.files)}
+      ${lib.concatStrings (map copyOne targets)}
       rc=0
       ${lib.getExe uniqueMapKeys} ${toString targets} >case.out 2>&1 || rc=$?
       got=$(cat case.out)
       want=${lib.escapeShellArg case.expected}
-      if [ "$rc" -ne ${toString case.status} ] || [ "$got" != "$want" ]; then
+      if [ "$rc" -ne ${toString status} ] || [ "$got" != "$want" ]; then
         echo "FAIL ${name}: rc=$rc want=$want got=$got" >&2
         exit 1
       fi
