@@ -40,7 +40,7 @@ in rec {
             [$entries[] | select(. as $e | $sys.value | to_entries | all($e[.key] == .value))] as $hits
             | if ($hits | length) != 1 then
                 error("kiro-cli: \($sys.key): \($hits | length) manifest entries match \($sys.value | tojson), expected 1; manifest downloads: \($available | join(", "))")
-              elif ($hits[0].download | type) != "string" or ($hits[0].download | startswith($v + "/") | not) then
+              elif ($hits[0].download | startswith($v + "/") | not) then
                 error("kiro-cli: \($sys.key): download \($hits[0].download) for \($sys.value | tojson) is not under manifest version \($v); manifest downloads: \($available | join(", "))")
               else .urls[$sys.key] = $base + "/" + $hits[0].download end)
       ''} "$1"

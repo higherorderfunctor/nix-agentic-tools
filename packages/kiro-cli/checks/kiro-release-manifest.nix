@@ -1,4 +1,4 @@
-# The release selector against manifests shaped like Kiro's real one, which
+# The release selector against a manifest shaped like Kiro's real one, which
 # lists zip, tar.zst and rpm siblings and musl tarballs beside each glibc
 # tarball. Expected URLs are written by hand from the manifest's download paths.
 {pkgs, ...}: let
@@ -20,19 +20,30 @@ in {
     [ "$("$jq" -r '.urls."aarch64-darwin"' selected.json)" = https://desktop-release.q.us-east-1.amazonaws.com/3.1.0/kirocli-universal-darwin.tar.gz ]
     [ "$("$jq" '.urls | length' selected.json)" = 2 ]
 
-    # Each refusal names the Nix system, and the manifest's downloads.
+    # Each refusal names the Nix system, and the manifest's downloads. The
+    # negative manifests are the fixture with one transformation each.
     expect_refusal() {
-      local fixture="$1" system="$2" reason="$3" status=0
-      ${select} "${fixtures}/$fixture.json" > /dev/null 2> err.txt || status=$?
+      local name="$1" filter="$2" system="$3" reason="$4" status=0
+      "$jq" "$filter" ${fixtures}/manifest.json > "$name.json"
+      ${select} "$name.json" > /dev/null 2> err.txt || status=$?
       [ "$status" != 0 ]
       grep -qF "$system" err.txt
       grep -qF "$reason" err.txt
       grep -qF 'manifest downloads:' err.txt
       grep -qF 'kirocli-x86_64-linux-musl.tar.gz' err.txt
     }
-    expect_refusal missing-entry x86_64-linux '0 manifest entries match'
-    expect_refusal duplicate-entry x86_64-linux '2 manifest entries match'
-    expect_refusal stale-download aarch64-darwin 'is not under manifest version 3.1.0'
+    # Wanted entry missing.
+    expect_refusal missing-entry \
+      '.packages |= map(select(.download != "3.1.0/kirocli-x86_64-linux.tar.gz"))' \
+      x86_64-linux '0 manifest entries match'
+    # Wanted entry listed twice.
+    expect_refusal duplicate-entry \
+      '.packages += [.packages[] | select(.download == "3.1.0/kirocli-x86_64-linux.tar.gz")]' \
+      x86_64-linux '2 manifest entries match'
+    # Selected download from another version than the manifest's.
+    expect_refusal stale-download \
+      '(.packages[] | select(.download == "3.1.0/kirocli-universal-darwin.tar.gz") | .download) = "3.0.0/kirocli-universal-darwin.tar.gz"' \
+      aarch64-darwin 'is not under manifest version 3.1.0'
 
     touch "$out"
   '';
