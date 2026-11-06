@@ -560,7 +560,7 @@ The suite takes the measured top-level value options from the environment, so no
 option list is written by hand; one single-attribute `nix eval` supplies it:
 
 ```bash
-KIRO_LAUNCH_VALUE_OPTIONS="$(nix eval --impure --raw --expr 'let lib = (builtins.getFlake "nixpkgs").lib; in lib.concatStringsSep "," (import ./packages/kiro-cli/lib/launchValueOptions.nix {inherit lib;}).measured')" \
+KIRO_LAUNCH_VALUE_OPTIONS="$(nix eval --impure --raw --expr 'let lib = (builtins.getFlake (toString ./.)).inputs.nixpkgs.lib; in lib.concatStringsSep "," (import ./packages/kiro-cli/lib/launchValueOptions.nix {inherit lib;}).measured')" \
   python -m unittest discover -s packages/kiro-cli/usage -p 'test_*.py' -v
 ```
 
