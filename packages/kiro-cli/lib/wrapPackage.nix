@@ -55,22 +55,11 @@
 
   # Value-taking top-level options whose values must not be mistaken for a
   # subcommand: `kiro-cli --agent acp` is a bare launch, not the `acp`
-  # subcommand. Sourced from the 3.0.0 binary's chat-argument strings and the
-  # TUI's launch-flag table. An unlisted value flag spelled `acp` would make
-  # its value look like the subcommand and append `--agent-engine=v3` to a
-  # bare launch.
-  launchValueFlags = [
-    "--agent"
-    "--agent-engine"
-    "--delete-session"
-    "--effort"
-    "--model"
-    "--output-format"
-    "--profile"
-    "--repo"
-    "--resume-id"
-    "--session-source"
-  ];
+  # subcommand. The list is measured from the binary's `--help`
+  # (./launchValueOptions.nix) and shared with `kiro-usage exec`; an unlisted
+  # value option spelled `acp` would make its value look like the subcommand and
+  # append `--agent-engine=v3` to a bare launch.
+  launchValueFlags = (import ./launchValueOptions.nix {inherit lib;}).measured;
 
   # Options that only reach Kiro through this wrapper. mkKiro.nix reports the
   # ones a consumer set while `package = null` leaves no wrapper to carry them.

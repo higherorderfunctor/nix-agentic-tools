@@ -102,6 +102,40 @@ in {
         && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
     );
 
+    # The measured top-level value options are exactly the three the 3.0.0
+    # parser takes a value for: a list that carried `--model` (chat-only) or the
+    # no-value `--resume-picker` alias `--list` would misread their neighbors.
+    # A value option's short name and aliases are skipped too.
+    module-kiro-launch-value-options = mkTest "kiro-launch-value-options" (
+      let
+        launchValueOptions = import ../lib/launchValueOptions.nix {inherit lib;};
+        option = {
+          aliases = [];
+          short = null;
+          takesValue = true;
+        };
+      in
+        launchValueOptions.measured
+        == ["--agent" "--repo" "--resume-id"]
+        && launchValueOptions.valueOptions {
+          "--flag" =
+            option
+            // {
+              long = "--flag";
+              takesValue = false;
+              aliases = ["--other"];
+            };
+          "--value" =
+            option
+            // {
+              long = "--value";
+              short = "-v";
+              aliases = ["--alias"];
+            };
+        }
+        == ["--alias" "--value" "-v"]
+    );
+
     # The `acp --agent-engine` presence scan: an exact per-token match in both
     # spellings (a substring scan of "$*" would let a prompt that mentions the
     # flag count), defaulting to 0, and stopping at `--`.

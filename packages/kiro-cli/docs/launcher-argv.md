@@ -2,12 +2,13 @@
 
 <!-- cspell:ignore avante codecompanion cutover -->
 
-> **Last verified:** 2026-11-05 — Kiro CLI 3.0.0 ships one `kiro-cli` binary.
+> **Last verified:** 2026-11-06 — Kiro CLI 3.0.0 ships one `kiro-cli` binary.
 > The wrapper always prepends `--v3` and adds `--agent-engine=v3` to `acp`
 > (before an end-of-options `--`, else last) unless the caller passed an
-> `--agent-engine`; it injects no trust flag. The 3.0.0 facts below are read
-> from the binary and asserted by `kiro-kas-dispatch`; 2.x measurements are
-> labelled as such.
+> `--agent-engine`; it injects no trust flag. Its subcommand scan skips the
+> values of the top-level options the binary's `--help` lists as taking one. The
+> 3.0.0 facts below are read from the binary and asserted by
+> `kiro-kas-dispatch`; 2.x measurements are labelled as such.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -157,12 +158,19 @@ Kiro's default.
 `gateOnSubcommand` runs `subcommandBlock`, which walks argv left to right and
 stops at the first token that is neither an option nor an option's **value**:
 
-- **Value-taking options must be listed.** `launchValueFlags` in
-  `wrapPackage.nix` lists the 3.0.0 top-level ones (`--agent`, `--model`,
-  `--agent-engine`, `--resume-id` and others), sourced from the binary's
-  chat-argument strings and the TUI's launch-flag table. Without the skip,
+- **Value-taking options must be listed, and the list is measured.** The scan
+  skips the next token after each top-level option that takes a value, spelled
+  by long name, short name and alias. 3.0.0's top level has three: `--agent`,
+  `--resume-id` and `--repo`. The list comes from the `top` table of
+  `cli.options` in `extracted/`, which `extract/cli-help.py` reads from the
+  payload's `kiro-cli --help` (`lib/launchValueOptions.nix` derives the names).
+  The same names reach `kiro-usage exec` as `--launch-value-options`, so the
+  launcher and the usage tool cannot disagree. Without the skip,
   `kiro-cli --agent acp` reads as the `acp` subcommand and a bare launch gets
-  `--agent-engine=v3`, which its parser rejects. The `--opt=value` form needs no
+  `--agent-engine=v3`, which its parser rejects. An option the top level does
+  not parse, such as `--model` (a `chat` and `acp` option), is not skipped:
+  upstream rejects `kiro-cli --model acp` at the top level, so nothing launches
+  and the scan reads `acp` as the subcommand. The `--opt=value` form needs no
   entry: one token, handled by the `-*` arm.
 - **`--` parks on a sentinel** no gate matches, so gated injection declines
   rather than guessing.
@@ -357,13 +365,29 @@ parse probe rather than trusting help text — use an argument that fails
 validation LATE, so "unexpected argument" versus "invalid value" distinguishes a
 parse rejection from an accepted flag.
 
+The option tables of `kiro-cli`, `chat` and `acp` need no hand re-measure: the
+`kiro-cli-extracted` check runs `extract/cli-help.py` against the Linux payload,
+prints the whole table in its build log and fails when it differs from the
+committed `cli.options` facts. Regenerate with
+`nix run .#checks.x86_64-linux.kiro-cli-extracted.passthru.regenerate`. The
+tables are measured on x86_64-linux only: clap compiles each platform's tables
+from one source, so Darwin has no host-run job for them.
+
 ## Tests
 
 - `packages/kiro-cli/checks/kiro-wrapper-argv.nix` — the real wrapper against a
   stub package that prints its argv. Covers which SIDE of the subcommand each
-  flag lands on, the value-flag skip, `--`, idempotence of `--v3`, the
-  presence-only `acp` selector, the absence of `--trust-tools`, and the env/PATH
-  export paths.
+  flag lands on, the value-flag skip (`--agent`, `--resume-id`, `--repo`, and
+  `--model` not skipped), `--`, idempotence of `--v3`, the presence-only `acp`
+  selector, the absence of `--trust-tools`, and the env/PATH export paths.
+- `packages/kiro-cli/checks/kiro-cli-extracted.nix` — the drift check for
+  `cli.options` (hand-written rows for `--auth-method`, `--agent-engine`,
+  `--format`, `--resume-picker`, `--verbose` and the value options) and
+  `kiro-cli-help-fixtures`, which runs the parser on the real 3.0.0 help output
+  under `checks/fixtures/help/` and on three inputs it must refuse.
+- `packages/kiro-cli/checks/module-eval.nix`
+  (`module-kiro-launch-value-options`) — the measured value-option list, and
+  that a short name and an alias of a value option are skipped too.
 - `packages/kiro-cli/checks/kas-dispatch.py` (`kiro-kas-dispatch`) — the real
   3.0.0 binary through the wrapper, and the raw `acp --agent-engine=v3`
   measurement.

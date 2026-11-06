@@ -1002,7 +1002,7 @@ class RuntimeTests(unittest.TestCase):
                 for error in (FileNotFoundError(), PermissionError(13, "Permission denied")):
                     execute.side_effect = error
                     output = io.StringIO()
-                    with patch.object(sys, "argv", ["runtime.py", "cli", "--state-dir", str(state), "--port", "19001", "--warn-bytes", "1", "--", "exec", "absent"]), contextlib.redirect_stderr(output):
+                    with patch.object(sys, "argv", ["runtime.py", "cli", "--state-dir", str(state), "--port", "19001", "--warn-bytes", "1", "--launch-value-options=--agent", "--", "exec", "absent"]), contextlib.redirect_stderr(output):
                         self.assertEqual(runtime.main(), 1)
                     self.assertIn("absent", output.getvalue())
                     self.assertNotIn("Start the kiro-usage service", output.getvalue())
