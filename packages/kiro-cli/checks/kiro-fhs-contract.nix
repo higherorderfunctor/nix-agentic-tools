@@ -11,16 +11,9 @@
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     kiro-fhs-contract = let
       kiroPackage = pkgs.ai.kiro-cli;
-      wrapKiroPackage =
-        (import ../lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage;
       selectedKiroPackage = (kiroPackage.withBundlePatches {
         replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
       }).withRolloutFeatures ["background_execution"];
-      trustedKiroPackage = wrapKiroPackage {
-        package = selectedKiroPackage;
-        trustedMcpTools = ["fs_read"];
-        v3 = false;
-      };
     in
       pkgs.runCommandLocal "kiro-fhs-contract-check" {} ''
         set -euETo pipefail
@@ -34,27 +27,29 @@
         [ -f "$nat_entrypoint" ] || nat_fail "kiro-cli no longer resolves to a generated launcher"
 
         # nixpkgs 9ddfd8a consolidated the three per-command FHS environments
-        # into one shared environment. Its public commands are now thin
+        # into one shared environment. Its public commands are thin
         # makeWrapper scripts, so readlink -f on bin/kiro-cli stops one layer
-        # before the bubblewrap launcher. Keep accepting the older direct
-        # launcher while it remains in the compatibility range.
+        # before the bubblewrap launcher. This package pins that topology:
+        # bin/kiro-cli must dispatch through the shared launcher.
         nat_entrypoint_root="''${nat_entrypoint%/bin/kiro-cli}"
         nat_shared_launcher="$nat_entrypoint_root/libexec/kiro-cli/kiro-cli-wrapper"
-        if [ -e "$nat_shared_launcher" ]; then
-          for nat_command in kiro-cli kiro-cli-chat kiro-cli-term; do
-            nat_command_wrapper="$(${pkgs.coreutils}/bin/readlink -f ${kiroPackage}/bin/$nat_command)"
-            [ -f "$nat_command_wrapper" ] \
-              || nat_fail "$nat_command no longer resolves to a generated command wrapper"
-            ${pkgs.gnugrep}/bin/grep -Eq \
-              "^exec \"$nat_shared_launcher\"[[:space:]]+$nat_command[[:space:]]+\"\\\$@\"[[:space:]]*$" \
-              "$nat_command_wrapper" \
-              || nat_fail "$nat_command no longer dispatches through the shared FHS launcher"
-          done
-          nat_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_shared_launcher")"
-        else
-          nat_launcher="$nat_entrypoint"
-        fi
+        [ -e "$nat_shared_launcher" ] \
+          || nat_fail "the shared FHS launcher is missing; re-measure the wrapper topology"
+        ${pkgs.gnugrep}/bin/grep -Eq \
+          "^exec \"$nat_shared_launcher\"[[:space:]]+kiro-cli[[:space:]]+\"\\\$@\"[[:space:]]*$" \
+          "$nat_entrypoint" \
+          || nat_fail "kiro-cli no longer dispatches through the shared FHS launcher"
+        nat_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_shared_launcher")"
         [ -f "$nat_launcher" ] || nat_fail "could not locate the generated FHS launcher"
+
+        # 3.0.0 ships one command. nixpkgs' FHS expression also wraps
+        # kiro-cli-chat and kiro-cli-term; package.nix removes them, so every
+        # selected variant exposes exactly kiro-cli.
+        for nat_package in ${kiroPackage} ${selectedKiroPackage}; do
+          nat_bin_entries="$(${pkgs.coreutils}/bin/ls -A "$nat_package/bin")"
+          [ "$nat_bin_entries" = "kiro-cli" ] \
+            || nat_fail "$nat_package/bin must contain exactly kiro-cli, found: $nat_bin_entries"
+        done
 
         ${pkgs.gnugrep}/bin/grep -qF -- '--bind /nix /nix' "$nat_launcher" \
           || nat_fail "FHS launcher no longer bind-mounts /nix; re-measure extraPackages visibility"
@@ -144,36 +139,10 @@
           "$nat_profile" \
           || nat_fail "FHS profile no longer preserves inherited PATH as its tail"
 
-        # Production-shaped trust injection: the upstream root shadows an
-        # outer kiro-cli-chat wrapper, so the configured wrapper must be part
-        # of the FHS payload itself. Follow both the consolidated shared
-        # launcher and the older per-command launcher to the synthesized root,
-        # then inspect the command path dispatch actually selects.
-        nat_trusted_entrypoint="$(${pkgs.coreutils}/bin/readlink -f ${trustedKiroPackage}/bin/kiro-cli-chat)"
-        nat_trusted_entrypoint_root="''${nat_trusted_entrypoint%/bin/kiro-cli-chat}"
-        nat_trusted_shared_launcher="$nat_trusted_entrypoint_root/libexec/kiro-cli/kiro-cli-wrapper"
-        if [ -e "$nat_trusted_shared_launcher" ]; then
-          nat_trusted_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_trusted_shared_launcher")"
-        else
-          nat_trusted_launcher="$nat_trusted_entrypoint"
-        fi
-        nat_trusted_rootfs="$(${pkgs.gnused}/bin/sed -n \
-          's#^for i in \(/nix/store/[^ ]*-fhsenv-rootfs\)/\*; do$#\1#p' \
-          "$nat_trusted_launcher")"
-        [ -d "$nat_trusted_rootfs" ] \
-          || nat_fail "could not locate the configured FHS root; trustedMcpTools composition is unverified"
-        nat_trusted_chat="$(${pkgs.coreutils}/bin/readlink -f "$nat_trusted_rootfs/usr/bin/kiro-cli-chat")"
-        [ -f "$nat_trusted_chat" ] \
-          || nat_fail "configured FHS root no longer supplies kiro-cli-chat"
-        ${pkgs.gnugrep}/bin/grep -qF -- '--trust-tools=fs_read' "$nat_trusted_chat" \
-          || nat_fail "trustedMcpTools wrapper is not inside the FHS command path"
-        ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.unwrapped}/bin/kiro-cli-chat' "$nat_trusted_chat" \
-          || nat_fail "FHS trust wrapper lost the selected rollout/prompt payload"
-        for nat_command in kiro-cli kiro-cli-chat; do
-          ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.kas}/node_modules/@kiro/agent/dist/server/acp-server.js' \
-            "${selectedKiroPackage.unwrapped}/bin/$nat_command" \
-            || nat_fail "selected native command lost its fixed KAS path"
-        done
+        # A rollout and prompt-patched payload still binds its own KAS.
+        ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.kas}/node_modules/@kiro/agent/dist/server/acp-server.js' \
+          "${selectedKiroPackage.unwrapped}/bin/kiro-cli" \
+          || nat_fail "selected native command lost its fixed KAS path"
         touch "$out"
       '';
   };

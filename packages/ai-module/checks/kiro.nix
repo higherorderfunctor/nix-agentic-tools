@@ -132,25 +132,28 @@ in {
     '';
     ai-module-kiro-surfaces = mkTest "ai-module-kiro-surfaces" (
       lib.all (backend: let
-        evaluated = backends.${backend} {
-          ai.kiro = {
-            agents.reviewer = ''{"name":"reviewer"}'';
-            cli.enable = true;
-            context.text = "CONTEXT";
-            native.agents.writer = {
-              format = "markdown";
-              prompt.text = "WRITE";
+        evaluated = backends.${backend} (lib.recursiveUpdate {
+            ai.kiro = {
+              agents.reviewer = ''{"name":"reviewer"}'';
+              cli.enable = true;
+              context.text = "CONTEXT";
+              native.agents.writer = {
+                format = "markdown";
+                prompt.text = "WRITE";
+              };
+              rules.scoped = rule;
+              skills.single = skill;
             };
-            permissions = [
+          }
+          # Home Manager only: devenv declares no ai.kiro.permissions option.
+          (lib.optionalAttrs (backend == "hm") {
+            ai.kiro.permissions = [
               {
                 capability = "filesystem";
                 effect = "allow";
               }
             ];
-            rules.scoped = rule;
-            skills.single = skill;
-          };
-        };
+          }));
         inherit (evaluated) config;
         prefix = ".kiro/";
         paths =

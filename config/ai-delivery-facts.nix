@@ -10,10 +10,12 @@
   };
   # A surface declared `backends = []` has no per-runtime pool option.
   declaresPool = surface: ecosystem: (optionPaths.records.${ecosystem}.surfaceSupport.${surface} or {backends = [];}).backends != [];
-  inputOptions = surface: ecosystem:
+  inputOptions = surface: ecosystem: mode:
     if surface == "permissions"
     then
-      if builtins.elem ecosystem ["kimchi" "kiro"]
+      # Kiro's `permissions` is declared under `hm.options`, so it is no input
+      # where devenv has no such option.
+      if ecosystem == "kimchi" || (ecosystem == "kiro" && mode == "hm")
       then [["ai" ecosystem "permissions"]]
       else if builtins.elem ecosystem ["claude" "codex"]
       then [["ai" ecosystem "native" "settings" "permissions"]]
@@ -49,7 +51,7 @@ in {
   in {
     "permissions/copilot/devenv" = copilot;
     "permissions/copilot/hm" = copilot;
-    "permissions/kiro/devenv" = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";
+    "permissions/kiro/devenv" = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read, and a devenv shell must not define a new root to reach them. Home Manager alone declares ai.kiro.permissions and ai.kiro.cli.trustedMcpTools (the hm.options of packages/kiro-cli/lib/mkKiro.nix); on devenv they do not exist, and the shared MCP toolPolicy warns through surfaceSupport. Agent-local permission records remain part of agents.";
   };
   # Shared surfaces a record does not consume while a native option still
   # writes the file (Kiro's native hooks and `cli.json`): the row delivers

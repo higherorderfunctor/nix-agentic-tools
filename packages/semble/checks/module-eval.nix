@@ -1029,6 +1029,17 @@ in {
         tools = ["read"];
       });
       invalidFile = pkgs.writeText "invalid-search.json" "{}";
+      # The production launcher, which appends `--agent-engine=v3` to `acp`,
+      # without the buildFHSEnv layer: nested user namespaces are not portable
+      # across Nix build sandboxes.
+      wrapped =
+        (import ../../kiro-cli/lib/wrapPackage.nix {
+          inherit pkgs;
+          inherit (pkgs) lib;
+        }).wrapPackage {
+          package = pkgs.ai.kiro-cli;
+          useFhsSandbox = false;
+        };
     in
       assert fromGeneratedTree ".kiro/agents/semble-search.json" evaluated.config.home.file.".kiro/agents/semble-search.json";
         pkgs.runCommandLocal "module-test-semble-kiro-acp" {nativeBuildInputs = [pkgs.python3];} ''
@@ -1041,6 +1052,8 @@ in {
           export XDG_CONFIG_HOME="$TMPDIR/config"
           export XDG_DATA_HOME="$TMPDIR/data"
           export XDG_STATE_HOME="$TMPDIR/state"
+          export CFFIXED_USER_HOME="$HOME"
+          export KIRO_DISABLE_TELEMETRY=1
           # Since 2.35.1 `agent validate` and `acp` refuse to start without a
           # login; test mode passes that gate. A placeholder KIRO_API_KEY passes it
           # too, but then session/new asks the remote MCP governance API, which
@@ -1052,11 +1065,11 @@ in {
           cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
 
           validate_status=0
-          # Drive the unwrapped chat binary that implements `kiro-cli agent
-          # validate` directly. The exported Linux package is a buildFHSEnv
+          # Drive the unwrapped binary that implements `kiro-cli agent validate`
+          # directly. The exported Linux package is a buildFHSEnv
           # bubblewrap launcher, and nested user namespaces are not portable across
           # Nix build sandboxes; validation itself does not need the FHS root.
-          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
+          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
             --path "$HOME/.kiro/agents/semble-search.json" \
             >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
             || validate_status=$?
@@ -1070,7 +1083,7 @@ in {
           }
 
           invalid_status=0
-          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
+          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
             --path "$HOME/.kiro/agents/invalid-search.json" \
             >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
             || invalid_status=$?
@@ -1086,11 +1099,12 @@ in {
             exit 1
           }
 
-          # Invoke the chat binary directly and omit --agent-engine: this is Kiro's
-          # v2 ACP path. The driver sends only initialize and session/new, never a
-          # model-bearing session/prompt request.
+          # Drive the launcher production runs. It appends --agent-engine=v3 to
+          # `acp`, and the v3 engine selects the agent from session/new
+          # `_meta.kiro.modeId`; `acp --agent` is rejected there. The driver sends
+          # only initialize and session/new, never a model-bearing session/prompt.
           python3 ${./semble-kiro-acp.py} \
-            ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat \
+            ${wrapped}/bin/kiro-cli \
             semble-search \
             control-search \
             "$TMPDIR/workspace" \
@@ -1107,7 +1121,7 @@ in {
     # The check above SIGKILLs a child that outlives its post-stdin-EOF budget
     # and then reads its exit status. Nothing exercised those branches, so a
     # harness kill was reported as a product crash for five weeks. The real
-    # `kiro-cli-chat` cannot be asked to hang, to panic, or to take a
+    # `kiro-cli` cannot be asked to hang, to panic, or to take a
     # third-party signal, so the contract is proved against a fake server that
     # can -- including that an autonomous non-zero exit still FAILS, which is
     # the assertion the fix had to keep.

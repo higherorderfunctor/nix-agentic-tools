@@ -1,9 +1,10 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-29 — two native package shards per system exclude
-> patched Kiro; its required validation legs use Ubuntu when kiro-scope finds no
-> relevant changes. The committed devenv package lists contain no kiro-cli entry
-> with either CI setting; local runtime opt-ins are separate.
+> **Last verified:** 2026-11-05 — Kiro 3.0.0's payload is owned here and
+> re-wrapped by nixpkgs' FHS package. Two native package shards per system
+> exclude patched Kiro; its required validation legs use Ubuntu when kiro-scope
+> finds no relevant changes. The committed devenv package lists contain no
+> kiro-cli entry with either CI setting; local runtime opt-ins are separate.
 
 ### Overview
 
@@ -179,14 +180,13 @@ cache.
 `.#ciPackages.<sys>`, Kiro's patched canary included, on every input bump; only
 the CodeQL engines are left out of its `--select` (see the codeql fragment).
 Building Kiro there is deliberate and stays: `postInstallCheck` runs
-`kiro-cli-chat --version`, so the build is a genuine runtime smoke test of the
-patch, and `doInstallCheck` is already true upstream so the phase really
-executes. The fix is therefore at the PUSH, not the build —
-`pushFilter: kiro-cli|codeql` on every `cachix-action` step that holds the token
-(`ci.yml` publish-hestia and build-packages, and the `update.yml` update step
-every lane shares). One spelling, copied identically: Actions cannot share an
-action input across workflows, and `test-ci-packages.py` fails if any
-credentialed step lacks it.
+`kiro-cli --version`, so the build is a genuine runtime smoke test of the patch,
+and the owned payload sets `doInstallCheck` so the phase really executes. The
+fix is therefore at the PUSH, not the build — `pushFilter: kiro-cli|codeql` on
+every `cachix-action` step that holds the token (`ci.yml` publish-hestia and
+build-packages, and the `update.yml` update step every lane shares). One
+spelling, copied identically: Actions cannot share an action input across
+workflows, and `test-ci-packages.py` fails if any credentialed step lacks it.
 
 **The generalizable lesson: `cachix-action` with a token runs a watch-store
 daemon that pushes every path realized in the job.** Reasoning about which
@@ -256,13 +256,13 @@ keeping because none is specific to Kiro:
   its `/nix/store/` prefix.
 
 Sources are filtered too, and gain explicit versioned names
-(`kiro-cli-source-<version>-<system>.<ext>`). They were unversioned
-(`kirocli-x86_64-linux.tar.gz`, and darwin's `Kiro%20CLI.dmg` landing as
-`Kiro-20CLI.dmg` once nix strips the illegal `%`), so a 647 MiB blob could not
-be attributed to a release. Caching them bought nothing regardless: the version
-comes from the committed sidecar, not IFD, so **eval never needs the source and
-nix fetches `src` only when it must BUILD** — anyone with a cache hit never
-touches it, and anyone without is building from source anyway.
+(`kiro-cli-source-<version>-<system>.tar.gz`). The release basenames
+(`kirocli-x86_64-linux.tar.gz`, `kirocli-universal-darwin.tar.gz`) carry no
+version, so a several-hundred-MiB blob could not be attributed to a release.
+Caching them bought nothing regardless: the version comes from the committed
+sidecar, not IFD, so **eval never needs the source and nix fetches `src` only
+when it must BUILD** — anyone with a cache hit never touches it, and anyone
+without is building from source anyway.
 
 KAS outputs are named `kiro-cli-kas[-patched]-<version>`, so the same upload
 filter excludes them. They are unfree release data (agent metadata declares
@@ -272,39 +272,27 @@ also covers that payload. Native package and KAS share the fetched source; KAS
 extracts directly from it, avoiding a dependency cycle. See the Kiro launcher
 fragment for archive validation, patch selection and runtime checks.
 
-### The overrideAttrs Pattern
+### Owning the payload, re-wrapping upstream's FHS package
 
-kiro-cli overrides an existing nixpkgs package rather than defining a new
-derivation from scratch. This inherits upstream build logic (install phases,
-meta, dependencies) while pinning to inline versions and per-platform sources:
+kiro-cli no longer overrides nixpkgs' `kiro-cli-unwrapped`: since 3.0.0 the
+release ships one `kiro-cli` binary in a `kirocli/` tarball on both platforms,
+while that derivation's install phase still names the pre-3.0 files
+(`kiro-cli-chat`, `kiro-cli-term`, a Darwin `.app` from a DMG).
+`packages/kiro-cli/packages/ai/kiro-cli/package.nix` therefore owns the payload
+with `stdenv.mkDerivation` (`sourceRoot = "kirocli"`, `versionCheckHook` with
+`doInstallCheck = true`) and hands it to nixpkgs' public `kiro-cli` through
+`.override {kiro-cli-unwrapped = …;}`, keeping upstream's Linux FHS sandbox. One
+`releaseUrls` table feeds both the fetched sources and the updater, so a build
+that fetches a platform's tarball proves the updater's URL for it.
 
-```nix
-pkgs.<package>.overrideAttrs (_: {
-  inherit (sources) version;
-  src = fetchurl { inherit (platformSrc) url hash; };
-})
-```
-
-Upstream nixpkgs changes to that derivation (new dependencies, build fixes) are
-picked up on nixpkgs bumps.
-
-**But only while `pkgs.<name>` remains the derivation carrying `src`.** This
-pattern degrades to a SILENT no-op — not an error — the moment upstream
-restructures the attribute out from under it. nixpkgs f13ff45a split `kiro-cli`
-into `kiro-cli-unwrapped` plus a public FHS wrapper (initially a `symlinkJoin`
-of three environments, now one shared environment); the public derivation has no
-`src`, and its `buildCommand` never reaches the unwrapped package's
-`fixupPhase`, so the pin AND the `postFixup` both evaporated while the build
-stayed green. `packages/kiro-cli/packages/ai/kiro-cli/package.nix` therefore
-feature-detects `pkgs ? kiro-cli-unwrapped` on the injected `pkgs`, overrides
-the unwrapped derivation, and hands the result back to upstream's wrapper via
-`.override`. Its public passthru also exposes `withFhsPayload` so module
-configuration that must be visible inside the FHS root can use that same
-upstream expression. The public package-selection contract is topology-stable:
-`unwrapped` always names the direct payload, and `kiroFhsSandbox` says whether
-selecting it actually removes an FHS layer (`false` on darwin and pre-split
-nixpkgs). `useFhsSandbox = false` selects that payload explicitly instead of
-changing the public package's default meaning.
+The earlier thin `overrideAttrs` shape degraded to a SILENT no-op — not an error
+— when nixpkgs f13ff45a split `kiro-cli` into `kiro-cli-unwrapped` plus a public
+FHS wrapper: the public derivation has no `src`, and its `buildCommand` never
+reaches the unwrapped package's `fixupPhase`, so the pin AND the `postFixup`
+both evaporated while the build stayed green. The public package-selection
+contract is topology-stable: `unwrapped` always names the direct payload (a
+valid no-op selection on darwin), and `useFhsSandbox = false` selects that
+payload explicitly instead of changing the public package's default meaning.
 
 Read the "When the attribute stops being the derivation" section of the
 overlay-pattern fragment before adding another `overrideAttrs` package — it

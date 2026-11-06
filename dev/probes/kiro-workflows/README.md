@@ -12,7 +12,7 @@ so a future session can extend rather than rebuild.
 
 ## Prerequisite
 
-Workflows are GA since Kiro CLI 2.26.0. Set `ai.kiro.cli.v3 = true` and
+Workflows are GA since Kiro CLI 2.26.0. Set
 `ai.kiro.cli.workflows.enable = true`. Home Manager implies the global
 `chat.enableWorkflows` setting; devenv requires it in the user's global Kiro
 settings and warns when it is missing. Start a fresh session and confirm

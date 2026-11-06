@@ -1,13 +1,14 @@
-"""A fake Kiro v2 ACP server, for exercising semble-kiro-acp.py's teardown.
+"""A fake Kiro v3 ACP server, for exercising semble-kiro-acp.py's teardown.
 
 It answers exactly the three exchanges the real driver performs -- initialize,
-session/new, and one commands/available notification -- and then does whatever
+session/new, and one mcp/status notification -- and then does whatever
 FAKE_TEARDOWN says once stdin reaches EOF. That last part is the point: the real
-`kiro-cli-chat` gives no way to ask for a hang, a panic, or a third-party
+`kiro-cli` gives no way to ask for a hang, a panic, or a third-party
 signal, so the teardown branches were unreachable by any test and stayed wrong
 for weeks.
 
-argv: acp --agent <name>
+argv: acp (the v3 engine rejects `--agent`; the agent arrives as
+`session/new` `_meta.kiro.modeId`)
 FAKE_TEARDOWN: hang | signal | <int exit status>
 """
 
@@ -21,7 +22,10 @@ import time
 # short enough that a leaked process cannot outlive a build.
 HANG_SECONDS = 600
 
-agent = sys.argv[sys.argv.index("--agent") + 1]
+# A driver still passing the v2 selector must fail here as it does on the real
+# engine.
+if "--agent" in sys.argv:
+    sys.exit("error: the following arguments are not supported with --agent-engine=v3: --agent")
 teardown = os.environ["FAKE_TEARDOWN"]
 
 
@@ -30,16 +34,19 @@ def send(message):
     sys.stdout.flush()
 
 
-# The real server advertises Semble's MCP server to the configured agent only;
+# The real server connects Semble's MCP server for the configured agent only;
 # the control agent must see neither the server nor its tools.
-def commands_available():
+def mcp_status(agent):
     if agent != "semble-search":
-        return {"tools": []}
+        return None
     return {
-        "mcpServers": [{"name": "semble", "status": "running", "toolCount": 2}],
-        "tools": [
-            {"name": "find_related", "source": "mcp:semble"},
-            {"name": "search", "source": "mcp:semble"},
+        "sessionId": "fake-session",
+        "servers": [
+            {
+                "name": "semble",
+                "status": "connected",
+                "tools": [{"name": "find_related"}, {"name": "search"}],
+            }
         ],
     }
 
@@ -51,12 +58,18 @@ for line in sys.stdin:
     if request.get("method") == "initialize":
         send({"jsonrpc": "2.0", "id": request["id"], "result": {"protocolVersion": 1}})
     elif request.get("method") == "session/new":
+        agent = request["params"]["_meta"]["kiro"]["modeId"]
         send({
             "jsonrpc": "2.0",
             "id": request["id"],
-            "result": {"modes": {"currentModeId": agent}, "sessionId": "fake-session"},
+            "result": {
+                "modes": {"currentModeId": agent, "availableModes": [{"id": agent}]},
+                "sessionId": "fake-session",
+            },
         })
-        send({"jsonrpc": "2.0", "method": "_kiro.dev/commands/available", "params": commands_available()})
+        status = mcp_status(agent)
+        if status is not None:
+            send({"jsonrpc": "2.0", "method": "_kiro/mcp/status", "params": status})
 
 # stdin reached EOF: this is the window the driver budgets and the fix is about.
 if teardown == "hang":
@@ -66,4 +79,12 @@ elif teardown == "signal":
     # failure -- `harness_kill` stays false because it sent nothing.
     os.kill(os.getpid(), signal.SIGTERM)
     time.sleep(HANG_SECONDS)
+elif teardown.startswith("v3-closed"):
+    # Kiro 3.0.0's v3 relay on stdin EOF. `v3-closed` is the real shape (status
+    # 1, the marker as the last stderr line); each suffix breaks one part of it.
+    status = 2 if teardown == "v3-closed-status-2" else 1
+    print("error: the v3 engine's stdin is closed", file=sys.stderr, flush=True)
+    if teardown == "v3-closed-then-line":
+        print("error: a later failure", file=sys.stderr, flush=True)
+    sys.exit(status)
 sys.exit(int(teardown))

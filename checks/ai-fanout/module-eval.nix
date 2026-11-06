@@ -68,14 +68,11 @@ in {
         kiro = "kiro-cli";
       };
       fixtureFor = runtime: let
-        package =
-          (pkgs.writeShellScriptBin binaries.${runtime} ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            exit 0
-          '').overrideAttrs (_: {
-            passthru.kiroFhsSandbox = false;
-          });
+        package = pkgs.writeShellScriptBin binaries.${runtime} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exit 0
+        '';
         configFor = package:
           lib.setAttrByPath (lib.init (optionPaths.launcher runtime "package"))
           ({inherit package;} // lib.optionalAttrs (runtime == "kiro") {useFhsSandbox = false;});
@@ -128,7 +125,8 @@ in {
         #
         # Every harness wraps on devenv because `gitSshConfigWorkaround` defaults
         # on and contributes `GIT_SSH_COMMAND`. Codex and Kimchi also always wrap
-        # on Home Manager for their launch preflight checks. Other Home Manager
+        # on Home Manager for their launch preflight checks, and Kiro because its
+        # launcher always injects the v3 engine selectors. Other Home Manager
         # launchers wrap only when they inject configuration.
         # `claude` has no wrapper anywhere (its env rides
         # `.claude/settings.json`, never process env), so it installs `cfg.package`
@@ -144,7 +142,7 @@ in {
             claude = "bare";
             codex = "wrapped";
             kimchi = "wrapped";
-            kiro = "bare";
+            kiro = "wrapped";
           };
         };
         installedBy = {

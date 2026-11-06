@@ -17,16 +17,16 @@ methods.
 Each row is a configuration surface. All three methods should support it. Gaps
 are bugs unless marked N/A with rationale.
 
-| Surface          | lib                           | HM                                                                                                     | devenv                                                                                                    |
-| ---------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| Agents           | N/A                           | `ai.agents`, per-CLI `.agents`                                                                         | `ai.agents`, per-CLI `.agents`                                                                            |
-| Environment vars | N/A                           | `ai.environmentVariables`; Claude `native.settings.env`                                                | `ai.environmentVariables`; Claude `native.settings.env`                                                   |
-| Hooks            | N/A                           | `ai.hooks` (Claude, Codex); per-CLI `.hooks` for claude, codex, kiro; Kimchi none (warns); copilot N/A | `ai.hooks` (Claude, Codex, Kimchi); per-CLI `.hooks` for claude, codex, kimchi, kiro; copilot N/A         |
-| Context/rules    | N/A                           | `ai.context`, `ai.rules`, per-runtime                                                                  | `ai.context`, `ai.rules`, per-runtime                                                                     |
-| MCP servers      | `mkStdioEntry`, `mkHttpEntry` | `ai.mcpServers`, per-CLI `.mcpServers`; Claude → personal plugin's `.mcp.json`                         | `ai.mcpServers`, per-CLI `.mcpServers`; Claude → project `.mcp.json`                                      |
-| Permissions      | N/A                           | claude + codex `native.settings.permissions`; kimchi + kiro `.permissions`; copilot N/A                | claude + codex `native.settings.permissions`; kimchi `.permissions`; kiro none (global-only); copilot N/A |
-| Settings         | N/A                           | Per-CLI `native.settings` (typed + freeform)                                                           | Per-CLI `native.settings` (typed + freeform)                                                              |
-| Skills           | N/A                           | `ai.skills`, per-CLI `.skills`                                                                         | `ai.skills`, per-CLI `.skills`                                                                            |
+| Surface          | lib                           | HM                                                                                                     | devenv                                                                                                                   |
+| ---------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Agents           | N/A                           | `ai.agents`, per-CLI `.agents`                                                                         | `ai.agents`, per-CLI `.agents`                                                                                           |
+| Environment vars | N/A                           | `ai.environmentVariables`; Claude `native.settings.env`                                                | `ai.environmentVariables`; Claude `native.settings.env`                                                                  |
+| Hooks            | N/A                           | `ai.hooks` (Claude, Codex); per-CLI `.hooks` for claude, codex, kiro; Kimchi none (warns); copilot N/A | `ai.hooks` (Claude, Codex, Kimchi); per-CLI `.hooks` for claude, codex, kimchi, kiro; copilot N/A                        |
+| Context/rules    | N/A                           | `ai.context`, `ai.rules`, per-runtime                                                                  | `ai.context`, `ai.rules`, per-runtime                                                                                    |
+| MCP servers      | `mkStdioEntry`, `mkHttpEntry` | `ai.mcpServers`, per-CLI `.mcpServers`; Claude → personal plugin's `.mcp.json`                         | `ai.mcpServers`, per-CLI `.mcpServers`; Claude → project `.mcp.json`                                                     |
+| Permissions      | N/A                           | claude + codex `native.settings.permissions`; kimchi + kiro `.permissions`; copilot N/A                | claude + codex `native.settings.permissions`; kimchi `.permissions`; kiro none (option absent; global-only); copilot N/A |
+| Settings         | N/A                           | Per-CLI `native.settings` (typed + freeform)                                                           | Per-CLI `native.settings` (typed + freeform)                                                                             |
+| Skills           | N/A                           | `ai.skills`, per-CLI `.skills`                                                                         | `ai.skills`, per-CLI `.skills`                                                                                           |
 
 ### Per-Surface Notes
 
@@ -71,10 +71,12 @@ backends. Kimchi uses `ai.kimchi.permissions`, merged into
 `.kimchi/permissions.json` under devenv. Kiro uses `ai.kiro.permissions`,
 written to `~/.kiro/settings/permissions.yaml` under Home Manager only: Kiro
 reads permissions from `~/.kiro/settings/` or `~/.kiro/workspace-roots/<hash>/`,
-never a project `.kiro/`, so a devenv-written file would never be read.
-Agent-local permission records stay part of each Kiro agent. github.com Copilot
-reads no permissions file; a custom agent's `tools` list is its only file-borne
-tool restriction.
+never a project `.kiro/`, so a devenv-written file would never be read, and
+devenv defines no root of its own to reach them. `ai.kiro.permissions` and
+`ai.kiro.cli.trustedMcpTools` therefore exist on Home Manager only; on devenv
+they are unknown options. Agent-local permission records stay part of each Kiro
+agent. github.com Copilot reads no permissions file; a custom agent's `tools`
+list is its only file-borne tool restriction.
 
 ### Settings Type Coverage
 

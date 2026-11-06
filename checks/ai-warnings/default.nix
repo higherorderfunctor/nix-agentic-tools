@@ -5,7 +5,6 @@
   ...
 }: let
   policy = import ../../config/ai-delivery.nix {inherit lib;};
-  proxyLib = import ../../lib/ai/proxy.nix {inherit lib;};
   reasonsFor = import ../../lib/ai/app/supportReasons.nix;
   settingsProbes = import ../../lib/testing/normalized-settings-probes.nix {inherit lib;};
   # lib/testing/module-harness.nix declares `warnings` in both backend stubs,
@@ -86,11 +85,12 @@
       then ["ai" row.ecosystem "permissions"]
       else ["ai" row.surface];
   in
-    # No permissions option or translation exists for these runtimes, so there
+    # No permissions option or translation exists for these runtimes (nor for
+    # Kiro on devenv, whose permissions option is Home Manager only), so there
     # is nothing to probe. Assert the EMPTY input list rather than skipping the
     # row: a row that later grows an input option then stops passing by
     # default instead of staying silently unexercised.
-    if row.surface == "permissions" && row.ecosystem != "kiro"
+    if row.surface == "permissions" && (row.ecosystem != "kiro" || row.mode == "devenv")
     then row.inputOptions == []
     else lib.all (field: warns field path) (requestFields row.surface);
   # Conditional record gaps keep focused requests that trigger their predicates.
@@ -128,18 +128,9 @@
         then ["args" "package" "settings"]
         else ["settings"]
       )) [false true]
-    ++ map (field: {
-      runtime = "kiro";
-      surface = "proxy";
-      gapPath = [field];
-      path = ["ai" "proxy" field];
-      warningPath = ["ai" "kiro" "proxy" field];
-      value = sample.proxy.http;
-      # Pin the v2 delivery gap even if Kiro's default engine changes.
-      extra.ai.kiro.cli.v3 = false;
-    })
-    proxyLib.fields
-    # A tool policy value with no surface on the runtime or backend.
+    # A tool policy value with no surface on the runtime or backend. Kiro
+    # delivers it as Home Manager permissions.yaml rules, so its Home Manager
+    # case asserts silence instead.
     ++ map (runtime: {
       inherit runtime;
       surface = "mcpServers";
@@ -149,7 +140,20 @@
         command = "probe";
         toolPolicy.probe = "disabled";
       };
-    }) ["kimchi" "kiro"]
+    }) ["kimchi"]
+    ++ map (mode: {
+      inherit mode;
+      runtime = "kiro";
+      silent = mode == "hm";
+      surface = "mcpServers";
+      gapPath = ["toolPolicy"];
+      path = ["ai" "mcpServers" "probe"];
+      value = {
+        command = "probe";
+        toolPolicy.probe = "disabled";
+      };
+    })
+    policy.modes
     ++ [
       {
         runtime = "claude";
@@ -489,10 +493,13 @@
     evaluation = evalConfig mode (lib.recursiveUpdate enabled input);
     messages = evaluation.warnings;
   in
-    present messages
-    && (!(case ? count) || builtins.length messages == case.count)
-    && !present emptyCaseWarnings.${mode}.${case.runtime}
-    && evaluate mode input == [];
+    if case.silent or false
+    then !(lib.any (lib.hasInfix (lib.showOption warningPath)) messages)
+    else
+      present messages
+      && (!(case ? count) || builtins.length messages == case.count)
+      && !present emptyCaseWarnings.${mode}.${case.runtime}
+      && evaluate mode input == [];
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
     {
       ai = {
@@ -588,81 +595,65 @@
       {url = "https://example.invalid";}
       {command = "probe";}
     ];
-  # `isDarwin` is forced in BOTH directions rather than left to the host: this
-  # check runs on x86_64-linux and aarch64-darwin, so reading the real platform
-  # would make the non-Darwin arms assert nothing on the Darwin runner.
-  trustWarnings = {
-    backend,
-    darwin ? false,
-    trustedMcpTools ? ["@probe"],
-    v3 ? false,
-  }: let
-    declaration = {
-      ai.kiro = {
-        cli.enable = true;
-        cli = {inherit trustedMcpTools v3;};
-      };
+  # Kiro reads tool policy only from permission rules under ~/.kiro, which a
+  # devenv shell neither writes nor reaches through a root of its own. Home
+  # Manager declares the options that feed those rules; devenv declares none
+  # of them and warns on the shared surface through `surfaceSupport`.
+  kiroHmOnlyOptions = [["ai" "kiro" "cli" "trustedMcpTools"] ["ai" "kiro" "permissions"]];
+  kiroPolicyRequest = {
+    ai.mcpServers.probe = {
+      command = "probe";
+      toolPolicy.probe = "disabled";
     };
-    platformPkgs =
-      pkgs
-      // {
-        stdenv =
-          pkgs.stdenv
-          // {
-            hostPlatform = pkgs.stdenv.hostPlatform // {isDarwin = darwin;};
-          };
-      };
-    record = import ../../packages/kiro-cli/lib/mkKiro.nix {
-      lib = harness.hmLib;
-      pkgs = platformPkgs;
-    };
-  in
-    (lib.evalModules {
-      modules = [
-        harness.aiBase.sharedOptions
-        (
-          if backend == "hm"
-          then harness.hmStubs
-          else harness.devenvStubs
-        )
-        (harness.aiBase.app.${backend + "Transform"} record)
-        {config = declaration;}
-      ];
-    }).config.warnings;
+  };
+  kiroPolicyWarnings = mode: evaluate mode (lib.recursiveUpdate (harness.setEnable "kiro" true) kiroPolicyRequest);
+  kiroPolicyNeedle = "ai.mcpServers.probe.toolPolicy is set but devenv does not deliver it to kiro (reason:";
+  evaluates = mode: config: (builtins.tryEval (evalConfig mode (lib.recursiveUpdate (harness.setEnable "kiro" true) config)).warnings).success;
+  kiroTrustChecks = {
+    # Home Manager keeps the options and renders permissions.yaml, silently.
+    hmDelivers = let
+      result = evalConfig "hm" (lib.recursiveUpdate (harness.setEnable "kiro" true) {ai.kiro.cli.trustedMcpTools = ["@probe"];});
+    in
+      lib.assertMsg (lib.all (path: lib.hasAttrByPath path (harness.evalHm {}).options) kiroHmOnlyOptions)
+      "Home Manager must declare ai.kiro.cli.trustedMcpTools and ai.kiro.permissions"
+      && lib.assertMsg (result.home.file ? ".kiro/settings/permissions.yaml")
+      "Home Manager must render ~/.kiro/settings/permissions.yaml from trustedMcpTools"
+      && lib.assertMsg (!contains "does not deliver" result.warnings)
+      "Home Manager must stay silent on trustedMcpTools"
+      && lib.assertMsg (kiroPolicyWarnings "hm" == [])
+      "Home Manager delivers MCP toolPolicy as permission rules and must stay silent";
+    # An option that is declared on devenv and ignored there, or only warned
+    # about, leaves a setting that looks configured and is not. The option
+    # must be absent, so setting it fails evaluation.
+    devenvOptionsAbsent =
+      lib.assertMsg (lib.all (path: !lib.hasAttrByPath path (harness.evalDevenv {}).options) kiroHmOnlyOptions)
+      "devenv must not declare ai.kiro.cli.trustedMcpTools or ai.kiro.permissions"
+      && lib.assertMsg (evaluates "devenv" {})
+      "control: devenv Kiro with neither option set must evaluate"
+      && lib.assertMsg (!evaluates "devenv" {ai.kiro.cli.trustedMcpTools = ["@probe"];})
+      "devenv must reject ai.kiro.cli.trustedMcpTools as an unknown option, not accept or warn"
+      && lib.assertMsg (!evaluates "devenv" {
+        ai.kiro.permissions = [
+          {
+            capability = "shell";
+            effect = "allow";
+          }
+        ];
+      })
+      "devenv must reject ai.kiro.permissions as an unknown option, not accept or warn";
+    # A shared request that silently succeeds on devenv, or that defines the
+    # Home Manager options there (an unknown-option error), is the wrong
+    # implementation: surfaceSupport must warn instead.
+    devenvWarnsOnSharedPolicy = let
+      messages = kiroPolicyWarnings "devenv";
+    in
+      lib.assertMsg (lib.any (lib.hasPrefix kiroPolicyNeedle) messages)
+      "devenv must warn through surfaceSupport on ai.mcpServers.<name>.toolPolicy for Kiro: ${builtins.toJSON messages}";
+  };
 in {
   imports = [./runtime.nix];
   checks = {
-    ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
-      # Withheld: Darwin under either engine, and the v3 `acp` arm anywhere.
-      contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "hm";
-        darwin = true;
-      })
-      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "devenv";
-        darwin = true;
-        v3 = true;
-      })
-      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "devenv";
-        v3 = true;
-      })
-      # Recovered, or never withheld.
-      && trustWarnings {
-        backend = "hm";
-        darwin = true;
-        v3 = true;
-      }
-      == []
-      && trustWarnings {
-        backend = "hm";
-        darwin = true;
-        trustedMcpTools = [];
-      }
-      == []
-      && trustWarnings {backend = "devenv";} == []
-      && trustWarnings {backend = "hm";} == []
-    );
+    ai-warnings-kiro-tool-trust = harness.mkTest "ai-warnings-kiro-tool-trust" (lib.all lib.id (lib.attrValues kiroTrustChecks));
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.assertMsg settingsFieldsSilent "existing and declared normalized settings consumers must stay supported and quiet"
       && lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
@@ -707,7 +698,6 @@ in {
             kiro.cli = {
               enable = true;
               package = null;
-              v3 = true;
             };
             proxy.instance = "main";
           };

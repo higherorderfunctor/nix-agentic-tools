@@ -102,7 +102,6 @@ The pinned `workflows` rollout state is 100% for all users without a channel
 restriction. No binary patch is needed. Configure:
 
 ```nix
-ai.kiro.cli.v3 = true;
 ai.kiro.cli.workflows.enable = true;
 ```
 

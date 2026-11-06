@@ -40,7 +40,6 @@ in {
     cli = config.ai.kiro.cli or {};
     workflowAvailable =
       (cli.workflows.enable or false)
-      && (cli.v3 or false)
       && (cli.native.settings.chat.enableWorkflows or null) != false;
   in
     lib.mapAttrs (runtime: settings:

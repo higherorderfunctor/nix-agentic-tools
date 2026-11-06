@@ -9,15 +9,15 @@
       inherit (pkgs) lib;
     }).wrapPackage {
       inherit package;
-      trustedMcpTools = [];
       useFhsSandbox = false;
-      v3 = true;
     };
+  # `unwrapped` is the stock payload the raw argv measurement runs against.
   variants = pkgs.writeText "kiro-cli-kas-dispatch.json" (builtins.toJSON {
     stock = {
       package = wrap package;
       server = server package.kas;
       managed = false;
+      unwrapped = "${package.unwrapped}";
     };
     patched = {
       package = wrap patched;

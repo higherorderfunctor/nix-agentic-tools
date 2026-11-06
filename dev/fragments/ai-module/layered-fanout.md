@@ -207,8 +207,9 @@ rather than a second path field: a runtime names exactly the groups it moves.
   project-root anchor for relative secret readers. Hooks state `method = "ro"`
   because the v3 scan keeps only `isFile()` entries; the engine retires them at
   N→0. Hooks, settings and steering ledgers are ungated upgrade declarations.
-  Permissions remain HM-only because Kiro never reads them from project
-  `.kiro/`.
+  Permissions and `trustedMcpTools` are declared for Home Manager only, because
+  Kiro never reads them from project `.kiro/` and devenv defines no root of its
+  own; setting either on devenv is an unknown-option error.
 - **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
   (`paths:`) loader passes `includeExternal: false` at Project scope, with no
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into

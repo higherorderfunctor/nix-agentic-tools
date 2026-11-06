@@ -539,30 +539,6 @@
       && lib.hasInfix "claude-opus-*" claude
       && lib.hasInfix "gpt-*-sol" claude
     );
-    # The skill's Kiro evidence covers the v3 engine only: reaching Kiro turns it
-    # on by default, the program being off leaves Kiro alone, and an explicit
-    # consumer value wins.
-    "module-delegate-routing-${name}-kiro-v3" = mkTest "delegate-routing-${name}-kiro-v3" (
-      result.config.ai.kiro.cli.v3
-      && !(builtins.any (lib.hasInfix "ai.kiro.cli.v3") result.config.warnings)
-      && !(change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.cli.v3
-      && (change {ai.programs.delegate-routing.runtimes.kiro.enable = false;}).config.ai.kiro.cli.v3
-      && !(change {
-        ai.programs.delegate-routing.runtimes = {
-          kiro.enable = false;
-          claude.manualExternalDelegates = ["kimchi"];
-        };
-      }).config.ai.kiro.cli.v3
-      && (let
-        unmanaged = change {ai.kiro.cli.package = null;};
-      in
-        !unmanaged.config.ai.kiro.cli.v3
-        && !(builtins.any (lib.hasInfix "ai.kiro.cli.package is null") unmanaged.config.warnings))
-      && (let
-        optedOut = change {ai.kiro.cli.v3 = false;};
-      in
-        !optedOut.config.ai.kiro.cli.v3 && builtins.any (lib.hasInfix "ai.kiro.cli.v3 is false") optedOut.config.warnings)
-    );
     "module-delegate-routing-${name}-kiro-workflows" = mkTest "delegate-routing-${name}-kiro-workflows" (let
       enabled = change {ai.kiro.cli.workflows.enable = true;};
       enabledSkill = readSkill enabled "kiro";
@@ -609,7 +585,6 @@
       && !(lib.hasInfix "`run_workflow`" kiro)
       && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
       && techniqueCells enabledSkill "run_workflow" == ["`run_workflow`" "workflow" "true" "true" "interactive+headless+acp"]
-      && hidden {ai.kiro.cli.v3 = false;}
       && hidden {ai.kiro.cli.native.settings.chat.enableWorkflows = false;}
       && hidden {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = false;}
       && !(lib.hasInfix "`run_workflow`" (readSkill enabled "claude"))

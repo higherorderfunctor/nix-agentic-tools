@@ -24,7 +24,8 @@
 # Shared runtime and pool APIs have exact option-tree parity. Non-AI owners'
 # helper namespaces follow their native lifecycle backend; docs still expose
 # them, and presence guards below keep those explicit exclusions honest.
-# Claude's launch-effort unpin and Codex's daemon selection and session trust
+# Claude's launch-effort unpin, Codex's daemon selection and session trust, and
+# Kiro's permission rules and trusted MCP tools (read only from ~/.kiro)
 # remain backend-specific leaves.
 {
   lib,
@@ -47,7 +48,7 @@
     };
     backendOnly = {
       devenv = ["ai.codex.trustProjectForSession"];
-      hm = ["ai.claude.native.installMethod" "ai.claude.native.unpinLaunchEffort" "ai.codex.pinDaemonToPackage"];
+      hm = ["ai.claude.native.installMethod" "ai.claude.native.unpinLaunchEffort" "ai.codex.pinDaemonToPackage" "ai.kiro.cli.trustedMcpTools" "ai.kiro.permissions"];
     };
     comparable = backend: let
       excluded = map (owner: "ai.${owner}.") localOwners.${backend} ++ backendOnly.${backend};

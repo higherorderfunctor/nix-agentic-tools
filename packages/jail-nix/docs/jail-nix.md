@@ -137,7 +137,7 @@ Known interactions, not solved here:
 - Kimchi's wrapper exports `KIMCHI_API_KEY` from its redact reference inside the
   jail, so masking that secret file breaks launch, and the real key still
   reaches the harness.
-- Kiro's default FHS launcher selects its internal `/usr/bin/kiro-cli-chat`
-  before inherited `PATH`. With FHS disabled, the PATH lookup can select the
-  installed chat wrapper and add another `ai.jail`. Both routes remain inside
-  the outer jail.
+- Kiro 3.0.0 runs one `kiro-cli` binary and dispatches to no separate chat
+  binary (`packages/kiro-cli/docs/launcher-argv.md`), so the 2.x route through
+  an installed chat wrapper is gone. Whether the binary re-launches itself
+  through `PATH` is unmeasured.

@@ -49,21 +49,26 @@ in
                   else {hideThinkingBlock = true;};
                 permissions.allow = ["probe"];
               };
-              kiro = {
-                native.agents.probe.prompt = {text = "probe";};
-                hooksJson.probe = ''{"event":"pre-commit"}'';
-                cli.native.settings =
-                  if mode == "hm"
-                  then {chat.defaultModel = "probe";}
-                  else {chat.enableTangentMode = true;};
-                permissions = [
-                  {
-                    capability = "mcp";
-                    effect = "allow";
-                    match = ["probe/*"];
-                  }
-                ];
-              };
+              kiro =
+                {
+                  native.agents.probe.prompt = {text = "probe";};
+                  hooksJson.probe = ''{"event":"pre-commit"}'';
+                  cli.native.settings =
+                    if mode == "hm"
+                    then {chat.defaultModel = "probe";}
+                    else {chat.enableTangentMode = true;};
+                }
+                // lib.optionalAttrs (mode == "hm") {
+                  # Home Manager only: Kiro tool policy lives in ~/.kiro, which
+                  # devenv cannot write, so devenv declares no `permissions`.
+                  permissions = [
+                    {
+                      capability = "mcp";
+                      effect = "allow";
+                      match = ["probe/*"];
+                    }
+                  ];
+                };
             }.${
               runtime
             };

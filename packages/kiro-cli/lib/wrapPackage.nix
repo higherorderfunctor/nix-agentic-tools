@@ -1,60 +1,45 @@
-# Wrap kiro-cli so it launches the way the config asks — shared by BOTH backends
-# (DRY). Returns the raw package when nothing needs wrapping.
+# Wrap kiro-cli so it launches the v3 engine — shared by BOTH backends (DRY).
 #
 # `environmentVariables` are baked as `export`s on BOTH backends. devenv used
 # to pass `{}` here and export through its native `env` attrset instead; that
 # wrote the PROJECT SHELL, handing every variable to the developer's own
-# session, so it was retired on 2026-08-10. devenv also still needs the flag
-# injection so `devenv shell` launches the v3 TUI exactly like HM does.
+# session, so it was retired on 2026-08-10.
 #
 # `extraPackages` is a separate PATH prefix, not another environment-variable
 # entry. Keeping it separate lets the generated wrapper prepend store-backed
 # tools to either the inherited PATH or an explicit `environmentVariables.PATH`
 # without capturing the evaluator's PATH or replacing the caller's environment.
 #
-# On post-split Linux, chat-only argv injection is the one wrapper concern that
-# cannot remain outside: the FHS root's /usr/bin shadows the outer chat command.
-# When the overlay exposes `withFhsPayload`, this helper wraps the unwrapped chat
-# payload first and asks nixpkgs to rebuild its own FHS package around it. Every
-# other export stays outer and inherited. `useFhsSandbox = false` instead selects
+# On Linux the wrapper sits OUTSIDE nixpkgs' FHS package; every export it
+# makes is inherited across bubblewrap. `useFhsSandbox = false` instead wraps
 # the same pinned `passthru.unwrapped` payload directly.
 #
-# ── The argv contract ──────────────────────────────────────────────────────
-# `--v3` is a LAUNCHER-GLOBAL option, so it is injected BEFORE any subcommand.
-# Appending it instead is what made `kiro-cli acp` die with "error: unexpected
-# argument found" — the flag was in the wrong argv POSITION, not unsupported by
-# `acp`. Prepended, every subcommand accepts it.
+# ── The argv contract (kiro-cli 3.0.0) ─────────────────────────────────────
+# `--v3` is a LAUNCHER-GLOBAL option, prepended before any subcommand. Without
+# it the bare launch and `chat` follow the `chat.agentEngine` setting and the
+# binary's upgrade state, which 3.0.0 moves either way ("you can try V3 any
+# time with kiro-cli --v3" in the Rust strings, "Back to V2: … kiro-cli --v2
+# for one session" in the TUI); the prepend pins v3 for the session. A
+# misplaced global is what once made `kiro-cli acp` die with "unexpected
+# argument": the position, not the flag, was wrong.
 #
-# `--trust-tools` is different in kind: the chat binary declares it on the
-# `chat` and `acp` SUBCOMMANDS and not at top level, so it is appended and
-# gated. Do not "make these consistent" — they are opposite cases.
+# `acp` never reads that global. It resolves its engine from `acp
+# --agent-engine`, then the `acp.agentEngine` setting, then a default that is
+# v2 whenever `--agent`, `--model`, `--effort`, `--trust-all-tools` or
+# `--trust-tools` is given or the initialize names a client on the binary's
+# built-in v2 list (`acp-smoke` is one). So `--agent-engine=v3` is added to
+# `acp` unless an `--agent-engine` token is already there, placed before an
+# end-of-options `--` when one is present (a token past it is a positional);
+# the caller's own selector is left to upstream. `kiro-kas-dispatch` measures
+# both facts.
 #
-# ── Why there is no `--tui` here ────────────────────────────────────────────
-# There used to be an `ai.kiro.tui` option that injected `--tui` and implied
-# `--v3`. It was removed. `--tui` selects the new TUI harness for the OLD
-# engine, and v3 already uses that harness — so under v3 the flag is redundant,
-# and it is going away with v3 anyway. Anyone who still wants it on an older
-# engine can pass it on the command line.
+# There is no `--trust-tools` injection. Under v3 no process hands the flag to
+# KAS, which reads tool policy only from `permissions.yaml`; the bare-launch
+# parser rejects it, and `acp --agent-engine=v3` rejects it with a conflict.
+# `trustedMcpTools` lowers to `settings/permissions.yaml` in mkKiro.nix, on
+# Home Manager only.
 #
-# The implication was NOT decoration, which is why it cannot simply be dropped
-# from a config without also switching to `v3`. Measured on 2.16.0:
-#
-#   kiro-cli --tui       -> error: Conflicting options: --tui cannot be used
-#                           with --agent-engine=v1
-#   kiro-cli --tui --v3  -> works
-#   kiro-cli-chat chat --tui --agent-engine=v2 -> parses (reaches input check)
-#
-# The chat binary defaults to **v1** and `--tui` conflicts with it, while the
-# launcher injects no engine of its own. So bare `--tui` was always broken and
-# `tui = true` only worked because it silently dragged `--v3` along.
-#
-# That default is v1, not the v2 this file long claimed on the strength of a
-# help string. Nothing here depends on the specific value — the trust gate asks
-# only "is it v3" — which is why its fallback below is a sentinel rather than a
-# version number.
-#
-# Measured against kiro-cli 2.16.0; see packages/kiro-cli/docs/launcher-argv.md
-# for the probe transcript and how to re-measure on a version bump.
+# See packages/kiro-cli/docs/launcher-argv.md for the measurements.
 {
   lib,
   pkgs,
@@ -63,27 +48,39 @@
     (import ../../../lib/idempotentFlags.nix {inherit lib;})
     gateOnSubcommand
     idempotentFlagBlock
-    optionValueBlock
+    optionPresenceBlock
     ;
 
   usage = import ./usageTracking.nix {inherit lib pkgs;};
 
-  # Value-taking options whose values must not be mistaken for a subcommand.
-  # Only the chat binary's list survives: the launcher-side list existed for the
-  # removed `--tui` gate, which was the sole caller that had to distinguish a
-  # bare launch (`kiro-cli --agent acp` is a bare launch, not the `acp`
-  # subcommand). `--v3` is injected unconditionally and needs no such gate.
-  chatValueFlags = ["--resume-id"];
+  # Value-taking top-level options whose values must not be mistaken for a
+  # subcommand: `kiro-cli --agent acp` is a bare launch, not the `acp`
+  # subcommand. Sourced from the 3.0.0 binary's chat-argument strings and the
+  # TUI's launch-flag table. An unlisted value flag spelled `acp` would make
+  # its value look like the subcommand and append `--agent-engine=v3` to a
+  # bare launch.
+  launchValueFlags = [
+    "--agent"
+    "--agent-engine"
+    "--delete-session"
+    "--effort"
+    "--model"
+    "--output-format"
+    "--profile"
+    "--repo"
+    "--resume-id"
+    "--session-source"
+  ];
 
+  # Options that only reach Kiro through this wrapper. mkKiro.nix reports the
+  # ones a consumer set while `package = null` leaves no wrapper to carry them.
   wrapperReasons = {
     environmentDefaults ? {},
     environmentVariables ? {},
     environmentVariablesName ? "ai.environmentVariables / ai.kiro.cli.environmentVariables",
     extraPackages ? [],
     secretEnv ? {},
-    trustedMcpTools ? [],
     usageTracking ? {enable = false;},
-    v3 ? false,
   }: {
     environmentDefaults = {
       active = environmentDefaults != {};
@@ -101,45 +98,30 @@
       active = secretEnv != {};
       name = "ai.mcpServers / ai.kiro.mcpServers credential headers";
     };
-    trustedMcpTools = {
-      active = trustedMcpTools != [];
-      name = "ai.kiro.cli.trustedMcpTools";
-    };
     usageTracking = {
       active = usageTracking.enable;
       name = "ai.kiro.cli.usageTracking";
     };
-    v3 = {
-      active = v3;
-      name = "ai.kiro.cli.v3";
-    };
   };
+in {
+  inherit wrapperReasons;
 
-  # Build one ordinary wrapper layer around the package passed here. The
-  # public function below decides whether that layer belongs outside the
-  # upstream FHS package or on its unwrapped payload.
-  wrapDirect = {
+  wrapPackage = {
     package,
-    v3,
-    trustedMcpTools,
     usageTracking ? {enable = false;},
     environmentDefaults ? {},
     environmentVariables ? {},
     extraPackages ? [],
     secretEnv ? {},
+    useFhsSandbox ? true,
     secretOptionPaths ? {},
   }: let
-    reasons = wrapperReasons {
-      inherit environmentDefaults environmentVariables extraPackages secretEnv trustedMcpTools usageTracking v3;
-    };
-    hasEnv = reasons.environmentVariables.active || reasons.environmentDefaults.active;
-    hasExtraPackages = reasons.extraPackages.active;
-    hasSecret = reasons.secrets.active;
-    hasTrust = reasons.trustedMcpTools.active;
-    hasV3 = reasons.v3.active;
-    hasUsage = reasons.usageTracking.active;
-    needsWrapper = lib.any (reason: reason.active) (lib.attrValues reasons);
-    trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
+    hasUsage = usageTracking.enable;
+    selectedPackage =
+      if useFhsSandbox
+      then package
+      else package.unwrapped or package;
+
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
     # wrapper can ALSO position the flags. makeWrapper only appends
     # (`--append-flags`) or prepends blindly (`--add-flags`), with no way to
@@ -170,234 +152,67 @@
     # command directories afterward. The conditional expansion avoids a
     # trailing colon (and therefore an implicit current-directory PATH entry)
     # when PATH is unset or empty.
-    pathExport = lib.optionalString hasExtraPackages ''
+    pathExport = lib.optionalString (extraPackages != []) ''
       export PATH=${lib.escapeShellArg (lib.makeBinPath extraPackages)}''${PATH:+:"$PATH"}
     '';
 
-    # `--v3` is injected for EVERY subcommand, because it is global and because
-    # that is what makes it reach `acp`: the launcher rewrites its own `--v3`
-    # into `--agent-engine v3` — TWO tokens; the error text's `--agent-engine=v3`
-    # is clap's diagnostic formatting, not the argv — on the dispatched
-    # subcommand. A caller's explicit
-    # `--agent-engine=vN` still wins — upstream resolves that, so this wrapper
-    # deliberately implements no precedence of its own.
-    v3Block = lib.optionalString hasV3 (idempotentFlagBlock {
+    v3Block = idempotentFlagBlock {
       flags = ["--v3"];
       position = "prepend";
-    });
-
-    # There is deliberately no `--tui` injection. The option that produced it
-    # was REMOVED, not merely defaulted off — see the note at the top of this
-    # file for the measurements behind that.
-    launcherInjection = v3Block;
-
-    # `--trust-tools` on the chat binary: appended, and gated to the subcommands
-    # that declare it. Not idempotence-guarded — unlike `--tui`, repeating it is
-    # accepted rather than fatal.
-    #
-    # `acp` is conditional, because THE TWO WRAPPERS COMPOSE. The launcher
-    # resolves `kiro-cli-chat` through PATH — ON LINUX; Darwin uses app bundle
-    # discovery instead and never runs this wrapper via the launcher (see
-    # launcher-argv.md, "Darwin bundle discovery must reach the packaged app").
-    # In a real Linux profile `kiro-cli acp` runs the
-    # launcher wrapper AND then this one:
-    #
-    #   kiro-cli acp
-    #     -> launcher wrapper prepends --v3
-    #     -> launcher rewrites --v3 to `--agent-engine v3`, resolves
-    #        kiro-cli-chat on PATH -> lands here
-    #     -> this wrapper appends --trust-tools
-    #     => error: the following arguments are not supported with
-    #        --agent-engine=v3: --trust-tools
-    #
-    # The deciding fact is the EFFECTIVE engine, which only argv knows: a
-    # caller's `--agent-engine` overrides the injected `--v3`, so neither
-    # direction can be settled at eval time. Both are real and measured:
-    #
-    #   kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x   -> runs (v2)
-    #   kiro-cli      acp --agent-engine=v3 --trust-tools=x   -> CONFLICT
-    #
-    # So the engine is resolved at runtime, from argv, falling back to THE CHAT
-    # BINARY'S OWN default rather than to what this Nix config bakes in. That
-    # distinction is the whole point: this wrapper cannot assume the launcher
-    # wrapper is in the chain. `kiro-cli-chat acp` invoked directly runs the
-    # binary's default engine however `v3 = true` is set, so defaulting to v3
-    # here withheld `--trust-tools` from a session that would have accepted it.
-    #
-    # The fallback token is deliberately a SENTINEL, not a version. All the gate
-    # asks is "is the effective engine v3", so any non-v3 value is equivalent —
-    # and naming a specific one invites exactly the drift this comment used to
-    # carry: it claimed `v2` on the strength of a `[default: v2]` help string,
-    # while 2.16.0 actually defaults to v1 (measured: `kiro-cli-chat chat --tui`
-    # fails with `--tui cannot be used with --agent-engine=v1`). A sentinel
-    # cannot go stale when upstream moves the default again.
-    #
-    # Nothing is lost on the normal path, because the launcher does not merely
-    # set a mood — it REWRITES argv. `kiro-cli --v3 acp` arrives here as an
-    # explicit `acp --agent-engine v3` (measured), which `nat_engine` reads
-    # directly, so the withhold still fires through the token rather than
-    # through a guess.
-    #
-    # Why upstream forbids it there — NOT because v3 dropped the flag; under v3
-    # `chat` still honours it. `--trust-tools` is a CLIENT-SIDE knob: kiro's TUI
-    # re-emits it onto the downstream ACP argv. Its auto-answer of
-    # `allow_always` — including the explicit branch for the v3 "kas" engine —
-    # is gated on `--trust-all-tools`, a DIFFERENT flag; `trustTools` occurs
-    # exactly once in `tui.js`, in the flag-spec table, and is never read by the
-    # approval handler. On the `acp` arm kiro-cli IS the agent and the external
-    # ACP client owns that answer, so the flag has nothing agent-side to bind
-    # to. Withholding costs little, with one caveat worth stating: under
-    # home-manager `trustedMcpTools` is ALSO translated into
-    # `settings/permissions.yaml` (`mkPermissionRules`), which the v3 agent
-    # reads — but that translation is home-manager-only, so on the devenv
-    # backend the withheld grant is not recovered declaratively. The interactive
-    # half is an ACP `session/request_permission` round-trip the CLI flag could
-    # never have participated in either way. `chat` stays unconditional.
-    engineScan = optionValueBlock {
-      flag = "--agent-engine";
-      var = "nat_engine";
     };
-    # The configured v3 flag belongs only to the launcher. A direct chat
-    # invocation must establish v3 itself, including the --v3 form that the
-    # launcher forwards on its chat path. Never infer the chat binary's default.
-    usageEngineGuard = requireExplicitV3:
-      lib.optionalString hasUsage ''
-        ${engineScan}
-        if [ -n "$nat_engine" ] && [ "$nat_engine" != v3 ]; then
-          printf '%s\n' 'Kiro usage tracking requires the v3 engine; remove the non-v3 --agent-engine override or disable usageTracking.' >&2
-          exit 1
-        fi
-        ${lib.optionalString requireExplicitV3 ''
-          nat_usage_v3=0
-          for nat_arg in "$@"; do
-            case "$nat_arg" in
-              --) break ;;
-              --v3) nat_usage_v3=1 ;;
-            esac
-          done
-          if [ "$nat_engine" != v3 ] && [ "$nat_usage_v3" != 1 ]; then
-            printf '%s\n' 'Kiro usage tracking requires an explicit v3 engine for kiro-cli-chat; pass --agent-engine v3 or --v3, or use kiro-cli.' >&2
-            exit 1
-          fi
-        ''}
-      '';
-    trustAppend = "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}";
-    trustInjection = lib.optionalString hasTrust (
-      lib.concatStringsSep "\n" [
-        (lib.optionalString (!hasUsage) engineScan)
-        (gateOnSubcommand {
-            subcommands = ["acp" "chat"];
-            valueFlags = chatValueFlags;
-          } (lib.concatStringsSep "\n" [
-            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-unspecified}\" != v3 ]; then"
-            "  ${trustAppend}"
-            "fi"
-          ]))
-      ]
+    # Placed after `acp` and before an end-of-options `--`: `--agent-engine` is
+    # an `acp` option, not a global, and a token past `--` is a positional.
+    acpEngineBlock =
+      gateOnSubcommand {
+        subcommands = ["acp"];
+        valueFlags = launchValueFlags;
+      } (lib.concatStringsSep "\n" [
+        (optionPresenceBlock {
+          flag = "--agent-engine";
+          var = "nat_engine";
+        })
+        "if [ \"$nat_engine\" = 0 ]; then"
+        "  nat_argv=()"
+        "  nat_placed=0"
+        "  for nat_arg in \"$@\"; do"
+        "    if [ \"$nat_placed\" = 0 ] && [ \"$nat_arg\" = -- ]; then nat_argv+=(--agent-engine=v3); nat_placed=1; fi"
+        "    nat_argv+=(\"$nat_arg\")"
+        "  done"
+        "  if [ \"$nat_placed\" = 0 ]; then nat_argv+=(--agent-engine=v3); fi"
+        "  set -- \"\${nat_argv[@]}\""
+        "fi"
+      ]);
+
+    # A strict-mode wrapper: bake env, inject the engine selectors, exec the
+    # real bin preserving argv0. The `exec` line's shape is load-bearing beyond
+    # this file: probe scripts resolve the real binary by reading it back out
+    # of the generated wrapper.
+    launcher = pkgs.writeShellScript "kiro-cli-launcher" (
+      lib.concatStringsSep "\n" (
+        ["set -euETo pipefail" "shopt -s inherit_errexit 2>/dev/null || :"]
+        ++ lib.optional (envExports != "") envExports
+        ++ lib.optional (environmentDefaults != {}) (import ../../../lib/ai/environment-defaults.nix {inherit lib;} environmentDefaults)
+        ++ lib.optionals (secretExports != "") [
+          ''export PATH="''${PATH-${pkgs.coreutils}/bin}"''
+          secretExports
+        ]
+        ++ lib.optional (pathExport != "") pathExport
+        ++ lib.optional hasUsage (usage.launcherBlock usageTracking)
+        ++ [
+          v3Block
+          acpEngineBlock
+          "exec -a \"$0\" ${lib.escapeShellArg "${selectedPackage}/bin/kiro-cli"} \"$@\""
+        ]
+      )
     );
-
-    # A strict-mode wrapper: bake env, run `injection`, exec the real bin
-    # preserving argv0. The `exec` line's shape is load-bearing beyond this
-    # file: probe scripts resolve the real binary by reading it back out of the
-    # generated wrapper.
-    mkWrapper = name: {
-      realBin,
-      injection ? "",
-      requireExplicitV3 ? false,
-    }:
-      pkgs.writeShellScript name (
-        lib.concatStringsSep "\n" (
-          ["set -euETo pipefail" "shopt -s inherit_errexit 2>/dev/null || :"]
-          ++ lib.optional (envExports != "") envExports
-          ++ lib.optional (environmentDefaults != {}) (import ../../../lib/ai/environment-defaults.nix {inherit lib;} environmentDefaults)
-          ++ lib.optionals (secretExports != "") [
-            ''export PATH="''${PATH-${pkgs.coreutils}/bin}"''
-            secretExports
-          ]
-          ++ lib.optional (pathExport != "") pathExport
-          ++ lib.optionals hasUsage [(usageEngineGuard requireExplicitV3) (usage.launcherBlock usageTracking)]
-          ++ lib.optional (injection != "") injection
-          ++ ["exec -a \"$0\" ${lib.escapeShellArg realBin} \"$@\""]
-        )
-      );
   in
-    assert lib.assertMsg (!hasUsage || hasV3) "Kiro usage tracking requires v3 = true in the managed wrapper.";
     assert lib.assertMsg (!hasUsage || usage.pythonRequirement.assertion) usage.pythonRequirement.message;
-      if !needsWrapper
-      then package
-      else
-        pkgs.symlinkJoin {
-          name = "kiro-cli-wrapped";
-          paths = [package] ++ lib.optional hasUsage (usage.tool usageTracking);
-          postBuild = ''
-            ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasUsage || hasV3) ''
-              rm -f "$out/bin/kiro-cli"
-              ln -s ${mkWrapper "kiro-cli-launcher" {
-                realBin = "${package}/bin/kiro-cli";
-                injection = launcherInjection;
-              }} "$out/bin/kiro-cli"
-            ''}
-            ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasTrust || hasUsage) ''
-              rm -f "$out/bin/kiro-cli-chat"
-              ln -s ${mkWrapper "kiro-cli-chat-wrapper" {
-                realBin = "${package}/bin/kiro-cli-chat";
-                injection = trustInjection;
-                requireExplicitV3 = true;
-              }} "$out/bin/kiro-cli-chat"
-            ''}
-          '';
-        };
-in {
-  inherit wrapperReasons;
-
-  wrapPackage = {
-    package,
-    v3,
-    trustedMcpTools,
-    usageTracking ? {enable = false;},
-    environmentDefaults ? {},
-    environmentVariables ? {},
-    extraPackages ? [],
-    secretEnv ? {},
-    useFhsSandbox ? true,
-    secretOptionPaths ? {},
-  }: let
-    # The upstream Linux FHS root supplies its own /usr/bin/kiro-cli-chat ahead
-    # of the inherited PATH. An outer chat wrapper is therefore unreachable
-    # when the launcher dispatches. Re-compose the upstream package around a
-    # chat-only wrapped payload so --trust-tools lives at the command path the
-    # FHS launcher actually selects. Other exports remain outside: they are
-    # inherited across bubblewrap and retain their established precedence.
-    placeTrustInsideFhs =
-      useFhsSandbox
-      && pkgs.stdenv.hostPlatform.isLinux
-      && trustedMcpTools != []
-      && package ? unwrapped
-      && package ? withFhsPayload;
-    innerTrustPackage =
-      (wrapDirect {
-        package = package.unwrapped;
-        v3 = false;
-        inherit trustedMcpTools;
-      }).overrideAttrs (_: {
-        # nixpkgs' FHS expression inherits these from its payload. Ordinary
-        # outer wrappers do not need them, so surface them only on this inner
-        # package and leave every existing wrapper derivation unchanged.
-        inherit (package.unwrapped) meta version;
-      });
-    selectedPackage =
-      if !useFhsSandbox
-      then package.unwrapped or package
-      else if placeTrustInsideFhs
-      then package.withFhsPayload innerTrustPackage
-      else package;
-  in
-    wrapDirect {
-      package = selectedPackage;
-      inherit environmentDefaults environmentVariables extraPackages secretEnv secretOptionPaths usageTracking v3;
-      trustedMcpTools =
-        if placeTrustInsideFhs
-        then []
-        else trustedMcpTools;
-    };
+      pkgs.symlinkJoin {
+        name = "kiro-cli-wrapped";
+        paths = [selectedPackage] ++ lib.optional hasUsage (usage.tool usageTracking);
+        postBuild = ''
+          rm -f "$out/bin/kiro-cli"
+          ln -s ${launcher} "$out/bin/kiro-cli"
+        '';
+      };
 }

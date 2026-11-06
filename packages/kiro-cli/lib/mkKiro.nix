@@ -30,9 +30,6 @@
   openKeys = import ../../../lib/open-keys {inherit lib;};
   proxyLib = import ../../../lib/ai/proxy.nix {inherit lib;};
 
-  # Refuse v2 engines: their model-request proxy consumption is unverified.
-  proxyDefaults = cfg: defaults: lib.optionalAttrs cfg.cli.v3 defaults;
-
   inherit (aiTypes) enabledTextOrNull;
 
   # Eval-pure read of committed binary facts (no IFD), including engine hook
@@ -52,7 +49,6 @@
 
   inherit (import ./friendly-features.nix) featureSettingImplications friendlyRolloutFeatures;
   rolloutFriendlyOptions = lib.mapAttrs' (name: feature: lib.nameValuePair feature name) friendlyRolloutFeatures;
-  friendlyFeatureNames = builtins.attrNames friendlyRolloutFeatures;
   needsGlobalNotice = setting: !(builtins.elem "chat.${setting}" workspaceOverridableSettings);
 
   # A hook action: `command` (subprocess) or `agent` (inline prompt appended to
@@ -286,7 +282,7 @@
   #
   # ALWAYS EMIT `name` — two parsers disagree about it, and the strict
   # one fails closed (measured on 2.16.0):
-  #   * Rust CLI (kiro-cli-chat) parses agents as JSON ONLY and REQUIRES
+  #   * Rust CLI (2.16.0 kiro-cli-chat) parses agents as JSON ONLY and REQUIRES
   #     `name`. A `.json` file without it is rejected outright with
   #     "missing field name" on EVERY `kiro-cli` invocation, so that
   #     agent never loads. Its directory scan also SILENTLY skips `.md`
@@ -663,15 +659,6 @@
       else if (effectiveRolloutFeatures cfg) != [] && !(cfg.cli.package ? withRolloutFeatures)
       then cfg.cli.package
       else resolvePackage cfg;
-    packageNeedsFhsPayload = package:
-      package
-      != null
-      && (package.kiroFhsSandbox or (package ? unwrapped || package ? withFhsPayload));
-    needsFhsPayloadComposition =
-      cfg.cli.useFhsSandbox
-      && pkgs.stdenv.hostPlatform.isLinux
-      && cfg.cli.trustedMcpTools != []
-      && (packageNeedsFhsPayload cfg.cli.package || packageNeedsFhsPayload resolvedPackage);
   in
     [
       {
@@ -689,20 +676,6 @@
         '';
       }
       {
-        assertion =
-          !needsFhsPayloadComposition
-          || (resolvedPackage ? unwrapped && resolvedPackage ? withFhsPayload);
-        message = ''
-          ai.kiro.cli: `trustedMcpTools` with the Linux FHS sandbox needs the
-          resolved `package` to expose both `passthru.unwrapped` and
-          `passthru.withFhsPayload`. Without that composition seam the FHS
-          launcher's `/usr/bin/kiro-cli-chat` shadows the outer trust wrapper,
-          so the grant would be silently lost. Use `pkgs.ai.kiro-cli` from this
-          flake's overlay, preserve both passthru attributes in custom rollout
-          variants, or set `useFhsSandbox = false`.
-        '';
-      }
-      {
         assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
         message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
       }
@@ -716,16 +689,7 @@
           features or select an overlay-provided kiro-cli package.
         '';
       }
-      {
-        assertion = (effectiveRolloutFeatures cfg) == [] || cfg.cli.v3;
-        message = "ai.kiro.cli.features: a rollout patch requires `v3 = true`; enable ai.kiro.cli.v3 so the kas engine can surface the feature.";
-      }
     ]
-    ++ map (name: {
-      assertion = !cfg.cli.${name}.enable || cfg.cli.v3;
-      message = "ai.kiro.cli.${name}.enable requires `v3 = true`; this feature uses the kas engine.";
-    })
-    friendlyFeatureNames
     ++ lib.mapAttrsToList (name: feature: {
       assertion = !cfg.cli.${name}.enable || cfg.cli.features.${feature}.enable;
       message = "ai.kiro.cli.${name}.enable is on but ai.kiro.cli.features.${feature}.enable is explicitly false";
@@ -822,16 +786,15 @@
     })
   ];
 
-  # Translate the v2 `trustedMcpTools` list into v3 `permissions.yaml`
-  # rules (ONLY when v3 is active) and merge with explicit `permissions`.
-  # v2 keeps using `--trust-tools` untouched. See
+  # Translate the `trustedMcpTools` list into v3 `permissions.yaml` rules and
+  # merge with explicit `permissions`. KAS reads tool policy only from that
+  # file; no Kiro process hands it a `--trust-tools` list. See
   # docs/plans/kiro-v3-permissions.md.
   #   "@srv"      -> { capability = mcp; match = ["srv/*"]; }
   #   "@srv/tool" -> { capability = mcp; match = ["srv/tool"]; }  (1:1)
   #   "subagent"  -> { capability = subagent; }
   #   "use_aws" / other bare tokens -> dropped (aws_tool removed in v3)
   mkPermissionRules = cfg: let
-    hasV3 = cfg.cli.v3;
     trusted = cfg.cli.trustedMcpTools;
     mcpMatches = map (t: let
       body = lib.removePrefix "@" t;
@@ -858,29 +821,29 @@
       {inherit (r) capability effect;}
       // lib.optionalAttrs ((r.match or []) != []) {inherit (r) match;}
       // lib.optionalAttrs ((r.exclude or []) != []) {inherit (r) exclude;};
-    rules = map renderRule (cfg.permissions ++ lib.optionals hasV3 translated);
+    rules = map renderRule (cfg.permissions ++ translated);
   in
-    if hasV3 && dropped != []
+    if dropped != []
     then
       lib.warn
       "ai.kiro.cli.trustedMcpTools entries not representable as v3 permissions, dropped: ${lib.concatStringsSep ", " dropped}"
       rules
     else rules;
 
-  # Kiro carries `prompt` and `disabled` only as v3 permission rules, which
-  # reach permissions.yaml on Home Manager alone.
-  kiroRulesDelivered = backend: cfg: cfg.cli.v3 && backend == "hm";
-  # The generic MCP `toolPolicy` in Kiro's spelling. `auto` joins the trusted
-  # tools (`--trust-tools`, and under v3 on Home Manager an allow rule through
-  # mkPermissionRules); where rules are delivered, `prompt` and `disabled`
-  # become ask and deny rules, which Kiro resolves by restrictiveness
-  # (deny > ask > allow). An empty list contributes no definition, so a
-  # consumer's own defaults survive.
-  kiroToolPolicy = {
-    backend,
-    cfg,
-    mergedServers,
-  }: let
+  # Kiro carries tool trust only as v3 permission rules, read from
+  # `~/.kiro/settings/` and `~/.kiro/workspace-roots/<hash>/` (acp-server.js
+  # policy loader). Both sit outside the devenv root, and a devenv shell must
+  # not define a new root (no KIRO_HOME) to reach them, so only Home Manager
+  # writes them. The options that exist only to feed them
+  # (`ai.kiro.cli.trustedMcpTools`, `ai.kiro.permissions`) are declared under
+  # the record's `hm.options` and do not exist on devenv.
+  kiroRulesDelivered = backend: backend == "hm";
+  # The generic MCP `toolPolicy` in Kiro's spelling, defined only where rules
+  # are delivered. `auto` joins the trusted tools (an allow rule through
+  # mkPermissionRules) and `prompt` and `disabled` become ask and deny rules,
+  # which Kiro resolves by restrictiveness (deny > ask > allow). An empty list
+  # contributes no definition, so a consumer's own defaults survive.
+  kiroToolPolicy = mergedServers: let
     policy = aiCommon.mcpToolPolicy mergedServers;
     rule = effect: rows:
       lib.optional (rows != []) {
@@ -889,25 +852,23 @@
         match = map (row: "${row.server}/${row.tool}") rows;
       };
     trusted = map (row: "@${row.server}/${row.tool}") policy.auto;
-    rules = lib.optionals (kiroRulesDelivered backend cfg) (rule "ask" policy.prompt ++ rule "deny" policy.disabled);
+    rules = rule "ask" policy.prompt ++ rule "deny" policy.disabled;
   in
     lib.mkMerge [
       (lib.mkIf (trusted != []) {ai.kiro.cli.trustedMcpTools = trusted;})
       (lib.mkIf (rules != []) {ai.kiro.permissions = rules;})
     ];
-  # The `prompt` and `disabled` tools no delivered Kiro surface carries on
-  # this backend. Without v3 rules a `prompt` tool may still run unasked under
-  # a broad `@server` trust, so it warns too.
+  # The `auto`, `prompt` and `disabled` tools this backend cannot deliver:
+  # every one on devenv, none on Home Manager.
   kiroUndeliveredTools = {
     backend,
-    cfg,
     path,
     value,
     ...
   }: let
     policy = aiCommon.mcpToolPolicy {${lib.last path} = value;};
   in
-    lib.optionals (!kiroRulesDelivered backend cfg) (lib.sort builtins.lessThan (map (row: row.tool) (policy.disabled ++ policy.prompt)));
+    lib.optionals (!kiroRulesDelivered backend) (lib.sort builtins.lessThan (map (row: row.tool) (policy.auto ++ policy.disabled ++ policy.prompt)));
 
   # Shared by the manual factory and both module backends. Applying either
   # selector first preserves the other through the package's passthru contract.
@@ -1113,7 +1074,7 @@
   # particular must `cat` the decrypted file at launch rather than bake a
   # static value, so it could never have been a plain env write. On HM the
   # symlinkJoin wrapper is the only export mechanism at all, so env vars ride
-  # along with the `--v3` / `--trust-tools` flag injection either way.
+  # along with the `--v3` / `acp --agent-engine=v3` injection either way.
   kiroInstallPackage = {
     cfg,
     launcherEnvironment,
@@ -1122,9 +1083,9 @@
     ...
   }:
     wrapKiroPackage {
-      inherit (cfg.cli) extraPackages trustedMcpTools usageTracking useFhsSandbox v3;
+      inherit (cfg.cli) extraPackages usageTracking useFhsSandbox;
       package = resolvePackage cfg;
-      environmentDefaults = proxyDefaults cfg launcherEnvironmentDefaults;
+      environmentDefaults = launcherEnvironmentDefaults;
       # A false global setting must also release the package's environment guard.
       environmentVariables =
         lib.optionalAttrs (((flatNativeSettings cfg)."app.disableAutoupdates" or null) == false) {
@@ -1151,7 +1112,7 @@ in
     # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
-    executables = ["kiro-cli" "kiro-cli-chat" "kiro-cli-term"];
+    executables = ["kiro-cli"];
     optionNamespaces.launcher = ["cli"];
     # The native agent layer (see mkRuntime.nix): each normalized agent
     # lowers into `ai.kiro.native.agents.<name>`, a typed agent record.
@@ -1159,8 +1120,8 @@ in
     # Claude/Copilot tool names a normalized record carries.
     agentNativeType = kiroAgentRecord;
     agentTransformer = agent.renderKiro;
-    # `.md` agents serve the ACP/IDE path; kiro-cli-chat skips them (see the
-    # `kiroAgentRecord` comment).
+    # `.md` agents serve the ACP/IDE path; the Rust agent scan skipped them on
+    # 2.16.0 (see the `kiroAgentRecord` comment).
     agentsDirSuffixes = [".json" ".md"];
     agentsDescriptionSuffix = "A normalized or native record is written as `<configDir>/agents/<name>.json` or `.md` according to its `format`; a raw file is written as is, keeping a `.md` path's suffix.";
     contextFilename = "AGENTS.md";
@@ -1198,18 +1159,10 @@ in
           each = true;
           path = ["toolPolicy"];
           when = args: kiroUndeliveredTools args != [];
-          reason = args: "Kiro enforces `prompt` and `disabled` only through v3 permission rules in the global settings/permissions.yaml, which only Home Manager with ai.kiro.cli.v3 writes, so these tools keep Kiro's default: ${lib.concatStringsSep ", " (kiroUndeliveredTools args)}.";
+          reason = args: "Kiro reads tool policy only from permission rules under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/), outside the devenv root, which neither writes there nor defines a new root, so only Home Manager delivers it and these tools keep Kiro's default: ${lib.concatStringsSep ", " (kiroUndeliveredTools args)}.";
         }
       ];
-      proxy.gaps =
-        map (field: {
-          path = [field];
-          # ai.kiro.proxy.<field> = null suppresses the root unit's warning
-          # for an inherited value.
-          when = {cfg, ...}: !cfg.cli.v3 && cfg.normalized.proxy.${field} != null;
-          reason = "Kiro v2 model-request proxy consumption is unverified; only the v3 model request path has been verified.";
-        })
-        proxyLib.fields;
+      proxy = {};
       rules = {
         gaps = [
           {
@@ -1253,8 +1206,8 @@ in
             ${openKeys.allowlistSyntax}
           '';
         };
-        backgroundExecution.enable = lib.mkEnableOption "background execution for v3 sessions; rebind cli.native.settings.chat.keybindings.moveToBackground globally when needed";
-        codeToSpec.enable = lib.mkEnableOption "Code-to-Spec Explore and analysis tools (requires cli.v3; devenv also needs global chat.enableC2s)";
+        backgroundExecution.enable = lib.mkEnableOption "background execution; rebind cli.native.settings.chat.keybindings.moveToBackground globally when needed";
+        codeToSpec.enable = lib.mkEnableOption "Code-to-Spec Explore and analysis tools (devenv also needs global chat.enableC2s)";
         extraPackages = lib.mkOption {
           type = lib.types.listOf lib.types.package;
           default = [];
@@ -1285,13 +1238,13 @@ in
               from the pinned binary. Upstream state: ${builtins.toJSON (kiroFact "rolloutStates.${name}")}.
               Features available to all stable users
               at 100% leave the package untouched; other enabled features
-              patch the binary's embedded manifest and require cli.v3. A raw
+              patch the binary's embedded manifest. A raw
               feature enables availability only; use the friendly switch when
               the feature also needs a client setting.
             '';
           };
         });
-        kvim.enable = lib.mkEnableOption "the /kvim Neovim pane (requires cli.v3 and nvim on PATH; no package is added automatically)";
+        kvim.enable = lib.mkEnableOption "the /kvim Neovim pane (requires nvim on PATH; no package is added automatically)";
         # Kiro-specific settings are read-only copies on both backends.
         native.settings = lib.mkOption {
           type = lib.types.submodule {
@@ -1414,16 +1367,7 @@ in
             so it tracks version bumps instead of being curated here.
           '';
         };
-        sandbox.enable = lib.mkEnableOption "local sandbox availability (requires cli.v3). Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
-        # MCP tools to auto-approve — appends `--trust-tools=<csv>`
-        # to `kiro-cli-chat`. Eliminates the need for a bespoke
-        # symlinkJoin wrapper in the consumer.
-        trustedMcpTools = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [];
-          description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (both backends).";
-          example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
-        };
+        sandbox.enable = lib.mkEnableOption "local sandbox availability. Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
         # bundle from the pinned release, without changing its prompt bytes.
@@ -1471,31 +1415,7 @@ in
             package.
           '';
         };
-        # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
-        # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
-        # `chat` subcommand and are rejected by the launcher, so the launcher's
-        # sole engine selector is this boolean.
-        #
-        # There is deliberately NO `tui` option. One existed: it injected `--tui`
-        # and implied `--v3`, and that implication was load-bearing rather than
-        # decorative — bare `--tui` conflicts with the chat binary's default
-        # engine (v1 on 2.16.0) and the launcher supplies none of its own.
-        # `--tui` selects the new TUI harness for the OLD engine; v3 already uses
-        # that harness, so under v3 it is redundant, and it is going away with v3
-        # regardless. Anyone who wants it on an older engine passes it on the
-        # command line.
-        v3 = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = ''
-            Append `--v3` (next-generation Kiro agent) to the kiro-cli
-            launcher wrapper. Applied by both backends.
-
-            Required by the friendly feature switches and raw rollout patches:
-            those features are surfaced by the v3 (`kas`) engine.
-          '';
-        };
-        workflows.enable = lib.mkEnableOption "Kiro CLI workflows (requires cli.v3; devenv also needs global chat.enableWorkflows)";
+        workflows.enable = lib.mkEnableOption "Kiro CLI workflows (devenv also needs global chat.enableWorkflows)";
       };
       # Config directory (HOME-relative for HM, project-relative for
       # devenv). All file writes use this as root prefix. Exposed as an
@@ -1504,29 +1424,6 @@ in
         type = lib.types.str;
         default = ".kiro";
         description = "Config directory relative to HOME / devenv root.";
-      };
-      # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
-      # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
-      # exclude). Under v3 the v2 `trustedMcpTools` list is also
-      # translated and merged in (see mkPermissionRules). HM-only: Kiro reads
-      # permissions only from `~/.kiro/settings/` (global) or
-      # `~/.kiro/workspace-roots/<hash>/`, never project `.kiro/`.
-      permissions = lib.mkOption {
-        type = lib.types.listOf kiroPermissionRule;
-        default = [];
-        description = ''
-          V3 capability-based permission rules, rendered to
-          `<configDir>/settings/permissions.yaml` as `{ rules = [...]; }`
-          (mirrors Kiro's schema). When v3 is active, `trustedMcpTools` is
-          translated and merged. HM only.
-        '';
-        example = [
-          {
-            capability = "mcp";
-            effect = "allow";
-            match = ["context7-mcp/*" "git-intel-mcp/hotspots"];
-          }
-        ];
       };
       # -- Hooks -----------------------------------------------------------
       # Typed as `kiroHookRecord`; raw hook envelopes go in `hooksJson`. Kiro
@@ -1595,6 +1492,42 @@ in
         '';
       };
     };
+    # Home Manager only: Kiro reads tool policy only from permission rules
+    # under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/).
+    # A devenv shell never writes outside the project and must not define a
+    # new root to reach them, so these options do not exist there at all:
+    # setting one under `ai.kiro.*` on devenv is an unknown-option error, not
+    # a warning. The shared `ai.mcpServers.<name>.toolPolicy` surface warns
+    # there through `surfaceSupport.mcpServers`.
+    hm.options = {
+      cli.trustedMcpTools = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "MCP tool patterns to auto-approve. Each `@server` or `@server/tool` entry, and `subagent`, becomes an allow rule merged into `~/.kiro/settings/permissions.yaml` (under `configDir`), the only place the v3 engine reads tool trust; other bare names warn and are dropped. Home Manager only: Kiro reads that file from the user's home, and a devenv shell neither writes outside the project nor defines a new root, so this option does not exist on devenv.";
+        example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
+      };
+      # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
+      # exclude). The `trustedMcpTools` list is translated and merged in
+      # (see mkPermissionRules).
+      permissions = lib.mkOption {
+        type = lib.types.listOf kiroPermissionRule;
+        default = [];
+        description = ''
+          V3 capability-based permission rules, rendered to
+          `<configDir>/settings/permissions.yaml` as `{ rules = [...]; }`
+          (mirrors Kiro's schema). `trustedMcpTools` is translated and
+          merged. Home Manager only: this option does not exist on devenv,
+          because Kiro reads permissions only from the user's home.
+        '';
+        example = [
+          {
+            capability = "mcp";
+            effect = "allow";
+            match = ["context7-mcp/*" "git-intel-mcp/hotspots"];
+          }
+        ];
+      };
+    };
     config = {
       backend,
       cfg,
@@ -1632,21 +1565,6 @@ in
             (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
           ignored)
         )) (builtins.attrNames cfg.hooks);
-      # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
-      # withhold test rather than a platform test. Two argv paths drop the flag:
-      # Darwin's launcher resolves the chat binary by app-bundle discovery and never
-      # runs the wrapper that appends it, and the `acp` subcommand rejects it under
-      # the v3 engine (packages/kiro-cli/lib/wrapPackage.nix:194-256). Exactly one
-      # composition recovers the grant declaratively — Home Manager with v3, where
-      # mkPermissionRules also writes it into settings/permissions.yaml
-      # (packages/kiro-cli/lib/mkKiro.nix:707-742) — so that is the only case
-      # suppressed, and the devenv half that the wrapper's own comment says is not
-      # recovered declaratively now reports instead of staying silent.
-      trustToolsWarnings = lib.optional (cfg.cli.trustedMcpTools
-        != []
-        && (pkgs.stdenv.hostPlatform.isDarwin || cfg.cli.v3)
-        && !kiroRulesDelivered backend cfg)
-      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
       nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
@@ -1665,17 +1583,15 @@ in
         environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "cli" "environmentVariables"]];
         extraPackages = [["ai" "kiro" "cli" "extraPackages"]];
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
-        trustedMcpTools = [["ai" "kiro" "cli" "trustedMcpTools"]];
         usageTracking = [["ai" "kiro" "cli" "usageTracking" "enable"]];
-        v3 = [["ai" "kiro" "cli" "v3"]];
       };
       wrapperPackageReasons =
         lib.mapAttrsToList (key: reason:
           reason // {explicit = explicitAt wrapperReasonPaths.${key};})
         (wrapperReasons {
-          environmentDefaults = proxyDefaults cfg launcherEnvironmentDefaults;
+          environmentDefaults = launcherEnvironmentDefaults;
           environmentVariables = mergedEnvironmentVariables;
-          inherit (cfg.cli) extraPackages trustedMcpTools usageTracking v3;
+          inherit (cfg.cli) extraPackages usageTracking;
           inherit (kiroSecrets) secretEnv;
         });
       # Beside the wrapper's own reasons: package-dependent options the
@@ -1741,7 +1657,7 @@ in
         inherit (kiroSecrets) urlSecretEnv;
       };
       flatSettings = flatNativeSettings cfg;
-      permissionRules = mkPermissionRules cfg;
+      permissionRules = lib.optionals isHm (mkPermissionRules cfg);
       steeringEmitters = mkSteeringEmitters {
         inherit cfg mergedContext hasMergedContext mergedRules;
         sharedAgentsMd = !isHm;
@@ -1752,7 +1668,9 @@ in
           (lib.mkIf (isHm && cfg.cli.package != null) {
             ai.kiro.cli.native.settings.app.disableAutoupdates = lib.mkDefault true;
           })
-          (kiroToolPolicy {inherit backend cfg mergedServers;})
+          # optionalAttrs, not mkIf: a definition of an undeclared option errors
+          # even under a false mkIf, and devenv declares neither option.
+          (lib.optionalAttrs (kiroRulesDelivered backend) (kiroToolPolicy mergedServers))
           (lib.optionalAttrs (!isHm && options ? enterShell) {
             enterShell = lib.concatStrings (lib.mapAttrsToList (name: setting:
               lib.optionalString (cfg.cli.${name}.enable && needsGlobalNotice setting) ''
@@ -1767,7 +1685,7 @@ in
           {
             assertions =
               mkAssertions cfg
-              ++ usageTracking.assertions cfg (mergedEnvironmentVariables // proxyDefaults cfg launcherEnvironmentDefaults)
+              ++ usageTracking.assertions cfg (mergedEnvironmentVariables // launcherEnvironmentDefaults)
               ++ mkAgentFormatAssertions nativeAgentPlans
               ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
           }
@@ -1775,7 +1693,6 @@ in
             warnings =
               packageWarnings
               ++ hookWarnings
-              ++ trustToolsWarnings
               ++ (openKeys.inspect {
                 known = nativeSettingsKnown;
                 value = flatSettings;
@@ -1836,9 +1753,9 @@ in
                 skills = mergedSkills;
               })
               {
-                # Kiro reads global permissions only; trust answers cannot
-                # replace this store link.
-                "${settingsDir}/permissions.yaml" = lib.mkIf (isHm && permissionRules != []) {
+                # Kiro reads permissions from ~/.kiro only; trust answers
+                # cannot replace this store link.
+                "${settingsDir}/permissions.yaml" = lib.mkIf (permissionRules != []) {
                   content.source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
                     rules = permissionRules;
                   };

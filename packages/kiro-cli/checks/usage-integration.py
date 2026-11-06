@@ -19,8 +19,6 @@ with tempfile.TemporaryDirectory() as directory:
     def launch(binary, env=environment, arguments=None):
         if arguments is None:
             arguments = ["chat", "synthetic"]
-            if binary == "kiro-cli-chat":
-                arguments += ["--agent-engine", "v3"]
         return subprocess.run([str(Path(package) / "bin" / binary), *arguments], env=env, text=True, capture_output=True)
 
     result = launch("kiro-cli")
@@ -38,22 +36,9 @@ with tempfile.TemporaryDirectory() as directory:
                 break
             time.sleep(0.05)
         assert result.returncode == 0, result.stderr
-        for binary in ("kiro-cli", "kiro-cli-chat"):
-            result = launch(binary)
-            assert result.returncode == 0, result.stderr
-            body = json.loads(result.stdout)
-            assert body["proxy"] == "http://127.0.0.1:18091", body
-            assert body["ca"] == str(state / "ca/mitmproxy-ca-cert.pem"), body
-        for binary in ("kiro-cli", "kiro-cli-chat"):
-            for override in (["--agent-engine=v1"], ["--agent-engine", "v2"]):
-                result = launch(binary, arguments=["chat", *override, "synthetic"])
-                assert result.returncode != 0 and "requires the v3 engine" in result.stderr, result
-            result = launch(binary, arguments=["chat", "--agent-engine=v3", "synthetic"])
-            assert result.returncode == 0, result.stderr
-        result = launch("kiro-cli-chat", arguments=["chat", "synthetic"])
-        assert result.returncode != 0 and "requires an explicit v3 engine" in result.stderr, result
-        result = launch("kiro-cli-chat", arguments=["chat", "--v3", "synthetic"])
-        assert result.returncode == 0, result.stderr
+        body = json.loads(result.stdout)
+        assert body["proxy"] == "http://127.0.0.1:18091", body
+        assert body["ca"] == str(state / "ca/mitmproxy-ca-cert.pem"), body
         assert (state.stat().st_mode & 0o777) == 0o700
         recorded = json.loads((state / "service.json").read_text())
         assert (recorded["payload_retention_days"], recorded["warn_bytes"]) == ("90", "5368709120")
@@ -117,9 +102,5 @@ with tempfile.TemporaryDirectory() as directory:
         process.communicate(timeout=5)
     result = subprocess.run([str(Path(disabled) / "bin/kiro-cli"), "chat"], env=environment | {"HTTPS_PROXY": "http://inherited:1234"}, text=True, capture_output=True)
     assert result.returncode == 0 and json.loads(result.stdout)["proxy"] == "http://inherited:1234"
-    for binary in ("kiro-cli", "kiro-cli-chat"):
-        arguments = ["chat", "--agent-engine=v2", "synthetic"]
-        result = subprocess.run([str(Path(disabled) / "bin" / binary), *arguments], env=environment, text=True, capture_output=True)
-        assert result.returncode == 0 and json.loads(result.stdout)["argv"] == arguments, result
 
 print("PASS: opt-in launchers, local service, trust readiness, conflicts, query tool, disabled environment")

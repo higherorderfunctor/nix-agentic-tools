@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extracts the two JavaScript bundles embedded in the pinned kiro-cli-chat binary.
+"""Extracts the two JavaScript bundles embedded in the 2.28.0 kiro-cli-chat binary.
 
 usage: python3 bundles.py <out-dir> → kas.js (KAS @kiro/agent 0.66.26), tui.js.
 The pinned ELF contains zstd frames at the offsets below. Binary and bundle hashes

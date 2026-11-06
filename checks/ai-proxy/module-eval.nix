@@ -323,7 +323,7 @@
     printf '%s\n' "''${HTTP_PROXY-absent}" "''${HTTPS_PROXY-absent}" "''${https_proxy-absent}"
     EOF
     chmod +x "$out/bin/proxy-sentinel"
-    for name in codex kimchi kiro-cli kiro-cli-chat; do
+    for name in codex kimchi kiro-cli; do
       ln -s proxy-sentinel "$out/bin/$name"
     done
   '';
@@ -342,7 +342,6 @@
             cli = {
               package = sentinel;
               environmentVariables = env;
-              v3 = true;
             };
           }
           else {
@@ -368,9 +367,6 @@
       });
       kimchiNative = installedConfig (lib.recursiveUpdate (launcherConfig runtime {} {inherit http https;}) {
         ai.kimchi.native.harnessSettings.httpProxy = local;
-      });
-      kiroV2 = installedConfig (lib.recursiveUpdate (launcherConfig runtime {} {inherit http https;}) {
-        ai.kiro.cli.v3 = false;
       });
       native = installed {
         HTTP_PROXY = local;
@@ -409,11 +405,6 @@
         ${lib.optionalString (runtime == "kimchi" && backend == "hm") ''
           expected=$(printf '%s\n' absent absent absent)
           actual=$(env -u HTTP_PROXY -u HTTPS_PROXY ${kimchiNative}/bin/${exe})
-          test "$actual" = "$expected"
-        ''}
-        ${lib.optionalString (runtime == "kiro") ''
-          expected=$(printf '%s\n' absent absent absent)
-          actual=$(env -u HTTP_PROXY -u HTTPS_PROXY ${kiroV2}/bin/${exe})
           test "$actual" = "$expected"
         ''}
         echo PASS > "$out"
@@ -506,48 +497,6 @@
       }))
       && !(lib.any (lib.hasInfix warning) (copilot {})))))
   backends;
-  kiroWarnings = lib.mapAttrs' (backend: evaluate:
-    lib.nameValuePair "module-ai-proxy-${backend}-kiro-engine-warning"
-    (mkTest "ai-proxy-${backend}-kiro-engine-warning" (let
-      warnings = v3: root: proxy:
-        unverified
-        (evaluate {
-          ai = {
-            proxy = root;
-            kiro = {
-              inherit proxy;
-              cli = {
-                enable = true;
-                inherit v3;
-              };
-            };
-          };
-        }).config.warnings;
-      unverified = lib.filter (lib.hasInfix "Kiro v2 model-request proxy consumption is unverified");
-      once = field: messages:
-        builtins.length messages
-        == 1
-        && lib.hasInfix "ai.kiro.proxy.${field} is set" (builtins.head messages);
-      singleHttp = {
-        inherit http;
-        https = null;
-      };
-      v2 = warnings false {inherit http;} {};
-    in
-      builtins.length v2
-      == 2
-      && once "http" (lib.filter (lib.hasInfix ".http is set") v2)
-      && once "https" (lib.filter (lib.hasInfix ".https is set") v2)
-      && once "http" (warnings false singleHttp {})
-      && once "http" (warnings false {} singleHttp)
-      && warnings true singleHttp {} == []
-      && warnings true {} singleHttp == []
-      && warnings false {inherit http;} {
-        http = null;
-        https = null;
-      }
-      == [])))
-  backends;
   usageTracking = lib.mapAttrs' (backend: evaluate:
     lib.nameValuePair "module-ai-proxy-${backend}-kiro-usage-tracking"
     (mkTest "ai-proxy-${backend}-kiro-usage-tracking" (let
@@ -561,7 +510,6 @@
               cli = {
                 enable = true;
                 usageTracking.enable = true;
-                v3 = true;
               };
             };
           };
@@ -587,7 +535,6 @@ in {
   checks =
     semantics
     // invalidProxies
-    // kiroWarnings
     // launchers
     // packageWarnings
     // settings

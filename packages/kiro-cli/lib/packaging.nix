@@ -7,17 +7,18 @@ rec {
   # patch would come to disagree about which file they are talking about.
   #
   # Locating by CONTENT rather than by filename is deliberate and load-bearing.
-  # `wrapProgram` renames the real ELF (`kiro-cli-chat` ->
-  # `.kiro-cli-chat-wrapped` -> ...`_`) and this repo wraps it a second time, so
-  # any hard-coded name is one nixpkgs change away from pointing at nothing.
-  # That is not hypothetical: `passthru.extracted` DID hard-code
-  # `bin/.kiro-cli-chat-wrapped`, and nixpkgs f13ff45a dissolved the name
-  # entirely by splitting the package (see packages/kiro-cli/packages/ai/kiro-cli/package.nix).
+  # `wrapProgram` renames the real binary (`kiro-cli` -> `.kiro-cli-wrapped`)
+  # and wrappers may be layered again, so any hard-coded name is one packaging
+  # change away from pointing at nothing. That is not hypothetical:
+  # `passthru.extracted` DID hard-code `bin/.kiro-cli-chat-wrapped`, a name
+  # that later disappeared twice — when nixpkgs split the package and when
+  # 3.0.0 merged the launcher and chat binaries into one `kiro-cli`.
   #
   # TWO anchors, and both are required:
-  #   * the rollout-manifest key, which only the chat binary carries — measured
-  #     2026-08-10 on 2.16.2, where it appears 32 times in the ~556 MB chat ELF
-  #     and ZERO times in the launcher or the terminal binary;
+  #   * the rollout-manifest key, which only the chat implementation carries —
+  #     measured 2026-08-10 on 2.16.2, where it appears 32 times in the ~556 MB
+  #     chat ELF and ZERO times in the launcher or the terminal binary. Since
+  #     3.0.0 the release ships one binary, which carries it;
   #   * a native-executable magic number, so a small shell wrapper (or any other
   #     file that merely mentions the key) can never be selected in its place.
   #
@@ -31,7 +32,7 @@ rec {
 
     KIRO_MANIFEST_MARKER = b'"treatment_percent"'
 
-    # ELF (Linux) plus every Mach-O flavour a darwin .app bundle can carry:
+    # ELF (Linux) plus every Mach-O flavour a darwin release can carry:
     # thin and fat, 32- and 64-bit, both byte orders.
     KIRO_EXEC_MAGIC = (
         b"\x7fELF",
@@ -52,12 +53,9 @@ rec {
         for dirpath, _dirs, filenames in os.walk(root):
             for filename in sorted(filenames):
                 path = os.path.join(dirpath, filename)
-                # Symlinks are skipped rather than resolved. On darwin nixpkgs
-                # installs the real Mach-O under
-                # "$out/Applications/Kiro CLI.app/Contents/MacOS/" and leaves
-                # "$out/bin/*" as symlinks into it, so following them would
-                # report one binary twice and turn a healthy tree into an
-                # ambiguity error.
+                # Symlinks are skipped rather than resolved: a symlink into
+                # the tree would report one binary twice and turn a healthy
+                # tree into an ambiguity error.
                 if os.path.islink(path) or not os.path.isfile(path):
                     continue
                 if os.path.getsize(path) < 4:
@@ -249,7 +247,7 @@ rec {
   # "$out". Nothing in the release is executed, so the package's update and
   # drift check read every platform's release on one host.
   #   pkgs: this host's nixpkgs set.
-  #   release: the fetched release archive, `.tar.gz` or `.dmg`.
+  #   release: the fetched release `.tar.gz`.
   #   architecture: the release's CPU name, as embedded-kas.py takes it.
   mkKiroExtract = {
     pkgs,
@@ -264,11 +262,7 @@ rec {
     python3="${pkgs.python3}/bin/python3"
 
     ${pkgs.coreutils}/bin/mkdir release
-    ${
-      if pkgs.lib.hasSuffix ".dmg" release.name
-      then "(cd release && ${pkgs.undmg}/bin/undmg ${release})"
-      else "tar -xzf ${release} -C release"
-    }
+    tar -xzf ${release} -C release
 
     # LOCATE, by content; its own failures are phrased as location failures.
     kiroChatBin=$("$python3" ${kiroLocateChatScript pkgs} "$PWD/release")
@@ -400,11 +394,8 @@ rec {
           print(p)
     '';
   in ''
-    # Walks all of "$out", not "$out/bin". On Darwin nixpkgs installs the real
-    # Mach-O into "$out/Applications/Kiro CLI.app/Contents/MacOS/" and leaves
-    # "$out/bin/*" as SYMLINKS into it — and the patcher skips symlinks, so a
-    # bin-only walk finds nothing there and fails the build. Linux is
-    # unaffected: its binaries are real files under bin/.
+    # Walks all of "$out", not "$out/bin", so the patch does not depend on
+    # where the payload installs its binary; the locator selects it by content.
     kiroRolloutPatched=$(${pkgs.python3}/bin/python3 ${script} \
       ${pkgs.lib.escapeShellArg (pkgs.lib.concatStringsSep "," features)} "$out")
     ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
@@ -455,12 +446,10 @@ rec {
   # kills the process before any argument is parsed — and it needs NO
   # credentials, so it runs in the sandbox on any builder.
   #
-  # It must target the CHAT binary specifically. nixpkgs' `versionCheckHook`
-  # runs `meta.mainProgram`, which is the LAUNCHER, while the manifest lives in
-  # the chat binary — so a dead chat binary would otherwise sail through a
-  # green build.
+  # It targets the patched binary through its `kiro-cli` wrapper, the one file
+  # the release ships since 3.0.0.
   kiroRolloutVerify = ''
-    echo "kiro-rollout: verifying the patched chat binary still runs"
-    "$out/bin/kiro-cli-chat" --version > /dev/null
+    echo "kiro-rollout: verifying the patched binary still runs"
+    "$out/bin/kiro-cli" --version > /dev/null
   '';
 }

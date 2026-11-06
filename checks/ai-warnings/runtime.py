@@ -45,16 +45,15 @@ def guard(script, root):
 
 def credentials(manifest):
     for case, package in json.loads(Path(manifest).read_text()).items():
-        for binary in ["kiro-cli", "kiro-cli-chat"]:
-            argv = [f"{package}/bin/{binary}"]
-            if case in ["absent", "good"]:
-                result = run(argv, output="launched")
-            else:
-                result = subprocess.run(argv, text=True, capture_output=True)
-                assert result.returncode != 0, result
-                assert "launched" not in result.stdout, result.stdout
-                assert "ai.kiro.mcpServers.probe.headers.Authorization" in result.stderr, result.stderr
-            assert "fixture-token" not in result.stderr + result.stdout
+        argv = [f"{package}/bin/kiro-cli"]
+        if case in ["absent", "good"]:
+            result = run(argv, output="launched")
+        else:
+            result = subprocess.run(argv, text=True, capture_output=True)
+            assert result.returncode != 0, result
+            assert "launched" not in result.stdout, result.stdout
+            assert "ai.kiro.mcpServers.probe.headers.Authorization" in result.stderr, result.stderr
+        assert "fixture-token" not in result.stderr + result.stdout
 
 
 def global_feature_notices(script, root):

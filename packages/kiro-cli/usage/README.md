@@ -420,24 +420,23 @@ entry (no cache split) or no context window (no ~tokens), when any. `--json`
 writes the store report, or the list of session reports, instead.
 `kiro-usage report` passes the configured theme.
 
-The managed `kiro-usage exec kiro-cli` and `kiro-usage exec kiro-cli-chat`
-commands also print a short summary of what that run captured to standard error
-after Kiro exits: per root session the run touched, a headline with its request
-count and credits, a model table of requests, credits to two decimals, rounded
-input, output and cached token counts and cache-hit share sorted by credits, and
-a conversation table splitting the main conversation from subagents and
-workflows. One `⚠` line appears only when totals are suspect: capture
-unavailable, unknown credits, incomplete or unfinished calls, calls without a
-conversation identity, duplicate request IDs, or calls with several metering
-events. `kiro-usage session` keeps the full report, and
-`kiro-usage report --session ID` the whole session's summary. A local proxy
-marker links the invocation's captures to their recorded session identities.
-Kiro uses inherited terminal input and output directly; no screen parsing or
-process-ID guess selects the session. Standard output, exit status, and signals
-are preserved. Tracked chat runs as a child of the summary supervisor, retaining
-the terminal descriptors with its own process ID. Explicit help, version, login,
-and administrative commands skip the summary, including after recognized global
-options. Other commands have no automatic Kiro summary.
+The managed `kiro-usage exec kiro-cli` command also prints a short summary of
+what that run captured to standard error after Kiro exits: per root session the
+run touched, a headline with its request count and credits, a model table of
+requests, credits to two decimals, rounded input, output and cached token counts
+and cache-hit share sorted by credits, and a conversation table splitting the
+main conversation from subagents and workflows. One `⚠` line appears only when
+totals are suspect: capture unavailable, unknown credits, incomplete or
+unfinished calls, calls without a conversation identity, duplicate request IDs,
+or calls with several metering events. `kiro-usage session` keeps the full
+report, and `kiro-usage report --session ID` the whole session's summary. A
+local proxy marker links the invocation's captures to their recorded session
+identities. Kiro uses inherited terminal input and output directly; no screen
+parsing or process-ID guess selects the session. Standard output, exit status,
+and signals are preserved. Tracked chat runs as a child of the summary
+supervisor, retaining the terminal descriptors with its own process ID. Explicit
+help, version, login, and administrative commands skip the summary, including
+after recognized global options. Other commands have no automatic Kiro summary.
 
 `ai.kiro.cli.usageTracking.summary` styles that summary: the module writes it to
 a JSON file and passes it to the runtime's `cli --summary-theme FILE`. Every key

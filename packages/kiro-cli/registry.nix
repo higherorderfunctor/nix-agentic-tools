@@ -80,9 +80,9 @@
         }
       ];
     };
-    # kiro-wrapper: the argv contract of the generated kiro-cli launcher /
-    # chat wrappers — which subcommands accept `--tui`/`--v3`/`--trust-tools`,
-    # why the appends are gated rather than unconditional, and how to
+    # kiro-wrapper: the argv contract of the generated kiro-cli launcher —
+    # where `--v3` and `acp --agent-engine=v3` land, why the `acp` selector is
+    # gated rather than unconditional, and how to
     # re-measure on a version bump. Kept OUT of the `kiro-cli` category (whose
     # fragment is the ~300-line auto-memory map) so an edit to the wrapper
     # loads the wrapper rule, not the memory pipeline. Scoped to the generic
@@ -93,8 +93,8 @@
         "packages/kiro-cli/checks/kiro-fhs-contract.nix"
         "packages/kiro-cli/checks/kiro-wrapper-argv.nix"
         "lib/idempotentFlags.nix"
-        # The overlay's wrapProgram calls carry the darwin argv0
-        # bundle-discovery fix, which is part of this argv contract.
+        # The overlay's postFixup wrapper (package-bound KAS, the update
+        # guard) is part of this argv contract.
         "packages/${facetOwner}/packages/ai/kiro-cli/package.nix"
         "packages/${facetOwner}/lib/**"
       ];

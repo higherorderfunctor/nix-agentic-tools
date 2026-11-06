@@ -649,6 +649,51 @@ in {
         evaluated.config.ai.testapp.turboMode
     );
 
+    # A backend's option declaration replaces the record's at the same path as a
+    # whole. Merged field by field, the record's attrset `default` keys would
+    # survive in the backend's declaration; a group (`cli`) still joins.
+    factory-mkRuntime-backend-option-replaces-shared-declaration = mkTest "mkRuntime-backend-option-replaces-shared-declaration" (
+      let
+        record = ai.app.mkRuntime {
+          name = "testapp";
+          surfaceSupport = {};
+          defaults = {package = pkgs.hello;};
+          options = {
+            cli.shared = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+            };
+            table = lib.mkOption {
+              type = lib.types.attrsOf lib.types.int;
+              default = {fromRecord = 1;};
+            };
+          };
+          hm.options = {
+            cli.backendOnly = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+            };
+            table = lib.mkOption {
+              type = lib.types.attrsOf lib.types.int;
+              default = {};
+            };
+          };
+        };
+        evaluated = lib.evalModules {
+          modules = [
+            ai.sharedOptions
+            hmStubs
+            (ai.app.hmTransform record)
+            {config = {};}
+          ];
+        };
+      in
+        evaluated.config.ai.testapp.table
+        == {}
+        && evaluated.config.ai.testapp.cli.shared
+        && evaluated.config.ai.testapp.cli.backendOnly
+    );
+
     factory-mkRuntime-fanout-merges-shared-servers = mkTest "mkRuntime-fanout-merges-shared-servers" (
       let
         record = ai.app.mkRuntime {

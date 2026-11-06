@@ -138,12 +138,12 @@ naming each option; Codex's `pinDaemonToPackage` gets the same treatment on its
 own.
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
-`jail`, `shell`, `extraPackages`, `native.settings`, `trustedMcpTools`,
-`tweaks`, `features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
-`backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows` switches.
-Rollout names and typed `native.settings.chat.keybindings` keys come from the
-extracted registry. Friendly workflows select the GA stock package and imply
-their global client setting on Home Manager; Code-to-Spec also implies its
+`jail`, `shell`, `extraPackages`, `native.settings`, `trustedMcpTools` (Home
+Manager only), `tweaks`, `features.<name>.enable`, and `useFhsSandbox`, plus the
+friendly `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows`
+switches. Rollout names and typed `native.settings.chat.keybindings` keys come
+from the extracted registry. Friendly workflows select the GA stock package and
+imply their global client setting on Home Manager; Code-to-Spec also implies its
 global setting there. Devenv warns when either requested global setting is
 missing, and refuses explicit project-only writes of global keys. The
 environment, jail and shell folds live at `cli.normalized.environmentVariables`,
@@ -254,12 +254,13 @@ The ai module fans out TWO kinds of configuration:
   rollout-resolved package, so custom factories must preserve that route.
   Packages without it fail a named assertion. This is runtime-specific package
   selection, not a normalized sandbox pool.
-- A custom Linux FHS package used with `trustedMcpTools` must expose both
-  `passthru.unwrapped` and `passthru.withFhsPayload`. Otherwise the synthesized
-  `/usr/bin/kiro-cli-chat` can shadow the outer trust wrapper, so the module
-  rejects the configuration instead of silently losing the grant. Direct payload
-  packages may declare `passthru.kiroFhsSandbox = false`; the overlay does this
-  for darwin and pre-split nixpkgs.
+- `ai.kiro.cli.trustedMcpTools` lowers to v3 allow rules in
+  `settings/permissions.yaml`. Tool trust is Home Manager only: it merges into
+  `~/.kiro/settings/`, the only place the v3 engine reads it. devenv never
+  writes outside the project and must not define a new root (no `KIRO_HOME`), so
+  `trustedMcpTools` and `ai.kiro.permissions` are declared under the record's
+  `hm.options` and do not exist there (an unknown-option error). The shared MCP
+  `toolPolicy` warns on devenv Kiro through `surfaceSupport`.
 - `ai.codex.native.settings` — typed stable keys plus a TOML-compatible native
   freeform tail. The module sets neither model nor reasoning effort unless the
   consumer declares one, leaving Codex's lower config layers or built-in

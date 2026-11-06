@@ -401,6 +401,31 @@ class SummaryTests(unittest.TestCase):
                 process.stdin.close()
             os.close(master)
 
+    def test_acp_names_its_engine_before_the_end_of_options_marker(self):
+        cases = (
+            (["acp"], ["--v3", "acp", "--agent-engine=v3"]),
+            (["acp", "--model", "x"], ["--v3", "acp", "--model", "x", "--agent-engine=v3"]),
+            (["acp", "--agent-engine=v2"], ["--v3", "acp", "--agent-engine=v2"]),
+            (["acp", "--agent-engine", "v3"], ["--v3", "acp", "--agent-engine", "v3"]),
+            (["--agent-engine", "v2", "acp"], ["--v3", "--agent-engine", "v2", "acp"]),
+            (["acp", "--"], ["--v3", "acp", "--agent-engine=v3", "--"]),
+            (["acp", "--", "--agent-engine=v3"], ["--v3", "acp", "--agent-engine=v3", "--", "--agent-engine=v3"]),
+            (["--agent", "acp"], ["--v3", "--agent", "acp"]),
+            (["--agent", "a", "acp"], ["--v3", "--agent", "a", "acp", "--agent-engine=v3"]),
+            (["chat"], ["--v3", "chat"]),
+            (["chat", "--", "acp"], ["--v3", "chat", "--", "acp"]),
+            (["mcp", "list"], ["--v3", "mcp", "list"]),
+        )
+        for arguments, expected in cases:
+            with self.subTest(arguments=arguments), patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute:
+                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments])
+                execute.assert_called_once_with("kiro-cli", ["kiro-cli", *expected], {})
+
+    def test_other_commands_get_no_engine_selector(self):
+        with patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute:
+            runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["other-tool", "acp"])
+            execute.assert_called_once_with("other-tool", ["other-tool", "acp"], {})
+
     def test_non_chat_commands_skip_summary(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "refresh_disk_index"), patch.object(runtime, "invocation_summary") as summary:
             for arguments in (["--version"], ["--help"], ["login"], ["--help-all"], ["chat", "--help"], ["--agent-engine", "v3", "login"], ["--agent-engine=v3", "whoami"], ["--tui", "login"], ["--agent", "x", "mcp", "list"]):

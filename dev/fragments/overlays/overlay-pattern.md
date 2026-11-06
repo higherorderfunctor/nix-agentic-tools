@@ -1,6 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-29 — pnpm_12 bootstrap has no hash fixers.
+> **Last verified:** 2026-11-05 — kiro-cli owns its payload derivation and
+> re-wraps it through nixpkgs' public package; pnpm_12 bootstrap has no hash
+> fixers.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -508,34 +510,27 @@ became a no-op**:
 **The build stayed GREEN through all of it.** No seam on the public attribute
 could have helped: `.override` reaches the wrapper's arguments, not the
 unwrapped derivation's attrs, and `overrideAttrs` reaches a derivation that has
-nothing we wanted to change. The fix is to re-point the BASE:
+nothing we wanted to change. The fix was to re-point the BASE at
+`kiro-cli-unwrapped`. Kiro 3.0.0 then changed the release layout that
+derivation's install phase names (one `kiro-cli` binary, a Darwin tarball
+instead of a DMG), so the overlay now OWNS the payload derivation and still
+hands it to upstream's wrapper through the same seam:
 
 ```nix
 # packages/kiro-cli/packages/ai/kiro-cli/package.nix
-hasUnwrapped = pkgs ? kiro-cli-unwrapped;
-basePackage =
-  if hasUnwrapped then pkgs.kiro-cli-unwrapped else pkgs.kiro-cli;
-# … pinned = basePackage.overrideAttrs (…) …
+# … pinned = pkgs.stdenv.mkDerivation { … sourceRoot = "kirocli"; … } …
 # then hand it back to upstream's wrapper, preserving the FHS sandbox and the
 # route in both directions (metadata/name handling omitted here):
-rewrap = payload:
-  (pkgs.kiro-cli.override {kiro-cli-unwrapped = payload;}).overrideAttrs
-  (attrs: {
-    passthru = (attrs.passthru or {}) // pinned.passthru // {
-      kiroFhsSandbox = pkgs.stdenv.hostPlatform.isLinux;
-      unwrapped = pinned;
-      withFhsPayload = rewrap;
-    };
-  });
-in rewrap pinned
+(pkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}).overrideAttrs
+(attrs: {
+  passthru = (attrs.passthru or {}) // pinned.passthru // {
+    unwrapped = pinned;
+  };
+})
 ```
 
-Three properties of that shape are deliberate:
+Two properties of that shape are deliberate:
 
-- **Feature-detect the ATTRIBUTE, never gate on a nixpkgs version.** One
-  expression stays correct on both sides of the split, and the branch retires
-  itself when the pin floor moves past it. A version gate would need a human to
-  notice and delete it.
 - **Re-wrap through upstream's own expression** rather than exporting the
   unwrapped derivation directly. Silently opting out of an upstream RUNTIME fix
   while still publishing the attribute under its normal name is the invisible
@@ -546,12 +541,8 @@ Three properties of that shape are deliberate:
 - **Merge `passthru` onto the wrapper, do not replace it.** `passthru` is not a
   derivation input, so re-attaching ours moves neither `drvPath` nor `outPath`,
   and the wrapper's `unwrapped` key is the only supported route from the public
-  attribute back to the real binaries. `withFhsPayload` is the corresponding
-  route forward: it places a configured payload inside upstream's wrapper while
-  retaining the pinned package's metadata and passthru contract.
-  `kiroFhsSandbox` disambiguates that contract on darwin and pre-split nixpkgs,
-  where the public package is already direct and `unwrapped` is a valid no-op
-  selection rather than evidence of an FHS layer.
+  attribute back to the real binaries. On darwin, where the public package is
+  already direct, `unwrapped` is a valid no-op selection.
 
 **How to detect this class before it costs a release.** A silent-drop split
 produces no error anywhere; the only tell is that the package's own facts stop

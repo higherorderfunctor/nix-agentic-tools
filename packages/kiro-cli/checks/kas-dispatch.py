@@ -1,4 +1,9 @@
-"""Real native launcher/direct-chat dispatch: package binding beats old caches."""
+"""Real native dispatch through the wrapper: package binding beats old caches.
+
+The wrapper's `acp --agent-engine=v3` reaches KAS for a client on the binary's
+built-in v2 list, and the stock variant's raw measurement pins the binary
+behavior that selector is built on.
+"""
 
 import importlib.util
 import json
@@ -20,37 +25,67 @@ def capture_node(root):
     return capture, node
 
 
+def offline_env(root, bin_dir, node):
+    home = root / "home"
+    home.mkdir(exist_ok=True)
+    return {"PATH": bin_dir + ":" + os.environ["PATH"],
+            "HOME": str(home), "CFFIXED_USER_HOME": str(home),
+            "XDG_CACHE_HOME": str(root / "cache"), "XDG_CONFIG_HOME": str(root / "config"),
+            "KIRO_KAS_NODE_PATH": str(node), "KIRO_DISABLE_TELEMETRY": "1",
+            "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
+
+
+def raw(binary, arguments, stdin=""):
+    """Run the stock binary with no managed argv injection and report what it did.
+
+    `started`: the capture node ran, so the acp relay spawned KAS (it resolves
+    node from KIRO_KAS_NODE_PATH). `stdout`: non-empty when the v2 engine
+    answered the initialize itself. `log`: the binary's acp-engine lines from
+    $TMPDIR/kiro-log/kiro-chat.log at KIRO_LOG_LEVEL=info.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        capture, node = capture_node(root)
+        work, scratch = root / "work", root / "tmp"
+        work.mkdir()
+        scratch.mkdir()
+        run_env = offline_env(root, str(Path(binary).parent), node)
+        run_env.update(TMPDIR=str(scratch), KIRO_LOG_LEVEL="info")
+        result = subprocess.run([binary, *arguments], env=run_env, cwd=work,
+                                input=stdin, capture_output=True, text=True, timeout=30)
+        log = [line for path in scratch.glob("kiro-log/*.log")
+               for line in path.read_text(errors="replace").splitlines()
+               if "acp engine" in line or "ACP initialize" in line or "agentEngine" in line]
+        return {"returncode": result.returncode, "started": capture.exists(),
+                "stdout": result.stdout, "stderr": result.stderr, "log": log}
+
+
 for name, variant in variants.items():
     for stale in (False, True):
-        for command in ("kiro-cli", "kiro-cli-chat"):
-            for mode in ("chat", "acp"):
-                with tempfile.TemporaryDirectory() as tmp:
-                    root = Path(tmp)
-                    home, work = root / "home", root / "work"
-                    home.mkdir()
-                    work.mkdir()
-                    old = home / ".local/share/kiro-cli/kas/0.1.0-old/node_modules/@kiro/agent/dist/server/acp-server.js"
-                    if stale:
-                        old.parent.mkdir(parents=True)
-                        old.write_text("throw Error('stale KAS selected');")
-                    capture, node = capture_node(root)
-                    env = {"PATH": variant["package"] + "/bin:" + os.environ["PATH"],
-                           "HOME": str(home), "CFFIXED_USER_HOME": str(home),
-                           "XDG_CACHE_HOME": str(root / "cache"), "XDG_CONFIG_HOME": str(root / "config"),
-                           "KIRO_KAS_NODE_PATH": str(node), "KIRO_DISABLE_TELEMETRY": "1",
-                           "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
-                    args = [variant["package"] + "/bin/" + command, mode]
-                    # The real factory wrapper defaults only the launcher to v3;
-                    # direct-chat engine selection remains explicit.
-                    if command == "kiro-cli-chat":
-                        args += ["--agent-engine", "v3"]
-                    if mode == "chat":
-                        args += ["--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"]
-                    result = subprocess.run(args, env=env, cwd=work, input="", capture_output=True, text=True, timeout=30)
-                    assert capture.exists(), (name, stale, args, result.returncode, result.stderr)
-                    argv = json.loads(capture.read_text())
-                    assert variant["server"] in argv, (name, stale, args, argv)
-                    assert list(home.glob("**/kas/*/node_modules/@kiro/agent/dist/server/acp-server.js")) == ([old] if stale else []), "unexpected cache extraction"
+        for mode in ("chat", "acp"):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                home, work = root / "home", root / "work"
+                home.mkdir()
+                work.mkdir()
+                old = home / ".local/share/kiro-cli/kas/0.1.0-old/node_modules/@kiro/agent/dist/server/acp-server.js"
+                if stale:
+                    old.parent.mkdir(parents=True)
+                    old.write_text("throw Error('stale KAS selected');")
+                capture, node = capture_node(root)
+                env = {"PATH": variant["package"] + "/bin:" + os.environ["PATH"],
+                       "HOME": str(home), "CFFIXED_USER_HOME": str(home),
+                       "XDG_CACHE_HOME": str(root / "cache"), "XDG_CONFIG_HOME": str(root / "config"),
+                       "KIRO_KAS_NODE_PATH": str(node), "KIRO_DISABLE_TELEMETRY": "1",
+                       "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
+                args = [variant["package"] + "/bin/kiro-cli", mode]
+                if mode == "chat":
+                    args += ["--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"]
+                result = subprocess.run(args, env=env, cwd=work, input="", capture_output=True, text=True, timeout=30)
+                assert capture.exists(), (name, stale, args, result.returncode, result.stderr)
+                argv = json.loads(capture.read_text())
+                assert variant["server"] in argv, (name, stale, args, argv)
+                assert list(home.glob("**/kas/*/node_modules/@kiro/agent/dist/server/acp-server.js")) == ([old] if stale else []), "unexpected cache extraction"
     # Explicit inherited override remains available only in the stock variant.
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -64,15 +99,33 @@ for name, variant in variants.items():
                        input="", capture_output=True, text=True, timeout=30)
         expected = variant["server"] if variant["managed"] else str(override)
         assert expected in json.loads(capture.read_text()), (name, "override precedence")
-        # An explicit v2 choice beats the injected launcher --v3. Its own
-        # validation error is before auth/network and before any KAS process.
+        # The wrapper names the engine on `acp` itself: `acp-smoke` is on the
+        # binary's v2 client list, so without the appended selector upstream's
+        # default would answer it with the v2 engine and never start KAS.
         capture.unlink()
-        result = subprocess.run([variant["package"] + "/bin/kiro-cli", "acp", "--agent-engine=v2", "--auth-method", "client"],
-                                env=env, cwd=tmp, input="", capture_output=True, text=True, timeout=30)
-        assert result.returncode == 2 and "only supported with --agent-engine=v3" in result.stderr, result.stderr
-        assert not capture.exists(), "explicit v2 started KAS"
+        subprocess.run([variant["package"] + "/bin/kiro-cli", "acp"], env=env, cwd=tmp,
+                       input=smoke.request("acp-smoke"), capture_output=True, text=True, timeout=30)
+        assert capture.exists(), (name, "v2-listed client through the wrapper")
         # Remove both overrides and initialize through native ACP with real Node.
         del env["KIRO_KAS_NODE_PATH"]
         del env["KIRO_KAS_SERVER_PATH"]
         smoke.initialize([variant["package"] + "/bin/kiro-cli", "acp"], env)
-    print(f"PASS: {name}: launcher/direct chat, CLI/ACP, fresh/stale cache, explicit overrides/v2, real ACP initialize", flush=True)
+    print(f"PASS: {name}: CLI/ACP, fresh/stale cache, explicit override, v2-listed client, real ACP initialize", flush=True)
+
+# Raw measurement on the stock payload, with no managed argv injection: the
+# binary fact the wrapper's `acp` selector depends on. An explicit
+# `--agent-engine=v3` starts KAS for every client, one on the built-in v2 list
+# included, with or without an initialize. Every row prints before the
+# assertion, so one CI run records the whole matrix.
+binary = variants["stock"]["unwrapped"] + "/bin/kiro-cli"
+INPUTS = {"eof": "", "nix-check": smoke.request(), "acp-smoke": smoke.request("acp-smoke")}
+measured = {}
+for kind, stdin in INPUTS.items():
+    row = measured[kind] = raw(binary, ["acp", "--agent-engine=v3"], stdin)
+    print("MEASURE", json.dumps({"argv": ["acp", "--agent-engine=v3"], "stdin": kind,
+                                  "returncode": row["returncode"], "started": row["started"],
+                                  "stdout": row["stdout"][:200], "stderr": row["stderr"][:200],
+                                  "log": row["log"][-3:]}), flush=True)
+for kind, row in measured.items():
+    assert row["started"], ("explicit v3 acp", kind, row)
+print("PASS: raw: explicit v3 acp starts KAS for every client", flush=True)

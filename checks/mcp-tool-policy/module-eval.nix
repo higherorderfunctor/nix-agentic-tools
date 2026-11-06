@@ -42,35 +42,36 @@
     then hmCodexSettings evaluated
     else evaluated.config.ai.codex.files.".codex/config.toml".content.value;
   kiroRule = rule: {inherit (rule) capability effect match;};
-  # The repository supports Kiro's v3 engine only; v2 is untested.
+  # The trust and permission options exist on Home Manager only; devenv has
+  # neither to read, and its policy reaches nothing but the one warning.
   kiroCase = backend: let
-    evaluated = evalWith backend "kiro" {ai.kiro.cli.v3 = true;};
+    evaluated = evalWith backend "kiro" {};
     inherit (evaluated.config.ai) kiro;
-    rulesDelivered = backend == "hm";
     warnings = policyWarnings evaluated;
   in
-    builtins.elem "@probe/a" kiro.cli.trustedMcpTools
-    && map kiroRule kiro.permissions
-    == lib.optionals rulesDelivered [
-      {
-        capability = "mcp";
-        effect = "ask";
-        match = ["probe/b"];
-      }
-      {
-        capability = "mcp";
-        effect = "deny";
-        match = ["probe/c"];
-      }
-    ]
-    && (
-      if rulesDelivered
-      then warnings == []
-      else
-        builtins.length warnings
-        == 1
-        && lib.hasSuffix "keep Kiro's default: b, c.)" (builtins.head warnings)
-    );
+    if backend == "hm"
+    then
+      kiro.cli.trustedMcpTools
+      == ["@probe/a"]
+      && map kiroRule kiro.permissions
+      == [
+        {
+          capability = "mcp";
+          effect = "ask";
+          match = ["probe/b"];
+        }
+        {
+          capability = "mcp";
+          effect = "deny";
+          match = ["probe/c"];
+        }
+      ]
+      && warnings == []
+    else
+      !(kiro.cli ? trustedMcpTools)
+      && !(kiro ? permissions)
+      && builtins.length warnings == 1
+      && lib.hasSuffix "keep Kiro's default: a, b, c.)" (builtins.head warnings);
   # A consumer's own lower-priority trust and rules, with no policy declared.
   kiroExistingRule = {
     capability = "mcp";
@@ -116,32 +117,36 @@ in {
           d.approval_mode = "prompt";
         };
       }))
-    # Kiro: `auto` is a trusted tool everywhere; ask and deny rules exist only
-    # where they reach permissions.yaml (Home Manager with v3); whatever a
-    # backend cannot carry is named in one warning.
+    # Kiro: allow, ask and deny rules exist only where they reach
+    # permissions.yaml (Home Manager); whatever a backend cannot carry is named
+    # in one warning.
     (perBackend "kiro" (backend:
       kiroCase backend
-      && (backend == "devenv" || (evalWith backend "kiro" {ai.kiro.cli.v3 = true;}).config.home.file ? ".kiro/settings/permissions.yaml")))
+      && (backend == "devenv" || (evalWith backend "kiro" {}).config.home.file ? ".kiro/settings/permissions.yaml")))
     # Kiro with no policy: a consumer's mkDefault trust and rules survive.
-    (perBackend "kiro-defaults" (backend: let
-      inherit
-        ((backends.${backend} (lib.recursiveUpdate (setEnable "kiro" true) {
-            ai = {
-              kiro = {
-                cli.trustedMcpTools = lib.mkDefault ["@existing/read"];
-                permissions = lib.mkDefault [kiroExistingRule];
+    # Home Manager only, where the options exist.
+    (perBackend "kiro-defaults" (backend:
+      backend
+      == "devenv"
+      || (let
+        inherit
+          ((backends.${backend} (lib.recursiveUpdate (setEnable "kiro" true) {
+              ai = {
+                kiro = {
+                  cli.trustedMcpTools = lib.mkDefault ["@existing/read"];
+                  permissions = lib.mkDefault [kiroExistingRule];
+                };
+                mcpServers.probe = {inherit url;};
               };
-              mcpServers.probe = {inherit url;};
-            };
-          }))
+            }))
           .config
           .ai)
-        kiro
-        ;
-    in
-      kiro.cli.trustedMcpTools
-      == ["@existing/read"]
-      && map kiroRule kiro.permissions == [kiroExistingRule]))
+          kiro
+          ;
+      in
+        kiro.cli.trustedMcpTools
+        == ["@existing/read"]
+        && map kiroRule kiro.permissions == [kiroExistingRule])))
     # Kimchi has no surface for the policy: one warning, nothing rendered.
     (perBackend "kimchi" (backend: builtins.length (policyWarnings (evalWith backend "kimchi" {})) == 1))
     # A proxied server's lowered client entry keeps its policy, so the runtime

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-# usage: [KIRO_BASE_HOME=<dir>] [T=secs] [SETTINGS='{cli.json keys}'] [CASE_ENV="K=V ..."] wire2.sh <case> -- <kiro-cli-chat args...>
-# Pinned native kiro-cli-chat in an empty network namespace (unshare -rn, loopback only); all four service
+# usage: [KIRO_BASE_HOME=<dir>] [T=secs] [SETTINGS='{cli.json keys}'] [CASE_ENV="K=V ..."] wire2.sh <case> -- <kiro-cli args...>
+# Pinned native kiro-cli in an empty network namespace (unshare -rn, loopback only); all four service
 # endpoints point at capserver2.py on 127.0.0.1:18765, which answers ListAvailableModels with two fixture
 # models and GenerateAssistantResponse from cases/<case>/rules.json (else cases/x.rules.json).
 # When cases/<case>/script.json exists, acpctl.py drives the process over ACP stdio with it.
@@ -72,7 +72,7 @@ r=0
 env -i PATH="$U:/usr/bin:/bin" HOME="$R/home" CFFIXED_USER_HOME="$R/home" XDG_CONFIG_HOME="$R/home/.config" \
   XDG_CACHE_HOME="$R/home/.cache" XDG_DATA_HOME="$R/home/.local/share" TERM=dumb KIRO_DISABLE_TELEMETRY=1 \
   ACP_LOG="$R/acp.log" ACP_STDERR="$R/acp.err" KIRO_LOG_LEVEL=debug KIRO_CHAT_LOG_FILE="$R/chat.log" "${case_env[@]}" \
-  timeout "$T" "${driver[@]}" "${wrap[@]}" "$U/kiro-cli-chat" "$@" >"$R/out.txt" 2>&1 || r=$?
+  timeout "$T" "${driver[@]}" "${wrap[@]}" "$U/kiro-cli" "$@" >"$R/out.txt" 2>&1 || r=$?
 kill "$sp"
 exit "$r"' _ "$@" || rc=$?
 printf 'rc=%s run=%s\n' "$rc" "$R"

@@ -9,15 +9,19 @@ import sys
 import tempfile
 
 
+def request(client="nix-check"):
+    """One ACP initialize line, as a client named `client` sends it."""
+    return json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": 1, "clientCapabilities": {},
+        "clientInfo": {"name": client, "version": "1"}}}) + "\n"
+
+
 def initialize(command, env):
     with tempfile.TemporaryFile(mode="w+") as errors:
         process = subprocess.Popen(command, env=env, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=errors, text=True)
         try:
-            request = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-                "protocolVersion": 1, "clientCapabilities": {},
-                "clientInfo": {"name": "nix-check", "version": "1"}}}
-            process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.write(request())
             process.stdin.flush()
             if not select.select([process.stdout], [], [], 30)[0]:
                 raise AssertionError("KAS initialize timed out")
