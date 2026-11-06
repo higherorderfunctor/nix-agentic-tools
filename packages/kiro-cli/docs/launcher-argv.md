@@ -381,10 +381,11 @@ from one source, so Darwin has no host-run job for them.
   `--model` not skipped), `--`, idempotence of `--v3`, the presence-only `acp`
   selector, the absence of `--trust-tools`, and the env/PATH export paths.
 - `packages/kiro-cli/checks/kiro-cli-extracted.nix` — the drift check for
-  `cli.options` (hand-written rows for `--auth-method`, `--agent-engine`,
-  `--format`, `--resume-picker`, `--verbose` and the value options) and
-  `kiro-cli-help-fixtures`, which runs the parser on the real 3.0.0 help output
-  under `checks/fixtures/help/` and on three inputs it must refuse.
+  `cli.options` (exact rows for the top-level value options this change reads;
+  membership rows for `v3` in `acp --agent-engine`, `cli` in `acp --auth-method`
+  and `json` in `chat --format`) and `kiro-cli-help-fixtures`, which runs the
+  parser on the real 3.0.0 help output under `checks/fixtures/help/` and on
+  three inputs it must refuse.
 - `packages/kiro-cli/checks/module-eval.nix`
   (`module-kiro-launch-value-options`) — the measured value-option list, and
   that a short name and an alias of a value option are skipped too.
