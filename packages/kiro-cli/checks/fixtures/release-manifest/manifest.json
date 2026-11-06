@@ -1,0 +1,101 @@
+{
+  "version": "3.1.0",
+  "packages": [
+    {
+      "kind": "deb",
+      "targetTriple": "x86_64-unknown-linux-gnu",
+      "os": "linux",
+      "fileType": "zip",
+      "architecture": "x86_64",
+      "variant": "headless",
+      "download": "3.1.0/kirocli-x86_64-linux.zip",
+      "sha256": "6f43c9ca9811d1ef2d4b47148667243b5af2d4aaea7cdef3e9a6af1c10d4c8ba",
+      "size": 138093607,
+      "channel": "stable"
+    },
+    {
+      "kind": "deb",
+      "targetTriple": "x86_64-unknown-linux-gnu",
+      "os": "linux",
+      "fileType": "tarZst",
+      "architecture": "x86_64",
+      "variant": "headless",
+      "download": "3.1.0/kirocli-x86_64-linux.tar.zst",
+      "sha256": "9efc69489e07892f40f6e4e29c5105a5feaff47d507fd2bde32f3974097a2477",
+      "size": 128250139,
+      "channel": "stable"
+    },
+    {
+      "kind": "deb",
+      "targetTriple": "x86_64-unknown-linux-gnu",
+      "os": "linux",
+      "fileType": "tarGz",
+      "architecture": "x86_64",
+      "variant": "headless",
+      "download": "3.1.0/kirocli-x86_64-linux.tar.gz",
+      "sha256": "006835b2f4f433f55bb02601cd3053ccb10bd3d408478719c33d320f18e46ba5",
+      "size": 138093608,
+      "channel": "stable"
+    },
+    {
+      "kind": "deb",
+      "targetTriple": "universal-apple-darwin",
+      "os": "macos",
+      "fileType": "zip",
+      "architecture": "universal",
+      "variant": "standalone",
+      "download": "3.1.0/kirocli-universal-darwin.zip",
+      "sha256": "81559df6deffaad19581f9f1014b608709c49659f10f1b0c348cbafc2c8930d7",
+      "size": 263886245,
+      "channel": "stable"
+    },
+    {
+      "kind": "deb",
+      "targetTriple": "universal-apple-darwin",
+      "os": "macos",
+      "fileType": "tarGz",
+      "architecture": "universal",
+      "variant": "standalone",
+      "download": "3.1.0/kirocli-universal-darwin.tar.gz",
+      "sha256": "c907a6aab93e0404a75db667412ac09a01163eefc4f1d734e7d221a6e03870f0",
+      "size": 263812836,
+      "channel": "stable"
+    },
+    {
+      "kind": "deb",
+      "targetTriple": "x86_64-unknown-linux-gnu",
+      "os": "linux",
+      "fileType": "rpm",
+      "architecture": "x86_64",
+      "variant": "headless",
+      "download": "3.1.0/kirocli-x86_64-linux.rpm",
+      "sha256": "139a3eab6f129fd2237423250c0fba35bac1af1b61665f6af1ce20c137b71a42",
+      "size": 137809994,
+      "channel": "stable"
+    },
+    {
+      "kind": "deb",
+      "targetTriple": "x86_64-unknown-linux-musl",
+      "os": "linux",
+      "fileType": "tarGz",
+      "architecture": "x86_64",
+      "variant": "headless",
+      "download": "3.1.0/kirocli-x86_64-linux-musl.tar.gz",
+      "sha256": "82ae70f353f8e1a8bd414053f16e47a6b07567660daf4ade9501213864c0c335",
+      "size": 142060130,
+      "channel": "stable"
+    },
+    {
+      "kind": "deb",
+      "targetTriple": "x86_64-unknown-linux-musl",
+      "os": "linux",
+      "fileType": "zip",
+      "architecture": "x86_64",
+      "variant": "headless",
+      "download": "3.1.0/kirocli-x86_64-linux-musl.zip",
+      "sha256": "53a2e7e99c23714e5e021cfda67369b97c6dbcb69f10479eaed5b613270ad6d3",
+      "size": 142058864,
+      "channel": "stable"
+    }
+  ]
+}
