@@ -16,8 +16,11 @@
     theme = summaryTheme cfg;
   in
     lib.optionals (theme != {}) ["--summary-theme" (toString (pkgs.writeText "kiro-usage-summary-theme.json" (builtins.toJSON theme)))];
+  # `exec` finds the launched kiro-cli's subcommand by skipping these options'
+  # values; the same measured list drives the managed launcher's scan.
+  launchValueArgs = ["--launch-value-options=${lib.concatStringsSep "," (import ./launchValueOptions.nix {inherit lib;}).measured}"];
   # The tool's `exec` and `report` commands print the exit summary.
-  toolArgs = cfg: ["--port" (toString cfg.port)] ++ warnArgs cfg ++ stateArgs cfg ++ summaryArgs cfg;
+  toolArgs = cfg: ["--port" (toString cfg.port)] ++ launchValueArgs ++ warnArgs cfg ++ stateArgs cfg ++ summaryArgs cfg;
   # toPythonApplication sets pythonModule = false; the interpreter mitmdump runs on is its Python dependencies'.
   pythonOf = drv:
     if lib.isDerivation (drv.pythonModule or null)

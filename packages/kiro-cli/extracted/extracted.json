@@ -1,4 +1,495 @@
 {
+  "cli": {
+    "__platforms": {
+      "x86_64-linux": {
+        "options": {
+          "acp": {
+            "--agent": {
+              "aliases": [],
+              "count": false,
+              "long": "--agent",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "AGENT"
+            },
+            "--agent-engine": {
+              "aliases": [],
+              "count": false,
+              "long": "--agent-engine",
+              "possibleValues": ["v2", "v1", "v3"],
+              "short": null,
+              "takesValue": true,
+              "valueName": "ENGINE"
+            },
+            "--auth-method": {
+              "aliases": ["--authMethod"],
+              "count": false,
+              "long": "--auth-method",
+              "possibleValues": ["cli", "client"],
+              "short": null,
+              "takesValue": true,
+              "valueName": "METHOD"
+            },
+            "--effort": {
+              "aliases": [],
+              "count": false,
+              "long": "--effort",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "EFFORT"
+            },
+            "--help": {
+              "aliases": [],
+              "count": false,
+              "long": "--help",
+              "possibleValues": [],
+              "short": "-h",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--login": {
+              "aliases": [],
+              "count": false,
+              "long": "--login",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--model": {
+              "aliases": [],
+              "count": false,
+              "long": "--model",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "MODEL"
+            },
+            "--trust-all-tools": {
+              "aliases": [],
+              "count": false,
+              "long": "--trust-all-tools",
+              "possibleValues": [],
+              "short": "-a",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--trust-tools": {
+              "aliases": [],
+              "count": false,
+              "long": "--trust-tools",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "TOOL_NAMES"
+            },
+            "--verbose": {
+              "aliases": [],
+              "count": true,
+              "long": "--verbose",
+              "possibleValues": [],
+              "short": "-v",
+              "takesValue": false,
+              "valueName": null
+            }
+          },
+          "chat": {
+            "--agent": {
+              "aliases": [],
+              "count": false,
+              "long": "--agent",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "AGENT"
+            },
+            "--agent-engine": {
+              "aliases": [],
+              "count": false,
+              "long": "--agent-engine",
+              "possibleValues": ["v2", "v1", "v3"],
+              "short": null,
+              "takesValue": true,
+              "valueName": "ENGINE"
+            },
+            "--all-cwds": {
+              "aliases": [],
+              "count": false,
+              "long": "--all-cwds",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--cloud": {
+              "aliases": [],
+              "count": false,
+              "long": "--cloud",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--delete-session": {
+              "aliases": [],
+              "count": false,
+              "long": "--delete-session",
+              "possibleValues": [],
+              "short": "-d",
+              "takesValue": true,
+              "valueName": "SESSION_ID"
+            },
+            "--effort": {
+              "aliases": [],
+              "count": false,
+              "long": "--effort",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "EFFORT"
+            },
+            "--format": {
+              "aliases": [],
+              "count": false,
+              "long": "--format",
+              "possibleValues": ["plain", "json", "json-pretty"],
+              "short": "-f",
+              "takesValue": true,
+              "valueName": "FORMAT"
+            },
+            "--help": {
+              "aliases": [],
+              "count": false,
+              "long": "--help",
+              "possibleValues": [],
+              "short": "-h",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--legacy-ui": {
+              "aliases": ["--classic"],
+              "count": false,
+              "long": "--legacy-ui",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--list-models": {
+              "aliases": [],
+              "count": false,
+              "long": "--list-models",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--list-sessions": {
+              "aliases": [],
+              "count": false,
+              "long": "--list-sessions",
+              "possibleValues": [],
+              "short": "-l",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--mode": {
+              "aliases": [],
+              "count": false,
+              "long": "--mode",
+              "possibleValues": ["default", "spec"],
+              "short": null,
+              "takesValue": true,
+              "valueName": "MODE"
+            },
+            "--model": {
+              "aliases": [],
+              "count": false,
+              "long": "--model",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "MODEL"
+            },
+            "--no-interactive": {
+              "aliases": [],
+              "count": false,
+              "long": "--no-interactive",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--output-format": {
+              "aliases": [],
+              "count": false,
+              "long": "--output-format",
+              "possibleValues": ["text", "stream-json"],
+              "short": null,
+              "takesValue": true,
+              "valueName": "OUTPUT_FORMAT"
+            },
+            "--repo": {
+              "aliases": [],
+              "count": false,
+              "long": "--repo",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "REPO"
+            },
+            "--require-mcp-startup": {
+              "aliases": [],
+              "count": false,
+              "long": "--require-mcp-startup",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--resume": {
+              "aliases": [],
+              "count": false,
+              "long": "--resume",
+              "possibleValues": [],
+              "short": "-r",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--resume-id": {
+              "aliases": [],
+              "count": false,
+              "long": "--resume-id",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "SESSION_ID"
+            },
+            "--resume-picker": {
+              "aliases": [],
+              "count": false,
+              "long": "--resume-picker",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--session-source": {
+              "aliases": [],
+              "count": false,
+              "long": "--session-source",
+              "possibleValues": ["v1", "v2"],
+              "short": null,
+              "takesValue": true,
+              "valueName": "v1|v2"
+            },
+            "--sessions": {
+              "aliases": [],
+              "count": false,
+              "long": "--sessions",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--trust-all-tools": {
+              "aliases": [],
+              "count": false,
+              "long": "--trust-all-tools",
+              "possibleValues": [],
+              "short": "-a",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--trust-tools": {
+              "aliases": [],
+              "count": false,
+              "long": "--trust-tools",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "TOOL_NAMES"
+            },
+            "--trust-workspace": {
+              "aliases": [],
+              "count": false,
+              "long": "--trust-workspace",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--tui": {
+              "aliases": [],
+              "count": false,
+              "long": "--tui",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--v2": {
+              "aliases": [],
+              "count": false,
+              "long": "--v2",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--v3": {
+              "aliases": [],
+              "count": false,
+              "long": "--v3",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--verbose": {
+              "aliases": [],
+              "count": true,
+              "long": "--verbose",
+              "possibleValues": [],
+              "short": "-v",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--wrap": {
+              "aliases": [],
+              "count": false,
+              "long": "--wrap",
+              "possibleValues": ["always", "never", "auto"],
+              "short": "-w",
+              "takesValue": true,
+              "valueName": "WRAP"
+            }
+          },
+          "top": {
+            "--agent": {
+              "aliases": [],
+              "count": false,
+              "long": "--agent",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "AGENT"
+            },
+            "--cloud": {
+              "aliases": [],
+              "count": false,
+              "long": "--cloud",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--help": {
+              "aliases": [],
+              "count": false,
+              "long": "--help",
+              "possibleValues": [],
+              "short": "-h",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--legacy-ui": {
+              "aliases": ["--classic"],
+              "count": false,
+              "long": "--legacy-ui",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--repo": {
+              "aliases": [],
+              "count": false,
+              "long": "--repo",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "REPO"
+            },
+            "--resume": {
+              "aliases": [],
+              "count": false,
+              "long": "--resume",
+              "possibleValues": [],
+              "short": "-r",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--resume-id": {
+              "aliases": [],
+              "count": false,
+              "long": "--resume-id",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": true,
+              "valueName": "SESSION_ID"
+            },
+            "--resume-picker": {
+              "aliases": ["--list"],
+              "count": false,
+              "long": "--resume-picker",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--tui": {
+              "aliases": [],
+              "count": false,
+              "long": "--tui",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--v2": {
+              "aliases": [],
+              "count": false,
+              "long": "--v2",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--v3": {
+              "aliases": [],
+              "count": false,
+              "long": "--v3",
+              "possibleValues": [],
+              "short": null,
+              "takesValue": false,
+              "valueName": null
+            },
+            "--verbose": {
+              "aliases": [],
+              "count": true,
+              "long": "--verbose",
+              "possibleValues": [],
+              "short": "-v",
+              "takesValue": false,
+              "valueName": null
+            },
+            "--version": {
+              "aliases": [],
+              "count": false,
+              "long": "--version",
+              "possibleValues": [],
+              "short": "-V",
+              "takesValue": false,
+              "valueName": null
+            }
+          }
+        }
+      }
+    }
+  },
   "hookTriggerAliases": {
     "AfterFileEdit": "PostFileSave",
     "agentSpawn": "SessionStart",

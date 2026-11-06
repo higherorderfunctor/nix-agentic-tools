@@ -102,6 +102,41 @@ in {
         && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
     );
 
+    # The measured top-level value options include the three the 3.0.0 parser
+    # takes a value for; membership, so an upstream addition clears by
+    # regeneration. A measurement that dropped one of them (the old hand list
+    # lacked `--repo`) would treat that option's value as the subcommand. The
+    # synthetic table below is exact: a `valueOptions` that skipped a value
+    # option's short name or aliases, or kept a no-value option, would differ.
+    module-kiro-launch-value-options = mkTest "kiro-launch-value-options" (
+      let
+        launchValueOptions = import ../lib/launchValueOptions.nix {inherit lib;};
+        option = {
+          aliases = [];
+          short = null;
+          takesValue = true;
+        };
+      in
+        lib.all (name: lib.elem name launchValueOptions.measured) ["--agent" "--repo" "--resume-id"]
+        && launchValueOptions.valueOptions {
+          "--flag" =
+            option
+            // {
+              long = "--flag";
+              takesValue = false;
+              aliases = ["--other"];
+            };
+          "--value" =
+            option
+            // {
+              long = "--value";
+              short = "-v";
+              aliases = ["--alias"];
+            };
+        }
+        == ["--alias" "--value" "-v"]
+    );
+
     # The `acp --agent-engine` presence scan: an exact per-token match in both
     # spellings (a substring scan of "$*" would let a prompt that mentions the
     # flag count), defaulting to 0, and stopping at `--`.

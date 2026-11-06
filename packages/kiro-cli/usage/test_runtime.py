@@ -26,6 +26,21 @@ import disk_index
 from mitm_addon import UsageCapture
 import runtime
 
+# The top-level options that take a value, as the packaged tool is handed them: the check exports the list measured from the binary's help.
+def _launch_value_options():
+    measured = os.environ.get("KIRO_LAUNCH_VALUE_OPTIONS")
+    if not measured:
+        raise RuntimeError(
+            "KIRO_LAUNCH_VALUE_OPTIONS is unset. Export the measured list, comma separated, e.g. "
+            "KIRO_LAUNCH_VALUE_OPTIONS=\"$(nix eval --impure --raw --expr 'let lib = (builtins.getFlake (toString ./.)).inputs.nixpkgs.lib; "
+            "in lib.concatStringsSep \",\" (import ./packages/kiro-cli/lib/launchValueOptions.nix {inherit lib;}).measured')\" "
+            "(see packages/kiro-cli/usage/README.md)"
+        )
+    return tuple(measured.split(","))
+
+
+LAUNCH_VALUE_OPTIONS = _launch_value_options()
+
 
 class SummaryTests(unittest.TestCase):
     def test_exact_sessions_and_unknown_identity(self):
@@ -407,10 +422,11 @@ class SummaryTests(unittest.TestCase):
             (["acp", "--model", "x"], ["--v3", "acp", "--model", "x", "--agent-engine=v3"]),
             (["acp", "--agent-engine=v2"], ["--v3", "acp", "--agent-engine=v2"]),
             (["acp", "--agent-engine", "v3"], ["--v3", "acp", "--agent-engine", "v3"]),
-            (["--agent-engine", "v2", "acp"], ["--v3", "--agent-engine", "v2", "acp"]),
             (["acp", "--"], ["--v3", "acp", "--agent-engine=v3", "--"]),
             (["acp", "--", "--agent-engine=v3"], ["--v3", "acp", "--agent-engine=v3", "--", "--agent-engine=v3"]),
             (["--agent", "acp"], ["--v3", "--agent", "acp"]),
+            (["--resume-id", "acp"], ["--v3", "--resume-id", "acp"]),
+            (["--model", "acp"], ["--v3", "--model", "acp", "--agent-engine=v3"]),
             (["--agent", "a", "acp"], ["--v3", "--agent", "a", "acp", "--agent-engine=v3"]),
             (["chat"], ["--v3", "chat"]),
             (["chat", "--", "acp"], ["--v3", "chat", "--", "acp"]),
@@ -418,7 +434,7 @@ class SummaryTests(unittest.TestCase):
         )
         for arguments, expected in cases:
             with self.subTest(arguments=arguments), patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute:
-                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments])
+                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments], launch_value_options=LAUNCH_VALUE_OPTIONS)
                 execute.assert_called_once_with("kiro-cli", ["kiro-cli", *expected], {})
 
     def test_other_commands_get_no_engine_selector(self):
@@ -428,14 +444,14 @@ class SummaryTests(unittest.TestCase):
 
     def test_non_chat_commands_skip_summary(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "refresh_disk_index"), patch.object(runtime, "invocation_summary") as summary:
-            for arguments in (["--version"], ["--help"], ["login"], ["--help-all"], ["chat", "--help"], ["--agent-engine", "v3", "login"], ["--agent-engine=v3", "whoami"], ["--tui", "login"], ["--agent", "x", "mcp", "list"]):
-                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments])
-            self.assertEqual(execute.call_count, 9)
+            for arguments in (["--version"], ["--help"], ["login"], ["--help-all"], ["chat", "--help"], ["--model", "login"], ["--tui", "login"], ["--agent", "x", "mcp", "list"]):
+                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments], launch_value_options=LAUNCH_VALUE_OPTIONS)
+            self.assertEqual(execute.call_count, 8)
             summary.assert_not_called()
             wait.assert_not_called()
-            for arguments in (["chat", "please explain login and --version"], ["chat", "--", "--help"], ["--resume-id", "sess_resume"], ["--agent", "doctor"], ["--model", "login"], []):
-                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments])
-            self.assertEqual(summary.call_count, 6)
+            for arguments in (["chat", "please explain login and --version"], ["chat", "--", "--help"], ["--resume-id", "sess_resume"], ["--agent", "doctor"], []):
+                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments], launch_value_options=LAUNCH_VALUE_OPTIONS)
+            self.assertEqual(summary.call_count, 5)
 
     def test_closed_summary_stderr_keeps_child_status(self):
         for status, expected in ((23, 23), (-signal.SIGTERM, -signal.SIGTERM)):
@@ -499,8 +515,15 @@ class SummaryTests(unittest.TestCase):
             execute.assert_called_once_with(sys.executable, [sys.executable, str(script / "capture.py"), "--db", "/state/usage.sqlite3", *arguments])
 
     def test_main_returns_child_status(self):
-        with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--", "exec", "kiro-cli"]), patch.object(runtime, "cli", return_value=23):
+        with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--launch-value-options=--agent,--repo", "--", "exec", "kiro-cli"]), patch.object(runtime, "cli", return_value=23) as cli:
             self.assertEqual(runtime.main(), 23)
+        self.assertEqual(cli.call_args.args[-1], ["--agent", "--repo"])
+
+    def test_cli_refuses_to_start_without_the_launch_value_options(self):
+        with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--", "exec", "kiro-cli"]), \
+                patch.object(runtime, "cli") as cli, contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            runtime.main()
+        cli.assert_not_called()
 
 
 if __name__ == "__main__":

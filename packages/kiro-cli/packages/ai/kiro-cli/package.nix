@@ -144,18 +144,6 @@
             inherit pkgs;
           };
 
-          # Every platform's release, read statically on this host: no
-          # binary is executed, so PR CI and the drift check measure every
-          # platform from one host. IFD-safe: consumed ONLY by `nix build`
-          # (PR CI + drift check), never readFile'd at eval.
-          extracted = pkgs.lib.mapAttrs (target: _:
-            pkgs.runCommandLocal "kiro-cli-${target}-extracted.json" {} (vu.mkKiroExtract {
-              architecture = (pkgs.lib.systems.elaborate target).parsed.cpu.name;
-              inherit pkgs;
-              release = releaseSourceFor target;
-            }))
-          release.selectors;
-
           inherit autoUpdateWrapperFlags kas;
           withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches;
           withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches;
@@ -178,9 +166,42 @@
         pname = "kiro-cli-unwrapped-${rolloutSuffix}";
         postInstallCheck = vu.kiroRolloutVerify;
       });
+
+    # Every platform's release, read statically on this host: no binary is
+    # executed, so PR CI and the drift check measure every platform from one
+    # host. IFD-safe: consumed ONLY by `nix build` (PR CI + drift check), never
+    # readFile'd at eval.
+    #
+    # x86_64-linux's raw also carries the option tables of the payload's
+    # `--help`, the one extraction that executes the binary
+    # (`vu.mkKiroHelpExtract`). They are measured on x86_64-linux only: clap
+    # compiles each platform's tables from one source, and Darwin runners are
+    # capped, so no Darwin host-run job exists. `extracted/facts.json` declares
+    # `cli.options` for that system alone, and the Darwin raw never carries it.
+    extracted = pkgs.lib.mapAttrs (target: _: let
+      static = pkgs.runCommandLocal "kiro-cli-${target}-extracted.json" {} (vu.mkKiroExtract {
+        architecture = (pkgs.lib.systems.elaborate target).parsed.cpu.name;
+        inherit pkgs;
+        release = releaseSourceFor target;
+      });
+    in
+      if target == "x86_64-linux" && system == target
+      then
+        pkgs.runCommandLocal "kiro-cli-${target}-extracted-help.json" {} (vu.mkKiroHelpExtract {
+          binary = "${pinned}/bin/kiro-cli";
+          inherit pkgs static;
+        })
+      else static)
+    release.selectors;
+
     # `unwrapped` names the direct payload on both platforms, which the
     # locator's failure text and `useFhsSandbox = false` rely on.
-    passthru = pinned.passthru // {unwrapped = pinned;};
+    passthru =
+      pinned.passthru
+      // {
+        inherit extracted;
+        unwrapped = pinned;
+      };
 
     # Rollout builds are renamed at the exported attribute as well as at the
     # payload, so a patched build is identifiable where consumers install it.

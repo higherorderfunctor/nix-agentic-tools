@@ -157,8 +157,13 @@
       # `--agent-engine=v3` to a bare launch, which its parser rejects.
       expect "--agent VALUE is a bare launch"     '--v3|--agent|acp'      "$V" --agent acp
       expect "--agent=VALUE is a bare launch"     '--v3|--agent=acp'      "$V" --agent=acp
-      expect "--model VALUE is a bare launch"     '--v3|--model|acp'      "$V" --model acp
       expect "--resume-id VALUE is a bare launch" '--v3|--resume-id|acp'  "$V" --resume-id acp
+      expect "--repo VALUE is a bare launch"      '--v3|--repo|acp'       "$V" --repo acp
+      # The skipped options are the ones the 3.0.0 top level parses a value for
+      # (--agent, --resume-id, --repo). `--model` is a `chat` option: at the top
+      # level it is rejected, so the scan does not skip its neighbor and `acp`
+      # after it is the subcommand.
+      expect "--model VALUE is not skipped"       '--v3|--model|acp|--agent-engine=v3' "$V" --model acp
       expect "--agent VALUE then acp gets its engine" \
         '--v3|--agent|a|acp|--agent-engine=v3'                            "$V" --agent a acp
       expect "a bare launch prompt gets nothing more" \

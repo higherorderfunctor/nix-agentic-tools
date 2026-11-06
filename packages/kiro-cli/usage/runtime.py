@@ -237,10 +237,6 @@ def wait_command(command, arguments, environment):
             signal.signal(number, handler)
 
 
-# Launcher globals consumed before the subcommand: the value options take the next token, the flags take none.
-# Unknown options are not guessed at, so the first one ends the scan as the subcommand.
-LAUNCH_VALUE_OPTIONS = ("--agent", "--agent-engine", "--model", "--repo", "--resume-id")
-LAUNCH_FLAG_OPTIONS = ("--classic", "--cloud", "--list", "--resume", "--resume-picker", "--tui", "--v2", "--v3", "--verbose", "-r", "-v")
 ADMINISTRATIVE_COMMANDS = (
     "agent", "dashboard", "debug", "diagnostic", "doctor", "help", "init",
     "integrations", "issue", "launch", "login", "logout", "mcp", "powers",
@@ -254,20 +250,19 @@ def launch_options(arguments):
     return arguments[:arguments.index("--")] if "--" in arguments else arguments
 
 
-def launch_subcommand(options):
-    """The first token that is neither a launcher global nor its value, or None for a bare launch."""
+def launch_subcommand(options, value_options):
+    """The first token that is not an option or an option's value, or None for a bare launch. `value_options` are the
+    launcher options that take the next token (measured from the binary's help); any other option takes none."""
     leading = iter(options)
     for option in leading:
-        if option in LAUNCH_VALUE_OPTIONS:
+        if option in value_options:
             next(leading, None)
-        elif option in LAUNCH_FLAG_OPTIONS or option.partition("=")[0] in LAUNCH_VALUE_OPTIONS:
-            continue
-        else:
+        elif not option.startswith("-"):
             return option
     return None
 
 
-def exec_command(path, port, warn_bytes, arguments, theme=None):
+def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_options=()):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -280,7 +275,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None):
         if "--v3" not in launch_options(tail):
             tail.insert(0, "--v3")
         options = launch_options(tail)
-        subcommand = launch_subcommand(options)
+        subcommand = launch_subcommand(options, launch_value_options)
         # `acp` ignores the global `--v3`; it resolves its engine from its own
         # `--agent-engine`, so name it before `--` unless the caller already did.
         if subcommand == "acp" and not any(option.partition("=")[0] == "--agent-engine" for option in options):
@@ -328,7 +323,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None):
         raise CommandError(f"cannot execute {command}: {error.strerror}; check the executable path and permissions") from error
 
 
-def cli(path, arguments, port, warn_bytes, theme=None):
+def cli(path, arguments, port, warn_bytes, theme=None, launch_value_options=()):
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -337,7 +332,7 @@ def cli(path, arguments, port, warn_bytes, theme=None):
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
     if command == "exec":
-        return exec_command(path, port, warn_bytes, tail, theme)
+        return exec_command(path, port, warn_bytes, tail, theme, launch_value_options)
     if command == "session" and tail:
         invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
     elif command == "report":
@@ -365,6 +360,8 @@ def main():
             child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":  # read by the exec summary and report only
             child.add_argument("--summary-theme")
+            # The launcher's top-level options that take a value, comma-separated: `exec` skips their values to find the subcommand.
+            child.add_argument("--launch-value-options", required=True, type=lambda names: [name for name in names.split(",") if name])
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":
             child.add_argument("--mitmdump", required=True)
@@ -374,7 +371,7 @@ def main():
     try:
         path = state_directory(args.state_dir)
         if args.mode == "cli":
-            return cli(path, args.arguments, args.port, args.warn_bytes, args.summary_theme)
+            return cli(path, args.arguments, args.port, args.warn_bytes, args.summary_theme, args.launch_value_options)
         elif args.mode == "service":
             service(args, path)
         else:

@@ -5,6 +5,11 @@
 # vanishing is a correctness signal the typed surface must react to). The build
 # of passthru.extracted also enforces the shape assertions baked into
 # vu.mkKiroExtract's locators.
+#
+# The option tables of `--help` (`cli.options`) are the one host-run fact: the
+# x86_64-linux extraction runs the Linux payload, and that single measurement is
+# declared for x86_64-linux only (clap compiles the tables from one source; the
+# Darwin runner is capped). Its build log prints the whole measured table.
 {
   extractedLib,
   pkgs,
@@ -14,6 +19,22 @@
   checks = let
     inherit (import ../lib/friendly-features.nix) featureSettingImplications friendlyRolloutFeatures;
     inherit (extractedLib {inherit pkgs;}) mkOwnerCheck;
+    # One option of the `--help` table as the extractor records it, with the
+    # defaults of a plain flag; each need below spells out what differs.
+    optionNeed = table: long: overrides: {
+      key = "cli.options.${table}.${long}";
+      value =
+        {
+          aliases = [];
+          count = false;
+          inherit long;
+          possibleValues = [];
+          short = null;
+          takesValue = false;
+          valueName = null;
+        }
+        // overrides;
+    };
   in
     {
       # The trigger-map locator on synthetic bundles: a quoted key is the same
@@ -42,6 +63,62 @@
           done
           touch "$out"
         '';
+      # The help parser on the real 3.0.0 output saved under fixtures/help: every
+      # shape it has (compact and long layouts, aliases, `...` counts, inline
+      # and block possible values, multi-line prose) against hand-written rows,
+      # then the three inputs it refuses.
+      kiro-cli-help-fixtures = pkgs.runCommand "kiro-cli-help-fixtures" {nativeBuildInputs = [pkgs.gnugrep pkgs.gnused];} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        jq=${pkgs.jq}/bin/jq
+        parse() { ${pkgs.python3}/bin/python3 -I ${../extract/cli-help.py} --help-dir "$1"; }
+        parse ${./fixtures/help} 2> table.txt > parsed.json
+        fail=0
+        # expect <label> <jq filter that must hold>
+        expect() {
+          if ! "$jq" -e "$2" parsed.json > /dev/null; then
+            echo "FAIL: $1" >&2
+            fail=1
+          fi
+        }
+        expect "table sizes" '(.cli.options | map_values(length)) == {acp: 10, chat: 30, top: 13}'
+        expect "chat --output-format: block values, one description wrapped over two lines" \
+          '.cli.options.chat["--output-format"].possibleValues == ["text", "stream-json"]'
+        expect "chat --session-source: value name with a bar, inline values" \
+          '.cli.options.chat["--session-source"] | .valueName == "v1|v2" and .possibleValues == ["v1", "v2"]'
+        expect "chat --wrap: block values" \
+          '.cli.options.chat["--wrap"].possibleValues == ["always", "never", "auto"]'
+        expect "chat --legacy-ui: alias in the long layout" \
+          '.cli.options.chat["--legacy-ui"].aliases == ["--classic"]'
+        expect "chat --verbose: count flag" '.cli.options.chat["--verbose"].count'
+        expect "chat --resume-picker has no alias" '.cli.options.chat["--resume-picker"].aliases == []'
+        expect "top --legacy-ui: alias in the compact layout" \
+          '.cli.options.top["--legacy-ui"].aliases == ["--classic"]'
+        expect "top --resume-picker: alias on a continuation line" \
+          '.cli.options.top["--resume-picker"].aliases == ["--list"]'
+        expect "top --version: short name without a value" \
+          '.cli.options.top["--version"] | .short == "-V" and .takesValue == false'
+        expect "acp --auth-method: block values and an alias" \
+          '.cli.options.acp["--auth-method"] | .aliases == ["--authMethod"] and .possibleValues == ["cli", "client"]'
+        expect "acp has no top-only option" '.cli.options.acp | has("--resume") | not'
+        [ "$fail" = 0 ]
+        grep -q '^  top  *--resume-picker  *-  *--list' table.txt
+        # Refusals, each with the message that names it.
+        refuses() {
+          local label="$1" message="$2" status=0
+          rm -rf case && mkdir case && cp ${./fixtures/help}/*.txt case/
+          chmod -R u+w case
+          sed -i "$3" "case/$4"
+          parse case > /dev/null 2> err.txt || status=$?
+          # Two statements: the left side of `&&` is exempt from errexit.
+          [ "$status" != 0 ]
+          grep -qF "$message" err.txt || { echo "FAIL: $label: got $(cat err.txt)" >&2; exit 1; }
+        }
+        refuses "no Options section" "no Options section" 's/^Options:$/Flags:/' top.txt
+        refuses "an option line it cannot read" "option line not understood" 's/^  -h, --help .*/  -h/' top.txt
+        refuses "v3 gone from acp --agent-engine" "no longer lists v3" 's/v2, v1, v3/v2, v1/' acp.txt
+        touch "$out"
+      '';
       kiro-rollout-fixtures = pkgs.runCommand "kiro-rollout-fixtures" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -79,6 +156,37 @@
             contains = "chat.enableTangentMode";
             key = "workspaceOverridableSettings";
           }
+          # Vocabulary no code here consumes is pinned by membership, so an
+          # upstream addition shows only as drift of the committed raw.
+          # The inline form `[possible values: …]`; the launcher appends `v3`.
+          {
+            contains = "v3";
+            key = "cli.options.acp.--agent-engine.possibleValues";
+          }
+          # The block form `Possible values:`.
+          {
+            contains = "cli";
+            key = "cli.options.acp.--auth-method.possibleValues";
+          }
+          {
+            contains = "json";
+            key = "cli.options.chat.--format.possibleValues";
+          }
+          # The top-level options that take a value: the scan list of
+          # lib/launchValueOptions.nix is derived from this table, so these
+          # records are exact.
+          (optionNeed "top" "--agent" {
+            takesValue = true;
+            valueName = "AGENT";
+          })
+          (optionNeed "top" "--repo" {
+            takesValue = true;
+            valueName = "REPO";
+          })
+          (optionNeed "top" "--resume-id" {
+            takesValue = true;
+            valueName = "SESSION_ID";
+          })
         ]
         ++ map (feature: {
           contains = feature;

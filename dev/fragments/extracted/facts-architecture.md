@@ -1,7 +1,8 @@
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-29 — PR CI produces Linux-handled extractions
-> before Darwin host-run facts and publishes one commit per system.
+> **Last verified:** 2026-11-06 — PR CI produces Linux-handled extractions
+> before Darwin host-run facts and publishes one commit per system; Kiro's help
+> tables are the one Linux-only host-run row.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -73,6 +74,13 @@ PR CI lands Linux's carry before Darwin measures it. Darwin runs only owners
 with a `host-run` row for Darwin, today Codex (clap help is compiled per
 platform). Update workers publish pins only; a package build failure leaves a
 writable red PR for CI and review.
+
+Kiro's `cli.options` rows are `host-run` and declared for `x86_64-linux` only.
+The Linux extraction runs the Linux payload's `--help` (`chat` and `acp` too),
+in a derivation separate from the static read, and merges the table into the
+Linux raw. Clap compiles each platform's tables from one source and the Darwin
+runner count is capped, so Darwin's raw never carries them and `hostRunOn`
+selects no Darwin job for Kiro.
 
 ## The subtractive rule
 
