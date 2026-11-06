@@ -5,6 +5,13 @@ are accepted findings for the loop. For a shared abstraction (`lib/**`,
 checks in fresh contexts. Use different models for the two checks where
 possible. Report disagreements only.
 
+When the draft exceeds the Size row, the reviewer also names each specific cut
+or collapse with evidence: what breaks if it is deleted and the simpler form.
+The reviewer never judges its own proposed cuts, and neither does the writer. In
+three-check review, the Judge decides which cuts stand; in one-reviewer review,
+the orchestrator or another agent does. The writer applies only accepted cuts.
+The user remains the final spot-check and is not consulted about cuts.
+
 **First check:** gets the draft, the description's guarantee claims (never its
 review history or the writer's notes) and the rubric file verbatim. Grades the
 description's claims first, then every rubric row in order: pass with the line
