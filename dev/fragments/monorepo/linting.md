@@ -66,9 +66,11 @@ Formatters and linters remain separate — treefmt formats and lints nothing.
   fail. There is no separate empty-corpus guard for cspell.
 - **Unique map keys:** `unique-map-keys` rejects a repeated key within one
   mapping in JSON, JSONC, JSONL, JSON5, YAML, Markdown YAML frontmatter, TOML,
-  JSON/TOML lock files, and Nix attribute sets. It reports the key path from the
-  document root and parser line where available. Treefmt's formatter exclusions
-  do not apply to this semantic rule.
+  JSON/TOML lock files, and Nix attribute sets. JSON-family findings use a JSON
+  pointer from the document root; TOML and Nix report the parser's own message
+  and location, and YAML reports its parser line. Treefmt's formatter exclusions
+  do not apply to this semantic rule. TOML and `nix-instantiate` each stop at
+  the first error in a file, so a file may report one duplicate at a time.
 
 **Commit-only hooks:**
 

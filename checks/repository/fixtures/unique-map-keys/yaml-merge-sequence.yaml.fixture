@@ -1,0 +1,4 @@
+first: &first {a: 1, b: 2}
+second: &second {c: 3}
+merged:
+  <<: [*first, *second]

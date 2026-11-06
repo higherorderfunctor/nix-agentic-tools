@@ -7,7 +7,7 @@
   shellStrict = import ./shell-strict.nix;
   strictShellApplication = import ../lib/strict-shell-application.nix pkgs;
 
-  uniqueMapKeys = import ../checks/repository/unique-map-keys.nix {inherit lib pkgs;};
+  uniqueMapKeys = import ../checks/repository/unique-map-keys.nix {inherit pkgs;};
 
   rejectDefaultBranchCommit = strictShellApplication {
     name = "reject-default-branch-commit";
