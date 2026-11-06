@@ -38,6 +38,7 @@
       "codex agents": {
         "flags": [
           { "names": ["--config", "-c"], "valueName": "key=value" },
+          { "names": ["--no-daemon"], "valueName": null },
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--remote"], "valueName": "ADDR" },
           { "names": ["--disable"], "valueName": "FEATURE" },
@@ -1074,6 +1075,10 @@
     { "maturity": "removed", "name": "apply_patch_preserve_line_endings" },
     { "maturity": "under development", "name": "apply_patch_streaming_events" },
     { "maturity": "stable", "name": "apps" },
+    {
+      "maturity": "under development",
+      "name": "apps_early_resource_discovery"
+    },
     { "maturity": "removed", "name": "apps_mcp_path_override" },
     { "maturity": "under development", "name": "artifact" },
     { "maturity": "under development", "name": "async_compaction" },
@@ -1093,6 +1098,10 @@
     { "maturity": "removed", "name": "code_mode_buffered_exec" },
     { "maturity": "stable", "name": "code_mode_host" },
     { "maturity": "under development", "name": "code_mode_host_grpc" },
+    {
+      "maturity": "under development",
+      "name": "code_mode_host_output_truncation"
+    },
     { "maturity": "stable", "name": "code_mode_interrupt" },
     { "maturity": "under development", "name": "code_mode_only" },
     {
@@ -1124,7 +1133,7 @@
     },
     { "maturity": "under development", "name": "defer_mailbox_preemption" },
     { "maturity": "under development", "name": "deferred_executor" },
-    { "maturity": "under development", "name": "deferred_tool_world_state" },
+    { "maturity": "stable", "name": "deferred_tool_world_state" },
     { "maturity": "removed", "name": "elevated_windows_sandbox" },
     { "maturity": "removed", "name": "enable_fanout" },
     { "maturity": "under development", "name": "enable_mcp_apps" },
@@ -1143,6 +1152,7 @@
     { "maturity": "under development", "name": "external_agent_memory_import" },
     { "maturity": "removed", "name": "external_migration" },
     { "maturity": "stable", "name": "fast_mode" },
+    { "maturity": "stable", "name": "gcp_setup_wizard" },
     { "maturity": "stable", "name": "goals" },
     { "maturity": "stable", "name": "guardian_approval" },
     {
@@ -1189,8 +1199,10 @@
     { "maturity": "stable", "name": "in_app_local_automation" },
     { "maturity": "stable", "name": "in_app_updates" },
     { "maturity": "stable", "name": "in_app_voice" },
+    { "maturity": "under development", "name": "incremental_exec_tools" },
     { "maturity": "stable", "name": "incremental_tools" },
     { "maturity": "under development", "name": "instant_interrupt" },
+    { "maturity": "under development", "name": "interrupt_on_cancel" },
     { "maturity": "removed", "name": "item_ids" },
     { "maturity": "removed", "name": "js_repl" },
     { "maturity": "removed", "name": "js_repl_tools_only" },
@@ -1241,7 +1253,7 @@
     { "maturity": "under development", "name": "request_permissions_tool" },
     { "maturity": "removed", "name": "request_rule" },
     { "maturity": "removed", "name": "resize_all_images" },
-    { "maturity": "under development", "name": "respect_system_proxy" },
+    { "maturity": "experimental", "name": "respect_system_proxy" },
     { "maturity": "removed", "name": "responses_websockets" },
     { "maturity": "removed", "name": "responses_websockets_v2" },
     {
@@ -1277,6 +1289,7 @@
       "name": "subagent_default_context_limits"
     },
     { "maturity": "under development", "name": "subagent_thread_environments" },
+    { "maturity": "stable", "name": "suppress_model_change_announcements" },
     { "maturity": "stable", "name": "system_proxy_fallback" },
     { "maturity": "removed", "name": "terminal_resize_reflow" },
     {
@@ -1290,6 +1303,7 @@
     { "maturity": "stable", "name": "tool_suggest" },
     { "maturity": "removed", "name": "transcript_v2" },
     { "maturity": "removed", "name": "tui_app_server" },
+    { "maturity": "under development", "name": "tui_extensions_statusline" },
     { "maturity": "under development", "name": "tui_multi_backend" },
     { "maturity": "stable", "name": "ultrafast_mode" },
     { "maturity": "removed", "name": "unavailable_dummy_tools" },
