@@ -636,6 +636,7 @@
       "disableReplyCheck": { "type": "boolean" },
       "disableSideloadFlags": { "type": "boolean" },
       "disableSkillShellExecution": { "type": "boolean" },
+      "disableWindowsBashCommandSplit": { "type": "boolean" },
       "disableWorkflows": { "type": "boolean" },
       "disabledMcpjsonServers": { "type": "array" },
       "disabledMcpjsonServers[]": { "type": "string" },
@@ -1079,6 +1080,7 @@
         "type": "string"
       },
       "permissions.deny": { "type": "array" },
+      "permissions.denyInsteadOfPrompting": { "type": "boolean" },
       "permissions.deny[]": { "type": "string" },
       "permissions.disableAutoMode": { "enum": ["disable"], "type": "string" },
       "permissions.disableBypassPermissionsMode": {
@@ -1698,6 +1700,7 @@
       "disableReplyCheck",
       "disableSideloadFlags",
       "disableSkillShellExecution",
+      "disableWindowsBashCommandSplit",
       "disableWorkflows",
       "disabledMcpjsonServers",
       "editorMode",
