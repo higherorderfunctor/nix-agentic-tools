@@ -1,8 +1,7 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-11-05 — kiro-cli owns its payload derivation and
-> re-wraps it through nixpkgs' public package; pnpm_12 bootstrap has no hash
-> fixers.
+> **Last verified:** 2026-11-06 — kiro-cli owns its payload derivation and its
+> Linux FHS env; pnpm_12 bootstrap has no hash fixers.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -513,36 +512,34 @@ unwrapped derivation's attrs, and `overrideAttrs` reaches a derivation that has
 nothing we wanted to change. The fix was to re-point the BASE at
 `kiro-cli-unwrapped`. Kiro 3.0.0 then changed the release layout that
 derivation's install phase names (one `kiro-cli` binary, a Darwin tarball
-instead of a DMG), so the overlay now OWNS the payload derivation and still
-hands it to upstream's wrapper through the same seam:
+instead of a DMG), so the overlay now OWNS the payload derivation and builds its
+own Linux FHS env around it:
 
 ```nix
 # packages/kiro-cli/packages/ai/kiro-cli/package.nix
 # … pinned = pkgs.stdenv.mkDerivation { … sourceRoot = "kirocli"; … } …
-# then hand it back to upstream's wrapper, preserving the FHS sandbox and the
-# route in both directions (metadata/name handling omitted here):
-(pkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}).overrideAttrs
-(attrs: {
-  passthru = (attrs.passthru or {}) // pinned.passthru // {
-    unwrapped = pinned;
-  };
-})
+# then, on Linux, an FHS env of our own that execs the payload and keeps the
+# route back to it (metadata/name handling omitted here):
+pkgs.buildFHSEnv {
+  pname = "kiro-cli";
+  runScript = "${pinned}/bin/kiro-cli";
+  targetPkgs = p: [pinned p.stdenv.cc.cc.lib p.wl-clipboard];
+  passthru = pinned.passthru // {unwrapped = pinned;};
+}
 ```
 
 Two properties of that shape are deliberate:
 
-- **Re-wrap through upstream's own expression** rather than exporting the
-  unwrapped derivation directly. Silently opting out of an upstream RUNTIME fix
+- **Keep an FHS env on Linux** rather than exporting the unwrapped derivation
+  directly. Silently dropping the runtime support the generic-glibc `bun` needs
   while still publishing the attribute under its normal name is the invisible
-  divergence this fragment family exists to prevent — and re-wrapping means
-  whatever upstream adds to that wrapper next comes along for free. A named
-  consumer option may deliberately select `passthru.unwrapped`, but the public
-  package must not change meaning implicitly.
-- **Merge `passthru` onto the wrapper, do not replace it.** `passthru` is not a
-  derivation input, so re-attaching ours moves neither `drvPath` nor `outPath`,
-  and the wrapper's `unwrapped` key is the only supported route from the public
-  attribute back to the real binaries. On darwin, where the public package is
-  already direct, `unwrapped` is a valid no-op selection.
+  divergence this fragment family exists to prevent. A named consumer option may
+  deliberately select `passthru.unwrapped`, but the public package must not
+  change meaning implicitly.
+- **Carry the payload's `passthru` onto the env.** `unwrapped` is the only
+  supported route from the public attribute back to the real binaries. On
+  darwin, where the public package is already direct, `unwrapped` is a valid
+  no-op selection.
 
 **How to detect this class before it costs a release.** A silent-drop split
 produces no error anywhere; the only tell is that the package's own facts stop

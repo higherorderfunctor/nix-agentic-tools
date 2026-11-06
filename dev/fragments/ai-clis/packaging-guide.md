@@ -1,10 +1,10 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-11-05 — Kiro 3.0.0's payload is owned here and
-> re-wrapped by nixpkgs' FHS package. Two native package shards per system
-> exclude patched Kiro; its required validation legs use Ubuntu when kiro-scope
-> finds no relevant changes. The committed devenv package lists contain no
-> kiro-cli entry with either CI setting; local runtime opt-ins are separate.
+> **Last verified:** 2026-11-06 — Kiro 3.0.0's payload and its Linux FHS env are
+> owned here. Two native package shards per system exclude patched Kiro; its
+> required validation legs use Ubuntu when kiro-scope finds no relevant changes.
+> The committed devenv package lists contain no kiro-cli entry with either CI
+> setting; local runtime opt-ins are separate.
 
 ### Overview
 
@@ -272,7 +272,7 @@ also covers that payload. Native package and KAS share the fetched source; KAS
 extracts directly from it, avoiding a dependency cycle. See the Kiro launcher
 fragment for archive validation, patch selection and runtime checks.
 
-### Owning the payload, re-wrapping upstream's FHS package
+### Owning the payload and the Linux FHS env
 
 kiro-cli no longer overrides nixpkgs' `kiro-cli-unwrapped`: since 3.0.0 the
 release ships one `kiro-cli` binary in a `kirocli/` tarball on both platforms,
@@ -280,8 +280,9 @@ while that derivation's install phase still names the pre-3.0 files
 (`kiro-cli-chat`, `kiro-cli-term`, a Darwin `.app` from a DMG).
 `packages/kiro-cli/packages/ai/kiro-cli/package.nix` therefore owns the payload
 with `stdenv.mkDerivation` (`sourceRoot = "kirocli"`, `versionCheckHook` with
-`doInstallCheck = true`) and hands it to nixpkgs' public `kiro-cli` through
-`.override {kiro-cli-unwrapped = …;}`, keeping upstream's Linux FHS sandbox. One
+`doInstallCheck = true`) and, on Linux, builds its own `pkgs.buildFHSEnv` around
+it (targets: the payload, `stdenv.cc.cc.lib`, `wl-clipboard`; the runScript
+execs the payload's `kiro-cli`), so `bin/` holds exactly one command. One
 `releaseUrls` table feeds both the fetched sources and the updater, so a build
 that fetches a platform's tarball proves the updater's URL for it.
 

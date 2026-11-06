@@ -1406,13 +1406,13 @@ in
           type = lib.types.bool;
           default = true;
           description = ''
-            Whether to use nixpkgs' Linux FHS compatibility wrapper. The default
-            keeps upstream's runtime support for the generic-glibc `bun` that
+            Whether to use this package's own Linux FHS environment. The default
+            keeps its runtime support for the generic-glibc `bun` that
             Kiro extracts dynamically. Set this to false to launch this flake's
             pinned unwrapped package directly, restoring ordinary host namespace
             visibility at the cost of that compatibility guarantee. This has no
-            practical effect on Darwin, where nixpkgs already ships the unwrapped
-            package.
+            practical effect on Darwin, where the package is already the unwrapped
+            payload.
           '';
         };
         workflows.enable = lib.mkEnableOption "Kiro CLI workflows (devenv also needs global chat.enableWorkflows)";

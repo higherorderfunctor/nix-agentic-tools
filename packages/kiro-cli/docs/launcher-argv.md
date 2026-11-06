@@ -294,16 +294,11 @@ root. See [`fhs-sandbox.md`](fhs-sandbox.md) for why that distinction matters.
 
 ## Linux FHS layer
 
-Since f13ff45a the public Linux package wraps `kiro-cli-unwrapped` in
-`buildFHSEnv`. nixpkgs 9ddfd8a consolidated the per-command environments into
-one shared environment: `$out/bin/*` are thin wrappers selecting a command,
-`$out/libexec/kiro-cli/kiro-cli-wrapper` enters bubblewrap, and `/init`
-delegates through a three-line dispatcher. This repo supplies its own pinned
-payload to that expression; its `wrapProgram` shim lives on
-`passthru.unwrapped`. The module's launcher sits outside the FHS package, and
-argv and environment pass through every layer. nixpkgs' FHS expression still
-wraps `kiro-cli-chat` and `kiro-cli-term`, which 3.0.0 does not ship;
-`package.nix` removes those two wrappers, so only `bin/kiro-cli` is shipped. See
+The public Linux package is this repo's own `buildFHSEnv` around the pinned
+payload: `$out/bin/kiro-cli` is the bubblewrap launcher and `/init` execs the
+payload's `kiro-cli` directly, so only `bin/kiro-cli` is shipped. The payload's
+`wrapProgram` shim lives on `passthru.unwrapped`. The module's launcher sits
+outside the FHS package, and argv and environment pass through every layer. See
 [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule, shadowed set and loader
 trap. Darwin builds no FHS layer.
 
