@@ -89,8 +89,8 @@
 
   # The `case` patterns matching one option in argv: every long name (`flag` and
   # its `aliases`) as `--name` or `--name=value`, and the short name as `-x`,
-  # plus the attached form (`-x` directly followed by its value) when the option takes a value. A short
-  # option inside a cluster (`-vw`) is not matched.
+  # plus the attached form (`-x` directly followed by its value) when the option
+  # takes a value. A short option inside a cluster (`-vw`) is not matched.
   optionPatterns = {
     flag,
     aliases ? [],

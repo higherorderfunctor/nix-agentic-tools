@@ -271,7 +271,9 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
     tracked = Path(command).name == "kiro-cli"
     if tracked:
         # Pin the v3 engine as the managed launcher does: prepend `--v3` unless
-        # an option before argv's `--` boundary already is one.
+        # an option before argv's `--` boundary already is one. The configured
+        # `ai.kiro.cli.chat` and `acp` options are added by that launcher, which
+        # this runs, so nothing here repeats them.
         if "--v3" not in launch_options(tail):
             tail.insert(0, "--v3")
         options = launch_options(tail)

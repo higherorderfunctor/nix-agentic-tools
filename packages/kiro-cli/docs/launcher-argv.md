@@ -1,14 +1,17 @@
 # kiro-cli wrapper: the argv contract
 
-<!-- cspell:ignore avante codecompanion cutover -->
+<!-- cspell:ignore avante codecompanion cutover walways wnever -->
 
 > **Last verified:** 2026-11-06 — Kiro CLI 3.0.0 ships one `kiro-cli` binary.
 > The wrapper always prepends `--v3` and adds `--agent-engine=v3` to `acp`
 > (before an end-of-options `--`, else last) unless the caller passed an
 > `--agent-engine`; it injects no trust flag. Its subcommand scan skips the
-> values of the top-level options the binary's `--help` lists as taking one. The
-> 3.0.0 facts below are read from the binary and asserted by
-> `kiro-kas-dispatch`; 2.x measurements are labelled as such.
+> values of the top-level options the binary's `--help` lists as taking one.
+> Four consumer options (`ai.kiro.cli.chat.{mode,wrap,requireMcpStartup}` and
+> `ai.kiro.cli.acp.authMethod`) add their flag the same way, and a bare launch
+> is rewritten to `chat` when a chat option is set. The 3.0.0 facts below are
+> read from the binary and asserted by `kiro-kas-dispatch`; 2.x measurements are
+> labelled as such.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -22,12 +25,14 @@
 
 ## What is injected where
 
-| Flag                | Position                     | Applies to                                        |
-| ------------------- | ---------------------------- | ------------------------------------------------- |
-| `--v3`              | **prepend**                  | every subcommand + bare, unless already present   |
-| `--agent-engine=v3` | **after `acp`**, before `--` | `acp`, when the caller passed no `--agent-engine` |
+| Flag                                                | Position                      | Applies to                                                                                      |
+| --------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `--v3`                                              | **prepend**                   | every subcommand + bare, unless already present                                                 |
+| `--agent-engine=v3`                                 | **after `acp`**, before `--`  | `acp`, when the caller passed no `--agent-engine`                                               |
+| `--mode=<v>`, `--wrap=<v>`, `--require-mcp-startup` | **after `chat`**, before `--` | `chat`, and a bare launch rewritten to it; only for a configured option the caller did not pass |
+| `--auth-method=<v>`                                 | **after `acp`**, before `--`  | `acp`, when configured and the caller passed no `--auth-method` or alias                        |
 
-Both live in `lib/wrapPackage.nix`. Do not "make them consistent": `--v3` is a
+All live in `lib/wrapPackage.nix`. Do not "make them consistent": `--v3` is a
 launcher-global option, while `--agent-engine` belongs to `acp`.
 
 ## `--v3` is launcher-global, so it is prepended
@@ -153,6 +158,79 @@ Kiro's default.
 > the authenticated identity (`lite` is documented as restricted to
 > vendor-internal users), not off the environment.
 
+## Consumer options for `chat` and `acp`
+
+`lib/cliOptions.nix` classifies every option of the three `--help` tables in
+`cli.options` (`top`, `chat`, `acp`): a setting, or an exclusion with a reason
+(`one-off`, `mode`, `wrapper-owned`, `rejected-on-v3`, `trust-settled`,
+`duplicates-a-workspace-setting`, `no-v3-effect`). `report` diffs the table
+against the committed extraction, and `module-kiro-launch-option-classification`
+fails on an option with no row or a row whose option is gone. Four options are
+settings, each `nullOr` with default `null` and typed from the extracted record
+(an enum from its possible values, a bool for a flag with none):
+
+| Option                               | Flag                    | Type                       |
+| ------------------------------------ | ----------------------- | -------------------------- |
+| `ai.kiro.cli.chat.mode`              | `--mode`                | `default`, `spec`          |
+| `ai.kiro.cli.chat.requireMcpStartup` | `--require-mcp-startup` | bool; false passes nothing |
+| `ai.kiro.cli.chat.wrap`              | `--wrap`                | `always`, `never`, `auto`  |
+| `ai.kiro.cli.acp.authMethod`         | `--auth-method`         | `cli`, `client`            |
+
+3.0.0's parser enforces only `--agent-engine` and `--auth-method`; `--mode` and
+`--wrap` accept any string, so the enum is what refuses a wrong value, at
+evaluation. `--agent`, `--model` and `--effort` are not settings here: a
+workspace setting (`chat.defaultAgent`, `chat.defaultModel`,
+`chat.modelDefaults`) already sets each, and `acp` rejects all three under
+`--agent-engine=v3`. The trust flags stay out (see above), as do the modes
+(`--sessions`, `--no-interactive`, `--output-format`, `--cloud`, `--repo`) and
+`--tui`/`--legacy-ui`, which the pinned v3 launch supersedes. The same four
+options exist on Home Manager and devenv, and `package = null` warns when one is
+set, because they need the managed wrapper.
+
+A configured option becomes one `--name=value` word, added only when the caller
+passed none of its spellings before `--`: the long name and aliases as `--x v`
+or `--x=v`, the short name as `-w v` or `-wv`. A short option inside a cluster
+(`-vw`) is not recognized, so injecting beside it would repeat the option, which
+3.0.0 rejects ("cannot be used multiple times"). The word goes after the
+subcommand and any INPUT, in front of an end-of-options `--`, the same placement
+as `acp`'s engine selector.
+
+**A bare launch becomes `chat`** when argv before `--` has no subcommand or
+other positional token, none of the once-per-invocation top-level options
+(`--help`, `--version`, `--resume`, `--resume-id`, `--resume-picker` and its
+`--list` alias, `--verbose`, all classified `one-off`, plus the hidden
+`--help-all`), no value option still waiting for its value, and at least one
+chat option adds a word. `chat` is appended after the top-level options, so
+`kiro-cli --agent a` becomes `--v3 --agent a chat ...`. Rejected by the rewrite:
+`chat` has no `-V`/`--version`, no `--list` alias and no `--help-all`, so
+rewriting those would swap a result for an error; and `kiro-cli --agent` would
+read the appended `chat` as the agent's name. `settings`, `login`, `acp`, `mcp`
+and every other subcommand are untouched, as is a bare launch with an INPUT,
+`--`, or no chat option set.
+
+Measured on the stock 3.0.0 binary (empty `HOME`, `KIRO_NO_AUTO_UPDATE=1`, stdin
+from `/dev/null`), with `--help` last so a parse failure in any earlier token
+shows first:
+
+| argv the wrapper produces                                                   | exit | first line                                                              |
+| --------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------- |
+| `--v3 chat --mode=spec --require-mcp-startup --wrap=never --help`           | 0    | `AI assistant in your terminal`                                         |
+| `--v3 --agent a chat --mode=spec --require-mcp-startup --wrap=never --help` | 0    | `AI assistant in your terminal`                                         |
+| `--v3 chat hello --mode=spec --require-mcp-startup --wrap=never --help`     | 0    | `AI assistant in your terminal`                                         |
+| `--v3 chat -wnever --mode=spec --require-mcp-startup --help`                | 0    | `AI assistant in your terminal`                                         |
+| `--v3 acp --agent-engine=v3 --auth-method=client --help`                    | 0    | `Start Agent Client Protocol (ACP) agent`                               |
+| `--v3 acp --agent-engine=v3 --auth-method=cli --help`                       | 0    | `Start Agent Client Protocol (ACP) agent`                               |
+| `--v3 chat --mode=spec --require-mcp-startup --wrap=never -- hello --help`  | 2    | `error: unrecognized subcommand '--help'` (same as without the options) |
+| `--v3 --version`, `--v3 -V`, `--v3 --help-all`, `--v3 --resume-id x --help` | 0    | version or `The Kiro CLI` help, argv not rewritten                      |
+| `--v3 chat --wrap never --wrap=always --help`                               | 2    | `the argument '--wrap <WRAP>' cannot be used multiple times`            |
+
+`kiro-cli chat --help-all` is rejected (exit 2), which is why the rewrite spares
+`--help-all`. `kiro-usage exec kiro-cli ...` runs the PATH-selected `kiro-cli`,
+the managed wrapper, so these options are added once, there (`usage/runtime.py`,
+`exec_command`); its own `--v3` and `acp` selector mirror exists only to
+classify the launch for capture, and a bare launch is captured the same whether
+or not the wrapper then makes it `chat`.
+
 ## How the scan decides (`lib/idempotentFlags.nix`)
 
 `gateOnSubcommand` runs `subcommandBlock`, which walks argv left to right and
@@ -174,11 +252,15 @@ stops at the first token that is neither an option nor an option's **value**:
   entry: one token, handled by the `-*` arm.
 - **`--` parks on a sentinel** no gate matches, so gated injection declines
   rather than guessing.
+- **A dangling value option is visible.** `nat_skip` is 1 when the scan ends
+  right after a value option, which is how the bare-launch rewrite avoids
+  appending `chat` as that option's value.
 
 `idempotentFlagBlock` takes an explicit `position` with **no default** — picking
 the wrong one is precisely the bug above. `optionPresenceBlock` reports whether
-an option occurs before `--` as `--flag` or `--flag=value`, and never reads the
-value.
+an option occurs before `--` as `--flag` or `--flag=value` (also an alias, the
+short name and its attached form), and never reads the value;
+`injectOptionsBlock` adds the words of the options that do not, before `--`.
 
 ### Package-bound KAS and selected prompt patches
 
@@ -380,6 +462,18 @@ from one source, so Darwin has no host-run job for them.
   flag lands on, the value-flag skip (`--agent`, `--resume-id`, `--repo`, and
   `--model` not skipped), `--`, idempotence of `--v3`, the presence-only `acp`
   selector, the absence of `--trust-tools`, and the env/PATH export paths.
+- `packages/kiro-cli/checks/kiro-wrapper-argv.nix` also covers the configured
+  options: placement after `chat` and `acp`, the caller's `--wrap=never`,
+  `--wrap never`, `-w`, `-walways`, `--authMethod`, `--` with options after it,
+  the bare-launch rewrite and each argv it must leave alone (`--version`, `-V`,
+  `--help`, `-h`, `--help-all`, `--resume-id x`, `settings`, `login`, a prompt,
+  a dangling `--agent`), and that no trust flag or Kiro home appears.
+- `packages/kiro-cli/checks/module-eval.nix` (`module-kiro-launch-option-*`,
+  `module-kiro-{hm,devenv}-launch-options*`,
+  `module-kiro-package-null-explicit-launch-options-warn`) — the classification
+  against the extraction and the exact four settings, enum refusal at
+  evaluation, the same launcher content on both backends, null and false
+  injecting nothing, and the `package = null` warning.
 - `packages/kiro-cli/checks/kiro-cli-extracted.nix` — the drift check for
   `cli.options` (exact rows for the top-level value options this change reads;
   membership rows for `v3` in `acp --agent-engine`, `cli` in `acp --auth-method`

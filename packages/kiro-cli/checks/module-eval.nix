@@ -13,6 +13,34 @@
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) idempotentFlags kiroCliSettings kiroSteeringContent kiroWrappedDrvs renderKiroSecrets renderedMcpJson soleFork soleSame;
+  cliOptions = import ../lib/cliOptions.nix {inherit lib;};
+  # One value for each of the four launch options, valid by the extracted help.
+  launchOptionValues = {
+    acp.authMethod = "client";
+    chat = {
+      mode = "spec";
+      requireMcpStartup = true;
+      wrap = "never";
+    };
+  };
+  # What the launcher carries for them: one `--name=value` word each, and the
+  # rewrite that appends `chat` to a bare launch.
+  launchOptionWords = ["--auth-method=client" "--mode=spec" "--require-mcp-startup" "--wrap=never" ''set -- "$@" chat''];
+  # The launcher of an evaluated `ai.kiro.cli` for `backend`, with `needles` it
+  # must carry and `absentNeedles` it must not.
+  launchWrapperTest = {
+    absentNeedles ? [],
+    config,
+    evaluate,
+    name,
+    needles ? [],
+    packages,
+  }:
+    mkWrapperGrepTest {
+      inherit absentNeedles name needles;
+      package = builtins.head (packages (evaluate {ai.kiro.cli = {enable = true;} // config;}));
+      bin = "kiro-cli";
+    };
   mcpFile = ev: ev.config.ai.kiro.files."${ev.config.ai.kiro.configDir}/settings/mcp.json";
   hookFiles = ev: let
     prefix = "${ev.config.ai.kiro.configDir}/hooks/";
@@ -135,6 +163,137 @@ in {
             };
         }
         == ["--alias" "--value" "-v"]
+    );
+
+    # ── Consumer launch options (ai.kiro.cli.{acp,chat}) ─────────────────
+    # The classification must judge every extracted option, in both directions,
+    # and expose exactly the four settings: a table that missed a new upstream
+    # option, kept a removed one, or turned an excluded option into a setting
+    # (`--model`, `--trust-tools`, ...) fails here.
+    module-kiro-launch-option-classification = mkTest "kiro-launch-option-classification" (
+      assert lib.assertMsg (cliOptions.report
+        == {
+          stale = [];
+          unclassified = [];
+        }) "cli.options and the classification disagree: ${builtins.toJSON cliOptions.report}";
+        lib.concatMap (tier: map (name: "${tier}.${name}") (builtins.attrNames cliOptions.options.${tier})) ["acp" "chat"]
+        == ["acp.authMethod" "chat.mode" "chat.requireMcpStartup" "chat.wrap"]
+    );
+
+    # The diff itself, on a table with one option each side lacks: a report that
+    # compared one direction only would leave one list empty.
+    module-kiro-launch-option-classification-diff = mkTest "kiro-launch-option-classification-diff" (
+      cliOptions.reportOf {
+        classification.top = {
+          "--b" = null;
+          "--c" = null;
+        };
+        tables.top = {
+          "--a" = null;
+          "--b" = null;
+        };
+      }
+      == {
+        stale = ["top --c"];
+        unclassified = ["top --a"];
+      }
+    );
+
+    # The types come from the extracted help: an enum where it lists values, a
+    # bool for the flag. Each option takes a listed value and refuses another at
+    # evaluation, on both backends, and defaults to null. The good value is the
+    # positive control: a harness failure cannot make the refusal pass.
+    module-kiro-launch-option-types = mkTest "kiro-launch-option-types" (
+      let
+        read = evaluate: config: path:
+          builtins.tryEval (lib.attrByPath path null (evaluate {ai.kiro.cli = {enable = true;} // config;}).config.ai.kiro.cli);
+        cases = [
+          {
+            good = {chat.mode = "default";};
+            bad = {chat.mode = "bogus";};
+            path = ["chat" "mode"];
+          }
+          {
+            good = {chat.wrap = "auto";};
+            bad = {chat.wrap = "sometimes";};
+            path = ["chat" "wrap"];
+          }
+          {
+            good = {chat.requireMcpStartup = false;};
+            bad = {chat.requireMcpStartup = "yes";};
+            path = ["chat" "requireMcpStartup"];
+          }
+          {
+            good = {acp.authMethod = "cli";};
+            bad = {acp.authMethod = "bogus";};
+            path = ["acp" "authMethod"];
+          }
+        ];
+      in
+        lib.all (evaluate:
+          lib.all (case:
+            (read evaluate case.good case.path).success
+            && !(read evaluate case.bad case.path).success
+            && (read evaluate {} case.path).value == null)
+          cases) [evalHm evalDevenv]
+    );
+
+    # Both backends hand the same four options to the launcher.
+    module-kiro-hm-launch-options = launchWrapperTest {
+      name = "kiro-hm-launch-options";
+      evaluate = evalHm;
+      packages = ev: ev.config.home.packages;
+      config = launchOptionValues;
+      needles = launchOptionWords;
+    };
+    module-kiro-devenv-launch-options = launchWrapperTest {
+      name = "kiro-devenv-launch-options";
+      evaluate = evalDevenv;
+      packages = ev: ev.config.packages;
+      config = launchOptionValues;
+      needles = launchOptionWords;
+    };
+
+    # Null, the default, injects nothing and leaves a bare launch alone, and so
+    # does a false flag; a launcher carrying either would change the argv of a
+    # consumer who set no option.
+    module-kiro-hm-launch-options-null = launchWrapperTest {
+      name = "kiro-hm-launch-options-null";
+      evaluate = evalHm;
+      packages = ev: ev.config.home.packages;
+      config = {};
+      absentNeedles = launchOptionWords;
+    };
+    module-kiro-devenv-launch-options-false = launchWrapperTest {
+      name = "kiro-devenv-launch-options-false";
+      evaluate = evalDevenv;
+      packages = ev: ev.config.packages;
+      config.chat.requireMcpStartup = false;
+      absentNeedles = launchOptionWords;
+    };
+
+    # With no managed wrapper the options reach nothing, so a consumer who set
+    # one is told, naming it; an unset option stays silent.
+    module-kiro-package-null-explicit-launch-options-warn = mkTest "kiro-package-null-explicit-launch-options-warn" (
+      let
+        warnings = eval: config:
+          (eval {
+            ai.kiro.cli =
+              {
+                enable = true;
+                package = null;
+              }
+              // config;
+          }).config.warnings;
+      in
+        lib.all (eval:
+          warnings eval {}
+          == []
+          && warnings eval {
+            acp.authMethod = "client";
+            chat.wrap = "never";
+          }
+          == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.acp.authMethod, ai.kiro.cli.chat.wrap. Unset them or set ai.kiro.cli.package."]) [evalHm evalDevenv]
     );
 
     # The `acp --agent-engine` presence scan: an exact per-token match in both

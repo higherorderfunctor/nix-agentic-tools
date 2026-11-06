@@ -33,6 +33,14 @@
 # the caller's own selector is left to upstream. `kiro-kas-dispatch` measures
 # both facts.
 #
+# `ai.kiro.cli.chat.<name>` and `ai.kiro.cli.acp.<name>` add their option to
+# `chat` and `acp` as one `--option=value` word, unless the caller passed that
+# option, placed before an end-of-options `--` (./cliOptions.nix classifies the
+# options). Only when a chat option is configured, a bare launch also gets
+# `chat` appended: the chat options belong to `chat`, and the bare launch is a
+# chat launch. A bare launch that carries a once-per-invocation option
+# (`--version`, `--help`, `--resume-id`, ...) is left alone.
+#
 # There is no `--trust-tools` injection. Under v3 no process hands the flag to
 # KAS, which reads tool policy only from `permissions.yaml`; the bare-launch
 # parser rejects it, and `acp --agent-engine=v3` rejects it with a conflict.
@@ -46,10 +54,14 @@
 }: let
   inherit
     (import ../../../lib/idempotentFlags.nix {inherit lib;})
+    anyOptionBlock
+    bareInvocation
     gateOnSubcommand
     idempotentFlagBlock
-    optionPresenceBlock
+    injectOptionsBlock
     ;
+
+  cliOptions = import ./cliOptions.nix {inherit lib;};
 
   usage = import ./usageTracking.nix {inherit lib pkgs;};
 
@@ -68,6 +80,7 @@
     environmentVariables ? {},
     environmentVariablesName ? "ai.environmentVariables / ai.kiro.cli.environmentVariables",
     extraPackages ? [],
+    launchOptions ? {},
     secretEnv ? {},
     usageTracking ? {enable = false;},
   }: {
@@ -82,6 +95,12 @@
     extraPackages = {
       active = extraPackages != [];
       name = "ai.kiro.cli.extraPackages";
+    };
+    launchOptions = let
+      configured = lib.filter (path: lib.attrByPath (lib.drop 3 path) null launchOptions != null) cliOptions.paths;
+    in {
+      active = configured != [];
+      name = lib.concatMapStringsSep ", " lib.showOption configured;
     };
     secrets = {
       active = secretEnv != {};
@@ -101,6 +120,7 @@ in {
     environmentDefaults ? {},
     environmentVariables ? {},
     extraPackages ? [],
+    launchOptions ? {},
     secretEnv ? {},
     useFhsSandbox ? true,
     secretOptionPaths ? {},
@@ -149,28 +169,37 @@ in {
       flags = ["--v3"];
       position = "prepend";
     };
+    injections = cliOptions.injections launchOptions;
+    # `bareChatBlock` runs first, so `chatBlock` sees the rewritten bare launch.
+    # The rewrite needs the scan's `nat_skip` to be 0: after `kiro-cli --agent`
+    # the appended `chat` would be taken as the agent's value.
+    bareChatBlock = lib.optionalString (injections.chat != []) (gateOnSubcommand {
+        subcommands = [bareInvocation];
+        valueFlags = launchValueFlags;
+      } (lib.concatStringsSep "\n" [
+        (anyOptionBlock {
+          options = cliOptions.oneOffTopOptions;
+          var = "nat_once";
+        })
+        "if [ \"$nat_once\" = 0 ] && [ \"$nat_skip\" = 0 ]; then set -- \"$@\" chat; fi"
+      ]));
+    chatBlock = gateOnSubcommand {
+      subcommands = ["chat"];
+      valueFlags = launchValueFlags;
+    } (injectOptionsBlock injections.chat);
     # Placed after `acp` and before an end-of-options `--`: `--agent-engine` is
     # an `acp` option, not a global, and a token past `--` is a positional.
-    acpEngineBlock =
+    acpBlock =
       gateOnSubcommand {
         subcommands = ["acp"];
         valueFlags = launchValueFlags;
-      } (lib.concatStringsSep "\n" [
-        (optionPresenceBlock {
-          flag = "--agent-engine";
-          var = "nat_engine";
-        })
-        "if [ \"$nat_engine\" = 0 ]; then"
-        "  nat_argv=()"
-        "  nat_placed=0"
-        "  for nat_arg in \"$@\"; do"
-        "    if [ \"$nat_placed\" = 0 ] && [ \"$nat_arg\" = -- ]; then nat_argv+=(--agent-engine=v3); nat_placed=1; fi"
-        "    nat_argv+=(\"$nat_arg\")"
-        "  done"
-        "  if [ \"$nat_placed\" = 0 ]; then nat_argv+=(--agent-engine=v3); fi"
-        "  set -- \"\${nat_argv[@]}\""
-        "fi"
-      ]);
+      } (injectOptionsBlock ([
+          {
+            flag = "--agent-engine";
+            token = "--agent-engine=v3";
+          }
+        ]
+        ++ injections.acp));
 
     # A strict-mode wrapper: bake env, inject the engine selectors, exec the
     # real bin preserving argv0. The `exec` line's shape is load-bearing beyond
@@ -187,9 +216,8 @@ in {
         ]
         ++ lib.optional (pathExport != "") pathExport
         ++ lib.optional hasUsage (usage.launcherBlock usageTracking)
+        ++ lib.filter (block: block != "") [v3Block bareChatBlock chatBlock acpBlock]
         ++ [
-          v3Block
-          acpEngineBlock
           "exec -a \"$0\" ${lib.escapeShellArg "${selectedPackage}/bin/kiro-cli"} \"$@\""
         ]
       )
