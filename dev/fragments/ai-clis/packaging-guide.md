@@ -288,8 +288,9 @@ updater (`packages/kiro-cli/lib/release.nix`) reads Kiro's
 `latest/manifest.json` once and picks each Nix system's entry by `targetTriple`
 and `fileType`, since the musl tarballs share every other field with the glibc
 ones. It writes the entry's URL to `sources.json`, which the package fetches, so
-a renamed artifact fails the update naming the system, its selector and the
-manifest's downloads.
+a renamed file is followed through the manifest. An entry that no longer matches
+its selector, matches twice, or sits outside the manifest's version fails the
+update naming the system, its selector and the manifest's downloads.
 
 The earlier thin `overrideAttrs` shape degraded to a SILENT no-op — not an error
 — when nixpkgs f13ff45a split `kiro-cli` into `kiro-cli-unwrapped` plus a public
