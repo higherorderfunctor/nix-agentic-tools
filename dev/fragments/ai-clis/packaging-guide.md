@@ -33,9 +33,10 @@ opt-in. Repository code reads them from `ciPackages.<system>`.
 
 ### Build Patterns
 
-**overrideAttrs binary** (kiro-cli): overrides nixpkgs' `kiro-cli-unwrapped`
-derivation to pin the version and `src` from a per-platform `sources.json`, then
-re-composes the public package through upstream's wrapper.
+**Owned payload binary** (kiro-cli): builds its own `stdenv.mkDerivation`
+payload from the per-platform release tarball pinned in `sources.json`, then on
+Linux wraps it in this package's own `buildFHSEnv` (see "Owning the payload and
+the Linux FHS env" below). Nothing is taken from nixpkgs' `kiro-cli`.
 
 **Source override** (chatgpt-codex): `pkgs.codex.override` swaps in
 `mkRustPlatform {inherit pkgs sources sourcesFile; pname = "chatgpt-codex"; sourceRoot = "codex-rs";}`,
@@ -218,16 +219,16 @@ Supporting properties:
   hash, which is exactly why one sat unnoticed in a cache listing. The patched
   build is now `kiro-cli-unwrapped-rollout-<features>-<version>`, gated inside
   `optionalAttrs (rolloutFeatures != [])` so the default derivation is
-  untouched. Darwin needs the rename re-applied in the OUTER `overrideAttrs`,
-  because upstream's `kiro-cli-unwrapped.overrideAttrs {pname = "kiro-cli";}`
-  clobbers it otherwise.
-- **The rename cannot reach the linux FHS intermediates.** Upstream originally
-  hardcoded one `pname = executableName` per environment and now hardcodes
-  `pname = "kiro-cli"` for the consolidated environment. Neither form consults
-  `kiro-cli-unwrapped.pname`, so `-bwrap` / `-fhsenv-rootfs` are identical
-  strings for both variants. They carry no proprietary bytes and are inert
-  without the unwrapped path — but it is why the filter is blunt rather than
-  surgical.
+  untouched. The exported package is renamed `kiro-cli-<rolloutSuffix>` as well:
+  on Linux through the `name` of the own `buildFHSEnv` (the rollout branch
+  only), on Darwin through the `pname` of the payload's `overrideAttrs`. The
+  default keeps `kiro-cli`.
+- **The FHS env's intermediates name themselves.** `-bwrap`, `-fhsenv-rootfs`
+  and `-init` come from `buildFHSEnv`, which names them from the env's
+  `pname`/`name`, not from the payload's `pname`. Their store paths already
+  differ per variant, because the rootfs and the init reference the selected
+  payload. Nothing asserts how they are named, which is why the filter matches
+  every kiro-named path rather than picking layers.
 
 Both knobs are configuration, so the `kiro-patched` job's "Assert the patched
 output is not published" step asserts the OUTCOME. It enumerates the patched
@@ -241,13 +242,13 @@ and a tripwire that can only pass is worse than none.
 Getting that step right took wrong versions, and each failure mode is worth
 keeping because none is specific to Kiro:
 
-- **Assert on the WHOLE patched closure, shared FHS pieces included.** The
-  dispatcher, `-init` script, and `-fhsenv-profile` tree are byte-identical
-  across both variants and share a store path. The step used to subtract the
-  unpatched closure so those paths, published before the filter reached
-  `ci.yml`, did not read as leaks. The operator purged them (2026-10-10, every
-  kiro path in the pinned closure answers 404), so the subtraction is gone and
-  any kiro path that answers 200 fails the step.
+- **Assert on the WHOLE patched closure, FHS pieces included.** The step used to
+  subtract the unpatched closure, because the FHS pieces of the earlier upstream
+  wrapper (dispatcher, `-init` script, `-fhsenv-profile` tree) were
+  byte-identical across variants and had been published before the filter
+  reached `ci.yml`, so they did not read as leaks. The operator purged them
+  (2026-10-10, every kiro path in the pinned closure answers 404), so the
+  subtraction is gone and any kiro path that answers 200 fails the step.
 - **An emptiness guard is not enough.** A large, well-formed, entirely useless
   list passes `[ -z ]` and makes the loop ask nothing. The step requires the
   patched closure listing to contain a kiro path, so a shape change is one loud

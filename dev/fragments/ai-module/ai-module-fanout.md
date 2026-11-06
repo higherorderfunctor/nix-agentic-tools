@@ -248,12 +248,12 @@ The ai module fans out TWO kinds of configuration:
   in both backends. It is Kiro-specific because it closes the Linux
   `buildFHSEnv` visibility gap; it remains independent of `ai.shell`, which
   selects an executable rather than supplying commands.
-- `ai.kiro.cli.useFhsSandbox` — defaults true and keeps nixpkgs' Linux
-  compatibility wrapper. False selects the configured package's pinned
-  `passthru.unwrapped` payload in both backends; validation inspects the
-  rollout-resolved package, so custom factories must preserve that route.
-  Packages without it fail a named assertion. This is runtime-specific package
-  selection, not a normalized sandbox pool.
+- `ai.kiro.cli.useFhsSandbox` — defaults true and keeps this package's own Linux
+  FHS env. False selects the configured package's pinned `passthru.unwrapped`
+  payload in both backends; validation inspects the rollout-resolved package, so
+  custom factories must preserve that route. Packages without it fail a named
+  assertion. This is runtime-specific package selection, not a normalized
+  sandbox pool.
 - `ai.kiro.cli.trustedMcpTools` lowers to v3 allow rules in
   `settings/permissions.yaml`. Tool trust is Home Manager only: it merges into
   `~/.kiro/settings/`, the only place the v3 engine reads it. devenv never

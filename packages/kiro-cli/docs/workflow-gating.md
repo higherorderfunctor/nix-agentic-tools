@@ -43,8 +43,8 @@ assertion on both backends.
 | `sandbox.enable`             | `local_sandbox`        | Availability only. Each invocation still needs `--sandbox` with `--no-interactive` or `--output-format stream-json`; Linux requires bubblewrap and user namespaces. |
 | `workflows.enable`           | `workflows` (GA)       | Global `chat.enableWorkflows`.                                                                                                                                      |
 
-Kiro's local sandbox feature is separate from nixpkgs' Linux FHS compatibility
-wrapper, controlled by `cli.useFhsSandbox`.
+Kiro's local sandbox feature is separate from this package's own Linux
+`buildFHSEnv`, controlled by `cli.useFhsSandbox`.
 
 ### Generated rollout options and key bindings
 
