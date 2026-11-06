@@ -64,6 +64,11 @@ Formatters and linters remain separate — treefmt formats and lints nothing.
   batches made only of such files, otherwise exits 1 with nothing checked. Both
   local hooks and `checks.repo-lints` use this invocation; spelling issues still
   fail. There is no separate empty-corpus guard for cspell.
+- **Unique map keys:** `unique-map-keys` rejects a repeated key within one
+  mapping in JSON, JSONC, JSONL, JSON5, YAML, Markdown YAML frontmatter, TOML,
+  JSON/TOML lock files, and Nix attribute sets. It reports the key path from the
+  document root and parser line where available. Treefmt's formatter exclusions
+  do not apply to this semantic rule.
 
 **Commit-only hooks:**
 
