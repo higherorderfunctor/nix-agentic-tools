@@ -38,11 +38,13 @@ Patchelf
 pluginhost
 pnpmfile
 qll
+reauthenticated
 SYSTEMONE
 TERMUX
 TYPESAFE
 ufeff
 uncarried
+unheld
 userconfig
 WEZTERM
 WHATWG
