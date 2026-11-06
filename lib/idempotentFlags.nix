@@ -71,7 +71,8 @@
   # matches, so every gate declines rather than guessing.
   #
   # An empty-string argument is a positional whose text is "", so `nat_sub` alone
-  # cannot tell it from no subcommand. A caller that must (`gateOnSubcommand`'s
+  # cannot tell it from no subcommand, and a lone `-` would otherwise fall into
+  # the option arm. A caller that must (`gateOnSubcommand`'s
   # `positionalVar`) names a variable the scan sets to 1 when it found a
   # positional and to 0 otherwise; the text is unchanged without one.
   subcommandScan = {positionalVar ? null}: valueFlags:
@@ -90,6 +91,9 @@
         "    --) nat_sub=\"--\"; break ;;"
       ]
       ++ lib.optional (valueFlags != []) "    ${altPattern valueFlags}) nat_skip=1 ;;"
+      # A lone `-` is a positional, not an option; only a caller tracking
+      # positionals (`positionalVar`) sees the arm, so other scans are unchanged.
+      ++ lib.optional (positionalVar != null) "    -) nat_sub=\"-\"; ${positionalVar}=1; break ;;"
       ++ [
         "    -*) ;;"
         "    *) nat_sub=\"$nat_arg\"; ${lib.optionalString (positionalVar != null) "${positionalVar}=1; "}break ;;"

@@ -292,6 +292,8 @@
         '--v3|'                                                           "$O" ""
       expect "an empty argument before settings is not rewritten" \
         '--v3||settings'                                                  "$O" "" settings
+      # A scan that reads a lone `-` as an option would append chat here.
+      expect "a lone dash is not rewritten" '--v3|-' "$O" -
       expect "-- is not rewritten"             '--v3|--'                  "$O" --
       expect "-- then options is not rewritten" '--v3|--|--wrap'          "$O" -- --wrap
       # `chat` appended after a value option that has no value would be read as

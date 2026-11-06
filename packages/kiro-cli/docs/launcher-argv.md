@@ -197,8 +197,8 @@ in front of an end-of-options `--`, the same placement as `acp`'s engine
 selector.
 
 **A bare launch becomes `chat`** when argv before `--` has no subcommand or
-other positional token (an empty argument counts as one), none of the
-once-per-invocation top-level options (`--help`, `--version`, `--resume`,
+other positional token (an empty argument or a lone `-` counts as one), none of
+the once-per-invocation top-level options (`--help`, `--version`, `--resume`,
 `--resume-id`, `--resume-picker` and its `--list` alias, `--verbose`, all
 classified `one-off`, plus the hidden `--help-all`), whether spelled long, short
 or inside a cluster (`-rv` is `-r` and `-v`, both one-off), no value option
