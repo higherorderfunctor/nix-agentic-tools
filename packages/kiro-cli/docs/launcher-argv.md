@@ -197,18 +197,19 @@ in front of an end-of-options `--`, the same placement as `acp`'s engine
 selector.
 
 **A bare launch becomes `chat`** when argv before `--` has no subcommand or
-other positional token, none of the once-per-invocation top-level options
-(`--help`, `--version`, `--resume`, `--resume-id`, `--resume-picker` and its
-`--list` alias, `--verbose`, all classified `one-off`, plus the hidden
-`--help-all`), whether spelled long, short or inside a cluster (`-rv` is `-r`
-and `-v`, both one-off), no value option still waiting for its value, and at
-least one chat option adds a word. `chat` is appended after the top-level
-options, so `kiro-cli --agent a` becomes `--v3 --agent a chat ...`. Rejected by
-the rewrite: `chat` has no `-V`/`--version`, no `--list` alias and no
-`--help-all`, so rewriting those would swap a result for an error; and
-`kiro-cli --agent` would read the appended `chat` as the agent's name.
-`settings`, `login`, `acp`, `mcp` and every other subcommand are untouched, as
-is a bare launch with an INPUT, `--`, or no chat option set.
+other positional token (an empty argument counts as one), none of the
+once-per-invocation top-level options (`--help`, `--version`, `--resume`,
+`--resume-id`, `--resume-picker` and its `--list` alias, `--verbose`, all
+classified `one-off`, plus the hidden `--help-all`), whether spelled long, short
+or inside a cluster (`-rv` is `-r` and `-v`, both one-off), no value option
+still waiting for its value, and at least one chat option adds a word. `chat` is
+appended after the top-level options, so `kiro-cli --agent a` becomes
+`--v3 --agent a chat ...`. Rejected by the rewrite: `chat` has no
+`-V`/`--version`, no `--list` alias and no `--help-all`, so rewriting those
+would swap a result for an error; and `kiro-cli --agent` would read the appended
+`chat` as the agent's name. `settings`, `login`, `acp`, `mcp` and every other
+subcommand are untouched, as is a bare launch with an INPUT, `--`, or no chat
+option set.
 
 Measured on the stock 3.0.0 binary (empty `HOME`, `KIRO_NO_AUTO_UPDATE=1`, stdin
 from `/dev/null`), with `--help` last so a parse failure in any earlier token
