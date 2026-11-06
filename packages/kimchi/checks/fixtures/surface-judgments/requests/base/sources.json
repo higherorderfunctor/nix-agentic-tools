@@ -1,6 +1,6 @@
 {
   "src/chained-fetch.ts": "function chained() {\n  return fetch(u).then(cb);\n}\n",
-  "src/policy.ts": "const enabled = true;\nconst resources = [{ id: \"chosen\", enabled: true, label: \"selected\" }, { id: \"other\", enabled: false }];\nregister(\"request\", { enabled: true });\nfunction choose(value) {\n  if (value !== undefined) return value;\n  return enabled;\n}\nconst options = { enabled: true, label: \"option\" };\n",
+  "src/policy.ts": "const enabled = true;\nconst resources = [{ id: \"chosen\", enabled: true, label: \"selected\" }, { id: \"other\", enabled: false }];\nregister(\"request\", { enabled: true });\nfunction choose(value) {\n  if (value !== undefined) return value;\n  return enabled;\n}\nconst options = { enabled: true, label: \"option\" };\nconst keyed = [{ id: \"a/b[0]#c\", enabled: true }];\n",
   "src/regions.ts": "export const REGIONS = {};\n",
   "src/requests.ts": "\nexport function requestA() {\n  const unrelated = \"before\";\n  return fetch(\"https://a.example\");\n}\nexport function requestB() {\n  return fetch(\"https://b.example\");\n}\nfunction callerA() { return requestA(); }\nfunction nextCaller() { return requestA(); }\nregister({ onStart: requestA });\nconst stored = requestA;\nfunction unrelatedCaller() { return \"before\"; }\n",
   "src/returned-fetch.ts": "function getFetch() { return fetch; }\nfunction returned() {\n  return getFetch()(\n    url\n  );\n}\n",

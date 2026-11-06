@@ -248,13 +248,13 @@
   },
   {
     "base": "requests/base",
-    "codes": ["EVIDENCE_CHANGED"],
+    "codes": ["RECORDED_HASH"],
+    "details": [
+      "hashes to sha256:063097d8b91526df1ca90876267b254b0f5e7a7bb380b833a6a3fecbb485b2df"
+    ],
     "expect": {
-      "diff.json/request-b/rows/added": [],
-      "diff.json/request-b/rows/removed": [],
-      "diff.json/request-b/spans/0/new": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
-      "diff.json/request-b/spans/0/old": null,
-      "diff.json/request-b/spans/0/site/path": "src/policy.ts"
+      "current.json/request-b/evidenceHash": "sha256:063097d8b91526df1ca90876267b254b0f5e7a7bb380b833a6a3fecbb485b2df",
+      "diff.json/request-b/spans": []
     },
     "failureIds": ["request-b"],
     "name": "request-citation-added",
@@ -262,25 +262,10 @@
       {
         "file": "verdicts",
         "path": "judgments/1/selector/sources/0",
-        "value": {
-          "anchor": {
-            "role": {
-              "kind": "node",
-              "steps": [
-                ["list", 0],
-                ["bindings:enabled", 0],
-                ["node", 0],
-                ["list", 0],
-                ["name:enabled", 0]
-              ]
-            },
-            "symbol": []
-          },
-          "path": "src/policy.ts"
-        }
+        "value": "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]"
       }
     ],
-    "rejects": "ignoring newly selected explicit citations when comparing request evidence",
+    "rejects": "accepting a newly cited span id without an updated evidenceHash",
     "unchanged": ["request-a"]
   },
   {
@@ -321,18 +306,20 @@
     "patches": [
       {
         "file": "verdicts",
-        "path": "judgments/0/evidence/spans/0/path",
-        "value": "src/does-not-exist.ts"
-      },
-      {
-        "file": "verdicts",
         "path": "judgments/0/evidenceHash",
         "value": "sha256:36fd8a37bba94a44b880d0e637db71bf9a975c54a645b5d59740bbbea61383fa"
       },
       {
         "file": "verdicts",
-        "path": "judgments/0/selector/sources/0/path",
-        "value": "src/does-not-exist.ts"
+        "path": "judgments/0/selector/sources/0",
+        "value": "src/does-not-exist.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]"
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "src/does-not-exist.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
+        }
       }
     ],
     "rejects": "uncaught filesystem errors that skip citation diagnostics and packet artifacts",
@@ -450,7 +437,6 @@
               "rows": [
                 "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
               ],
-              "spans": [],
               "statement": "sha256:0ad66e0a3da85dc3ae1ecb80625854420d37be5dd189538e76c18ae18e813ff9"
             },
             "evidenceHash": "sha256:a876c21a335651de7a0d30f594e573a27b80c0ea5d05da186cbba3715bac9b93",
@@ -492,7 +478,6 @@
               "rows": [
                 "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
               ],
-              "spans": [],
               "statement": "sha256:e301fb86dcd7416fecffc7837eaa62c7c0943b93590c865ba36e250aa4e6a684"
             },
             "evidenceHash": "sha256:fc20cb0f3f0e9585e64b6a3863c88e802d8a202f5c6c1ae337ec6d5ac789f3c6",
@@ -534,7 +519,6 @@
               "rows": [
                 "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
               ],
-              "spans": [],
               "statement": "sha256:e301fb86dcd7416fecffc7837eaa62c7c0943b93590c865ba36e250aa4e6a684"
             },
             "evidenceHash": "sha256:035220e06d35ba9c938454c340022bc469abd42ca73919def57d44fc58ff1f94",
@@ -564,6 +548,11 @@
             "verdict": "unknown"
           }
         ]
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {}
       }
     ],
     "rejects": "silently rebinding a same-callee ordinal to another call sharing its statement and caller rows"
@@ -823,7 +812,10 @@
       "current.json/request-a/packet/rows/sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9/kind": "caller",
       "current.json/request-a/packet/statement": "return fetch(\"https://a.example\");",
       "current.json/request-chained-fetch/packet/statement": "return fetch(u).then(cb);",
-      "current.json/request-returned-fetch/packet/statement": "return getFetch()(\n    url\n  );"
+      "current.json/request-returned-fetch/packet/statement": "return getFetch()(\n    url\n  );",
+      "spans.json": {
+        "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
+      }
     },
     "name": "request-read-only-and-repeatable",
     "rejects": "hashing fact order, selecting the wrong nested call, losing current row detail, or rewriting verdicts",
@@ -919,6 +911,11 @@
         "file": "facts",
         "path": "requestCallers/0",
         "remove": true
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {}
       }
     ],
     "rejects": "retaining a removed request after its record is explicitly removed",
@@ -977,16 +974,19 @@
     "patches": [
       {
         "file": "verdicts",
+        "path": "judgments/0/evidenceHash",
+        "value": "sha256:e95dbf69bae0b7f37844ca1b08d71dcd202694df9934cf7efeb90b5f171413a8"
+      },
+      {
+        "file": "verdicts",
         "path": "judgments/0/selector/sources/0",
+        "value": "src/requests.ts#function:requestA[0]#"
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
         "value": {
-          "anchor": {
-            "role": {
-              "kind": "node",
-              "steps": []
-            },
-            "symbol": [["function:requestA", 0]]
-          },
-          "path": "src/requests.ts"
+          "src/requests.ts#function:requestA[0]#": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
         }
       }
     ],
@@ -1065,6 +1065,283 @@
     ],
     "rejects": "hashing an enclosing variable declaration around a concise arrow",
     "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "name": "request-span-escaped-id",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/1/evidenceHash",
+        "value": "sha256:695f8eb3d509aa7513d11129f0a92e331b14f4b2d2e2ef4b27a9509179a9ed06"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/1/selector/sources/0",
+        "value": "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:\"a%2Fb%5B0%5D%23c\"[0]"
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+          "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:\"a%2Fb%5B0%5D%23c\"[0]": "sha256:9556a87c486c79b10767c83e0f04042c0f92a7b12afaf9c0238a77746ed52b73"
+        }
+      }
+    ],
+    "rejects": "resolving a cited span whose step name holds # / [ or ] by its unescaped spelling",
+    "unchanged": ["request-a"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "src/policy.ts",
+        "from": "\"a/b[0]#c\", enabled: true",
+        "to": "\"a/b[0]#c\", enabled: false"
+      }
+    ],
+    "expect": {
+      "diff.json/request-b/spans/0/new": "sha256:178ee47be3907688c2ba37de678ad6d8a05bd98212f870ce1f4d688b29f78e2f",
+      "diff.json/request-b/spans/0/old": "sha256:9556a87c486c79b10767c83e0f04042c0f92a7b12afaf9c0238a77746ed52b73"
+    },
+    "failureIds": ["request-b"],
+    "name": "request-span-escaped-id-edited",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/1/evidenceHash",
+        "value": "sha256:695f8eb3d509aa7513d11129f0a92e331b14f4b2d2e2ef4b27a9509179a9ed06"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/1/selector/sources/0",
+        "value": "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:\"a%2Fb%5B0%5D%23c\"[0]"
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+          "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:\"a%2Fb%5B0%5D%23c\"[0]": "sha256:9556a87c486c79b10767c83e0f04042c0f92a7b12afaf9c0238a77746ed52b73"
+        }
+      }
+    ],
+    "rejects": "missing a byte edit inside a span whose id needed escaping",
+    "unchanged": ["request-a"]
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/policy.ts",
+        "from": "{ id: \"a/b[0]#c\", enabled: true }",
+        "to": "{ id: `a\nb`, enabled: true }"
+      }
+    ],
+    "name": "request-span-multiline-id",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/1/evidenceHash",
+        "value": "sha256:9773f0d95373fbc6d411c523c5e8aa9ff1cb6b93372900f8fbd068ec6acc8e74"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/1/selector/sources/0",
+        "value": "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:`a\nb`[0]"
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+          "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:`a\nb`[0]": "sha256:91841448b5e18ffe5c01c8bfd324271b31a969bf00275a2b09306ea383b87116"
+        }
+      }
+    ],
+    "rejects": "refusing a cited span whose step name holds a line terminator, as a multiline template literal id does",
+    "unchanged": ["request-a"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "details": ["/spans/%ZZ#]#[x: invalid span id"],
+    "failureIds": ["<verdict-file>"],
+    "name": "request-span-id-malformed",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "%ZZ#]#[x": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
+        }
+      }
+    ],
+    "rejects": "throwing on, or accepting, a span id whose pairs and path do not parse into a source site"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "details": [
+      "/spans/%73rc/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]: invalid span id"
+    ],
+    "failureIds": ["<verdict-file>"],
+    "name": "request-span-id-noncanonical",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/selector/sources/0",
+        "value": "%73rc/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]"
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "%73rc/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
+        }
+      }
+    ],
+    "rejects": "accepting a span id that does not re-encode to itself, giving one identity two ids"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["RECORDED_HASH"],
+    "details": [
+      "hashes to sha256:17817d49a781c430660aabe028be1495688ea244d45e20f7febfa3df60aba32b"
+    ],
+    "failureIds": ["request-a"],
+    "name": "request-span-id-removed",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/selector/sources/0",
+        "remove": true
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {}
+      }
+    ],
+    "rejects": "keeping a recorded evidenceHash after a cited span id is removed",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "details": ["/judgments/1/selector/sources/0: unknown span id"],
+    "failureIds": ["request-b"],
+    "name": "request-span-id-unknown",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/1/selector/sources/0",
+        "value": "src/policy.ts##list[0]/bindings:resources[0]"
+      }
+    ],
+    "rejects": "citing a span id absent from the spans table",
+    "unchanged": ["request-a"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED", "EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "src/policy.ts",
+        "from": "const enabled = true;",
+        "to": "const enabled = false;"
+      }
+    ],
+    "expect": {
+      "diff.json/request-b/spans/0/new": "sha256:cde083d92431a8f400067e09d9c16998a54a7d69d8cd70fa21476ccf15e7a3ed",
+      "diff.json/request-b/spans/0/old": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
+    },
+    "failureIds": ["request-a", "request-b"],
+    "name": "request-span-shared-edited",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/1/evidenceHash",
+        "value": "sha256:06442880bc746e2dbd3fbf3636d47b8b419ea13593719b939eaacc9b0769b0a5"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/1/selector/sources",
+        "value": [
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]",
+          "src/requests.ts#function:requestB[0]#block[0]/list[0]/node[0]"
+        ]
+      },
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+          "src/requests.ts#function:requestB[0]#block[0]/list[0]/node[0]": "sha256:896dd7a6f436d373a969dcdb490ad09804c873a6f5e8474dbdfd2e7ae6318158"
+        }
+      }
+    ],
+    "rejects": "checking a shared span's bytes for only one of the records citing it, or expanding ids in string rather than identity order"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT", "VERDICT_INPUT"],
+    "details": [
+      "/spans/src/policy.ts##list[0]/bindings:\"[0]: unreferenced span",
+      "/spans/src/policy.ts##list[0]/bindings:%25[0]: unreferenced span"
+    ],
+    "failureIds": ["<verdict-file>", "<verdict-file>"],
+    "name": "request-span-unreferenced",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "spans",
+        "value": {
+          "src/policy.ts##list[0]/bindings:\"[0]": "sha256:cde083d92431a8f400067e09d9c16998a54a7d69d8cd70fa21476ccf15e7a3ed",
+          "src/policy.ts##list[0]/bindings:%25[0]": "sha256:cde083d92431a8f400067e09d9c16998a54a7d69d8cd70fa21476ccf15e7a3ed",
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c"
+        }
+      }
+    ],
+    "rejects": "keeping table hashes no record cites, letting them suppress other records, ordering ids by quoted JSON instead of as strings, or expanding an id to another entry's hash",
+    "unchanged": true
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "details": ["/spans: non-canonical spans table"],
+    "edits": [
+      {
+        "file": "verdicts",
+        "from": "\"spans\":{\"",
+        "to": "\"spans\":{\"src/policy.ts##list[0]/bindings:resources[0]\":\"sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c\",\""
+      }
+    ],
+    "failureIds": ["<verdict-file>"],
+    "name": "request-spans-table-unsorted",
+    "rejects": "accepting a spans table out of canonical key order"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "details": ["/judgments/0/selector/sources/1: duplicate source citation"],
+    "failureIds": ["request-a"],
+    "name": "request-source-duplicate-citation",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/selector/sources",
+        "value": [
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]",
+          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]"
+        ]
+      }
+    ],
+    "rejects": "accepting one span id cited twice in a record"
   },
   {
     "base": "requests/base",

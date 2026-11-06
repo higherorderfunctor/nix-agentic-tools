@@ -16,6 +16,7 @@ import {
   resolver,
   rootKey,
   schemaPrefix,
+  spanId,
   verdicts,
 } from "./packet.mjs";
 
@@ -50,7 +51,8 @@ const actions = (request) => {
 const failures = [],
   current = {},
   diff = {},
-  display = {};
+  display = {},
+  spans = {};
 const counts = { roots: 0, supported: 0, refuted: 0, unknown: 0 };
 const unavailable = {
   id: "<verdict-file>",
@@ -219,6 +221,8 @@ async function evaluate() {
       request ? requestEvidence.resolve : resolve,
     );
     current[id] = result;
+    for (const span of result.evidence?.spans ?? [])
+      spans[spanId(span)] = span.sha256;
     diff[id] = {
       recorded: recorded ? old : null,
       current: result.evidenceHash ?? null,
@@ -285,6 +289,7 @@ for (const [name, value] of Object.entries({
   current,
   diff,
   display,
+  spans,
   status: {
     ok: !failures.length,
     counts,

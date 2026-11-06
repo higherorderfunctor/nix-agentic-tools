@@ -390,8 +390,8 @@
     "edits": [
       {
         "file": "verdicts",
-        "from": "\"schemaVersion\":1}",
-        "to": "\"schemaVersion\":2}"
+        "from": "\"schemaVersion\":1,",
+        "to": "\"schemaVersion\":2,"
       }
     ],
     "name": "unsupported-verdict-schema",
