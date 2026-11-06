@@ -22,12 +22,17 @@ Every rubric carries these standing rows:
    write the decision the label stands for. Numbering the artifact itself
    defines (a script's own phase headings) is a name and stays.
 4. **Size.** Estimate while planning and count the final diff while reviewing:
-   about 500 hand-written code lines per PR is the review-attention signal;
-   tests, fixtures and checks fit within about twice that code unless the brief
-   says why. These are steering signals, never caps: being over never stops work
-   and never needs the user's approval. If an estimate is over and a seam exists
-   that a reviewer can read alone, split into stacked PRs without asking. If no
-   seam exists, make one change and say why in the brief and PR summary.
+   200-400 hand-written code lines per PR is the target, and about 500 is where
+   a change counts as over. Tests, fixtures and checks fit within about twice
+   the change's actual hand-written code unless the brief says why; docs and
+   shipped agent-instruction prose (skills, fragments, prompts) count as
+   hand-written code. These are steering signals, never caps: being over never
+   stops work and never needs the user's approval, and does not fail this row;
+   the row fails only a change that is over with neither a split nor a stated
+   reason. If an estimate is over and a seam exists that a reviewer can read
+   alone, split into stacked PRs without asking; each piece passes its checks on
+   its own. If no seam exists, make one change and say why in the brief and PR
+   summary.
 
 Paste the file verbatim into the worker's and every reviewer's brief. A one-line
 summary or "follow the project rules" is not a rubric.

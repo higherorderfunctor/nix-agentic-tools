@@ -1,7 +1,8 @@
 List the parts of the work before choosing execution. Size each part with the
-Work and review rubric's Size row: split an over-signal part at a seam a
-reviewer can read alone, or carry one change with its reason. Name the files
-each part writes and its dependencies.
+Work and review rubric's Size row and follow that row's split rule. Checks,
+tests and docs that exist only for a part ship in the same change as that part,
+so a split never moves a part's tests to another PR. Name the files each part
+writes and its dependencies.
 
 Use a tool from the table that exists in this session's mode. A single
 self-contained task needs one delegate. Use a workflow when the work has
