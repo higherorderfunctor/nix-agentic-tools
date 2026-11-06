@@ -2395,7 +2395,7 @@
     "multimedia": { "template": "Image and video behavior.", "type": "object" },
     "multimedia.disable-image-generation": {
       "description": "DisableImageGeneration controls whether the built-in image_generation tool is injected/allowed.\n\nSupported values:\n  - false (default): image_generation is enabled everywhere (normal behavior).\n  - true: image_generation is disabled everywhere. The server stops injecting it, removes it from request payloads,\n    and returns 404 for /v1/images/generations and /v1/images/edits.\n  - \"chat\": disable image_generation injection for all non-images endpoints (e.g. /v1/responses, /v1/chat/completions),\n    while keeping /v1/images/generations and /v1/images/edits enabled and preserving image_generation there.\n  - \"passthrough\": do not modify the tool list on non-images endpoints — keep image_generation if the client\n    sent it and do not inject it otherwise; on /v1/images/generations and /v1/images/edits behave like \"chat\".",
-      "template": "disable-image-generation supports: false (default), true, \"chat\", or \"passthrough\".",
+      "template": "disable-image-generation supports: false (default), true, \"chat\", or \"passthrough\".\nNative Codex Responses-Lite routes reject forced hosted image_generation with HTTP 400; use the Images API instead.\nExplicit \"passthrough\" keeps forwarding these requests without capability validation.",
       "type": "any"
     },
     "multimedia.gpt-image-2-base-model": {
