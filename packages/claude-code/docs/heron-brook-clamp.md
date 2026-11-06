@@ -15,7 +15,7 @@
 >   claude-code update PR failed past a `reviewBy` date. Its only job was to
 >   find out when the grant could be dropped, and a grant left behind after
 >   upstream removes the clamp does no harm, so the calendar only turned bot PRs
->   red. Removed 2026-11-06.
+>   red.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
