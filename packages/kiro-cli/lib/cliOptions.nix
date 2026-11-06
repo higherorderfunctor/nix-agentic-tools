@@ -54,7 +54,7 @@
       "--legacy-ui" = r.no-v3-effect;
       "--list-models" = r.one-off;
       "--list-sessions" = r.one-off;
-      "--mode" = setting "mode" "Mode of the V3 agent, passed to `kiro-cli chat` as `--mode`. The help declares `default` and `spec`; the parser does not enforce them, so the type is what refuses another value.";
+      "--mode" = setting "mode" "Mode of the V3 agent, passed to `kiro-cli chat` as `--mode`. The type takes the values the help declares, `default` and `spec`, so another value fails at evaluation rather than at launch.";
       "--model" = r.duplicates-a-workspace-setting;
       "--no-interactive" = r.mode;
       "--output-format" = r.mode;
@@ -72,7 +72,7 @@
       "--v2" = r.rejected-on-v3;
       "--v3" = r.wrapper-owned;
       "--verbose" = r.one-off;
-      "--wrap" = setting "wrap" "Line wrapping of chat output, passed to `kiro-cli chat` as `--wrap`. Kiro's own default is to detect the terminal; the parser does not enforce the three values, so the type is what refuses another.";
+      "--wrap" = setting "wrap" "Line wrapping of chat output, passed to `kiro-cli chat` as `--wrap`. Kiro's own default is to detect the terminal; another value than the three the help declares fails at evaluation rather than at launch.";
     };
     top = {
       "--agent" = r.duplicates-a-workspace-setting;

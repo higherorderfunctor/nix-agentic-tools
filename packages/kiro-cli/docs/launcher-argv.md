@@ -176,16 +176,17 @@ settings, each `nullOr` with default `null` and typed from the extracted record
 | `ai.kiro.cli.chat.wrap`              | `--wrap`                | `always`, `never`, `auto`  |
 | `ai.kiro.cli.acp.authMethod`         | `--auth-method`         | `cli`, `client`            |
 
-3.0.0's parser enforces only `--agent-engine` and `--auth-method`; `--mode` and
-`--wrap` accept any string, so the enum is what refuses a wrong value, at
-evaluation. `--agent`, `--model` and `--effort` are not settings here: a
-workspace setting (`chat.defaultAgent`, `chat.defaultModel`,
-`chat.modelDefaults`) already sets each, and `acp` rejects all three under
-`--agent-engine=v3`. The trust flags stay out (see above), as do the modes
-(`--sessions`, `--no-interactive`, `--output-format`, `--cloud`, `--repo`) and
-`--tui`/`--legacy-ui`, which the pinned v3 launch supersedes. The same four
-options exist on Home Manager and devenv, and `package = null` warns when one is
-set, because they need the managed wrapper.
+3.0.0's parser rejects a value outside the declared set
+(`--v3 chat --wrap=foo --help` and `--v3 chat --mode=foo --help` exit 2 with
+`invalid value 'foo'`), and the option enums take the same values, so a wrong
+value fails at evaluation instead of at launch. `--agent`, `--model` and
+`--effort` are not settings here: a workspace setting (`chat.defaultAgent`,
+`chat.defaultModel`, `chat.modelDefaults`) already sets each, and `acp` rejects
+all three under `--agent-engine=v3`. The trust flags stay out (see above), as do
+the modes (`--sessions`, `--no-interactive`, `--output-format`, `--cloud`,
+`--repo`) and `--tui`/`--legacy-ui`, which the pinned v3 launch supersedes. The
+same four options exist on Home Manager and devenv, and `package = null` warns
+when one is set, because they need the managed wrapper.
 
 A configured option becomes one `--name=value` word, added only when the caller
 passed none of its spellings before `--`: the long name and aliases as `--x v`
