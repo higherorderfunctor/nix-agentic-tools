@@ -151,7 +151,7 @@
       hook = {
         enable = true;
         name = "unique-map-keys";
-        entry = lib.getExe uniqueMapKeys.package;
+        entry = lib.getExe uniqueMapKeys;
         files = "\\.(json5?|jsonc|jsonl|lock|md|nix|toml|ya?ml)$";
       };
       ci.backend = "git-hooks";

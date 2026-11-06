@@ -67,7 +67,7 @@
       };
       lock-toml = {
         files = [{extension = "lock";}];
-        expected = "case.lock: duplicate key: Cannot overwrite a value (at line 3, column 6)";
+        expected = "case.lock: Cannot overwrite a value (at line 3, column 6)";
         status = 1;
       };
       markdown-no-frontmatter = {
@@ -99,8 +99,8 @@
           }
         ];
         expected = ''
-          nix-batch-duplicate.nix: duplicate key /a: error: attribute 'a' already defined at nix-batch-duplicate.nix:1:3
-          nix-batch-syntax.nix: parse error: error: syntax error, unexpected end of file, expecting '.' or '=' at nix-batch-syntax.nix:2:1'';
+          nix-batch-duplicate.nix: error: attribute 'a' already defined at nix-batch-duplicate.nix:1:10
+          nix-batch-syntax.nix: error: syntax error, unexpected end of file, expecting '.' or '=' at nix-batch-syntax.nix:2:1'';
         status = 1;
       };
       toml-array-tables = {
@@ -110,18 +110,23 @@
       };
       toml-direct = {
         files = [{extension = "toml";}];
-        expected = "case.toml: duplicate key: Cannot overwrite a value (at line 2, column 6)";
+        expected = "case.toml: Cannot overwrite a value (at line 2, column 6)";
         status = 1;
       };
       toml-dotted = {
         files = [{extension = "toml";}];
-        expected = "case.toml: duplicate key: Cannot overwrite a value (at line 2, column 8)";
+        expected = "case.toml: Cannot overwrite a value (at line 2, column 8)";
         status = 1;
       };
       toml-table = {
         files = [{extension = "toml";}];
-        expected = "case.toml: duplicate key: Cannot declare ('table',) twice (at line 3, column 7)";
+        expected = "case.toml: Cannot declare ('table',) twice (at line 3, column 7)";
         status = 1;
+      };
+      yaml-merge = {
+        files = [{extension = "yaml";}];
+        expected = "";
+        status = 0;
       };
       yaml-merge-sequence = {
         files = [{extension = "yaml";}];
@@ -135,8 +140,13 @@
       };
       yaml-quoted-key = {
         files = [{extension = "yaml";}];
-        expected = "case.yaml: duplicate key /nested/a (line 3)";
+        expected = "case.yaml: duplicate key /nested/a (line 3)\ncase.yaml: duplicate key /nested/a (line 4)";
         status = 1;
+      };
+      yaml-sibling-mappings = {
+        files = [{extension = "yml";}];
+        expected = "";
+        status = 0;
       };
     };
 
@@ -151,7 +161,7 @@
     in ''
       ${lib.concatStrings (map copyOne case.files)}
       rc=0
-      ${lib.getExe uniqueMapKeys.package} ${toString targets} >case.out 2>&1 || rc=$?
+      ${lib.getExe uniqueMapKeys} ${toString targets} >case.out 2>&1 || rc=$?
       got=$(cat case.out)
       want=${lib.escapeShellArg case.expected}
       if [ "$rc" -ne ${toString case.status} ] || [ "$got" != "$want" ]; then
