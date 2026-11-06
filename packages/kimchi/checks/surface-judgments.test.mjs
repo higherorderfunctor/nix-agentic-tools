@@ -183,7 +183,7 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
     const result = run(args);
     assert.equal(result.status, 0, `${test.name}: ${result.stderr}`);
     const artifacts = Object.fromEntries(
-      ["current", "diff", "display", "status"].map((name) => [
+      ["current", "diff", "display", "spans", "status"].map((name) => [
         `${name}.json`,
         JSON.parse(readFileSync(join(out, `${name}.json`), "utf8")),
       ]),

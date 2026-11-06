@@ -20,9 +20,11 @@ export const requestClaimParts = [
 ];
 export const hash = (value) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}`;
+// Strings sort as themselves, so span ids order like canonical object keys.
+const sortKey = (v) => (typeof v === "string" ? v : canonical(v));
 const ordered = (items) =>
   items.sort((a, b) =>
-    canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0,
+    sortKey(a) < sortKey(b) ? -1 : sortKey(a) > sortKey(b) ? 1 : 0,
   );
 export class EvidenceError extends Error {
   constructor(code, detail, citation) {
@@ -103,6 +105,43 @@ const requestSite = (role) => ({
   path: sourcePath,
 });
 const sourceSite = requestSite({ kind: (v) => v === "node", steps });
+// A span id writes a request citation as path#symbol#steps, each [name, ordinal]
+// pair as name[ordinal] joined by "/"; names escape % # / [ ], the path % #.
+const escapeId = (text, chars) =>
+  text.replace(chars, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+const pairs = (list) =>
+  list.map(([name, i]) => `${escapeId(name, /[%#/[\]]/g)}[${i}]`).join("/");
+export const spanId = ({ path, anchor }) =>
+  `${escapeId(path, /[%#]/g)}#${pairs(anchor.symbol)}#${pairs(anchor.role.steps)}`;
+// Only an id that re-encodes to itself is accepted, so one identity has one id.
+function spanSite(id) {
+  const decode = (text) =>
+    text.replace(/%([0-9A-F]{2})/g, (_, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+  const parsePairs = (text = "") =>
+    text
+      ? text.split("/").map((pair) => {
+          const m = /^(.*)\[(\d+)\]$/s.exec(pair);
+          return m && [decode(m[1]), Number(m[2])];
+        })
+      : [];
+  const [path, symbol, steps] = id.split("#");
+  const site = {
+    anchor: {
+      role: { kind: "node", steps: parsePairs(steps) },
+      symbol: parsePairs(symbol),
+    },
+    path: decode(path),
+  };
+  try {
+    validate(site, sourceSite);
+    if (spanId(site) === id) return site;
+  } catch (error) {
+    if (!(error instanceof EvidenceError)) throw error;
+  }
+  schema("VERDICT_INPUT", `/spans/${id}`, "invalid span id");
+}
 const isRequest = (selector) => selector?.fact?.kind === "requestCallers";
 export const rootKey = (selector) =>
   canonical(
@@ -122,7 +161,7 @@ function selector(value, path) {
             kind: (v) => v === "requestCallers",
             where: { request: requestSite(callRole) },
           },
-          sources: [sourceSite],
+          sources: [string],
         }
       : {
           fact: {
@@ -169,10 +208,27 @@ export function verdicts(value) {
   validate(value, {
     judgments: (v) => Array.isArray(v),
     schemaVersion: version,
+    spans: object,
   });
+  const keys = Object.keys(value.spans);
+  if (canonical(keys) !== canonical(ordered([...keys])))
+    schema("VERDICT_INPUT", "/spans", "non-canonical spans table");
+  const table = new Map(
+    keys.map((id) => {
+      const site = spanSite(id);
+      validate(value.spans[id], digest, `/spans/${id}`);
+      return [id, site];
+    }),
+  );
+  // Ids cited by a malformed record count, so its own error is not repeated.
+  const cited = new Set(
+    value.judgments.flatMap((j) =>
+      Array.isArray(j?.selector?.sources) ? j.selector.sources : [],
+    ),
+  );
   const ids = new Set(),
     roots = new Set();
-  return value.judgments.map((judgment, i) => {
+  const records = value.judgments.map((judgment, i) => {
     const path = `/judgments/${i}`,
       request = isRequest(judgment?.selector);
     try {
@@ -195,7 +251,6 @@ export function verdicts(value) {
                   call: digest,
                   root: digest,
                   rows: [digest],
-                  spans: [{ ...sourceSite, sha256: digest }],
                   statement: digest,
                 },
                 selector,
@@ -208,6 +263,15 @@ export function verdicts(value) {
         path,
       );
       const evidence = request ? judgment.evidence : judgment.packet;
+      if (request)
+        judgment.selector.sources.forEach((id, j) => {
+          if (!table.has(id))
+            schema(
+              "VERDICT_INPUT",
+              `${path}/selector/sources/${j}`,
+              "unknown span id",
+            );
+        });
       for (const [array, items, field] of [
         ["rows", evidence.rows, request ? "evidence/rows" : "packet/rows"],
         [
@@ -215,7 +279,7 @@ export function verdicts(value) {
           judgmentSelector(judgment).sources,
           request ? "selector/sources" : "packet/selector/sources",
         ],
-        ["spans", evidence.spans, request ? "evidence/spans" : "packet/spans"],
+        ["spans", judgment.packet?.spans ?? [], "packet/spans"],
       ])
         if (canonical(items) !== canonical(ordered([...items])))
           schema(
@@ -234,12 +298,36 @@ export function verdicts(value) {
         );
       ids.add(judgment.id);
       roots.add(root);
-      return { judgment };
+      if (!request) return { judgment };
+      // Expansion restores the summary packet() hashes, spans in identity order.
+      const sources = ordered(
+        judgment.selector.sources.map((id) => table.get(id)),
+      );
+      const spans = sources.map((site) => ({
+        ...site,
+        sha256: value.spans[spanId(site)],
+      }));
+      return {
+        judgment: {
+          ...judgment,
+          evidence: { ...judgment.evidence, spans },
+          selector: { ...judgment.selector, sources },
+        },
+      };
     } catch (error) {
       if (!(error instanceof EvidenceError)) throw error;
       return { judgment, error };
     }
   });
+  for (const id of keys)
+    if (!cited.has(id))
+      records.push({
+        error: new EvidenceError(
+          "VERDICT_INPUT",
+          `${schemaPrefix("VERDICT_INPUT")}/spans/${id}: unreferenced span`,
+        ),
+      });
+  return records;
 }
 export function factRows(value) {
   return value.regionRegistry.fields.filter((row, i) => {

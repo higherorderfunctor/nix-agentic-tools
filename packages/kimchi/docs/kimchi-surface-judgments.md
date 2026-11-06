@@ -25,10 +25,11 @@ initial EU judgment is unknown because the client-derived URL does not establish
 server availability. The US judgment supports direct URL construction only,
 excluding effective configuration, callers, execution and availability.
 
-The file's closed schema is `{schemaVersion: 1, judgments: [...]}`. Each
-hosted-gateway record requires `id`, `claim`, `scope`, `packet`, `evidenceHash`,
-`verdict` and `rationale`. IDs are unique descriptive lowercase kebab-case.
-Verdicts are `supported`, `refuted` or `unknown`. Unknown requires nonblank
+The file's closed schema is
+`{schemaVersion: 1, judgments: [...], spans: {...}}`. Each hosted-gateway record
+requires `id`, `claim`, `scope`, `packet`, `evidenceHash`, `verdict` and
+`rationale`. IDs are unique descriptive lowercase kebab-case. Verdicts are
+`supported`, `refuted` or `unknown`. Unknown requires nonblank
 `missingEvidence`; other dispositions forbid it. Selectors and citations live in
 the packet, without duplicate metadata fields. Unknown fields and versions are
 refused.
@@ -63,18 +64,17 @@ unknowns. It stores neither a packet nor decoded statement text. Its compact
 - `root`: the SHA-256 hash of the request root's canonical JSON identity.
 - `rows`: one SHA-256 digest of each normalized caller row's canonical JSON,
   sorted, preserving duplicates.
-- `spans`: each explicit source citation's `{path, anchor, sha256}`, sorted by
-  identity.
 - `statement`: the request statement's original-byte SHA-256 hash.
 
-`evidenceHash` hashes the canonical JSON of that summary. CI recomputes it from
-the current facts and pinned tree. Request summary fields have a closed schema;
-row/root digests and call/span/statement hashes must be lowercase SHA-256
-values. The hosted-gateway records keep their full packets and existing hash
-rules.
+`evidenceHash` hashes the canonical JSON of that summary after the checker adds
+`spans`: each id in `selector.sources` expanded to `{path, anchor, sha256}` from
+the shared span table, sorted by identity. CI recomputes it from the current
+facts and pinned tree. Request summary fields have a closed schema; row/root
+digests and call/span/statement hashes must be lowercase SHA-256 values. The
+hosted-gateway records keep their full packets and existing hash rules.
 
 A request selector has `fact: {kind: "requestCallers", where: {request}}` and an
-explicit `sources` array. The request citation is
+explicit `sources` array of span ids. The request citation is
 `{path, anchor: {symbol, role: {kind: "call", callee, ordinal}}}`. Paths are
 canonical repository-relative `src/...` paths. `symbol` is a chain of
 `[name, ordinal]` pairs: function names/bindings, class names, method/accessor
@@ -153,19 +153,20 @@ produce `REQUEST_LOCATION`; missing or unreadable citation files produce
 `ANCHOR_MISSING` with an incomplete packet. Both retain the usual diagnostics
 and artifacts.
 
-Explicit request citations use
-`{path, anchor: {symbol, role: {kind: "node", steps}}}`. Each `[key, ordinal]`
-step selects a direct syntax child of the previous node, starting at the named
-owner. Keys include `name:<spelling>`, callee keys, `bindings:<names>`, keyed
-object entries `entry:id:<spelling>` or `entry:name:<spelling>`, and the fixed
-labels `block`, `list`, `node` and `token` (all leaf tokens). JSDoc children are
-skipped. These steps can select registration arguments, resource entries,
-properties, return statements and precedence conditions. Final files, blocks,
-functions, classes and their direct SyntaxList children are refused.
-Intermediate nodes of those kinds are allowed. This is a node-kind restriction,
-not a size guarantee: an accepted statement such as an `if` can still cover most
-of a function. Reviewers choose spans proportional to the claim; there is no
-byte limit. No TypeScript enum aliases enter persisted identities.
+Explicit request citations have the identity
+`{path, anchor: {symbol, role: {kind: "node", steps}}}`, written as a span id.
+Each `[key, ordinal]` step selects a direct syntax child of the previous node,
+starting at the named owner. Keys include `name:<spelling>`, callee keys,
+`bindings:<names>`, keyed object entries `entry:id:<spelling>` or
+`entry:name:<spelling>`, and the fixed labels `block`, `list`, `node` and
+`token` (all leaf tokens). JSDoc children are skipped. These steps can select
+registration arguments, resource entries, properties, return statements and
+precedence conditions. Final files, blocks, functions, classes and their direct
+SyntaxList children are refused. Intermediate nodes of those kinds are allowed.
+This is a node-kind restriction, not a size guarantee: an accepted statement
+such as an `if` can still cover most of a function. Reviewers choose spans
+proportional to the claim; there is no byte limit. No TypeScript enum aliases
+enter persisted identities.
 
 Editing call/statement/citation bytes, adding/removing a
 caller/callback/boundary row, or changing selected metadata invalidates that
@@ -177,6 +178,33 @@ regenerated. The original source buffers, canonical JSON and sha256 rules below
 apply to both families. Request row digests sort lexically; gateway rows sort by
 canonical JSON. Both preserve multiplicity. Release hashes, absolute paths,
 timestamps and numeric coordinates never enter request packets.
+
+### Shared span table
+
+Each cited request span is stored once, in the top-level `spans` object, which
+maps a span id to its `sha256:` hash. Records sharing a span cite the same id. A
+span id is `<path>#<symbol>#<steps>`: each `[name, ordinal]` pair is written
+`name[ordinal]` and pairs are joined by `/`. Names percent-escape `%`, `#`, `/`,
+`[` and `]` as `%25`, `%23`, `%2F`, `%5B` and `%5D`; the path escapes only `%`
+and `#`. For example
+`src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]`
+cites a top-level binding. The check parses each id, refuses it unless the
+parsed citation is a valid explicit request citation that re-encodes to the same
+string, and so gives each identity exactly one id. Table keys and each record's
+`sources` sort as plain strings. Every cited id must be in the table and every
+table entry must be cited.
+
+Editing a cited span's bytes fails every record citing it with
+`EVIDENCE_CHANGED`. Adding, removing or changing a record's id, or a table hash,
+changes its expanded summary, so it fails `RECORDED_HASH` until the record's
+`evidenceHash` is updated. Rejudge every record citing a span whose table hash
+changes.
+
+The packet output's `spans.json` maps the id of every currently resolved request
+span to its current hash. To add a citation, add its id to the record's
+`selector.sources` and, when it is new, to `spans` with any well-formed
+placeholder hash; rerun; copy the id's hash from `spans.json` into the table and
+the record's `evidenceHash` from `current.json`.
 
 ## Evidence packet
 
@@ -263,11 +291,12 @@ or writes its inputs.
 The packet output contains `current.json` (complete packets and hashes, new-root
 candidates, or explicit incomplete results without a complete hash), `diff.json`
 (old/current hashes, row multiset changes and span changes), `display.json`
-(one-based current numeric citations, exclusive ends), `diagnostics.txt` and
-`status.json` (classification counts and ordered failure codes). Missing
-baselines are `recorded: null`. For requests, `current.json` also contains the
-compact `evidence` summary; full rows live at `packet.rows[<digest>]`. Request
-row changes in `diff.json` and diagnostics list added/removed digests, including
+(one-based current numeric citations, exclusive ends), `spans.json` (current
+request span hashes by span id), `diagnostics.txt` and `status.json`
+(classification counts and ordered failure codes). Missing baselines are
+`recorded: null`. For requests, `current.json` also contains the compact
+`evidence` summary; full rows live at `packet.rows[<digest>]`. Request row
+changes in `diff.json` and diagnostics list added/removed digests, including
 duplicate counts, rather than repeating row bodies. Valid classified unknowns
 are counted separately. Failures sort by judgment id, then code; invalid records
 suppress dependent errors while independent records continue. Whole-input
@@ -307,9 +336,11 @@ The complete catalogue follows. Each action names
 Schema reasons are the literal strings `invalid JSON`,
 `unsupported schemaVersion`, `unknown field`, `missing field`,
 `invalid type or value`, `duplicate judgment id`, `duplicate judgment root`,
-`duplicate source citation` and `non-canonical <array> array for judgment <id>`.
-Source reasons are `invalid UTF-8`,
-`TypeScript parse error <code> at <line:column>` and
+`duplicate source citation`, `non-canonical <array> array for judgment <id>`,
+`non-canonical spans table`, `invalid span id`, `unknown span id` (at a record's
+`selector/sources/<i>`) and `unreferenced span` (at `/spans/<id>`, reported
+under `<verdict-file>` while other records are still checked). Source reasons
+are `invalid UTF-8`, `TypeScript parse error <code> at <line:column>` and
 `unsupported structural shape at <anchor>` or
 `region <region> contains unsupported <construct>: use named property assignments with identifier or string-literal names`.
 A file-level verdict failure uses id `<verdict-file>` and claim
@@ -408,9 +439,10 @@ edits only `packages/kimchi/surface-judgments.json`. The fixture suite uses its
 own gateway and request verdict baselines under
 `checks/fixtures/surface-judgments/` and local expectations, which do not change
 when live claims or verdicts are reviewed. Deliberately edit the live verdict
-file, copying the current request selector, evidence summary and hash (or the
-hosted-gateway packet and hash) only as part of that review. There is no
-accept/update operation. Then run:
+file, copying the current request selector fact, evidence summary without
+`spans`, span hashes from `spans.json` and evidence hash (or the hosted-gateway
+packet and hash) only as part of that review. There is no accept/update
+operation. Then run:
 
 ```bash
 set -euETo pipefail
