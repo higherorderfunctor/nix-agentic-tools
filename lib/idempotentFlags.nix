@@ -61,6 +61,9 @@
   # subcommand. The `--opt=value` form needs no entry: it is one token and falls
   # through the `-*` arm.
   #
+  # `nat_skip` is 1 afterwards when the last token was a value option still
+  # waiting for its value.
+  #
   # A literal `--` stops the scan with `nat_sub="--"`, which no real subcommand
   # matches, so every gate declines rather than guessing.
   subcommandBlock = valueFlags:
@@ -84,15 +87,27 @@
       ]
     );
 
-  # Sets shell variable `var` to 1 when option `flag` occurs before any
-  # literal `--`, in either spelling — the exact token `--flag` (its value is
-  # the next token) or one token `--flag=value` — else 0. Only presence is
-  # read, never the value: the caller decides whether to inject, and the
-  # wrapped CLI resolves what the caller asked for. A token past `--` is a
-  # positional the wrapped CLI will not honour, so neither does this; an exact
-  # match keeps a prompt that merely mentions the flag from counting.
-  optionPresenceBlock = {
+  # The `case` patterns matching one option in argv: every long name (`flag` and
+  # its `aliases`) as `--name` or `--name=value`, and the short name as `-x`,
+  # plus the attached form (`-x` directly followed by its value) when the option takes a value. A short
+  # option inside a cluster (`-vw`) is not matched.
+  optionPatterns = {
     flag,
+    aliases ? [],
+    short ? null,
+    takesValue ? true,
+  }:
+    lib.concatMap (name: [(lib.escapeShellArg name) "${lib.escapeShellArg name}=*"]) ([flag] ++ aliases)
+    ++ lib.optional (short != null) (lib.escapeShellArg short + lib.optionalString takesValue "*");
+
+  # Sets shell variable `var` to 1 when any of `options` (records for
+  # `optionPatterns`) occurs before any literal `--`, else 0. Only presence is
+  # read, never the value: the caller decides whether to inject, and the wrapped
+  # CLI resolves what the caller asked for. A token past `--` is a positional
+  # the wrapped CLI will not honour, so neither does this; an exact match keeps
+  # a prompt that merely mentions the option from counting.
+  anyOptionBlock = {
+    options,
     var,
   }:
     lib.concatStringsSep "\n" [
@@ -100,10 +115,47 @@
       "for nat_arg in \"$@\"; do"
       "  case \"$nat_arg\" in"
       "    --) break ;;"
-      "    ${lib.escapeShellArg flag}|${lib.escapeShellArg flag}=*) ${var}=1 ;;"
+      "    ${lib.concatStringsSep "|" (lib.concatMap optionPatterns options)}) ${var}=1 ;;"
       "  esac"
       "done"
     ];
+
+  # `anyOptionBlock` for one option: `{flag, aliases?, short?, takesValue?, var}`.
+  optionPresenceBlock = {var, ...} @ option:
+    anyOptionBlock {
+      inherit var;
+      options = [(removeAttrs option ["var"])];
+    };
+
+  # Adds the argv word `token` of each option that the caller has not already
+  # passed (see `optionPatterns` for the spellings), just before an
+  # end-of-options `--` when argv has one — a token past it is a positional —
+  # and last otherwise. `options` are `optionPatterns` records plus `token`;
+  # injected words keep the list's order. An empty list yields "".
+  injectOptionsBlock = options:
+    if options == []
+    then ""
+    else
+      lib.concatStringsSep "\n" (
+        ["nat_inject=()"]
+        ++ lib.concatMap (option: [
+          (optionPresenceBlock (removeAttrs option ["token"] // {var = flagVar option.flag;}))
+          "if [ \"\$${flagVar option.flag}\" = 0 ]; then nat_inject+=(${lib.escapeShellArg option.token}); fi"
+        ])
+        options
+        ++ [
+          "if [ \"\${#nat_inject[@]}\" -gt 0 ]; then"
+          "  nat_argv=()"
+          "  nat_placed=0"
+          "  for nat_arg in \"$@\"; do"
+          "    if [ \"$nat_placed\" = 0 ] && [ \"$nat_arg\" = -- ]; then nat_argv+=(\"\${nat_inject[@]}\"); nat_placed=1; fi"
+          "    nat_argv+=(\"$nat_arg\")"
+          "  done"
+          "  if [ \"$nat_placed\" = 0 ]; then nat_argv+=(\"\${nat_inject[@]}\"); fi"
+          "  set -- \"\${nat_argv[@]}\""
+          "fi"
+        ]
+      );
 
   # flags    : boolean flag strings, e.g. [ "--tui" "--v3" ].
   # position : "prepend" for a CLI-global option (before any subcommand);
@@ -142,7 +194,7 @@
         )
     );
 in {
-  inherit idempotentFlagBlock optionPresenceBlock subcommandBlock;
+  inherit anyOptionBlock idempotentFlagBlock injectOptionsBlock optionPresenceBlock subcommandBlock;
 
   # The `subcommands` entry standing for an invocation that carries NO
   # subcommand — `kiro-cli` on its own. Named rather than written as a bare ""
