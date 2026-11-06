@@ -173,9 +173,11 @@ in {
     injections = cliOptions.injections launchOptions;
     # `bareChatBlock` runs first, so `chatBlock` sees the rewritten bare launch.
     # The rewrite needs the scan's `nat_skip` to be 0: after `kiro-cli --agent`
-    # the appended `chat` would be taken as the agent's value.
+    # the appended `chat` would be taken as the agent's value. It also needs
+    # `nat_positional` to be 0: an empty-string argument is a positional too.
     bareChatBlock = lib.optionalString (injections.chat != []) (gateOnSubcommand {
         subcommands = [bareInvocation];
+        positionalVar = "nat_positional";
         valueFlags = launchValueFlags;
       } (lib.concatStringsSep "\n" [
         (anyOptionBlock {
@@ -183,7 +185,7 @@ in {
           shorts = cliOptions.shortOptions.top;
           var = "nat_once";
         })
-        "if [ \"$nat_once\" = 0 ] && [ \"$nat_skip\" = 0 ]; then set -- \"$@\" chat; fi"
+        "if [ \"$nat_once\" = 0 ] && [ \"$nat_skip\" = 0 ] && [ \"$nat_positional\" = 0 ]; then set -- \"$@\" chat; fi"
       ]));
     # `chat` has a short name for a setting (`-w`), so its scan reads clusters
     # (`-vw`); no `acp` setting has one.

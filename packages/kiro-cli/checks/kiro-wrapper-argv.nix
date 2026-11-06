@@ -232,6 +232,14 @@
         '--v3|acp|--authMethod=cli|--agent-engine=v3'                     "$O" acp --authMethod=cli
       expect "caller's acp --auth-method value is not doubled" \
         '--v3|acp|--auth-method|cli|--agent-engine=v3'                    "$O" acp --auth-method cli
+      expect "caller's acp --authMethod value is not doubled" \
+        '--v3|acp|--authMethod|cli|--agent-engine=v3'                     "$O" acp --authMethod cli
+      # A caller's chat --mode wins in both spellings, even though `mode = spec`
+      # is configured: no second --mode is added.
+      expect "caller's --mode value wins over the configured spec" \
+        '--v3|chat|--mode|default|--require-mcp-startup|--wrap=never'     "$O" chat --mode default
+      expect "caller's --mode=default wins over the configured spec" \
+        '--v3|chat|--mode=default|--require-mcp-startup|--wrap=never'     "$O" chat --mode=default
       # A token past `--` is a positional: it neither suppresses nor receives.
       expect "chat options go before --, and a --wrap past it does not count" \
         '--v3|chat|--mode=spec|--require-mcp-startup|--wrap=never|--|--wrap=always' "$O" chat -- --wrap=always
@@ -274,6 +282,16 @@
       expect "login is not rewritten"          '--v3|login'               "$O" login
       expect "a bare launch prompt is not rewritten" \
         '--v3|offline prompt'                                             "$O" 'offline prompt'
+      # One-off options with no chat meaning, and the `--list` alias of
+      # `--resume-picker`, leave a bare launch untouched.
+      expect "--resume-picker is not rewritten" '--v3|--resume-picker'    "$O" --resume-picker
+      expect "--list is not rewritten"         '--v3|--list'              "$O" --list
+      # An empty-string argument is a positional (a subcommand of no name), not
+      # the absence of one, so `chat` is inserted for neither.
+      expect "an empty argument is not rewritten" \
+        '--v3|'                                                           "$O" ""
+      expect "an empty argument before settings is not rewritten" \
+        '--v3||settings'                                                  "$O" "" settings
       expect "-- is not rewritten"             '--v3|--'                  "$O" --
       expect "-- then options is not rewritten" '--v3|--|--wrap'          "$O" -- --wrap
       # `chat` appended after a value option that has no value would be read as

@@ -69,12 +69,20 @@
   #
   # A literal `--` stops the scan with `nat_sub="--"`, which no real subcommand
   # matches, so every gate declines rather than guessing.
-  subcommandBlock = valueFlags:
+  #
+  # An empty-string argument is a positional whose text is "", so `nat_sub` alone
+  # cannot tell it from no subcommand. A caller that must (`gateOnSubcommand`'s
+  # `positionalVar`) names a variable the scan sets to 1 when it found a
+  # positional and to 0 otherwise; the text is unchanged without one.
+  subcommandScan = {positionalVar ? null}: valueFlags:
     lib.concatStringsSep "\n" (
       [
         # Plain (not indented) Nix strings throughout: `''…''` strips the common
         # leading whitespace, which would flatten this block's indentation.
         "nat_sub=\"\""
+      ]
+      ++ lib.optional (positionalVar != null) "${positionalVar}=0"
+      ++ [
         "nat_skip=0"
         "for nat_arg in \"$@\"; do"
         "  if [ \"$nat_skip\" = 1 ]; then nat_skip=0; continue; fi"
@@ -84,11 +92,13 @@
       ++ lib.optional (valueFlags != []) "    ${altPattern valueFlags}) nat_skip=1 ;;"
       ++ [
         "    -*) ;;"
-        "    *) nat_sub=\"$nat_arg\"; break ;;"
+        "    *) nat_sub=\"$nat_arg\"; ${lib.optionalString (positionalVar != null) "${positionalVar}=1; "}break ;;"
         "  esac"
         "done"
       ]
     );
+
+  subcommandBlock = subcommandScan {};
 
   # The `case` patterns matching one option's long spellings in argv: `flag`
   # and its `aliases`, as `--name` or `--name=value`.
@@ -296,10 +306,13 @@ in {
   # Wraps `body` so it runs only when the invocation's subcommand is one of
   # `subcommands` (include `bareInvocation` to cover the bare launch). Emits the
   # `nat_sub` detection itself, so a caller passes `valueFlags` rather than
-  # sequencing two blocks by hand. An empty `body` yields "" — no gate is
+  # sequencing two blocks by hand. `positionalVar` (null: none) names the
+  # variable that tells an empty-string positional from no subcommand, see
+  # `subcommandScan`. An empty `body` yields "" — no gate is
   # emitted for an injection that has nothing to inject.
   gateOnSubcommand = {
     subcommands,
+    positionalVar ? null,
     valueFlags ? [],
   }: body:
     lib.throwIf (subcommands == [])
@@ -309,7 +322,7 @@ in {
       then ""
       else
         lib.concatStringsSep "\n" [
-          (subcommandBlock valueFlags)
+          (subcommandScan {inherit positionalVar;} valueFlags)
           "case \"$nat_sub\" in"
           "  ${altPattern subcommands})"
           (indentBlock (indentBlock body))
