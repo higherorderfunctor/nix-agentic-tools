@@ -283,9 +283,13 @@ while that derivation's install phase still names the pre-3.0 files
 with `stdenv.mkDerivation` (`sourceRoot = "kirocli"`, `versionCheckHook` with
 `doInstallCheck = true`) and, on Linux, builds its own `pkgs.buildFHSEnv` around
 it (targets: the payload, `stdenv.cc.cc.lib`, `wl-clipboard`; the runScript
-execs the payload's `kiro-cli`), so `bin/` holds exactly one command. One
-`releaseUrls` table feeds both the fetched sources and the updater, so a build
-that fetches a platform's tarball proves the updater's URL for it.
+execs the payload's `kiro-cli`), so `bin/` holds exactly one command. The
+updater (`packages/kiro-cli/lib/release.nix`) reads Kiro's
+`latest/manifest.json` once and picks each Nix system's entry by `targetTriple`
+and `fileType`, since the musl tarballs share every other field with the glibc
+ones. It writes the entry's URL to `sources.json`, which the package fetches, so
+a renamed artifact fails the update naming the system, its selector and the
+manifest's downloads.
 
 The earlier thin `overrideAttrs` shape degraded to a SILENT no-op — not an error
 — when nixpkgs f13ff45a split `kiro-cli` into `kiro-cli-unwrapped` plus a public

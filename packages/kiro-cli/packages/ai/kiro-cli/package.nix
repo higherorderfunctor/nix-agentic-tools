@@ -12,30 +12,26 @@
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
 
-  # Release-asset URL per Nix system: the single source for the fetched
-  # sources, the updateScript's URL templates and `meta.platforms`. A PR build
-  # that fetches a platform's tarball therefore proves the URL the updater
-  # will prefetch for it. Since 3.0.0 both platforms ship the same
-  # `kirocli/bin/kiro-cli` tarball layout; Darwin's is one universal binary.
-  releaseUrls = {
-    "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-universal-darwin.tar.gz";
-    "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
-  };
+  # The release manifest's selector per Nix system is the single source for
+  # the supported systems; the fetched URL per system is the one the updater
+  # wrote to sources.json from that manifest. Since 3.0.0 both platforms ship
+  # the same `kirocli/bin/kiro-cli` tarball layout; Darwin's is one universal
+  # binary.
+  release = import ../../../lib/release.nix;
 
   # Every platform's release is fetchable on any host, which is what lets one
   # host extract them all. The explicit name carries the version, because the
   # URL basename does not.
   releaseSourceFor = target:
     fetchurl {
-      url = releaseUrls.${target} sources.version;
-      inherit (sources.${target}) hash;
+      inherit (sources.${target}) hash url;
       name = "kiro-cli-source-${sources.version}-${target}.tar.gz";
     };
   # Both selected prompt patches and rollout features follow every public,
   # direct and FHS payload route. The native output binds one selected KAS;
   # KAS depends only on the fetched release input, never on the native output.
   releaseSource =
-    if releaseUrls ? ${system}
+    if release.selectors ? ${system}
     then releaseSourceFor system
     else throw "kiro-cli: unsupported system ${system}";
   sourceRoot = "kirocli";
@@ -143,11 +139,8 @@
           });
 
         passthru = {
-          updateScript = vu.mkUpdateScript {
+          updateScript = release.mkUpdateScript {
             sourcesFile = repoPath ../../../sources.json;
-            pname = "kiro-cli";
-            versionCheck.cmd = "${pkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${pkgs.jq}/bin/jq -r '.version'";
-            platforms = releaseUrls;
             inherit pkgs;
           };
 
@@ -161,7 +154,7 @@
               inherit pkgs;
               release = releaseSourceFor target;
             }))
-          releaseUrls;
+          release.selectors;
 
           inherit autoUpdateWrapperFlags kas;
           withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches;
@@ -173,7 +166,7 @@
           homepage = "https://kiro.dev";
           license = pkgs.lib.licenses.unfree;
           mainProgram = "kiro-cli";
-          platforms = builtins.attrNames releaseUrls;
+          platforms = builtins.attrNames release.selectors;
           sourceProvenance = [pkgs.lib.sourceTypes.binaryNativeCode];
         };
       }
