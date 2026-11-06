@@ -1,24 +1,21 @@
 ## heron_brook Delegation Clamp — the escape clause
 
-> **Last verified:** 2026-10-09 (commit e114ff95) — the mitigation lives in
-> delegate-routing’s per-turn reminder; Claude retains the dated CI review and
-> its guard.
+> **Last verified:** 2026-11-06 — Claude Code 2.1.319 still ships the clamp with
+> its CLAUDE.md-or-skill escape clause; the mitigation lives in
+> delegate-routing’s per-turn reminder, and nothing watches upstream for its
+> removal.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
 >
 > - **A per-update version tripwire was TRIED and REJECTED.** It compared the
 >   pinned claude-code version against a recorded `verifiedClaudeVersion`, so it
->   went red on every release and was right on none of them — three discharges,
->   all clean. What replaced it is a ~90-day dated reminder scoped to the
->   claude-code update PR, plus an eval-only guard that the two agree on the
->   branch name.
-> - **`packages/claude-code/checks/claude-heron-brook.nix` anchors on the
->   reminder step's `- name:` line**, and reads its gate from within that step's
->   line range. It used to require exactly ONE `head_ref == 'update/…'` gate in
->   the whole file, which was correct while this was the only such step and went
->   red the moment a second tripwire added its own. The guard couples to the
->   STEP NAME by design — rename the step and it throws.
+>   went red on every release and was right on none of them.
+> - **A ~90-day dated review was TRIED and REJECTED.** A `ci.yml` step on the
+>   claude-code update PR failed past a `reviewBy` date. Its only job was to
+>   find out when the grant could be dropped, and a grant left behind after
+>   upstream removes the clamp does no harm, so the calendar only turned bot PRs
+>   red. Removed 2026-11-06.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
@@ -53,43 +50,21 @@ Re-derive these properties before rewording the permission grant:
 4. It grants permission rather than mandating delegation; the agent retains
    judgment about whether delegation fits the task.
 
-### The reminder, and why it is not a check
+### Checking upstream by hand
 
-A mitigation for undocumented vendor behavior must not outlive its cause — but
-the check that used to enforce that was the wrong instrument. It compared the
-pinned claude-code version against a recorded `verifiedClaudeVersion`, which is
-a **proxy**: it cannot tell "the clamp changed" from "the version number moved",
-so it went red on every claude-code release and was right on none of them.
+Nothing re-checks the clamp on a claude-code bump. To see whether a release
+still ships it, download the pinned binary from `sources.json` and grep it. The
+positive control is not optional; a clean negative from an unverified grep on a
+~300 MB binary proves nothing:
 
-What replaced it:
+```bash
+grep -ac 'NotebookEdit' "$B"              # control, must be >0
+grep -ac 'or a skill asks for it' "$B"    # 0 => clause changed or fixed
+grep -ac 'tengu_heron_brook' "$B"         # the gate
+```
 
-- **A dated step in `ci.yml`'s `test` job** fails once
-  `config/heron-brook-tripwire.json`'s `reviewBy` passes, gated on
-  `head_ref == 'update/claude-code'` so it touches no other PR. It cannot be a
-  Nix check — reading the date in a derivation is impure and cached. **The
-  discharge procedure, with its mandatory positive control, is the comment
-  directly above that step.** Read it there; it is deliberately not duplicated
-  here.
-- **`packages/claude-code/checks/claude-heron-brook.nix`** is now an eval-only
-  guard on that gate. It reads the branch name back out of `ci.yml` and fails if
-  no such update target exists, so renaming the target cannot silently stop the
-  reminder from ever firing again. No binary, no IFD, no derivation.
-
-  It finds that gate by **anchoring on the step's `- name:` line** and reading
-  only the lines between it and the next step. The obvious alternative —
-  matching `update/claude-code` directly — would defeat the guard entirely, by
-  making it a third copy of the name it exists to verify. The obvious cheaper
-  one, taking the first gate in the file, is what it used to do; that broke once
-  a second tripwire step gained its own gate. Bounding at the next step also
-  matters: without it, a heron_brook step that LOST its `if:` would silently
-  validate the following step's gate instead.
-
-  The cost is a coupling to the step name. **Rename that step and this guard
-  throws**, naming the string to update. That is deliberate — the alternative is
-  a guard that quietly stops guarding.
-
-Discharging means verifying that delegate-routing’s per-turn reminder still
-satisfies the clamp’s escape clause and bumping `reviewBy` ~90 days, or — if
-upstream fixed it — **dropping the permission grant from delegate-routing’s
-per-turn reminder and deleting the ci.yml step and that guard together**. An
-expired justification is a finding, not a formality to bump past.
+Presence is the signal, never the count: grep counts lines and the bundle is
+minified, so counts drift with no behavior change. If upstream fixed it, drop
+the permission grant from delegate-routing’s per-turn reminder. Upstream tracks
+it in
+[anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988).
