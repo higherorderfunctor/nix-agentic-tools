@@ -63,26 +63,40 @@ if (!flags["--isolation-child"]) {
     rmSync(temporary, { recursive: true, force: true });
   }
 }
-const baseline = Object.fromEntries(
-  verdicts.judgments.map(({ id, packet, evidenceHash }) => [
-    id,
-    { packet, evidenceHash },
-  ]),
-);
 const messages = read("expected/diagnostics.json");
+const cases = [...read("cases.json"), ...read("requests/cases.json")];
 for (const script of ["packet.mjs", "check.mjs"])
   assert.doesNotMatch(
     readFileSync(join(scripts, script), "utf8"),
     /child_process|node:(?:net|https?)|\bfetch\s*\(/,
     "packet scripts must not launch models or use the network",
   );
-for (const test of read("cases.json")) {
+for (const test of cases) {
+  assert.ok(
+    test.rejects?.trim(),
+    `${test.name}: name the wrong implementation`,
+  );
   const temporary = mkdtempSync(join(tmpdir(), "kimchi-judgments-"));
   try {
+    const base = test.base ?? "base";
+    if (test.base)
+      assert.ok(
+        test.base === "requests/base",
+        `${test.name}: request cases patch the shared baseline`,
+      );
+    const records = read(`${base}/verdicts.json`);
+    const baseline = Object.fromEntries(
+      records.judgments.map(({ id, packet, evidenceHash }) => [
+        id,
+        { packet, evidenceHash },
+      ]),
+    );
     const files = {
-      source: read("base/source.json"),
-      facts: JSON.stringify(read("base/facts.json")),
-      verdicts: JSON.stringify(verdicts),
+      ...(test.base
+        ? read(`${base}/sources.json`)
+        : { source: read("base/source.json") }),
+      facts: JSON.stringify(read(`${base}/facts.json`)),
+      verdicts: JSON.stringify(records),
     };
     if (test.hiddenRegion)
       files.source = `const HOSTED = { llmBaseUrl: "https://ap.example" };
@@ -95,9 +109,23 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
       );
       files[edit.file] = files[edit.file].replace(edit.from, edit.to);
     }
+    for (const patch of test.patches ?? []) {
+      const value = JSON.parse(files[patch.file]);
+      const keys = patch.path.split("/");
+      const key = keys.pop();
+      const parent = keys.reduce((item, part) => item[part], value);
+      if (patch.remove) {
+        if (Array.isArray(parent)) parent.splice(Number(key), 1);
+        else delete parent[key];
+      } else parent[key] = patch.value;
+      files[patch.file] = JSON.stringify(value);
+    }
     if (test.reverseFacts) {
       const facts = JSON.parse(files.facts);
-      facts.regionRegistry.fields.reverse();
+      (test.base
+        ? facts.requestCallers
+        : facts.regionRegistry.fields
+      ).reverse();
       files.facts = JSON.stringify(facts);
     }
     if (test.unorderedArray) {
@@ -119,11 +147,18 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
       judgment.evidenceHash = hash(canonical(judgment.packet));
       files.verdicts = JSON.stringify(records);
     }
-    mkdirSync(join(temporary, "src"));
-    writeFileSync(
-      join(temporary, "src/regions.ts"),
-      test.invalidUtf8 ? Buffer.from([0xff]) : files.source,
-    );
+    for (const [path, source] of Object.entries(files)) {
+      if (["facts", "verdicts"].includes(path)) continue;
+      const target = join(
+        temporary,
+        path === "source" ? "src/regions.ts" : path,
+      );
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(
+        target,
+        !test.base && test.invalidUtf8 ? Buffer.from([0xff]) : source,
+      );
+    }
     for (const name of ["facts", "verdicts"])
       writeFileSync(join(temporary, `${name}.json`), files[name]);
     const run = (args) =>
@@ -131,7 +166,7 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
         encoding: "utf8",
       });
     const out = join(temporary, "packets");
-    const result = run([
+    const args = [
       "--facts",
       join(temporary, "facts.json"),
       "--verdicts",
@@ -144,7 +179,8 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
       "x86_64-linux",
       "--out",
       out,
-    ]);
+    ];
+    const result = run(args);
     assert.equal(result.status, 0, `${test.name}: ${result.stderr}`);
     const artifacts = Object.fromEntries(
       ["current", "diff", "display", "status"].map((name) => [
@@ -168,10 +204,14 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
         `${test.name}: unresolved evidence cannot have a complete hash`,
       );
     if (test.unchanged)
-      for (const [id, expected] of Object.entries(baseline))
+      for (const id of test.unchanged === true
+        ? Object.keys(baseline)
+        : test.unchanged)
         assert.deepEqual(
-          artifacts["current.json"][id],
-          expected,
+          test.base
+            ? artifacts["current.json"][id]?.evidenceHash
+            : artifacts["current.json"][id],
+          test.base ? baseline[id].evidenceHash : baseline[id],
           `${test.name}: rejects ${test.rejects}`,
         );
     for (const [pointer, expected] of Object.entries(test.expect ?? {}))
@@ -189,6 +229,14 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
         test.name,
       );
     const diagnostics = readFileSync(join(out, "diagnostics.txt"), "utf8");
+    if (test.failureIds)
+      assert.deepEqual(
+        [...diagnostics.matchAll(/^Judgment: (.+)$/gm)].map(
+          (match) => match[1],
+        ),
+        test.failureIds,
+        `${test.name}: failure isolation`,
+      );
     if (messages[test.name])
       assert.equal(diagnostics, messages[test.name], test.name);
     for (const detail of test.details ?? [])
@@ -201,6 +249,20 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
         diagnostics.includes(`[${code}]`),
         `${test.name}: readable failure code`,
       );
+    if (test.repeat) {
+      assert.equal(run(args).status, 0, `${test.name}: repeat checker run`);
+      for (const [name, expected] of Object.entries(artifacts))
+        assert.deepEqual(
+          JSON.parse(readFileSync(join(out, name), "utf8")),
+          expected,
+          `${test.name}: repeatable ${name}`,
+        );
+      assert.equal(
+        readFileSync(join(out, "diagnostics.txt"), "utf8"),
+        diagnostics,
+        `${test.name}: repeatable diagnostics`,
+      );
+    }
     const gate = spawnSync(
       flags["--jq"] ?? "jq",
       ["-e", ".ok", join(out, "status.json")],
@@ -221,5 +283,5 @@ ${files.source.replace("\tus: {", `\tap: { ${test.hiddenRegion} },\n\tus: {`)}`;
   }
 }
 console.log(
-  `ok: ${read("cases.json").length} surface judgment fixtures; packets and gate preserve verdict bytes.`,
+  `ok: ${cases.length} surface judgment fixtures; packets and gate preserve verdict bytes.`,
 );

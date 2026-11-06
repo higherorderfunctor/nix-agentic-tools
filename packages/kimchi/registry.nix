@@ -95,7 +95,7 @@
         }
       ];
     };
-    # Fingerprinted claims over declared hosted gateways and their source spans.
+    # Context for fingerprinted claims over hosted gateways and request occurrences.
     kimchi-surface-judgments = {
       scopes = [
         "packages/${facetOwner}/checks/fixtures/surface-judgments/**"

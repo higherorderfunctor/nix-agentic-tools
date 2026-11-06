@@ -115,6 +115,7 @@ catchable
 catppuccin
 cctools
 checkin
+claudecode
 clearenv
 clicolor
 cliproxyapi
@@ -337,6 +338,7 @@ mpim
 mtimes
 multimodel
 multiset
+multisets
 multivar
 mystor
 napi
@@ -359,6 +361,7 @@ noexplore
 nohup
 nomodel
 nonblank
+noncanonical
 nosub
 nosuid
 noyolo
@@ -537,6 +540,7 @@ unbilled
 unbuildable
 uncacheable
 uncallable
+uncited
 uncompiled
 undici
 undmg
@@ -544,6 +548,7 @@ unforked
 ungated
 ungroomed
 unhide
+unjudged
 unmappable
 unparameterized
 unparseable
@@ -551,6 +556,7 @@ unpatchable
 unredacted
 unrepresentable
 unresumable
+unreviewed
 unscanned
 unsetenv
 unsets

@@ -73,6 +73,1817 @@
       "verdict": "unknown"
     },
     {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:deddd0617b7c5a77255458476f63fcf9e1906072f1f52eca2ea5922f0cc73417",
+      "id": "request-cli-auth-oauth-list-user-organizations-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:listUserOrganizations", 0]]
+              },
+              "path": "src/cli-auth/oauth.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:5d58d6b542e4d9a4162952a747e7460d61174537570cdc81dc5d5d79cfe3127b",
+        "root": "sha256:3cb4608571069a5e5b6a012ea3eddbe8b6f8032f6e6f354341eb18184b531880",
+        "rows": [
+          "sha256:1a1b249e14b1cbe4446bcacf1e5d949a7d7cd1ee447965910fc043a50b35f386",
+          "sha256:20bd665ae7355d0e7b8ef85d750cf48fba182831660a648d56b8b648a921b3c9",
+          "sha256:2bdc7b340cdea0f929b45f2e03c8fce5d978f392d2931bada2d6dc5e16b253e3",
+          "sha256:3f21c2e2bd1d23673b8a2a1026479aa12809e86e5b9b6678e82d31ddef1978c6",
+          "sha256:71e388db5c1e1ff13b0d30cf95f3be4012dfbb5fbe3f0ee4ad6dbadab4d5e5cd",
+          "sha256:8d2fa853ae703a37b1e8d646c6db32c7d52da18932e9ee5beab596999c16374d",
+          "sha256:abc5e160c7c990d414b6165abe2b83bf123b53a4eeb6141f1413ddb405ca047d",
+          "sha256:dfacf692682c4f534a4dc7a9251f89c3c398a5ac61376c6a658043229a78caf0"
+        ],
+        "spans": [],
+        "statement": "sha256:7fe567776de595cc0f8777a7277cee48a7a5577542c0bbcea4ca197cd0880adc"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:d6fa19a98665d1129a16199d89ca4dcabafa8b4f71c5be1b189eb37f8270a08f",
+      "id": "request-cli-auth-oauth-post-token-request-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:postTokenRequest", 0]]
+              },
+              "path": "src/cli-auth/oauth.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:a5e47b94fcd2a511488b519a151de3a77d20a0be6bce7b67c7fae2a35b7c9bf7",
+        "root": "sha256:df8f17d6e56d7dc6680bc556645d914884af40db57d65f6a3b9d011bb68a1d09",
+        "rows": [
+          "sha256:0a9dcd0371e97935defd89e6069a6f25b70cc26e53142f7202d38c00a856c969",
+          "sha256:1a1b249e14b1cbe4446bcacf1e5d949a7d7cd1ee447965910fc043a50b35f386",
+          "sha256:20bd665ae7355d0e7b8ef85d750cf48fba182831660a648d56b8b648a921b3c9",
+          "sha256:2bdc7b340cdea0f929b45f2e03c8fce5d978f392d2931bada2d6dc5e16b253e3",
+          "sha256:3dbd1e067c6e3a776ce549a48c5eb06104d44c17f563262294d506b07248ad82",
+          "sha256:6123034521cc3e89a861d7e48c8cf1eb3f14a91d24d3afcc721388236354afc2",
+          "sha256:8d2fa853ae703a37b1e8d646c6db32c7d52da18932e9ee5beab596999c16374d",
+          "sha256:abc5e160c7c990d414b6165abe2b83bf123b53a4eeb6141f1413ddb405ca047d",
+          "sha256:c9caea37aaa2e68c6b5d75317c781ae8248d4493c44c5746e42bbceeb455aea5",
+          "sha256:dfacf692682c4f534a4dc7a9251f89c3c398a5ac61376c6a658043229a78caf0",
+          "sha256:f0a50b6613dad1faa73e3ea36aefbd3f61704f6183e4de28b61b8a571119e940"
+        ],
+        "spans": [],
+        "statement": "sha256:5b889ed7681e596947911ba331b66209d249e4e9029adbc66df8f45eed28fa70"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:48639e7f367b2fcec94fef24b2d5bc5ebd504b06b6150fb082a851c49c6e42a8",
+      "id": "request-extensions-billing-status-refresh-billing-status-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchImpl",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:refreshBillingStatus", 0]]
+              },
+              "path": "src/extensions/billing/status.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:e5a5bbcf598b84e968bc2b7946146174f6a0eba79b61ecb215e04a1ca867fac3",
+        "root": "sha256:f8d792ac059565bbd418060eaedbfadea72ebdf2289d590eb8561d4d8477f369",
+        "rows": [
+          "sha256:074692446292a9cc1f72dc3e9cd38a2d771f1e72132c687d32d70698a8acf29e",
+          "sha256:08e3f50218abb96d973c7b116633a834b343a9b7e0a8bde03405a670771b8cbe",
+          "sha256:22730eda2a7d87abd95b9b34c15b765a5c767204ad903968d9bb401b2120dfe4",
+          "sha256:3468e4631a3005029ff366189ade186822d69269f67bec6d9230dc7903427760",
+          "sha256:348767107896e985686cb57b29f1417a1cd44eca1b8951936017b4e604c839d4",
+          "sha256:386895052f160797145f4d4dec57b1e73a9eed743571ec83083c47d1ee7c9a87",
+          "sha256:710d3451d435e5160fd677e976ec2fdfc07b8d23d8e3f766a5af204102b03574",
+          "sha256:75640f48a71c04046069e6cc32fca5b0775710457e352211f5d3940e412978ed",
+          "sha256:842464cbd965a09087d689addc8d615cf8601b2397c70459eda0805d46c99232",
+          "sha256:842bd0533778d1b3f234d8ed03f85a731a36a81f42693f73011b2f38ad2547c0",
+          "sha256:89ce4acefb3f120890598564bab3b87c6173877d461bdc10ed8117c4f4db018d",
+          "sha256:8c8261341b14996b501c32e13ad12edf8f7c591e73cdd7a1b22089714888b44e",
+          "sha256:94a84880e861c5abc41d0515a27deb951767c4877223fa686ed49cef26497685",
+          "sha256:a8288e63b8c0e4b0da8a9a69b5fa52e5c4355347c4a175d15eb9e2fd810120fa",
+          "sha256:b13b9a110ce9a0af4caaaba989333bf26329a856d210a890424aa18cc7d32ba5",
+          "sha256:d966ee4e85a180654d8a737e22ef55d3ad48f798f5466cf34ba25852fa2fb9ff",
+          "sha256:db819c2c501dd83e768f4f8e3e93bf39d2fbfeb57c95a74446b0437d3a8c2fbe",
+          "sha256:def4efb7867340f23f370ea110a2ab8be1fcc7aff1dfaee644d946dbc2098d9b",
+          "sha256:dfbaa893cc9e9b8b28e7969b046ec5ebaf707cc2e48ca7d29d62fce94c4b1c1e",
+          "sha256:ecd8a734bcff775f00cabfb933e9bc656cbfb3d309d241752d0c8d90d2c948eb",
+          "sha256:fee110ef79ee993c48f7d1719b847519dd037ea19a4aa61cb92b2ab139098d69",
+          "sha256:ffdec72edfc61df9fc7fd381a793a669a132bf2c9c39b6d59c6c96bb7c78c88d"
+        ],
+        "spans": [],
+        "statement": "sha256:3f85ae58f72f43c0985cd6440bf6752b1992d44343023b46a3665d208535e93a"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:344adbaf72a10e129d26ecf6d121c77707c4159058f4a14209fddb651ee3e111",
+      "id": "request-extensions-billing-status-refresh-budget-status-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchImpl",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:refreshBudgetStatus", 0]]
+              },
+              "path": "src/extensions/billing/status.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:0dea8f80e8c1dd2135901ae12748007b882bf217bf2400b407100704b816ca9a",
+        "root": "sha256:61cf536ae96d193d56fd9bf0f2e4a7bd34d6e22f1dc1e0c55fc604ce217a5be6",
+        "rows": [
+          "sha256:074692446292a9cc1f72dc3e9cd38a2d771f1e72132c687d32d70698a8acf29e",
+          "sha256:08e3f50218abb96d973c7b116633a834b343a9b7e0a8bde03405a670771b8cbe",
+          "sha256:112683c56483344447e8bee0ed92257f9a9319efbd238d86a03f530ccf7f8c2f",
+          "sha256:22730eda2a7d87abd95b9b34c15b765a5c767204ad903968d9bb401b2120dfe4",
+          "sha256:3468e4631a3005029ff366189ade186822d69269f67bec6d9230dc7903427760",
+          "sha256:348767107896e985686cb57b29f1417a1cd44eca1b8951936017b4e604c839d4",
+          "sha256:386895052f160797145f4d4dec57b1e73a9eed743571ec83083c47d1ee7c9a87",
+          "sha256:710d3451d435e5160fd677e976ec2fdfc07b8d23d8e3f766a5af204102b03574",
+          "sha256:75640f48a71c04046069e6cc32fca5b0775710457e352211f5d3940e412978ed",
+          "sha256:842464cbd965a09087d689addc8d615cf8601b2397c70459eda0805d46c99232",
+          "sha256:842bd0533778d1b3f234d8ed03f85a731a36a81f42693f73011b2f38ad2547c0",
+          "sha256:89ce4acefb3f120890598564bab3b87c6173877d461bdc10ed8117c4f4db018d",
+          "sha256:8c8261341b14996b501c32e13ad12edf8f7c591e73cdd7a1b22089714888b44e",
+          "sha256:94a84880e861c5abc41d0515a27deb951767c4877223fa686ed49cef26497685",
+          "sha256:b13b9a110ce9a0af4caaaba989333bf26329a856d210a890424aa18cc7d32ba5",
+          "sha256:d966ee4e85a180654d8a737e22ef55d3ad48f798f5466cf34ba25852fa2fb9ff",
+          "sha256:d978d7b0d3e33c83ff8282502d209a2fd342ef07b5b18b101ab8360a53710183",
+          "sha256:db819c2c501dd83e768f4f8e3e93bf39d2fbfeb57c95a74446b0437d3a8c2fbe",
+          "sha256:def4efb7867340f23f370ea110a2ab8be1fcc7aff1dfaee644d946dbc2098d9b",
+          "sha256:dfbaa893cc9e9b8b28e7969b046ec5ebaf707cc2e48ca7d29d62fce94c4b1c1e",
+          "sha256:ecd8a734bcff775f00cabfb933e9bc656cbfb3d309d241752d0c8d90d2c948eb",
+          "sha256:fee110ef79ee993c48f7d1719b847519dd037ea19a4aa61cb92b2ab139098d69"
+        ],
+        "spans": [],
+        "statement": "sha256:d81ada6f72357c31b4aafb7087ca5da7370cae1ab41896dfcf6391df571a82dd"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:68aef051be985d3f288816867e51c0a21e49844a88e2cb3774d9e2c3c9755224",
+      "id": "request-extensions-ide-adapter-mcp-client-ide-web-socket-transport-start-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "new:WebSocket",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["class:IdeWebSocketTransport", 0],
+                  ["method:start", 0]
+                ]
+              },
+              "path": "src/extensions/ide-adapter/mcp-client.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:a63e00cc0448f209e490e66e19819b6ff94950baf4d1cad0dc5a18565f1d4f55",
+        "root": "sha256:d0c01e2a21d874eb981f3746834c7b39512f5384d0452153607d29303466280e",
+        "rows": [
+          "sha256:704506c4aebd20bc9024cfb5bea4e5ab4caa4f54db788f3cf98740fd70bdb80e",
+          "sha256:731a42730bf642b5ba7e6bd9494585f6b6b031fbf4d9f6a1c7298caa137761ed",
+          "sha256:efaea841c9b69daac46ad88e6543f91bb81835ce1048d0ac4e4d034f403a5e9c"
+        ],
+        "spans": [],
+        "statement": "sha256:2e38e4a3b4233e14c66fb52933b7ff058f923e0de9a9b73459f47a48d9e706a3"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:5515f85d08d6bb2050be70bf1d647734843463d4acaaa0016d43fd67448041b1",
+      "id": "request-extensions-memory-backend-fetch-available-model-ids-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchImpl",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:fetchAvailableModelIds", 0]]
+              },
+              "path": "src/extensions/memory/backend.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:7c453f6d223800d65eef006a1cbc118c71177516fb51c385b602d7f4ebbaa71b",
+        "root": "sha256:17379de51f174afd4fd99616ebfa020f4f43fc5cfd9c94ccb99cbbadd6e2cc7e",
+        "rows": [
+          "sha256:1fd613f1aab93ccb67d9dab5c2f67870e5455c622ebc9e0d9387dcd4b07d9ce2",
+          "sha256:46300a4790bec97f89979362bd0e38d324f74f55b83432ad7292400297c346cc",
+          "sha256:5fa0213fd0a6999042dcc520c6b2cf0cb2749a06aa24363449485969be3bc1cd",
+          "sha256:7e928746c0f1430faff71ef98dd0fcdf17118faa6b1c1b0e470cfb68860b09bc",
+          "sha256:953a08fa974d8a92dd78e9e7d9f560700a05b411b1ef146c20c24e6c97568208",
+          "sha256:df295f905401f5cfe8c07dd1fc3393fd801c4892f16ec79e9943eea525b27f27"
+        ],
+        "spans": [],
+        "statement": "sha256:facb4aff184652037fa31e32e727006fb6d1549b3eaedb0cd3c86ea2df34db9f"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:fd38b5d75657ffdeb0999774280f8897d12be7fe2f9cda2881370a6e71e47174",
+      "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:original",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["function:tagEmbeddingRequests", 0],
+                  ["function:intercepted", 0]
+                ]
+              },
+              "path": "src/extensions/memory/backend.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:203253ba0f1f29a715586eec68e341c50da1ec2d276fccce1bf6e6efb7546884",
+        "root": "sha256:a01cd3880cc86311dbe81a4adc74999ada5453e1e5508f5f254d4ee92a938f66",
+        "rows": [
+          "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
+          "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
+          "sha256:564a25b33e2eecf46d30f0d055e5b13ceb4be613fcbab4e6949352a1b7234377",
+          "sha256:d6b54aae8b4c1da5b51b9005625f88e9a866aaaa2106d9f82ee1873643e915f4"
+        ],
+        "spans": [],
+        "statement": "sha256:dd94fd56cf6d0b3f2dc4e4c4c1914fc2d095f70f54fdf6fc6a79d9b856b681b8"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:f9f47f313f586583c76f52281a29ea34a4ccbfd37b8e5c76a5e4296dba30244e",
+      "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-1",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:original",
+                  "kind": "call",
+                  "ordinal": 1
+                },
+                "symbol": [
+                  ["function:tagEmbeddingRequests", 0],
+                  ["function:intercepted", 0]
+                ]
+              },
+              "path": "src/extensions/memory/backend.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:2acbe57ebd77b2012b57547b83990d191cfc0d604470b3fcf6bc1329b315f584",
+        "root": "sha256:c1427ad8cb6de274c92a49a0fb5ac1d5a28f696cb9bbf85316ac4bb17a23250e",
+        "rows": [
+          "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
+          "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
+          "sha256:564a25b33e2eecf46d30f0d055e5b13ceb4be613fcbab4e6949352a1b7234377",
+          "sha256:d6b54aae8b4c1da5b51b9005625f88e9a866aaaa2106d9f82ee1873643e915f4"
+        ],
+        "spans": [],
+        "statement": "sha256:67ce43b2c19c3d1efeb0df71cafea4bc8d4cec2304a08d6b9f8b188092917e4f"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:68bab89b32266d2e401eecf6b7b1ba1eed756a38723ce0fd8b75eb973b699029",
+      "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-2",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:original",
+                  "kind": "call",
+                  "ordinal": 2
+                },
+                "symbol": [
+                  ["function:tagEmbeddingRequests", 0],
+                  ["function:intercepted", 0]
+                ]
+              },
+              "path": "src/extensions/memory/backend.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:522e6921e9b0cac55ab879d9769a52794931d2af7c668d92cb3fbd7affdc6185",
+        "root": "sha256:1576b08f3335dd963747e104886501376f2ebb857d1a883ece2e23d719043fa8",
+        "rows": [
+          "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
+          "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
+          "sha256:564a25b33e2eecf46d30f0d055e5b13ceb4be613fcbab4e6949352a1b7234377",
+          "sha256:d6b54aae8b4c1da5b51b9005625f88e9a866aaaa2106d9f82ee1873643e915f4"
+        ],
+        "spans": [],
+        "statement": "sha256:67ce43b2c19c3d1efeb0df71cafea4bc8d4cec2304a08d6b9f8b188092917e4f"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:198f95202c201af735c82d799b90361ac7deae815458f1a54e9a6040326beb94",
+      "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-3",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:original",
+                  "kind": "call",
+                  "ordinal": 3
+                },
+                "symbol": [
+                  ["function:tagEmbeddingRequests", 0],
+                  ["function:intercepted", 0]
+                ]
+              },
+              "path": "src/extensions/memory/backend.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:a48403471d8610196f5e70a3569c5d5804b1638a13c302ddece5d87e03f58dbc",
+        "root": "sha256:bf5d713c8fae983fd298f4766dc27c81a999e1b986512a578ee1ef09b228a5fb",
+        "rows": [
+          "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
+          "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
+          "sha256:564a25b33e2eecf46d30f0d055e5b13ceb4be613fcbab4e6949352a1b7234377",
+          "sha256:d6b54aae8b4c1da5b51b9005625f88e9a866aaaa2106d9f82ee1873643e915f4"
+        ],
+        "spans": [],
+        "statement": "sha256:5b1332e212302aee0005e19edd07d4f9e3cc09f639abc1ee942fbd2cb6f55c62"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:5b64dfffa94d8932975d1dcca7c1e30d211ec9649894c25582e23dce54161a56",
+      "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-4",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:original",
+                  "kind": "call",
+                  "ordinal": 4
+                },
+                "symbol": [
+                  ["function:tagEmbeddingRequests", 0],
+                  ["function:intercepted", 0]
+                ]
+              },
+              "path": "src/extensions/memory/backend.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:203253ba0f1f29a715586eec68e341c50da1ec2d276fccce1bf6e6efb7546884",
+        "root": "sha256:fc4d5ec9d5f0960dcf0907f23c6e130c11909113f20ab5ab9c7b999ef1214e00",
+        "rows": [
+          "sha256:0bed0bbe3be65eca935a9ee7ff7b4d4d13fe5d841786ab44a23607e227df9156",
+          "sha256:15d946ae6cd25fea0c2a92f3e12f2884692376f16684a7263ed3832fe69bc283",
+          "sha256:564a25b33e2eecf46d30f0d055e5b13ceb4be613fcbab4e6949352a1b7234377",
+          "sha256:d6b54aae8b4c1da5b51b9005625f88e9a866aaaa2106d9f82ee1873643e915f4"
+        ],
+        "spans": [],
+        "statement": "sha256:5b1332e212302aee0005e19edd07d4f9e3cc09f639abc1ee942fbd2cb6f55c62"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:d959fb0d5a41c8de78068f8cba3e1ee1a1fff34c4c69994a03fc5b2c5f208176",
+      "id": "request-extensions-pr-cost-reporting-worker-deliver-events-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:deliverEvents", 0]]
+              },
+              "path": "src/extensions/pr-cost-reporting/worker.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:e814c09b6f20f0df179f9b97e683b50cf16885d7d9e4538b44591fa414b912be",
+        "root": "sha256:ecad9d791f23bda3a0bb0fc81b8621b88e6b58519ac7c1bc28c834e69c7b765d",
+        "rows": [
+          "sha256:2dc40e3a74fc5a8f4833fde0a592a0806237b35b4382d464a46262568565e9a4",
+          "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
+          "sha256:422c2cb3ee01d6c385ac80b8fc8ecf7e269be81c5be4f1c65fdc5e7a354ea31f",
+          "sha256:4a4d14dd1aef2bed36b62eaa69779c3b956ecfeb52d7e62c761fb5dced54b252",
+          "sha256:6a7662c379708d6689678bf54e291f6430d9935fc29584309782702b2acd4bb7",
+          "sha256:714950cd250e3370c0aef4a629e31c9012df22e9fffe908f742de4429decc6a0"
+        ],
+        "spans": [],
+        "statement": "sha256:54ef82b7f3e6f944c4591a3896501a9a18759fa7d225d76e3925445f813ca7f6"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:52bbcf2257c456bfeef656524e58998ee69195b6e697df6c8c64f015dbf64a35",
+      "id": "request-extensions-pr-cost-reporting-worker-deliver-events-fetch-bounded-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["function:deliverEvents", 0],
+                  ["function:fetchBounded", 0]
+                ]
+              },
+              "path": "src/extensions/pr-cost-reporting/worker.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:b577f64cde8bdb941d723d1bdb49e63c24f40990c7b3ba32d96b51b1339b74f8",
+        "root": "sha256:e7efd4b4a814b283c820336e01d21c9ce2c70ad5885c3bf551e25f350d772286",
+        "rows": [
+          "sha256:0ac7347e1f5e67eee4bafe044e614290c39300c4d6aea78f148001802f9ed255",
+          "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
+          "sha256:422c2cb3ee01d6c385ac80b8fc8ecf7e269be81c5be4f1c65fdc5e7a354ea31f",
+          "sha256:4a4d14dd1aef2bed36b62eaa69779c3b956ecfeb52d7e62c761fb5dced54b252",
+          "sha256:6a7662c379708d6689678bf54e291f6430d9935fc29584309782702b2acd4bb7",
+          "sha256:b2cf7b4ca3bc76219c1d7c9f44cbb7e10ab0e2e9a916cc622dbadbb20ecc212b",
+          "sha256:fe2a13c6aca64b19d0defbea10de867232941fdd768792350622094c0bcc1ff1"
+        ],
+        "spans": [],
+        "statement": "sha256:debc8bbd3e4ffd157c51c6f1fef141a26834d144d8d0ca83c179d951fb40108b"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:8386dc9d774f838a8b5c8f12235922d98141a54d2d22880bbf88e3e6eba057e4",
+      "id": "request-extensions-pr-cost-reporting-worker-deliver-snapshots-fetch-bounded-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["function:deliverSnapshots", 0],
+                  ["function:fetchBounded", 0]
+                ]
+              },
+              "path": "src/extensions/pr-cost-reporting/worker.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:b577f64cde8bdb941d723d1bdb49e63c24f40990c7b3ba32d96b51b1339b74f8",
+        "root": "sha256:113f374642e3e6cf35f55fe8e983dc359ec25ec3e88e6b93ab9535085630613e",
+        "rows": [
+          "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
+          "sha256:425f2a0a7635356bef66dbaf133f77ce83f5da5aff2c3b9fae6bd37c6abcf312",
+          "sha256:4a4d14dd1aef2bed36b62eaa69779c3b956ecfeb52d7e62c761fb5dced54b252",
+          "sha256:4fd080aadf842d8ba25c60ec297b200fad9cbd2a252c1500cbe14cc4a4412c1f",
+          "sha256:59300abc856765372fb69e628495f49e8fdfe6955a34298587669841ff376149",
+          "sha256:7ba5a4a139109d58e90d160e47191d59e7cfeb40fa2cb2ce780ef3d16e8ed033",
+          "sha256:81d399e4c5b4e45016512b2d109c20b0a201ab54e54a7156cf1130bcb22e5f8d",
+          "sha256:96ee26f941a76b738f674302224f093e84c0fbd0e5415b7746f7f66bbfa40b2e"
+        ],
+        "spans": [],
+        "statement": "sha256:2c3fe323119dd58a355a2da711b6936b972ca0694e927198c9e3add90f959765"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:087e92bd308d59a4db3b2ccd63eb92a9ed48e4126d76970e8a5a803280d2ecc6",
+      "id": "request-extensions-pull-request-status-provider-api-request-json-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:requestJSON", 0]]
+              },
+              "path": "src/extensions/pull-request-status/provider-api.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:eb92e5ca2d75f9111ac3cad6e878aa26bca9e4ea65b4c0e92be590e4a8b20082",
+        "root": "sha256:5640cf5554bb72fa7e048ea3b4d70151e5e473b4ebebaa0d738f9d68c030f9b1",
+        "rows": [
+          "sha256:102e97d06c5372ad353db5a0c77447fc9580b2944a3ec70039a5bd64996bee41",
+          "sha256:14fb1f0e1b6bd50bb65983f703a47670306fef72dad6b34aad47fb8e7aefe722",
+          "sha256:15f31b4eaef785a2edc07be72379a44c1a944cc6ffc79d2951615b69fe2cebba",
+          "sha256:24685727fbb2fe54bf5431a84edaef024487f32b9feb12463febcbcb20fee47f",
+          "sha256:2656b180d32a16574435a383302125dbd6386ccb3af1f4b20d46d6122248c864",
+          "sha256:4c5302a7e6214bbdfd2a23ce475f0d878258a9a8a5f8369088b3565b749948a2",
+          "sha256:596f0325ac551e725aeff1172ec37743618b1ad8278a727b63a30550e99697f1",
+          "sha256:5d5191cb5002def4b1b0c1cb93970b81fb6dce5e5b5a0c9948352fa3ac513d2b",
+          "sha256:70ee72ef4b490160a9c719bf404c2e2b3fe34b34347cf22a7744c833450d0d54",
+          "sha256:7121cadc698fdef624aff107c458f65c15ce05596d441085556c15ea3e7074e8",
+          "sha256:7695ad4181256abb761b808b3121c9ab268035482841ff9b172336b9d7d052c0",
+          "sha256:83193afb00fd637740c62335375c6951664acb2c1056bcde67b30c18af0a2455",
+          "sha256:8c42173683f942582f77a66cb2068fa7e48441a9cad527e2e559242bbea3fa5c",
+          "sha256:8e68c71bac75c7c0d42cf95a51fbe19618d2f9ce8f08bb238e654457e500ee4d",
+          "sha256:a339c312cb1afadda1b57c4b308fe28ac7a8ff281bf9b6570b057e67cb8ecbd7",
+          "sha256:c7e474469f300b0a0efa09d9531d6aa07608166eb2a6d31c16e4bc1a6e5881ea",
+          "sha256:d84c92954026f6b70dc8abf9b38622eaee2775f85ac38b1ba5f55a347c6385d5",
+          "sha256:e586f4e1d38535129264b12dd1030f47a78b0eb8dc525d4ca12732a0199118b6",
+          "sha256:eea720fd56d740fb115d616261662dff3ec4a62aca94629a62d8f1f017bf258d",
+          "sha256:f4e874a35de68cddcfda99eacbde9e68562e100b991ce7bd3c89153d8fb2b58b"
+        ],
+        "spans": [],
+        "statement": "sha256:df6143e9567c93acfdb9492e08ab524dd339072997a10c69975222953f77d563"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:f6bdf073e115820ea365a45aec2353405698416a4c3040d763785e8dcc414c47",
+      "id": "request-extensions-session-name-suggest-session-name-fetch-impl-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["function:suggestSessionName", 0],
+                  ["function:fetchImpl", 0]
+                ]
+              },
+              "path": "src/extensions/session-name.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:9dbaf118fd0c096ba6f620a222fdf43f9218d68a7ee848139eea7756fd61ddcb",
+        "root": "sha256:befe261f60c440951a5d1a91ec311ed77719b7afc965770bc665030951c038da",
+        "rows": [
+          "sha256:03300566e3352f952f9a54cbed762e52a69b29620ae83171592b59de7a5f0444",
+          "sha256:45611fcfabdf5e74f43337c89db3e7a5a8a7f876e6269a05a3a2185b0d712dff",
+          "sha256:816015d169f82feceffbf50351bea8b4210aac316f997c8c1e9f0c2e564c7d98",
+          "sha256:b019d2393ea2390d544898c40113a9f917f3922d77fd0d46f7745036eb03befc",
+          "sha256:f4078aa30de7162c36bd9b5950feae22f7dab5e23f50fc0b4bd591d496cfa24d"
+        ],
+        "spans": [],
+        "statement": "sha256:668991a6602e55856493a8484c6e7470d80d46c41fce063b30ba872164fec089"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:20fdfa7a7b8a777ad291f6bafd1d88d41bb15d08f9c3d2db7bf25f582a0a5e1c",
+      "id": "request-extensions-telemetry-transport-send-metrics-fetch-impl-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:globalThis.fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["function:sendMetrics", 0],
+                  ["function:fetchImpl", 0]
+                ]
+              },
+              "path": "src/extensions/telemetry/transport.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:47b3fdaa8f8a92b90d2b3b4c69df429371808e0643abc51ad53bbdb2b4d6a2cf",
+        "root": "sha256:7b2207a8bf35f5cb8cb9a3bec939d56433c11d8e99c052ac4e81c670f8d22d71",
+        "rows": [
+          "sha256:682207b7dfd8caf442d8c0678ed3c104a2ba0ef7b9bbe95085156ed2a4b123e3",
+          "sha256:80f19e6f0827b6a3f3c00b141d4b28df36198c00c01b3b3bea301c0741704383",
+          "sha256:92d9d9dec83280724a46a4659e29be481a231b7c4492a158d88d032ba4be9f8d",
+          "sha256:958eaebf6d91353a2f1320da4614c8c1ba1e104d38fa569c9b520cdf6a513e9b",
+          "sha256:d1a02d437e2db3356914d4aeda4937d24410b5f61ac13bef1da4c61dca1fbbb5"
+        ],
+        "spans": [],
+        "statement": "sha256:d40577b63b48726112d3c5010e34278d0062effa5ed58f4f73ef262c963c1c4c"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:474548889a812015111be28351947709be4675d58309d8af496f9e015ef50855",
+      "id": "request-extensions-teleport-pty-websocket-transport-web-socket-transport-open-socket-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "new:WebSocket",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["class:WebSocketTransport", 0],
+                  ["method:_openSocket", 0]
+                ]
+              },
+              "path": "src/extensions/teleport/pty/websocket-transport.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:9abe7aef4c6922fa8a67111e75dae4bf250e5b93eb7187c0649ee78f76806ba5",
+        "root": "sha256:12b1ce7885d234fb6ff767ca1028bf9aa4dc4b3326d6ec90208935042cf19a26",
+        "rows": [
+          "sha256:02d356ebaa5e1ae57cb0cc46537583cf71d0874787785dc1f7d5867f08178436",
+          "sha256:0530ef7eb21302d99793d1848dfa127d787aab32616ac0aa252cc75a1e508e90",
+          "sha256:0e57bbba3b570ca6ec34ae70209f4ba1c9a0097a620deea008973514c0255b48",
+          "sha256:108fb3b41fcf00e26b0aef533cce8d004799a0a3df2858fcf4ffa813c0fe01c2",
+          "sha256:1413bc19edae06b8eeaeba70d1fe9bb858c149cc2cff31c85749aaf1f820b236",
+          "sha256:15f3e21d1a4a1f2e4ac35c169704e40c69805b1b82b1cf84019e7cd89d51af1e",
+          "sha256:17e1f01a28ea0a1125e9d2fd0a0a6927acbc191dd63174463be30bd0e11f6a52",
+          "sha256:3938c07d0d264caee601a801edbb33737a1ec4557a78aba028adbfbf2c75a6b5",
+          "sha256:3a2958f3c87e1daf1d89c6553cd650ad18067312116cfd0ffbf5b95ae7b6ab34",
+          "sha256:524c2414115689bd74bfb23496ea33d72e22e995f5271a156e64aa627eeb09c6",
+          "sha256:5b54c8e8c9baba5b9aa6acd69b237130c498570efe4a315cb8e8a4805d3991ca",
+          "sha256:5bf8fde0f0e19827b8ed70c546cf3a634f5af888927da795ffc995cf83c22c27",
+          "sha256:7033a22844f721449cd753e8abbebcddfe40e9873f5538c1b31b02f2bd082af0",
+          "sha256:71864f38594bcef7fcdc240da8ae75258f2330a609b90bb62b3c72930f839f4b",
+          "sha256:7224cf134584986a98931a127cc6ee7ca78ac6de015bf7469a65a59d4ffdfb8e",
+          "sha256:8280ff9acd3764f5fd1a95a300f9a3deabadc54b0ceff7c143ba280f0658cd70",
+          "sha256:874868c50e5656c1e1cbc2fe119949cec9644e69eb481f5ff613b50517e8603a",
+          "sha256:88afb94d667be15bac0005c901327e73a8d54c2c921ae77dd1e4dc0067a15f2d",
+          "sha256:8cde776bef239b0679a910769e746fb52a35893de96179f882587d655bd09c31",
+          "sha256:8d4a209795ae1d8e2a07711c4736b29d3213672868690af4ae528f057296e2a0",
+          "sha256:98456f1445d9bc6b20a79106a80b4ede9787a602ac5a8d60d765a9b2b39f12a5",
+          "sha256:9ce7f0c867ddf48c3eebcf7ab4466c451180628e330bfaac3875ad9f5b5aa084",
+          "sha256:9d7d91074a0b4467bbc1fd2f4c15a0fc98170dadf43590982213534328d1687e",
+          "sha256:9ebe4c98c701d59d430dce028025dd39ac86d06359b26da813744c092a691c93",
+          "sha256:9fbf80b0ef2690c79eeeeebf6c3e6616c375845985abc92a9d6dacca3c0eb2a6",
+          "sha256:a175310ba0fab1217d4e9e026a958d56944120381789c44c191046df23ecf488",
+          "sha256:ac35339ec83112f5891f47291e50cc15c7ede7946b2e7cca8fb12436a7751c34",
+          "sha256:adc07896923e7996f9e67fc15ec0e0707eef37c0e4fbf72c8a55641084e63470",
+          "sha256:b2c4e264566ab3dbc501f7bfc607c47274154b41d3c46b81d0b81cd599e6736c",
+          "sha256:b2f020517a5036e2e3b159f07900bee8af6ee0e1567abe82c76989484bac869e",
+          "sha256:b463686f546c140e03cd2fb5d535680f54f061803ec1fd3f9dde15e9d4b16ba3",
+          "sha256:b899b67aa00b3dc8066f79484d54018b7e9efea418440759640f2d880ae0aa78",
+          "sha256:bb050b27b77dba2df8c12bf67e4068a239fa1b8df8e00ca16a49b738875f81be",
+          "sha256:bc987e16bfa3d41f52489d44b98d8cbfbb4fb66a92e514cfab744d8de4d45845",
+          "sha256:e6013927aa58a75075f3bc7a2fb1351fdbfde10eebff9d4dcf3312d487d7e460"
+        ],
+        "spans": [],
+        "statement": "sha256:ecbfba11a976128120ed4fcbf221478692048b70eafe146186404231ff47caf4"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:0c62e5ee55badb2448991448fab0f6db5c2d301322f6571e6befb36a86565ff0",
+      "id": "request-extensions-work-attribution-cost-sync-reconcile-work-costs-fetch-bounded-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["function:reconcileWorkCosts", 0],
+                  ["function:fetchBounded", 0]
+                ]
+              },
+              "path": "src/extensions/work-attribution/cost-sync.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:31aebc271366df5ae0af43be7ae477152553828121478858a15d7a52f67c15f0",
+        "root": "sha256:806f431524eca0d3e27a9843aa2262af2f3e59a334c183832c3fb256659c3b47",
+        "rows": [
+          "sha256:050bbc001e593f5749ee38a6f3c3d48ab2e24b31e5aa019db2e5fd297c9d4ae9",
+          "sha256:2c7bcd2f2fd2a080ec0f1a44c0428bb88bf8220459365aa8fbeefd797d90dd24",
+          "sha256:3371ca56c88670eec7492024bec6a2dfa9b3cf7bd56b11b97237497cb737940c",
+          "sha256:4e4f74b39dc14031bbeeaa017098d8d88c28db468401022ddbe8fe44ea3c19b4",
+          "sha256:75a9f5aa18ffc10f1d9468d2ae8480f6c0f38ac6527cb819587db68479a1c746",
+          "sha256:84ba1cb0f541ac96caf132e47a49505ae439532128ca6421b530189be75ce952",
+          "sha256:c026e4d7f85adfa8668f7c7e2ca213a98bd96038da21cd3c7be3a15ffb12d5de",
+          "sha256:c24fb5dcce5250bf5020dfa53ff588ec45706e56d3b334688332a320c925cddf",
+          "sha256:db1207d482f0800b657176c7f3b3bd82ae504883afbe534f398716e7885ae198",
+          "sha256:db2b48c68249d2833776fbd1f5478d5e0f6319f31361fe5de6689516b3ebdd4b",
+          "sha256:fd1b66de8582603538bcb0a09e53442eef9cf74bf13a1e8a21ac707d5775cc9b"
+        ],
+        "spans": [],
+        "statement": "sha256:10babacaf1ee0f962821eda71eb28ce8b955dccb36219c4e2e0fd4ba9571d322"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:ca23863de19370884400a456d10102f8ca895f48f67ccac853336634f15086e3",
+      "id": "request-http-proxy-create-dispatcher-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "new:undici.EnvHttpProxyAgent",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:createDispatcher", 0]]
+              },
+              "path": "src/http/proxy.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:e78c430966125e46dd5507c895d22ce04613706574905b8fad9193cb15ed5c47",
+        "root": "sha256:6fe4af8be35edbe9af372143e184359a6e87ef771c078eb5fae8a6d92fbf20a0",
+        "rows": [
+          "sha256:5110b91ea10a4fc0032d3f5839b394a64ea13d92343b55fa110517e28cd71c69",
+          "sha256:7ace9dc7810560db439446cda32b5a982af7e9dbda0e2cffa6fd1fc4c35ba681",
+          "sha256:aadd8f213ebaf5cd6a60009c1dae1235429b808926039f1d39a74b334939cf39",
+          "sha256:e9198339319c8c1545684f24d222133e01bcef73519be3e4fafcb12c79eeef47"
+        ],
+        "spans": [],
+        "statement": "sha256:0d3f1d1c76100014c991925643af6ce411bfa1d3fe71a2e1a4bcfa2f61535396"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:835a954193aa2360b4211bdb157fef3b40c2cf86d5297def0b9b3c6dfe7eeb07",
+      "id": "request-models-fetch-available-models-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:fetchAvailableModels", 0]]
+              },
+              "path": "src/models.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:001dc9ed93a390f0fc7cac97d8d7d30dff49d50c4c5d7d3f241c80bb18fdf5ed",
+        "root": "sha256:04f74274fc1e81b015d6d842495daa5096cf9f7a36550fcf22ec712678d0a8b9",
+        "rows": [
+          "sha256:01bba2f9883bd793c1ad91e3f9714e5d7479482952303b73f681232f745c3f45",
+          "sha256:067ef2f5af24e0b928e8ec7d7855a6cc72dcd7107ebb11d740694efdbaff20a8",
+          "sha256:07f02eed5a0cc3962f7157d5653496055a455bb395615d3e620e5b0b09f64311",
+          "sha256:0b434693da3963b25abb424989625b63951d51bda8b2a58fe61060282a647943",
+          "sha256:0f7851ee7b6cae9d8ba62d78ef17034e24f7ecda76f3d38343f5d115c1c4b5da",
+          "sha256:133621b04202b9b32b0ba0b78b28bbf2a57d8a062fc9056563753932fdff704d",
+          "sha256:13573ed4046f76c9c9b1c0afb17379fdca04faacf5cf02d3a112cef7c4441a9d",
+          "sha256:18dbdbeb860f6a0df20f95753f7a36833c72fb4f87e65c45c6a25738d03a2bc2",
+          "sha256:1f0d1051a2bc46b3fed5c4fd2a6c63b92866f90c3568fb6b5b75ebcfbba9ffd2",
+          "sha256:220aca67ba6a1b1688909ee025ebc2ff688aa1973d83600215d6a75e31e208d4",
+          "sha256:22730eda2a7d87abd95b9b34c15b765a5c767204ad903968d9bb401b2120dfe4",
+          "sha256:344e8134d39dd2b0c588886a45f402bb70f21b728d9911f740e32fd8d734d473",
+          "sha256:3817bbbfd5a557bd81df163171ade0e49130ce6ab8cdf4e60c563e153a1a1220",
+          "sha256:417a93fad2b761ff723daca6f3dccdf436418baf86c95a3547364b5f50a30144",
+          "sha256:44045ee94e49fb4b4c2f8ae7271e007f6acfb704baf5a5f959019d59b2b5901b",
+          "sha256:46b5301082b069e94114175a98c268270b9e600aba43ead1c665bb424255a292",
+          "sha256:4ab71eddf6d8849785187468e374b6e634de6d3c532e159c284335e3a0ee605b",
+          "sha256:597239758486dcdc3f10febe9acc816e8e5fb28ffe662aa42f19b4f07c72906e",
+          "sha256:68dacda37b392c9c5a2c764a8d176c9227b3a0c7caec1d2d98beb331fea63e8d",
+          "sha256:6d1d72404704c589b1cade7a54122a923c4a51518346a11705438ddadbebdfcc",
+          "sha256:70824aa82fab2f614e4283ffb259eceeb558970ebcd21529d68322fe36105767",
+          "sha256:750c865e3fa37da4c0ac1bbba27d6bc30eb0212810ba218fe54d5c4ee4d0d209",
+          "sha256:75640f48a71c04046069e6cc32fca5b0775710457e352211f5d3940e412978ed",
+          "sha256:75cfc39cfca87c1ed1d914d73fa7e998197d8a9528ac278857f68bc6605ff830",
+          "sha256:76a42683b2e71e28128e58eae1eb582015adddefcad998e43d21fac3c4ae8a9f",
+          "sha256:801e8dc3e2c02ed6ef9f0f663bb3068e05d8c158c09a02d48f2d6eed94be2fe2",
+          "sha256:82e103c94f4a385bd0cc7c20951943b745b7afff2f1dd73c0af17cfa5a5142d3",
+          "sha256:842bd0533778d1b3f234d8ed03f85a731a36a81f42693f73011b2f38ad2547c0",
+          "sha256:844eeec282ae001fca48753bb6997fbaf74cafbde0bf3ae3743b86a8bf735542",
+          "sha256:8527cdf4b9c68ca0d1ce63a12d9968d5d4fd041e39c7339a30b7611347a7ec83",
+          "sha256:8539c910ed5825c8dae09cd7ab8b2d6c28ad84ca8c852efc3d0f2d8bd8d7de87",
+          "sha256:8a4916dc5e6f77b39eed4fece84f36162bf99f689f08023b781ea6e95a183e42",
+          "sha256:9417bf3e1cb47874ed9ac410be75cfcec250e31cab5f44a01edd42ce8b64b418",
+          "sha256:b03de4d1d80a83fdcaf1da4f36bab21514f5ed22ae2d1ae5000596a66aec53bb",
+          "sha256:b13b9a110ce9a0af4caaaba989333bf26329a856d210a890424aa18cc7d32ba5",
+          "sha256:ba29674af646825bdf33b193a7212cda2672b146bf4e68440ac3c72838e21e70",
+          "sha256:c0d987302947eea4b84f96530ad420217a7957cc3beaccc1b9b3a3d31274b65f",
+          "sha256:d5dd6d2b09ad6a37016198487728278d06c35a242a3eac4961e1f51f35cce570",
+          "sha256:d934e40f5b88438b58ff29bf3c5fe59eed35147fe358311ccb9442aa4cceac7f",
+          "sha256:dfbaa893cc9e9b8b28e7969b046ec5ebaf707cc2e48ca7d29d62fce94c4b1c1e",
+          "sha256:e5e157bfcbb5f8042878de580957eb3e0a1e6e4a0327afdee41515847d4ac3cf",
+          "sha256:e86ec7d08870aaada4fa12ae2f1f17cc013cb74d72334210742cbc05f109cd57",
+          "sha256:eef1705993adde3acff81e620f1425770459d8dceab6d3bcfdb2b776bbd067a8"
+        ],
+        "spans": [],
+        "statement": "sha256:4fee45adb5d4c107f8524852c27249cfb735ed02a4162d1ea18d02fb663ac50f"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:83d7fa2c61cc64b0802f1fa55028d5e28fd6bf875f816a074287c78a3789cd96",
+      "id": "request-ollama-enrich-from-show-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchImpl",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:enrichFromShow", 0]]
+              },
+              "path": "src/ollama.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:3feeb3d49473f1a4c41b67779598e26bbac94564c22227f1f5f5de1af5bbd92a",
+        "root": "sha256:87cc7ee270442a1b0e45286ab4766f830338f843981600174b06db8f8b7fd209",
+        "rows": [
+          "sha256:62767ac499ee6c743da0e4dd6c82fd84506bf1181a336aa05531b493d3153664",
+          "sha256:9745acd7bcd413d1d75733be7f8d039cebed47ccd9cedd0712f0aa4aa020172f",
+          "sha256:bd4a41063de3feb43f1d50d239b613f29e9efe628f693015fee7a26d103660a8"
+        ],
+        "spans": [],
+        "statement": "sha256:dacec9f54e8795342900d033b82b7249c025c8047cb317ed8f4d26cc2f27ac2b"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:6bae53e4943afde92da46b23d483b2d0460dffa33ba2c929d5afbfc85cc17582",
+      "id": "request-ollama-probe-ollama-models-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchImpl",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:probeOllamaModels", 0]]
+              },
+              "path": "src/ollama.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:fb4531aa19fb6258bd1dd268e92da68bbb455413b7b67e8b080ba33b481a6459",
+        "root": "sha256:e311b11cab98ed8e9cc6cdbcac3050c273188bf8bf8750f4b6cab100fa6c1021",
+        "rows": [
+          "sha256:344e8134d39dd2b0c588886a45f402bb70f21b728d9911f740e32fd8d734d473",
+          "sha256:3c1b537bf12736a72e622ec52f9c7a4402383dfa154690c218694ddbc2a0d239",
+          "sha256:48a1268dc64f078da3d7838475da4784dd1752bf44bf25317a40e44729c39053",
+          "sha256:4ab71eddf6d8849785187468e374b6e634de6d3c532e159c284335e3a0ee605b",
+          "sha256:b03de4d1d80a83fdcaf1da4f36bab21514f5ed22ae2d1ae5000596a66aec53bb",
+          "sha256:b2c8641eccddb86adde35f9c7834fa765836e2c0889f670f32afe771fa39181f",
+          "sha256:c0c86b9ee7b9154eeb911d6c45d7296284192d47fef9e6a248d70132a41cb498",
+          "sha256:cac0071e51470b4661a19d4f734b79d07f1413fe10dd646f3cb6ab719135a743",
+          "sha256:d4c8e1af7204a4a561411f3bcaf8bf3d9d93d151a7275973c26b284239808cf5",
+          "sha256:d5dd6d2b09ad6a37016198487728278d06c35a242a3eac4961e1f51f35cce570",
+          "sha256:e5e157bfcbb5f8042878de580957eb3e0a1e6e4a0327afdee41515847d4ac3cf",
+          "sha256:eef1705993adde3acff81e620f1425770459d8dceab6d3bcfdb2b776bbd067a8"
+        ],
+        "spans": [],
+        "statement": "sha256:0187223ef7fe3f05f550448aa1992cab431bd113dfc2ff20896183ce9badd94a"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:4e291569f751ce8cf031eabb09d7c463776c5b3274e8699e766c2f22a6d76fe1",
+      "id": "request-sandbox-cloud-http-fetch-with-timeout-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchImpl",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:fetchWithTimeout", 0]]
+              },
+              "path": "src/sandbox/cloud/http.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:42c7ebfe564f5b8a6c541fbe9527e32103f809b130337b156fa97572436b3fcf",
+        "root": "sha256:4345c92bc80138484e63106f7f59fbba68ec3a3183366e544757d2f986d83b53",
+        "rows": [
+          "sha256:04cf32da9bc8d4f0d056e7029b93547138579ebe53c9f9290b2626ea17230efe",
+          "sha256:04e07879d850ead4c750e7f3569b2f2e2de99476567329dccfcb07136913e5b4",
+          "sha256:061e10cbb14ca02578f7e8539e0c77d0abeb8be30c75aa3f8f9a3f759637027c",
+          "sha256:0747d6d88b3b672f02c90460f152ef792818c2d3c27ae5ee4f5bba839ffda139",
+          "sha256:0c5212c5d5fc6c2c0002cd8fc8cb908fffb0f20e10e3cf2aa8eb575678d1c464",
+          "sha256:153c58b93f96cd591807525c2dee1f37991d88633da2e18bb5c2c1b741806379",
+          "sha256:181bc53195935720a55a148256da60c551b3159e6d35afd497586275e6112c9d",
+          "sha256:1a6672ed3e865eccbdfe192ab68e575d5f8f34ada5b8f9e1878b98fe78caf823",
+          "sha256:1debbe3fad4dd86e8a36ce02a422cea4c8824286581010449511190e647e1259",
+          "sha256:213276084108bf878f8610459df7ba71d1a1a2bff4b338f3ea08b05888265437",
+          "sha256:2630ed3712b8d55ebaf6108c9fcfe0d23ad5983c1b64b94e5863575791ed45d4",
+          "sha256:285e0c6c6490b67bb1f2022e7585c80c7c0ae5f92bb77ce4a1db3d599324df10",
+          "sha256:2a82f2cb0e6767b103ab2099ed42fb0575b6066adbf422683ead88d5d0f47546",
+          "sha256:2b1ac1f8f87c81c65dee32221839c46b6bcd548b0fcb06be830c6e71ad74bc12",
+          "sha256:2d2be4bbb4a7ac24803437a22acf4abb9f5e52f7c599220697ff67593dc66145",
+          "sha256:2eea6d543d0f50b47d00d71c3ed2e370368ff9893147415c00ebe465a3e89d88",
+          "sha256:3b39f33ed2f639aa057e11b8a45c2af2cd38e6c924d8972f800626b0a0d896e2",
+          "sha256:3b425e928cda6e053a043042320f1c19a6e511f08b392808f242d24fe7c31a5c",
+          "sha256:3bd74cff2ece46074663ea7981f3cc3d48754cb3e7d67f591bc700265c24876f",
+          "sha256:3d589e78995b44fce43ad7a38eb159e4a0415963ed856da582d67149d90bf5cb",
+          "sha256:3e457c172de6a8c89e0106e9d4a7e4a0fc5fe85c1b6303d6ec73681c6dd24890",
+          "sha256:3ea433a15200bb1190d45797b9665a9f97894074d1396cabc7ac12d9efaee9eb",
+          "sha256:3f16ec8d609890f95e6731e65287ce9dade2466b806da90f63be1f2dfba7c258",
+          "sha256:43d9e3a79d98036e95464c55a3e0674461554bf3a257f8bd75cc31a4f24e70eb",
+          "sha256:43e75682cf1267260703f09d9e44e4380e209cfd00158ce3b0c3207d8b8d4350",
+          "sha256:44607d379dd83398fe2fa1c970b4be77e1cb8ddaeb0935d2aeb898d236559b67",
+          "sha256:48106c170acd9317fb7b061f7dddee81afb2c4eb46abb24c1ffe3a580ad6cc47",
+          "sha256:496636e94cd9fad7702adfb398925c4886ef3b60bcacc8922677b17418620f53",
+          "sha256:4bb30cb75722eec403d3339258503c6058ee183b474f5a4cc4dad428e49bbc3a",
+          "sha256:4d8146fb10141d54692f867d27d6c75308c76b73263b00b505d1452c40844707",
+          "sha256:4d964cb4b66bebbe0473c8023bf3811c587481ea4c0dce38967c8fb9cc2fbbe8",
+          "sha256:4f9ba78bba2222170b6b261473d76e9c2e67b086f53093348592883df40445d9",
+          "sha256:506ab91e40284a5367bf47dadcf84018816cb6f2379de2129b730bda7c07d56d",
+          "sha256:534e71dfe0f07cc7e2f727bbaefb8017913baa61aa7575507f82e327643de1ac",
+          "sha256:562e52d145da654c768f400b79b9879ea8a7281000b1f3095d2df8c80392a702",
+          "sha256:5b05972c15860b5b47dd358f455436f1a294f4cf04159bf0dfb9e45dce055ce8",
+          "sha256:5b3a63876954cc0445fbeb09374929bf19a86f6e760a4f1618b29ad72dcc92ce",
+          "sha256:6032e2a7f0c7f1267a107c8731531b5f33af1089947dc815adb8946ef65faaba",
+          "sha256:60ae1f1a579cb73fc5a73193a798d95435a148889b9e01d6916dbb6dd1aa8048",
+          "sha256:60f8591a1e290fa675abf5aa4f0b39c5bd2f53d4ecebe1eff5c3dec2eaa60db4",
+          "sha256:619f3d339bd2514daa491618b48e7f16d44dbd4a742c25f69f0948517d25e4ad",
+          "sha256:61d5d34dad91100114eb6af7894e153016ca3faa46065f3d7b2d4088f54ba7ce",
+          "sha256:633ce2c95a0f6fbda87cf81053518fdc29e00f55594d6b78434069b393cb8375",
+          "sha256:6822112093a0b9cd7ac1ee07656eb3a3ebe2ed43c6be3eaa68d72415a27e02a8",
+          "sha256:6a0bb0f86c8b0e089fb5972147928a3e00b0d28515707cec8104781dcbe3934e",
+          "sha256:6a4dbcceb25c9098cc5ff60ba18a1930a2b039a678aeb86e992b247908c8e786",
+          "sha256:6dc2feabf0a310485a20c561810db2bedc42aa0e5987e6313156b5c6dce10823",
+          "sha256:708d51180fbed88ce3538364b16e7ca4b807792892e0381c4c94c0145b41a7ef",
+          "sha256:71cd180149c012952223b0ab219b75c982ec9e8bc680840131820de5dae22128",
+          "sha256:7a5bee5d2d32d2285f3cfadd1e4a032d132b15a8a69ab3ee72399e8503603e13",
+          "sha256:7a6071b340139f4c6decaaae9e6136b8f4cbc86dfdeb590086f54b107ef28149",
+          "sha256:7c40e17989afb54ac5f0c07626fec1e2feff8597f83068f7335a898dafa616ef",
+          "sha256:7e23ec4c4c4f4ecb79db7d9212ecce61479a985cf8287d55abb6ed840ecb0dc7",
+          "sha256:7f61a3ad4fa6a808a3c38e989f70324e848bbecda8a2a9e01d5da596875cf92a",
+          "sha256:7faba3151f01c0bbc663d616ab69df7322d01f7f80d72e637f9cc1c4bf1571dd",
+          "sha256:8010c3d00fc74bafd2a7567a559c441a79a17f053b7c783f63796e8dd9370656",
+          "sha256:811b4d3e24cc1d734e187bc0dc0bc5e307afb65c0ababf57ce273f2b8f9c0c3a",
+          "sha256:817e67dd51d2b909c8d87d1ab68a999f2fb5ebf1e8b779df11cad6737a25f79c",
+          "sha256:846cfa3bbe456a115a95ecdfb4e92b09a5e52a150b45dc03c835d0c29ae97565",
+          "sha256:87c3eab3d499b41cbc446360aaf2a0072c5d92cb10d22d60b2ed33498d6f23fd",
+          "sha256:8b8b0a524ee792ddd7fbecf18a8ec3c822d8a7bf9a61889ae3ff40a0216059bb",
+          "sha256:8bbdf45c0b6e8a4d36b8d8572cbc5acf7da3424c5d26c0c0babfca75a81ed518",
+          "sha256:8bc5bc6d22d4b0de0eb39fcb65b825597a0b9b17ff8f9091b596282402ca561a",
+          "sha256:8c13283826d21546b7a1146eef937aee37f9e96262a6d2abb66483c5993c3f75",
+          "sha256:8f5775fe3399be8028ce1e266afcd1d8b1af9436b9b6772c78846f91ac281630",
+          "sha256:92692ea146cdbe02dc693256ded6f6dc1512bf56b2537384c7291648ca39f06e",
+          "sha256:94ad8deb1d96f55896026c0ce0e4f7a3dd0f49f1d80d5255d7edb7cc567b9b0b",
+          "sha256:9aac2bafd6dd1c84f05b8151809fd76ace2acfcc32a1f27ae4655ef8497ab795",
+          "sha256:9cb30648e8de7143938a9acfdf5b3d947a554e11cdae94563f210f99ee83e967",
+          "sha256:9ff0c9de42cbdc18b159363d8b2b0854ae6c67e35900a9746af7c7498daefe5e",
+          "sha256:a01008b5f9f671ab9af1cbd535900782c65ed7da3116ca8a519e8a3c11dc23c0",
+          "sha256:a717c821ec62578df4f954f7dc5c9427651d87937d7bee67681bbc30f6d89ba9",
+          "sha256:ab526de81be8d06be738a15367de2b252f23127546039de2d7ea9160ff864e64",
+          "sha256:ad929cd00b571d269c2f1d6294aa5991ff5466bc1344fa0be055a666fbf13af3",
+          "sha256:b514567e92773c6bfb2d66bd5a5cf174f8f5eacd8ea402dfc7d7bf3ed933db69",
+          "sha256:b626d7c0c8efe0b45de74ad03c4fd432337c623bbdcdc1e2c69fb3c86123e46d",
+          "sha256:b7eb2b58204e9675007e4c1f939cccc3b35d75e88a7753119c6ccc5c1c1d73d3",
+          "sha256:c2b3a61c83db7c5d31bed23cb7d85a867c80e9b45a9d68003f3f78369242040c",
+          "sha256:c3632da876acf141fae79cac0b5de6acf859b0f16d4163079e8faa5c1310c7ad",
+          "sha256:c50702ebc4788cdfa129f031d9719c860091be62aac55fbbf2defc7148a5bfb5",
+          "sha256:c665966efffed1fb00687bfb043df66b7b4496196046ce17892472dec019f35c",
+          "sha256:c815fbb380b7d182d8fe268c2903815ac1a0a8e20b92cb0f9a576c25f61dc887",
+          "sha256:cc45f84591fe5771464814ec9d80ad1c16d89eb1dcc77f2439bf0f635d715a87",
+          "sha256:d18d0ba06187788556feb9aa3c214d9da0897304ab732b81023fc00de51772b0",
+          "sha256:d699a9f162afbdf8ef85812763799a36bcff47c86377aad4f5a1b65948a36be5",
+          "sha256:d73083377af290af60605ab34efff55e5a3ef75125a475563a076469ec9b8358",
+          "sha256:d797f3bc8184fa40a853db3a64a58817408a76599d9ef559296a254723bd3004",
+          "sha256:db729b842a76620559fca1390bf5fab51bb94375013a1c5d2c5281e658d7a3ed",
+          "sha256:de281eaece242907bc40a0b48c0cdb631b1bd862b55159ecc1bf9b6e70eca200",
+          "sha256:e04602c14ea35ea8199b9f3b7e012bf1fcd7c28c0242b06227e178f09e85d439",
+          "sha256:e0c2464d85279e73d6f5e11c38171d5659af1e6413c4d8581d149a547b7a7b6f",
+          "sha256:e622ff6432608901568e9b15382974d45d07caee27b9c3a073bc0f01b66ca49b",
+          "sha256:e95acfead34b5a399fba08f7506ca614aab730ed473a6e4d21a62fb147af3b3c",
+          "sha256:ed48fd8cfbca407b8d6b15f00649ed0e5d4c14155c4f39e542c225d17cf9c939",
+          "sha256:ef77a4fe4caeccd8e65f6bc46957244ee9016cce4d87c465b2131474c6069261",
+          "sha256:f031d623e8cab3c83197fd26c22125779ae3ecf860433468785af9c68edef368",
+          "sha256:f39d1b718a8875813a0dfadb460b43971289b48d6d2c193a850b858842b248be",
+          "sha256:f3eed4e67e283a7e68018a4e313993ed9fed25b0b50b35c2dbef97c4e828f25e",
+          "sha256:f40f5f757b77c864b38a223c6e076c6ac24de79a647d3b19ffa88608ea2bc2c6",
+          "sha256:f54f8979b7968273665becb065b51bc88400dd63a95753a5add517ead07b3226",
+          "sha256:fbd7aa3d4fd3589ad377587d8d806ffab73a1d12fd43eb1193c535be3a5d8418",
+          "sha256:fed92553b1e96a568a03878d8c13473d956e53619993031c0827c94bd4f1694c"
+        ],
+        "spans": [],
+        "statement": "sha256:6cac54fcf4357208975ad477ebdc73fdc489199370f28674dbad72f8ab264bca"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:06226a870d212d24d67a0417114654df1046f06c404f6d23748a7edc10249fbe",
+      "id": "request-sandbox-cloud-readiness-probe-ready-once-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:probeReadyOnce", 0]]
+              },
+              "path": "src/sandbox/cloud/readiness.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:66c43816b465d04d87b833f16e0055ada4e8f11a9b3b0d87566bef168b326ea0",
+        "root": "sha256:98c8832a3db0d9441a551995255956c6bc01f8eb25d22bf705b0dacce4ce4ab3",
+        "rows": [
+          "sha256:04e79eea6c5911ec577302dc22b07561867f571710514cf8759ffa33f7f80298",
+          "sha256:196c51db43692d1a25d30503da8319b0f6418a0b813714525c7e4a25e51f3c98",
+          "sha256:1f0f5c9eecfa8bcb274f1bba19baf60cbeb158448a7e2205fb24c4f2a39b1433",
+          "sha256:29c6ec532b80b15153fb8db2b3b8be090ff6e7315a1097c088d2d6b5c949b94d",
+          "sha256:38645f07e752637609295444d6b21289d771935b90f4507709d3895994820562",
+          "sha256:53ef128d699a2a62fe7fd6bf44cb6f2fac97f7f9821087eb9ba8fcd231ec2a71",
+          "sha256:57cb5a36c19fc54a8fa8749cd81060f9af5c5be8c44044f2a2b2ef0297d85922",
+          "sha256:66f4ace41f39a16925394febb2aba05c09d90bc0efe68712ae283d48f772453e",
+          "sha256:72679ba71edbdd81715029a3fabbe6e2875e4e275247f3b224ff2d0acf69955c",
+          "sha256:80cece88b1ec5a8768c256af9d4db6da99dc6892044ec745ec93e3cf6967fb82",
+          "sha256:a040f405b54f5f1dccea745a625edb535683305b251ba65dcec623f092bdd7da",
+          "sha256:a4e6416e11dbf34f121981efebc86530e3839ba24b0bba10fe4c20d21771a79b",
+          "sha256:b02a4f07ff78808c528ef3db1ff790d01993fc524ad1903736f5db7091ed6a45",
+          "sha256:b626d7c0c8efe0b45de74ad03c4fd432337c623bbdcdc1e2c69fb3c86123e46d",
+          "sha256:bb15df4c7346a3484dec2265f3121bc1f745247dcaa3dee9ff98ddc4744acedb",
+          "sha256:bf976825a9aca93d4009db982201c45a2aa441be4d5d9a3a36a9c9a54507bcdd",
+          "sha256:c9637b8b1753c1726ae45771b73a22dc673c41e39a65ac809396c9e3d6792125",
+          "sha256:e8d099b043adabe0c699a4d0351d08b96d9682957827ad408f25d51f2bc81e92",
+          "sha256:eaba5dfa40df493ba39365d1b4e54c4fc6b2a84355d3b08ef07739e0ae6a31e0",
+          "sha256:eb081dd094584cf94aec916a14153d0ea58eef150781b56596240b6d4729a24a",
+          "sha256:f4df784d4782e2735e84bf7cc9af5cfc706acecd0958729a5d28b63b73e12d91",
+          "sha256:f8b6c1c1516dd8f8df9c497eae765dcc9de08cbedc1fe1b7bf24963f21ff9f0c",
+          "sha256:ff9cdc161eab3c355e14e2d3c45085ce532e1ba24e307fbaf02d74a2f12db148",
+          "sha256:ffdbbed44e54799db5268e3e781a981a30fd1bc911ca0733466c5421af3d187f"
+        ],
+        "spans": [],
+        "statement": "sha256:a5869279e09aae6dfaca0df788dfb6983819d309cad051a31fed241cb9b43cd5"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:c37ca8fe9671dd51dcbfa7836a2086296318e1a7c2b1446450b4fcc20fc8938d",
+      "id": "request-sandbox-worker-acp-client-acp-session-client-connect-web-socket-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "new:WS",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [
+                  ["class:AcpSessionClient", 0],
+                  ["method:_connectWebSocket", 0]
+                ]
+              },
+              "path": "src/sandbox/worker/acp-client.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:0cd3a9a5d52526e21e16a7048a2a5390ddd60c7ccd645fb43117e18d5be502a6",
+        "root": "sha256:b93d66a9de24abb6ab860d443cc6698ac3823450e7cf8ae690917fc6849a2333",
+        "rows": [
+          "sha256:1578a12dfd391dac8bbb1f42a8d4f066033e3283677d9fc8235ce1e2e314ba28",
+          "sha256:1aab1dafba68d3b1278397daf8399618088cc8f376a880a790d5768b39826814",
+          "sha256:31860062bb9162353bcf0845bc5da3b0884cc9737e68aa54cd6394aa5f8040b9",
+          "sha256:39358b77a765c81cea9e51a73439ed5271234bf75453a9362df63d3b9bfcffde",
+          "sha256:3a7061e0b24fe836282f458b19604f49446a70f4516fce697ec24103bf152145",
+          "sha256:3f13dc3a545a912905d2ee067404a2c05cff25f11f100076d0fd681d731be1ad",
+          "sha256:543a4944eef5314cbeb770a626df5c6ca0e0acded81e26190ca4bfb43234c0f9",
+          "sha256:5be2c699bb8e2ecab386f7f4fe078cb7e523c2513fa581fb00354915108af9c6",
+          "sha256:5ec57a2d7deca993c07e438fbcba65dd86385aea81753def9b256babbdd566af",
+          "sha256:616c6373b5939156562b98b0b3664c78203fea0be0a31c8782e282dddf2652f7",
+          "sha256:7f3e7b3d4203c04fc035e5cbb4eabc2927b033744675a9d49090e9f3d4dd0902",
+          "sha256:88c8a716aa9720778b55dc68fc57e131318769bc5a2b6e3cb1233af0d843c615",
+          "sha256:88d4e522abd53e711db4b58a58f9312f84e79671b78a2ccdf7d201d6574d55b9",
+          "sha256:8d46818d50d0d2c4a7dc26848b57abc2c58c240909b9557cbecd30995dd565e9",
+          "sha256:94af3549cb070596b1302b5862fe2d43fca26c4a0fbf5cb11ca724bcbbbc6e27",
+          "sha256:96e521d778179df299f283ac5ef7f9f7ce9ccb6d81c88cf8fee2f250d74be550",
+          "sha256:9c2cc659e6c35cfb6ffa618c68cc44a4d0079a148cf2e4199dc14f6cf6f9c594",
+          "sha256:a887cc42c2eef49e75048732216ceabd212f33fda916eac0134e3df3fad5cd09",
+          "sha256:a9cbde8a726b342230af3bfe68fef20a456c8811c4f6553b2c1092f98c3eaebb",
+          "sha256:b1730134f08bbd330f2536223ce83e2464ed9c1986a4490284874506f8431a78",
+          "sha256:bbc71b48f24da5141786abbfcff963f608c80c4805370d47621aaeba1e074b36",
+          "sha256:bd6239beed1eeeff65278f4a218d47dc6e5ce7e30b3d2f190d029961a647ae9c",
+          "sha256:c307894343a24a507562f3aec3981a26b1bfb4bc8c49d03fda7e687f83f3ae0d",
+          "sha256:cc6f54a84eb2929d3411bcb307a01032fe180b5ad3e6b1c202be0ebf969dce6e",
+          "sha256:d41df99c4a3c3f2214092157d2400c503b7d58c3ac3490798a9702d04e5c79ab",
+          "sha256:d8c82085673676e10db67d7c6fc836b9bb422dbc3837b085864fbebc7ad20acb",
+          "sha256:e215042edb138744792a295cf7b274394a88caf6ca79083ccea2c724386c1644",
+          "sha256:f37897ba88775e7deef5edbaa1b28c6ba5e983172b8a7dd7c8bd764e5164f12b"
+        ],
+        "spans": [],
+        "statement": "sha256:3430064af0a274e6f8c2a7631142a567c1a7d86bfbb603d23525295963ff5215"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:c9a092ec745eb7ed8e189ff701df013b91615dc7e06e173835b8844ac98b8cd3",
+      "id": "request-sandbox-worker-client-fetch-with-timeout-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchImpl",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:fetchWithTimeout", 0]]
+              },
+              "path": "src/sandbox/worker/client.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:42c7ebfe564f5b8a6c541fbe9527e32103f809b130337b156fa97572436b3fcf",
+        "root": "sha256:68ba352e9ea5719b44c81dc39a92e1fa15fbdb78bfa5d51536f820e83258df28",
+        "rows": [
+          "sha256:600d43bb055ca20324e135d9bad8bb793d5e3eba988e52aabd9a582eeb921681",
+          "sha256:6ca4ce85271a5b42a6b67f6db2700bdc14049fba3a096494716a04b9a90f36a7",
+          "sha256:6d075463661f959c8984f458be4932f0cbea59e4c9860abd917fedab4ab53f31",
+          "sha256:70979383f7edac2ec9d3e1dd2f18b712b45d381e58591dd3bf37a26cf83c831d",
+          "sha256:78dcbcadcecb15f418349c8776136f043b14c0a939221765c893a0014b628c68",
+          "sha256:81e97fb0c286678df6818db0e871442589aee42e34e756e61394a983dc5bef34",
+          "sha256:86c01c6e8c41e2f8e61eebf383b1293eb356120de0e6dbeac2d480a28e344b77",
+          "sha256:ae737a37618c240e7b7b415d3f6b595ea6469505fb140591b301d555db348e59",
+          "sha256:ceb4626a869d6aaacd168a924b286d8d0bc468391378ea665035eeb763a26dcd",
+          "sha256:daa9fe4938b3371439d8d2dc56e2e6a553742bad54f5b0c7f5cba378a3bc8775",
+          "sha256:eb40be5376396d4732596509512b5aa437caa92e3fccff05a58a26cfe61685cf",
+          "sha256:ee291207f8bc1128d7f5ffebcaccd26c0b885206cbbd9f9a749180d36a1edc38",
+          "sha256:fae90658f115067bed62c6728bbf51d7142138088264f9c2bf6e1ec6a3bff13c"
+        ],
+        "spans": [],
+        "statement": "sha256:6cac54fcf4357208975ad477ebdc73fdc489199370f28674dbad72f8ab264bca"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:21a0825cbdb8b5a0d3ef2c1eca61883aaaf97a9f007a8f617f1c084fb7ab5bcd",
+      "id": "request-self-hosted-discovery-fetch-self-hosted-endpoints-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:doFetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:fetchSelfHostedEndpoints", 0]]
+              },
+              "path": "src/self-hosted-discovery.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:c9cbb82128e7164103ce230f762d2e83e3fc4ddaa2318ff7c5f9d3e606c9c337",
+        "root": "sha256:c5329a8f8874486321c8880879385d07c2dccfc48b002648da7eb5f0986cb09c",
+        "rows": [
+          "sha256:63a368e58a54ea2c9cda8ad08425ef527ceb3c9c1e397d8ecb1ec16b2873c4c7",
+          "sha256:66fdaf4c999c76027f5cd4044e18a65ffcf7847a3eb85a1f5c11c28af42fa65b",
+          "sha256:88877898ceb039709e2f670e9e7c78540e05a88ef25d678f8ae30d588af81772",
+          "sha256:a53be169783da1a7b5aacbe3a391d75e42d58f36e4f3da034964f2315af6ca53",
+          "sha256:c3793f3ae597771a6b3eaac7ce353dcd84834e931bb33c67fb6e117874ca9bd2"
+        ],
+        "spans": [],
+        "statement": "sha256:6fcaca5f3b9e13febc133afc25310d5e5392bac46f6ef1ac77393648c89f6b87"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
+      "evidenceHash": "sha256:fee950f012c0018aaaae54c4c7b6e64671c36f3a47e53673d0f4f250ec164e46",
+      "id": "request-utils-http-fetch-with-retry-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetchFn",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:fetchWithRetry", 0]]
+              },
+              "path": "src/utils/http.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:34608e52e687849c3333007c5c535bd426c63813c1e7e5d9073da172206b450a",
+        "root": "sha256:187c8c7a2f678916f9a854ec8a7cf9d7f8293e8291854a12a76d2499f4577382",
+        "rows": [
+          "sha256:0011e1604d196a6c73166ed83435e2b04572b1800959506104130a21b9666414",
+          "sha256:00d9ba51936fe7ca0c252de38ca123ca6a68c4fe4e323a757c6d78edeb52b894",
+          "sha256:01cd801950c0daf2cf4451bee376bc7472b6948e5693647fbf3ac61bf3515b63",
+          "sha256:03300566e3352f952f9a54cbed762e52a69b29620ae83171592b59de7a5f0444",
+          "sha256:07dce041da95b9ad0bf3e7fd7f7bdbfa680d4c9b0edc8a2055a8103da1dea60c",
+          "sha256:083ca61757cb22879d049cf362897d918883c53127db59af97c092e13b5f05f4",
+          "sha256:090236f678d837ab938cddb8d69cfd69d0db491a76b0ec2f34225f08477676b6",
+          "sha256:09389a5dd54530a9fb51718586d4895432d79289cc28d38ea488816240c1e354",
+          "sha256:0ce2b5d5074be9818f209372a4933b846d62c2d80bb95cbb9c747965ce1d2442",
+          "sha256:0db2809e04e83c866b753ea8f06a378af1c89c779e2d061fd3c9e04695c6d9d6",
+          "sha256:0fe99b068f8e2cba59fc42a220827a818256ce71cabfcae785282fb314ffffc6",
+          "sha256:10856b313748018929ac256b7e178c3c0b464e40eddcce8bdd26adb388d6e0ff",
+          "sha256:12b072b9d5960034845ce9bceaefd99dd040fed4b31f68d8ff6c9bbb9a7e5836",
+          "sha256:12eab1f95af654028ae47c94ece3269bf475b3d59fcd68bd452605913dd9227c",
+          "sha256:1329bb75909c84883c8718f3f3e13b7c1a217f5ca144f1b9ffef76de5ca03781",
+          "sha256:1387ec83a1d340e7175d3592380891a56ed6706929b9a7b20f997aa12c45822b",
+          "sha256:14db8d7bc99dc10e5db3471a05b27c09db0eabcbdd441a3a9b8f4dc24a0526b6",
+          "sha256:1932e766e668ef2931ebcd9a963710826224ffc8b6f58b61f258b5d75c8a3b93",
+          "sha256:1c49be9b47723317c00df36680007e39a472ca0e9a33aadd6197d61a165808b1",
+          "sha256:2087f560068951aaf754e04519756868ac112c7a8759b1a4d129c12663ec9f4e",
+          "sha256:2183e819251d0361a546149a3837956b32bd14ceebd5735e648615ac3879e0d3",
+          "sha256:22a3c8a5674d5bc7178026e7e1ec7c80b3c5467813f2cdc7552ed13f88380f42",
+          "sha256:230f0e34e15c98c2e97ba77a708fb545f4bc9e7c41f4cb11aaf5712b10c0c7c4",
+          "sha256:24685727fbb2fe54bf5431a84edaef024487f32b9feb12463febcbcb20fee47f",
+          "sha256:28239f04f51481d98dd0945468a04ce7ea50a9c24609a0295673cd86e551bc70",
+          "sha256:2a1af85e83665dc1bcfefa0549abfbe60aa8ab03a9f517ff578078ecf1248c6b",
+          "sha256:2a70e1b9bb9f2e58049c4f601aa0c3be8c8945d52ef3dc844bfb122b0753fe46",
+          "sha256:2b04306302de118f35ac3996a4aba9ab30fcab3f06a52bbe13ee1a3ce039dbac",
+          "sha256:2dc20f4ce0e2e168fbaa81355a630344d0699d65d6e32a45a314e2406afd3c5a",
+          "sha256:315b23a1721420f10a23cfa8d32a5841bec487edf84ef20529f78acd976301e2",
+          "sha256:3430b05d502c974a6bd2aab5d809efaf8ba4eb8de801072f9077327c62e3243b",
+          "sha256:3617630b67c1c5d7235b113c3de70433efcd42a7ae36ec67858788de6ccc73e8",
+          "sha256:3a3c4bd16877d5840b60883b8cfd27948e55512ad5c5d716d0056bdd4444fd51",
+          "sha256:3b2065136a362be8fae5f2b8b90dcda1cc97e35ebb975c505cb4aa902f0feb8c",
+          "sha256:3be1c3a29f7333f027ec24eb16b97698ce18656c9690256ce2ff16b5e213e7e4",
+          "sha256:3d3235bca29c8138690aadd802b9a73c79599f815c42d3829d85c8815f8b3866",
+          "sha256:3d4227a7bfd1140cf83fc268855bba1a2cc3d13fe36574aed83aac32063886cc",
+          "sha256:43e2d4e0b804e5a7732c37a34ccf8e9700b2f3a00c1655fde14dda18a20c9a2e",
+          "sha256:485cc0e7d0fbcfe3e877c6e1d2805049de2d132c490b0d7a83da947af0369368",
+          "sha256:4ab71eddf6d8849785187468e374b6e634de6d3c532e159c284335e3a0ee605b",
+          "sha256:4b0dfe7d3393d63d8643a4b126aacdcab1109bf2088a9dee0e87ef0883528d98",
+          "sha256:4d643f076072c308edbf8738b608126039b3572542c04f88d792649aa1a1c62a",
+          "sha256:4feb22151d6f8e535a1b32e40a8b11d9d9478b0776de39531ab857fbaadc794b",
+          "sha256:5046894224e016069676b30e8e61f2aad4a9546607e4e4204539a0f472dfb8eb",
+          "sha256:52634a4f7ba18e4372213b476fcaef752fb17832c2a0c0aa7fc58a619a5d75e6",
+          "sha256:53dc5c7bb41da1efd750750cec2b6aae9d090ddf50bb1519b4c3a9126b51cb12",
+          "sha256:5430be4db11ed559455cdf470399bdd5bd25135d1a8d5ad83f011ec0c7bbfb40",
+          "sha256:54b3e8a35484a247316f62f2f5aa6036bd2ba8ca285558d8377885a3370d5dee",
+          "sha256:550203449e9ffd3b28799353e6abaf4034ad035ae782d1e50d0b5143ba342071",
+          "sha256:5b1c7d7ce3b0fbc01a8ef34207a0ea81f72089b93e0b6259f1edad85ff0dd3ee",
+          "sha256:5b8b46efac42590b2d365f356c5a7b1ec09d6a078abd27c9e4ad88b61856af3f",
+          "sha256:5ba425b843179db46e38adead559aa619eda73a4822505a3f9bc2d1e512b09ad",
+          "sha256:5c753e9a85819bd68b0e0cb2a797b3e4521b549d3d82a85d483b2e3ac488eefd",
+          "sha256:5d84993913183e4dfbe8c026fe2bfceaefd7f4efc3330fa572e04c1a5d0e0072",
+          "sha256:61e1451a5f8948dc7adc66c0a2fa639a8d3eb5cdd594a4186049d1d8091016f5",
+          "sha256:6490974aed603314b3e494c4c2e53791b6daf26c93cb10a02c921cd58f667fa9",
+          "sha256:651de38cc1b13345aa8968fa33698118290f8c373c3273a08aa4d43b8634da67",
+          "sha256:660a3f4047b039404ff1d4813540e5f52f104e64e3d216f36ee443107456081e",
+          "sha256:6a22eedf5664a573ea879dacfc8372d81c365e3b97d0913bb5b6c8b1ce045e19",
+          "sha256:6ad88fe7d2e1ff6973edaf82d04df89bb25238e7fc810986037349220454dca9",
+          "sha256:6bed42023a1178b6edc23bc9139d7186b40b26427b675c2259b36d13da7fe447",
+          "sha256:6d9227a47e4cb15363022d4b8db0b58872f9bbe00963980830a4e8bac4f9da42",
+          "sha256:6ef99f26672adb85b19080090247945c7948a287d06f799db99927e356fd0675",
+          "sha256:709720f640cdb3861b8b14414406710029b4f49bd50da9bcfcb901abb046a19e",
+          "sha256:70df0ecedf16faf117933fd20e68619ecc95167a1f4890b90d4ee1fba11e7161",
+          "sha256:7141f4e5b32660d3748893327c35355a6ec23c16f3563fea6cf2d6067af182d8",
+          "sha256:733f24d2d2576c130cbda0f6ce1316eba572ca9da80ac17556dd89c44d8c690b",
+          "sha256:7458a4395bb18faa356403c1a6ee0d2b8b6805c3fb3e5c674f5c718ad4690536",
+          "sha256:74b79d16049d18ba0e4e7114378ef395c8b74609fccf759b4a7a391de2a8711e",
+          "sha256:75ae9bb5ee3b6c71bc51b65e3041166e9db294d6c5a4f848e614cae9fb140930",
+          "sha256:76c815c621448ba5bfd874f746676b8f82d7e4a0fab2f962aa60d1b0eff876f3",
+          "sha256:7994f3dd6b2460c52006ce57f08c5cfd7783be551d1cfcecbafc9d29d838031e",
+          "sha256:7be35b15c887b9153bc916174ec5920a0ada90a061683721daeb5a5abaec5c5c",
+          "sha256:7cda199dd696fbfd48365ca92c63b8f541a2dd7cfe36df8809f6a4bfe3c7d1b1",
+          "sha256:7e928746c0f1430faff71ef98dd0fcdf17118faa6b1c1b0e470cfb68860b09bc",
+          "sha256:804ce4a68af18e22a865c0c034d83141c5083eab81ca2cad677463c700084db9",
+          "sha256:816015d169f82feceffbf50351bea8b4210aac316f997c8c1e9f0c2e564c7d98",
+          "sha256:8171e98e55afac4fe24c76b6a1e681d7d1d22607583fd468ec9d8f7b3b38c069",
+          "sha256:8305078b0808ab70d2cee3bd80d92381f649f45a9a8a8bd697a466625d6f5316",
+          "sha256:84d94f5ccdea1157f0b8942cbcf855e49ec35c4b01855843d72b04f727dc8c8f",
+          "sha256:86d74909d299e2d9f68e7828ef82208c7b378011ddd3985a66f34712b4b25fe3",
+          "sha256:87daf8127b7e9024ff1c13ef28c8a5b3d69f5505eed1bac4d4a257bd5d96509c",
+          "sha256:887ef460455b92a247640627d56f322f229543c4619d81de886df26c364e0f1e",
+          "sha256:90267fbdbafff19b8d51ca85d4f55231d418f1eefd0d8263f5fee811632d6cfe",
+          "sha256:90d472b3ca26d1b642cca2afb5f6ea5e64204b11eda3ffde7a4af171e6a71e3c",
+          "sha256:92d9d9dec83280724a46a4659e29be481a231b7c4492a158d88d032ba4be9f8d",
+          "sha256:9323fb4431675c59b73cf387b9e8d04df2e65faed0f0c82a35cadcbd23c17c97",
+          "sha256:93da0694739df7c5318ed840fa64226df099a90a6a7956d1c7c108e3689d1a8a",
+          "sha256:953521a41523aeca5afa86a8a306a6785c425c15f3394d2e4aae17a0b02b5a13",
+          "sha256:958eaebf6d91353a2f1320da4614c8c1ba1e104d38fa569c9b520cdf6a513e9b",
+          "sha256:97c8f5193bd879768ab29a634ae0067ab960d279c3b039d3750bc65dc30774cf",
+          "sha256:97f2140f218ed5c7c1ad24ded273b58189fa8f00baac5162923e10384d0efd6d",
+          "sha256:997980e5a2762b839fc79723cb08af1c3aac9c91009c7eb03e8a69c0d725da8a",
+          "sha256:9a1e705277299598adf03df143b052f0aa04597939ac6c7220a58501a615acbd",
+          "sha256:9a3cfd27a8237292917b1c1c4742c111b9cb0ab81ba38d01146c543a09792eaa",
+          "sha256:a0c8bcda0f139a425157fb68950751eb53bfa83c9ce37531979b5c85df8f1742",
+          "sha256:a2bc890e6df9be2fc6141a7a3d01b62031b347c2dc56419744f31cfa96a17c5f",
+          "sha256:a4b8b3133165acd6026e9332fd2099fb138732425e801ec8f2d6c8b886dc2734",
+          "sha256:a4fcf84f7d41d2102269a3fe49bceecaebce6c4ac297a0dc53f3ccd154aef3c1",
+          "sha256:a96a11aa12d28f66134b55708110a46c86cb2912d5b5fc5d1b328c0f1d3f4880",
+          "sha256:a9c2ac88d5a723ff2c266556de196ee49100d5f34da2a03ff132f7dc89c167dd",
+          "sha256:aa0f916db54d3ff1e1cfa5b30ca810660a70859dc09fff74ea27c9e8286af405",
+          "sha256:aa12d5f9865de1ceb25e92852b26752a26852a6b9077a5f077bd483bf81ad67e",
+          "sha256:ae7221dbed76fb8061ed5d5c85851558690bc83809935c687aaa99cb5da5ebe4",
+          "sha256:aea20273e3b279c4b1ec5da366289a5fd51a38f3002a8880f9c1ea5eb4ae6865",
+          "sha256:afa42a0c54bf0677b5ece7cfd0b5d59c6e344304ffd5e6c5a7580f5ec25cf9c5",
+          "sha256:afdaba3bb7a44d986e6c97790c4b58d95504a1458c9800c4e97fe28aed3a0e2a",
+          "sha256:b019d2393ea2390d544898c40113a9f917f3922d77fd0d46f7745036eb03befc",
+          "sha256:b11e745723a8a6ff3b11f7e56a72e064a4be0daa8f7f3304b9c5efc6c0dc0e0c",
+          "sha256:b358156e1aca5cbe41fa51cb0939d256334c39edbf3de0c63e429d303f0a97c7",
+          "sha256:b492700c3c4fd89a8d838167285dd694d74147d26652f784fe16769ebdb77800",
+          "sha256:b5e2d1f5c537ff65d14163f413a5b37656a73d763c31e1127bcd42b39f0e6df7",
+          "sha256:b696b974130465c1abd58a64671e466d774362eeeb509078abac10d03312a131",
+          "sha256:b7964e940df32aa90376a2c5768b7c2268303c3135d3faddd69240f8502ba383",
+          "sha256:b8aca5b035d40f71b3a11e936c2f778e9ed4541068105a333cd5c41541f11ead",
+          "sha256:bb468c717bfff80462e460a2cded447f85f78473eb7baf649b183ac77fe1e15c",
+          "sha256:bce5f9d0eb4f2824b5dde7997bb94d7957542d7356ea75e58b3c8c2df3a9750a",
+          "sha256:bd5dc9efc33721d07cb09d5fb50a80b63fbb3041125198decd3202714770f3f2",
+          "sha256:bd6fcdb108f0e24f55429c218fbdacb1d6d84583e9c0117182e515d24608a66e",
+          "sha256:bf267e7a19d611ee35b0e7600203bdfd2d7536b69302f80cbc87527e9bb21c5a",
+          "sha256:c046de1a5bdd38ae2406b31ac71c61646ff01cbbfe6bb65d811edb61437f8382",
+          "sha256:c3b52e4bd522ba25482dea215877f6c7f2a91774193f0ccb8ec0115fdc000601",
+          "sha256:c3d0fc3d6cb5fd63768ece31d5cc50e37145958a7173c28b4637323950bfb976",
+          "sha256:c4b894ca958e3882b3c38550b162b327fa7faf9879209297d72191b8c073c987",
+          "sha256:c577ab1381788d92569b7a955759d2a96f4af69f3b189549d4d16a705996f221",
+          "sha256:c594aaf861a387c8719b048861e5c4bb8ed73910fba9f844b3dee3b9a3dc293e",
+          "sha256:c599b541d5653e0c511997031743176c8ccd83cf0611d4f8d56890044c34cb80",
+          "sha256:c67937082e269074919fd263374bf7549d4f3550ada918f192d1df9528ce87f7",
+          "sha256:c7a00bdc05dd74a618bb7e510377471dc0cbcbc12b00be370a590474cd40acad",
+          "sha256:c8c6f86022869003e234e40067e11a45f3ac1e37a1f880c8e7f5ecbb4438af77",
+          "sha256:c8ce0d07b16f250aaa93962f227ed243c296988ce8f9af260d5e0a404c1503af",
+          "sha256:c9ee7aac1f800ac7731ff47480955287fc4e5eb3342c9ae81b8451004077e7d4",
+          "sha256:cd06856dc27ee6687d37ea0802a0b997fa5f3e6bdc6dad984c5c6fef1826f904",
+          "sha256:cd24eca82bda8a267a803e64f9a36a4f7aa656afd1739826f90910fc5df164d8",
+          "sha256:cd731d50555e1c32867d4e913b1be96123f16c480aa6fab2fe66c987c4975da1",
+          "sha256:cf70bae48c5a0b4c653a4ae601ba58ccd0668e25e5f72a102f28281b7b3f7ed4",
+          "sha256:d09822e3955f0051df8817e29e10870cb2078034e9822eee69920754df00c066",
+          "sha256:d1a02d437e2db3356914d4aeda4937d24410b5f61ac13bef1da4c61dca1fbbb5",
+          "sha256:d418af0270e9149f0419dc8af55484735af288f5b8c93d903c299f7ac00f3606",
+          "sha256:d5dd6d2b09ad6a37016198487728278d06c35a242a3eac4961e1f51f35cce570",
+          "sha256:d881edf94c4176306aac8e033223d6c4abda91f2b33eaa0edcede68484ddc6c7",
+          "sha256:d8cb6a06d9cd426d2ed72de8974119b5e0bb70949a4ac4122d2c1218c5ad3088",
+          "sha256:d9e33a81c61d415e401ff71c6adbc2deb546e7b9dfcc5696ce8f89764db0c504",
+          "sha256:df295f905401f5cfe8c07dd1fc3393fd801c4892f16ec79e9943eea525b27f27",
+          "sha256:df8921ef14b87afab3ba6de3cf4a63c4a42be6fd283e45c29b0d7873cc1a3f73",
+          "sha256:dfbb1eb87fe61f4a8ec4acb27a68a275c45f209e711d603754d4160bccbb9ff5",
+          "sha256:e1a84eb1b24348757f0afd392618e363a215a9c98c9aebd19708b81763d0ad01",
+          "sha256:e5093dc87dcb766ee5711c7611f884fc62f23c90b9aae1d89b8bc84cebfa1a74",
+          "sha256:e7a54266dc59a2ef931b76e09e3e08647ad537c30af366eb9a8907d7a5b2404d",
+          "sha256:e7de5b718b43025b134d25c4b5df5992ed44b60f6a7974bef3bfb8b001fb4ca8",
+          "sha256:e81287fd7612a764d301e692f44679cb88a06357e66a2e58ceb0e834eebab500",
+          "sha256:e95031a39780481137cc074fe1f916ffae2b84d612471749e2403089e7d110f4",
+          "sha256:e9b8cd3f2162a94a4d4aeeffeeb99fc026d3903e9c36d9ba7539edf873030d4b",
+          "sha256:eb3cfbbb6b141e58595176022c7ff99d8cf3b80420f1ba3644fdd340ec9b6e2d",
+          "sha256:f1cb5f6cdc91389f873607181baff90e4993aaefd3f116bea53ead7467e38e69",
+          "sha256:f5bf8400bb2fa5b8616aac52fd78137055335898e450c92c013448a177208764",
+          "sha256:f6c0ffd203ceb0b245ffd7dab36d196468d00a879625e9ed42e3cfc3231af9ef",
+          "sha256:f97efb5dcabbcd2ad45994629b903f21800802727506860ed9734e1d9d042ef6",
+          "sha256:f98c1bc374074cc11ab6b7171c7cdac3eed8f7ffbb2781ee68f3f944a1d5e172",
+          "sha256:fb07dae7b0e4b67ac88727aabef8a5e0beb29b5194a703b00db88838f431f02e"
+        ],
+        "spans": [],
+        "statement": "sha256:b88bd30fe4b0db6bc53f44f0d59449cfa193409f6f7d081739253d8600bd5ceb"
+      }
+    },
+    {
       "claim": "For an argument whose llmBaseUrl equals the US registry declaration, searchUrl constructs https://llm.kimchi.dev/v1/search.",
       "evidenceHash": "sha256:6f4778769d25031b71090d6199f66c1982917db7deea931b701d7236607f1ffa",
       "id": "us-search-url-construction",

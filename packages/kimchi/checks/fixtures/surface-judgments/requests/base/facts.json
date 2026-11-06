@@ -1,0 +1,199 @@
+{
+  "regionRegistry": {
+    "fields": []
+  },
+  "requestCallers": [
+    {
+      "callSite": {
+        "column": 10,
+        "endColumn": 35,
+        "endLine": 4,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 4
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 8,
+        "file": "kimchi/src/requests.ts",
+        "line": 2
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 8,
+        "file": "kimchi/src/requests.ts",
+        "line": 2
+      }
+    },
+    {
+      "callSite": {
+        "column": 10,
+        "endColumn": 35,
+        "endLine": 4,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 4
+      },
+      "distance": 1,
+      "functionSite": {
+        "column": 8,
+        "file": "kimchi/src/requests.ts",
+        "line": 2
+      },
+      "kind": "caller",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 29,
+        "file": "kimchi/src/requests.ts",
+        "line": 9
+      }
+    },
+    {
+      "callSite": {
+        "column": 10,
+        "endColumn": 35,
+        "endLine": 7,
+        "file": "kimchi/src/requests.ts",
+        "library": "fetch",
+        "line": 7
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 8,
+        "file": "kimchi/src/requests.ts",
+        "line": 6
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 8,
+        "file": "kimchi/src/requests.ts",
+        "line": 6
+      }
+    },
+    {
+      "callSite": {
+        "column": 12,
+        "endColumn": 42,
+        "endLine": 3,
+        "file": "kimchi/src/stability.ts",
+        "library": "fetch",
+        "line": 3
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 28,
+        "file": "kimchi/src/stability.ts",
+        "line": 2
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 28,
+        "file": "kimchi/src/stability.ts",
+        "line": 2
+      }
+    },
+    {
+      "callSite": {
+        "column": 42,
+        "endColumn": 73,
+        "endLine": 9,
+        "file": "kimchi/src/stability.ts",
+        "library": "fetch",
+        "line": 9
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/stability.ts",
+        "line": 9
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 1,
+        "file": "kimchi/src/stability.ts",
+        "line": 9
+      }
+    },
+    {
+      "callSite": {
+        "column": 42,
+        "endColumn": 73,
+        "endLine": 9,
+        "file": "kimchi/src/stability.ts",
+        "library": "fetch",
+        "line": 9
+      },
+      "distance": 1,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/stability.ts",
+        "line": 9
+      },
+      "kind": "callback",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 3,
+        "file": "kimchi/src/stability.ts",
+        "line": 7
+      }
+    },
+    {
+      "callSite": {
+        "column": 10,
+        "endColumn": 17,
+        "endLine": 2,
+        "file": "kimchi/src/chained-fetch.ts",
+        "library": "fetch",
+        "line": 2
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/chained-fetch.ts",
+        "line": 1
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 1,
+        "file": "kimchi/src/chained-fetch.ts",
+        "line": 1
+      }
+    },
+    {
+      "callSite": {
+        "column": 10,
+        "endColumn": 3,
+        "endLine": 5,
+        "file": "kimchi/src/returned-fetch.ts",
+        "library": "fetch",
+        "line": 3
+      },
+      "distance": 0,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/returned-fetch.ts",
+        "line": 2
+      },
+      "kind": "enclosing",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 1,
+        "file": "kimchi/src/returned-fetch.ts",
+        "line": 2
+      }
+    }
+  ]
+}

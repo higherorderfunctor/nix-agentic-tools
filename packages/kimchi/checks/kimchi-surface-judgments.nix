@@ -8,7 +8,10 @@
   extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
   inherit (extracted.load {dir = ../extracted;}) aggregate;
   regionRegistry = extracted.get aggregate "regionRegistry";
-  facts = pkgs.writeText "kimchi-judgment-facts.json" (builtins.toJSON {regionRegistry.fields = regionRegistry.fields;});
+  facts = pkgs.writeText "kimchi-judgment-facts.json" (builtins.toJSON {
+    regionRegistry.fields = regionRegistry.fields;
+    requestCallers = extracted.get aggregate "requestCallers";
+  });
   system = pkgs.stdenv.hostPlatform.system;
   scripts = ../extract/judgments;
   typescript = "${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js";

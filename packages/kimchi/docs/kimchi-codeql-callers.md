@@ -6,20 +6,25 @@ shares the `network` query pack, models, release database and query results;
 merges it beside `requestGuards` for the judgment check; the egress report does
 not read or publish it. Only requests under `kimchi/src/` qualify, using the
 same `ClientRequest`, library and target predicates as the network queries. A
-call occurrence is identified by file, line **and column**. Thus the two calls
-on `src/extensions/memory/backend.ts:192` remain distinct even though `network`
-groups them. Carried dependencies are outside this fact.
+call occurrence is identified by file and its exact start and end positions.
+Thus the two calls on `src/extensions/memory/backend.ts:192` remain distinct
+even though `network` groups them. Calls sharing a start also remain distinct:
+`getFetch()(url)` can measure the outer invocation, while `fetch(u).then(cb)`
+measures the inner invocation. Carried dependencies are outside this fact.
 
-Every row contains `callSite` (file, line, column, library), `functionSite`
-(file, line, column), `kind`, `site` (file, line, column), `property`, `reason`
-and `distance`. Locations retain the database's repository-relative `kimchi/`
-prefix. Unused properties and reasons are null. Rows are deduplicated and sorted
-by request location/library, distance, function location, kind, site, property
-and reason. Each edge or boundary keeps its minimum distance across chains;
-paths are never emitted. For a receiving member call, `site` starts at the
-called property name (`then` in `f().then(cb)`), or the property expression
-inside brackets. Other calls use the call's start. This also applies to
-boundaries at receiving calls, keeping calls within one chain distinct.
+Every row contains `callSite` (file, line, column, endLine, endColumn, library),
+`functionSite` (file, line, column), `kind`, `site` (file, line, column),
+`property`, `reason` and `distance`. Locations retain the database's
+repository-relative `kimchi/` prefix. All line and column values are 1-based;
+`endLine` and `endColumn` include the invocation's final character, as defined
+by CodeQL locations. Unused properties and reasons are null. Rows are
+deduplicated and sorted by request location/library, distance, function
+location, kind, site, property and reason. Each edge or boundary keeps its
+minimum distance across chains; paths are never emitted. For a receiving member
+call, `site` starts at the called property name (`then` in `f().then(cb)`), or
+the property expression inside brackets. Other calls use the call's start. This
+also applies to boundaries at receiving calls, keeping calls within one chain
+distinct.
 
 - `enclosing`: `functionSite` and `site` identify the request's enclosing
   function; distance is zero.
@@ -132,8 +137,8 @@ module, source constructor callers and callbacks, distinct chained call sites,
 callback properties versus stored properties, registration, module storage,
 mutual recursion, depth, exported entries, inline arrows/function expressions,
 object/class methods, minimum distances and unsupported returned functions.
-Function declaration locations exclude the `export` keyword, as the pinned
-extractor's `fixExports` does.
+Expected request ends are counted by hand. Function declaration locations
+exclude the `export` keyword, as the pinned extractor's `fixExports` does.
 
 QL compilation, fixture equality and real-release coverage must be settled by
 CI.

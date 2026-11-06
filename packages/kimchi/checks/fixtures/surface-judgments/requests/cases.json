@@ -1,0 +1,1210 @@
+[
+  {
+    "codes": ["UNCLASSIFIED_ROOT", "VERDICT_INPUT"],
+    "details": ["/judgments/0/packet/selector: invalid type or value"],
+    "failureIds": ["<unclassified:eu>", "eu-search-service-availability"],
+    "name": "gateway-record-request-selector",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/packet/selector/fact",
+        "value": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": []
+              },
+              "path": "src/requests.ts"
+            }
+          }
+        }
+      }
+    ],
+    "rejects": "accepting a gateway-shaped record with a request selector until evidence comparison"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["UNCLASSIFIED_ROOT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "  return fetch(\"https://a.example\");",
+        "to": "  return fetch(\"https://a.example\"); fetch(\"https://c.example\");"
+      }
+    ],
+    "failureIds": [
+      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":1},\"symbol\":[[\"function:requestA\",0]]},\"path\":\"src/requests.ts\"}>"
+    ],
+    "name": "request-added",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/8",
+        "value": {
+          "callSite": {
+            "column": 38,
+            "endColumn": 63,
+            "endLine": 4,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 4
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          }
+        }
+      }
+    ],
+    "rejects": "enumerating verdicts only, merging same-line calls, or hashing all requests in one owner together",
+    "unchanged": true
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "expect": {
+      "diff.json/request-a/rows/added": [
+        "sha256:05374205f26a73d66737af6a09d37efc3f02725c0ab03bc65566ed9843f9514b",
+        "sha256:14d05d31e40f34c6aac6a630688e97969f771356283329737c8bd5ccc9c5938d",
+        "sha256:392f5009dffc00f0ec0e6441143c504cf3ed6e921d1649d3c9c7ef0cc92a3f5b",
+        "sha256:6d1ff75a8ad929cbf0834a94bad7764a4f84d822deaee1e093988a02199f62e1",
+        "sha256:d40d596c682883271f0603ef555543b8f544bfe3ff79b84ab4ce688519b35ad7"
+      ],
+      "diff.json/request-a/rows/removed": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+      ],
+      "diff.json/request-a/spans": []
+    },
+    "failureIds": ["request-a"],
+    "name": "request-caller-added",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/8",
+        "value": {
+          "callSite": {
+            "column": 10,
+            "endColumn": 35,
+            "endLine": 4,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 4
+          },
+          "distance": 1,
+          "functionSite": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "caller",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 32,
+            "file": "kimchi/src/requests.ts",
+            "line": 10
+          }
+        }
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/9",
+        "value": {
+          "callSite": {
+            "column": 10,
+            "endColumn": 35,
+            "endLine": 4,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 4
+          },
+          "distance": 1,
+          "functionSite": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "callback",
+          "property": "onStart",
+          "reason": null,
+          "site": {
+            "column": 1,
+            "file": "kimchi/src/requests.ts",
+            "line": 11
+          }
+        }
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/10",
+        "value": {
+          "callSite": {
+            "column": 10,
+            "endColumn": 35,
+            "endLine": 4,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 4
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "boundary",
+          "property": null,
+          "reason": "stored",
+          "site": {
+            "column": 16,
+            "file": "kimchi/src/requests.ts",
+            "line": 12
+          }
+        }
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/11",
+        "value": {
+          "callSite": {
+            "column": 10,
+            "endColumn": 35,
+            "endLine": 4,
+            "file": "kimchi/src/requests.ts",
+            "library": "other-fetch-model",
+            "line": 4
+          },
+          "distance": 0,
+          "functionSite": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "enclosing",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          }
+        }
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/distance",
+        "value": 7
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/kind",
+        "value": "measured-kind"
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/reason",
+        "value": "measured-reason"
+      }
+    ],
+    "rejects": "dropping caller, callback, boundary, alternate-library rows, or typed metadata from request evidence",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "expect": {
+      "diff.json/request-a/rows/added": [],
+      "diff.json/request-a/rows/removed": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+      ]
+    },
+    "failureIds": ["request-a"],
+    "name": "request-caller-removed",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/1",
+        "remove": true
+      }
+    ],
+    "rejects": "append-only freshness checks",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "expect": {
+      "diff.json/request-b/rows/added": [],
+      "diff.json/request-b/rows/removed": [],
+      "diff.json/request-b/spans/0/new": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+      "diff.json/request-b/spans/0/old": null,
+      "diff.json/request-b/spans/0/site/path": "src/policy.ts"
+    },
+    "failureIds": ["request-b"],
+    "name": "request-citation-added",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/1/selector/sources/0",
+        "value": {
+          "anchor": {
+            "role": {
+              "kind": "node",
+              "steps": [
+                ["list", 0],
+                ["bindings:enabled", 0],
+                ["node", 0],
+                ["list", 0],
+                ["name:enabled", 0]
+              ]
+            },
+            "symbol": []
+          },
+          "path": "src/policy.ts"
+        }
+      }
+    ],
+    "rejects": "ignoring newly selected explicit citations when comparing request evidence",
+    "unchanged": ["request-a"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "src/policy.ts",
+        "from": "const enabled = true;",
+        "to": "const enabled = false;"
+      }
+    ],
+    "expect": {
+      "diff.json/request-a/rows/added": [],
+      "diff.json/request-a/rows/removed": [],
+      "diff.json/request-a/spans/0/new": "sha256:cde083d92431a8f400067e09d9c16998a54a7d69d8cd70fa21476ccf15e7a3ed",
+      "diff.json/request-a/spans/0/old": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+      "diff.json/request-a/spans/0/site/path": "src/policy.ts"
+    },
+    "failureIds": ["request-a"],
+    "name": "request-citation-edited",
+    "rejects": "ignoring explicit narrow source citations",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["ANCHOR_MISSING"],
+    "details": [
+      "cannot read source src/does-not-exist.ts (ENOENT)",
+      "Evidence hash: old=",
+      "new=unresolved",
+      "Packets:",
+      "Fix:"
+    ],
+    "failureIds": ["request-a"],
+    "incomplete": true,
+    "name": "request-citation-file-missing",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidence/spans/0/path",
+        "value": "src/does-not-exist.ts"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidenceHash",
+        "value": "sha256:36fd8a37bba94a44b880d0e637db71bf9a975c54a645b5d59740bbbea61383fa"
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments/0/selector/sources/0/path",
+        "value": "src/does-not-exist.ts"
+      }
+    ],
+    "rejects": "uncaught filesystem errors that skip citation diagnostics and packet artifacts",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "failureIds": ["request-a"],
+    "name": "request-claim-blank-part",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/claim/trigger",
+        "value": "  "
+      }
+    ],
+    "rejects": "accepting a blank request trigger claim",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED", "EVIDENCE_CHANGED", "REMOVED_ROOT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "\nexport function requestA() {\n  const unrelated = \"before\";\n  return fetch(\"https://a.example\");\n}\nexport function requestB() {\n  return fetch(\"https://b.example\");\n}\nfunction callerA() { return requestA(); }\nfunction nextCaller() { return requestA(); }\nregister({ onStart: requestA });\nconst stored = requestA;\nfunction unrelatedCaller() { return \"before\"; }\n",
+        "to": "function intercepted() {\n\n  return ready ? original(second) : original(third);\n}\n"
+      }
+    ],
+    "expect": {
+      "diff.json/rebind-1/rows": {
+        "added": [],
+        "removed": []
+      },
+      "diff.json/rebind-1/spans": [
+        {
+          "new": "sha256:c3dac454dd28ae26c79abda7029d1b7a6cfc6710a9e0dab01c731cf742364ee7",
+          "old": "sha256:636f376d38e737bca5b607b45df88fdfb94e3e8cecc4c6e58d541acc1f0e3a83",
+          "site": "request call"
+        }
+      ]
+    },
+    "failureIds": ["rebind-0", "rebind-1", "rebind-2"],
+    "name": "request-earlier-call-deleted-rebind",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers",
+        "value": [
+          {
+            "callSite": {
+              "column": 18,
+              "endColumn": 33,
+              "endLine": 3,
+              "file": "kimchi/src/requests.ts",
+              "library": "fetch",
+              "line": 3
+            },
+            "distance": 0,
+            "functionSite": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            },
+            "kind": "enclosing",
+            "property": null,
+            "reason": null,
+            "site": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            }
+          },
+          {
+            "callSite": {
+              "column": 37,
+              "endColumn": 51,
+              "endLine": 3,
+              "file": "kimchi/src/requests.ts",
+              "library": "fetch",
+              "line": 3
+            },
+            "distance": 0,
+            "functionSite": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            },
+            "kind": "enclosing",
+            "property": null,
+            "reason": null,
+            "site": {
+              "column": 1,
+              "file": "kimchi/src/requests.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      {
+        "file": "verdicts",
+        "path": "judgments",
+        "value": [
+          {
+            "claim": {
+              "default": "Unknown: default behavior has not been judged.",
+              "destination": "Unknown: effective destination has not been judged.",
+              "disable": "Unknown: disabling controls have not been judged.",
+              "trigger": "Unknown: triggering behavior has not been judged."
+            },
+            "evidence": {
+              "call": "sha256:f38c930f77b7b0403f73dfdd1f16b769dc3a0c808a983c6971578a5e70cd009a",
+              "root": "sha256:8b9c5ff21e0b74630541263a8fcd6d4d29b109813e4ad7d36aff2b976eda7892",
+              "rows": [
+                "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
+              ],
+              "spans": [],
+              "statement": "sha256:0ad66e0a3da85dc3ae1ecb80625854420d37be5dd189538e76c18ae18e813ff9"
+            },
+            "evidenceHash": "sha256:a876c21a335651de7a0d30f594e573a27b80c0ea5d05da186cbba3715bac9b93",
+            "id": "rebind-0",
+            "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+            "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+            "scope": "The selected request occurrence and explicitly cited source bytes.",
+            "selector": {
+              "fact": {
+                "kind": "requestCallers",
+                "where": {
+                  "request": {
+                    "anchor": {
+                      "role": {
+                        "callee": "call:original",
+                        "kind": "call",
+                        "ordinal": 0
+                      },
+                      "symbol": [["function:intercepted", 0]]
+                    },
+                    "path": "src/requests.ts"
+                  }
+                }
+              },
+              "sources": []
+            },
+            "verdict": "unknown"
+          },
+          {
+            "claim": {
+              "default": "Unknown: default behavior has not been judged.",
+              "destination": "Unknown: effective destination has not been judged.",
+              "disable": "Unknown: disabling controls have not been judged.",
+              "trigger": "Unknown: triggering behavior has not been judged."
+            },
+            "evidence": {
+              "call": "sha256:636f376d38e737bca5b607b45df88fdfb94e3e8cecc4c6e58d541acc1f0e3a83",
+              "root": "sha256:75db7a3ca7731b5632100ee447ffd230d7bd63e0705492f6957e9059617151a5",
+              "rows": [
+                "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
+              ],
+              "spans": [],
+              "statement": "sha256:e301fb86dcd7416fecffc7837eaa62c7c0943b93590c865ba36e250aa4e6a684"
+            },
+            "evidenceHash": "sha256:fc20cb0f3f0e9585e64b6a3863c88e802d8a202f5c6c1ae337ec6d5ac789f3c6",
+            "id": "rebind-1",
+            "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+            "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+            "scope": "The selected request occurrence and explicitly cited source bytes.",
+            "selector": {
+              "fact": {
+                "kind": "requestCallers",
+                "where": {
+                  "request": {
+                    "anchor": {
+                      "role": {
+                        "callee": "call:original",
+                        "kind": "call",
+                        "ordinal": 1
+                      },
+                      "symbol": [["function:intercepted", 0]]
+                    },
+                    "path": "src/requests.ts"
+                  }
+                }
+              },
+              "sources": []
+            },
+            "verdict": "unknown"
+          },
+          {
+            "claim": {
+              "default": "Unknown: default behavior has not been judged.",
+              "destination": "Unknown: effective destination has not been judged.",
+              "disable": "Unknown: disabling controls have not been judged.",
+              "trigger": "Unknown: triggering behavior has not been judged."
+            },
+            "evidence": {
+              "call": "sha256:c3dac454dd28ae26c79abda7029d1b7a6cfc6710a9e0dab01c731cf742364ee7",
+              "root": "sha256:5438b563dea5a2900a0decb65d6842405939ed3d430858332ef705311a3f3dc7",
+              "rows": [
+                "sha256:f61e92db15e4bca5f542737e21f8a984661bbe73ffd5f7de992ddc84114e9454"
+              ],
+              "spans": [],
+              "statement": "sha256:e301fb86dcd7416fecffc7837eaa62c7c0943b93590c865ba36e250aa4e6a684"
+            },
+            "evidenceHash": "sha256:035220e06d35ba9c938454c340022bc469abd42ca73919def57d44fc58ff1f94",
+            "id": "rebind-2",
+            "missingEvidence": "Evidence establishing default, destination, disable, and trigger behavior is missing.",
+            "rationale": "Fixture record intentionally leaves the four behavior claims unjudged.",
+            "scope": "The selected request occurrence and explicitly cited source bytes.",
+            "selector": {
+              "fact": {
+                "kind": "requestCallers",
+                "where": {
+                  "request": {
+                    "anchor": {
+                      "role": {
+                        "callee": "call:original",
+                        "kind": "call",
+                        "ordinal": 2
+                      },
+                      "symbol": [["function:intercepted", 0]]
+                    },
+                    "path": "src/requests.ts"
+                  }
+                }
+              },
+              "sources": []
+            },
+            "verdict": "unknown"
+          }
+        ]
+      }
+    ],
+    "rejects": "silently rebinding a same-callee ordinal to another call sharing its statement and caller rows"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
+    "details": [
+      "cannot adapt requestCallers location at /requestCallers/1/site: caller site is ambiguous between nested invocations sharing a start; resolving it requires the site's end position in requestCallers"
+    ],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "function callerA() { return requestA(); }",
+        "to": "function callerA() { return makeRegistrar()(\"start\", requestFn); }"
+      }
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "name": "request-caller-shared-start-refused",
+    "rejects": "choosing the inner makeRegistrar() invocation for the shared-start caller site in makeRegistrar()(\"start\", requestFn)"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-end-after-close",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/6/callSite/endColumn",
+        "value": 18
+      }
+    ],
+    "rejects": "accepting the dot after a closing parenthesis as the inclusive call end"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-fact-bad-distance",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/distance",
+        "value": "5"
+      }
+    ],
+    "rejects": "accepting a string as a request caller distance"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-fact-missing",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers",
+        "remove": true
+      }
+    ],
+    "rejects": "defaulting the absent requestCallers fact array to an empty inventory"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-location-call",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/column",
+        "value": 11
+      }
+    ],
+    "rejects": "rounding a request start inside a token to the nearest call"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION",
+      "REQUEST_LOCATION"
+    ],
+    "details": [
+      "at /requestCallers/0/site: cannot read source src/policy.ts/child.ts (ENOTDIR)",
+      "Evidence hash: old=",
+      "Packets:",
+      "Fix:"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-location-file-unreadable",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/file",
+        "value": "kimchi/src/policy.ts/child.ts"
+      }
+    ],
+    "rejects": "uncaught non-ENOENT fact source read errors that skip the failure envelope"
+  },
+  {
+    "base": "requests/base",
+    "codes": [
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT",
+      "REQUEST_FACT_INPUT"
+    ],
+    "expect": {
+      "current.json": {},
+      "diff.json": {}
+    },
+    "failureIds": [
+      "request-a",
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ],
+    "name": "request-missing-end-column",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/6/callSite/endColumn",
+        "remove": true
+      }
+    ],
+    "rejects": "accepting request facts without the required inclusive endColumn"
+  },
+  {
+    "base": "requests/base",
+    "codes": ["UNCLASSIFIED_ROOT", "REMOVED_ROOT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "function requestB()",
+        "to": "function renamedB()"
+      }
+    ],
+    "failureIds": [
+      "<unclassified:request:{\"anchor\":{\"role\":{\"callee\":\"call:fetch\",\"kind\":\"call\",\"ordinal\":0},\"symbol\":[[\"function:renamedB\",0]]},\"path\":\"src/requests.ts\"}>",
+      "request-b"
+    ],
+    "name": "request-owner-renamed",
+    "rejects": "retaining a request judgment after its enclosing function is renamed",
+    "unchanged": ["request-a"]
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "expect": {
+      "current.json/request-a/evidence/rows": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9",
+        "sha256:c12fe4cc4408ddbe45b1589b00dd8e32dee3564c7527bab90df40d341c52163e"
+      ],
+      "current.json/request-a/evidence/spans/0/sha256": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
+      "current.json/request-a/packet/rows/sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9/kind": "caller",
+      "current.json/request-a/packet/statement": "return fetch(\"https://a.example\");",
+      "current.json/request-chained-fetch/packet/statement": "return fetch(u).then(cb);",
+      "current.json/request-returned-fetch/packet/statement": "return getFetch()(\n    url\n  );"
+    },
+    "name": "request-read-only-and-repeatable",
+    "rejects": "hashing fact order, selecting the wrong nested call, losing current row detail, or rewriting verdicts",
+    "repeat": true,
+    "reverseFacts": true,
+    "unchanged": true
+  },
+  {
+    "base": "requests/base",
+    "codes": ["VERDICT_INPUT"],
+    "details": ["/judgments/0/evidence/rows: non-canonical rows array"],
+    "failureIds": ["request-a"],
+    "name": "request-recorded-row-digests-unsorted",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidence/rows",
+        "value": [
+          "sha256:c12fe4cc4408ddbe45b1589b00dd8e32dee3564c7527bab90df40d341c52163e",
+          "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+        ]
+      }
+    ],
+    "rejects": "accepting unsorted request row digest lists",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["RECORDED_HASH"],
+    "details": ["recorded evidence summary", "Evidence hash: old="],
+    "failureIds": ["request-a"],
+    "name": "request-recorded-summary-tampered",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/evidence/statement",
+        "value": "sha256:d121be3103007b41edf96f8262925f8c7d61894afe9a041843b631f69445bc57"
+      }
+    ],
+    "rejects": "trusting the recorded evidenceHash after summary bytes change",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["REMOVED_ROOT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "return fetch(\"https://a.example\");",
+        "to": "return undefined;"
+      }
+    ],
+    "failureIds": ["request-a"],
+    "name": "request-removed",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/1",
+        "remove": true
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0",
+        "remove": true
+      }
+    ],
+    "rejects": "silently dropping an orphan judgment",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "return fetch(\"https://a.example\");",
+        "to": "return undefined;"
+      }
+    ],
+    "name": "request-removed-record-by-hand",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0",
+        "remove": true
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1",
+        "remove": true
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0",
+        "remove": true
+      }
+    ],
+    "rejects": "retaining a removed request after its record is explicitly removed",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "expect": {
+      "diff.json/request-a/rows/added": [
+        "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9"
+      ],
+      "diff.json/request-a/rows/removed": []
+    },
+    "failureIds": ["request-a"],
+    "name": "request-row-multiplicity",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/8",
+        "value": {
+          "callSite": {
+            "column": 10,
+            "endColumn": 35,
+            "endLine": 4,
+            "file": "kimchi/src/requests.ts",
+            "library": "fetch",
+            "line": 4
+          },
+          "distance": 1,
+          "functionSite": {
+            "column": 8,
+            "file": "kimchi/src/requests.ts",
+            "line": 2
+          },
+          "kind": "caller",
+          "property": null,
+          "reason": null,
+          "site": {
+            "column": 29,
+            "file": "kimchi/src/requests.ts",
+            "line": 9
+          }
+        }
+      }
+    ],
+    "rejects": "deduplicating repeated caller rows before hashing or comparing request evidence",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["SOURCE_INPUT"],
+    "failureIds": ["request-a"],
+    "incomplete": true,
+    "name": "request-source-broad-function-refused",
+    "patches": [
+      {
+        "file": "verdicts",
+        "path": "judgments/0/selector/sources/0",
+        "value": {
+          "anchor": {
+            "role": {
+              "kind": "node",
+              "steps": []
+            },
+            "symbol": [["function:requestA", 0]]
+          },
+          "path": "src/requests.ts"
+        }
+      }
+    ],
+    "rejects": "accepting a whole function as a narrow explicit source citation",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["SOURCE_INPUT"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "export function requestA() {\n  const unrelated = \"before\";\n  return fetch(\"https://a.example\");\n}",
+        "to": "export const requestA = () => fetch(\"https://a.example\");\n\n\n"
+      }
+    ],
+    "failureIds": ["request-a"],
+    "incomplete": true,
+    "name": "request-source-concise-arrow-refused",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/column",
+        "value": 31
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/endColumn",
+        "value": 56
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/endLine",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/line",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/functionSite/column",
+        "value": 25
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/column",
+        "value": 25
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/column",
+        "value": 31
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/endColumn",
+        "value": 56
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/endLine",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/line",
+        "value": 2
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/functionSite/column",
+        "value": 25
+      }
+    ],
+    "rejects": "hashing an enclosing variable declaration around a concise arrow",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": ["EVIDENCE_CHANGED"],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "return fetch(\"https://a.example\");",
+        "to": "return fetch(\"https://a.example\") ?? null;"
+      }
+    ],
+    "expect": {
+      "diff.json/request-a/rows/added": [],
+      "diff.json/request-a/rows/removed": [],
+      "diff.json/request-a/spans/0/new": "sha256:32aa4e874bad6a708f2f1cb90ad68087550f6c8d75b912976a1d1ab095bb3388",
+      "diff.json/request-a/spans/0/old": "sha256:86cb1fdd4692e6e05352dcd383038775e8704857b1478f85fdb79c260ce8a0ea",
+      "diff.json/request-a/spans/0/site": "request statement"
+    },
+    "failureIds": ["request-a"],
+    "name": "request-statement-wrapper-edited",
+    "rejects": "hashing the request expression instead of its whole containing statement",
+    "unchanged": ["request-b"]
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/requests.ts",
+        "from": "\n",
+        "to": "declare function requestA(): Promise<Response>;\n\n"
+      },
+      {
+        "file": "src/requests.ts",
+        "from": "const unrelated = \"before\"",
+        "to": "const unrelated = \"edited\""
+      },
+      {
+        "file": "src/requests.ts",
+        "from": "function unrelatedCaller() { return \"before\"; }",
+        "to": "function unrelatedCaller() { return \"edited\"; }"
+      },
+      {
+        "file": "src/policy.ts",
+        "from": "label: \"selected\"",
+        "to": "label: \"adjacent\""
+      }
+    ],
+    "name": "request-type-only-overload-insertion",
+    "patches": [
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/line",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/functionSite/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/site/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/line",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/functionSite/line",
+        "value": 3
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/site/line",
+        "value": 10
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/callSite/line",
+        "value": 8
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/functionSite/line",
+        "value": 7
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/site/line",
+        "value": 7
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/0/callSite/endLine",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/1/callSite/endLine",
+        "value": 5
+      },
+      {
+        "file": "facts",
+        "path": "requestCallers/2/callSite/endLine",
+        "value": 8
+      }
+    ],
+    "rejects": "hashing line coordinates, unrelated bodies or adjacent uncited bytes, or counting type-only declarations as runtime owners",
+    "unchanged": true
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/stability.ts",
+        "from": "function deliverEvents() {\n",
+        "to": "function deliverEvents() { const unrelatedIds = [1, 2].map((n) => n * 2);\n"
+      }
+    ],
+    "name": "request-unrelated-arrow-insertion",
+    "rejects": "same-token function-start ordinals that shift a deliverEvents callback after an unrelated map arrow",
+    "unchanged": true
+  },
+  {
+    "base": "requests/base",
+    "codes": [],
+    "edits": [
+      {
+        "file": "src/stability.ts",
+        "from": "function loginExtension(pi) {\n",
+        "to": "function loginExtension(pi) { pi.on(\"session_shutdown\", () => {});\n"
+      }
+    ],
+    "name": "request-unrelated-event-insertion",
+    "rejects": "same-callee call ordinals that shift billing caller rows after a different pi.on event",
+    "unchanged": true
+  }
+]
