@@ -335,7 +335,31 @@ gh pr create --head <branch-N> --base <branch-N-1> \
 
 ## Subsequent Updates
 
-After amending or restacking commits, re-submit with:
+### Pinned force-push
+
+Before any rewrite (amend, fix, restack or move), capture the commit each branch
+points at, which is what its remote should still hold:
+
+```bash
+declare -A lease=()
+for b in <branch-1> <branch-2> ... <branch-N>; do lease[$b]=$(git rev-parse "$b"); done
+```
+
+After the rewrite, push with one `--force-with-lease=<branch>:<expected-sha>`
+per branch:
+
+```bash
+args=()
+for b in "${!lease[@]}"; do args+=("--force-with-lease=$b:${lease[$b]}"); done
+git push "${args[@]}" "$remote" "${!lease[@]}"
+```
+
+The bare `--force-with-lease` compares against the remote-tracking ref, which
+any fetch (pre-flight step 5 fetches, and worktrees share these refs) moves to
+the remote's current tip, so after a fetch it passes and protects nothing.
+
+After amending or restacking commits, re-submit with (the lease must have been
+captured before the amend):
 
 ```bash
 git submit "$SELECTED"   # force-push existing remote branches (no -c needed)
@@ -348,11 +372,7 @@ on the remote. If it fails with `couldn't find remote ref`, a selected branch
 still tracks `main`; see step 6.
 
 If `git submit` produces no output (public commits on main), force-push all
-branches manually:
-
-```bash
-git push --force-with-lease "$remote" <branch-1> <branch-2> ... <branch-N>
-```
+branches manually with the pinned lease (Pinned force-push).
 
 PRs/MRs auto-update when their branches are force-pushed. No need to recreate
 them. Only branches downstream of the changed commit need updating, but pushing
@@ -391,6 +411,9 @@ other worktrees' stacks and stale branches repo-wide (see **Rewriting** in
    old_tip="$(git rev-parse HEAD)"
    ```
 
+   Before the move, capture the lease for every remaining branch (Pinned
+   force-push).
+
    If every PR/MR in the stack merged, nothing remains to move: skip the rest of
    this recipe and tear the worktree down instead of submitting again.
 
@@ -417,13 +440,9 @@ other worktrees' stacks and stale branches repo-wide (see **Rewriting** in
    git sl
    ```
 
-6. **Force-push with leases.** Fetch first, so each lease compares against the
-   current remote-tracking ref, then push every remaining branch:
-
-   ```bash
-   git fetch "$remote"
-   git push --force-with-lease "$remote" <branch-1> <branch-2> ... <branch-N>
-   ```
+6. **Force-push with pinned leases.** Push every remaining branch with the lease
+   step 2 captured (Pinned force-push). Do not fetch to refresh the lease: a
+   fetch is what makes the bare form pass.
 
 7. **Confirm the next PR/MR targets main.** On GitHub, deleting the merged base
    branch retargets it automatically; otherwise set it yourself:
@@ -465,7 +484,8 @@ worktree's line.
 When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
 
 1. **Identify the target commit** — the PR tells you which branch/commit the
-   feedback applies to.
+   feedback applies to. Before step 2, capture the lease for the target and
+   every downstream branch (Pinned force-push).
 
 2. **Apply the fix** using `/stack-fix`. It handles both absorb (line-level
    fixes) and manual amend (structural changes) paths, including dry-run
@@ -473,9 +493,8 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
 
 3. **Force-push all downstream branches** (target + every branch after it):
 
-   ```bash
-   git push --force-with-lease "$remote" <target-branch> <downstream-1> ... <downstream-N>
-   ```
+   Push with the pinned lease (Pinned force-push) for the target and downstream
+   branches.
 
 4. **Return to the stack tip** after pushing:
 
