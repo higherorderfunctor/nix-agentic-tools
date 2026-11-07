@@ -21,6 +21,31 @@
         }
       ];
     };
+    # kiro-decisions: the settled rules for how this package is built (v3-only
+    # release and updater, no new Kiro config root, option tiers, the
+    # extractor-driven flag tables) and the scrubbed-environment procedure for
+    # measuring the binary. Scoped to the whole owner directory, the shared flag
+    # helper and the update workflow, because any of them can break one of
+    # those rules, and a measurement can land in any owner check.
+    kiro-decisions = {
+      scopes = [
+        ".github/workflows/update.yml"
+        "lib/idempotentFlags.nix"
+        "packages/${facetOwner}/**"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "decisions";
+          dir = facetOwner;
+        }
+        {
+          location = "package";
+          name = "probing";
+          dir = facetOwner;
+        }
+      ];
+    };
     # kiro-settings: how nested `native.settings` lowers into kiro's FLAT
     # cli.json, and why the flatten boundary has to come from the binary rather
     # than from attrset shape. Scoped to the flattener, the extractor that
@@ -82,12 +107,13 @@
     };
     # kiro-wrapper: the argv contract of the generated kiro-cli launcher —
     # where `--v3` and `acp --agent-engine=v3` land, why the `acp` selector is
-    # gated rather than unconditional, and how to
-    # re-measure on a version bump. Kept OUT of the `kiro-cli` category (whose
-    # fragment is the ~300-line auto-memory map) so an edit to the wrapper
-    # loads the wrapper rule, not the memory pipeline. Scoped to the generic
-    # shell helper, the factory's lib/ directory that consumes it, and the
-    # behavioral check, since all three have to move together.
+    # gated rather than unconditional, and how to re-measure on a version
+    # bump. Kept OUT of the
+    # `kiro-cli` category (whose fragment is the ~300-line auto-memory map) so
+    # an edit to the wrapper loads the wrapper rule, not the memory pipeline.
+    # Scoped to the generic shell helper, the factory's lib/ directory that
+    # consumes it, and the behavioral check, since all three have to move
+    # together.
     kiro-wrapper = {
       scopes = [
         "packages/kiro-cli/checks/kiro-fhs-contract.nix"

@@ -114,8 +114,8 @@ exactly this through the wrapper.
 
 ## Tool trust is `permissions.yaml`, never a flag
 
-The wrapper injects no `--trust-tools`. Under v3 no process hands the list to
-KAS:
+The wrapper injects no `--trust-tools`, `--trust-all-tools` or
+`--trust-workspace`. Under v3 no process hands the list to KAS:
 
 - `acp-server.js` has no `trustTools`, `trust_tools` or `trustAllTools`; it
   reads tool policy only from `permissions.yaml` / `permissions.json`, layered
@@ -293,6 +293,9 @@ stops at the first token that is neither an option nor an option's **value**:
   `-vr` has once-per-invocation options. Only callers that pass `shorts` read
   clusters; the `acp` scan, which has no setting with a short name, and every
   other caller keep whole-token matching.
+- **Shared helper changes are opt-in.** A change to `lib/idempotentFlags.nix`
+  keeps every other caller's generated text byte-identical: new behavior (such
+  as `shorts`) is selected per caller, never by changing a default.
 - **`--` parks on a sentinel** no gate matches, so gated injection declines
   rather than guessing.
 - **A dangling value option is visible.** `nat_skip` is 1 when the scan ends
@@ -462,14 +465,16 @@ follow the extracted registry; background execution can be rebound with
 ## Re-measuring on a version bump
 
 Run against the **unwrapped** binary — a bare `PATH` lookup finds the wrapper,
-which is the thing under test. One binary serves both platforms.
+which is the thing under test. One binary serves both platforms. Every command
+goes through `probe`, the scrubbed-environment launcher in
+[`probing.md`](probing.md), never with only a scratch `HOME`.
 
 ```bash
 K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.unwrapped); KB="$K/bin/kiro-cli"
 
 # 1. globals still parse BEFORE a subcommand, and still fail after it
-"$KB" --v3 whoami >/dev/null && echo "prepend ok"
-"$KB" whoami --v3 2>&1 | grep -q "unexpected argument" && echo "append still fails"
+probe "$KB" --v3 whoami >/dev/null && echo "prepend ok"
+probe "$KB" whoami --v3 2>&1 | grep -q "unexpected argument" && echo "append still fails"
 
 # 2. the acp engine resolution: rerun kiro-kas-dispatch and read its MEASURE
 #    rows; a listed client that starts KAS under plain `acp` means upstream's
@@ -479,7 +484,7 @@ K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.unw
 # 3. the v3 conflict set on acp: "not supported with --agent-engine=v3: <opt>"
 #    (exit 2) means conflict; the empty baseline must not conflict.
 for opt in "" "--agent x" "--model auto" "--effort low" "--trust-tools=x" "-a"; do
-  out=$("$KB" acp --agent-engine v3 $opt </dev/null 2>&1)
+  out=$(probe "$KB" acp --agent-engine v3 $opt 2>&1)
   echo "[$opt] $? ${out%%$'\n'*}"
 done
 ```
