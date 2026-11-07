@@ -75,9 +75,9 @@
     {
       "claim": {
         "default": "Organization listing belongs to the selected CAST AI SSO login: it follows a successful token exchange and credential conversion, rather than the refresh callback.",
-        "destination": "config.organizationsUrl comes from nonblank trimmed KIMCHI_ORGANIZATIONS_URL or the selected region castApiUrl plus /v1/organizations: https://api.cast.ai/v1/organizations for US and https://api.eu.cast.ai/v1/organizations for EU. Pending login region takes precedence over stored region.",
-        "disable": "Avoiding that SSO login path prevents the listing; unsupported or missing region configuration, failure to obtain an authorization code, or token exchange/credential-conversion failure stops it earlier. The login abort signal and timeout bound the request.",
-        "trigger": "loginWithCastAiOauth converts the token response to a credential, then requests organizations with credential.access before organization selection and credential return."
+        "destination": "config.organizationsUrl comes from nonblank trimmed KIMCHI_ORGANIZATIONS_URL or the selected region castApiUrl plus /v1/organizations: https://api.cast.ai/v1/organizations for US and https://api.eu.cast.ai/v1/organizations for EU. The pending selector region takes precedence; the provider callback falls back to loadConfig().region (a valid KIMCHI_REGION, then a valid global config region, then US).",
+        "disable": "Avoiding that SSO login path prevents the listing; a selected region without an OAuth tenant (self-hosted), failure to obtain an authorization code, or token exchange/credential-conversion failure stops it earlier. The login abort signal and timeout bound the request.",
+        "trigger": "The provider OAuth login callback and the startup auth gate's SSO choice both call loginWithCastAiOauth; the startup gate supplies its prompted region. loginWithCastAiOauth converts the token response to a credential, then requests organizations with credential.access before organization selection and credential return."
       },
       "evidence": {
         "call": "sha256:5d58d6b542e4d9a4162952a747e7460d61174537570cdc81dc5d5d79cfe3127b",
@@ -94,7 +94,7 @@
         ],
         "statement": "sha256:7fe567776de595cc0f8777a7277cee48a7a5577542c0bbcea4ca197cd0880adc"
       },
-      "evidenceHash": "sha256:e21f0f0f3ef4f75252e729f124d919ab8dfa8f8ef673d3e07fb386cc87f24f37",
+      "evidenceHash": "sha256:7e84efe1c90266a967fc4608ef80bc3cff97eef068059991468a12fd4357fe32",
       "id": "request-cli-auth-oauth-list-user-organizations-0",
       "rationale": "The sequence places listing after credential conversion and before selection; endpoint construction follows region selection and a full-URL environment override.",
       "scope": "Original pinned Kimchi 1.26.0 SSO organization-list request; excludes package resource/update/telemetry adaptations, runtime availability and the organization service or its authorization results.",
@@ -127,6 +127,18 @@
           "src/cli-auth/oauth.ts#function:loginWithCastAiOauth[0]#block[0]/list[0]/node[1]/block[0]/list[0]/bindings:{code}[0]",
           "src/cli-auth/oauth.ts#function:loginWithCastAiOauth[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]",
           "src/cli-auth/oauth.ts#function:loginWithCastAiOauth[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[3]",
+          "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/bindings:envRegion[0]",
+          "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/node[0]",
+          "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/node[1]",
+          "src/config.ts#function:loadConfig[0]#block[0]/list[0]/bindings:region[0]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/bindings:config[0]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[0]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[1]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[2]/call:ctx.ui.custom[0]/list[1]/node[0]/block[0]/list[0]/node[0]/node[0]/call:function:[0]/node[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/bindings:credential[0]",
+          "src/extensions/login/index.ts#function:createKimchiProviderOAuth[0]#block[0]/list[0]/bindings:ssoOAuth[0]",
+          "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/bindings:region[0]",
+          "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/node[0]",
+          "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/node[1]",
           "src/oauth-config.ts#function:nonEmptyEnv[0]#block[0]/list[0]/bindings:value[0]",
           "src/oauth-config.ts#function:nonEmptyEnv[0]#block[0]/list[0]/node[0]",
           "src/oauth-config.ts#function:oauthConfigForRegion[0]#block[0]/list[0]/bindings:defaults[0]",
@@ -135,17 +147,19 @@
           "src/oauth-config.ts#function:resolveOAuthLoginConfig[0]#block[0]/list[0]/bindings:region[0]",
           "src/oauth-config.ts#function:resolveOAuthLoginConfig[0]#block[0]/list[0]/node[0]",
           "src/oauth-config.ts#function:resolveOAuthLoginConfig[0]#block[0]/list[0]/node[1]",
+          "src/regions.ts##list[0]/bindings:DEFAULT_REGION[0]",
           "src/regions.ts##list[0]/bindings:REGIONS[0]/node[0]/list[0]/name:REGIONS[0]/node[0]/node[0]/node[0]/list[0]/name:eu[0]/entry:id:\"eu\"[0]/list[0]/name:castApiUrl[0]",
-          "src/regions.ts##list[0]/bindings:REGIONS[0]/node[0]/list[0]/name:REGIONS[0]/node[0]/node[0]/node[0]/list[0]/name:us[0]/entry:id:\"us\"[0]/list[0]/name:castApiUrl[0]"
+          "src/regions.ts##list[0]/bindings:REGIONS[0]/node[0]/list[0]/name:REGIONS[0]/node[0]/node[0]/node[0]/list[0]/name:us[0]/entry:id:\"us\"[0]/list[0]/name:castApiUrl[0]",
+          "src/regions.ts##list[0]/bindings:REGION_ENV[0]"
         ]
       },
       "verdict": "supported"
     },
     {
       "claim": {
-        "default": "The token endpoint is conditional on CAST AI SSO: provider login waits for an authorization code, while the separately registered refresh callback can renew an existing OAuth credential without another login.",
-        "destination": "New login uses the pending region before the stored region, then nonblank trimmed KIMCHI_OAUTH_TOKEN_URL before the region token URL: https://login.kimchi.dev/oauth/token for US and https://login.eu.kimchi.dev/oauth/token for EU. Refresh uses the tokenUrl saved in the credential, rather than resolving the current environment again.",
-        "disable": "Not starting SSO login prevents its code exchange but does not stop refresh of stored OAuth credentials. Login rejects a missing or unsupported region configuration; refresh rejects missing tokenUrl/clientId or blank refresh tokens before sending. The caller abort signal and request timeout are passed to fetch.",
+        "default": "The token endpoint is conditional on CAST AI SSO: the provider OAuth login callback and the startup auth gate's SSO choice wait for an authorization code, while the separately registered refresh callback can renew an existing OAuth credential without another login.",
+        "destination": "New login uses the pending selector region; the provider callback falls back to loadConfig().region (a valid KIMCHI_REGION, then a valid global config region, then US). It then uses nonblank trimmed KIMCHI_OAUTH_TOKEN_URL before the region token URL: https://login.kimchi.dev/oauth/token for US and https://login.eu.kimchi.dev/oauth/token for EU. Refresh uses the tokenUrl saved in the credential, rather than resolving the current environment again.",
+        "disable": "Not starting SSO login prevents its code exchange but does not stop refresh of stored OAuth credentials. Login rejects a selected region without an OAuth tenant (self-hosted); refresh rejects missing tokenUrl/clientId or blank refresh tokens before sending. The caller abort signal and request timeout are passed to fetch.",
         "trigger": "loginWithCastAiOauth exchanges the first code from the callback server or manual input using authorization_code; refreshCastAiOauth sends refresh_token when the provider refresh callback supplies a stored credential with tokenUrl, clientId and a nonblank refresh token."
       },
       "evidence": {
@@ -166,7 +180,7 @@
         ],
         "statement": "sha256:5b889ed7681e596947911ba331b66209d249e4e9029adbc66df8f45eed28fa70"
       },
-      "evidenceHash": "sha256:d59bf58edcf5f80598f5803eaae2b263adccb5e33d7b681ab3c90943cc5aef10",
+      "evidenceHash": "sha256:7e296676ddab908f4cd55807e0f2e56cbb443a099e53806d8e988b897e59717f",
       "id": "request-cli-auth-oauth-post-token-request-0",
       "rationale": "The two grant call sites and registered callbacks establish distinct login and refresh paths; configFromCredential preserves the stored refresh destination.",
       "scope": "Original pinned Kimchi 1.26.0 OAuth token helper and provider callbacks; excludes packaging changes to resource switches, updater and telemetry, dependency refresh scheduling, runtime transport availability and authorization-server behavior.",
@@ -201,6 +215,18 @@
           "src/cli-auth/oauth.ts#function:refreshCastAiOauth[0]#block[0]/list[0]/bindings:config[0]",
           "src/cli-auth/oauth.ts#function:refreshCastAiOauth[0]#block[0]/list[0]/bindings:token[0]",
           "src/cli-auth/oauth.ts#function:requireTokenField[0]#block[0]/list[0]/node[0]",
+          "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/bindings:envRegion[0]",
+          "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/node[0]",
+          "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/node[1]",
+          "src/config.ts#function:loadConfig[0]#block[0]/list[0]/bindings:region[0]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/bindings:config[0]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[0]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[1]",
+          "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[2]/call:ctx.ui.custom[0]/list[1]/node[0]/block[0]/list[0]/node[0]/node[0]/call:function:[0]/node[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/bindings:credential[0]",
+          "src/extensions/login/index.ts#function:createKimchiProviderOAuth[0]#block[0]/list[0]/bindings:ssoOAuth[0]",
+          "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/bindings:region[0]",
+          "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/node[0]",
+          "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/node[1]",
           "src/oauth-config.ts##list[0]/bindings:REGION_OAUTH_DEFAULTS[0]/node[0]/list[0]/name:REGION_OAUTH_DEFAULTS[0]/node[1]/list[0]/name:eu[0]/node[0]/list[0]/name:tokenUrl[0]",
           "src/oauth-config.ts##list[0]/bindings:REGION_OAUTH_DEFAULTS[0]/node[0]/list[0]/name:REGION_OAUTH_DEFAULTS[0]/node[1]/list[0]/name:us[0]/node[0]/list[0]/name:tokenUrl[0]",
           "src/oauth-config.ts#function:nonEmptyEnv[0]#block[0]/list[0]/bindings:value[0]",
@@ -210,17 +236,19 @@
           "src/oauth-config.ts#function:oauthConfigForRegion[0]#block[0]/list[0]/node[1]/node[0]/list[0]/name:tokenUrl[0]",
           "src/oauth-config.ts#function:resolveOAuthLoginConfig[0]#block[0]/list[0]/bindings:region[0]",
           "src/oauth-config.ts#function:resolveOAuthLoginConfig[0]#block[0]/list[0]/node[0]",
-          "src/oauth-config.ts#function:resolveOAuthLoginConfig[0]#block[0]/list[0]/node[1]"
+          "src/oauth-config.ts#function:resolveOAuthLoginConfig[0]#block[0]/list[0]/node[1]",
+          "src/regions.ts##list[0]/bindings:DEFAULT_REGION[0]",
+          "src/regions.ts##list[0]/bindings:REGION_ENV[0]"
         ]
       },
       "verdict": "supported"
     },
     {
       "claim": {
-        "default": "The credits read is automatic on session_start when loadConfig().apiKey is nonempty, and after a successful model-completion response settles when gateway credentials and an LLM endpoint are configured; a fresh credential-free configuration skips it.",
+        "default": "The credits read runs without user action as a forced refresh on session_start when loadConfig().apiKey is nonempty, and as an automatic refresh after a successful model-completion response settles when gateway credentials and an LLM endpoint are configured; a fresh credential-free configuration skips it.",
         "destination": "creditsEndpointFromLlmEndpoint trims llmEndpoint, removes a terminal /openai/v1, and appends /v1/credits; the default request URL is https://llm.kimchi.dev/v1/credits. A valid KIMCHI_BASE_URL takes precedence over an allowed-project llmEndpoint, global llmEndpoint, and the selected regional gateway. KIMCHI_REGION overrides the stored region; US is the fallback.",
         "disable": "A missing trimmed gateway token or LLM endpoint leaves creditsApiConfig unset and prevents the fetch. Configured API credentials precede stored OAuth/API-key credentials. Automatic calls within 30 seconds of the last automatic refresh reuse state before loading config; forced calls bypass that throttle, but both modes coalesce an in-flight refresh.",
-        "trigger": "refreshBillingSnapshot invokes the credits helper; startup and login paths request forced refreshes, /budget forces a refresh with UI, and the CLI completion hook stored by installGlobalFetchInstrumentation requests automatic refreshes."
+        "trigger": "refreshBillingSnapshot invokes the credits helper; startup and login paths and the Kimchi logout selector request forced refreshes, /budget forces a refresh with UI, and the CLI completion hook stored by installGlobalFetchInstrumentation requests automatic refreshes."
       },
       "evidence": {
         "call": "sha256:e5a5bbcf598b84e968bc2b7946146174f6a0eba79b61ecb215e04a1ca867fac3",
@@ -367,10 +395,10 @@
     },
     {
       "claim": {
-        "default": "The budget read is automatic on session_start when loadConfig().apiKey is nonempty, and after a successful model-completion response settles when gateway credentials and an LLM endpoint are configured; a fresh credential-free configuration skips it.",
+        "default": "The budget read runs without user action as a forced refresh on session_start when loadConfig().apiKey is nonempty, and as an automatic refresh after a successful model-completion response settles when gateway credentials and an LLM endpoint are configured; a fresh credential-free configuration skips it.",
         "destination": "budgetEndpointFromLlmEndpoint removes trailing slashes and a terminal /openai/v1 before appending /v1/budget (normally https://llm.kimchi.dev/v1/budget). loadConfig chooses a valid KIMCHI_BASE_URL before allowed-project/global llmEndpoint and the regional gateway; region selection is environment, global config, then US.",
         "disable": "refreshBudgetStatus returns when creditsApiConfig is absent: configureBillingCreditsApi requires both a trimmed token and endpoint. Gateway resolution favors the configured key over auth.json credentials. refreshBillingStatusFromConfig suppresses automatic calls during its 30-second cooldown; forced calls bypass that check, and either mode shares an existing in-flight refresh.",
-        "trigger": "The budget half of refreshBillingSnapshot runs for forced startup/login or /budget refreshes and for automatic refreshes from the module-held model-completion settlement hook."
+        "trigger": "The budget half of refreshBillingSnapshot runs for forced startup/login, Kimchi logout selector or /budget refreshes and for automatic refreshes from the module-held model-completion settlement hook."
       },
       "evidence": {
         "call": "sha256:0dea8f80e8c1dd2135901ae12748007b882bf217bf2400b407100704b816ca9a",
@@ -519,7 +547,7 @@
       "claim": {
         "default": "Unknown whether the external MCP SDK invokes this transport in a default session. The original CLI includes ideAdapterExtension, whose session_start handler attempts discovery immediately and then polls every 5000 ms; the cited client hands its transport to Client.connect.",
         "destination": "When start() is invoked through connectToIde, it opens ws://127.0.0.1:<lockfile.port>/mcp with the lockfile authToken in the token query parameter.",
-        "disable": "Discovery returns during shutdown, while already connected, or without a parsed matching lockfile. KIMCHI_IDE_LOCKFILE_DIR selects the search directory instead of ~/.config/kimchi/ide; choosing a directory without matching lockfiles prevents discovery. Non-ws lockfiles are rejected before Client.connect, and session_shutdown clears the polling timer.",
+        "disable": "Discovery returns during shutdown, while already connected, or without a parsed matching lockfile. KIMCHI_IDE_LOCKFILE_DIR selects the search directory instead of ~/.config/kimchi/ide; choosing a directory without matching lockfiles prevents discovery. Non-ws lockfiles are rejected before Client.connect, and session_shutdown clears the polling timer. Three consecutive connectToIde failures stop discovery polling; the next session_start resets the retry counter and re-arms the timer.",
         "trigger": "Unknown whether Client.connect calls start(): that implementation belongs to the external MCP SDK. Within the pinned source, session_start and the discovery timer call connectToIde for a matching parsed lockfile; if start() is invoked, its Promise executor constructs the WebSocket."
       },
       "evidence": {
@@ -532,7 +560,7 @@
         ],
         "statement": "sha256:2e38e4a3b4233e14c66fb52933b7ff058f923e0de9a9b73459f47a48d9e706a3"
       },
-      "evidenceHash": "sha256:4643668c8caed4f22d9c6b1f94cc2976bcf93041e7f800d7b7458b403e26da58",
+      "evidenceHash": "sha256:098973f20d6e0a6cc54ef6d7be22fd6bcd09b404841cc53c3e7b81c17e311a80",
       "id": "request-extensions-ide-adapter-mcp-client-ide-web-socket-transport-start-0",
       "missingEvidence": "default: the external MCP Client.connect implementation proving that the default discovery path invokes IdeWebSocketTransport.start. trigger: the same SDK-to-transport invocation bridge; external dependency files cannot be cited by the src/... grammar.",
       "rationale": "The local URL construction and discovery suppression are explicit. Client.connect receives the transport, but the pinned src tree and caller rows do not establish the SDK-to-start invocation, so default execution and the complete trigger remain unknown.",
@@ -559,7 +587,9 @@
         },
         "sources": [
           "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/token[57]",
+          "src/extensions/ide-adapter/index.ts##list[0]/bindings:MAX_RECONNECT_RETRIES[0]",
           "src/extensions/ide-adapter/index.ts##list[0]/bindings:POLL_INTERVAL_MS[0]",
+          "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[2]",
           "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[6]",
           "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[7]",
           "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/token[0]",
@@ -576,6 +606,9 @@
           "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[2]",
           "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[3]",
           "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/block[0]/list[0]/bindings:newConnection[0]",
+          "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/block[0]/list[0]/node[3]",
+          "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/node[0]/block[0]/list[0]/node[0]",
+          "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/node[0]/block[0]/list[0]/node[2]",
           "src/extensions/ide-adapter/lockfile.ts##list[0]/bindings:DEFAULT_LOCKFILE_DIR[0]",
           "src/extensions/ide-adapter/lockfile.ts#function:getLockfileDir[0]#block[0]/list[0]/node[0]",
           "src/extensions/ide-adapter/lockfile.ts#function:scanLockfiles[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[0]",
@@ -704,7 +737,7 @@
     },
     {
       "claim": {
-        "default": "Default session registration leaves extensions.memory off. If another backend entry installs the wrapper, later unmatched-origin fetches can reach this call independently of the memory feature; installing the wrapper itself sends nothing.",
+        "default": "Memory session registration defaults off unless enabled through resource precedence: organization FORCE_ON/FORCE_OFF, a local settings.json override, KIMCHI_ENABLE_RESOURCES, organization ON/OFF, then the false definition default. If another backend entry installs the wrapper, later unmatched-origin fetches can reach this call independently of the memory feature; installing the wrapper itself sends nothing.",
         "destination": "The input string, URL or Request URL supplied by the initiating caller is passed unchanged to the saved fetch; this unmatched-origin branch has no configured destination of its own.",
         "disable": "This call is avoided if the wrapper is not installed or not invoked, or if the input has the saved gateway origin and takes a later branch. Clearing the saved origin makes this forwarding branch apply; it does not block network traffic.",
         "trigger": "A later invocation of the installed fetch wrapper calls the saved fetch when the saved gateway origin is absent or differs from the input URL origin."
@@ -720,7 +753,7 @@
         ],
         "statement": "sha256:dd94fd56cf6d0b3f2dc4e4c4c1914fc2d095f70f54fdf6fc6a79d9b856b681b8"
       },
-      "evidenceHash": "sha256:82893f9b74223b06615af832df53ee1cd0c7c5af346ece812f53a1e2cac81214",
+      "evidenceHash": "sha256:ef8259982e51b259d7d97603943f853a50b43ed8dbf08bf85837c467cbff96e4",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-0",
       "rationale": "The early origin test forwards the original input and init, so this occurrence cannot be assigned the enablement of memory alone.",
       "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 0; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
@@ -759,15 +792,38 @@
           "src/resources/definitions.ts##list[0]/bindings:staticDefinitionsById[0]",
           "src/resources/definitions.ts#function:getResourceDefinition[0]#block[0]/list[0]/node[0]",
           "src/resources/filter.ts#function:enabledExtensionFactories[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts##list[0]/bindings:SETTINGS_KEY[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:ids[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:getResourceOverride[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourcePolicy[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourceSettingsPath[0]#block[0]/list[0]/node[0]",
           "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:definition[0]",
-          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]"
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:orgPolicy[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:override[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[3]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[4]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[5]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[6]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#list[1]/name:path[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:resources[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:settings[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[1]"
         ]
       },
       "verdict": "supported"
     },
     {
       "claim": {
-        "default": "Memory registration defaults off, so its normal session route does not install interception. After createMemoryBackend installs it through an invoked memory path, this branch requires a later embedding fetch with an organizationId; setup has no send of its own.",
+        "default": "Memory session registration defaults off unless enabled through resource precedence: organization FORCE_ON/FORCE_OFF, a local settings.json override, KIMCHI_ENABLE_RESOURCES, organization ON/OFF, then the false definition default. After a tagEmbeddingRequests caller (createMemoryBackend or createSharedEmbedder) installs it, this branch requires a later embedding fetch with an organizationId; setup has no send of its own.",
         "destination": "The initiating input URL is unchanged and must share requestOrigin(gatewayBaseUrl); only headers and the JSON body are replaced, preserving existing tags and adding memory:embedding if absent.",
         "disable": "A missing or different gateway origin takes the earlier unmodified-forwarding branch. A missing organizationId selects the sibling tagged-body call; an absent body, non-embedding URL or tagging exception reaches fallback forwarding. None of those branch choices cancels the initiating fetch.",
         "trigger": "A later invocation of the installed fetch wrapper calls the saved fetch when the input origin matches the saved gateway, the URL contains /embeddings, a truthy init.body can be parsed and tagged, and the saved organizationId produces headers."
@@ -783,7 +839,7 @@
         ],
         "statement": "sha256:67ce43b2c19c3d1efeb0df71cafea4bc8d4cec2304a08d6b9f8b188092917e4f"
       },
-      "evidenceHash": "sha256:600f1645bf2e8868a607c3484d749960a512444b99e468c137a090722d79f7db",
+      "evidenceHash": "sha256:1207ed4c265db35262300638c8a7a1c5979f23d1e86250ec460f20dc07df0c8c",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-1",
       "rationale": "The matching-origin, body and header branches select the tagged send with organization headers; installation alone does not invoke it.",
       "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 1; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
@@ -822,19 +878,43 @@
           "src/extensions/memory/backend.ts#function:tagEmbeddingRequests[0]/function:intercepted[0]#block[0]/list[0]/node[1]",
           "src/extensions/memory/backend.ts#function:tagEmbeddingRequests[0]/function:intercepted[0]#block[0]/list[0]/node[2]",
           "src/extensions/memory/config.ts##list[0]/bindings:MEMORY_RESOURCE_ID[0]",
+          "src/extensions/memory/embedder.ts#function:createSharedEmbedder[0]#block[0]/list[0]/node[2]",
           "src/resources/definitions.ts##list[0]/bindings:STATIC_RESOURCE_DEFINITIONS[0]/node[0]/list[0]/name:STATIC_RESOURCE_DEFINITIONS[0]/node[1]/list[0]/entry:id:MEMORY_RESOURCE_ID[0]",
           "src/resources/definitions.ts##list[0]/bindings:staticDefinitionsById[0]",
           "src/resources/definitions.ts#function:getResourceDefinition[0]#block[0]/list[0]/node[0]",
           "src/resources/filter.ts#function:enabledExtensionFactories[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts##list[0]/bindings:SETTINGS_KEY[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:ids[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:getResourceOverride[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourcePolicy[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourceSettingsPath[0]#block[0]/list[0]/node[0]",
           "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:definition[0]",
-          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]"
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:orgPolicy[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:override[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[3]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[4]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[5]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[6]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#list[1]/name:path[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:resources[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:settings[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[1]"
         ]
       },
       "verdict": "supported"
     },
     {
       "claim": {
-        "default": "The default-disabled memory resource does not install this wrapper through session registration. A separately reached backend can install it, after which matching embedding fetches without an organizationId use this branch; installation is not a request.",
+        "default": "Memory session registration defaults off unless enabled through resource precedence: organization FORCE_ON/FORCE_OFF, a local settings.json override, KIMCHI_ENABLE_RESOURCES, organization ON/OFF, then the false definition default. A separately reached backend can install it, after which matching embedding fetches without an organizationId use this branch; installation is not a request.",
         "destination": "The caller-selected matching-origin input URL is retained, and only init.body is replaced with JSON whose tags include memory:embedding; no organization headers are added by this branch.",
         "disable": "Origin mismatch wins before body handling. A saved organizationId selects the sibling call with headers; a non-embedding URL, absent body or tagging exception reaches the final forwarding statement instead. These conditions select a different send rather than a network kill switch.",
         "trigger": "A later invocation of the installed fetch wrapper calls the saved fetch when the input origin matches the saved gateway, the URL contains /embeddings, a truthy init.body can be parsed and tagged, and no saved organizationId produces headers."
@@ -850,7 +930,7 @@
         ],
         "statement": "sha256:67ce43b2c19c3d1efeb0df71cafea4bc8d4cec2304a08d6b9f8b188092917e4f"
       },
-      "evidenceHash": "sha256:76150c77f797ffad04a6f633b7f669e7c94a95b41540a8a077576bb71d2de615",
+      "evidenceHash": "sha256:8c5b51ce89447b2805918bf64cc8d6f06fbe26ec8aaccaaf0be3917d4002d57c",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-2",
       "rationale": "Absent organization state selects the tagged-body send without added headers after the origin and body checks.",
       "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 2; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
@@ -893,15 +973,38 @@
           "src/resources/definitions.ts##list[0]/bindings:staticDefinitionsById[0]",
           "src/resources/definitions.ts#function:getResourceDefinition[0]#block[0]/list[0]/node[0]",
           "src/resources/filter.ts#function:enabledExtensionFactories[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts##list[0]/bindings:SETTINGS_KEY[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:ids[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:getResourceOverride[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourcePolicy[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourceSettingsPath[0]#block[0]/list[0]/node[0]",
           "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:definition[0]",
-          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]"
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:orgPolicy[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:override[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[3]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[4]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[5]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[6]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#list[1]/name:path[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:resources[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:settings[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[1]"
         ]
       },
       "verdict": "supported"
     },
     {
       "claim": {
-        "default": "The memory extension is omitted under its false registration default; backend construction reached elsewhere still installs interception. Only subsequent matching-origin traffic with organization headers can use this fallback.",
+        "default": "Memory session registration defaults off unless enabled through resource precedence: organization FORCE_ON/FORCE_OFF, a local settings.json override, KIMCHI_ENABLE_RESOURCES, organization ON/OFF, then the false definition default. Backend construction reached elsewhere still installs interception. Only subsequent matching-origin traffic with organization headers can use this fallback.",
         "destination": "The matching-origin input is sent to the original caller-selected URL with merged organization headers; an existing gateway organization header wins over the saved organizationId.",
         "disable": "Origin mismatch exits through the first forwarding call; successful embedding tagging returns through a tagged-body call; absent organizationId selects the other final call. The wrapper does not consult a memory-disable switch on this path.",
         "trigger": "A later invocation of the installed fetch wrapper calls the saved fetch when the input origin matches the saved gateway and organization headers exist, but the embedding branch is skipped or throws before returning."
@@ -917,7 +1020,7 @@
         ],
         "statement": "sha256:5b1332e212302aee0005e19edd07d4f9e3cc09f639abc1ee942fbd2cb6f55c62"
       },
-      "evidenceHash": "sha256:2f640d35c0960d0abbf0a63d752347225a298f5e22701292f93eecf8e6524ff0",
+      "evidenceHash": "sha256:5e74430483d8c445ce330aa83fe3776055060dbf6035c2d88022a1e8ff8d0115",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-3",
       "rationale": "The final header-bearing send is reached only after the origin check and failure or omission of the embedding-body return.",
       "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 3; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
@@ -959,15 +1062,38 @@
           "src/resources/definitions.ts##list[0]/bindings:staticDefinitionsById[0]",
           "src/resources/definitions.ts#function:getResourceDefinition[0]#block[0]/list[0]/node[0]",
           "src/resources/filter.ts#function:enabledExtensionFactories[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts##list[0]/bindings:SETTINGS_KEY[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:ids[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:getResourceOverride[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourcePolicy[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourceSettingsPath[0]#block[0]/list[0]/node[0]",
           "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:definition[0]",
-          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]"
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:orgPolicy[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:override[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[3]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[4]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[5]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[6]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#list[1]/name:path[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:resources[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:settings[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[1]"
         ]
       },
       "verdict": "supported"
     },
     {
       "claim": {
-        "default": "Default memory registration supplies no interceptor because the resource is off. Once a backend caller installs it, later matching-origin fetches without organization headers may fall through here; the assignment to global fetch itself makes no request.",
+        "default": "Memory session registration defaults off unless enabled through resource precedence: organization FORCE_ON/FORCE_OFF, a local settings.json override, KIMCHI_ENABLE_RESOURCES, organization ON/OFF, then the false definition default. Once a backend caller installs it, later matching-origin fetches without organization headers may fall through here; the assignment to global fetch itself makes no request.",
         "destination": "The caller-selected matching-origin input and init are forwarded unchanged; no wrapper default host is substituted.",
         "disable": "The earlier origin check and successful embedding-tagging return take precedence; organizationId chooses the sibling final call with headers. Turning off the initiating caller prevents its fetch, while this forwarding branch itself has no feature switch.",
         "trigger": "A later invocation of the installed fetch wrapper calls the saved fetch when the input origin matches the saved gateway and no organization headers exist, but the embedding branch is skipped or throws before returning."
@@ -983,7 +1109,7 @@
         ],
         "statement": "sha256:5b1332e212302aee0005e19edd07d4f9e3cc09f639abc1ee942fbd2cb6f55c62"
       },
-      "evidenceHash": "sha256:07d41073b9576483f4de47054d601bb41960855efaf788995d01cf6422f1dca6",
+      "evidenceHash": "sha256:0d826f4350a00dab0127de75b98eb802003df46df6f3d068646008d58038d1fd",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-4",
       "rationale": "The last unchanged-input send requires matching origin and no organization headers after the embedding path falls through.",
       "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 4; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
@@ -1025,8 +1151,31 @@
           "src/resources/definitions.ts##list[0]/bindings:staticDefinitionsById[0]",
           "src/resources/definitions.ts#function:getResourceDefinition[0]#block[0]/list[0]/node[0]",
           "src/resources/filter.ts#function:enabledExtensionFactories[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts##list[0]/bindings:SETTINGS_KEY[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:ids[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:envEnabledResources[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:getResourceOverride[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourcePolicy[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:getResourceSettingsPath[0]#block[0]/list[0]/node[0]",
           "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:definition[0]",
-          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]"
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:orgPolicy[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/bindings:override[0]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[1]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[2]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[3]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[4]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[5]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[6]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#block[0]/list[0]/node[7]",
+          "src/resources/store.ts#function:isResourceEnabled[0]#list[1]/name:path[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:raw[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:resources[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/bindings:settings[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[0]",
+          "src/resources/store.ts#function:readResourceSettings[0]#block[0]/list[0]/node[1]"
         ]
       },
       "verdict": "supported"
@@ -1034,8 +1183,8 @@
     {
       "claim": {
         "default": "The default cost-per-PR registration allows event uploads in tracking sessions whose reporting state follows enabled telemetry, but requires a due batch belonging to the verified account; an empty outbox causes no POST.",
-        "destination": "POST <platform>/ai-optimizer/v1beta/organizations/<verified organizationId>/pr-cost-events:batchIngest, refusing redirects. platformApiUrl uses KIMCHI_REMOTE_ENDPOINT over the selected region API origin (US https://api.cast.ai); environment region wins over saved region, and self-hosted resolves discovered API endpoints.",
-        "disable": "withReportingConsent prevents a POST when reporting is disabled or its still-followed effective telemetry is off; an explicit /pr-reporting choice detaches telemetry consent. isResourceEnabled controls registration and uploadSkipReason suppresses non-uploading sessions. The batch must belong to the verified account, have elapsed retry time, and retain its id/body; lease, cancellation and credential/base changes also stop dispatch. Effective telemetry gives forced organization policy precedence over environment, file and default.",
+        "destination": "POST <platform>/ai-optimizer/v1beta/organizations/<verified organizationId>/pr-cost-events:batchIngest, refusing redirects. platformApiUrl uses KIMCHI_REMOTE_ENDPOINT (accepted only for HTTPS or loopback HTTP) over the selected region API origin (US https://api.cast.ai); environment region wins over saved region, and self-hosted resolves discovered API endpoints.",
+        "disable": "Missing resolved API-key/SSO credentials or a platform API URL that is neither HTTPS nor loopback HTTP stops dispatch. withReportingConsent prevents a POST when reporting is disabled or its still-followed effective telemetry is off; an explicit /pr-reporting choice detaches telemetry consent. isResourceEnabled controls registration and uploadSkipReason suppresses non-uploading sessions. The batch must belong to the verified account, have elapsed retry time, and retain its id/body; lease, cancellation and credential/base changes also stop dispatch. Effective telemetry gives forced organization policy precedence over environment, file and default.",
         "trigger": "Reporting reconciliation reaches deliverEvents through the stored subscriber. After credential verification, it freezes an account batch with consent and dispatches only when the pending batch still has the same id and bytes; the POST starts inside withReportingConsent while the queue update lock is held."
       },
       "evidence": {
@@ -1051,7 +1200,7 @@
         ],
         "statement": "sha256:54ef82b7f3e6f944c4591a3896501a9a18759fa7d225d76e3925445f813ca7f6"
       },
-      "evidenceHash": "sha256:d0604fcd98568d26eec440b2efd736b6379ad68cd73d9e659314591c13c2b36e",
+      "evidenceHash": "sha256:0432e278773f864306f32ffe8b42400aa31ebaa04403f1f901895f084d6f7ec4",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-0",
       "rationale": "The guarded action invocation and lock lifecycle support dispatch-time consent, rather than treating callback registration as proof of invocation.",
       "scope": "Original pinned Kimchi 1.26.0 PR cost event uploads; excludes packaging controls for resources, self-update and telemetry, observed delivery, and server acceptance.",
@@ -1157,6 +1306,7 @@
           "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[2]",
           "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[3]/block[0]/list[0]/node[0]",
           "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[4]",
+          "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[5]",
           "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[7]",
           "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[8]",
           "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[9]",
@@ -1443,7 +1593,7 @@
       "claim": {
         "default": "Default-enabled cost-per-PR and telemetry permit legacy snapshot delivery in eligible tracking sessions only when a pending frozen snapshot is due; the empty default queue does not initiate this request.",
         "destination": "The verification and snapshot calls share platformApiUrl: /ai-optimizer/v1beta/api-keys:verify, then /ai-optimizer/v1beta/organizations/<snapshot organizationId>/pr-cost-snapshots. KIMCHI_REMOTE_ENDPOINT wins over the regional API origin, normally https://api.cast.ai; region selection favors KIMCHI_REGION over saved region, and self-hosted uses discovery. Redirects are rejected.",
-        "disable": "A frozen snapshot is skipped for a hold, retry/upload window, account pause, missing credential, unsafe or mismatched endpoint, or exhausted attempt budget. Each fetch rechecks enabled reporting, hold and pending frozen content plus ownership, lease and abort state. Session eligibility comes from uploadSkipReason and resource precedence in isResourceEnabled; /pr-reporting off pauses the queue, while an explicit choice overrides its default of following effective telemetry (forced organization policy before user environment/file/default).",
+        "disable": "A frozen snapshot is skipped for a hold, retry/upload window, missing credential, unsafe or mismatched endpoint, or exhausted attempt budget. An account pause skips only snapshots that add requests or pull requests; withdrawal-only snapshots remain eligible. Each fetch rechecks enabled reporting, hold and pending frozen content plus ownership, lease and abort state. Session eligibility comes from uploadSkipReason and resource precedence in isResourceEnabled; /pr-reporting off pauses the queue, while an explicit choice overrides its default of following effective telemetry (forced organization policy before user environment/file/default).",
         "trigger": "The reporting subscriber runs reconcileReporting, which calls deliverSnapshots before event delivery. fetchBounded serves account verification and then the legacy snapshot POST for a due, unheld snapshot with matching account credentials and endpoint."
       },
       "evidence": {
@@ -1654,9 +1804,9 @@
     {
       "claim": {
         "default": "The default-on cost-per-PR resource registers pullRequestStatusExtension. session_start starts branch polling; a branch with a discoverable Git remote can therefore cause repository and PR/MR API reads without a separate user request.",
-        "destination": "The selected repository host/provider determines the API: github.com uses https://api.github.com/repos/<name>, a single-label subdomain of ghe.com uses https://api.<host>/repos/<name>, other GitHub hosts use https://<host>/api/v3/repos/<name>, and GitLab uses https://<host>/api/v4/projects/<encoded name>. Caller paths/query select the resource; redirects must remain on the API origin.",
+        "destination": "The selected repository host/provider determines the API: github.com uses https://api.github.com/repos/<name>, a single-label subdomain of ghe.com uses https://api.<host>/repos/<name>, other GitHub hosts use https://<host>/api/v3/repos/<name>, and GitLab uses https://<host>/api/v4/projects/<encoded name>. Caller paths/query select the resource; redirects must remain on the API origin. Host classification recognizes github.com, single-label *.ghe.com and GH_HOST as GitHub, and gitlab.com plus GITLAB_HOST, GL_HOST or GITLAB_URI as GitLab. For an unclassified Git remote host, repository discovery considers the /api/v3/repos/<name> GitHub shape before the /api/v4/projects/<encoded name> GitLab shape, skipping candidates whose repository path is invalid; fallback depends on the preceding lookup result and credential source. These probes may use a saved or resolved credential.",
         "disable": "Disabling extensions.cost-per-pr prevents its CLI registration according to isResourceEnabled: forced organization policy, persisted override, environment enable, soft organization policy, then default. Session shutdown stops the polling and aborts active work. Missing work initialization postpones tracking polls; an absent branch or ambiguous remote prevents branch API lookup. requestJSON also rejects aborted, rate-limited, expired or unsafe-origin requests.",
-        "trigger": "Branch polling and tracked-work reconciliation invoke repository/PR lookups; shell push or PR-creation completion invalidates the branch cooldown. requestJSON sends GET attempts when repository discovery or an API page lookup supplies a same-origin URL, subject to cancellation and deadline checks."
+        "trigger": "Branch polling and tracked-work reconciliation invoke repository/PR lookups; PR-cost reporting capture also resolves repository identities through captureEvents, translateGroup and repositoryIdentities when the reporting subscription permits uploads and reporting is enabled; shell push or PR-creation completion invalidates the branch cooldown. requestJSON sends GET attempts when repository discovery or an API page lookup supplies a same-origin URL, subject to cancellation and deadline checks."
       },
       "evidence": {
         "call": "sha256:eb92e5ca2d75f9111ac3cad6e878aa26bca9e4ea65b4c0e92be590e4a8b20082",
@@ -1685,7 +1835,7 @@
         ],
         "statement": "sha256:df6143e9567c93acfdb9492e08ab524dd339072997a10c69975222953f77d563"
       },
-      "evidenceHash": "sha256:c445f90297b3e5cc6cf325bf746bdc718eb807ca68b72059879cd001618ece58",
+      "evidenceHash": "sha256:344b1d379824a57a0bc822f7a3de78e5c52051071d06704039ea326feec090e0",
       "id": "request-extensions-pull-request-status-provider-api-request-json-0",
       "rationale": "Registration and branch startup establish automatic eligibility. Request-local origin, cooldown and cancellation checks constrain each GET independently of telemetry consent.",
       "scope": "Original pinned Kimchi 1.26.0 Git-provider lookup; excludes Nix remote resource and self-update/telemetry configuration, runtime availability, and Git-provider behavior.",
@@ -1708,6 +1858,14 @@
         },
         "sources": [
           "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/node[12]/call:enabledExtensionFactories[0]/list[0]/node[0]/node[0]/list[0]/entry:id:COST_PER_PR_RESOURCE_ID[1]",
+          "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]#block[0]/list[0]/node[2]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[1]",
+          "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]/function:synchronize[0]#block[0]/list[0]/node[5]",
+          "src/extensions/pr-cost-reporting/worker.ts#function:captureEvents[0]#block[0]/list[0]/node[5]/block[0]/list[0]/bindings:translated[0]",
+          "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/bindings:state[0]",
+          "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/node[0]",
+          "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]",
+          "src/extensions/pr-cost-reporting/worker.ts#function:repositoryIdentities[0]#block[0]/list[0]/node[4]/block[0]/list[0]/node[3]/block[0]/list[0]/bindings:value[0]",
+          "src/extensions/pr-cost-reporting/worker.ts#function:translateGroup[0]#block[0]/list[0]/bindings:{repositories,settled}[0]",
           "src/extensions/pull-request-status/branch-status.ts#function:lookupBranchPullRequest[0]#block[0]/list[0]/node[0]",
           "src/extensions/pull-request-status/branch-status.ts#function:lookupBranchPullRequest[0]#block[0]/list[0]/node[1]/block[0]/list[0]/bindings:remote[0]",
           "src/extensions/pull-request-status/index.ts##list[0]/bindings:BRANCH_REFRESH_MS[0]",
@@ -1729,13 +1887,20 @@
           "src/extensions/pull-request-status/provider-api.ts#function:gheComHost[0]#block[0]/list[0]/node[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:githubAPI[0]#block[0]/list[0]/node[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:githubAPI[0]#block[0]/list[0]/node[1]",
+          "src/extensions/pull-request-status/provider-api.ts#function:gitlabHost[0]#block[0]/list[0]/node[0]",
+          "src/extensions/pull-request-status/provider-api.ts#function:providerFor[0]#block[0]/list[0]/node[0]",
+          "src/extensions/pull-request-status/provider-api.ts#function:providerFor[0]#block[0]/list[0]/node[1]",
+          "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:candidates[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:config[0]",
+          "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:provider[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:remotes[0]",
+          "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:saved[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:selected[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:upstream[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:{ssh,...remote}[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[1]",
+          "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[3]",
           "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[3]/block[0]/list[0]/node[2]/block[0]/list[0]/bindings:{value}[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:requestJSON[0]#block[0]/list[0]/bindings:origin[0]",
           "src/extensions/pull-request-status/provider-api.ts#function:requestJSON[0]#block[0]/list[0]/bindings:remaining[0]",
@@ -1783,7 +1948,7 @@
     {
       "claim": {
         "default": "The CLI installs sessionNameExtension by default. On turn_end it attempts naming once per session when no name exists and a naming hint is available, provided gateway credentials resolve.",
-        "destination": "The retry callback forwards its URL to fetch; suggestSessionName constructs it as the configured llmEndpoint without trailing slashes plus /chat/completions. The default is https://llm.kimchi.dev/openai/v1/chat/completions, with KIMCHI_BASE_URL ahead of allowed-project/global llmEndpoint and the selected region.",
+        "destination": "The retry callback forwards its URL to fetch; suggestSessionName constructs it as llmEndpoint without trailing slashes plus /chat/completions. A valid KIMCHI_BASE_URL overrides configured llmEndpoint and yields <KIMCHI_BASE_URL>/openai/v1/chat/completions after trimming trailing slashes; an invalid value is ignored with a warning. Otherwise allowed-project/global llmEndpoint is used as the completion base, falling back to the selected region; the default URL is https://llm.kimchi.dev/openai/v1/chat/completions.",
         "disable": "An existing session name, a prior naming attempt, no usable hint, or no resolved gateway token prevents the automatic naming request. The configured API key is tried before stored OAuth/API-key credentials.",
         "trigger": "The turn_end callback calls suggestSessionName with the hint; fetchWithRetry invokes this injected fetch callback for the naming completion and retries. session_start resets the once-per-session state."
       },
@@ -1799,7 +1964,7 @@
         ],
         "statement": "sha256:668991a6602e55856493a8484c6e7470d80d46c41fce063b30ba872164fec089"
       },
-      "evidenceHash": "sha256:fc2ccb8a74230e1d229baa2c6d59c7598fdd171e5f213c5b2cfa0d3fb193aaec",
+      "evidenceHash": "sha256:814d100f59ba9eecc28fdc662ba82df85f9c4f5d19868b8e0bf0d0cfaaabb30f",
       "id": "request-extensions-session-name-suggest-session-name-fetch-impl-0",
       "rationale": "Naming-state and credential checks determine automatic eligibility. The naming caller supplies the completion URL and the retry helper invokes its fetch callback.",
       "scope": "Original pinned Kimchi 1.26.0 automatic session naming; excludes Nix resource overrides and self-update/telemetry setup, provider execution, and service reachability.",
@@ -1845,6 +2010,8 @@
           "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/bindings:trimmed[0]",
           "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[0]",
           "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[1]",
+          "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[2]",
+          "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[3]",
           "src/config.ts#function:getEnvironmentApiKey[0]#block[0]/list[0]/node[0]",
           "src/config.ts#function:loadConfig[0]#block[0]/list[0]/bindings:envLlmBaseUrl[0]",
           "src/config.ts#function:loadConfig[0]#block[0]/list[0]/bindings:extras[0]/node[0]/list[0]/name:extras[0]/node[0]/list[0]/name:apiKey[0]",
@@ -1982,10 +2149,10 @@
     },
     {
       "claim": {
-        "default": "The original CLI registers teleport on non-Windows hosts outside sandbox clusters. Opening its workspace-session overlay connects the initial tab eagerly; other connections follow tab activation, and reconnect is enabled unless options.reconnect is false.",
+        "default": "The original CLI registers teleport on non-Windows hosts outside sandbox clusters. Opening its workspace-session overlay connects the initial tab eagerly; other connections follow tab activation, and TabManager enables reconnect by omitting the reconnect option.",
         "destination": "TabManager supplies the workspace credentials wsUrl, with trailing slashes removed, plus /session/<encoded session name>/connect. WebSocketTransport uses that URL and the tokenProvider result as a Bearer token; it has no built-in hostname.",
-        "disable": "The extension returns before command registration on Windows or in a detected sandbox. A disposed tab manager or an already connected tab skips opening. close() sets _closed and cancels the supervisor; _openSocket returns while closed. reconnect:false suppresses automatic reconnect after closure, but does not disable an explicit connect().",
-        "trigger": "An initial or activated overlay tab calls transport.connect(); connect obtains a token and opens the socket immediately or after its token Promise resolves. Overlay credentials expiring within 30000 ms, or with an unparseable expiry, are reauthenticated by tokenProvider. Socket closure passes to the reconnect supervisor unless closed or reconnect is false."
+        "disable": "The extension returns before command registration on Windows or in a detected sandbox. A disposed tab manager or a tab that already has a transport skips opening. close() sets _closed and cancels the supervisor; _openSocket returns while closed. TabManager is the only production constructor and never supplies reconnect:false. Automatic reconnect stops when the supervisor receives a fatal close code or exhausts its total retry window; explicit connect() and the overlay manual-retry action can start another connection.",
+        "trigger": "An initial or activated overlay tab calls transport.connect(); connect obtains a token and opens the socket immediately or after its token Promise resolves. Overlay credentials expiring within 30000 ms, or with an unparseable expiry, are reauthenticated by tokenProvider. The overlay manual-retry action changes the credential expiry to force fresh credentials and calls transport.forceRetry(), which resets supervisor state and calls connect(). Socket closure passes to the reconnect supervisor unless the transport was explicitly closed."
       },
       "evidence": {
         "call": "sha256:9abe7aef4c6922fa8a67111e75dae4bf250e5b93eb7187c0649ee78f76806ba5",
@@ -2029,7 +2196,7 @@
         ],
         "statement": "sha256:ecbfba11a976128120ed4fcbf221478692048b70eafe146186404231ff47caf4"
       },
-      "evidenceHash": "sha256:354e5d3da721f34da6b5f583378a8b017ea5298f48b57171063a5b5b62612334",
+      "evidenceHash": "sha256:81225ada0443f10fa132567adaf4b5a22afb28ca06a539e92f3e0dc5259439e6",
       "id": "request-extensions-teleport-pty-websocket-transport-web-socket-transport-open-socket-0",
       "rationale": "The teleport registration guard, overlay URL construction, token resolution and transport close/reconnect branches establish separate command eligibility and connection controls.",
       "scope": "Original pinned Kimchi 1.26.0 teleport command, overlay and PTY transport behavior; excludes packaged remote-resource changes, disabled update or telemetry setup, service availability and WebSocket-library internals.",
@@ -2070,9 +2237,12 @@
           "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:tokenProvider[0]#block[0]/list[0]/node[0]",
           "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:tokenProvider[0]#block[0]/list[0]/node[1]",
           "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:tokenProvider[0]#block[0]/list[0]/node[2]",
+          "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:triggerManualRetry[0]#block[0]/list[0]/node[0]",
+          "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:triggerManualRetry[0]#block[0]/list[0]/node[6]/block[0]/list[0]/node[0]",
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/constructor:constructor[0]#list[0]/name:opts[0]",
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:addTab[0]#block[0]/list[0]/bindings:eager[0]",
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:addTab[0]#block[0]/list[0]/node[3]",
+          "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:transport[0]",
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:transport[0]/node[0]/list[0]/name:transport[0]/new:WebSocketTransport[0]/list[0]/node[0]/list[0]/name:tokenProvider[0]",
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:transport[0]/node[0]/list[0]/name:transport[0]/new:WebSocketTransport[0]/list[0]/node[0]/list[0]/name:url[0]",
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:url[0]",
@@ -2081,6 +2251,8 @@
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/node[6]",
           "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:switchTo[0]#block[0]/list[0]/node[4]",
           "src/extensions/teleport/overlay/tab-manager.ts#function:stripTrailingSlash[0]#block[0]/list[0]/node[0]",
+          "src/extensions/teleport/pty/reconnect-supervisor.ts#class:ReconnectSupervisor[0]/method:handleClose[0]#block[0]/list[0]/node[1]",
+          "src/extensions/teleport/pty/reconnect-supervisor.ts#class:ReconnectSupervisor[0]/method:handleClose[0]#block[0]/list[0]/node[3]",
           "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/constructor:constructor[0]#block[0]/list[0]/node[0]",
           "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/constructor:constructor[0]#block[0]/list[0]/node[1]",
           "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/constructor:constructor[0]#block[0]/list[0]/node[2]",
@@ -2092,6 +2264,9 @@
           "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:connect[0]#block[0]/list[0]/bindings:tokenOrPromise[0]",
           "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:connect[0]#block[0]/list[0]/node[0]",
           "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:connect[0]#block[0]/list[0]/node[2]",
+          "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:forceRetry[0]#block[0]/list[0]/node[0]",
+          "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:forceRetry[0]#block[0]/list[0]/node[1]",
+          "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:forceRetry[0]#block[0]/list[0]/node[2]",
           "src/utils/os-metadata.ts#function:isWindows[0]#block[0]/list[0]/node[0]",
           "src/utils/sandbox.ts#function:isInSandboxCluster[0]#block[0]/list[0]/node[0]",
           "src/utils/sandbox.ts#function:isInSandboxCluster[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]",
@@ -2102,7 +2277,7 @@
     },
     {
       "claim": {
-        "default": "Unknown: the source defines a costs-channel subscriber and skips a channel when it has no subscriber, but the cited evidence does not establish a production caller that subscribes the costs channel under default configuration.",
+        "default": "The pinned production source never subscribes the costs channel, so its supervisor does not invoke reconcileWorkCosts and this callback does not execute.",
         "destination": "The callback forwards verification to <current.apiUrl>/ai-optimizer/v1beta/api-keys:verify and billing reads to <current.apiUrl>/ai-optimizer/v1beta/organizations/<organizationId>/llm-requests with tag/time/page query parameters. The captured source must match the current configured platform base, whose default is https://api.cast.ai and whose environment override is KIMCHI_REMOTE_ENDPOINT; redirects are rejected.",
         "disable": "Within a running pass, lease assertions, aborts, the five-second pass deadline and the 30-call budget prevent further fetches; items wait for their refresh schedule, and missing or changed billing credentials/endpoints skip lookup. Billing pages additionally require matching organization and user identity.",
         "trigger": "When reconcileWorkCosts runs, due open billing items with a matching captured credential/endpoint cause account verification and billing-page lookups through fetchBounded. The supervisor can invoke the pass only while its costs channel is present."
@@ -2125,10 +2300,9 @@
         ],
         "statement": "sha256:10babacaf1ee0f962821eda71eb28ce8b955dccb36219c4e2e0fd4ba9571d322"
       },
-      "evidenceHash": "sha256:3c8121b781b6fc1aa142a5cd443c170e1d6aaf754ae6698f46b7c67918e4be0c",
+      "evidenceHash": "sha256:81c31aca8491c671f0d44b9a0125d26445af51e1117c21721a21af2459a4eb13",
       "id": "request-extensions-work-attribution-cost-sync-reconcile-work-costs-fetch-bounded-0",
-      "missingEvidence": "default: A production caller that invokes subscribeCostReconciliation or otherwise creates the costs channel, or a citation form establishing its repository-wide absence; current node citations cannot prove an absent caller.",
-      "rationale": "The local pass, bounded fetch and endpoint construction are established. Default execution is unresolved because a channel definition and an invocation guarded by channel presence do not establish a production subscription.",
+      "rationale": "Repository-wide non-test source search finds subscribeCostReconciliation only at its declaration; it is the only subscriber for the costs channel, and runChannel returns when that channel is absent. The local pass, bounded fetch and endpoint construction are established.",
       "scope": "Original pinned Kimchi 1.26.0 work-cost reconciliation; excludes Nix remote resources, self-update and telemetry changes, actual scheduling, and billing API availability.",
       "selector": {
         "fact": {
@@ -2219,6 +2393,7 @@
           "src/extensions/work-attribution/reconcile-supervisor.ts#function:runChannel[0]#block[0]/list[0]/node[0]",
           "src/extensions/work-attribution/reconcile-supervisor.ts#function:scan[0]#block[0]/list[0]/node[3]/block[0]/list[0]/node[2]",
           "src/extensions/work-attribution/reconcile-supervisor.ts#function:subscribeCostReconciliation[0]#block[0]/list[0]/node[0]",
+          "src/extensions/work-attribution/reconcile-supervisor.ts#function:subscribeReconciliation[0]#block[0]/list[0]/node[2]",
           "src/extensions/work-attribution/scope.ts#function:platformApiUrl[0]#block[0]/list[0]/node[0]",
           "src/regions.ts##list[0]/bindings:DEFAULT_REGION[0]",
           "src/regions.ts##list[0]/bindings:REGIONS[0]/node[0]/list[0]/name:REGIONS[0]/node[0]/node[0]/node[0]/list[0]/name:us[0]",
@@ -2230,7 +2405,7 @@
           "src/utils/http.ts#function:fetchWithRetry[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/bindings:response[0]"
         ]
       },
-      "verdict": "unknown"
+      "verdict": "supported"
     },
     {
       "claim": {
@@ -2283,8 +2458,8 @@
       "claim": {
         "default": "During normal session discovery, a configured API key or stored OAuth access token enables metadata refresh; without a key, discoverModelsConfig returns cached/custom models before this call. Environment-key sessions also use discoverModelsConfig.",
         "destination": "The normalized options.endpoint, otherwise resolveEndpoints().llmBaseUrl, gains /v1/models/metadata?include_in_cli=true. Normal CLI options use valid KIMCHI_BASE_URL before allowed-project and global llmEndpoint; otherwise KIMCHI_REGION then global region then US selects the gateway (US https://llm.kimchi.dev, EU https://llm.eu.kimchi.dev, self-hosted discovered LLM origin). Explicit endpoint text is trimmed, gains https:// when scheme-less, and loses trailing slashes.",
-        "disable": "An empty key bypasses the discovery refresh, not explicit validateApiKey. Avoiding both discovery and validation callers prevents this occurrence; cached fallback is consulted only after a failed refresh, so having a cache does not suppress authenticated discovery.",
-        "trigger": "discoverModelsConfig calls fetchAvailableModels after its nonempty-key check; explicit validateApiKey invokes the same fetch helper without that check. The helper constructs a metadata URL and attempts a bearer-authenticated fetch."
+        "disable": "An empty key bypasses the discovery refresh. Avoiding the discoverModelsConfig callers prevents this occurrence in the pinned production source; cached fallback is consulted only after a failed refresh, so having a cache does not suppress authenticated discovery. The models.ts validateApiKey export bypasses the key check but has no production caller.",
+        "trigger": "discoverModelsConfig, called by updateModelsConfig and discoverEnvironmentModels, calls fetchAvailableModels after its nonempty-key check. The models.ts validateApiKey export also calls the helper without that check but has no production caller. The helper constructs a metadata URL and attempts a bearer-authenticated fetch."
       },
       "evidence": {
         "call": "sha256:001dc9ed93a390f0fc7cac97d8d7d30dff49d50c4c5d7d3f241c80bb18fdf5ed",
@@ -2336,7 +2511,7 @@
         ],
         "statement": "sha256:4fee45adb5d4c107f8524852c27249cfb735ed02a4162d1ea18d02fb663ac50f"
       },
-      "evidenceHash": "sha256:e426da1a1eb9f95d6423bfb2ab8c655bbd4998907293e34e26afa9a16e828d7b",
+      "evidenceHash": "sha256:a88c8033269f8dafec80cd2092fcf04a092fb75c7b5f27188561612b8c0ff34c",
       "id": "request-models-fetch-available-models-0",
       "rationale": "The discovery early return does not apply to direct validation, and cache fallback follows the attempted request. Endpoint normalization and configuration precedence determine the destination.",
       "scope": "Original pinned Kimchi 1.26.0 metadata retrieval and discovery/validation callers; excludes Nix remote-resource, updater and telemetry alterations, actual network availability, and gateway model-catalog behavior.",
@@ -2358,6 +2533,9 @@
           }
         },
         "sources": [
+          "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:authJsonPath[0]",
+          "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:gatewayCredentials[0]",
+          "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:oauthAccessToken[0]",
           "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/node[9]/block[0]/list[0]/node[0]/block[1]/list[0]/node[1]",
           "src/cli.ts#function:cliMain[0]/function:discover[0]#call:discoverEnvironmentModels[0]",
           "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/bindings:envRegion[0]",
@@ -2409,7 +2587,7 @@
     },
     {
       "claim": {
-        "default": "The default Ollama discovery path issues show requests only after a successful tags response supplies model entries with a nonempty string model or name.",
+        "default": "The default Ollama discovery path issues show requests only after a successful tags response supplies an entry whose model, or name when model is null or undefined, is a nonempty string.",
         "destination": "The same normalized probe host plus /api/show; startup host precedence is OLLAMA_HOST, KIMCHI_OLLAMA_HOST, then http://localhost:11434.",
         "disable": "Avoiding the probe prevents enrichment; failed tags transport, a non-OK response, invalid JSON, no model entries or a missing usable model reference prevents the corresponding show calls. No separate show enable flag precedes its fetch.",
         "trigger": "probeOllamaModels maps the returned models to enrichment tasks; each valid reference invokes enrichFromShow, which POSTs its name using options.fetch or global fetch."
@@ -2477,7 +2655,7 @@
       "claim": {
         "default": "Normal session model discovery attempts the Ollama tags probe after preceding model-discovery work reaches injectOllamaProvider; the environment-key discovery path also calls discoverOllamaProvider without an Ollama opt-in.",
         "destination": "The normalized host plus /api/tags; startup selects nonblank trimmed OLLAMA_HOST before KIMCHI_OLLAMA_HOST, then http://localhost:11434, with trailing slashes removed.",
-        "disable": "The probe has no enable flag: avoiding the discovery call prevents it, while changing either Ollama host variable redirects it. The request carries a timeout signal; server absence is handled after the attempt.",
+        "disable": "The probe has no enable flag: avoiding the discovery call prevents it. A nonblank OLLAMA_HOST redirects it; KIMCHI_OLLAMA_HOST redirects it only when OLLAMA_HOST is unset or blank. The request carries a timeout signal; server absence is handled after the attempt.",
         "trigger": "probeOllamaModels sends a tags request whenever discovery invokes it, normalizing its host and using options.fetch or global fetch."
       },
       "evidence": {
@@ -2539,10 +2717,10 @@
     },
     {
       "claim": {
-        "default": "This shared cloud-operation sink has no independent default-on schedule. Default remote-run registration is enabled outside Windows and sandbox clusters; its command invokes a remote run. Separately, the default-enabled agents extension resumes persisted remote runs on session_start when entries exist and KIMCHI_PARENT_SESSION_ID is unset or empty.",
+        "default": "This shared cloud-operation sink has no independent default-on schedule. Default remote-run registration is enabled outside Windows and sandbox clusters; its command and dispatch tool reach cloud operations only when the agents extension is enabled and initializes spawnRemoteAgentFn. Teleport commands are also registered by default outside Windows and sandbox clusters and can invoke cloud operations when used. Separately, the default-enabled agents extension resumes persisted remote runs with status running on session_start when KIMCHI_PARENT_SESSION_ID is unset or empty.",
         "destination": "fetchWithTimeout sends to its caller-provided URL without replacing the host. Cloud operations append workspace, token-verification, token-exchange or quota paths to options.endpoint when provided, otherwise resolveEndpoints().platformApiUrl; KIMCHI_REMOTE_ENDPOINT overrides the resolved platform URL, whose default US registry API host is https://api.cast.ai.",
-        "disable": "No helper-wide feature opt-out exists: upstream operations must not invoke it, and each send receives a timeout signal (30000 ms unless overridden) combined with an external signal when supplied. Remote-run registration is first suppressed on Windows or in sandbox clusters, then by trimmed, case-insensitive KIMCHI_REMOTE_RUN values 0 or false; the interactive-tool suppression state set through setPrintGate additionally removes its dispatch tool. Agent registration separately follows organization FORCE_ON/FORCE_OFF, local settings, KIMCHI_ENABLE_RESOURCES, organization ON/OFF, then its definition default; its resume callback skips child sessions and empty state, and a disposed manager or missing credential prevents resume. These controls do not disable unrelated teleport callers.",
-        "trigger": "Cloud authentication, workspace listing/get/create/update/resume/delete, quota lookup and key/token operations call this sink with their URL and fetch implementation. Calls also arise while an existing remote run is resumed or recovered; the session-start path checks whether another client already watches the run before attachment."
+        "disable": "No helper-wide feature opt-out exists: upstream operations must not invoke it, and each send receives a timeout signal (30000 ms unless overridden) combined with an external signal when supplied. Remote-run registration is first suppressed on Windows or in sandbox clusters, then by trimmed, case-insensitive KIMCHI_REMOTE_RUN values 0 or false; the interactive-tool suppression state set through setPrintGate additionally removes its dispatch tool. Remote-run command/dispatch execution and session-start resume require the agents extension, whose registration follows organization FORCE_ON/FORCE_OFF, local settings, KIMCHI_ENABLE_RESOURCES, organization ON/OFF, then its definition default; its resume callback skips child sessions and empty state, and a disposed manager or missing credential prevents resume. Teleport has its own Windows/sandbox-cluster registration guard; KIMCHI_REMOTE_RUN and the agents resource do not gate its command handlers.",
+        "trigger": "Cloud authentication, workspace listing/get/create/update/resume/delete, quota lookup and key/token operations call this sink with their URL and fetch implementation. The teleport, terminal, sync, remote-sessions and ssh-config command handlers can initiate these operations. Calls also arise while a persisted running remote run is resumed or recovered; the session-start path checks whether another client already watches the run before attachment. Completed entries with completionPending and a string result complete locally before credential lookup or network calls."
       },
       "evidence": {
         "call": "sha256:42c7ebfe564f5b8a6c541fbe9527e32103f809b130337b156fa97572436b3fcf",
@@ -2653,7 +2831,7 @@
         ],
         "statement": "sha256:6cac54fcf4357208975ad477ebdc73fdc489199370f28674dbad72f8ab264bca"
       },
-      "evidenceHash": "sha256:a037330a4be1e14b0e2c0f909abd1df85a6056d2f25d98a3c83d64e739336f32",
+      "evidenceHash": "sha256:9b79c62bdaa5a793b1de79bb5c824c4a3562fe094aabbe247b32fc84dac294bd",
       "id": "request-sandbox-cloud-http-fetch-with-timeout-0",
       "rationale": "The request is an unconditionally delegated fetch inside a timeout wrapper. Registration and resume citations demonstrate distinct upstream controls; their precedence must not be converted into one switch for every cloud caller.",
       "scope": "Original pinned Kimchi 1.26.0 cloud HTTP helper and cited command/resume controls; excludes Nix remote-resource, update and telemetry modifications, server responses and runtime network availability.",
@@ -2676,6 +2854,7 @@
         },
         "sources": [
           "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/node[9]/call:enabledExtensionFactories[0]/list[0]/node[0]/node[0]/list[0]/entry:id:\"extensions.agents\"[0]",
+          "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/token[112]",
           "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/token[114]",
           "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/bindings:envRegion[0]",
           "src/config.ts#function:effectiveRegion[0]#block[0]/list[0]/node[0]",
@@ -2688,13 +2867,17 @@
           "src/config.ts#function:resolveEndpoints[0]#block[0]/list[0]/node[0]",
           "src/config.ts#function:resolveEndpoints[0]#block[0]/list[0]/node[1]",
           "src/config.ts#function:withLlmBaseUrl[0]#block[0]/list[0]/node[0]",
+          "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[10]",
           "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/bindings:resumable[0]",
           "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[0]",
           "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[2]",
           "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[4]/block[0]/list[0]/bindings:outcome[0]",
           "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/token[0]",
+          "src/extensions/agents/index.ts#function:spawnRemoteAgent[0]#block[0]/list[0]/node[0]",
+          "src/extensions/agents/index.ts#function:spawnRemoteAgent[0]#block[0]/list[0]/node[1]",
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/bindings:promise[0]/node[0]/list[0]/name:promise[0]/call:attachRemoteAgent().then[0]/name:then[0]/call:attachRemoteAgent[0]",
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[0]",
+          "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[1]",
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[2]",
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[3]",
           "src/extensions/agents/manager/constants.ts##list[0]/bindings:PARENT_SESSION_ID_ENV_KEY[0]",
@@ -2711,6 +2894,13 @@
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[0]",
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[1]",
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[2]",
+          "src/extensions/remote-run/runner.ts#function:runCloudAgent[0]#block[0]/list[0]/bindings:{id,result,backgrounded}[0]",
+          "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[0]",
+          "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[1]/call:pi.registerCommand[0]",
+          "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[2]",
+          "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[3]",
+          "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[4]/call:pi.registerCommand[0]",
+          "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[5]",
           "src/regions.ts##list[0]/bindings:DEFAULT_REGION[0]",
           "src/regions.ts##list[0]/bindings:REGIONS[0]/node[0]/list[0]/name:REGIONS[0]/node[0]/node[0]/node[0]/list[0]/name:us[0]/entry:id:\"us\"[0]/list[0]/name:castApiUrl[0]",
           "src/regions.ts##list[0]/bindings:REGION_ENV[0]",
@@ -2776,10 +2966,10 @@
     },
     {
       "claim": {
-        "default": "Readiness polling is conditional on a caller requesting a prepared remote workspace, including teleport and remote-agent start, revival or attachment. With no options overrides, waitForWorkspaceReady polls every 1500 ms, gives each probe 5000 ms and sets the overall timeout threshold to ten minutes; registration availability follows the cited teleport, remote-run and agents defaults.",
+        "default": "Readiness polling is conditional on a caller requesting a prepared remote workspace, including teleport, remote-agent start and revival; persisted-run attachment probes only when recovery finds the sandbox not alive and attempts revival. With no options overrides, waitForWorkspaceReady polls every 1500 ms, gives each probe 5000 ms and sets the overall timeout threshold to ten minutes. Revival overrides the readiness timeout to five minutes per attempt, for up to three attempts; registration availability follows the cited teleport, remote-run and agents defaults.",
         "destination": "probeReadyOnce converts the supplied workspace wsUrl from ws to http or wss to https, preserves existing http/https, removes trailing slashes, and appends /api/startupcompletedz. Its GET carries the supplied connectToken as a Bearer token; no fixed workspace host is selected here.",
-        "disable": "Before each probe the readiness loop rejects an aborted signal or an exceeded overall deadline, and returns after the first successful probe. Individual probe timeout and caller cancellation are combined. Avoiding workspace preparation avoids this loop; Windows/sandbox suppression and KIMCHI_REMOTE_RUN opt-out affect their respective command registrations, while the separately governed agents resume path remains subject to resource-policy precedence and its session/credential checks.",
-        "trigger": "After workspace authentication, teleport calls waitForWorkspaceReady with the returned credentials; remote-agent creation and attachment do likewise. The loop invokes probeReadyOnce, waits between unsuccessful probes, and stops on readiness, cancellation or timeout."
+        "disable": "Before each probe the readiness loop rejects an aborted signal or an exceeded overall deadline, and returns after the first successful probe. Individual probe timeout and caller cancellation are combined. A steer continuation reusing a live kept ACP client skips the readiness wait. Avoiding workspace preparation avoids this loop; Windows/sandbox suppression and KIMCHI_REMOTE_RUN opt-out affect their respective command registrations, while the separately governed agents resume path remains subject to resource-policy precedence and its session/credential checks.",
+        "trigger": "After workspace authentication, teleport creation/attachment and remote-agent creation call waitForWorkspaceReady with the returned credentials. Persisted-run attachment enters recovery directly; only a session poll reporting !status.alive leads to tryReviveWorkspace and a readiness wait. The loop invokes probeReadyOnce, waits between unsuccessful probes, and stops on readiness, cancellation or timeout."
       },
       "evidence": {
         "call": "sha256:66c43816b465d04d87b833f16e0055ada4e8f11a9b3b0d87566bef168b326ea0",
@@ -2812,7 +3002,7 @@
         ],
         "statement": "sha256:a5869279e09aae6dfaca0df788dfb6983819d309cad051a31fed241cb9b43cd5"
       },
-      "evidenceHash": "sha256:bf8af61dbf62cf43e101ed88f81d27746a78169b56db0001c6d450339b2db177",
+      "evidenceHash": "sha256:0f53cb8d631145f9cc6eec8e29464f5d2aa9cfae85a79cb68e0e28eb0ad91e9a",
       "id": "request-sandbox-cloud-readiness-probe-ready-once-0",
       "rationale": "The loop defines probe timing and termination, and deriveBaseUrl determines the workspace-relative destination. Command registration and persisted-run attachment are separate entry paths with distinct disabling controls.",
       "scope": "Original pinned Kimchi 1.26.0 workspace readiness source and its cited caller gates, excluding packaging resource switches, self-update and telemetry changes, external fetch semantics and actual workspace readiness.",
@@ -2847,8 +3037,14 @@
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[2]",
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[3]",
           "src/extensions/agents/manager/constants.ts##list[0]/bindings:PARENT_SESSION_ID_ENV_KEY[0]",
-          "src/extensions/agents/manager/remote-agent-runner.ts#function:continueRemoteAgent[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts##list[0]/bindings:REVIVE_MAX_ATTEMPTS[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts##list[0]/bindings:REVIVE_READY_TIMEOUT_MS[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts#function:attachRemoteAgent[0]#block[0]/list[0]/node[1]/block[0]/list[0]/bindings:outcome[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts#function:continueRemoteAgent[0]#block[0]/list[0]/bindings:reusedAcpClient[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts#function:continueRemoteAgent[0]#block[0]/list[0]/node[1]",
+          "src/extensions/agents/manager/remote-agent-runner.ts#function:recoverFromDisconnectInner[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[4]",
           "src/extensions/agents/manager/remote-agent-runner.ts#function:runRemoteAgent[0]#block[0]/list[0]/node[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts#function:tryReviveWorkspace[0]#block[0]/list[0]/node[0]",
           "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/bindings:lastById[0]",
           "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/node[0]",
           "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/node[1]",
@@ -2859,6 +3055,7 @@
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[0]",
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[1]",
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[2]",
+          "src/extensions/teleport/commands/attach.ts#function:runAttachSession[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[4]/block[0]/list[0]/node[0]",
           "src/extensions/teleport/commands/teleport.ts#function:runTeleport[0]#block[0]/list[0]/node[11]/block[0]/list[0]/node[1]/block[0]/list[0]/node[0]",
           "src/extensions/teleport/commands/teleport.ts#function:runTeleport[0]#block[0]/list[0]/node[11]/block[0]/list[0]/node[4]/block[0]/list[0]/node[0]",
           "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[0]",
@@ -3088,7 +3285,7 @@
         ],
         "statement": "sha256:6cac54fcf4357208975ad477ebdc73fdc489199370f28674dbad72f8ab264bca"
       },
-      "evidenceHash": "sha256:2ecc907af81e0dbd02175b4a090ee3294140be0a6f5361386804a0d1fc33b6bd",
+      "evidenceHash": "sha256:046f5f53727e2ee57ea29b60375bca794e1bfc237c476dafeab66090e0660bbf",
       "id": "request-sandbox-worker-client-fetch-with-timeout-0",
       "rationale": "All six HTTP methods share the same timeout send while retaining their own verb, path and body. The constructor establishes transport defaults, and upstream registration evidence is scoped to the callers it actually controls.",
       "scope": "Original pinned Kimchi 1.26.0 worker HTTP client and cited operation entry paths; excludes Nix resource policy, disabled self-update/telemetry setup, runtime fetch implementation behavior and worker services.",
@@ -3123,6 +3320,8 @@
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[2]",
           "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[3]",
           "src/extensions/agents/manager/constants.ts##list[0]/bindings:PARENT_SESSION_ID_ENV_KEY[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts#function:attachRemoteAgent[0]#block[0]/list[0]/bindings:st[0]/node[0]/list[0]/name:st[0]/node[1]/list[0]/name:client[0]",
+          "src/extensions/agents/manager/remote-agent-runner.ts#function:runRemoteAgent[0]#block[0]/list[0]/bindings:client[0]",
           "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/bindings:lastById[0]",
           "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/node[0]",
           "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/node[1]",
@@ -3133,6 +3332,7 @@
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[0]",
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[1]",
           "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[2]",
+          "src/extensions/teleport/commands/teleport.ts#function:runTeleport[0]#block[0]/list[0]/node[11]/block[0]/list[0]/bindings:client[0]",
           "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[0]",
           "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[1]/call:pi.registerCommand[0]",
           "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[4]/call:pi.registerCommand[0]",
@@ -3260,7 +3460,7 @@
         "default": "The shared sink is used during ordinary CLI startup when the resolved organization-policy token is nonempty: initOrgPolicy fetches before consulting its cache, before telemetry setup. It has no independent default-on feature; its other caller rows describe separate API, memory, naming, telemetry, web, integration and update paths.",
         "destination": "fetchWithRetry forwards its required url argument unchanged to options.fetchImpl, or globalThis.fetch when no implementation is supplied; it defines no destination URL or host default.",
         "disable": "There is no feature-disable parameter at this sink: preventing an initial attempt requires preventing the relevant caller or supplying a fetch implementation that declines it. maxRetries is clamped to at least zero and still allows the initial attempt. The caller signal is combined with the per-attempt timeout signal; an aborted caller stops further retries after a failure, but is not checked before invoking fetchFn. Disabling telemetry cannot suppress the earlier organization-policy fetch.",
-        "trigger": "A caller invocation enters the attempt loop and invokes fetchFn. Further attempts follow retryable HTTP responses or thrown errors until the retry budget is exhausted; caller abort stops error retries. The default budget is ten retries after the first attempt, with a 30-second per-attempt timeout."
+        "trigger": "A caller invocation enters the attempt loop and invokes fetchFn. Further attempts follow retryable HTTP responses or thrown errors until the retry budget is exhausted; caller abort stops all further attempts. The default budget is ten retries after the first attempt, with a 30-second per-attempt timeout. The startup organization-policy caller overrides these defaults with zero retries and a 1500 ms timeout."
       },
       "evidence": {
         "call": "sha256:34608e52e687849c3333007c5c535bd426c63813c1e7e5d9073da172206b450a",
@@ -3429,7 +3629,7 @@
         ],
         "statement": "sha256:b88bd30fe4b0db6bc53f44f0d59449cfa193409f6f7d081739253d8600bd5ceb"
       },
-      "evidenceHash": "sha256:cd1bb841f06ed963941cc42d562f5b17cef5b432c727eef3946eda04af705f84",
+      "evidenceHash": "sha256:636e7568c4a74feb75a52aea9cd6c3892e407fc513730a2b30ef226cdb90b906",
       "id": "request-utils-http-fetch-with-retry-0",
       "rationale": "The required URL and fetch selection bind routing to each invocation. Loop, response and abort branches establish retry controls without inventing a common caller gate; cliMain and initOrgPolicy establish a startup use that precedes telemetry policy.",
       "scope": "Original pinned Kimchi 1.26.0 retry sink and the cited startup policy path; caller-specific feature scheduling remains with the callers. Excludes package remote-resource overrides, removed self-update or telemetry setup, runtime availability and remote services.",
@@ -3451,6 +3651,7 @@
           }
         },
         "sources": [
+          "src/api/org-settings.ts##list[0]/bindings:STARTUP_FETCH_OPTIONS[0]",
           "src/api/org-settings.ts#function:fetchOrgPolicy[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[0]",
           "src/cli.ts#function:cliMain[0]#block[0]/list[0]/bindings:orgPolicyCredentials[0]",
           "src/cli.ts#function:cliMain[0]#block[0]/list[0]/bindings:telemetryConfig[0]",
@@ -3554,6 +3755,7 @@
   ],
   "schemaVersion": 1,
   "spans": {
+    "src/api/org-settings.ts##list[0]/bindings:STARTUP_FETCH_OPTIONS[0]": "sha256:5b4f921c3919d0ecbd640880d8b9fc9c1c15e68721343afcb99ec07390643c49",
     "src/api/org-settings.ts#function:fetchOrgPolicy[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[0]": "sha256:4e33a92e3a8774d655c8c00d67637268cd355cb9d669783e4c7a9cc76a1607e9",
     "src/api/organizations.ts#function:verifyApiKey[0]#block[0]/list[0]/bindings:endpoint[0]": "sha256:1786eea67f97bee59970419f3bab0a01e295be6cd27e6c81802bfeaf230dd51a",
     "src/api/organizations.ts#function:verifyApiKey[0]#block[0]/list[0]/bindings:fetchImpl[0]": "sha256:ea2b49372c37efbca241dac984f814beea9353dfdd17f61b6e72bde524470f61",
@@ -3594,6 +3796,7 @@
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/bindings:userTelemetryConfig[0]": "sha256:cba1280d6179377dd64fdb047641d03fd9302b0ec2c5260590c88a0a6ad29d0f",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[0]": "sha256:ed7e418ef6820cde4a506e53dd177bd845353baf64ca26a69d6fab73c3a274ef",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[4]": "sha256:c4dd02886881c4881fb4940bfbc705a5c60d825671e7c3fe6253c7b97d5ef3d3",
+    "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:authJsonPath[0]": "sha256:7c684e4cb738f99b5bcd681e0cfff08a1bbe09e61426adeae09e03290e7a200a",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/call:sessionNameExtension[0]": "sha256:83fe16dc99bf3e366b95cbbd3d14c0171212abd20bc65b6870d09b02f7602da9",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/call:telemetryExtension[0]": "sha256:5ba503cbd48b5443a926426b75cc07673e3e1ba0f4b05eb82bb94b5a3d93d32f",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/node[11]/call:enabledExtensionFactories[0]/list[0]/node[0]/node[0]/list[0]/entry:id:MEMORY_RESOURCE_ID[0]": "sha256:07ed926fab7f1a404e6b66dc1e6119dd6a92e79b4062a693cca866de7c430759",
@@ -3606,6 +3809,8 @@
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/token[18]": "sha256:8d1ef5381492843c950baf6f31751ef1e9faf924fcfb0ca5e3a2880a6c2b51ff",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/token[23]": "sha256:65e48d89f70fd24aa2a69504ed2c193183c90cce7365ec6a15eea7105accddca",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:extensionFactories[0]/node[0]/list[0]/name:extensionFactories[0]/node[0]/list[0]/token[57]": "sha256:50adf5dde4a7271a1f67857cc4e8bedc06f00a3df831f667ecdf5f378df6539c",
+    "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:gatewayCredentials[0]": "sha256:9a0b6c582fbeeefc7596d93ee173b8ae19cc85749221448d0862ee5ec7f0c369",
+    "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/bindings:oauthAccessToken[0]": "sha256:91099dda9dd759f07d7c47fc1698dba757ab4f7d8b322fb67ef1629f92f88905",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/node[24]": "sha256:db574590badf4eceeab44768c518302609167954f4a8588b5644230f6e1fe631",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/node[9]/block[0]/list[0]/node[0]/block[1]/list[0]/node[1]": "sha256:14c4192ace863bf45239c0109b1f80568c52c8cc9627b77ef3b95d113b1caa4c",
     "src/cli.ts#function:cliMain[0]#block[0]/list[0]/node[9]/block[0]/list[0]/node[3]/block[1]/list[0]/node[9]/block[0]/list[0]/node[0]/block[1]/list[0]/node[3]": "sha256:7c7a83c0a8b6c805752a0c28aecf26d63966515421fd04307230b8569344dfc0",
@@ -3628,6 +3833,7 @@
     "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/bindings:trimmed[0]": "sha256:dc43e3d5d5ed63945076570173f23931a059901bb0d92922b56f8023c3ed4adf",
     "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[0]": "sha256:1094d2c372914a73e03c8d19732a20c4442d8a76e65a7590e921e504c4a923e3",
     "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[1]": "sha256:a83a28d4422fb98fa4e95de5724139c95d78b7d2a3a5ee5fb30878285d281ee2",
+    "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[2]": "sha256:fa035675daa3a3a6481f281429a9e6891ca6110829a63b029b937388d1399de8",
     "src/config.ts#function:environmentLlmBaseUrl[0]#block[0]/list[0]/node[3]": "sha256:13cf6334087e1b03bcee72b9f39b2206da138d9963a1f2c5cf413e3f20761999",
     "src/config.ts#function:getEnvironmentApiKey[0]#block[0]/list[0]/node[0]": "sha256:5ed3629f295d36a225693d32085a54b4c11b08e1b8751bdc2cb5e52bba8a7f1a",
     "src/config.ts#function:isValidHttpUrl[0]#block[0]/list[0]/node[0]": "sha256:451b401905c627a236f27d2d3756f52cfe1ad5677b65b375a5e40eddf0fbb155",
@@ -3669,22 +3875,34 @@
     "src/entry.ts##list[0]/node[19]": "sha256:d506c067d358f7fe7dfc89be00f77d5093db39293d5e42d1bbcaf4205d204908",
     "src/environment-models.ts#function:discoverEnvironmentModels[0]#block[0]/list[0]/bindings:ollama[0]": "sha256:dc827bd9414ed2743103da3a9160923526a31230aa717ed6c53dba4d5c9b0bb3",
     "src/environment-models.ts#function:discoverEnvironmentModels[0]#block[0]/list[0]/node[0]/block[0]/list[0]/bindings:discovered[0]": "sha256:e2600bf65edca55aa4c74f14c6360b3c8a0bc16b7f17312c304b3bbb48e7a3f1",
+    "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[10]": "sha256:6a86322b0727accffcc43f80301efa6f059c76d4e533c9c504d05ec128a57b5f",
     "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/bindings:resumable[0]": "sha256:248ee3a892e0e75eadf875032ef312039aa8aba2a30c890f8269f8f9eb890a62",
     "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[0]": "sha256:81fbb34e186b948252a1e2217beccd675497b884a2ed32574140eb391cb383b7",
     "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[2]": "sha256:a6f48eb37f6a82e3b630555bd432eb955fac0f0b386358827c3586c438b54215",
     "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[4]/block[0]/list[0]/bindings:outcome[0]": "sha256:a23b718c32af756ff1059a937e908efd0c9693ca71a9d37ad266f0a01a52c962",
     "src/extensions/agents/index.ts##list[0]/node[42]/block[0]/list[0]/node[12]/call:pi.on[0]/list[0]/token[0]": "sha256:f33ffc2aece37db1777e5be3757aa540e1cfb4ad8cd00cbd94617802415fe201",
+    "src/extensions/agents/index.ts#function:spawnRemoteAgent[0]#block[0]/list[0]/node[0]": "sha256:5b2ca44128e4dc45217375da07d5fec5460b6ae54e3e6ec833272035dd86c901",
+    "src/extensions/agents/index.ts#function:spawnRemoteAgent[0]#block[0]/list[0]/node[1]": "sha256:2225504494028bd5228bacb58e646ffb37daadbea633057d95a6d4d2256ed2ad",
     "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/bindings:promise[0]/node[0]/list[0]/name:promise[0]/call:attachRemoteAgent().then[0]/name:then[0]/call:attachRemoteAgent[0]": "sha256:c0cb56d78d33ef67d2c0b0c1c5342bc1eacab472963d2bbe8fcda42488930cd2",
     "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[0]": "sha256:15ba6696e10f5075e384c56a4670368204213c3931805ce97974ef38248f3fd5",
+    "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[1]": "sha256:948e5de0f86b6eed5e952dd6b31d9b5b12d2ee517ade7ada1a99e696005b668c",
     "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[2]": "sha256:6176eed6e0c172f508d5c86f55a71fee0690bfd5a9d9d4f7c672f1bb3c79b27c",
     "src/extensions/agents/manager/agent-manager.ts#class:AgentManager[0]/method:resumeRemoteRecord[0]#block[0]/list[0]/node[3]": "sha256:5b538394a205993c0571a2eb93a2f29d3c588335728b257eb756ebbbef0b7185",
     "src/extensions/agents/manager/constants.ts##list[0]/bindings:PARENT_SESSION_ID_ENV_KEY[0]": "sha256:3eed166ea497ab388d7f667a82aececbd9db17098a98961093d5b532931d2fa3",
-    "src/extensions/agents/manager/remote-agent-runner.ts#function:continueRemoteAgent[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]": "sha256:545c4426d82fc8535aec406434e6dcf00361851effe387bee9b0b274f941be89",
+    "src/extensions/agents/manager/remote-agent-runner.ts##list[0]/bindings:REVIVE_MAX_ATTEMPTS[0]": "sha256:8f0f91e960838db5c5ca08fa31c7e889a6d0e0cc83ab3bd521231864e05668ed",
+    "src/extensions/agents/manager/remote-agent-runner.ts##list[0]/bindings:REVIVE_READY_TIMEOUT_MS[0]": "sha256:64d1b560362fe9630e90a2f423bdb3641090ac5f53915ac09fe39c84e6ed4ae0",
+    "src/extensions/agents/manager/remote-agent-runner.ts#function:attachRemoteAgent[0]#block[0]/list[0]/bindings:st[0]/node[0]/list[0]/name:st[0]/node[1]/list[0]/name:client[0]": "sha256:6321b322810208fcc503652ef5c0fa8ab282496ec1e42650d2bad10e148de5e0",
+    "src/extensions/agents/manager/remote-agent-runner.ts#function:attachRemoteAgent[0]#block[0]/list[0]/node[1]/block[0]/list[0]/bindings:outcome[0]": "sha256:52155c95e58c2ce3d1b68ea2ee3df161226d5f4208fa60f4a11a12c9a964a68c",
+    "src/extensions/agents/manager/remote-agent-runner.ts#function:continueRemoteAgent[0]#block[0]/list[0]/bindings:reusedAcpClient[0]": "sha256:abf8febac3106661154b51c79966871fe882bfd68af291c2c3a2d1c466c88560",
+    "src/extensions/agents/manager/remote-agent-runner.ts#function:continueRemoteAgent[0]#block[0]/list[0]/node[1]": "sha256:b18ca461ccf1726055f6b337d8905eb180ff9b997970b78686857858864ec155",
     "src/extensions/agents/manager/remote-agent-runner.ts#function:continueRemoteAgent[0]#block[0]/list[0]/node[2]/block[0]/list[0]/node[0]/block[1]/list[0]/node[0]/block[0]/list[0]/node[1]/block[0]/list[0]/bindings:candidate[0]": "sha256:508cbe1f8a7fdfcbcbbdb50ff44b73ed38bbd87f1c0325862ca1b0775fcb3459",
     "src/extensions/agents/manager/remote-agent-runner.ts#function:recoverFromDisconnectInner[0]#block[0]/list[0]/node[1]/block[0]/list[0]/bindings:reattachClient[0]": "sha256:4daf6867977dda9eac4c743928d59816d96180f804e9698fb29a3bd1ab7a0630",
+    "src/extensions/agents/manager/remote-agent-runner.ts#function:recoverFromDisconnectInner[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[4]": "sha256:96a56bf4a8d51de5c2b06bcec4d8de31d3b66690777eae4b452b8519c96d3511",
     "src/extensions/agents/manager/remote-agent-runner.ts#function:recoverTextViaReplay[0]#block[0]/list[0]/bindings:replayClient[0]": "sha256:1efbb84347169829b8e225641d33fa6a25114b4ee035c20177a7b0b194d3b3b1",
     "src/extensions/agents/manager/remote-agent-runner.ts#function:runRemoteAgent[0]#block[0]/list[0]/bindings:acpClient[0]": "sha256:4062c2aea19686b0e128f3f0d660c51504820fcee9b9a26befbc6bd6345f129b",
+    "src/extensions/agents/manager/remote-agent-runner.ts#function:runRemoteAgent[0]#block[0]/list[0]/bindings:client[0]": "sha256:0541840b182f0cbbd822c998440ef1fa77c3f3ad46f17212168e74052d9e2438",
     "src/extensions/agents/manager/remote-agent-runner.ts#function:runRemoteAgent[0]#block[0]/list[0]/node[0]": "sha256:a24ddd17006b751eaa14bbe64014d19bcf53262f9aad6077f84994756ec9b8b7",
+    "src/extensions/agents/manager/remote-agent-runner.ts#function:tryReviveWorkspace[0]#block[0]/list[0]/node[0]": "sha256:d03d793ec23b11884e4af0b2751dca232f8c029d2900a26625b8de9fcd5b45f7",
     "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/bindings:lastById[0]": "sha256:e64cc1340c573e677e17c2c4234fb65aa40e86ac971fe73309091c9f5e2d3735",
     "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/node[0]": "sha256:242553635ba4e323e5cc7647516b07a6450f44fd0e29f5497baa1889ce903bc6",
     "src/extensions/agents/remote-run-persistence.ts#function:findResumableRemoteRuns[0]#block[0]/list[0]/node[1]": "sha256:1f1b73ac78da1619917c96a60ca0f9ff5f6c3086d8c3b471f3e64679a983a3af",
@@ -3716,7 +3934,9 @@
     "src/extensions/billing/status.ts#function:refreshBudgetStatus[0]#block[0]/list[0]/bindings:config[0]": "sha256:025ede16f387c2d94acb67ba9bd10e48cc09800cdebe9f410acac16642c7e1e1",
     "src/extensions/billing/status.ts#function:refreshBudgetStatus[0]#block[0]/list[0]/bindings:fetchImpl[0]": "sha256:959979fa9d1baf33315c6ec49b7da6186db96fbb4744a23429a73588eed74fbe",
     "src/extensions/billing/status.ts#function:refreshBudgetStatus[0]#block[0]/list[0]/node[0]": "sha256:0fc8a14bed5e4c2c44e6b1054ba4fbb47958896cd63092231cdd924d4f1b341d",
+    "src/extensions/ide-adapter/index.ts##list[0]/bindings:MAX_RECONNECT_RETRIES[0]": "sha256:a694a838b8119d1c74e4af7488efee6ef87adf95d41021de6de72e1b2483da1f",
     "src/extensions/ide-adapter/index.ts##list[0]/bindings:POLL_INTERVAL_MS[0]": "sha256:6d12d137090f524263cbdef81e1fe485ab638db28425d31ad11d0e547df0894d",
+    "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[2]": "sha256:636467a1bbc40f5b802946d03d4ed7f4a98f192950a8dc0dfae4e41e28a0df25",
     "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[6]": "sha256:088a1bf530acab6d8abe0b62fd2409a9d0cd339d2997dd646e440a056bee0b09",
     "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[7]": "sha256:15b9acb2ccef1b3f0c861d354b1e77110cd3b44e5f4e0e639a1d28efdca7547c",
     "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]#block[0]/list[0]/node[1]/call:pi.on[0]/list[0]/token[0]": "sha256:f33ffc2aece37db1777e5be3757aa540e1cfb4ad8cd00cbd94617802415fe201",
@@ -3733,6 +3953,9 @@
     "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[2]": "sha256:e2ab619567aa6b90d3127eab6deabde477253a4c50951e14297dacb7fcd85ebd",
     "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[3]": "sha256:6f2d53e50e0a662d3fcbefb776d002bfe3c3ba92e045c45441c8f0a906267585",
     "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/block[0]/list[0]/bindings:newConnection[0]": "sha256:5dcba0e6060de93a6fa4ca358e6feeedffcffa172639ff2fb7a2f90cd1289f16",
+    "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/block[0]/list[0]/node[3]": "sha256:636467a1bbc40f5b802946d03d4ed7f4a98f192950a8dc0dfae4e41e28a0df25",
+    "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/node[0]/block[0]/list[0]/node[0]": "sha256:953220de4080b82172bd3a7aa88ffeded9ed202b88e77baa23086400b2af84e5",
+    "src/extensions/ide-adapter/index.ts#function:ideAdapterExtension[0]/function:discoverAndConnect[0]#block[0]/list[0]/node[4]/node[0]/block[0]/list[0]/node[2]": "sha256:17a04fb54bd720be93f024f48010fc9b95188983114bdbd5f8340ff4cc15c35d",
     "src/extensions/ide-adapter/lockfile.ts##list[0]/bindings:DEFAULT_LOCKFILE_DIR[0]": "sha256:dc06195bc009bdba28e4a0f101af370e9058beccef0ad07f8567a77078f750c6",
     "src/extensions/ide-adapter/lockfile.ts#function:getLockfileDir[0]#block[0]/list[0]/node[0]": "sha256:f95eb157b028ca4c1b27b63e6edb5ed074bfd1662de9333f2b837a084ac81d4f",
     "src/extensions/ide-adapter/lockfile.ts#function:scanLockfiles[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[0]": "sha256:1146aa329ef1775e4043d71fefe554e537be6202b1e0d48dd921e2d67e65ba4a",
@@ -3747,13 +3970,21 @@
     "src/extensions/ide-adapter/mcp-client.ts#function:connectToIde[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]": "sha256:badae517e260020774772112aae3b5b7b5b4538fd81895f4d02a1dd5104da731",
     "src/extensions/login/flow.ts#function:completeKimchiSsoLogin[0]#block[0]/list[0]/node[8]/block[0]/list[0]/node[0]": "sha256:5a2b9e030c0e9d40f590276fda1a4fae847a0f3d3b8875176db913b262eec192",
     "src/extensions/login/flow.ts#function:configureKimchiToken[0]#block[0]/list[0]/node[5]/block[0]/list[0]/node[0]": "sha256:5a2b9e030c0e9d40f590276fda1a4fae847a0f3d3b8875176db913b262eec192",
+    "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/bindings:config[0]": "sha256:61349bedfc7413b942f3b1b7fd348d119f7718b499cf5f887da51f624a0e88e9",
+    "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[0]": "sha256:21aa2736ff202d45038ecdc79ea6ef4da37d8f419895e120708fba17cd5c818f",
+    "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[1]": "sha256:dccc11c0b7ccf3101c2dd91980df59bde0e8efc1673f5586c138accf73e8bd91",
+    "src/extensions/login/flow.ts#function:performKimchiSsoLoginWithExtensionUI[0]#block[0]/list[0]/node[2]/call:ctx.ui.custom[0]/list[1]/node[0]/block[0]/list[0]/node[0]/node[0]/call:function:[0]/node[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/bindings:credential[0]": "sha256:03743fcdd616e609a07766abaaaeb463b3f8a51777712869c622a0295cae38ac",
     "src/extensions/login/flow.ts#function:promptSelfHostedEndpoints[0]#block[0]/list[0]/bindings:discover[0]": "sha256:422e55e14d3433d44380064e822669a24dd066ad9d285da839da7da71e36cb0b",
     "src/extensions/login/flow.ts#function:promptSelfHostedEndpoints[0]#block[0]/list[0]/node[0]/block[0]/list[0]/bindings:consoleUrl[0]": "sha256:6edac2a53f7d5361d7f6b8004205ed74dc5d6d0665929cea0d3d09e41b903f9b",
     "src/extensions/login/flow.ts#function:promptSelfHostedEndpoints[0]#block[0]/list[0]/node[0]/block[0]/list[0]/bindings:input[0]": "sha256:1d48e4da4fddb9268eb46ea7417eb9792140f038ce41c8a85fb7a2c49a5f646d",
     "src/extensions/login/flow.ts#function:promptSelfHostedEndpoints[0]#block[0]/list[0]/node[0]/block[0]/list[0]/bindings:result[0]": "sha256:54cb3ff01a1ea6be8b67d11934355bd2528848f222852b06ccc8f78964001c12",
     "src/extensions/login/flow.ts#function:promptSelfHostedEndpoints[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[0]": "sha256:66ba22cc443c0d669bbef2deb293a062fea298310e15bfed3a8d99c154cb9d19",
     "src/extensions/login/flow.ts#function:promptSelfHostedEndpoints[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[1]": "sha256:a96d46ce53d3c8c4bfc316d1eda00dd463a4e66b0e547a8257f9988b03013134",
+    "src/extensions/login/index.ts#function:createKimchiProviderOAuth[0]#block[0]/list[0]/bindings:ssoOAuth[0]": "sha256:f216f79c9f50b2dcd9ace35d24f5a3514ed99be6b7c5fd4270bb900e41c7d9ee",
     "src/extensions/login/index.ts#function:loginExtension[0]#block[0]/list[0]/node[5]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[0]": "sha256:11992c937c91a36bb8a2345a0ba6e1e4c4573ce41286d2de6c6999346311c937",
+    "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/bindings:region[0]": "sha256:b99bbe980a34d0668ac810370f5395ef261c79483654db964159afc3ec7e1558",
+    "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/node[0]": "sha256:6ac1d6d81480045d5969d4c784b375e00e68dbc3c8c80c58c607b348e49fa3ad",
+    "src/extensions/login/startup-auth.ts#function:runStartupAuthGate[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[1]/node[1]/block[0]/list[0]/node[1]": "sha256:5431aba726a5f1e7132ee123009f930ed6795475c333e2a9497fda9e833da5d1",
     "src/extensions/memory/backend.ts##list[0]/bindings:MEMORY_EMBEDDING_TAG[0]": "sha256:d9a4a0928d45cfad1bde2586cd7839f6999ef09130fc7d239c3e1a3cb7d5ab54",
     "src/extensions/memory/backend.ts#function:createMemoryBackend[0]#block[0]/list[0]/node[2]": "sha256:c43c3a966305eb99dfa4dd55fa8f17882264ea7258686807111b9959d5dc1ef9",
     "src/extensions/memory/backend.ts#function:requestOrigin[0]#block[0]/list[0]/node[0]": "sha256:87891cbf596522c845fc0eb07c6e58d68e3e388bcbff1a89538fea06f7d264a6",
@@ -3782,6 +4013,7 @@
     "src/extensions/memory/capture.ts#function:wireMemoryCapture[0]#block[0]/list[0]/node[1]": "sha256:d6352c0ccd206662d96aa7ce47d5dcc531449a88ebab676f487948dcb73e998e",
     "src/extensions/memory/capture.ts#function:wireMemoryCapture[0]#block[0]/list[0]/node[2]": "sha256:83b4fc110c63da0ca523894ceeebf8b7f24092fc951f0caf51f4b1568ed581d0",
     "src/extensions/memory/config.ts##list[0]/bindings:MEMORY_RESOURCE_ID[0]": "sha256:333ad9f6429d22d28ca9a84e573beafffb8bce14184f9fca30d77e1b4311f9cd",
+    "src/extensions/memory/embedder.ts#function:createSharedEmbedder[0]#block[0]/list[0]/node[2]": "sha256:c43c3a966305eb99dfa4dd55fa8f17882264ea7258686807111b9959d5dc1ef9",
     "src/extensions/memory/index.ts#function:createMemoryExtension[0]/function:memoryExtension[0]#block[0]/list[0]/bindings:memoryActive[0]": "sha256:2f22461b66b936f91c55b858fa8f8e5280d6c19129bdabb4307595782108b22e",
     "src/extensions/memory/index.ts#function:createMemoryExtension[0]/function:memoryExtension[0]#block[0]/list[0]/node[2]": "sha256:fc3ee828efd8235c33276dde870470954d58c9e75572b5aa5ad9e880d5c72a97",
     "src/extensions/pr-cost-reporting/automation.ts##list[0]/bindings:CI_VARIABLES[0]": "sha256:cd261b64b7f7cf2a01a6522c759792ce2db36a5e505f3cff9a30123c4340301a",
@@ -3795,6 +4027,7 @@
     "src/extensions/pr-cost-reporting/automation.ts#function:uploadSkipReason[0]#block[0]/list[0]/node[5]": "sha256:13cf6334087e1b03bcee72b9f39b2206da138d9963a1f2c5cf413e3f20761999",
     "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]#block[0]/list[0]/node[1]": "sha256:d569934757c53d0e605a6b401410130a1200bec7936f5ce6aaddf600e49a5759",
     "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]#block[0]/list[0]/node[2]": "sha256:d5e0479048ac47e742b474553cc2776933311992ac4e368cef4b157127e31135",
+    "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]#block[0]/list[0]/node[2]/call:pi.on[0]/list[0]/node[0]/block[0]/list[0]/node[1]": "sha256:f6b050a49161bcee73bce66d957bf438599950cd28480fb025ad0010e5b24333",
     "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]#block[0]/list[0]/node[3]": "sha256:7413d66044add3e0c33c146bb068f25bfb572836f0daef1e4d0e3668e7eab80a",
     "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]/function:handler[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]/node[1]/block[0]/list[0]/node[0]": "sha256:7a82e1e78f2ab315aaea90a0b246f7db5a1f80d52e5ad4e1e11dcd3ca7bab851",
     "src/extensions/pr-cost-reporting/index.ts#function:prCostReportingExtension[0]/function:synchronize[0]#block[0]/list[0]/node[0]": "sha256:994a9888d3f1ab69c9b117d8fe7b0474c75b670cbd69b340a47fe4c7772d8078",
@@ -3815,6 +4048,7 @@
     "src/extensions/pr-cost-reporting/queue.ts#function:update[0]/function:check[0]#block[0]/list[0]/node[0]": "sha256:e3eece3d2288185a68c337e24aa3de46194d9e495056a9ce6e816425a48b882f",
     "src/extensions/pr-cost-reporting/queue.ts#function:update[0]/function:check[0]#block[0]/list[0]/node[1]": "sha256:51ed7063bb679cedca24b28e4200e81a68960467918017507a161be7f0dde9f8",
     "src/extensions/pr-cost-reporting/queue.ts#function:withReportingConsent[0]#block[0]/list[0]/node[0]/node[0]/call:update[0]": "sha256:19e4fd4c20f06101c1ba15cc91364d4c559317811aa9ee1442668231964700c4",
+    "src/extensions/pr-cost-reporting/worker.ts#function:captureEvents[0]#block[0]/list[0]/node[5]/block[0]/list[0]/bindings:translated[0]": "sha256:6c68689c71182baf665ea6cc6b0ae849c85d1240555eb5f0272172fd6d96e557",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/bindings:account[0]": "sha256:02d1bbe90648309daff32bff3d6a592b13b76beedcfd9e840d2643b156437e6c",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/bindings:apiUrl[0]": "sha256:43e32edadbbd8971fef6141e58d9890d19a3beae7c795882ee42179d4df6d77c",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/bindings:due[0]": "sha256:02d30d4b6c0fac87ce190bdcad14fc7a0aeed07b31c94e87e0e907ba5e9df5bd",
@@ -3832,6 +4066,7 @@
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[2]": "sha256:7c4cbf3d98798b78a160af3795b1b705d1d0728e6fff9111637d0398c17a1a83",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[3]/block[0]/list[0]/node[0]": "sha256:cdb01f2898b0353bf5f1f6732bc87a765714cf2214030559812c665fe5e5b804",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[4]": "sha256:51ed7063bb679cedca24b28e4200e81a68960467918017507a161be7f0dde9f8",
+    "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[5]": "sha256:f0186a33da39139619aedf2a11d5635dd90fc8cc131c8116aa16cfa6aab13f9e",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[7]": "sha256:77a8dfa0fa24726dc0b89bb2d4d183221002a4b977422fce9cebae551713b582",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[8]": "sha256:a550ca83b8c0efdf43b2fdef1632af69daab069fac611c4e4c633d38a1452a0b",
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverEvents[0]#block[0]/list[0]/node[0]/call:reportingDelivery[0]/list[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[9]": "sha256:d74576cfdf6126245ab7124046885785373556ec57cce10cd2ab3db9325b6dba",
@@ -3872,6 +4107,7 @@
     "src/extensions/pr-cost-reporting/worker.ts#function:deliverSnapshots[0]/function:fetchBounded[0]#block[0]/list[0]/node[2]": "sha256:d16967c9e9ce1fca77a0e886d2a3eb9ebeccdf4bef8e126856fdd119208a9947",
     "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/bindings:state[0]": "sha256:2b17c8c35dca22f797e43d662650a6247aa348d0a8f3d0180669f5f9297f5954",
     "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/node[0]": "sha256:97a464aaedfcb6fa5716ffd3ff5942ac7f7251739107c31c196920e56a5165ed",
+    "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[0]": "sha256:fbd815a542449b8098b13c9a557f133a374820ba0f06056f531ca04e56a1725d",
     "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/node[2]": "sha256:167f5de60cbcc4c88cad0f229eb13312ef9dc260c91f062a264f00d06b6d01a2",
     "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/node[3]/block[0]/list[0]/node[0]": "sha256:6aa741f55e0f19918f42d01ba73da3268041b727ce53b2a78fe3730e53cb8788",
     "src/extensions/pr-cost-reporting/worker.ts#function:reconcileReporting[0]#block[0]/list[0]/node[3]/block[0]/list[0]/node[1]": "sha256:932dac56d448de9ab50d22427577baeda1f0da2eedff374e1ec1b5c786e86c54",
@@ -3880,8 +4116,10 @@
     "src/extensions/pr-cost-reporting/worker.ts#function:reportingDelivery[0]#block[0]/list[0]/node[2]/block[0]/list[0]/node[0]": "sha256:4ca1fb13f6355372f030246c380507454eb7e518d0c37450c66e74cca9abd19b",
     "src/extensions/pr-cost-reporting/worker.ts#function:reportingDelivery[0]/function:check[0]#block[0]/list[0]/node[0]": "sha256:43f5184e3cc9695b88dca2b1f90069c50e3f559e8b6c3da9f6babdaea1ca1670",
     "src/extensions/pr-cost-reporting/worker.ts#function:reportingDelivery[0]/function:check[0]#block[0]/list[0]/node[1]": "sha256:6ae950e4047b6b21a24512d5cea2a3639369a1a5814c003599bc8d4b048ea104",
+    "src/extensions/pr-cost-reporting/worker.ts#function:repositoryIdentities[0]#block[0]/list[0]/node[4]/block[0]/list[0]/node[3]/block[0]/list[0]/bindings:value[0]": "sha256:78e7134c00a01b9eaecabf4a89e2579d8d445682dbec2d116d2c71896828c96f",
     "src/extensions/pr-cost-reporting/worker.ts#function:safeEndpoint[0]#block[0]/list[0]/bindings:url[0]": "sha256:7d7966a4ee60aeb8a967345d14d69d35ef6149178ee6aa4994e62b0bc00264b1",
     "src/extensions/pr-cost-reporting/worker.ts#function:safeEndpoint[0]#block[0]/list[0]/node[0]": "sha256:5291ebbc28937db3b5c277459f599c50353624daa0c828b1ae0007f6297fc932",
+    "src/extensions/pr-cost-reporting/worker.ts#function:translateGroup[0]#block[0]/list[0]/bindings:{repositories,settled}[0]": "sha256:02b0a6cc2fb44fd00c0fc89aec45d951485425b712f851999d26614fdba3df70",
     "src/extensions/print-mode.ts#function:setPrintGate[0]#block[0]/list[0]/node[0]": "sha256:77ccfbd5d1857869337f2a9f001c10490ff2ccf5383cacc2710ab2e5514db824",
     "src/extensions/print-mode.ts#function:shouldSuppressInteractiveTools[0]#block[0]/list[0]/node[0]": "sha256:6977a57a606a73f2e7cb01fddc4b8d72ae2be26f0e9e8b6d85a610dd27e02982",
     "src/extensions/pull-request-status/branch-status.ts#function:lookupBranchPullRequest[0]#block[0]/list[0]/node[0]": "sha256:4a6119878cba5bb593d23183a8310018435a1e163ea698d8ab408419d7b872b9",
@@ -3905,13 +4143,20 @@
     "src/extensions/pull-request-status/provider-api.ts#function:gheComHost[0]#block[0]/list[0]/node[0]": "sha256:f1a8c6d7ecddecad1dd5c08dd47ae4337cd9ad7b6ab821b78dec5ae2a1683160",
     "src/extensions/pull-request-status/provider-api.ts#function:githubAPI[0]#block[0]/list[0]/node[0]": "sha256:745089e22b016cf3c7275bbcefdfb6f6fcd22b71016bc878749db562d2c78e24",
     "src/extensions/pull-request-status/provider-api.ts#function:githubAPI[0]#block[0]/list[0]/node[1]": "sha256:14f10be5dfcec7af717e3d6df4552b46c8ae697a55e1ab990df2a6417e8f973f",
+    "src/extensions/pull-request-status/provider-api.ts#function:gitlabHost[0]#block[0]/list[0]/node[0]": "sha256:d8d3caed83753af945b69df9a32e670f93e208a0d77f931064811ea64994849c",
+    "src/extensions/pull-request-status/provider-api.ts#function:providerFor[0]#block[0]/list[0]/node[0]": "sha256:cc2fd95c693736d6def890cfdf99cd63de13b2c7bf545fe3424525e8724ff4cf",
+    "src/extensions/pull-request-status/provider-api.ts#function:providerFor[0]#block[0]/list[0]/node[1]": "sha256:8dd088111bf13b929a73e3a4e313dc49b869830412ebfcc5f9eed61220e4835d",
+    "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:candidates[0]": "sha256:629995420436feb7eef8b16edd960439729c8e3dde6d3958509087101c39a5f0",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:config[0]": "sha256:2f29d37af2d284b9b94b42adf9623577cbf8210f4ff5f7fc989dd6a25bd671e0",
+    "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:provider[0]": "sha256:a937be92492e61e135033a27e613601f8d8b0b5a9f642b5d85b13b4626ed9228",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:remotes[0]": "sha256:52a943151d106d0f6df08016395592a23cb19dceff1f1a69c43b224a2ae1701c",
+    "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:saved[0]": "sha256:a6c64db3fe910d9cbea54f0f3d73b94e3e8d93b2f9df84343b294cd8b1a0fef1",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:selected[0]": "sha256:f0ce3871b11a6809b61dab60bdc28c413c1e9db8413c72eddc7c1d5c0d2771d6",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:upstream[0]": "sha256:b1d685c9b4611c17d7f3b0145dd13ad29ed52cbbb3424231be6396011586447f",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/bindings:{ssh,...remote}[0]": "sha256:d2894a33f846cce65a5fcf2ce805655f240a4a101bde41fed84b487a266745b6",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[0]": "sha256:d4707a18df70d5564b2a87ad7e5ec67a6eb4a267f0160148e81796b64599779c",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[1]": "sha256:913ad17c3374605ad78b6daea404deb9ec7a52f097b4443dcfd4d89c1c23fab6",
+    "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[3]": "sha256:a70596dff64fb03e5c5b93b7e8f47e75a9751567485d23e6057092d02c84783a",
     "src/extensions/pull-request-status/provider-api.ts#function:repositoryIdentity[0]#block[0]/list[0]/node[3]/block[0]/list[0]/node[2]/block[0]/list[0]/bindings:{value}[0]": "sha256:6a5c67a3d55adeb14955eaa9bcc08ccf85d3c3731a6aa2ab2d8a221ed4a7a3ac",
     "src/extensions/pull-request-status/provider-api.ts#function:requestJSON[0]#block[0]/list[0]/bindings:origin[0]": "sha256:25c949998528523e742884495c0390578fc765f1c4b5f995597f98c923e8145f",
     "src/extensions/pull-request-status/provider-api.ts#function:requestJSON[0]#block[0]/list[0]/bindings:remaining[0]": "sha256:bd37877f7d3ca80765cbe08afd3c20e90fdad519999572dc1e5ff09b5d413e3e",
@@ -3930,6 +4175,7 @@
     "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[0]": "sha256:b79093b707375aca388874e37294df6f5bb810625de08ae6b3e7e818e6fc69f7",
     "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[1]": "sha256:c4dbc2e5e17397a20d1ae5284ff2b932c8580e5ef38faf3170d7a3ee98aa578f",
     "src/extensions/remote-run/runner.ts#function:isRemoteRunEnabled[0]#block[0]/list[0]/node[2]": "sha256:d4f10a549fb221253d3a6e1af5f0c5afd9f61c942814a26369c42f1655de41c0",
+    "src/extensions/remote-run/runner.ts#function:runCloudAgent[0]#block[0]/list[0]/bindings:{id,result,backgrounded}[0]": "sha256:793f93b41ff591ae9302a06e5622e81ad2f70330f018fc53efbad3b6ca688cff",
     "src/extensions/session-name.ts#function:sessionNameExtension[0]#block[0]/list[0]/node[0]/node[0]/block[0]/list[0]/bindings:hasAutoNamed[0]": "sha256:a1563f0e2199574042531288cfb81b6ca98c1e2609c28047b1f539f4f25ce702",
     "src/extensions/session-name.ts#function:sessionNameExtension[0]#block[0]/list[0]/node[0]/node[0]/block[0]/list[0]/node[0]": "sha256:bce09d3b1b157c02a1a8ffc79eb497d5fb264434ef33dee0071780048a8f945a",
     "src/extensions/session-name.ts#function:sessionNameExtension[0]#block[0]/list[0]/node[0]/node[0]/block[0]/list[0]/node[1]": "sha256:95b67ddf8079e0ac79e0c51dc4d29ba252391c394d2f590871cf03e6dbc10270",
@@ -3950,14 +4196,19 @@
     "src/extensions/telemetry/transport.ts#function:sendMetrics[0]#block[0]/list[0]/bindings:consent[0]": "sha256:690c73c15827d25c931c67a91257265ccda6a9396049d8412a4f04c1610dd789",
     "src/extensions/telemetry/transport.ts#function:sendMetrics[0]#block[0]/list[0]/node[0]": "sha256:48e78ee786436e975c1493f3928dd1fefe6ad92090257a0e19b9ae9710de6b9a",
     "src/extensions/telemetry/transport.ts#function:sendMetrics[0]#block[0]/list[0]/node[3]/block[0]/list[0]/bindings:response[0]/node[0]/list[0]/name:response[0]/node[0]/call:fetchWithRetry[0]": "sha256:76c84f73d1c8627f6f7eb77c4b7a6ab9a47dc2de026765c2d83255757bc7c35b",
+    "src/extensions/teleport/commands/attach.ts#function:runAttachSession[0]#block[0]/list[0]/node[1]/block[0]/list[0]/node[4]/block[0]/list[0]/node[0]": "sha256:2d834641f2e84a526a661b7a72483dce1693fe937332334eef4d420f1b073716",
     "src/extensions/teleport/commands/attach.ts#function:runAttachSession[0]#block[0]/list[0]/node[2]/node[0]/call:ctx.ui.custom[0]/list[1]/call:createTabsOverlay[0]": "sha256:47f48c6760910ce254a7e155e737bad4428b553f9a2ebb0b550d21dd0759c66a",
+    "src/extensions/teleport/commands/teleport.ts#function:runTeleport[0]#block[0]/list[0]/node[11]/block[0]/list[0]/bindings:client[0]": "sha256:0541840b182f0cbbd822c998440ef1fa77c3f3ad46f17212168e74052d9e2438",
     "src/extensions/teleport/commands/teleport.ts#function:runTeleport[0]#block[0]/list[0]/node[11]/block[0]/list[0]/node[1]/block[0]/list[0]/node[0]": "sha256:54a2e7dd10b24f329fb4c257e3dc6793d368d58f510ac4f9fa62dcc7db4d0f23",
     "src/extensions/teleport/commands/teleport.ts#function:runTeleport[0]#block[0]/list[0]/node[11]/block[0]/list[0]/node[4]/block[0]/list[0]/node[0]": "sha256:0855e7cbc0d8a4d77801233958c7daaeb776ad2dde13148987594926e4c4b590",
     "src/extensions/teleport/commands/teleport.ts#function:runTeleport[0]#block[0]/list[0]/node[12]/node[0]/call:ctx.ui.custom[0]/list[1]/call:createTabsOverlay[0]": "sha256:bab46e2888545e9f081fb1b1fe23a74261c1f82939ddd4db1c5f7580f31c75d0",
     "src/extensions/teleport/index.ts#function:makeHandler[0]#block[0]/list[0]/node[0]/node[0]/block[0]/list[0]/node[0]/block[0]/list[0]/node[0]": "sha256:6edf626226e1db9ccbdf44c1c43f23bfc2c43c7ae3bc3d24bb041a90432913d6",
     "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[0]": "sha256:43c3ee10ecd7b43afeb2c8abe07c13b97eecaead1fb8761c63435a88799b18c4",
     "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[1]/call:pi.registerCommand[0]": "sha256:7d9c6757d322737c61d15d8179299fa2261a919ea6f699cefe38c54bd5a61505",
+    "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[2]": "sha256:238114279b8ea6331a67065aeb8eed1a6c89f15bd762604d74e9d744e49a0018",
+    "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[3]": "sha256:10841baf5639cfbd60727cf07ac10594fcd8235c4c12bdc770c09b66154128d6",
     "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[4]/call:pi.registerCommand[0]": "sha256:a31c404c7ecba643ad9cf9bbc4b02c7365cb5dedbba66929c37d7c152efb5a3a",
+    "src/extensions/teleport/index.ts#function:teleportExtension[0]#block[0]/list[0]/node[5]": "sha256:c0e4251e312756e1d65af8bdda9080576145421781f49babfbc9a8814ca1d3d1",
     "src/extensions/teleport/overlay/overlay-component.ts##list[0]/bindings:TOKEN_REFRESH_SKEW_MS[0]": "sha256:cb582e0a097d7952afabcf86a9a6d4d6848312318ad9082ad48366fae77f5dfa",
     "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]#block[0]/list[0]/bindings:creds[0]": "sha256:c04b86161664143e0b74b71a34280d413a92becd4b66a49a35840babebe8f5be",
     "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]#block[0]/list[0]/node[0]/node[0]/block[0]/list[0]/bindings:manager[0]/node[0]/list[0]/name:manager[0]/new:TabManager[0]/list[0]/node[0]/list[0]/name:tokenProvider[0]": "sha256:a5f17581c19159c223e12895959d7114aceaa76f278b06a63752c4b48ae818f0",
@@ -3967,9 +4218,12 @@
     "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:tokenProvider[0]#block[0]/list[0]/node[0]": "sha256:3ba3a6d70e656f8144f1e1c0cb9a790274265fb4339414fe79c3b534c5431b9f",
     "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:tokenProvider[0]#block[0]/list[0]/node[1]": "sha256:ca49776d3a7c7358a1939dc30f00982b69726cdd37a930bda327ff915c8354ad",
     "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:tokenProvider[0]#block[0]/list[0]/node[2]": "sha256:c3cf4992bb99e5188d008980973e4376a9b3fb12deca788103591b07268b005e",
+    "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:triggerManualRetry[0]#block[0]/list[0]/node[0]": "sha256:d53fbfb64498950fb0ac0ad0be8a187a567a78f244afcbab8b6834a76ccc902e",
+    "src/extensions/teleport/overlay/overlay-component.ts#function:createTabsOverlay[0]/function:triggerManualRetry[0]#block[0]/list[0]/node[6]/block[0]/list[0]/node[0]": "sha256:aa0ef5321951c9704e78357e64535e4b82f8acf77f1ab335e0333aad4dba8f64",
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/constructor:constructor[0]#list[0]/name:opts[0]": "sha256:7e593cdec5e6189f33dafb030c58681213d975b0a66f5a43f886786041dd502c",
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:addTab[0]#block[0]/list[0]/bindings:eager[0]": "sha256:e3452ea2a62bdc546780c7747f085549776e4bcdeebe50afd711b702e03e6c2b",
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:addTab[0]#block[0]/list[0]/node[3]": "sha256:389519dfb5f399fe59037ef1853243237e0878929bf1685df12d093a7b5fb5ee",
+    "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:transport[0]": "sha256:a2531584c0b42fabe49d12dda8ef7ee2cfb66f6ac7cb1a25fd81e275333a4afa",
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:transport[0]/node[0]/list[0]/name:transport[0]/new:WebSocketTransport[0]/list[0]/node[0]/list[0]/name:tokenProvider[0]": "sha256:017d5c31ae747f3484806a74dbc3991985f7c16a3e827c23bccdcc8763643bec",
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:transport[0]/node[0]/list[0]/name:transport[0]/new:WebSocketTransport[0]/list[0]/node[0]/list[0]/name:url[0]": "sha256:28e5ebabd9d8f6e237df63da2b503785093f0229241bc7021198f63c43b93269",
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/bindings:url[0]": "sha256:a24375b2495f27535f9827289661cc6e4afafc1eb2e61968751fd63aa2abbd5b",
@@ -3978,6 +4232,8 @@
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:ensureConnected[0]#block[0]/list[0]/node[6]": "sha256:e1f627d641a7ee20c9c4410c46e35d633c929e720e74ec5c270927d0ddf1f642",
     "src/extensions/teleport/overlay/tab-manager.ts#class:TabManager[0]/method:switchTo[0]#block[0]/list[0]/node[4]": "sha256:5d29df7b4c4496d952676dc0547f1c1210950b85c693c0ba1b926fc251348f10",
     "src/extensions/teleport/overlay/tab-manager.ts#function:stripTrailingSlash[0]#block[0]/list[0]/node[0]": "sha256:369d40f65eb12cf3f3e4e2f1eb2b4568ee751a45f7094b38322bfb0bb0df5f90",
+    "src/extensions/teleport/pty/reconnect-supervisor.ts#class:ReconnectSupervisor[0]/method:handleClose[0]#block[0]/list[0]/node[1]": "sha256:56a92276a06403ca4d52550b1d1c45ea532b84d5cfe0bfb1552122ab650b0183",
+    "src/extensions/teleport/pty/reconnect-supervisor.ts#class:ReconnectSupervisor[0]/method:handleClose[0]#block[0]/list[0]/node[3]": "sha256:03a9a4e5f0d8752365bdb556365c57714ea4aa68daa691ba6688776f7f076f0f",
     "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/constructor:constructor[0]#block[0]/list[0]/node[0]": "sha256:ed6c530cbbf7dd0388d62511a1d32e5fbe9fd9558e2c1ebb0f8527fc5927e4e3",
     "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/constructor:constructor[0]#block[0]/list[0]/node[1]": "sha256:ff0786de45b89ad07acbab56111381dda5c2d7e67692a05ec7dd9b5901e3c61a",
     "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/constructor:constructor[0]#block[0]/list[0]/node[2]": "sha256:3721d70d24e3f9e6472d5dd0df9790afe9b8a3ab97f1d32216b97a87ea9d8a34",
@@ -3989,6 +4245,9 @@
     "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:connect[0]#block[0]/list[0]/bindings:tokenOrPromise[0]": "sha256:879b7746b03ea48360d0cea60b67df842523537d36fc2166261eea925d16cb3c",
     "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:connect[0]#block[0]/list[0]/node[0]": "sha256:9d13822fc264196771d87c9727e5b373d794d071889aadb2d55f24c17ca289d4",
     "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:connect[0]#block[0]/list[0]/node[2]": "sha256:ab467e49c821ee2118e4005a54344363550ffd6b06bf3f2318dd906da183cb5c",
+    "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:forceRetry[0]#block[0]/list[0]/node[0]": "sha256:56a770e8f8f5e738f150029f0b71685da318bd403c8ca640d4b4d719d6fb0624",
+    "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:forceRetry[0]#block[0]/list[0]/node[1]": "sha256:edbb3461ae679ab12a921d59ab567668ab1fff83233031425d10a600bfc456eb",
+    "src/extensions/teleport/pty/websocket-transport.ts#class:WebSocketTransport[0]/method:forceRetry[0]#block[0]/list[0]/node[2]": "sha256:b551bb93b660372dd5625f9cde445ff3fb5f71062258f507b1165a22e3067706",
     "src/extensions/work-attribution/billing-api.ts#function:lookupRows[0]#block[0]/list[0]/node[0]/block[0]/list[0]/bindings:params[0]": "sha256:7c71d743e155ff87fe0c634b7c25b113f3f84c72b43cd41e2da2e4fbe6116263",
     "src/extensions/work-attribution/billing-api.ts#function:lookupRows[0]#block[0]/list[0]/node[0]/block[0]/list[0]/bindings:response[0]": "sha256:589a62dadac43ce24a5e995028f9303c418b4f20e96457ef62bcf9feaf8800a7",
     "src/extensions/work-attribution/billing-api.ts#function:lookupRows[0]#block[0]/list[0]/node[0]/block[0]/list[0]/node[0]": "sha256:a9e873b3e2a49e45d6e1310eac1aa0bfefd93a1b73b6d4b263472a29301832bc",
