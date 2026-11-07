@@ -1,6 +1,7 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-10-29 — shared guidance is individually named
+> **Last verified:** 2026-11-07 — the always-loaded `architecture` rule is a
+> router to owner-held decisions; shared guidance is individually named
 > always-on rules, selected per runtime through existing rule disables. Copilot
 > writes its own GitHub files and does not contribute to shared AGENTS.md. Local
 > AGENTS.md and `.agents/rules/` are generated and gitignored; drift compares
@@ -72,8 +73,9 @@ deleted by hand.
   default `ai.formatter`, which is this flake's exported treefmt module, so a
   committed file is already in the same house style as `nix fmt` produces.
 - `dev/fragments/` — dev-only instruction fragments; its
-  `architecture/architecture.md` is always-loaded repository architecture
-  guidance, registered in `config/fragment-categories.nix`.
+  `architecture/architecture.md` is the always-loaded router to the architecture
+  decisions each owner document holds, registered in
+  `config/fragment-categories.nix`.
 - `dev/generate.nix` — fragment composition into content, plus the two human
   documents.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.

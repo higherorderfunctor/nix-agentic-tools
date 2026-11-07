@@ -2,11 +2,23 @@
 
 <!-- cspell:ignore cutover sqlx -->
 
-> **Last verified:** 2026-11-07 — the code quality bar, extraction rules and
-> stack process for rebuilding the Airlock egress proxy as small PRs.
+> **Last verified:** 2026-11-07 — carries the vetted Airlock rebuild decision;
+> the code quality bar, extraction rules and stack process for rebuilding the
+> Airlock egress proxy as small PRs.
 
-Airlock is rebuilt as a stack of small PRs; the rule is in
-`dev/fragments/architecture/architecture-isolation.md`.
+## Architecture decisions
+
+Relocated from the Isolation list, last verified 2026-11-06.
+
+- **Airlock is rebuilt as a stack of small PRs.** The `feat/airlock` branch is
+  source material only, never merged, so each behavior arrives small enough to
+  review. Transport is loopback TCP CONNECT through `HTTPS_PROXY`, with TLS
+  interception for an allowlist, where each TLS leg negotiates ALPN on its own
+  and the CA exists before binding; storage is SQLite behind a trait with
+  mandatory guards; client identity and auth wait for their own design decision.
+  Handlers stay small dispatchers, Cedar only permits or forbids, and Rust owns
+  candidate selection, availability and connections. Direction vetted
+  2026-10-26. See `packages/airlock/` and `packages/airlock/docs/airlock.md`.
 
 ## Basics
 

@@ -1,8 +1,23 @@
 # jail.nix library
 
-> **Last verified:** 2026-10-20 — the input tracks a tested GitHub mirror
-> through the dependency sweep; `ai-jail-live` proves on a CI runner that the
-> launcher runs inside bubblewrap.
+> **Last verified:** 2026-11-07 — carries the proposed architecture decision for
+> harness sandboxing; the input tracks a tested GitHub mirror through the
+> dependency sweep; `ai-jail-live` proves on a CI runner that the launcher runs
+> inside bubblewrap.
+
+## Architecture decisions
+
+- **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
+  (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`
+  (jail.nix, bubblewrap) is an extra layer that keeps a harness from damaging
+  its own dev environment, mostly by accident while it debugs that environment;
+  the two may be layered. `ai.jail` wraps every harness launcher once, in
+  `lib/ai/app/mkBackendTransform.nix`, so every runtime and both backends share
+  it and the command keeps its name. Copilot is the exception: it ships no
+  launcher here, so it only gets a warning. Rejected: each runtime's built-in
+  sandbox, because they cannot be normalized across runtimes; and a per-factory
+  wrapper, which would drift per runtime. See `lib/ai/jail/default.nix` and
+  `packages/jail-nix/docs/jail-nix.md`.
 
 jail.nix (`sourcehut:~alexdavid/jail.nix`, read through the GitHub mirror
 `higherorderfunctor/jail.nix`) is a pure Nix library that wraps a program in

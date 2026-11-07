@@ -1,8 +1,44 @@
 ## Network Proxy
 
-> **Last verified:** 2026-10-30 — `ai.proxy` is the shared HTTP/HTTPS network
-> proxy surface with named instance selection; inference selection remains
+> **Last verified:** 2026-11-07 — carries the architecture decisions for the
+> network proxy surface; `ai.proxy` is the shared HTTP/HTTPS network proxy
+> surface with named instance selection; inference selection remains
 > `ai.settings.inference`.
+
+### Architecture decisions
+
+Relocated from the repository architecture list, last verified 2026-11-07. The
+shared network proxy surface was first vetted 2026-10-30.
+
+- **Network proxy is a shared surface.** `ai.proxy.http` and `ai.proxy.https`
+  select the network proxy for a process's HTTP and HTTPS traffic. One generic
+  lowering names `HTTP_PROXY` and `HTTPS_PROXY`; runtimes choose delivery only.
+  An undefined field takes the selected instance's origin for that protocol,
+  else its defined sibling, using definition priority rather than value to avoid
+  circular defaults. Root fields copy to `ai.<runtime>.proxy` at default
+  priority; runtime overrides are field by field and explicit null blocks the
+  corresponding variable. Prefer a runtime settings file that honors the value
+  (a file read only for trusted projects does not count), then an environment
+  wrapper default the user's environment can override, then a CLI flag. Project
+  trust is never a delivery mechanism for proxy traffic, and never the only
+  delivery mechanism for anything: when a project setting is the natural home,
+  the launcher wrapper guarantees the same effect for an untrusted project.
+  Claude's wrapper appends `--add-dir` from
+  `ai.claude.untrustedProjectAdditionalDirectories` when its trust map does not
+  trust the launch directory; the same wrapper check can serve other
+  project-scope settings later. Trusting a project is opt-in in
+  `devenv.local.nix`. Native user values win; unsupported runtimes warn through
+  `surfaceSupport`. `proxy.instance` selects an `ai.internal.proxyInstances`
+  entry, which airlock registers; registries are per evaluation, so Home Manager
+  and devenv share none. Vetted 2026-11-07. See `lib/ai/proxy.nix`,
+  `lib/ai/sharedOptions.nix`, `lib/ai/app/mkBackendTransform.nix` and
+  `dev/fragments/ai-proxy/ai-proxy.md`.
+- **PROPOSAL (not yet vetted): Network proxy instance selection.** Owners
+  register named proxies in `ai.internal.proxyInstances` and claim names in
+  `ai.claims.proxy-instance`. Root and runtime `proxy.instance` select them.
+  Instance selection also supplies a loopback `NO_PROXY` default. See the
+  Network Proxy section of this document for selection, protocol defaults and
+  precedence.
 
 ```nix
 ai.proxy.http = "http://127.0.0.1:8080";

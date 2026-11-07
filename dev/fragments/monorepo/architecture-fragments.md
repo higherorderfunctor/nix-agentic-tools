@@ -1,8 +1,9 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-11-06 — shared guidance uses individually named
-> always-on rules; scoped rules keep registry matchers and references; authoring
-> rules and a content-level audit are stated. Local AGENTS.md and readable
+> **Last verified:** 2026-11-07 — the `architecture` category is one router rule
+> over owner-held decisions; shared guidance uses individually named always-on
+> rules; scoped rules keep registry matchers and references; authoring rules and
+> a content-level audit are stated. Local AGENTS.md and readable
 > `.agents/rules/` indexes are generated and gitignored. Copilot receives
 > selected named rules through `.github/instructions/` and writes unnamed
 > context independently to `.github/copilot-instructions.md`.
@@ -17,9 +18,9 @@ content. Two location flavors are supported by `dev/generate.nix`:
   through `ai.rules` alongside the published coding standards. Other documents
   in that directory remain authoritative references loaded by the operating
   policy's action triggers; their directory alone does not make them
-  always-loaded. The `architecture` category also selects its decisions as
-  always-loaded rules, one per source, outside the Copilot reviewer category
-  selection.
+  always-loaded. The `architecture` category selects one always-loaded router
+  rule that lists the owner documents holding each architecture decision,
+  outside the Copilot reviewer category selection.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
 
