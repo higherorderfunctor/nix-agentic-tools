@@ -30,16 +30,64 @@
       ]
       ++ map row rows);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
+  # The concrete id a launch route names: the family's current example id, or
+  # its match pattern when no example is maintained.
+  launchId = family: (
+    if (family.example or "") != ""
+    then family.example
+    else family.match
+  );
   poolSuffix = family: target: let
     pool = selection.poolFor family target;
   in
-    lib.optionalString (pool != null) " (${pool})";
+    lib.optionalString (pool != null) " (pool ${pool})";
+  # One sized delegate per harness goes through the technique that pins both
+  # model and effort; from another harness only an external command runs, so
+  # in-harness tools drop out of external reaches.
+  launchTechnique = target: externalOnly: let
+    kindOrder = {
+      external = 3;
+      subagent = 1;
+      workflow = 2;
+    };
+    eligible = lib.filterAttrs (_: node:
+      node.enable
+      && builtins.elem node.kind delegateKinds
+      && node.pinsModel == true
+      && node.pinsEffort == true
+      && (!externalOnly || node.kind == "external"))
+    techniques.${target};
+  in
+    builtins.sort
+    (a: b: kindOrder.${techniques.${target}.${a}.kind} < kindOrder.${techniques.${target}.${b}.kind})
+    (builtins.attrNames eligible);
+  launch = family: target: let
+    names = launchTechnique target (target != runtime);
+  in
+    # Refused where both delivery paths render it (the module and the public
+    # mkSkill helper meet here): a reach must name a technique, and a route
+    # composes that technique's model value spelling, so the technique a route
+    # names — enabled, pinning model and effort, first in kind order — must
+    # exist and carry one. Disabled and out-ranked techniques never compose a
+    # route and are not refused.
+    if names == []
+    then
+      throw "ai.programs.delegate-routing.runtimes.${target}.techniques: enable a technique that pins model and effort${
+        if target != runtime
+        then "; from another harness it must be an external technique, otherwise ${target} must not be reached"
+        else ""
+      }"
+    else let
+      name = builtins.head names;
+      node = techniques.${target}.${name};
+    in "`${name}` with ${node.modelArg} `${launchId family}`";
   reach = family: target:
     (
       if target == runtime
-      then "native"
-      else "via ${target} external"
+      then "${runtime}: "
+      else "via ${target}: "
     )
+    + launch family target
     + poolSuffix family target;
   poolsText = lib.optionalString (pools != {}) ''
     ## Pools
@@ -85,8 +133,9 @@
     lib.optionalString (members != []) ''
       ### ${name}
 
-      ${table ["Family" "Use for" "Avoid for" "Effort (delegate)" "Reach"] (map (family: [
+      ${table ["Family" "Orchestration" "Use for" "Avoid for" "Effort (delegate)" "Launch"] (map (family: [
           (familyLabel family)
+          (family.orchestration or "")
           family.useFor
           family.avoidFor
           family.effort
@@ -127,7 +176,7 @@
   manual = target: ''
     ### ${target}
 
-    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}${poolSuffix family target}") (selected target)}
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}") (selected target)}
 
     ${techniqueBlock target true}
     Not a candidate for auto-selection; use only when the user names it.
@@ -141,7 +190,7 @@ in ''
 
   ## delegate sizing
 
-  Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`).
+  Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`). The Launch column names, per harness, the technique that pins both model and effort and the id spelling it takes; a concrete id there is the family's current pick, otherwise resolve the highest version matching the pattern.
 
   ${poolsText}${lib.concatMapStringsSep "\n" tier tiers}
   Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
