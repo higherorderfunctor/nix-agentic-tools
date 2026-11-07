@@ -1,10 +1,10 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-11-06 — automatic PR CI runs only for PRs targeting
+> **Last verified:** 2026-11-07 — automatic PR CI runs only for PRs targeting
 > `main`; stacked PRs dispatch CI by hand after a substantive change; PR waits
 > use the review-loop skill's pr-watch.sh; repository-wide gates run before
 > folding stack work; stack fix lanes are serial; rebases and absorbs do not run
-> commit hooks; a fix may live anywhere in its PR's commit range.
+> commit hooks; fixes stay in their PR and fold into the introducing commit.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -375,8 +375,10 @@ The instinct this replaces is a sound one in a project with several reviewers,
 where unasked additions tax people who did not ask for them. Here there is one
 reviewer, and they would rather review the right shape once.
 
-A fix may live anywhere in its PR's commit range, because PRs squash-merge. A
-reference from one PR to something that lands in a later PR is a defect.
+At the PR level, fixes stay in their PR because PRs squash-merge; within that
+PR, fold review fixes into the introducing commit with `stack-fix` / absorb so
+each commit passes its checks. A reference from one PR to something that lands
+in a later PR is a merge defect.
 
 Open a separate PR when the change is genuinely unrelated to any open one.
 

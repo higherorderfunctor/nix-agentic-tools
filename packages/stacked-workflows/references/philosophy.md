@@ -9,7 +9,9 @@ Every commit should:
 
 - Be describable in one sentence (if you need "and", split it)
 - Be independently revertible without side effects
-- Leave the codebase in a working state (tests pass, code compiles)
+- Leave the codebase in a working state: each commit passes the checks it
+  touches, folding minimal corrections into the commit that introduces the
+  defect and moving assertions about later behavior into the implementing commit
 - Target 50-200 lines of changed code
 - Only reference things that exist in earlier commits (no forward references)
 - Include documentation for the feature it introduces (not in a separate doc
