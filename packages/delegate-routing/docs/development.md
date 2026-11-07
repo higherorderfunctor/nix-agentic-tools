@@ -121,7 +121,9 @@ is omitted.
 `skill.columns.<families|pools|techniques>` set header text, order and presence
 keyed by column. A disabled column drops its header and cells; an enabled key
 the renderer has no cell for fails naming it. The techniques Command column
-still appears only when a delegate technique has a command.
+still appears only when a delegate technique has a command. The families Pool
+column stays between Effort (delegate) and Launch even without pooled families;
+its cells are empty when a family has no pool guidance.
 
 `skill.phrases` are templates used inside generated blocks: `"Native reach"` and
 `"External reach"` (`{harness}`, `{launch}`, `{pool}`), `"Launch route"`
@@ -304,9 +306,9 @@ fail evaluation. Two accounts for one family on one harness are out of scope;
 route and instance reaches are not represented.
 
 The pool registry and family bindings default to `{}`. A consumer with one
-vendor and one harness writes nothing extra. Without pools, the skill text stays
-byte-identical. The package does not infer budgets from vendors or add account
-names to its defaults.
+vendor and one harness writes nothing extra. Without pools, the family tables
+still render an empty Pool column. The package does not infer budgets from
+vendors or add account names to its defaults.
 
 ## Delivery and previews
 

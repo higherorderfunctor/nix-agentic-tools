@@ -51,8 +51,6 @@
         (row (map (_: "---") shown))
       ]
       ++ map (item: row (map (filler: filler item) fillers)) items);
-  # The Pool column appears only when a candidate carries pool guidance.
-  pooled = lib.any (family: family.pool or "" != "") candidates;
   opencodeGo = import ./opencode-go.nix {inherit lib;};
   goRendered = lib.any (family: family.vendor == opencodeGo.vendor) (candidates ++ lib.concatMap selected manualExternalDelegates);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
@@ -177,7 +175,7 @@
     lib.optionalString (members != []) ''
       ${phrase "Family table heading" {tier = name;}}
 
-      ${table "families" (lib.removeAttrs skill.columns.families (lib.optional (!pooled) "Pool")) {
+      ${table "families" skill.columns.families {
           "Avoid for" = family: family.avoidFor;
           "Effort (delegate)" = family: family.effort;
           Family = familyLabel;

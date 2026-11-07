@@ -998,9 +998,9 @@
       unplanned = readSkill (goSelected null) "claude";
     in
       # Presets ship but render only when selected; the default skill has no
-      # Pool column and no provisional note.
+      # provisional note; the Pool column remains even without pool guidance.
       !(lib.hasInfix "(opencode-go)" claude)
-      && !(lib.hasInfix "| Pool " claude)
+      && lib.hasInfix "| Pool " claude
       && !(hasProse note claude)
       && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
       && hasProse note planned
@@ -1008,7 +1008,12 @@
       && lib.hasInfix "go-plus: $60 of list-price use empties the monthly pool" planned
       && lib.hasInfix "go-plus: unlimited" planned
       && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
-      && !(lib.hasInfix "| Pool " unplanned)
+      && lib.hasInfix "| Pool " unplanned
+      && lib.all (line: let
+        cells = lib.splitString "|" line;
+      in
+        lib.trim (builtins.elemAt cells (builtins.length cells - 3)) == "")
+      (builtins.filter (line: lib.hasPrefix "| go-" line) (lib.splitString "\n" unplanned))
       && passes (goSelected "go-plus")
       # A manual-only target's Go families carry the same pool hint on their
       # own list item; the formatter wraps list items onto indented lines.
