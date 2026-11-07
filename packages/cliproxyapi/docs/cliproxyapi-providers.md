@@ -1,8 +1,8 @@
 ## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
-> **Last verified:** 2026-10-29 — OAuth upstream credentials require vendor and
+> **Last verified:** 2026-10-30 — OAuth upstream credentials require vendor and
 > a secret account email; named API-key credentials can select the built-in z.ai
-> vendor defaults and a priority.
+> or OpenCode Go vendor defaults and a priority, and serve per-API models.
 
 How a harness selects an instance and its client key is in
 `dev/fragments/ai-inference/ai-inference.md`; this covers the upstream
@@ -44,6 +44,10 @@ credential requires it. OAuth routes omit `api`. Unknown credentials and
 unserved APIs fail evaluation. Generated API-key rules use the selected API's
 provider, `kind = "apikey"`, and exact `base-urls`.
 
+`apis.<api>.models` replaces `models` for that API's block, so one key can serve
+a different catalog per API; every served API needs one of the two, or
+evaluation fails.
+
 CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
 for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
 their family must have printable edges, and blocks in that family cannot share
@@ -53,8 +57,9 @@ letter or digit, so Go and Nix normalize their compatibility-provider identities
 alike.
 
 `normalized.settings.inference.credentials` is `[{name; models;}]` in client
-route order. Claude turns declared API-key models into `/model` picker rows;
-Codex discovers CPA's catalog without per-credential `-p` profiles
+route order, each with the models of the route's resolved API. Claude turns
+declared API-key models into `/model` picker rows; Codex discovers CPA's catalog
+without per-credential `-p` profiles
 (`dev/fragments/ai-inference/ai-inference-runtimes.md`). Route list order is
 preserved in generated rules and picker rows; it does not define CPA priority or
 fallback. `apiKey.priority` is an optional integer, omitted from CPA config when
@@ -76,7 +81,9 @@ Built-in `vendor = "z-ai"` defaults
 `apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,
 repairing measured tool-name and empty-justification failures. Explicit
 `toolAliases = {};` and `codexShellArgCleanup = false;` disable those defaults;
-other vendors omit both settings unless requested.
+other vendors omit both settings unless requested. `vendor = "opencode-go"`
+places each OpenCode Go model on its native API and refuses `claude-*`, `glm-*`
+and `gpt-*` models (`cliproxyapi-settings.md`, Instances).
 
 ```nix
 {inputs, ...}: let

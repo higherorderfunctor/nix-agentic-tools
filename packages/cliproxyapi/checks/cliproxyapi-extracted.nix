@@ -6,15 +6,21 @@
   self,
   ...
 }: let
-  configFacts = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi.passthru.extracted;
-  vendorFacts = import ../extract/z-ai.nix {
+  packages = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
+  configFacts = packages.cliproxyapi.passthru.extracted;
+  opencodeGoFacts = import ../extract/opencode-go.nix {
     inherit pkgs;
-    docs = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi-z-ai-docs;
+    docs = packages.cliproxyapi-opencode-go-docs;
+  };
+  zAiFacts = import ../extract/z-ai.nix {
+    inherit pkgs;
+    docs = packages.cliproxyapi-z-ai-docs;
   };
   extracted = pkgs.runCommand "cliproxyapi-extracted" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    ${pkgs.jq}/bin/jq --slurpfile vendor ${vendorFacts} '. + {zAi: $vendor[0]}' ${configFacts} > "$out"
+    ${pkgs.jq}/bin/jq --slurpfile opencodeGo ${opencodeGoFacts} --slurpfile zAi ${zAiFacts} \
+      '. + {opencodeGo: $opencodeGo[0], zAi: $zAi[0]}' ${configFacts} > "$out"
   '';
 in {
   checks = (extractedLib {inherit pkgs;}).mkOwnerCheck {

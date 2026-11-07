@@ -218,7 +218,10 @@ in {
             == {
               apis = {
                 anthropic = null;
-                chat.base-url = "https://chat.example/v4";
+                chat = {
+                  base-url = "https://chat.example/v4";
+                  models = null;
+                };
                 responses = null;
               };
               codexShellArgCleanup = true;
@@ -251,6 +254,148 @@ in {
       if problems == []
       then true
       else throw (lib.concatStringsSep "\n" problems));
+    module-ai-inference-opencode-go-credential = mkTest "ai-inference-opencode-go-credential" (let
+      facts = import ../../lib/extracted/facts.nix {inherit lib;};
+      catalog = (facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "opencodeGo").models;
+      providers = import ../../packages/cliproxyapi/lib/providers.nix {inherit lib;};
+      vendor = providers.vendors.opencode-go;
+      # Synthetic catalogs for the shape refusals; each malformed one must
+      # fail evaluation of the defaults.
+      native = api: base_url: {api.${api} = {inherit base_url;};};
+      shaped = {
+        anthropic = native "messages" "https://go.example/anthropic/v1";
+        chat = native "chat-completions" "https://go.example/openai/v1";
+      };
+      builds = models: (builtins.tryEval (builtins.deepSeq (providers.opencodeGo models).apis true)).success;
+      catalogShapes = {
+        "well-formed catalog builds" = builds shaped;
+        "two native APIs refused" = !(builds (shaped // {two.api = shaped.anthropic.api // shaped.chat.api;}));
+        "unknown native API refused" = !(builds (shaped // {odd = native "embeddings" "https://go.example/openai/v1";}));
+        "conflicting base URLs refused" = !(builds (shaped // {other = native "chat-completions" "https://elsewhere.example/v1";}));
+        "messages URL without /v1 refused" = !(builds (shaped // {anthropic = native "messages" "https://go.example/anthropic";}));
+        "missing base_url refused" = !(builds (shaped // {bare.api.responses = {};}));
+      };
+      urls = {
+        anthropic = "https://opencode.ai/inference/go/anthropic";
+        chat = "https://opencode.ai/inference/go/openai/v1";
+        responses = "https://opencode.ai/inference/go/openai/v1";
+      };
+      problems =
+        lib.concatMap (backend: let
+          go = apiKey:
+            evaluate backend (instanceChange {
+              credentials.go = {
+                vendor = "opencode-go";
+                apiKey = {key = clientKey "opencode-go";} // apiKey;
+              };
+              clientKeys = {
+                personal.routes = lib.mkForce [
+                  {
+                    api = "anthropic";
+                    credential = "go";
+                  }
+                ];
+                work.routes = lib.mkForce [
+                  {
+                    api = "chat";
+                    credential = "go";
+                  }
+                ];
+              };
+            });
+          result = go {};
+          blocksOf = evaluated: family: lib.filter (entry: entry.name == "go") (rendered evaluated).api-keys.${family};
+          modelsIn = evaluated: family: lib.concatMap (block: map (model: model.name) block.models) (blocksOf evaluated family);
+          block = family: lib.head (blocksOf result family);
+          overridden = go {
+            apis = {
+              chat = {
+                base-url = "https://go.example/v1";
+                models = ["kimi-k3"];
+              };
+              responses = null;
+            };
+          };
+          refusedModel = model: failsWith ["credentials.go: vendor `opencode-go` refuses models `${model}`" "Claude OAuth, z.ai and Codex OAuth credentials serve them"];
+          allPlaced = lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"];
+          # CPA trims model names, so a padded Claude id is refused at the type.
+          rejectsPadded = model:
+            !(builtins.tryEval (builtins.deepSeq
+              (go {
+                apis.anthropic = {
+                  base-url = urls.anthropic;
+                  models = [model];
+                };
+              }).config.ai.cliproxyapi.instances.clients.credentials
+              true)).success;
+          checks = {
+            "accepted" = failedMessages result == [];
+            "per-API base URLs" = (block "claude").base-url == urls.anthropic && (block "openai-compatibility").base-url == urls.chat && (block "codex").base-url == urls.responses;
+            "native placement" =
+              lib.all (model: lib.elem model (modelsIn result "claude")) ["minimax-m3" "qwen3.8-max"]
+              && lib.all (model: lib.elem model (modelsIn result "openai-compatibility")) ["deepseek-v4-pro" "kimi-k3"]
+              && lib.all (model: lib.elem model (modelsIn result "codex")) ["grok-4.7" "muse-spark-1.3-contributor"]
+              && !(lib.elem "kimi-k3" (modelsIn result "claude" ++ modelsIn result "codex"));
+            "generate-content on chat" = catalog.gemini-4-argon.api ? generate-content && lib.elem "gemini-4-argon" (modelsIn result "openai-compatibility");
+            "every other catalog model placed once" = lib.sort lib.lessThan allPlaced == builtins.filter (id: !(vendor.refuses id)) (builtins.attrNames catalog);
+            "defaults leave refused families out" =
+              lib.all (id: catalog ? ${id} && vendor.refuses id && !(lib.elem id allPlaced)) ["claude-haiku-5-5" "glm-5.3" "gpt-6-luna"]
+              && !(lib.any (id: lib.any (prefix: lib.hasPrefix prefix id) ["claude-" "glm-" "gpt-"]) allPlaced);
+            "Claude added to an API refused" = refusedModel "claude-haiku-5-5" (go {
+              apis.anthropic = {
+                base-url = urls.anthropic;
+                models = ["claude-haiku-5-5" "qwen3.8-max"];
+              };
+            });
+            "Claude through credential models refused" = refusedModel "claude-haiku-5-5" (go {
+              apis.responses = {
+                base-url = urls.responses;
+                models = null;
+              };
+              models = ["claude-haiku-5-5"];
+            });
+            "GLM added to an API refused" = refusedModel "glm-5.3" (go {
+              apis.chat = {
+                base-url = urls.chat;
+                models = ["glm-5.3" "kimi-k3"];
+              };
+            });
+            "GPT added to an API refused" = refusedModel "gpt-6-luna" (go {
+              apis.responses = {
+                base-url = urls.responses;
+                models = ["gpt-6-luna" "grok-4.7"];
+              };
+            });
+            "Claude id with leading space refused" = rejectsPadded " claude-haiku-5-5";
+            "Claude id with no-break space refused" = rejectsPadded "claude-haiku-5-5 ";
+            "interior Unicode model name accepted" = let
+              unicode = go {
+                apis.chat = {
+                  base-url = urls.chat;
+                  models = ["qwen-中文-v1"];
+                };
+              };
+            in
+              failedMessages unicode == [] && modelsIn unicode "openai-compatibility" == ["qwen-中文-v1"];
+            "z.ai shims off" = !((block "claude") ? tool-aliases) && !((block "openai-compatibility") ? codex-shell-arg-cleanup);
+            "picker lists the routed API's models" =
+              result.config.ai.claude.normalized.settings.inference.credentials
+              == [
+                {
+                  name = "go";
+                  inherit (vendor.apis.anthropic) models;
+                }
+              ];
+            "API override" = failedMessages overridden == [] && (lib.head (blocksOf overridden "openai-compatibility")).base-url == "https://go.example/v1" && modelsIn overridden "openai-compatibility" == ["kimi-k3"];
+            "API removed" = blocksOf overridden "codex" == [] && (lib.head (blocksOf overridden "claude")).base-url == urls.anthropic;
+          };
+        in
+          map (name: "${backend}: ${name}") (builtins.attrNames (lib.filterAttrs (_: ok: !ok) checks))) ["devenv" "hm"]
+        ++ map (name: "catalog: ${name}") (builtins.attrNames (lib.filterAttrs (_: ok: !ok) catalogShapes));
+    in
+      if problems == []
+      then true
+      else throw (lib.concatStringsSep "\n" problems));
     module-ai-inference-instance-clients = mkTest "ai-inference-instance-clients" (let
       problems = lib.concatMap (backend: let
         result = evaluate backend {};
@@ -276,6 +421,38 @@ in {
         pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
+        # One credential whose APIs serve different models; the
+        # personal client routes to its chat API.
+        split = apiKeyChange:
+          evaluate backend (instanceChange {
+            credentials.split.apiKey =
+              lib.recursiveUpdate {
+                apis = {
+                  anthropic = {
+                    base-url = "https://split.example/anthropic";
+                    models = ["split-anthropic"];
+                  };
+                  chat = {
+                    base-url = "https://split.example/v1";
+                    models = ["split-chat"];
+                  };
+                };
+                key = clientKey "split";
+              }
+              apiKeyChange;
+            clientKeys.personal.routes = lib.mkForce [
+              {
+                api = "chat";
+                credential = "split";
+              }
+            ];
+          });
+        splitResult = split {};
+        splitBlock = family: lib.findFirst (entry: entry.name == "split") null (rendered splitResult).api-keys.${family};
+        fallback = split {
+          apis.chat.models = null;
+          models = ["split-shared"];
+        };
         priorityBlocks = priority:
           lib.concatLists (builtins.attrValues
             (rendered (evaluate backend (instanceChange {
@@ -331,6 +508,35 @@ in {
               {
                 name = "zai";
                 inherit (apiKey) models;
+              }
+            ];
+          "per-API models accepted" = failedMessages splitResult == [];
+          "per-API models replace credential models" = (splitBlock "claude").models == [{name = "split-anthropic";}] && (splitBlock "openai-compatibility").models == [{name = "split-chat";}];
+          "API without models falls back to credential models" =
+            failedMessages fallback
+            == []
+            && (lib.findFirst (entry: entry.name == "split") null (rendered fallback).api-keys.openai-compatibility).models
+            == [{name = "split-shared";}]
+            && (lib.findFirst (entry: entry.name == "split") null (rendered fallback).api-keys.claude).models == [{name = "split-anthropic";}];
+          "API without models refused" = refused backend "credentials.split.apiKey serves API `chat` without models" (instanceChange {
+            credentials.split.apiKey = {
+              apis = {
+                anthropic = {
+                  base-url = "https://split.example/anthropic";
+                  models = ["split-anthropic"];
+                };
+                chat.base-url = "https://split.example/v1";
+              };
+              key = clientKey "split";
+            };
+          });
+          "API with emptied models refused" = failsWith ["credentials.split.apiKey serves API `chat` without models"] (split {apis.chat.models = [(lib.mkIf false "split-chat")];});
+          "picker lists the routed API's models" =
+            splitResult.config.ai.claude.normalized.settings.inference.credentials
+            == [
+              {
+                name = "split";
+                models = ["split-chat"];
               }
             ];
           "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
