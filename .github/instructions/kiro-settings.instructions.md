@@ -7,17 +7,26 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-30 — the TUI source is decoded statically from each
-> release; runtime surfaceSupport declarations own normalized backend reach and
-> nested delivery diagnostics. Unknown complete settings keys warn; Home Manager
-> permits them, while devenv refuses every key outside the workspace allowlist.
-> Both backends expose the spelling allowlist.
+> **Last verified:** 2026-11-06 — option paths say where a setting lands; the
+> TUI source is decoded statically from each release; runtime surfaceSupport
+> declarations own normalized backend reach and nested delivery diagnostics.
+> Unknown complete settings keys warn; Home Manager permits them, while devenv
+> refuses every key outside the workspace allowlist. Both backends expose the
+> spelling allowlist.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
 the shipped TUI merge allows 23, including in 2.22.1. The package's
 project-local guard must follow the TUI consumer, so extraction uses the
 materialized source.
+
+### Where an option lives
+
+`ai.kiro.cli.native.settings` lowers into the flat `cli.json` described below.
+`ai.kiro.cli.chat.*` and `ai.kiro.cli.acp.*` (the `chat` and `acp` tiers of
+`settingTiers` in `packages/kiro-cli/lib/cliOptions.nix`) hold knobs that exist
+only as that subcommand's flag, classified from the extracted `--help` tables;
+see `launcher-argv.md`, "Consumer options for `chat` and `acp`".
 
 ### Model suggestions
 

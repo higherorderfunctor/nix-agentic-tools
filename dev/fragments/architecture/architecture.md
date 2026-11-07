@@ -1,6 +1,6 @@
 # Architecture
 
-> **Last verified:** 2026-11-06 — repository architecture decisions; the
+> **Last verified:** 2026-11-07 — repository architecture decisions; the
 > Isolation decisions are in `architecture-isolation.md`.
 
 HITL-vetted decisions about how this repository is built. Each entry is a rule,
@@ -64,8 +64,20 @@ hoc machinery beside an existing abstraction.
   config file from `lib/extracted/render.nix`, which lifts secrets into
   placeholders. This avoids duplicating type and render logic over extracted
   facts. The four older generators (claude-code, kimchi, glab, git tools)
-  migrate to it as separate work; never add another. See
-  `dev/fragments/extracted/typed-settings.md`.
+  migrate to it as separate work; never add another. Native option surfaces come
+  from this machinery; normalized `ai.*` surfaces map onto them, never a
+  parallel tree, and one without a lossless native mapping is an explicit
+  exclusion (vetted 2026-11-07). See
+  `dev/fragments/extracted/typed-settings.md`,
+  `dev/fragments/hm-modules/module-conventions.md` and
+  `packages/coding-standards/fragments/config-parity.md`.
+- **Packages pin the current upstream release only.** No backwards compatibility
+  with older releases: option surfaces and extracted facts describe the pinned
+  version only. This keeps one shape to extract, type and test. Vetted
+  2026-11-07. See each owner's `sources.json` pins, the update pipeline
+  (`dev/fragments/pipeline/update-pipeline.md`) and
+  `dev/fragments/extracted/extraction-method.md`, rule "Support only the pinned
+  version".
 - **Exclusive resources use claims.** Owners register `ai.claims.<group>.<key>`
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
@@ -95,18 +107,20 @@ hoc machinery beside an existing abstraction.
 - **Network proxy is a shared surface.** `ai.proxy.http` and `ai.proxy.https`
   select the network proxy for a process's HTTP and HTTPS traffic. One generic
   lowering names `HTTP_PROXY` and `HTTPS_PROXY`; runtimes choose delivery only.
-  An undefined field defaults to its defined sibling, using definition priority
-  rather than value to avoid circular defaults. Root fields copy to
-  `ai.<runtime>.proxy` at default priority; runtime overrides are field by field
-  and explicit null blocks the corresponding variable. Prefer a runtime settings
-  file that honors the value (a file read only for trusted projects does not
-  count), then an environment wrapper default the user's environment can
-  override, then a CLI flag. Project trust is never a delivery mechanism;
-  trusting a project is opt-in in `devenv.local.nix`. Native user values win;
-  unsupported runtimes warn through `surfaceSupport`. No instance selection or
-  proxy registry belongs to this surface yet. Vetted 2026-10-30. See
-  `lib/ai/proxy.nix`, `lib/ai/sharedOptions.nix`,
-  `lib/ai/app/mkBackendTransform.nix` and `dev/fragments/ai-proxy/ai-proxy.md`.
+  An undefined field takes the selected instance's origin for that protocol,
+  else its defined sibling, using definition priority rather than value to avoid
+  circular defaults. Root fields copy to `ai.<runtime>.proxy` at default
+  priority; runtime overrides are field by field and explicit null blocks the
+  corresponding variable. Prefer a runtime settings file that honors the value
+  (a file read only for trusted projects does not count), then an environment
+  wrapper default the user's environment can override, then a CLI flag. Project
+  trust is never a delivery mechanism; trusting a project is opt-in in
+  `devenv.local.nix`. Native user values win; unsupported runtimes warn through
+  `surfaceSupport`. `proxy.instance` selects an `ai.internal.proxyInstances`
+  entry, which airlock registers; registries are per evaluation, so Home Manager
+  and devenv share none. Vetted 2026-10-30. See `lib/ai/proxy.nix`,
+  `lib/ai/sharedOptions.nix`, `lib/ai/app/mkBackendTransform.nix` and
+  `dev/fragments/ai-proxy/ai-proxy.md`.
 - **PROPOSAL (not yet vetted): Network proxy instance selection.** Owners
   register named proxies in `ai.internal.proxyInstances` and claim names in
   `ai.claims.proxy-instance`. Root and runtime `proxy.instance` select them.
