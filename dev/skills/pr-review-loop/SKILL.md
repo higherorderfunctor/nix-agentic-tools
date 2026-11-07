@@ -122,6 +122,17 @@ The guards each close a way a hand-written watcher reported the wrong thing:
 `UNSTABLE` on the PR is not a failure — it means "not all green yet" and covers
 pending. `DIRTY` is the one that means stop waiting and rebase.
 
+Before telling anyone a PR is mergeable, read its state: green checks are not
+mergeability, because an armed auto-merge lands the PR the moment they pass.
+
+```bash
+gh pr view <N> --json state,mergedAt,autoMergeRequest
+```
+
+Report "merged" when `state` is `MERGED`, and "green; auto-merge will land it"
+when `autoMergeRequest` is set. Ask for a merge only when the PR is `OPEN` with
+`autoMergeRequest` null.
+
 ## Watching a dispatched CI run
 
 A stacked PR (base is another PR's branch) gets no automatic checks, so an empty
