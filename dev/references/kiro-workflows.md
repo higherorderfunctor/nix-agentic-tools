@@ -116,9 +116,9 @@ its workflow choice per session.
 `validate_workflow` on a trivial definition before running a probe. Absent tools
 require checking the engine, global setting and persisted session choice.
 
-Other friendly switches are `codeToSpec`, `backgroundExecution`, `kvim` and
-`sandbox`. `cli.features.<name>.enable` exposes every extracted rollout name and
-changes availability only, with no implied client setting. Typed
+Other friendly switches are `codeToSpec`, `backgroundExecution` and `kvim`.
+`cli.features.<name>.enable` exposes every extracted rollout name and changes
+availability only, with no implied client setting. Typed
 `cli.native.settings.chat.keybindings` keys also come from the pinned registry.
 Scope exclusions and feature prerequisites are in
 [`workflow-gating.md`](../../packages/kiro-cli/docs/workflow-gating.md).

@@ -10,6 +10,5 @@
     backgroundExecution = "background_execution";
     codeToSpec = "c2s";
     kvim = "kvim";
-    sandbox = "local_sandbox";
   };
 }

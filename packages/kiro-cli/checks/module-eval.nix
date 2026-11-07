@@ -390,7 +390,6 @@ in {
         ["normalized" "environmentVariables"]
         ["normalized" "shell"]
         ["package"]
-        ["sandbox"]
         ["shell"]
         ["tweaks"]
         ["useFhsSandbox"]
@@ -464,10 +463,6 @@ in {
         };
         kvim = {
           feature = "kvim";
-          setting = null;
-        };
-        sandbox = {
-          feature = "local_sandbox";
           setting = null;
         };
         # 3.1.0 removed the workflows rollout: the setting is the only gate.

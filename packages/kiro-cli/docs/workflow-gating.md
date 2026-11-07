@@ -42,16 +42,17 @@ friendly switch with a rollout feature implies it at default priority.
 Explicitly disabling that raw feature while leaving the friendly switch enabled
 fails an assertion on both backends.
 
-| `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                                                                                              |
-| ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backgroundExecution.enable` | `background_execution` | No client setting. If needed, rebind `native.settings.chat.keybindings.moveToBackground` globally.                                                                  |
-| `codeToSpec.enable`          | `c2s`                  | Global `chat.enableC2s`; Home Manager implies it, while devenv warns if it is missing.                                                                              |
-| `kvim.enable`                | `kvim`                 | `nvim` on PATH; no editor package is installed automatically.                                                                                                       |
-| `sandbox.enable`             | `local_sandbox`        | Availability only. Each invocation still needs `--sandbox` with `--no-interactive` or `--output-format stream-json`; Linux requires bubblewrap and user namespaces. |
-| `workflows.enable`           | none (3.1.0)           | Global `chat.enableWorkflows`; the rollout entry no longer exists.                                                                                                  |
+| `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                             |
+| ---------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------- |
+| `backgroundExecution.enable` | `background_execution` | No client setting. If needed, rebind `native.settings.chat.keybindings.moveToBackground` globally. |
+| `codeToSpec.enable`          | `c2s`                  | Global `chat.enableC2s`; Home Manager implies it, while devenv warns if it is missing.             |
+| `kvim.enable`                | `kvim`                 | `nvim` on PATH; no editor package is installed automatically.                                      |
+| `workflows.enable`           | none (3.1.0)           | Global `chat.enableWorkflows`; the rollout entry no longer exists.                                 |
 
-Kiro's local sandbox feature is separate from this package's own Linux
-`buildFHSEnv`, controlled by `cli.useFhsSandbox`.
+Kiro 3.1.0 makes the local sandbox available without a rollout (per-run
+`--sandbox` still applies), and this package does not deliver its `sandbox.json`
+yet, so there is no `sandbox` switch. Kiro's local sandbox feature is separate
+from this package's own Linux `buildFHSEnv`, controlled by `cli.useFhsSandbox`.
 
 ### Generated rollout options and key bindings
 
