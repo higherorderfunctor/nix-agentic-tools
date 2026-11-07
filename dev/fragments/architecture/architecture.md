@@ -1,6 +1,7 @@
 # Architecture
 
-> **Last verified:** 2026-10-29 — repository architecture decisions.
+> **Last verified:** 2026-11-06 — repository architecture decisions; the
+> Isolation decisions are in `architecture-isolation.md`.
 
 HITL-vetted decisions about how this repository is built. Each entry is a rule,
 its reason, and where the mechanism lives. Before adding a mechanism, check this
@@ -83,12 +84,14 @@ hoc machinery beside an existing abstraction.
   picks the one lowering a runtime runs, and a runtime without that lowering
   fails an assertion naming the backend. Everything a backend sets, launcher
   flags included, lives in its lowering. Lowerings set native values at default
-  priority, so a consumer's own native value wins. Vetted 2026-10-28. This keeps
-  a second proxy owner a module merge rather than an edit to a shared owner
-  table, and keeps a consumer's override a plain definition. See
-  `lib/ai/inference/default.nix`, `lib/ai/app/mkBackendTransform.nix`,
-  `packages/claude-code/lib/inference.nix` and
-  `packages/chatgpt-codex/lib/inference.nix`.
+  priority, so a consumer's own native value wins. Only the selected backend's
+  settings apply, so a runtime selecting another backend never gets CPA's base
+  URL, `apiKeyHelper`, auth clearing or picker rows; an unknown instance fails
+  evaluation. Vetted 2026-10-28. This keeps a second proxy owner a module merge
+  rather than an edit to a shared owner table, and keeps a consumer's override a
+  plain definition. See `lib/ai/inference/default.nix`,
+  `lib/ai/app/mkBackendTransform.nix`, `packages/claude-code/lib/inference.nix`
+  and `packages/chatgpt-codex/lib/inference.nix`.
 - **Network proxy is a shared surface.** `ai.proxy.http` and `ai.proxy.https`
   select the network proxy for a process's HTTP and HTTPS traffic. One generic
   lowering names `HTTP_PROXY` and `HTTPS_PROXY`; runtimes choose delivery only.
@@ -96,10 +99,12 @@ hoc machinery beside an existing abstraction.
   rather than value to avoid circular defaults. Root fields copy to
   `ai.<runtime>.proxy` at default priority; runtime overrides are field by field
   and explicit null blocks the corresponding variable. Prefer a runtime settings
-  file that honors the value, then an environment wrapper default the user's
-  environment can override, then a CLI flag. Native user values win; unsupported
-  runtimes warn through `surfaceSupport`. No instance selection or proxy
-  registry belongs to this surface yet. Vetted 2026-10-30. See
+  file that honors the value (a file read only for trusted projects does not
+  count), then an environment wrapper default the user's environment can
+  override, then a CLI flag. Project trust is never a delivery mechanism;
+  trusting a project is opt-in in `devenv.local.nix`. Native user values win;
+  unsupported runtimes warn through `surfaceSupport`. No instance selection or
+  proxy registry belongs to this surface yet. Vetted 2026-10-30. See
   `lib/ai/proxy.nix`, `lib/ai/sharedOptions.nix`,
   `lib/ai/app/mkBackendTransform.nix` and `dev/fragments/ai-proxy/ai-proxy.md`.
 - **PROPOSAL (not yet vetted): Network proxy instance selection.** Owners

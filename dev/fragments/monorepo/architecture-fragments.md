@@ -17,8 +17,9 @@ content. Two location flavors are supported by `dev/generate.nix`:
   through `ai.rules` alongside the published coding standards. Other documents
   in that directory remain authoritative references loaded by the operating
   policy's action triggers; their directory alone does not make them
-  always-loaded. The `architecture` category also selects its decisions as an
-  always-loaded rule, outside the Copilot reviewer category selection.
+  always-loaded. The `architecture` category also selects its decisions as
+  always-loaded rules, one per source, outside the Copilot reviewer category
+  selection.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
 
