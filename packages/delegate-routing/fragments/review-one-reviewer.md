@@ -27,6 +27,10 @@ the draft itself. For each fail or issue, returns its location, the row or
 requirement it breaks, evidence, whether it holds, and a proposed severity; if
 uncertain, returns the open question that would settle it.
 
+The reviewer, not the writer, searches for dead code: removed names, dead
+branches, checks pinning removed behavior, stale prose and shims. It lists what
+it searched, so an empty result differs from not looking.
+
 **Second check:** gets each issue that holds, its location and its rubric row or
 requirement, without the first check's reasoning, evidence or severity.
 Independently checks the draft for what would make the issue wrong. Returns
@@ -46,3 +50,12 @@ already survived a check. Pass outcomes and evidence, not arguments. An issue or
 rebuttal without evidence does not count. Reviewers never see the round number,
 previous verdict or writer's account of fixes. Send the writer only accepted
 issues, with location and severity.
+
+Set the review tier by blast radius, meaning what reads or depends on the
+change, not by line count. Prose and docs are not exempt. A change that repeats
+an existing pattern gets one narrow question: how it differs from its named
+precedent.
+
+A model on trial, with no review track record in this setup, may be an extra
+finder but never the second check or the Judge. Blend vendors across review
+roles.
