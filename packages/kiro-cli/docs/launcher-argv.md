@@ -114,8 +114,8 @@ exactly this through the wrapper.
 
 ## Tool trust is `permissions.yaml`, never a flag
 
-The wrapper injects no `--trust-tools`. Under v3 no process hands the list to
-KAS:
+The wrapper injects no `--trust-tools`, `--trust-all-tools` or
+`--trust-workspace`. Under v3 no process hands the list to KAS:
 
 - `acp-server.js` has no `trustTools`, `trust_tools` or `trustAllTools`; it
   reads tool policy only from `permissions.yaml` / `permissions.json`, layered
@@ -293,6 +293,9 @@ stops at the first token that is neither an option nor an option's **value**:
   `-vr` has once-per-invocation options. Only callers that pass `shorts` read
   clusters; the `acp` scan, which has no setting with a short name, and every
   other caller keep whole-token matching.
+- **Shared helper changes are opt-in.** A change to `lib/idempotentFlags.nix`
+  keeps every other caller's generated text byte-identical: new behavior (such
+  as `shorts`) is selected per caller, never by changing a default.
 - **`--` parks on a sentinel** no gate matches, so gated injection declines
   rather than guessing.
 - **A dangling value option is visible.** `nat_skip` is 1 when the scan ends
@@ -489,6 +492,9 @@ Read `--help-all` for the launcher's own options (that Options block is what
 parse probe rather than trusting help text — use an argument that fails
 validation LATE, so "unexpected argument" versus "invalid value" distinguishes a
 parse rejection from an accepted flag.
+
+Probe in a scrubbed environment, never with only a scratch `HOME`; the full
+procedure is in [`probing.md`](probing.md).
 
 The option tables of `kiro-cli`, `chat` and `acp` need no hand re-measure: the
 `kiro-cli-extracted` check runs `extract/cli-help.py` against the Linux payload,
