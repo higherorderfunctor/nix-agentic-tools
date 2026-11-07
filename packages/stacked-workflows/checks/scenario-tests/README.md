@@ -33,10 +33,15 @@ fixture contents. Each owns its primary checkout, linked worktrees, `HOME`,
 `XDG_CONFIG_HOME` and temporary directory. Inherited Git environment variables
 are cleared and `GIT_CONFIG_NOSYSTEM=1` disables system config.
 
-The 59 original cases retain their assertions; three additional cases cover
-reference recipes 5, 13 and 16. Retired history-layout checks, old result files
-and the inventory are not inputs. Every failed assertion or execution error
-fails the check; there are no expected-failure exemptions.
+The original cases cover the skill recipes; three cases cover reference recipes
+5, 13 and 16. Six pinned-submit cases exercise an existing-branch update,
+creation (including a branch named after the move), stale-tip rejection with and
+without a post-rewrite fetch, and rejection of a competing creation that an
+ordinary push could fast-forward. The first-push-from-main case runs the
+published explicit branch union, preview and push with two names. Retired
+history-layout checks, old result files and the inventory are not inputs. Every
+failed assertion or execution error fails the check; there are no
+expected-failure exemptions.
 
 ## What is checked
 
@@ -56,9 +61,9 @@ events may not rewrite or hide upstream-reachable commits. Case-specific
 endpoints check the intended final content and topology.
 
 Command tracing records failed or empty selections and rejects later mutation.
-The trace file is sourced into the deliberately non-strict example shell: adding
-strict mode would change the documented behavior being tested. It observes
-failures without preventing an unsafe command from running.
+The trace file is sourced into the example shell without changing its
+strictness: published blocks decide whether strict mode applies. The trace
+observes failures without preventing an unsafe command from running.
 
 `RESULTS.md` contains a failure table; `results.json` records every case.
 Per-case directories retain command logs, exact executed shell blocks, ordered

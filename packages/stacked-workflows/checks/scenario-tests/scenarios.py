@@ -245,8 +245,8 @@ def exercise(c):
                 block = c.body('stack-test', '${STACK:?run the selection block first}')
             guard = c.shell(selection + block, replacements={'<revset>': '@' if kind == 'guard-unset' else '$STACK'})
         c.check('guard: detected prohibited rewrite or missing state', guard.returncode != 0 or bool(guard.stdout.strip()), f'rc={guard.returncode}; stdout={guard.stdout!r}; stderr={guard.stderr[-300:]!r}')
-    elif kind in ('submit', 'hash-submit', 'untrack', 'tracking-preserve'):
-        if kind == 'tracking-preserve':
+    elif kind in ('hash-submit', 'preview-tracking', 'push-tracking', 'submit'):
+        if kind == 'preview-tracking':
             c.git('config', 'branch.a.merge', 'refs/heads/feature-a')
         body = c.selected()
         if kind == 'hash-submit':
@@ -254,21 +254,93 @@ def exercise(c):
             full = c.body('stack-submit', 'SELECTED="$STACK"')
             line = next(line for line in full.splitlines() if line.startswith('SELECTED=') and '$ARGUMENTS' in line)
             body += 'ARGUMENTS=' + shlex.quote(arg) + '\n' + line + '\n'
-        if kind in ('submit', 'hash-submit'):
+        body += c.body('stack-submit', 'lease_heads=')
+        if kind in ('hash-submit', 'submit'):
             body += c.body('stack-submit', 'git move -b "$SELECTED" -d "$upstream" || exit 1')
-        body += c.body('stack-submit', 'for b in $(git query --branches "$SELECTED")')
-        body += '\ngit config remote.pushDefault "$remote"\n'
-        result = c.shell(body, 'git submit -c --dry-run "$SELECTED"' if kind != 'tracking-preserve' else 'git config branch.a.merge')
-        if kind == 'tracking-preserve':
-            c.check('endpoint: non-main tracking retained', 'refs/heads/feature-a' in result.stdout)
+        body += c.body('stack-submit', 'push_selected --dry-run')
+        if kind == 'push-tracking' or c.spec['id'] == 'HAPPY-submit':
+            body += c.body('stack-submit', 'push_selected\n')
+        result = c.shell(body)
+        if kind == 'preview-tracking':
+            c.check('endpoint: preview succeeds and retains non-main tracking', result.returncode == 0 and c.git('config', 'branch.a.merge') == 'refs/heads/feature-a', result.stderr[-500:])
         else:
-            c.check('endpoint: submission preview includes own stack', result.returncode == 0 and 'Would submit' in result.stdout, result.stdout[-500:])
-            if kind in ('submit', 'hash-submit'):
+            c.check('endpoint: submission preview includes own stack', result.returncode == 0 and 'a -> a' in result.stderr, result.stderr[-500:])
+            if kind in ('hash-submit', 'submit'):
                 c.check('endpoint: own tip moved onto upstream', c.cmd(['git', 'merge-base', '--is-ancestor', 'origin/main', 'HEAD']).returncode == 0)
-            if c.spec['id'] == 'HAPPY-submit':
-                result = c.shell(c.selected() + c.body('stack-submit', 'git submit -c "$SELECTED"'))
+            if kind == 'push-tracking' or c.spec['id'] == 'HAPPY-submit':
                 remote_head = c.git('--git-dir=' + str(c.root / 'origin.git'), 'rev-parse', 'refs/heads/a')
                 c.check('endpoint: actual local bare-origin push', result.returncode == 0 and remote_head == c.git('rev-parse', 'a'))
+                c.check('endpoint: push replaces inherited main tracking', c.git('config', 'branch.a.merge') == 'refs/heads/a')
+    elif kind == 'first-push-main':
+        c.wt = c.root / 'P'
+        c.check('fixture: main is checked out', c.git('symbolic-ref', 'HEAD') == 'refs/heads/main')
+        for branch, commit in (('feat/a', 'main~2'), ('feat/b', 'main~1')):
+            c.cmd(['git', 'branch', branch, commit], require=True)
+        main_tip = c.git('rev-parse', 'main')
+        body = STRICT + 'remote=origin\n'
+        body += c.body('stack-submit', "SELECTED='feat/a")
+        body += c.body('stack-submit', 'lease_heads=')
+        body += c.body('stack-submit', 'push_selected --dry-run')
+        body += c.body('stack-submit', 'push_selected\n')
+        result = c.shell(body)
+        c.check('endpoint: first push from main succeeds', result.returncode == 0, result.stderr[-1200:])
+        published = c.git('ls-remote', '--heads', 'origin').splitlines()
+        c.check('endpoint: exactly the two explicit branches are published',
+                sorted(published) == sorted(c.git('rev-parse', branch) + '\trefs/heads/' + branch
+                                            for branch in ('feat/a', 'feat/b')), repr(published))
+        for branch in ('feat/a', 'feat/b'):
+            c.check('endpoint: tracking matches ' + branch,
+                    c.git('config', 'branch.' + branch + '.remote') == 'origin'
+                    and c.git('config', 'branch.' + branch + '.merge') == 'refs/heads/' + branch)
+        c.check('endpoint: public main tip is unchanged', c.git('rev-parse', 'HEAD') == main_tip)
+    elif kind == 'pinned-submit':
+        mode = c.spec['args']['mode']
+        origin = c.root / 'origin.git'
+        existing = mode in ('stale', 'stale-fetch', 'update')
+        if existing:
+            c.cmd(['git', 'push', '-u', 'origin', 'a'], require=True)
+        competitor = c.root / 'up'
+        if mode in ('stale', 'stale-fetch'):
+            c.cmd(['git', 'fetch', 'origin', 'a'], cwd=competitor, require=True)
+            c.cmd(['git', 'checkout', '--detach', 'FETCH_HEAD'], cwd=competitor, require=True)
+            (competitor / 'concurrent').write_text('another writer\n')
+            c.cmd(['git', 'add', 'concurrent'], cwd=competitor, require=True)
+            c.cmd(['git', 'commit', '-m', 'concurrent update'], cwd=competitor, require=True)
+        competing_tip = c.git('rev-parse', 'HEAD', cwd=competitor)
+        before_tip = c.git('rev-parse', 'HEAD')
+        body = STRICT + c.selected() + c.body('stack-submit', 'lease_heads=')
+        body += c.body('stack-submit', 'git move -b "$SELECTED" -d "$upstream" || exit 1')
+        if mode == 'create':
+            # Production step 6 may name a branch after the initial move and snapshot.
+            body += '\ngit branch named-after-move HEAD\n'
+        racing = mode in ('create-race', 'stale', 'stale-fetch')
+        if racing:
+            body += '\ngit -C ' + shlex.quote(str(competitor)) + ' push origin HEAD:refs/heads/a\n'
+        if mode == 'stale-fetch':
+            # Reproduce a fetch by this or another worktree after the rewrite.
+            body += '\ngit fetch origin\n'
+        body += c.body('stack-submit', 'push_selected\n')
+        result = c.shell(body)
+        remote_tip = c.git('--git-dir=' + str(origin), 'rev-parse', 'refs/heads/a')
+        c.check('endpoint: production move rewrote the published tip', c.git('rev-parse', 'HEAD') != before_tip)
+        if racing:
+            c.check('endpoint: competing remote tip is preserved', remote_tip == competing_tip,
+                    f'remote={remote_tip}; competing={competing_tip}')
+            c.check('endpoint: stale or absent lease is rejected', result.returncode != 0 and 'stale info' in result.stderr,
+                    result.stderr[-1200:])
+            if mode == 'stale-fetch':
+                c.check('endpoint: fetch really advanced the shared tracking ref',
+                        c.git('rev-parse', 'origin/a') == competing_tip)
+            if mode == 'create-race':
+                c.check('endpoint: competing creation would permit an ordinary fast-forward',
+                        c.cmd(['git', 'merge-base', '--is-ancestor', competing_tip, 'a']).returncode == 0)
+        else:
+            c.check('endpoint: pinned publication succeeds', result.returncode == 0, result.stderr[-1200:])
+            branches = ['a', 'a-1'] + (['named-after-move'] if mode == 'create' else [])
+            for branch in branches:
+                c.check('endpoint: remote and tracking match ' + branch,
+                        c.git('--git-dir=' + str(origin), 'rev-parse', 'refs/heads/' + branch) == c.git('rev-parse', branch)
+                        and c.git('config', 'branch.' + branch + '.merge') == 'refs/heads/' + branch)
     elif kind in ('fix-test', 'fix-cache'):
         formatter = c.root / 'fmt.sh'
         formatter.write_text(STRICT + 'for file in a1 a2; do\n  if [ -f "$file" ]; then printf "fixed\\n" > "$file"; fi\ndone\n')

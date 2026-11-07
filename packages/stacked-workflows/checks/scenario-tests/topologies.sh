@@ -112,5 +112,10 @@ T12() {
   git_in P config branch.main.remote .
   git_in P config branch.main.merge refs/heads/trunk
 }
+T13() {
+  T5
+  c P public1
+  c P public2
+}
 fresh
 "$TOPOLOGY"

@@ -92,17 +92,54 @@ stack (`$STACK`, pre-flight step 5).
    `$remote` is also where the push steps below push. If it is `.` (main tracks
    a local branch), ask the user which remote to push to and set `remote` to it.
 
-   Run this block again in any new shell before a later step or section that
-   uses `$upstream`, `$base`, `$remote`, `$STACK` or `$SELECTED`, then redo step
-   2's selection and checks.
+   In a new shell, re-derive these variables and redo step 2's selection and
+   checks. Preserve any lease snapshot captured before a rewrite; fetching again
+   never authorizes refreshing that snapshot.
 
-6. **Check pushDefault**:
+6. **Capture pinned leases before rewriting**, including step 3's initial move.
+   Run this block in the same Bash shell as the later push calls:
 
    ```bash
-   git config remote.pushDefault || git config remote.pushDefault "$remote"
+   set -euETo pipefail
+   shopt -s inherit_errexit 2>/dev/null || :
+
+   lease_remote="$remote"
+   lease_heads="$(git ls-remote --heads "$lease_remote")" || exit 1
+
+   push_selected() {
+     : "${lease_remote:?capture remote leases before rewriting}"
+     : "${lease_heads?capture remote leases before rewriting}"
+     local b branches expected
+     local -a leases=() refs=()
+     branches="$(git query --branches "$SELECTED")" || return 1
+     test -n "$branches" || { echo "no selected branches" >&2; return 1; }
+     for b in $branches; do
+       expected="$(printf '%s\n' "$lease_heads" | awk -v ref="refs/heads/$b" '$2 == ref { print $1 }')"
+       leases+=("--force-with-lease=refs/heads/$b:$expected")
+       refs+=("refs/heads/$b:refs/heads/$b")
+     done
+     git push "$@" --set-upstream "${leases[@]}" "$lease_remote" "${refs[@]}"
+   }
    ```
 
-   `git submit -c` requires this to know where to push new branches.
+   This records the remote's branch tips before any rewrite. A branch absent
+   from that snapshot gets an empty expected SHA: its lease requires that the
+   remote branch still does not exist. This also covers branches named in step 6
+   after the move. A failed remote read stops the workflow; it must never be
+   treated as an empty remote.
+
+   Keep `lease_heads`, `lease_remote` and the function in this shell until the
+   push finishes. Do not recapture after a rewrite or fetch, including when
+   resuming in a new shell: without the original snapshot, stop and recover it
+   before pushing. For a later operation, capture a fresh snapshot **before**
+   that operation's first rewrite. The push uses the captured remote and
+   explicit branch refs, independent of tracking or `push.default`.
+
+   The packaged `git submit` has no expected-SHA option. Its branch forge
+   fetches before pushing with bare `--force-with-lease`; even `git submit -c`
+   can update existing branches that way. See the **`git submit`** entry in
+   `references/git-branchless.md` for the source evidence. Use `push_selected`
+   for both new branches and updates throughout this skill.
 
 ## Steps
 
@@ -152,7 +189,8 @@ stack (`$STACK`, pre-flight step 5).
      everything selected is already upstream. Do **not** fall back to `draft()`
      or `stack()`: in a repository with several worktrees both select other
      worktrees' stacks. (A first push of a repository whose whole history is on
-     `main` also lands here; the answer is the manual `git push` in step 8.)
+     `main` also lands here; use step 8's explicit `SELECTED` and pinned
+     `push_selected` path.)
    - **The second query prints commits:** stop, show those commits, and ask.
      Either the revset reaches past this worktree's stack (`draft()` does, for
      example), or local `main` has commits that are not on `$upstream` and the
@@ -167,7 +205,8 @@ stack (`$STACK`, pre-flight step 5).
      HEAD included, on the old base, and it still exits 0.
 
 3. **Rebase the stack onto the latest upstream.** Pre-flight step 5 already
-   fetched, so move only the selected stack onto the remote-tracking ref:
+   fetched and step 6 captured the leases, so move only the selected stack onto
+   the remote-tracking ref:
 
    ```bash
    git move -b "$SELECTED" -d "$upstream" || exit 1
@@ -229,33 +268,20 @@ stack (`$STACK`, pre-flight step 5).
    git branch <branch-name> <commit-hash>
    ```
 
-   Present the branch list to the user for review before proceeding.
+   Present the branch list to the user for review before proceeding. Every local
+   branch on a selected commit is pushed, including incidental review or
+   worktree branches. Step 7's dry-run preview shows each remote ref that will
+   be published; delete or move an unwanted local branch before publishing.
 
-   **Before the first push, drop tracking of `main`.** A branch created from the
-   upstream ref (`git worktree add -b <x> <path> origin/main`, or
-   `git branch <x> origin/main`) tracks `main`. `git submit` treats every branch
-   that has an upstream as already pushed and fetches `refs/heads/<x>`, which
-   fails with `fatal: couldn't find remote ref refs/heads/<x>`. `-c` does not
-   help. Unset the upstream of each selected branch that tracks main's upstream
-   branch, and leave any other tracking alone:
-
-   ```bash
-   main_merge="$(git config "branch.${main_branch}.merge" || echo "refs/heads/${main_branch}")"
-   for b in $(git query --branches "$SELECTED"); do
-     if [ "$b" != "$main_branch" ] \
-       && [ "$(git config "branch.$b.merge" || :)" = "$main_merge" ]; then
-       git branch --unset-upstream "$b"
-     fi
-   done
-   ```
-
-   `git submit -c` pushes with `--set-upstream`, so afterwards each branch
-   tracks its own remote branch and later updates work.
+   The pinned push sets upstream tracking to each branch's own remote branch,
+   including branches that initially track `main`.
 
 7. **Confirm before pushing** — preview what will be pushed:
 
    ```bash
-   git submit --dry-run "$SELECTED"    # or: git submit -c --dry-run "$SELECTED"
+   set -euETo pipefail
+   shopt -s inherit_errexit 2>/dev/null || :
+   push_selected --dry-run
    ```
 
    Show the dry-run output to the user and ask for confirmation:
@@ -269,33 +295,32 @@ stack (`$STACK`, pre-flight step 5).
    especially important when the skill is auto-invoked via
    `disable-model-invocation: false`.
 
-8. **Push branches** with `git submit` or `git push`:
+8. **Push branches with the captured leases**:
 
    ```bash
-   git submit -c "$SELECTED"
+   set -euETo pipefail
+   shopt -s inherit_errexit 2>/dev/null || :
+   push_selected
    ```
 
-   **Gotcha:** `git submit -c` silently does nothing when commits are on main
-   (public/non-draft). This happens when the entire history is being submitted
-   for the first time on the main branch. In this case, fall back to manual
-   push:
+   This creates absent branches and updates existing ones in the same push. If
+   any lease is rejected, stop and inspect the remote change with the user; do
+   not refresh the snapshot and retry or replace the command with `git submit`.
+   A dry-run does not reserve the remote refs, so the real push must use the
+   same leases.
+
+   For a first push whose entire history is on local `main`, step 2 reports an
+   empty selection. After agreeing which branches to publish, set `SELECTED` to
+   a revset union of their explicit names (separated by `|`, not spaces):
 
    ```bash
-   git push -u "$remote" <branch-1> <branch-2> ... <branch-N>
+   SELECTED='feat/a|feat/b'
    ```
 
-   The `-u` flag sets upstream tracking so tools like lazygit show branches as
-   in-sync with remote.
-
-   **Gotcha:** `git submit` skips commits with 2+ branches attached. Ensure one
-   branch per commit.
-
-   **Gotcha:** `git submit` requires `remote.pushDefault` to be set for
-   `--create` mode (pre-flight step 6):
-
-   ```bash
-   git config remote.pushDefault "$remote"
-   ```
+   Capture their remote snapshot with pre-flight step 6 before any rewrite, skip
+   step 3, and use the same preview and push in steps 7 and 8. This path
+   publishes public commits without rerunning step 2's empty-stack guard; there
+   is no unpinned fallback.
 
 9. **Create stacked PRs/MRs** — for each branch, create a pull/merge request
    targeting the previous branch in the stack (or `main` for the first). Use the
@@ -337,42 +362,18 @@ gh pr create --head <branch-N> --base <branch-N-1> \
 
 ### Pinned force-push
 
-Before any rewrite (amend, fix, restack or move), capture the commit each branch
-points at, which is what its remote should still hold:
+Before any amend, fix, restack or move, run pre-flight step 6 to capture the
+remote tips and define `push_selected`. This applies to the initial step 3 move
+as well as later updates. After the rewrite, re-derive `$SELECTED` using
+pre-flight step 5 and step 2's selection and checks, keeping the original lease
+snapshot. Preview with `push_selected --dry-run`, then push with `push_selected`
+after the required approval.
 
-```bash
-declare -A lease=()
-for b in <branch-1> <branch-2> ... <branch-N>; do lease[$b]=$(git rev-parse "$b"); done
-```
-
-After the rewrite, push with one `--force-with-lease=<branch>:<expected-sha>`
-per branch:
-
-```bash
-args=()
-for b in "${!lease[@]}"; do args+=("--force-with-lease=$b:${lease[$b]}"); done
-git push "${args[@]}" "$remote" "${!lease[@]}"
-```
-
-The bare `--force-with-lease` compares against the remote-tracking ref, which
-any fetch (pre-flight step 5 fetches, and worktrees share these refs) moves to
-the remote's current tip, so after a fetch it passes and protects nothing.
-
-After amending or restacking commits, re-submit with (the lease must have been
-captured before the amend):
-
-```bash
-git submit "$SELECTED"   # force-push existing remote branches (no -c needed)
-```
-
-Always pass `"$SELECTED"` (re-derived per pre-flight step 5 and step 2). A bare
-`git submit` defaults to `stack()`, which while local `main` is stale holds
-other worktrees' stacks too: it then force-pushes their branches once they are
-on the remote. If it fails with `couldn't find remote ref`, a selected branch
-still tracks `main`; see step 6.
-
-If `git submit` produces no output (public commits on main), force-push all
-branches manually with the pinned lease (Pinned force-push).
+Never refresh the expected tips after the rewrite. Bare `--force-with-lease`
+compares against remote-tracking refs, which any fetch (including another
+worktree's fetch) can update. The explicit SHA captured before rewriting still
+rejects a competing push after such a fetch. An empty expected SHA requires an
+absent branch, so a competing branch creation is rejected too.
 
 PRs/MRs auto-update when their branches are force-pushed. No need to recreate
 them. Only branches downstream of the changed commit need updating, but pushing
@@ -531,8 +532,7 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
 ## Tips
 
 - Always start with `git sl` to understand the stack before submitting.
-- One branch per commit. If a commit has multiple branches, `git submit` skips
-  it.
+- Use one branch per commit so each stacked PR has a clear base.
 - For very large stacks (20+ PRs), consider batching — submit the first 5-10,
   get them merged, then submit the next batch. Reviewers struggle with 20+ open
   PRs at once.
@@ -565,8 +565,3 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
     sleep 1
   done
   ```
-
-- If `git submit -c` fails with "no remote configured", set
-  `git config remote.pushDefault "$remote"`.
-- If `git submit -c` produces no output, commits are likely public (on main).
-  Use `git push "$remote" <branch> ...` instead.

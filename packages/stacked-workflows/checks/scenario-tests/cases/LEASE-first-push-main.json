@@ -1,0 +1,20 @@
+{
+  "args": {
+    "shell_scope": "one Bash shell preserves the first-push snapshot through preview and push"
+  },
+  "block_ids": [
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::9",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Pre-flight::5",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::6",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::8"
+  ],
+  "block_roles": ["selection", "guard", "preview", "mutator"],
+  "env": {},
+  "expected": {
+    "description": "two explicit branch names in the published revset union work for a first push from main",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "LEASE-first-push-main",
+  "kind": "first-push-main",
+  "topology": "T13"
+}
