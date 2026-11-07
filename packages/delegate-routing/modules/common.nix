@@ -41,6 +41,7 @@
     local = portable.runtimes.${runtime};
   in {
     routing = entries.resolveRouting portable.routing local.routing;
+    skill = entries.resolveSkill portable.skill local.skill;
     workflows = entries.resolveWorkflows portable.workflows local.workflows;
   };
   enabled = runtime:
@@ -273,7 +274,7 @@ in {
         delegate-routing = "${defaults.passthru.mkSkill {
           inherit runtime models techniques;
           inherit (portable) families pools;
-          inherit (resolved runtime) routing workflows;
+          inherit (resolved runtime) routing skill workflows;
           inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
         }}";
       };
@@ -299,6 +300,7 @@ in {
         programs.delegate-routing = {
           families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
           routing = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.routing;
+          skill = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.skill;
           workflows = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.workflows;
         };
       }

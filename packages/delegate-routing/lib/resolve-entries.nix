@@ -13,6 +13,11 @@
           else workflow.text;
       })
     runtime;
+  resolveSkill = portable: runtime: {
+    columns = lib.mapAttrs (table: columns: columns // runtime.columns.${table}) portable.columns;
+    entries = portable.entries // runtime.entries;
+    phrases = portable.phrases // runtime.phrases;
+  };
   sort = scope: entries: let
     enabled = lib.filterAttrs (_: entry: entry.enable) entries;
     names = builtins.attrNames enabled;

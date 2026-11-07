@@ -471,6 +471,7 @@ in {
           pools = "attribute set of (submodule)";
           reminder = "submodule";
           routing = "attribute set of (submodule)";
+          skill = "submodule";
           workflows = "attribute set of (submodule)";
         } ["claude" "codex" "kimchi" "kiro"]
         && programParity "peer-communication" {enable = "boolean";} harnessNames

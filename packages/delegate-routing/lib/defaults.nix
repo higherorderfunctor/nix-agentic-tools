@@ -18,6 +18,6 @@
     kimchi = [];
     kiro = [];
   };
-  inherit (import ./entries.nix {inherit lib;}) routing workflows;
+  inherit (import ./entries.nix {inherit lib;}) routing skill workflows;
   techniques = import ./techniques.nix {inherit claudeUsageScript codexUsageScript;};
 }

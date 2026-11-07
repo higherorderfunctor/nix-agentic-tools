@@ -99,6 +99,56 @@ keep a terminal step last when inserting a new step, give the new step a
 Repository runtime and skill ownership is documented in
 `dev/fragments/pipeline/generation-architecture.md`.
 
+## Skill text
+
+The renderer holds no skill prose, only table and list glue and diagnostics.
+Every heading and sentence is an entry, a column or a phrase under `skill`, at
+`ai.programs.delegate-routing.skill` and at `runtimes.<runtime>.skill`. A
+runtime key replaces the portable key atomically.
+
+`skill.entries` is the ordered body: Routing, Common workflows, Delegate sizing,
+Pools, Family tables, Technique availability, Technique tables and Manual-only
+external delegates. Entry text may use `{routing}`, `{workflows}`, `{pools}`,
+`{families}`, `{techniques}` and `{manual}`, each filled with its generated
+block. An entry whose placeholder block renders nothing, such as Pools with no
+pools declared, is omitted.
+
+`skill.columns.<families|pools|techniques>` set header text, order and presence
+keyed by column. A disabled column drops its header and cells; an enabled key
+the renderer has no cell for fails naming it. The techniques Command column
+still appears only when a delegate technique has a command.
+
+`skill.phrases` are templates used inside generated blocks: `"Native reach"` and
+`"External reach"` (`{harness}`, `{launch}`, `{pool}`), `"Launch route"`
+(`{technique}`, `{modelArg}`, `{model}`), `"Model pattern"` (`{match}`),
+`"Pool binding"` (`{pool}`), `"Pool window"` (`{limit}`, `{unit}`,
+`{resetDay}`), `"Family table heading"` (`{tier}`), `"Technique table heading"`
+and `"Manual delegate heading"` (`{harness}`). `"Launch fallback"`,
+`"Manual delegate note"`, `"Pool measured"`, `"Pool unmeasured"` and
+`"Pool reader missing"` take none. A disabled phrase renders nothing; a phrase
+the renderer reads but cannot find fails naming it.
+
+Shipped entries and columns carry `after` edges to every predecessor, so
+disabling any one keeps the rest in order. For example, this replaces one
+paragraph and drops one column:
+
+```nix
+ai.programs.delegate-routing.skill = {
+  columns.families.Orchestration.enable = false;
+  entries."Technique availability".text = "Check your tool list first.";
+};
+```
+
+The public `mkSkill` builder of the `delegate-routing-content` package is
+overridable. Its `override` receives the shipped inputs, so a direct caller
+edits the skill text from `prev.skill`:
+
+```nix
+(content.mkSkill {runtime = "claude";}).override (prev: {
+  skill = lib.recursiveUpdate prev.skill {phrases."Launch fallback".text = ", or ";};
+})
+```
+
 ## Families and runtime capabilities
 
 `families.<vendor>.<family>` is the portable decision table. Each record has a
