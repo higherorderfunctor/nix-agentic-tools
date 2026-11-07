@@ -11,12 +11,13 @@ external launcher (`claude -p`, `codex exec`). Skipping the vendor requirement
 because one tool's enum lacks the model is a loop failure; report it as one.
 
 One exception, on any forge (GitHub pull requests, GitLab merge requests or
-others): a change inside a stack of pull or merge requests gets one reviewer
-from a different vendor than the writer while it is stacked, following the first
-check below; that reviewer's supported issues are accepted findings for the
-loop. The change gets all three checks when it becomes ready to merge into the
-default branch. A pure rebase or restack of the stack gets no review; rework
-done during a rebase is a change, and the rules above apply to it.
+others): a change inside a stack of pull or merge requests, or a unit or a fix
+of a branch still being built, gets one reviewer from a different vendor than
+the writer while it is stacked or mid-build, following the first check below;
+that reviewer's supported issues are accepted findings for the loop. The change
+gets all three checks when it becomes ready to merge into the default branch. A
+pure rebase or restack of the stack gets no review; rework done during a rebase
+is a change, and the rules above apply to it.
 
 When the draft exceeds the Size row, the reviewer also names each specific cut
 or collapse with evidence: what breaks if it is deleted and the simpler form.

@@ -1010,6 +1010,14 @@
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
       && lib.hasInfix "6. **Loop:**" claude
+      # Fails if units lose their definition, cadence or vendor separation,
+      # fixes re-review the whole branch or retain its base, or mid-build
+      # units remain subject to the opening three-check rule.
+      && hasProse "A unit is a bounded change with one reader and one verification" claude
+      && hasProse "Each unit is reviewed by one check, from a vendor other than the writer's, before the next unit starts." claude
+      && hasProse "the fix's diff plus what it touches, one check, never the whole branch again." claude
+      && hasProse "for a fix round, HEAD before the fix starts" claude
+      && hasProse "a unit or a fix of a branch still being built" claude
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "6. **Loop:**" (readSkill runtimeWorkflowStep "claude")
