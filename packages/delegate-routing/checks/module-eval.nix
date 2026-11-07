@@ -61,7 +61,9 @@
     # The rendered skill itself refuses bad input by throwing, so a failing
     # scenario is one whose skill cannot be rendered.
     skillFails = config: !(builtins.tryEval (builtins.deepSeq (skill config) true)).success;
-    hasProse = needle: text: lib.hasInfix needle (lib.replaceStrings ["\n"] [" "] text);
+    # Rendering indents continuation lines and the formatter re-wraps them, so
+    # prose is matched with every whitespace run collapsed to one space.
+    hasProse = needle: text: lib.hasInfix needle (lib.concatStringsSep " " (builtins.filter (part: builtins.isString part && part != "") (builtins.split "[[:space:]]+" text)));
     native = change {ai.programs.delegate-routing.runtimes.claude.extraRuntimes = [];};
     nativeClaude = readSkill native "claude";
     disabled = evaluate {
@@ -1010,6 +1012,16 @@
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
       && lib.hasInfix "6. **Loop:**" claude
+      # Fails if units lose their definition, cadence or vendor separation,
+      # fixes re-review the whole branch or retain its base, or mid-build
+      # units remain subject to the opening three-check rule, or the
+      # branch-level review loses its ready/earlier sizing.
+      && hasProse "A unit is a bounded change with one reader and one verification" claude
+      && hasProse "Each unit is reviewed by one check, from a vendor other than the writer's, before the next unit starts." claude
+      && hasProse "the fix's diff plus what it touches, one check, never the whole branch again." claude
+      && hasProse "for a fix round, HEAD before the fix starts" claude
+      && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one reviewer" claude
+      && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "6. **Loop:**" (readSkill runtimeWorkflowStep "claude")

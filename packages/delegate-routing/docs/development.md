@@ -1,11 +1,13 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-06 — routing ships an always-on "Pool drain" entry
+> **Last verified:** 2026-11-07 — routing ships an always-on "Pool drain" entry
 > and a "Tune these rules" entry, the Review step holds the one review rule, the
-> usage helpers share one schema with UTC reset times, portable pools resolve
-> usage readers and label family reaches on both backends, proxy-accounted-usage
-> reads a Manager+ accounted monthly budget, and the always-on stub names the
-> source for steering its rules.
+> Work and review workflow builds a branch as units each reviewed by one check
+> before the next starts (all three checks at the branch-level review when the
+> PR goes ready), the usage helpers share one schema with UTC reset times,
+> portable pools resolve usage readers and label family reaches on both
+> backends, proxy-accounted-usage reads a Manager+ accounted monthly budget, and
+> the always-on stub names the source for steering its rules.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth

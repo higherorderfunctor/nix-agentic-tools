@@ -13,5 +13,5 @@ pattern and its required form, and has the writer run that linter on every
 edited file.
 
 Split a brief that needs one section per surface into one writer run per
-surface. Run them in sequence when they share a worktree, and commit each before
-the next.
+surface, and a surface with several units into one run per unit. Run them in
+sequence when they share a worktree, and commit each before the next.
