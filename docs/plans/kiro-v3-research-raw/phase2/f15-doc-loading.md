@@ -32,7 +32,7 @@ prose.
   keys at initialize.
 - Memory (2026-07-21, engine 2.13.0, empirical): v3 drops symlinked steering
   FILES; v2 follows them. Re-confirmed here from 2.15.1 code (section 3.2).
-- Vendor `private/kiro-v3-docs.md` L63, 262-264, 460, 711-715: claims steering
+- Vendor `../notes/kiro-v3-docs.md` L63, 262-264, 460, 711-715: claims steering
   has "front matter metadata", skills are "unchanged", agent resources accept
   `skill://backend-patterns`, and a `skill` permission capability exists.
   Verified/corrected below.

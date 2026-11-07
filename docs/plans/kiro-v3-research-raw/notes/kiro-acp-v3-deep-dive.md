@@ -3,10 +3,10 @@
 > **Verified against:** KAS
 > `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 > (kiro-cli 2.15.1 installed; the argv-layer companion
-> `private/kiro-acp-and-launcher-argv.md` was measured against 2.15.2).
-> Measured 2026-07-30. Sources: `private/kiro-phase2/acp-wireline.md` (bundle
-> read), `private/kiro-phase2/acp-config.md` (G2/G3/G7–G10),
-> `private/kiro-phase2/acp-live-probe.md` (live stdio probes), plus the
+> `kiro-acp-and-launcher-argv.md` was measured against 2.15.2).
+> Measured 2026-07-30. Sources: `../phase2/acp-wireline.md` (bundle
+> read), `../phase2/acp-config.md` (G2/G3/G7–G10),
+> `../phase2/acp-live-probe.md` (live stdio probes), plus the
 > f09/f10/f11 verification passes. Byte offsets churn per release — anchor on
 > the semantic names, not the numbers.
 
@@ -380,11 +380,11 @@ ever sent, and the driver answers `_kiro/auth/getAccessToken` with a JSON-RPC
 error (never reads the operator's credential store).
 
 **Argv contract** (seconds, no ACP): run the four-check block in
-`private/kiro-acp-and-launcher-argv.md` §"Argv-contract probe" — prepend-ok,
+`kiro-acp-and-launcher-argv.md` §"Argv-contract probe" — prepend-ok,
 append-fails, `--v3` translation intact, escape hatch intact.
 
 **Live ACP probes** — driver + step files preserved in
-`private/kiro-phase2/probes/`:
+`../phase2/probes/`:
 
 - `acp-drive.py` — generalized stdio driver (id-matching inbox, token
   refusal, JSONL frame capture, `${VAR}` substitution, killpg teardown).
@@ -406,7 +406,7 @@ append-fails, `--v3` translation intact, escape hatch intact.
   session and no credentials, so it is the cheapest probe here.
 
 ```bash
-P=private/kiro-phase2/probes
+P=docs/plans/kiro-v3-research-raw/phase2/probes  # run from the repository root
 mkdir -p /tmp/acp-home /tmp/acp-ws
 python3 "$P/acp-drive.py" ext /tmp/acp-home /tmp/acp-ws \
   "$P/steps-1-ext.json" /tmp/frames-ext.jsonl

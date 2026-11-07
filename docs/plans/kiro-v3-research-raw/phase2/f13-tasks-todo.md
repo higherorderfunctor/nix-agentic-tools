@@ -39,9 +39,9 @@ yes/no/indirect with evidence.
   `preTaskExecution`/`postTaskExecution`
   (corpus `records/hooks-io-contract.md:118,204-214,810`,
   `records/hooks-dispatch-gate.md:140-151`). Not re-derived here.
-- Vendor v3 doc (`private/kiro-v3-docs.md:489,734`) lists `todo_list` in the
+- Vendor v3 doc (`../notes/kiro-v3-docs.md:489,734`) lists `todo_list` in the
   "Tags" tables of the `tools` field. Vendor v2 doc
-  (`private/kiro-v2-experimental.md:74-93`) documents a v2 `todo` tool with a
+  (`../notes/kiro-v2-experimental.md:74-93`) documents a v2 `todo` tool with a
   `/todo` command gated by `chat.enableTodoList`.
 - v3 advertised `extensionMethods` are 7, none task/spec related (pinned
   mission facts / ACP argv doc).

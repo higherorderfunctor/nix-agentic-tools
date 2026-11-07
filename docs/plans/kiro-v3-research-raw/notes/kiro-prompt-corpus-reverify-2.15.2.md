@@ -132,8 +132,8 @@ This is not a hand-back-a-diff task. Carry it through review.
 
 **Where work happens.** Everything code- or corpus-related happens in the
 worktree, on the PR branch. **Do not modify the primary checkout at all**, with
-exactly one exception: `private/` docs, which are gitignored and machine-local,
-and which you should update there as you go.
+exactly one exception: gitignored, machine-local scratch docs, which you should
+update there as you go.
 
 Derive the worktree directory this way — it is correct from any worktree, and a
 bare `../<repo>-worktrees/…` silently resolves one level too deep from a linked
@@ -213,10 +213,10 @@ green and thread-clean, then hand it to me.
 
 - **Do not run the mode-F live fixtures.** Those need an operator sitting.
 - **Never commit to `main`**, and do not touch the primary checkout outside
-  `private/`.
+  the scratch docs.
 - Follow the repo's Conventional Commits convention and run `treefmt` on every
   changed file.
-- There is a `private/kiro-acp-and-launcher-argv.md` documenting ACP and launcher
+- There is a [`kiro-acp-and-launcher-argv.md`](kiro-acp-and-launcher-argv.md) documenting ACP and launcher
   argv behaviour from a separate session. It is **not in scope** to fold in here —
   I will converge that separately — but skim it if you hit an ACP question, so you
   do not re-derive what it already settled.

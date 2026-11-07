@@ -36,7 +36,7 @@ frame cited.
 
 ## 2. What is already known (going in)
 
-- ACP-W (`private/kiro-phase2/acp-wireline.md`): standard + advertised + 14
+- ACP-W (`./acp-wireline.md`): standard + advertised + 14
   unadvertised workflow methods, the agent->client `_kiro/auth/getAccessToken`
   request, error-code taxonomy, `session/update` kinds. This probe CONFIRMS the
   wireline read against a live engine.

@@ -30,7 +30,7 @@ description string.
   settles the tool-call side.
 - Corpus settled: dispatched sub-executions always take the first-turn branch;
   builtin mode ids load-then-filter; hooks approval path separate (C-4).
-- Vendor docs `private/kiro-v3-docs.md`: no per-tool schema claims found worth
+- Vendor docs `../notes/kiro-v3-docs.md`: no per-tool schema claims found worth
   citing; treated as input only.
 
 ## 3. The interface, fully enumerated

@@ -37,12 +37,12 @@ drive any of it; the model cannot. Nothing flows back automatically.
   `["chat.enableTangentMode","tangentMode"]` in the feature-resolution map
   (records/workflow-surface.md:491,546; records/limits-and-engine.md:1221,
   1302,1306). This item is net-new territory.
-- private/kiro-acp-and-launcher-argv.md section 4 (measured):
+- ../notes/kiro-acp-and-launcher-argv.md section 4 (measured):
   `sessionCapabilities` = `list`, `fork` (fork carries `messageId`);
   `checkpoints` / `sessionList` / `policyNotifications` all true;
   `replayMarking: true`; the 7 advertised `extensionMethods` include NO
   checkpoint method.
-- private/kiro-v3-docs.md: zero `/rewind` or fork content. The only
+- ../notes/kiro-v3-docs.md: zero `/rewind` or fork content. The only
   "checkpoint" mention (line 19) is the *spec task* checkpoint — a different
   concept (see section 6).
 - Settled corpus fact reused: v3 session store layout
