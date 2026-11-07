@@ -107,9 +107,6 @@ git config branchless.core.mainBranch main
 ### Key Configuration
 
 ```bash
-# Set default push remote for git submit --create
-git config remote.pushDefault origin
-
 # Interactive mode for git next when ambiguous
 git config branchless.next.interactive true
 
@@ -481,18 +478,37 @@ only when their edits do not overlap: each one then applies as an empty commit
 and is skipped. When the edits overlap, the rebase conflicts. Stop and ask the
 user rather than recursively hiding descendants (arxanas/git-branchless#965).
 
+> **Last verified:** 2026-11-07 — packaged submit options and branch-forge
+> pushes; stack-submit pins both creation and updates to pre-rewrite
+> observations.
+
 **`git submit`** — Push branches to remote.
 
 ```bash
-git submit                # force-push existing remote branches in stack() (see Stale local main)
-git submit -c             # create + push new remote branches
-git submit --dry-run      # preview what would be pushed (no side effects)
-git submit @              # push only branches at HEAD
-git submit 'draft()'      # push all draft branches (every worktree's stacks)
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+git submit --dry-run "$own"    # preview only; may fetch
 ```
 
-Note: force-pushes by design (updating review branches). Set
-`git config remote.pushDefault origin` for `--create`.
+**Use stack-submit's pinned pushes for publication.** The packaged source
+(`f37244cb30c481ec9bec44b43cdcab12f6284137`, binary version `0.11.1`) exposes no
+expected-SHA lease option in
+[`SubmitArgs`](https://github.com/arxanas/git-branchless/blob/f37244cb30c481ec9bec44b43cdcab12f6284137/git-branchless-opts/src/lib.rs#L413-L460).
+The branch forge
+[fetches tracked branches](https://github.com/arxanas/git-branchless/blob/f37244cb30c481ec9bec44b43cdcab12f6284137/git-branchless-submit/src/branch_forge.rs#L104-L132)
+and
+[updates with bare `--force-with-lease`](https://github.com/arxanas/git-branchless/blob/f37244cb30c481ec9bec44b43cdcab12f6284137/git-branchless-submit/src/branch_forge.rs#L306-L309).
+`-c`
+[enables creation and still updates existing branches](https://github.com/arxanas/git-branchless/blob/f37244cb30c481ec9bec44b43cdcab12f6284137/git-branchless-submit/src/lib.rs#L378-L411);
+it is not a safe new-branches-only path. Capture remote tips before rewriting
+and use `--force-with-lease=refs/heads/<branch>:<expected-sha>` for each
+explicit source/destination pair, as defined once in stack-submit's pre-flight
+step 6. An empty expected SHA requires an absent branch and protects creation
+against races too.
+
+The `stack()` default can select other worktrees' branches (see **Stale local
+main**); pass `$own` even for previews. The following upstream gotchas describe
+`git submit` behavior, not an alternative publishing recipe.
 
 **Gotcha:** a branch created from the upstream ref
 (`git worktree add -b <x> <path> origin/main`, or `git branch <x> origin/main`)
@@ -928,21 +944,15 @@ Worktree-safe: it never writes local `main`. Until local `main` catches up, use
 
 ### 9. Push a stack for review
 
-```bash
-# First time: create branches for each commit
-git branch feat-part-1 <hash1>
-git branch feat-part-2 <hash2>
-git submit -c "$own"           # push all new branches
+Use `/stack-submit`: select `$own` (see **Selecting your own stack**), capture
+remote leases before the initial move or any amend/restack, and create a branch
+for each commit. Its `push_selected --dry-run` previews the exact refs and
+pinned leases; `push_selected` publishes both new and existing branches with
+upstream tracking. Both calls use the same saved snapshot. On a first push,
+before the remote has `main`, set `base` to local `main`.
 
-# Subsequent updates after amending/restacking:
-git submit "$own"              # force-push existing remote branches
-```
-
-Pass `$own` (see **Selecting your own stack**) rather than relying on the
-`stack()` default. On a first push, before the remote has `main`, set `base` to
-local `main`. If the first `git submit -c` fails with
-`couldn't find remote ref`, the branch still tracks `main`; see the `git submit`
-gotcha.
+Do not substitute `git submit -c` or `git submit` after rewriting: both can
+force-push with an unpinned lease (see the **`git submit`** entry).
 
 ### 10. Undo a bad rebase
 
@@ -1168,15 +1178,17 @@ one. Use git-revise only when no other branch sits in the rewritten range, or
 move those branches yourself. For operations where branchless has equivalents
 (`reword`, `split`, `move`), prefer those.
 
-### With GitHub (git submit workflow)
+### With GitHub (pinned stack-submit workflow)
 
-1. Create branches: `git branch feat-1 <hash>` for each commit
-2. Push: `git submit -c "$own"` (creates remote branches; see **Selecting your
-   own stack**)
-3. Create PRs via `gh pr create --base <prev-branch> --head <branch>`
-4. After amend/restack: `git submit "$own"` to force-push updates
-5. After merge: `git fetch origin && git move -b HEAD -d origin/main` drops
-   merged commits (recipe 17), then submit again as in step 4
+1. Select this worktree's stack and capture remote leases using `/stack-submit`
+   **before** moving, amending or restacking commits.
+2. Create a branch for each commit and use stack-submit's pinned preview and
+   push; absent remote branches use empty expected SHAs.
+3. Create PRs via `gh pr create --base <prev-branch> --head <branch>`.
+4. Before each later amend/restack, capture fresh leases; push updates using
+   that operation's saved snapshot.
+5. After a squash merge, capture leases for the remaining branches before moving
+   them, then follow stack-submit's squash-merge recipe and pinned push.
 
 Set PR base to the previous branch in the stack; GitHub auto-updates dependent
 PRs on merge (arxanas/git-branchless#716).
