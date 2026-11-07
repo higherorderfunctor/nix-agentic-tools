@@ -1,14 +1,21 @@
 ## Kiro feature availability and client settings
 
-> **Last verified:** 2026-10-30 — rollout state retains every manifest field
-> except description; coverage rejects unknown fields and requires both public
-> and internal treatment to be 100% before preserving the stock package.
+> **Last verified:** 2026-11-07 — measured on Kiro CLI 3.1.0: workflows have no
+> rollout entry and `chat.enableWorkflows` is the only gate. Rollout state
+> retains every manifest field except description; coverage rejects unknown
+> fields and requires both public and internal treatment to be 100% before
+> preserving the stock package.
 
-Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
-rollout state is 100% for all users with no channel restriction, so enabling
-workflows does not patch the binary. The remaining gate is the global
-`chat.enableWorkflows` client setting; the managed launcher always runs the v3
-(`kas`) engine the feature lives in.
+Workflows were generally available behind a 100% rollout from **Kiro CLI
+2.26.0**. In **3.1.0** the rollout gate is gone: the TUI bundle reads the client
+setting alone (`Bo(Ve.CHAT_ENABLE_WORKFLOWS,!1)`, default false) and sends
+`workflows={enabled}` to the agent service, whose own default is `off`. The TUI
+itself is on by default in 3.1.0 and is no longer a rollout either; only `lite`
+remains rollout-gated. Enabling workflows therefore never touches the rollout
+patch. The only gate is the global `chat.enableWorkflows` client setting; the
+managed launcher always runs the v3 (`kas`) engine the feature lives in. These
+facts were measured on 3.1.0 from the TUI bundle and the `kas` workflow
+declaration, not inferred from the earlier releases.
 
 ```nix
 ai.kiro = {
@@ -31,9 +38,9 @@ workflow choice per session.
 
 The switches share declarations and package selection across Home Manager and
 devenv; client settings are implied only where the pinned client honors them. A
-friendly switch implies its raw feature at default priority. Explicitly
-disabling that raw feature while leaving the friendly switch enabled fails an
-assertion on both backends.
+friendly switch with a rollout feature implies it at default priority.
+Explicitly disabling that raw feature while leaving the friendly switch enabled
+fails an assertion on both backends.
 
 | `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                                                                                              |
 | ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,7 +48,7 @@ assertion on both backends.
 | `codeToSpec.enable`          | `c2s`                  | Global `chat.enableC2s`; Home Manager implies it, while devenv warns if it is missing.                                                                              |
 | `kvim.enable`                | `kvim`                 | `nvim` on PATH; no editor package is installed automatically.                                                                                                       |
 | `sandbox.enable`             | `local_sandbox`        | Availability only. Each invocation still needs `--sandbox` with `--no-interactive` or `--output-format stream-json`; Linux requires bubblewrap and user namespaces. |
-| `workflows.enable`           | `workflows` (GA)       | Global `chat.enableWorkflows`.                                                                                                                                      |
+| `workflows.enable`           | none (3.1.0)           | Global `chat.enableWorkflows`; the rollout entry no longer exists.                                                                                                  |
 
 Kiro's local sandbox feature is separate from this package's own Linux
 `buildFHSEnv`, controlled by `cli.useFhsSandbox`.
@@ -52,8 +59,8 @@ Kiro's local sandbox feature is separate from this package's own Linux
 `rolloutFeatures` fact under `packages/kiro-cli/extracted/`. Raw switches enable
 availability only; they do not imply client settings. For example,
 `features.c2s.enable` applies the rollout patch but leaves `chat.enableC2s` to
-the caller, while `features.workflows.enable` preserves the stock package and
-leaves `chat.enableWorkflows` to the caller.
+the caller, while no `features.workflows` switch exists on 3.1.0 because the
+rollout entry is gone; `chat.enableWorkflows` is the only workflows gate.
 
 The aggregate `rolloutStates.<name>` facts retain every manifest field except
 description, including internal treatment percentage.
@@ -107,4 +114,4 @@ names with the aggregate and verify the scope difference on both backends.
 
 `KIRO_ENABLED_FEATURES` remains an unreliable override: the Rust chat binary
 recomputes it before spawning the TUI. Restricted features use the embedded
-rollout manifest patch; GA workflows need no such override.
+rollout manifest patch; workflows need no such override.

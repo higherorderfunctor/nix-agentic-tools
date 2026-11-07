@@ -470,8 +470,9 @@ in {
           feature = "local_sandbox";
           setting = null;
         };
+        # 3.1.0 removed the workflows rollout: the setting is the only gate.
         workflows = {
-          feature = "workflows";
+          feature = null;
           setting = "enableWorkflows";
         };
       };
@@ -491,6 +492,7 @@ in {
         raw = runner.evaluate (lib.recursiveUpdate base {
           ai.kiro.cli.features.${case.feature}.enable = true;
         });
+        gated = case.feature != null;
         plain = runner.evaluate base;
         setting =
           if case.setting == null
@@ -509,11 +511,17 @@ in {
           };
         });
       in
-        soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages raw))
-        && (
-          if !(import ../extract/rollout-coverage.nix).needsPatch (kiroFact "rolloutStates.${case.feature}")
+        (
+          # A switch without a rollout feature leaves the stock package alone.
+          if !gated
           then soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
-          else selected.config.ai.kiro.cli.features.${case.feature}.enable && soleFork (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
+          else
+            soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages raw))
+            && (
+              if !(import ../extract/rollout-coverage.nix).needsPatch (kiroFact "rolloutStates.${case.feature}")
+              then soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
+              else selected.config.ai.kiro.cli.features.${case.feature}.enable && soleFork (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
+            )
         )
         && (
           if case.setting == null
@@ -522,10 +530,13 @@ in {
           then setting == true && explicitFalse.config.ai.kiro.cli.native.settings.chat.${case.setting} == false
           else setting == null && !(selected.config.ai.kiro.files ? ".kiro/settings/cli.json")
         )
-        && lib.any (item:
-          !item.assertion
-          && item.message == "ai.kiro.cli.${name}.enable is on but ai.kiro.cli.features.${case.feature}.enable is explicitly false")
-        rawDisabled.config.assertions;
+        && (
+          !gated
+          || lib.any (item:
+            !item.assertion
+            && item.message == "ai.kiro.cli.${name}.enable is on but ai.kiro.cli.features.${case.feature}.enable is explicitly false")
+          rawDisabled.config.assertions
+        );
     in
       lib.all (backend: lib.all (name: check backend backends.${backend} name cases.${name}) (builtins.attrNames cases)) (builtins.attrNames backends));
 
@@ -1204,7 +1215,7 @@ in {
         && soleSame (drvOf {features.background_execution.enable = true;})
         (drvOf {package = pkgs.ai.kiro-cli.withRolloutFeatures ["background_execution"];})
         && lib.all (name: soleSame (drvOf {}) (drvOf {features.${name}.enable = true;}))
-        ["remote_changelog" "test" "workflows"]
+        ["remote_changelog" "test"]
         && soleFork (drvOf {features.background_execution.enable = true;}) (drvOf {
           features = {
             background_execution.enable = true;
@@ -1411,7 +1422,7 @@ in {
             cli = {
               features = {
                 c2s.enable = true;
-                workflows.enable = true;
+                kvim.enable = true;
               };
             };
           };
