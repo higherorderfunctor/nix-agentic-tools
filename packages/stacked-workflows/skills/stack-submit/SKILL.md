@@ -358,61 +358,107 @@ PRs/MRs auto-update when their branches are force-pushed. No need to recreate
 them. Only branches downstream of the changed commit need updating, but pushing
 all is safe — unchanged branches are skipped automatically.
 
-After each squash-merged PR/MR, you MUST rebase the remaining stack, update the
-next PR/MR's base, and force-push remaining branches. Without this, downstream
-PRs/MRs show the full diff of all prior commits (the squash merge creates a new
-commit hash that downstream branches don't share).
+After each squash-merged PR/MR, you MUST move the remaining stack onto the new
+upstream, update the next PR/MR's base, and force-push the remaining branches.
+Without this, downstream PRs/MRs show the full diff of all prior commits (the
+squash merge creates a new commit hash that downstream branches don't share). Do
+it after EVERY squash merge, not just the first: each merge changes main.
 
-This must be done after EVERY squash merge, not just the first. Each merge
-changes main, and all downstream branches need rebasing onto it.
+Move only the remaining commits with `git move -s`, not `-b`. `-b` moves the
+whole lineage of the selection from where it leaves `$upstream`, so it drags the
+merged (now squashed) commits along; `-s <first remaining>` moves exactly that
+commit and its descendants. Never run a bare `git restack` here: it selects
+other worktrees' stacks and stale branches repo-wide (see **Rewriting** in
+`references/git-branchless.md`).
 
-```bash
-# 1. Re-run pre-flight step 5 (it fetches) and step 2 (selection and checks),
-#    then rebase the remaining stack onto the new upstream (same as step 3)
-git move -b "$SELECTED" -d "$upstream"
+1. **Fetch and detach review checkouts.** Re-run pre-flight step 5 (it fetches).
+   A worktree you own that has a stack commit checked out (for example a review
+   checkout) would be rewritten under you, and step 2's worktree check refuses
+   it: `git -C <path> switch --detach "$upstream"`. For a worktree you do not
+   own, stop and ask.
+2. **Select the remaining commits.** `$STACK` still holds the merged commits,
+   because the squash created a new commit upstream. Name the first commit whose
+   PR/MR is still open, select it and its descendants, then re-run step 2's
+   checks on that selection:
 
-# 2. Update the next PR/MR's base to main (it was pointing at the merged branch)
-#    See platform-specific commands below
+   ```bash
+   first="<first remaining commit>"
+   SELECTED="descendants($first) - ::$base"
+   git query -r "$SELECTED"            # must list only the unmerged commits
+   tip="$(git query -r "heads($SELECTED)")"
+   [ "$tip" = "$(git rev-parse HEAD)" ] || { echo "check out the tip: $tip"; exit 1; }
+   old_base="$(git rev-parse "${first}^")"
+   old_tip="$(git rev-parse HEAD)"
+   ```
 
-# 3. Force-push ALL remaining branches so PRs/MRs show clean single-commit diffs
-git push --force-with-lease "$remote" <branch-1> <branch-2> ... <branch-N>
-```
+   If every PR/MR in the stack merged, nothing remains to move: skip the rest of
+   this recipe and tear the worktree down instead of submitting again.
 
-#### GitHub
+3. **Push a backup** of the tip to the remote before rewriting, under a name of
+   its own so an earlier rewrite's backup is never overwritten, for example
+   `git push "$remote" "HEAD:refs/heads/archive/pre-move-$(git rev-parse --short HEAD)"`.
+   A local tag or branch is not a safe backup.
+4. **Move.** `git move --dry-run` only tests the in-memory attempt, so use it as
+   the preview and then run the real move:
 
-```bash
-gh pr edit <next-PR-number> --base main
-```
+   ```bash
+   git move --dry-run -s "$first" -d "$upstream" || exit 1
+   git move -s "$first" -d "$upstream" || exit 1
+   ```
 
-The move skips a commit whose patch is already upstream and deletes its branch,
-which handles a single-commit squash merge. A squash merge of several commits is
-still detected when their edits do not overlap: each one applies as an empty
-commit and is skipped. **Gotcha:** when they overlap, the move conflicts (exit
-1, nothing changed). Stop and ask rather than hiding the still-live descendants
+   If it reports a conflict it exits 1 and changes nothing. Stop and ask the
+   user.
+
+5. **Verify nothing else changed.** `git range-diff` must show every remaining
+   patch unchanged (a `=` row for each commit):
+
+   ```bash
+   git range-diff "$old_base..$old_tip" "$upstream..HEAD"
+   git sl
+   ```
+
+6. **Force-push with leases.** Fetch first, so each lease compares against the
+   current remote-tracking ref, then push every remaining branch:
+
+   ```bash
+   git fetch "$remote"
+   git push --force-with-lease "$remote" <branch-1> <branch-2> ... <branch-N>
+   ```
+
+7. **Confirm the next PR/MR targets main.** On GitHub, deleting the merged base
+   branch retargets it automatically; otherwise set it yourself:
+
+   ```bash
+   gh pr edit <next-PR-number> --base main
+   ```
+
+Because `-s` starts at the first remaining commit, the move never has to skip an
+already-merged patch, so a multi-commit squash needs no special handling. If a
+remaining commit's edits overlap the new upstream, the move conflicts (exit 1,
+nothing changed): stop and ask rather than hiding the still-live descendants
 (arxanas/git-branchless#965).
 
-If the whole stack has merged, the worktree ends up detached at the upstream tip
-with its branch deleted. That is the cue to tear the worktree down, not to
-submit again.
+Step 3's `-b` move, by contrast, skips a commit whose patch is already upstream
+and deletes its branch. It detects a squash of several commits only when their
+edits do not overlap, each applying as an empty commit; when they overlap, it
+conflicts.
 
 ### Out-of-order merge recovery
 
 If a PR is merged out of order (e.g., PR N+1 merged before PR N), the squash
 goes into the base branch — not main. Merge the base PR (N) next — it now
-contains both changes. After merging, re-run pre-flight step 5 (it fetches) and
-step 2 (selection and checks), then:
-
-```bash
-git move -b "$SELECTED" -d "$upstream"   # may only skip one of the two commits
-```
+contains both changes. After merging, the commits for both PRs are upstream:
+re-run pre-flight step 5 (it fetches), then run the squash-merge recipe above
+with `$SELECTED` limited to what remains, and `-s` on the first commit that is
+still unmerged.
 
 Do not try to update local `main` with `git branch -f main origin/main`: Git
-refuses it whenever another worktree has `main` checked out, and the move above
-does not need it.
+refuses it whenever another worktree has `main` checked out, and the move does
+not need it.
 
-If the move does not skip the already-merged commit, stop and ask. Do not move a
-descendant subtree or hide orphaned commits; either can reach another worktree's
-line.
+If a merged commit is still in the selection, stop and ask. Do not start the
+move at a merged commit or hide orphaned commits; either can reach another
+worktree's line.
 
 ## Addressing Review Feedback
 

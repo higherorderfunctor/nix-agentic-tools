@@ -100,6 +100,9 @@ introduced (typos, bug fixes, adjustments to existing code).
    git absorb --and-rebase --base <target-commit>^ -- --update-refs
    ```
 
+   The rebase does not run commit hooks: afterwards run the project's hook or
+   lint runner on the changed files (for example `prek run --files <files>`).
+
 6. **Verify the result** with `git sl` to show the updated stack.
 
 7. **Check for leftover changes**:
