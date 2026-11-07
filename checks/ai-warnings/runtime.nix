@@ -56,9 +56,6 @@ in {
     lib.hasInfix "workflows" (featureWarning {
       workflows.enable = true;
     })
-    && !(lib.hasInfix "global-feature" (featureWarning {
-      features.workflows.enable = true;
-    }))
     && lib.hasInfix "codeToSpec" (featureWarning {
       codeToSpec.enable = true;
     })
