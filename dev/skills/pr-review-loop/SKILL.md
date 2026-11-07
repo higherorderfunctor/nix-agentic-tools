@@ -165,6 +165,17 @@ It watches the run `gh workflow run` created, checked against the pushed commit,
 so no other run can pass for it. It stops on the first failed job instead of
 waiting for the slowest one, and every `gh` call has a time limit.
 
+When a stacked PR moves to `main`, two CI runs can start for its head and one of
+them is cancelled. The cancelled run leaves red contexts on the PR. Wait on the
+live run with `pr-watch.sh`, then merge once
+`gh pr view <pr> --json mergeStateStatus --jq .mergeStateStatus` prints `CLEAN`;
+the watcher reports `dirty`, never `CLEAN`.
+
+Some harness permission classifiers block `gh pr edit`, closing a PR and
+retargeting it, while allowing `gh pr create --draft`, `gh pr ready` and
+`gh workflow run`. Treat PR body and base changes as operator actions unless
+permission is given.
+
 ## Deciding whether a review is yours to read
 
 Three states look alike and only one means "reviewed, nothing found".
