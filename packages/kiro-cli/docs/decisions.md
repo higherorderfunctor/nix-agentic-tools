@@ -9,12 +9,12 @@ and where the mechanism lives. Decisions that already have a full write-up stay
 there; the last section only points at them.
 
 - **Release: v3 only, no backwards compatibility.** Options are pinned to the
-  current release and there is no engine option or v2 path. The package owns the
-  unwrapped derivation, built from the upstream tarballs, and its own Linux FHS
-  layer (`fhs-sandbox.md`). The updater reads the upstream release manifest, and
-  bumps run through the `update.yml` workflow with `targets=kiro-cli`
-  (`gh workflow run update.yml -f targets=kiro-cli`), never by hand. A
-  compatibility layer would need a conflict list that rots every release. See
+  current release. The package owns the unwrapped derivation, built from the
+  upstream tarballs, and its own Linux FHS layer (`fhs-sandbox.md`). The updater
+  reads the upstream release manifest, and bumps run through the `update.yml`
+  workflow with `targets=kiro-cli`
+  (`gh workflow run update.yml -f targets=kiro-cli`), never by hand. One pinned
+  release keeps every option checkable against the binary that ships. See
   `packages/kiro-cli/lib/release.nix`, `packages/kiro-cli/registry.nix`
   (`update.targets.kiro-cli`) and `.github/workflows/update.yml`.
 - **No new config root.** The wrapper and modules never set `KIRO_HOME`,
@@ -27,13 +27,14 @@ there; the last section only points at them.
   `packages/kiro-cli/checks/kiro-wrapper-argv.nix`, which fails a launcher
   carrying `KIRO_HOME` or `KIRO_DATA_DIR`.
 - **Options come in two tiers.** `ai.kiro.cli.<setting>` holds settings valid in
-  the repo-local `.kiro/settings.json`, plus knobs valid for both `chat` and
+  the repo-local `.kiro/settings/cli.json`, plus knobs valid for both `chat` and
   `acp`. `ai.kiro.cli.chat.*` and `ai.kiro.cli.acp.*` hold knobs that exist only
   as that subcommand's flag or environment variable. Options declare settings
   only, never one-off commands such as `--version` or `--resume`. The same
-  options exist on Home Manager and devenv; whatever falls outside the tiers is
-  a devenv gap that warns. This keeps each option's scope readable from its
-  path. See `packages/kiro-cli/lib/cliOptions.nix` and
+  options exist on Home Manager and devenv. Normalized delivery gaps warn
+  through `surfaceSupport`; native settings outside the workspace allowlist fail
+  evaluation on devenv. This keeps each option's scope readable from its path.
+  See `packages/kiro-cli/lib/cliOptions.nix` and
   `packages/kiro-cli/lib/mkKiro.nix`.
 - **Flag tables come from the extractor.** The classification of every extracted
   `cli.options.*` row, and the check that fails on an unclassified or stale one,
