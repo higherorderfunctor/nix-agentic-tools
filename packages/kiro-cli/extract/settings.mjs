@@ -151,7 +151,14 @@ const returnStatement = statements?.[2];
 const globalDecl = globalStatement?.declarationList?.declarations?.[0];
 const workspaceDecl =
   tryStatement?.tryBlock?.statements?.[0]?.declarationList?.declarations?.[0];
-const globalCall = globalDecl?.initializer;
+const globalInit = globalDecl?.initializer;
+// 3.0.0 seeds the merge from a global-loader call (`let e=ti()`). 3.1.0 seeds
+// it with `{}` and a separate caller composes `{...globalLoader(),...merge()}`.
+const globalCall = ts.isCallExpression(globalInit) ? globalInit : undefined;
+const emptySeed =
+  globalInit !== undefined &&
+  ts.isObjectLiteralExpression(globalInit) &&
+  globalInit.properties.length === 0;
 const workspaceCall = workspaceDecl?.initializer;
 const pathCall = workspaceCall?.arguments?.[0];
 const catchCall = tryStatement?.catchClause?.block?.statements?.[0]?.expression;
@@ -160,9 +167,12 @@ if (
   !ts.isVariableStatement(globalStatement) ||
   globalStatement.declarationList.declarations.length !== 1 ||
   !ts.isIdentifier(globalDecl.name) ||
-  !ts.isCallExpression(globalCall) ||
-  !ts.isIdentifier(globalCall.expression) ||
-  globalCall.arguments.length !== 0 ||
+  !(
+    emptySeed ||
+    (globalCall &&
+      ts.isIdentifier(globalCall.expression) &&
+      globalCall.arguments.length === 0)
+  ) ||
   !ts.isTryStatement(tryStatement) ||
   !ts.isVariableStatement(tryStatement.tryBlock.statements[0]) ||
   tryStatement.tryBlock.statements[0].declarationList.declarations.length !==
@@ -183,6 +193,43 @@ if (
   returnStatement.expression.text !== globalDecl.name.text
 )
   fail("workspace merge has an unsupported loader shape");
+
+// 3.1.0 only: exactly one zero-argument function whose whole body returns
+// `{...globalLoader(),...merge()}`, in that order and nothing else.
+let composer;
+let composerGlobalName;
+if (emptySeed) {
+  const composers = [];
+  const isZeroArgCall = (node, name) =>
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.arguments.length === 0 &&
+    (name === undefined || node.expression.text === name);
+  const findComposers = (node) => {
+    const ret = ts.isFunctionDeclaration(node)
+      ? node.body?.statements?.[0]
+      : undefined;
+    const object =
+      ret && ts.isReturnStatement(ret) ? ret.expression : undefined;
+    if (
+      object &&
+      node.parameters.length === 0 &&
+      node.body.statements.length === 1 &&
+      ts.isObjectLiteralExpression(object) &&
+      object.properties.length === 2 &&
+      object.properties.every(ts.isSpreadAssignment) &&
+      isZeroArgCall(object.properties[0].expression) &&
+      isZeroArgCall(object.properties[1].expression, merge.name.text)
+    )
+      composers.push({ node, global: object.properties[0].expression });
+    ts.forEachChild(node, findComposers);
+  };
+  findComposers(file);
+  if (composers.length !== 1)
+    fail("workspace merge has an unsupported loader shape");
+  composer = composers[0].node;
+  composerGlobalName = composers[0].global.expression.text;
+}
 
 const hasCalls = [];
 function checkMergeUses(node) {
@@ -241,11 +288,13 @@ const expectedMerged = Object.fromEntries(
 const mergeExpression =
   `(()=>{const ${registryName}=${registry.right.getText(file)};` +
   `const ${allowlistName}=${allowlist.right.getText(file)};` +
-  `const ${globalCall.expression.text}=()=>({...globalSettings});` +
+  `const ${emptySeed ? composerGlobalName : globalCall.expression.text}=()=>({...globalSettings});` +
   `const ${pathCall.expression.text}=()=>"fixture-path";` +
   `const ${workspaceCall.expression.text}=(path)=>{if(path!=="fixture-path")throw Error("path");return workspace};` +
   `const ${catchCall.expression.expression.text}={warn:()=>{throw Error("workspace read failed")}};` +
-  `${merge.getText(file)};return ${merge.name.text}()})()`;
+  (emptySeed
+    ? `${merge.getText(file)};${composer.getText(file)};return ${composer.name.text}()})()`
+    : `${merge.getText(file)};return ${merge.name.text}()})()`);
 let merged;
 try {
   merged = vm.runInNewContext(
