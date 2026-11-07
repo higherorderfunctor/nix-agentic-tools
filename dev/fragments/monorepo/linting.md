@@ -1,8 +1,9 @@
 ## Linting
 
-> **Last verified:** 2026-10-08 — local and CI cspell hooks tolerate batches
-> excluded entirely by ignorePaths while still failing spelling errors; the
-> separate shellcheck backend retains its empty-corpus guard. Full lineage:
+> **Last verified:** 2026-11-06 — a rule violated twice becomes a gate; local
+> and CI cspell hooks tolerate batches excluded entirely by ignorePaths while
+> still failing spelling errors; the separate shellcheck backend retains its
+> empty-corpus guard. Full lineage:
 > `git show f7189d05:dev/fragments/monorepo/linting.md`.
 
 `nix flake check` is the authoritative CI gate. Local hooks provide earlier
@@ -85,3 +86,24 @@ linting) — run it by hand or via the agnix MCP server.
 There is no shellharden in this repo, and no linter reads shell embedded in
 `.nix` strings beyond `writeShellApplication`'s own checkPhase. See the Bash
 coding standard for which sites that leaves unchecked.
+
+### A rule broken twice becomes a check
+
+When a written rule is violated a second time, stop adding prose and add a check
+that fails the build: a reviewer catching the same slip twice shows prose does
+not hold it.
+
+- **Prefer reshaping the code so the check can be syntax.** Deciding which
+  failures must abort is judgement and needs a suppression marker per false
+  positive forever; deciding whether a subshell sits in a status-tested context
+  is syntax. Where a restructure makes the safe form the default, the check
+  becomes one grep.
+- **Give the check a fixture self-test:** lines it must catch and lines it must
+  not, asserted before it scans anything real, so a check that quietly stops
+  discriminating fails loudly.
+- **Prove it by injection, not by rereading the pattern.** Inject the bypass and
+  confirm the check fires, and run a positive control: break the safe shape and
+  confirm it fires, or it passes vacuously once its target is renamed.
+- **Restore between negative controls from a real backup.** The command
+  `git checkout -- <file>` restores from the index, so damage you staged comes
+  back as the restored state.

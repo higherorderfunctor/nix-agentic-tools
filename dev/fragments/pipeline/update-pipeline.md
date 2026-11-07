@@ -1,9 +1,9 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-29 — updates run only as CI's per-target matrix,
-> and package lanes never build; fixture flake locks under
-> `checks/<concern>/flake.lock` are a third target kind, `update-lock.sh`; input
-> verification skips the CodeQL engines.
+> **Last verified:** 2026-11-06 — updates run only as CI's per-target matrix,
+> and package lanes never build; hashes come from the update tooling; fixture
+> flake locks under `checks/<concern>/flake.lock` are a third target kind,
+> `update-lock.sh`; input verification skips the CodeQL engines.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -188,6 +188,21 @@ file had no `rev`, e.g. mcp-proxy). The `checks.update-targets-parity` flake
 check now asserts every main-tracking target resolves to exactly one overlay
 carrying an inline rev AND that its declared `file` matches that resolver
 output, so the class fails at PR time rather than mid-pipeline.
+
+### Hashes come from the update tooling
+
+CI's update pipeline is the default producer of every hash; running the update
+script locally to derive one is also fine. Seeding or editing a hash by hand
+needs a reason worth reading. A patch for a future upstream version never ships
+ahead of that version's update.
+
+- When the pipeline cannot produce the hash (a stacked branch it never runs on,
+  a dependency not yet on `main`, a held-back update, or a case you have not met
+  before), bring the operator, before running anything heavy:
+  - why CI automation cannot produce it, and why it cannot run locally if not;
+  - what you propose instead, and its local build time, memory and disk.
+- Validate a delegate's claim about any of these before it reaches the operator.
+  The operator approves or vetoes; nothing is recorded afterward.
 
 ### config.update.targets (single source of truth)
 

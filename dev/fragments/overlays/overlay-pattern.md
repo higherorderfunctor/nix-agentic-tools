@@ -1,7 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
 > **Last verified:** 2026-11-06 — kiro-cli owns its payload derivation and its
-> Linux FHS env; pnpm_12 bootstrap has no hash fixers.
+> Linux FHS env; pnpm_12 bootstrap has no hash fixers; a hand hash edit needs a
+> reason.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -596,9 +597,10 @@ choice usually gets read as a question about the source shape. It mostly is not.
   change still needs the standalone fixer (`passthru.fixNpmDepsHash`,
   `passthru.fixPnpmDepsHash`, `passthru.fixVendorHash`,
   `passthru.rustUpdateExtract`) as an explicit escape hatch. Hashes are derived
-  by those fixers, never edited by hand. Inline re-derives every sweep and
-  therefore self-heals without that repair path. **Neither shape fails
-  silently**; do not write that one does.
+  by those fixers; a hand edit needs a reason worth reading (see the update
+  pipeline fragment). Inline re-derives every sweep and therefore self-heals
+  without that repair path. **Neither shape fails silently**; do not write that
+  one does.
 - **Record the inversion.** It corrects a belief this repo held: the rows still
   on plain `nix-update` are paying that uncacheable per-sweep cost TODAY, so
   "sidecars are legacy overhead from an older design" is close to backwards.

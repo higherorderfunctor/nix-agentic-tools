@@ -105,6 +105,11 @@ is worse than saying nothing: it looks like ownership and behaves like a block.
 Arm something that re-invokes you — a backgrounded watcher whose exit wakes the
 session — and only then report. Kill it once the signal arrives.
 
+Never close a message by offering to watch, poll or monitor a run ("want me to
+keep watching this?"). The operator tracks their own runs, so the offer is noise
+and hands them a decision that is yours. Report the run or URL your watcher
+covers instead.
+
 On every push to a PR against `main`, including the first:
 
 1. **Watch the PR until its first change.** Run the `pr-review-loop` skill's
@@ -212,6 +217,14 @@ runs multiple parallel sessions that share that cwd, so every one of them
 started failing the shared lint hooks on a file none of them had written, while
 the drafting session was the only one that could not see the damage. The primary
 checkout belongs to the operator, not to any agent session.
+
+A brief relayed from another repository or session carries the authority of its
+own context, not this repository's. Pasting one adopts its technical content; it
+does not repeal this repository's workflow. Where its process instructions
+conflict with these rules, such as where commits go or whether a worktree and PR
+are needed, follow this repository and say so in a sentence or two. The fault is
+resolving the conflict silently, and a brief's process claims can be as stale as
+its technical ones.
 
 Pre-flight before the first Write/Edit of any repo file in a session:
 
@@ -373,6 +386,22 @@ reviewer, and they would rather review the right shape once.
 
 Open a separate PR when the change is genuinely unrelated to any open one.
 
+**A PR is not ready while the ask it answers is still broken.** Keep working the
+same PR, and report progress against that ask rather than listing known open
+items as news. Each later review covers the delta since the last reviewed
+commit, unless a review surfaced something that needs a wider look.
+
+**No shim to keep an old shape alive.** This repository is its own only
+consumer, so a renamed or removed option, or a changed published-content shape
+(`packages/coding-standards/`, published rulesets), gets no compatibility alias,
+deprecation window or shim. State before and after in the PR body and change it
+outright; a shim is code nothing needs.
+
+**One PR, decided by coupling.** If a reviewer must read both changes to judge
+either, they ship together. Docs, tests, fragments, checks and config count as
+part of the change they describe or gate, so they are never a second PR. Wanting
+speed is not a reason to split.
+
 ### Bot `update/*` PRs land themselves
 
 `.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
@@ -441,6 +470,22 @@ or new complete hook rather than a partially truncated script. The upstream
 installer still runs immediately before the rewrite task in each shell's devenv
 DAG; do not split or reorder that dependency edge.
 
+**Another session's worktree under `<repo>-worktrees/` is never yours.** Do not
+enter, edit, rebase or remove it, whatever the operator mentions about its
+branch: naming a branch is context, not a work order. The teardown in step 7 is
+only for the worktree you created. Read its branch through a fetched PR head,
+which touches nothing there:
+
+```bash
+git fetch origin pull/<N>/head
+git show FETCH_HEAD:<path>
+```
+
+A change that belongs on that branch goes to its owner as a pasteable prompt
+saying what to edit and why. An ambiguous offer to carry a change over means
+ask, or write the prompt. If you already edited one, stop, do not commit or
+push, and report the dirty files so the owning session is not ambushed.
+
 One more shared thing, and it lives outside the repository entirely: **the
 agent's own memory directory is shared across concurrent sessions, and no
 session sees another's writes.** There is no locking and no notification — a
@@ -499,3 +544,22 @@ Lockfile conflicts (`flake.lock`, `devenv.lock`) during a rebase are
 **regenerated, never hand-merged**: take the base's copy, then re-run
 `nix flake lock` (and let devenv reconcile `devenv.lock`) so the result matches
 the merged `flake.nix` / `devenv.yaml`.
+
+**Force-pushing a branch you own needs no confirmation** once its
+`archive/<slug>/<what>` backup is pushed: your PR or stack branch after a rebase
+or restack. The backup makes the rewrite recoverable, so asking is friction. Use
+`--force-with-lease=<branch>:<expected-sha>`. This does not cover `main`,
+another session's branch, or deleting a branch.
+
+**Never chain a push, force-push or PR reply after `git commit` or an amend
+without testing its exit.** Hook rejections (cspell, statix, convco) are
+routine, and a pipeline reports only its last command's status:
+
+```bash
+if git commit -m "$msg"; then git push origin HEAD; else echo FAILED; fi
+```
+
+A failed commit followed by a force-push of HEAD can leave the PR branch at
+`origin/main`; GitHub then sees an empty diff and auto-closes the PR. Before any
+reply that names a sha, confirm the remote head equals local `HEAD` and that
+`HEAD` is not `origin/main`.

@@ -1,10 +1,11 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-10-29 — shared guidance uses individually named
-> always-on rules; scoped rules keep registry matchers and references. Local
-> AGENTS.md and readable `.agents/rules/` indexes are generated and gitignored.
-> Copilot receives selected named rules through `.github/instructions/` and
-> writes unnamed context independently to `.github/copilot-instructions.md`.
+> **Last verified:** 2026-11-06 — shared guidance uses individually named
+> always-on rules; scoped rules keep registry matchers and references; authoring
+> rules and a content-level audit are stated. Local AGENTS.md and readable
+> `.agents/rules/` indexes are generated and gitignored. Copilot receives
+> selected named rules through `.github/instructions/` and writes unnamed
+> context independently to `.github/copilot-instructions.md`.
 
 This repo ships path-scoped architecture fragments as dev-only context for
 agents working on it. They are SEPARATE from the published consumer-facing
@@ -77,6 +78,30 @@ commit, not a follow-up.
 This is not an etiquette rule. Research on LLM context shows out-of-date
 instructions degrade task success more than missing instructions. A lie is worse
 than silence.
+
+When you add or restructure a concept, audit the text inside every surface that
+grows with it, not only which files changed or what the generated output shows:
+fragment registrations and profiles, README examples, cspell terms and generator
+inputs. A reference to something that does not exist yet passes a file-level
+check and misleads every later reader; a generator input that names it spreads
+the reference to every output.
+
+### Authoring rules for fragments and skills
+
+These sources fan out to four runtimes, so they are read as steering, not as
+conversation.
+
+- **Write the rule, never quote the operator.** Interactive prose is not
+  steering grade; state the rule it implied in your own words.
+- **Every directive is gradeable.** If two competent agents with the same diff
+  could reach opposite conclusions about whether it applies, it is a defect. Key
+  it to something observable: a path from `git diff --name-only`, an exit code,
+  a count, a named check, or an event that already happened.
+- **Skills ride the `ai.skills` fanout.** Register a skill there (`dev/ai.nix`,
+  `<name> = ./skills/<name>;`) and never place one by hand: a hand-placed copy
+  is a second source of truth.
+- **The fragment owns when and whether; the skill owns how.** Neither restates
+  the other.
 
 ### The marker is ONE entry, not a changelog
 

@@ -43,14 +43,15 @@ BEFORE that does not parse).
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-10-01 — generated trees evaluate the exported treefmt
-> module with `ai.formatter` layered on top; one guard table stamps `ai.guards`
-> and carries phase and runtime selection; whole Markdown files are formatted
-> and parsed frontmatter values are compared; generated frontmatter quotes
-> scalar data centrally; tableCells pairs rumdl and markdownlint for distinct
-> MD056 cases; raw copies bypass format guards, while the Kiro runtime-shape
-> guard inspects their delivered Markdown; consumer checks default the Kiro
-> guard on for Kiro steering and Markdown agent paths only.
+> **Last verified:** 2026-11-06 — the formatter and guard option surface has
+> settled rejections; generated trees evaluate the exported treefmt module with
+> `ai.formatter` layered on top; one guard table stamps `ai.guards` and carries
+> phase and runtime selection; whole Markdown files are formatted and parsed
+> frontmatter values are compared; generated frontmatter quotes scalar data
+> centrally; tableCells pairs rumdl and markdownlint for distinct MD056 cases;
+> raw copies bypass format guards, while the Kiro runtime-shape guard inspects
+> their delivered Markdown; consumer checks default the Kiro guard on for Kiro
+> steering and Markdown agent paths only.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the
@@ -229,6 +230,24 @@ sends people looking for one:
 
 mdformat was rejected on output quality as much as on rewrap: it also escapes
 `\<150` and wikilink brackets, and renumbers ordered lists.
+
+### The formatter and guard option surface is settled
+
+Each of these was tried and rejected; reopen one only with new evidence.
+
+- **`ai.formatter` lives at the root only**, never under `ai.settings`, which
+  means normalized runtime intent, nor per surface or per runtime: the formatter
+  axis is file type.
+- **No frontmatter split and restore.** Safety comes from the guards and the
+  whole-file format above, not a byte freeze.
+- **No `ai.<runtime>.checks.all`.** It would put a diamond in the lattice
+  (`ai.checks.all`, then `ai.checks.<surface>`, then
+  `ai.<runtime>.checks.<surface>`), and agnix findings differ by target tool on
+  the same files.
+- **Guard records carry no `scope`, `surface` or function-valued `enabledBy` or
+  `program`.** A callable loader (`kiro-cli agent validate`) beats a shape rule.
+- **Kiro `format` is per record only.** A runtime-wide default was rejected, and
+  raw forms have no `format`.
 
 ### Two traps when validating a reflow
 

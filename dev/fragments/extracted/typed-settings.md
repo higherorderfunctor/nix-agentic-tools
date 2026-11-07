@@ -1,13 +1,14 @@
 # Extracted facts: typed settings and their render
 
-> **Last verified:** 2026-10-23 — `lib/extracted/options.nix` types the
-> CLIProxyAPI and CPA Manager Plus node trees with nullable container children
-> and `secretFile` nodes, and refuses a refinement row that would apply on a
-> node with a secret or secret-file descendant; a refinement row on a list node
-> receives its element type; `render.nix` lifts secrets and secret files into
-> `{$NAME}` placeholders and refuses a malformed `_redact` marker; `goTest` runs
-> each owner's loader check; kiro-cli types its four `chat`/`acp` launch options
-> from `--help` tables through it.
+> **Last verified:** 2026-11-06 — extracted keys become options with no human
+> gate and an update fails only on a real conflict; `lib/extracted/options.nix`
+> types the CLIProxyAPI and CPA Manager Plus node trees with nullable container
+> children and `secretFile` nodes, and refuses a refinement row that would apply
+> on a node with a secret or secret-file descendant; a refinement row on a list
+> node receives its element type; `render.nix` lifts secrets and secret files
+> into `{$NAME}` placeholders and refuses a malformed `_redact` marker; `goTest`
+> runs each owner's loader check; kiro-cli types its four `chat`/`acp` launch
+> options from `--help` tables through it.
 
 Two owners, CLIProxyAPI and CPA Manager Plus, get typed settings from their
 reconciled facts through one generator. The four older generators
@@ -105,3 +106,26 @@ extractor file. Each owner's `<owner>-settings` check evaluates `sample` through
 escapes, and runs an in-package `settings_test.go` against the tool's own
 loader. `checks.extracted-options` covers the generator and render on fixtures
 and requires every owner exporting `settingsType` to report empty.
+
+## Update policy and option surfaces
+
+Extracted keys become options with no human gate: a per-key review ledger would
+re-add the manual step extraction exists to remove, and a mis-classified key is
+cheap because a secret-capable option always has the reference form. Secret
+restriction comes from one classifier in library code,
+`lib/redact/classify.nix`, applied when options are generated.
+
+An update fails only on a real conflict: an extracted file or a large extraction
+surface disappears, or module code depends on an expected field that would then
+fail evaluation. Everything else, new names and individual removed names
+included, flows. Per-name `reconcile` classification stays on its current owners
+and is not extended to more.
+
+An option surface describing a packaged binary mirrors that binary. Enums (model
+ids, hook events, effort levels) are extracted into a committed, drift-checked
+sidecar, never hand-curated, and the extractor asserts the captured shape, not
+just non-emptiness. The guard must live in the extractor: the update regenerates
+the sidecar inside the same PR, so a collapsed extraction becomes the new truth
+and the drift check alone stays green. A freeform settings key the binary really
+reads is promoted to a typed option, because freeform passthrough accepts a typo
+silently while a typed option fails at evaluation.
