@@ -213,6 +213,7 @@ if (emptySeed) {
       ret && ts.isReturnStatement(ret) ? ret.expression : undefined;
     if (
       object &&
+      node.parent === file &&
       node.parameters.length === 0 &&
       node.body.statements.length === 1 &&
       ts.isObjectLiteralExpression(object) &&
@@ -226,6 +227,27 @@ if (emptySeed) {
   };
   findComposers(file);
   if (composers.length !== 1)
+    fail("workspace merge has an unsupported loader shape");
+  // The composer calls `merge` by spelling alone, so the name must resolve to
+  // the one discovered top-level function: a nested or sloppy-mode redeclared
+  // binding would make the composer call something else.
+  let mergeDeclarations = 0;
+  const countMergeDeclarations = (node) => {
+    if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isVariableDeclaration(node) ||
+        ts.isParameter(node)) &&
+      node.name &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === merge.name.text
+    )
+      mergeDeclarations += 1;
+    ts.forEachChild(node, countMergeDeclarations);
+  };
+  countMergeDeclarations(file);
+  if (mergeDeclarations !== 1)
     fail("workspace merge has an unsupported loader shape");
   composer = composers[0].node;
   composerGlobalName = composers[0].global.expression.text;
