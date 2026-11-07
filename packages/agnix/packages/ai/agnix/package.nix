@@ -28,12 +28,12 @@
     recipeFile = repoPath ./package.nix;
   };
 
-  rev = "4926685333ad34df98c6196d3508c466561b439c";
+  rev = "a3cdab57e32d3b31ffe36b5b3787fd311520c9ce";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-EB2TimCQgNQ3qNqa45bEXmm8ZIPMhUZlZLXyh75JZDY=";
+    hash = "sha256-73+RztupvciQKg9jtln83nk+2K9yD2/PkCTMYhRUe/Y=";
   };
 in
   rustPlatform.buildRustPackage {
