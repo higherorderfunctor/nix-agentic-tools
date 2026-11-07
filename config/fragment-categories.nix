@@ -103,6 +103,7 @@
     ai-inference = {
       scopes = [
         "checks/ai-inference/**"
+        "lib/ai/app/mkBackendTransform.nix"
         "lib/ai/inference/**"
         "packages/chatgpt-codex/lib/inference.nix"
         "packages/claude-code/lib/inference.nix"
@@ -192,6 +193,7 @@
         "ai-module-fanout"
         "collision-semantics"
         "layered-fanout"
+        "runtime-support"
         "shell-option"
       ];
     };
@@ -256,10 +258,11 @@
       ];
       sources = ["skills-fanout-pattern"];
     };
-    # Architecture decisions apply to every repository task.
+    # The architecture router applies to every repository task; the decisions
+    # live in the owner documents it lists.
     architecture = {
       scopes = null;
-      sources = ["architecture" "architecture-isolation"];
+      sources = ["architecture"];
     };
     # devenv: devenv files.* internals + skills layout walker. Scoped
     # to per-package devenv modules and the helper file.
@@ -282,6 +285,7 @@
         "lib/git-tool-settings/**"
         "packages/*/extract/**"
         "packages/*/extracted/**"
+        "packages/*/sources.json"
         "packages/chatgpt-codex/lib/**"
         "packages/claude-code/lib/**"
         "packages/cliproxyapi/lib/**"

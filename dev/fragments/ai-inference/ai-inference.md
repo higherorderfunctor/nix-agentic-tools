@@ -1,11 +1,37 @@
 ## ai.settings.inference: selecting an inference endpoint for AI harnesses
 
-> **Last verified:** 2026-10-29 — proxy owners register instances in
+> **Last verified:** 2026-11-07 — carries the architecture decision for
+> inference selection; proxy owners register instances in
 > `ai.internal.inferenceInstances`, with or without named clients; set root
 > fields copy down by priority and are withdrawn for a runtime selecting the
 > other form; the selected instance's backend picks the one lowering a runtime
 > runs, and a runtime without it fails an assertion. Upstream credentials are in
 > `packages/cliproxyapi/docs/cliproxyapi-providers.md`.
+
+### Architecture decisions
+
+- **Inference selection is runtime library code.** Inference proxy owners add
+  their instances to one registry, `ai.internal.inferenceInstances`, by ordinary
+  module merge and claim each name in `ai.claims.inference-instance`;
+  `lib/ai/inference` names no owner except one: an external `url` + `key`
+  selection has no registry entry, so it lowers as `cliproxyapi`, named once in
+  `externalBackend`. An instance's `clients` are optional, so an owner whose
+  instances take no client key registers none. Root `ai.settings.inference`
+  copies its set fields down to `ai.<runtime>.settings.inference` at default
+  priority, so a runtime value wins field by field; a runtime selecting the
+  other form (`instance` vs `url`) inherits none of the root's fields of that
+  form; `instance = null` opts a runtime out. The selected instance's backend
+  picks the one lowering a runtime runs, and a runtime without that lowering
+  fails an assertion naming the backend. Everything a backend sets, launcher
+  flags included, lives in its lowering. Lowerings set native values at default
+  priority, so a consumer's own native value wins. Only the selected backend's
+  settings apply, so a runtime selecting another backend never gets CPA's base
+  URL, `apiKeyHelper`, auth clearing or picker rows; an unknown instance fails
+  evaluation. Vetted 2026-10-28. This keeps a second proxy owner a module merge
+  rather than an edit to a shared owner table, and keeps a consumer's override a
+  plain definition. See `lib/ai/inference/default.nix`,
+  `lib/ai/app/mkBackendTransform.nix`, `packages/claude-code/lib/inference.nix`
+  and `packages/chatgpt-codex/lib/inference.nix`.
 
 `ai.settings.inference` selects a registered proxy instance or an external
 CLIProxyAPI endpoint for a harness. The selected instance's backend determines

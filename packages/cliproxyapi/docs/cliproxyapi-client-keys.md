@@ -1,8 +1,20 @@
 ## CLIProxyAPI instance client keys and routes
 
-> **Last verified:** 2026-10-29 — named client keys generate CPA access keys and
-> allowlist rules from credential routes. Conflicting hand-written entries are
-> refused.
+> **Last verified:** 2026-11-07 — carries the proposed architecture decision for
+> named routing; named client keys generate CPA access keys and allowlist rules
+> from credential routes. Conflicting hand-written entries are refused.
+
+## Architecture decisions
+
+- **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
+  `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
+  `clientKeys` once. Each client key routes only to named upstream credentials;
+  OAuth rules carry exact auth-file IDs, API-key rules carry exact base URLs,
+  and one API table lowers those credentials. A Harness selects
+  `settings.inference = {instance; clientKey;}` without publishing keys or
+  rules. External `url` + `key` selections add nothing to Instances. See
+  `lib/ai/inference/default.nix`, `packages/cliproxyapi/lib/providers.nix` and
+  `packages/cliproxyapi/modules/instances.nix`.
 
 `ai.cliproxyapi.instances.<name>` registers an enabled instance at
 `http://127.0.0.1:<port>`. Each `clientKeys.<name> = {key; routes;}` entry

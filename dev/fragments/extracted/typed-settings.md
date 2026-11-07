@@ -1,14 +1,30 @@
 # Extracted facts: typed settings and their render
 
-> **Last verified:** 2026-11-06 — extracted keys become options with no human
-> gate and an update fails only on a real conflict; `lib/extracted/options.nix`
-> types the CLIProxyAPI and CPA Manager Plus node trees with nullable container
-> children and `secretFile` nodes, and refuses a refinement row that would apply
-> on a node with a secret or secret-file descendant; a refinement row on a list
-> node receives its element type; `render.nix` lifts secrets and secret files
-> into `{$NAME}` placeholders and refuses a malformed `_redact` marker; `goTest`
-> runs each owner's loader check; kiro-cli types its four `chat`/`acp` launch
-> options from `--help` tables through it.
+> **Last verified:** 2026-11-07 — carries the architecture decision for the
+> extracted generator; extracted keys become options with no human gate and an
+> update fails only on a real conflict; `lib/extracted/options.nix` types the
+> CLIProxyAPI and CPA Manager Plus node trees with nullable container children
+> and `secretFile` nodes, and refuses a refinement row that would apply on a
+> node with a secret or secret-file descendant; a refinement row on a list node
+> receives its element type; `render.nix` lifts secrets and secret files into
+> `{$NAME}` placeholders and refuses a malformed `_redact` marker; `goTest` runs
+> each owner's loader check; kiro-cli types its four `chat`/`acp` launch options
+> from `--help` tables through it.
+
+## Architecture decisions
+
+- **Typed settings come from the extracted generator.** An owner with extracted
+  settings facts gets its option type from `lib/extracted/options.nix` and its
+  config file from `lib/extracted/render.nix`, which lifts secrets into
+  placeholders. This avoids duplicating type and render logic over extracted
+  facts. The four older generators (claude-code, kimchi, glab, git tools)
+  migrate to it as separate work; never add another. Native option surfaces come
+  from this machinery; normalized `ai.*` surfaces map onto them, never a
+  parallel tree, and one without a lossless native mapping is an explicit
+  exclusion (vetted 2026-11-07). See
+  `dev/fragments/extracted/typed-settings.md`,
+  `dev/fragments/hm-modules/module-conventions.md` and
+  `packages/coding-standards/fragments/config-parity.md`.
 
 Two owners, CLIProxyAPI and CPA Manager Plus, get typed settings from their
 reconciled facts through one generator. The four older generators

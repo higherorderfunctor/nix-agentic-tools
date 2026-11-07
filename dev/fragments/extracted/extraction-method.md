@@ -1,8 +1,19 @@
 # Extraction method: eval, then AST, then regex
 
-> **Last verified:** 2026-10-21 — added the rule to identify a binding by its
+> **Last verified:** 2026-11-07 — carries the architecture decision to pin only
+> the current upstream release; added the rule to identify a binding by its
 > checker symbol, and its spelling fallback where the global is undeclared; a
 > dataflow question goes to CodeQL, between eval and AST.
+
+## Architecture decisions
+
+- **Packages pin the current upstream release only.** No backwards compatibility
+  with older releases: option surfaces and extracted facts describe the pinned
+  version only. This keeps one shape to extract, type and test. Vetted
+  2026-11-07. See each owner's `sources.json` pins, the update pipeline
+  (`dev/fragments/pipeline/update-pipeline.md`) and
+  `dev/fragments/extracted/extraction-method.md`, rule "Support only the pinned
+  version".
 
 Every extractor picks the least brittle method its source allows. The method
 follows the SOURCE, not the author's habit.

@@ -165,7 +165,6 @@
       ];
       sharedAlways = [
         "architecture"
-        "architecture-isolation"
         "build-commands"
         "change-propagation"
         "coding-standards"
