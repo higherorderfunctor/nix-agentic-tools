@@ -3,6 +3,7 @@
   anthropic = {
     fable = {
       avoidFor = "routine delegate work (2× Opus cost); research at low effort (answers from memory); over-prescriptive prompts degrade it";
+      defaultEffort = "medium";
       effort = "medium for bounded judgment, high for investigation, xhigh only for runs over 30 min, max buys nothing over xhigh";
       match = "claude-fable-*";
       orchestration = "reserved for hard work";
@@ -18,6 +19,7 @@
     };
     opus = {
       avoidFor = "mechanical work (10× Haiku price)";
+      defaultEffort = "medium";
       effort = "medium default, high when more reasoning is needed; returns flatten after medium";
       match = "claude-opus-*";
       orchestration = "default orchestrator";
@@ -26,6 +28,7 @@
     };
     sonnet = {
       avoidFor = "spec or plan synthesis; \"find the approach\" work (Opus/medium is the better buy)";
+      defaultEffort = "medium";
       effort = "medium default, high when the bar is modest, never xhigh or max";
       match = "claude-sonnet-*";
       tier = "mid";

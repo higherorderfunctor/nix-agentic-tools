@@ -40,6 +40,7 @@
     # toFile: the rows hold no store paths, and evaluation can read it back.
     picker = builtins.toFile "claude-inference-model-picker.json" (builtins.toJSON {modelPicker.options = rows;});
   in {
+    modelPickerOptions = rows;
     # Claude reads and caches this descriptor before applying settings env.
     # A settings-only blank therefore still leaks its key to the proxy.
     # devenv's picker rows travel as `--settings`, the one non-user scope a
@@ -81,6 +82,8 @@
       (inferenceLowering.lower (builtins.seq backend (builtins.seq resolvedInference request))).launcherFlags or [];
   in {
     inherit (inferenceLowering) assertions;
+    # Consumers of the published picker ids use the lowering's evaluated rows.
+    modelPickerOptions = request: (inferenceLowering.lower request).modelPickerOptions or [];
     config = {
       backend,
       resolvedInference,

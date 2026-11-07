@@ -98,6 +98,16 @@
   kiroTweaksDeclared = lib.hasAttrByPath ["ai" "kiro" "cli" "tweaks"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = familyFunctions.effectiveTechniques config;
+  agentFiles = import ../lib/agent-files.nix {inherit lib;};
+  inference = import ../../../lib/ai/inference {inherit lib;};
+  pickerRows = (import ../../claude-code/lib/inference.nix {inherit lib pkgs;}).modelPickerOptions {
+    inherit backend;
+    resolvedInference = inference.resolve (config.ai.internal.inferenceInstances or {}) (config.ai.claude.settings.inference or {
+      instance = null;
+      url = null;
+    });
+  };
+  resolvedAgentFiles = agentFiles.resolve (agentFiles.facts.models ++ map (row: row.model) pickerRows) (select portable.families models.claude);
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
   names = lib.unique (map (family: family.name) flattenedFamilies);
@@ -156,6 +166,11 @@ in {
               type = lib.types.str;
               default = "";
               description = "Tasks this family should avoid.";
+            };
+            defaultEffort = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum agentFiles.facts.effortLevels);
+              default = null;
+              description = "Default effort pinned in the generated Claude agent file; null omits the pin.";
             };
             effort = lib.mkOption {
               type = lib.types.str;
@@ -272,7 +287,7 @@ in {
       inherit backend supportedRuntimes;
       skills = {runtime, ...}: {
         delegate-routing = "${defaults.passthru.mkSkill {
-          inherit runtime models techniques;
+          inherit runtime models techniques resolvedAgentFiles;
           inherit (portable) families pools;
           inherit (resolved runtime) routing skill workflows;
           inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
@@ -289,6 +304,11 @@ in {
 
   config = {
     ai = lib.mkMerge [
+      {
+        claude.agents =
+          lib.mkIf (sourceEnabled "claude" && techniques.claude."Agent with generated agent file".enable)
+          (lib.mapAttrs (_: entry: lib.mkDefault (agentFiles.render entry)) resolvedAgentFiles);
+      }
       (lib.genAttrs supportedRuntimes (runtime:
         lib.mkIf (sourceEnabled runtime)
         (lib.setAttrByPath (
