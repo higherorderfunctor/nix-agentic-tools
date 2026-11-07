@@ -78,8 +78,10 @@ database, logs included, from 113 to 216 MB.
 
 ### The patch step
 
-Kimchi's `package.json` `pnpm.patchedDependencies` names its dependency patches.
-Each patch whose package is carried is applied to the carried tree with
+Kimchi's `pnpm-workspace.yaml` top-level `patchedDependencies` names its
+dependency patches. Nix converts this non-empty mapping to JSON once for CodeQL
+and `install-runtime.mjs`; a missing or empty mapping fails the build. Each
+patch whose package is carried is applied to the carried tree with
 `git apply --ignore-space-change`. Every context line must match, allowing
 whitespace changes; pnpm compares lines after trimming trailing whitespace only.
 GNU patch with zero fuzz rejects two shapes pnpm accepts in the pi 1.3.0

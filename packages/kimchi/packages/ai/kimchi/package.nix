@@ -39,6 +39,16 @@
     name = "${versionedName}-source";
     inherit (extraction.kimchiSource) hash url;
   };
+  # CodeQL and the workflow runtime verify the same dependency patch map.
+  patchedDependencies =
+    pkgs.runCommand "kimchi-patched-dependencies-${sources.version}.json" {
+      nativeBuildInputs = [pkgs.jq pkgs.yq-go];
+    } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      yq -o=json '.patchedDependencies' ${kimchiSource}/pnpm-workspace.yaml \
+        | jq -e 'if type == "object" and length > 0 then . else error("pnpm-workspace.yaml: patchedDependencies must be a non-empty mapping") end' > "$out"
+    '';
   piAgentCorePackage = fetchExtraction extraction.piAgentCorePackage;
   piAiPackage = fetchExtraction extraction.piAiPackage;
   piMcpAdapterPackage = fetchExtraction extraction.piMcpAdapterPackage;
@@ -79,7 +89,7 @@
     inherit (extractionSources) kimchi;
     # TypeBox 1.3.27 supplies pi declarations to extract.mjs; Kimchi runs 1.3.7.
     dependencies = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi" "typebox"]);
-    inherit pkgs;
+    inherit patchedDependencies pkgs;
     inherit (sources) version;
   };
   # The `network` fact: ../../../lib/network.nix.
@@ -387,7 +397,7 @@ in
 
     passthru =
       {
-        inherit codeql externalizedExtensions externalizeExtensions fixPnpmDepsHash goFloor goModPath network proxyHelper requestEvidence;
+        inherit codeql externalizedExtensions externalizeExtensions fixPnpmDepsHash goFloor goModPath network patchedDependencies proxyHelper requestEvidence;
         inherit (goUpdate) fixGoFloor fixVendorHash;
         extractedRules = import ../../../extract/rules.nix {
           inherit extractedLib pkgs;

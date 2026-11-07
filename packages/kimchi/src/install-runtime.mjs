@@ -103,8 +103,8 @@ if (process.argv[4] === "pack") {
     .map((id) => path.join(output, "node_modules/.runtime", id));
   fs.mkdirSync(path.join(output, "tarballs"));
   if (!configuration.packages) directories.push(output);
-  const patches = configuration.patchedSource
-    ? manifestAt(configuration.patchedSource).pnpm.patchedDependencies
+  const patches = configuration.patchedDependencies
+    ? JSON.parse(fs.readFileSync(configuration.patchedDependencies, "utf8"))
     : {};
   const staging = fs.mkdtempSync(path.join(tmpdir(), "kimchi-pack-"));
   try {
