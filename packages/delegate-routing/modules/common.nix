@@ -23,6 +23,7 @@
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   optionPaths = import ../../../lib/ai/option-paths.nix {inherit lib pkgs;};
   reminder = import ../lib/reminder.nix {inherit lib pkgs;};
+  workflowResumeDirectory = "~/.claude/projects";
   # Home Manager has no Kimchi hook file.
   hookRuntimes = ["claude" "codex" "kiro"] ++ lib.optional (backend == "devenv") "kimchi";
   reminderProgram = (import ../../../lib/ai/program.nix {inherit lib;}).mkProgram {
@@ -316,6 +317,34 @@ in {
           then ["native" "settings" "env"]
           else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
         ) (usageEnvironment runtime))))
+      (lib.mkIf (sourceEnabled "claude" && techniques.claude.Workflow.enable) {
+        # Plain lists coexist with consumer directories; mkForce opts out.
+        claude.native.settings.permissions.additionalDirectories = [workflowResumeDirectory];
+      })
+      (lib.optionalAttrs (backend == "devenv") (lib.mkIf (
+          sourceEnabled "claude"
+          && techniques.claude.Workflow.enable
+          # No managed package means no wrapper to add the flag named by the hook.
+          && lib.attrByPath ["ai" "claude" "package"] null config != null
+        ) {
+          claude = {
+            # A consumer mkForce that drops the directory leaves the wrapper
+            # without the flag, so the notice would name a flag nobody added.
+            hooks.SessionStart = lib.mkIf (builtins.elem workflowResumeDirectory config.ai.claude.untrustedProjectAdditionalDirectories) [
+              {
+                hooks = [
+                  {
+                    command = import ../lib/workflow-resume.nix {
+                      inherit lib pkgs;
+                      directory = workflowResumeDirectory;
+                    };
+                  }
+                ];
+              }
+            ];
+            untrustedProjectAdditionalDirectories = [workflowResumeDirectory];
+          };
+        }))
       {
         programs.delegate-routing = {
           families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;

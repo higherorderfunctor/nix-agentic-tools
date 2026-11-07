@@ -6,7 +6,7 @@
 # `native.settings` at default priority, so the settings.json each backend
 # already writes (user on Home Manager, project on devenv) carries them and a
 # consumer's own value for a leaf wins; optional `launcherFlags` reach the
-# managed launcher.
+# managed launcher. The same launcher guarantees untrusted-project directory access.
 #
 # CLIProxyAPI's lowering turns each routed upstream credential's models into
 # `/model` picker rows; where each backend delivers them, and why, is in
@@ -98,10 +98,13 @@
     }:
       lib.ai.mkLauncher pkgs {
         exe = "claude";
-        flags = launcherFlags {
-          inherit backend;
-          resolvedInference = resolvedSettings.inference;
-        };
+        flags =
+          (launcherFlags {
+            inherit backend;
+            resolvedInference = resolvedSettings.inference;
+          })
+          ++ lib.optionals (backend == "devenv")
+          ((import ./untrustedProjectDirs.nix {inherit lib pkgs;}).flags cfg.untrustedProjectAdditionalDirectories);
         name = "claude-code-inference";
         inherit (cfg) package;
       };

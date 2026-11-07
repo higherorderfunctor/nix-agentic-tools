@@ -1,7 +1,8 @@
 # Architecture
 
-> **Last verified:** 2026-11-07 — repository architecture decisions; the
-> Isolation decisions are in `architecture-isolation.md`.
+> **Last verified:** 2026-11-07 — repository architecture decisions, including
+> untrusted-project directory delivery; the Isolation decisions are in
+> `architecture-isolation.md`.
 
 HITL-vetted decisions about how this repository is built. Each entry is a rule,
 its reason, and where the mechanism lives. Before adding a mechanism, check this
@@ -114,11 +115,17 @@ hoc machinery beside an existing abstraction.
   corresponding variable. Prefer a runtime settings file that honors the value
   (a file read only for trusted projects does not count), then an environment
   wrapper default the user's environment can override, then a CLI flag. Project
-  trust is never a delivery mechanism; trusting a project is opt-in in
+  trust is never a delivery mechanism for proxy traffic, and never the only
+  delivery mechanism for anything: when a project setting is the natural home,
+  the launcher wrapper guarantees the same effect for an untrusted project.
+  Claude's wrapper appends `--add-dir` from
+  `ai.claude.untrustedProjectAdditionalDirectories` when its trust map does not
+  trust the launch directory; the same wrapper check can serve other
+  project-scope settings later. Trusting a project is opt-in in
   `devenv.local.nix`. Native user values win; unsupported runtimes warn through
   `surfaceSupport`. `proxy.instance` selects an `ai.internal.proxyInstances`
   entry, which airlock registers; registries are per evaluation, so Home Manager
-  and devenv share none. Vetted 2026-10-30. See `lib/ai/proxy.nix`,
+  and devenv share none. Vetted 2026-11-07. See `lib/ai/proxy.nix`,
   `lib/ai/sharedOptions.nix`, `lib/ai/app/mkBackendTransform.nix` and
   `dev/fragments/ai-proxy/ai-proxy.md`.
 - **PROPOSAL (not yet vetted): Network proxy instance selection.** Owners

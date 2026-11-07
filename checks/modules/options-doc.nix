@@ -47,7 +47,12 @@
       hm = ["glab" "mcp-services"];
     };
     backendOnly = {
-      devenv = ["ai.codex.trustProjectForSession"];
+      devenv = [
+        # Project settings need a launcher fallback before trust; HM user settings
+        # already apply independently of project trust.
+        "ai.claude.untrustedProjectAdditionalDirectories"
+        "ai.codex.trustProjectForSession"
+      ];
       hm = ["ai.claude.native.installMethod" "ai.claude.native.unpinLaunchEffort" "ai.codex.pinDaemonToPackage" "ai.kiro.cli.trustedMcpTools" "ai.kiro.permissions"];
     };
     comparable = backend: let

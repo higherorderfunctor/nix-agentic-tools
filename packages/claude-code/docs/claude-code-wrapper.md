@@ -36,8 +36,8 @@ since that variable independently disables updates.
 
 ### Proxy credential suppression at launch
 
-The base package's `$out/bin/claude` is the pre-built binary itself. Without a
-proxy selection it is installed bare. A selection (`ai.settings.inference` or
+The base package's `$out/bin/claude` is the pre-built binary itself. With no
+launcher flags it is installed bare. A selection (`ai.settings.inference` or
 `ai.claude.settings.inference`) that resolves to a `cliproxyapi` backend
 installs the `claude-code-inference` launcher on both backends to unset
 `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec; the flag comes from that
@@ -157,3 +157,13 @@ Three things follow, and each of them is a trap if you assume the old shape:
   Opaque schema leaves remain open, while maps and lists inspect the declared
   shape below their arbitrary entry names or elements. Unknown-key warnings do
   not weaken separate credential or ownership refusals.
+
+### Directories from untrusted project settings
+
+Devenv's `ai.claude.untrustedProjectAdditionalDirectories` defaults to `[]`.
+Non-empty lists add a runtime argv rewrite to the same managed launcher as
+inference. It reads `.projects."<launch directory>".hasTrustDialogAccepted` from
+`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json` and, unless true, silently
+prepends `--add-dir` per directory. Leading `~/` expands to HOME. Unset HOME
+leaves argv unchanged. Home Manager has no such option because its user settings
+are independent of project trust. Delegate-routing uses it for Workflow scripts.
