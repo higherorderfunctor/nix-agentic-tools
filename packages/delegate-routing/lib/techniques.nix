@@ -7,9 +7,10 @@ in {
   claude = {
     Agent = {
       kind = "subagent";
+      launchRoute = false;
       modes = ["interactive" "headless"];
-      notes = "`model` takes only an alias from the tool's own enum; effort is inherited";
-      pinsEffort = false;
+      notes = "`effort` pins low to max; `model` stays enum-locked to aliases unless an agent definition file supplies a full id";
+      pinsEffort = true;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Agent`: depth 3 below main (claude:depth)
       runsOwnSubagents = "supported (headless)";

@@ -43,8 +43,10 @@ How to read the tables:
 | ACP host (V prompt; U lifecycle)                                      | —                                 | not in binary; nixpkgs `claude-agent-acp` 0.84.0 adapter | —                                                                                                                       | prompt fields mapped (system-prompt map)           | external adapter                                                                                                                                  |
 
 1. `description`, `prompt`, `subagent_type`, `model` (sonnet/opus/haiku/fable),
-   `run_in_background` (default bg), `isolation` worktree/remote. No
-   effort/tools/perm/system field.
+   `effort` (low to max), `run_in_background` (default bg), `isolation`
+   worktree/remote. No tools/perm/system field. Effort precedence in the 2.1.316
+   bundle: tool-call `effort`, agent-file `effort:`, permission-layer pin,
+   `CLAUDE_CODE_SUBAGENT_EFFORT`, then inherit.
 2. Agent is withheld at the cap. Explicit depth env wins; otherwise a valid
    cached feature value precedes the feature-client fallback (Vr; `codex:A`).
 3. Excess is **refused** "Do not retry", not queued.

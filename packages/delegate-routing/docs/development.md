@@ -1,10 +1,11 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-06 — routing ships an always-on "Pool drain" entry,
-> the usage helpers share one schema with UTC reset times, portable pools
-> resolve usage readers and label family reaches on both backends,
-> proxy-accounted-usage reads a Manager+ accounted monthly budget, and the
-> always-on stub names the source for steering its rules.
+> **Last verified:** 2026-11-06 — routing ships an always-on "Pool drain" entry
+> and a "Tune these rules" entry, the Review step holds the one review rule, the
+> usage helpers share one schema with UTC reset times, portable pools resolve
+> usage readers and label family reaches on both backends, proxy-accounted-usage
+> reads a Manager+ accounted monthly budget, and the always-on stub names the
+> source for steering its rules.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -32,12 +33,12 @@ and expose the same surface.
 
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
 `source`. Names become headings. The package ships the always-on "Load
-delegate-routing" stub and six enabled entries: "Follow the user's request",
-"Size the work", "Choose execution", "Pool drain", "Validate the result" and
-"Orchestrator session". "Pool drain", "Validate the result" and "Orchestrator
-session" are always-on too. "Orchestrator session" ships enabled; disable it
-with `routing."Orchestrator session".enable = false`. Policy belongs in these
-entries rather than renderer string literals.
+delegate-routing" stub and seven enabled entries: "Follow the user's request",
+"Size the work", "Choose execution", "Pool drain", "Validate the result",
+"Orchestrator session" and "Tune these rules". "Pool drain", "Validate the
+result" and "Orchestrator session" are always-on too. "Orchestrator session"
+ships enabled; disable it with `routing."Orchestrator session".enable = false`.
+Policy belongs in these entries rather than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
@@ -145,8 +146,10 @@ reach into a harness with no enabled technique pinning model and effort (from
 another harness, only an external one counts), so both the module and the public
 `mkSkill` helper enforce it; every enabled technique that pins model and effort
 is listed in kind order (subagent, workflow, external) as fallbacks, each must
-name a spelling, and disabled techniques are not listed or refused. From another
-harness only an external technique can launch, so external reaches name external
+name a spelling, and disabled techniques are not listed or refused. The
+exception is `launchRoute = false`: a technique that pins only model aliases,
+such as Claude's `Agent`, is neither listed nor refused. From another harness
+only an external technique can launch, so external reaches name external
 techniques only. Modes describe usual availability, not session-mode detection;
 use only tools present in the current session and external commands on PATH.
 Introspection and usage nodes describe how to obtain live evidence. Usage
