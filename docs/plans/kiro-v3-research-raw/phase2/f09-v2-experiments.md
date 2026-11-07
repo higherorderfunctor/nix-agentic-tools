@@ -35,9 +35,9 @@ bounded negative with positive controls) at this exact KASID.
   `remote_sandbox`; feature-to-setting table is `[["memory","memoryEnable"]]`.
 - `carried-negatives.md` C-11 (documented-but-unconsumed is a distinct
   state), C-3 (absences need concept-level sweeps + positive controls).
-- `private/kiro-v2-experimental.md` (input, v2 doc): the seven features and
+- `../notes/kiro-v2-experimental.md` (input, v2 doc): the seven features and
   their v2 `chat.enable*` settings.
-- `private/kiro-v3-docs.md` ~line 697 feature table: claims Knowledge
+- `../notes/kiro-v3-docs.md` ~line 697 feature table: claims Knowledge
   "Available", tags `todo_list` and `subagent` exist — claims to verify.
 
 Everything below that is new was read from the bundle at the pinned KASID

@@ -27,7 +27,7 @@ which shape it takes, and what answering each option changes on disk.
   `needs_approval`, `trust_options_map`, `WaitingForApproval` — v2-only.
 - `evidence/machine-state.md` L696–785: upstream #10168/#3582 — v2 sub-agent
   ask stalls. v2 machinery is not further covered here.
-- Vendor `private/kiro-v3-docs.md` L171–260 "Permissions" — mostly accurate;
+- Vendor `../notes/kiro-v3-docs.md` L171–260 "Permissions" — mostly accurate;
   contradictions listed in §6.
 
 ## 3. The interface, fully enumerated
@@ -366,7 +366,7 @@ isolated `HOME`, initialize, `session/new`.
   controls: sibling field `disabledTools` 23 hits, `workspaceTrusted` 37.
   C-11 state: documented-but-unconsumed at 2.15.1. Use permissions rules
   (`capability: mcp, match: [server/tool]`) instead.
-- **Vendor docs (private/kiro-v3-docs.md) corrections:** L245–248 says
+- **Vendor docs (../notes/kiro-v3-docs.md) corrections:** L245–248 says
   `.kiroignore` writes "always ask" — the bundle hard-DENIES them
   (`KIROIGNORE_RULE`, engine-level, case-insensitive). The always-deny list
   omits `~/.kiro/sandbox-state/`; the always-ask list omits `.vscode/**`,

@@ -15,7 +15,7 @@ read at its registration or call site (byte offsets given), not inferred.
 
 ## 2. What is already known
 
-- `private/kiro-acp-and-launcher-argv.md` §4/4b/5 (measured 2.15.2): handshake
+- `../notes/kiro-acp-and-launcher-argv.md` §4/4b/5 (measured 2.15.2): handshake
   capability table, auth-callback stall, `modes`=workflows, `session/new`
   result `_meta`, stderr/stdout discipline. Referenced, not re-derived.
 - Corpus `records/hooks-io-contract.md` L69-105: the ACP-delegating hook

@@ -12,7 +12,7 @@ handles. Minified names from the embedded client JS (`qCe`, `ABe`, `Kc`, `wa`,
 
 ## 0. Argv layer — settled elsewhere, 10-line summary
 
-`private/kiro-acp-and-launcher-argv.md` §1–3, §6 settled: launcher globals
+`../notes/kiro-acp-and-launcher-argv.md` §1–3, §6 settled: launcher globals
 (`--v3`, `--tui`, `--agent`, …) must be PREPENDED (clap global-option
 position); the launcher translates global `--v3` into `--agent-engine=v3` on
 the dispatched subcommand; a caller-supplied `--agent-engine` cleanly beats an

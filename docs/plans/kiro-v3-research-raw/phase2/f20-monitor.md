@@ -40,11 +40,11 @@ free; only reacting costs. The catches are gating (stock TUI sessions have
   per-session `workflowsEnabled`; ACP `_kiro/workflow/*` arm unconditional —
   corpus workflow-surface R-workflow-4 + settled facts.
 - Background shell tiers, gates and truncation — F10 digest
-  (`private/kiro-phase2/f10-builtin-tools.md`).
+  (`./f10-builtin-tools.md`).
 - `/spawn` is v2-only; KAS adapter stubs it ("/spawn is not supported in KAS
   mode"); v3 slash workflow-run/resume/status/cancel are inert — F11 digest.
 - `_session/steer`, `_kiro/hooks/triggerHook`, prompt-meta `agentInitiated`,
-  ws mux — ACP wireline digest (`private/kiro-phase2/acp-wireline.md`).
+  ws mux — ACP wireline digest (`./acp-wireline.md`).
 
 Everything below that is new was read from the bundle at the pinned KASID.
 

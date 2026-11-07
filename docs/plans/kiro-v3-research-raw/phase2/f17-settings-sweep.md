@@ -41,9 +41,9 @@ unconsumed is a distinct state).
 - `carried-negatives.md` C-11: `KIRO_ENABLED_FEATURES` is read by the CLI
   client (4 hits in the chat binary, fresh count) and its catalog's "workflows"
   entry has no consumer; verified 0 hits in the launcher and 0 in the bundle.
-- Vendor docs: `private/kiro-v3-docs.md` documents ZERO settings keys (no
+- Vendor docs: `../notes/kiro-v3-docs.md` documents ZERO settings keys (no
   `chat.*`, no `settings.json`, no `kiro-cli settings` anywhere in its 757
-  lines). `private/kiro-v2-experimental.md` documents 7 `chat.enable*` keys
+  lines). `../notes/kiro-v2-experimental.md` documents 7 `chat.enable*` keys
   (v2 doc, input only).
 
 ## 3. The interface, fully enumerated

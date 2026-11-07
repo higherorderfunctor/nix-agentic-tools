@@ -37,7 +37,7 @@ debt, not an implied backlog.
 ## Preserved material
 
 - `notes/` contains selected handoffs, source reads, documentation snapshots,
-  and behavioral probe reports previously kept at the top of `private/`.
+  and behavioral probe reports, formerly kept in a machine-local scratch area.
 - `phase2/` contains the F09-F22 interface digests, ACP research, and their
   model-free probe inputs.
 

@@ -31,7 +31,7 @@ working extraction recipe and a bounded negative for every claimed absence.
 - Builtin mode ids `vibe|spec|quick-spec|bug-fix|plan|autonomous`; agent loader
   recurses + follows symlinks; workspace profiles trust-gated; frontmatter is
   js-yaml CORE (settled facts).
-- Vendor doc claims (private/kiro-v3-docs.md:441-475): md body becomes the
+- Vendor doc claims (../notes/kiro-v3-docs.md:441-475): md body becomes the
   system prompt; JSON equivalent; line 661: `file-prompt` finding "Absolute or
   `~/` file prompt paths may not resolve". Verified/corrected below.
 
