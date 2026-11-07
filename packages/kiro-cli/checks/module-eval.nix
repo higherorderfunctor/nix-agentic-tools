@@ -390,7 +390,6 @@ in {
         ["normalized" "environmentVariables"]
         ["normalized" "shell"]
         ["package"]
-        ["sandbox"]
         ["shell"]
         ["tweaks"]
         ["useFhsSandbox"]
@@ -403,6 +402,10 @@ in {
         lib.all (path: !lib.hasAttrByPath path tree && lib.hasAttrByPath (["cli"] ++ path) tree) moved
         && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "mcpServers" "rules" "skills"]
         && tree.cli ? enable
+        # Kiro's own sandbox switch moved under cli; ai.kiro.sandbox is the
+        # runtime VM sandbox tree that packages/microvm mirrors per runtime.
+        && tree.cli ? sandbox
+        && tree.sandbox ? enable
         && tree.enable.readOnly
         && !(builtins.tryEval (evaluate {ai.kiro = {package = null;};}).config).success;
     in

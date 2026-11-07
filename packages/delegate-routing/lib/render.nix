@@ -25,6 +25,8 @@
   selected = target: select families models.${target};
   targets = family: builtins.filter (target: builtins.elem family (selected target)) runtimes;
   candidates = selection.candidates families models runtimes;
+  opencodeGo = import ./opencode-go.nix {inherit lib;};
+  goRendered = lib.any (family: family.vendor == opencodeGo.vendor) (candidates ++ lib.concatMap selected manualExternalDelegates);
   entryRenderer = import ./render-entries.nix {inherit lib;};
   routingText = entryRenderer.routing false routing;
   workflowText = entryRenderer.workflows false workflows;
@@ -179,6 +181,7 @@
           Family = familyLabel;
           Launch = family: lib.concatMapStringsSep "; " (reach family) (targets family);
           Orchestration = family: family.orchestration or "";
+          Pool = family: family.pool or "";
           "Use for" = family: family.useFor;
         }
         members}
@@ -213,13 +216,13 @@
   manual = target: ''
     ${phrase "Manual delegate heading" {harness = target;}}
 
-    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}") (selected target)}
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}${lib.optionalString (family.pool or "" != "") (phrase "Manual pool hint" {hint = family.pool;})}") (selected target)}
 
     ${techniqueBlock target true}
     ${phrase "Manual delegate note" {}}
   '';
   blocks = {
-    families = lib.concatMapStringsSep "\n" tier tiers;
+    families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n" + phrase "Provisional families" {});
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
     pools = poolsText;
     routing = routingText;

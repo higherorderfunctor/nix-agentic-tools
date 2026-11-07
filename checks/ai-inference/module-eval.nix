@@ -133,7 +133,9 @@
   rendered = result: let
     inherit (result.config.ai.services.cliproxyapi-clients.files.config) content secrets;
   in
-    builtins.fromJSON (fill secrets content);
+    # A command reference's program path carries its store context, which
+    # fromJSON refuses; content itself holds only placeholders.
+    builtins.fromJSON (builtins.unsafeDiscardStringContext (fill secrets content));
   oauthRule = name: {
     provider = "claude";
     kind = "oauth";
@@ -245,6 +247,7 @@ in {
           "plain shims omitted" =
             lib.all (entry: !(entry ? tool-aliases)) plain.api-keys.claude
             && lib.all (entry: !(entry ? codex-shell-arg-cleanup)) plain.api-keys.openai-compatibility;
+          "no vendor headers" = !((block "claude") ? headers) && !((block "openai-compatibility") ? headers);
           "shims rendered" = (block "claude").tool-aliases == {ToolSearch = "ToolSearch_";} && (block "openai-compatibility").codex-shell-arg-cleanup;
           "tier mapping retained as measured data" = builtins.attrNames vendor.claudeModels == ["haiku" "opus" "sonnet"] && lib.all (model: lib.elem model vendor.models) (builtins.attrValues vendor.claudeModels);
         };
@@ -377,6 +380,18 @@ in {
               };
             in
               failedMessages unicode == [] && modelsIn unicode "openai-compatibility" == ["qwen-中文-v1"];
+            "session header on every API block" =
+              vendor.headers
+              == {x-opencode-session = "$CPA-SESSION-ID";}
+              # Read the production reference before rendered removes its store
+              # context. A wrong literal or shell expansion must fail this check.
+              && lib.all (family: let
+                configured = lib.head (lib.filter (entry: entry.name == "go") result.config.ai.cliproxyapi.instances.clients.settings.api-keys.${family});
+                script = builtins.readFile configured.headers.x-opencode-session._redact.command;
+              in
+                builtins.attrNames (block family).headers
+                == ["x-opencode-session"]
+                && lib.hasInfix "printf '%s' '$CPA-SESSION-ID'" script) ["claude" "codex" "openai-compatibility"];
             "z.ai shims off" = !((block "claude") ? tool-aliases) && !((block "openai-compatibility") ? codex-shell-arg-cleanup);
             "picker lists the routed API's models" =
               result.config.ai.claude.normalized.settings.inference.credentials

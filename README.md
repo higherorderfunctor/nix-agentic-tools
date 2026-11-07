@@ -310,6 +310,7 @@ Temporarily unclassified supporting packages live in the split-ready
 | `cpa-manager-plus` | CPA Manager Plus dashboard and management server |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |
+| `git-relay` | Git relay daemon: forwards pushes to an upstream with a key the pusher never holds |
 | `gluetun` | VPN client for multiple providers (Linux only) |
 | `iron-proxy` | Egress proxy for sandboxed agents: allowlisted hosts and secret injection |
 | `mcp` | Model Context Protocol Python SDK |

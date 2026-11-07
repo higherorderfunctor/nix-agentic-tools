@@ -858,6 +858,152 @@
         };
       }) "family names must be unique across vendors"
     );
+    "module-delegate-routing-${name}-opencode-go-pool" = mkTest "delegate-routing-${name}-opencode-go-pool" (let
+      expectedBindings = lib.genAttrs ["claude" "codex" "kiro"] (_: "go-budget");
+      settings = {
+        opencodeGo = {
+          plan = "go-plus";
+          pool = "go-budget";
+        };
+        pools.go-budget.window = {
+          limit = 100;
+          resetDay = 1;
+          unit = "credits";
+        };
+        runtimes = {
+          claude.models = [{vendors = ["opencode-go"];}];
+          codex.models = [{families = ["go-kimi-k3"];}];
+          kiro.models = [
+            {
+              vendors = ["opencode-go"];
+              families = ["go-kimi-k3"];
+            }
+          ];
+        };
+      };
+      bound = change {ai.programs.delegate-routing = settings;};
+      text = readSkill bound "claude";
+      overridden = change {
+        ai.programs.delegate-routing =
+          settings
+          // {
+            families.opencode-go.go-kimi-k3.pools.claude = null;
+          };
+      };
+    in
+      passes bound
+      && lib.all (family: family.pools == expectedBindings)
+      (builtins.attrValues bound.config.ai.programs.delegate-routing.families.opencode-go)
+      && lib.hasInfix "## Pools" text
+      && lib.hasInfix "| Pool " text
+      && lib.hasInfix "go-plus: unlimited" text
+      && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `kimi-k3`, else `claude -p` with full model id the highest id matching `kimi-k3` (pool go-budget); via codex: `codex exec` with slug the highest id matching `kimi-k3` (pool go-budget)" text
+      # The manual launch keeps its registered pool and monetary guidance.
+      && hasProse "- go-kimi-k3 (opencode-go) `kimi-k3`: `kiro-cli chat` with model_id the highest id matching `kimi-k3` (pool go-budget): go-plus:" text
+      && passes overridden
+      && overridden.config.ai.programs.delegate-routing.families.opencode-go.go-kimi-k3.pools.claude == null
+      && poolFailsWith (change {ai.programs.delegate-routing = settings // {pools = {};};})
+      "unknown pool `go-budget`"
+      && lib.all (family: family.pools == expectedBindings)
+      (builtins.attrValues
+        (change {
+          ai.programs.delegate-routing =
+            settings
+            // {
+              opencodeGo = {
+                plan = null;
+                pool = "go-budget";
+              };
+            };
+        }).config.ai.programs.delegate-routing.families.opencode-go));
+    "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let
+      goSelected = plan:
+        change {
+          ai.programs.delegate-routing = {
+            opencodeGo = {inherit plan;};
+            runtimes.claude = {
+              extraRuntimes = [];
+              manualExternalDelegates = [];
+              models = [{vendors = ["opencode-go"];}];
+            };
+          };
+        };
+      kimi = {
+        match = "kimi-k3*";
+        tier = "strong";
+      };
+      overlapping = families: models:
+        change {
+          ai.programs.delegate-routing = {
+            inherit families;
+            runtimes.claude.models = [{vendors = ["opencode-go"];}] ++ models;
+          };
+        };
+      # Independent expected prose rejects a wrong or omitted note; phrase
+      # overrides reject a renderer that still reads hard-coded catalog prose.
+      note = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
+      withManualHint = override:
+        skill {
+          ai.programs.delegate-routing = {
+            opencodeGo.plan = "go-plus";
+            runtimes.kimchi.models = [{vendors = ["opencode-go"];}];
+            skill.phrases."Manual pool hint" = override;
+          };
+        };
+      withNote = override:
+        readSkill (change {
+          ai.programs.delegate-routing = {
+            runtimes.claude.models = [{vendors = ["opencode-go"];}];
+            skill.phrases."Provisional families" = override;
+          };
+        }) "claude";
+      planned = readSkill (goSelected "go-plus") "claude";
+      unplanned = readSkill (goSelected null) "claude";
+    in
+      # Presets and their note render only when selected; Pool is always a column.
+      !(lib.hasInfix "(opencode-go)" claude)
+      && lib.hasInfix "| Pool " claude
+      && !(hasProse note claude)
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
+      && hasProse note planned
+      && lib.hasInfix "CUSTOM GO NOTE" (withNote {text = "CUSTOM GO NOTE";})
+      && !(hasProse note (withNote {text = "CUSTOM GO NOTE";}))
+      && !(hasProse note (withNote {enable = false;}))
+      && lib.hasInfix "| Pool " planned
+      && lib.hasInfix "go-plus: $60 of list-price use empties the monthly pool" planned
+      && lib.hasInfix "go-plus: unlimited" planned
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
+      && lib.hasInfix "| Pool " unplanned
+      && hasProse "| | claude:" unplanned
+      && passes (goSelected "go-plus")
+      # Manual-only families keep their hint after main's concrete launch route;
+      # phrase overrides reject a renderer that appends hard-coded hint text.
+      && hasProse "go-kimi-k3 (opencode-go) `kimi-k3`: `kimchi -p` with `--list-models` id the highest id matching `kimi-k3`: go-plus: $60 of list-price use empties the monthly pool" (withManualHint {})
+      && lib.hasInfix "CUSTOM MANUAL HINT" (withManualHint {text = "CUSTOM MANUAL HINT";})
+      && !(hasProse ": go-plus: $60 of list-price use empties the monthly pool" (withManualHint {enable = false;}))
+      # A selected preset and another family, of any vendor, matching the
+      # same Go catalog model on one runtime fail; on different runtimes, or
+      # with no preset selected, they pass.
+      && lib.all (failsWith (overlapping {example.kimi = kimi;} [{families = ["kimi"];}])) ["kimi-k3 (" "example.kimi" "opencode-go.go-kimi-k3"]
+      && failsWith (overlapping {opencode-go.mine = kimi;} []) "opencode-go.mine"
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families.example.kimi = kimi;
+          runtimes = {
+            claude.models = [{families = ["kimi"];}];
+            codex.models = [{vendors = ["opencode-go"];}];
+          };
+        };
+      })
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families = {
+            example.kimi = kimi;
+            other.kimi-exact = kimi // {match = "kimi-k3";};
+          };
+          runtimes.claude.models = [{families = ["kimi" "kimi-exact"];}];
+        };
+      }));
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
       failsWith (invalidNode {
         kind = "subagent";
@@ -1218,7 +1364,7 @@
         && !(lib.hasInfix "Each row is a family" text)
         && positionOf "## Common workflows" < positionOf "### frontier"
         && positionOf "### frontier" < positionOf "### claude techniques"
-        && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Launch"]
+        && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Pool" "Launch"]
         && !(lib.hasInfix "default orchestrator" text)
         # An enabled column the renderer has no cell for is refused, not
         # rendered as an empty column.

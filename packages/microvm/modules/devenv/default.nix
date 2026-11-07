@@ -1,8 +1,4 @@
-{
-  config,
-  pkgs,
-  ...
-}: {
-  imports = [../common.nix];
-  packages = map (config.ai.internal.mkSandbox pkgs) (builtins.attrValues config.ai.sandboxes);
+{config, ...}: {
+  imports = [../../../git-relay/modules/devenv (import ../common.nix {backend = "devenv";})];
+  packages = config.ai.internal.sandboxPackages;
 }

@@ -1,8 +1,4 @@
-{
-  config,
-  pkgs,
-  ...
-}: {
-  imports = [../common.nix];
-  home.packages = map (config.ai.internal.mkSandbox pkgs) (builtins.attrValues config.ai.sandboxes);
+{config, ...}: {
+  imports = [../../../git-relay/modules/homeManager (import ../common.nix {backend = "hm";})];
+  home.packages = config.ai.internal.sandboxPackages;
 }

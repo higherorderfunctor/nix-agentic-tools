@@ -7,55 +7,79 @@ applyTo: "packages/microvm/**"
 
 # MicroVM sandbox implementation
 
-<!-- cspell:ignore ACPI chardev guestfwd sysfs virtio -->
+<!-- cspell:ignore ACPI chardev gettys guestfwd poweroff sysfs vcpus virtio -->
 
-> **Last verified:** 2026-11-06 — the launcher forwards guest completion through
-> a root-only virtio serial port; the sandbox is built and merged one bounded
-> capability at a time.
+> **Last verified:** 2026-11-06 — runtime guests, repository object retention,
+> read-only mounts, and committed-work recovery through virtio serial ports. The
+> launcher forwards guest completion through a root-only virtio serial port. The
+> sandbox is built and merged one bounded capability at a time.
 
-The public `lib.ai.mkSandbox pkgs {exe; outName;}` factory owns the guest
-definition and standalone launcher. The shared host option `ai.sandboxes` has
-only those fields, with `outName` defaulting to its attribute name. Backend
-modules differ only in the package installation sink. The repository binds the
-factory into `ai.internal.mkSandbox`, declared alongside the other shared
-internal bindings in `sharedOptions.nix`, so backend imports need no consumer
-`inputs` special argument. An empty map never forces a guest or the factory.
+`ai.sandbox` enables fresh Linux KVM guests for enabled Claude and Codex
+runtimes. Home Manager and devenv expose the same options and install
+`claude-sandbox` and `codex-sandbox` into their respective package profiles.
 
-The guest shares the host's store at `/nix/.ro-store`, not `/nix/store`:
-upstream mounts the latter as an overlay with tmpfs upper and work directories
-beneath `/nix/.rw-store`. Sharing directly at the overlay destination would hide
-the lower mount. Root is tmpfs as well; no disk, NIC, home or workspace is
-shared.
+`enable` defaults to false, `extraPackages` to `[]`, and memory/CPUs to 4096
+MiB/two. Every runtime in `lib/ai/runtimes.nix` mirrors the tree at
+`ai.<runtime>.sandbox`. Defined root leaves supply option defaults, as in
+`ai.proxy`; runtime definitions (including `mkDefault`) replace whole options,
+including lists or future attribute-set options. Other leaves keep root values;
+nothing flows up. Kiro's mirror is separate from `ai.kiro.cli.sandbox`.
 
-QEMU's upstream runner has `-no-reboot`, because its microvm machine can hang on
-powering off. The service's privileged `ExecStopPost` writes systemd's
-main-process `EXIT_CODE` and `EXIT_STATUS` through
-`/dev/virtio-ports/sandbox.status`, then requests reboot even if reporting
-fails. A root-only udev rule prevents the unprivileged process from forging
-completion. The unit waits for this device before starting; the reporter accepts
-ordinary completion results only, and unset main-process status (including
-preparation failure) produces no record. QEMU writes the separate file chardev
-into the private host runtime directory. Console output is never parsed. The
-existing store share already enables PCI in the upstream runner; virtio serial
-uses that bus on Linux guests without adding a mount. No serial getty competes
-with the process for its console.
+The guest-route table selects the plain `ai.claude.package` or
+`ai.codex.package`, before host launcher environment and jail wrapping. Enabling
+a sandbox with a null package fails evaluation. Kiro, Kimchi and Copilot have no
+guest route yet: an enabled runtime with resolved `sandbox.enable = true` warns
+once; set `ai.<runtime>.sandbox.enable = false` to opt out. Untouched defaults
+never warn. Sandbox commands claim their names through
+`ai.microvm.claims.command`.
 
-The host wrapper accepts zero arguments or removes one leading `--`, rejecting
-other prefixes before checking KVM and allocating its unique temporary runtime
-directory. It serializes the remaining arguments with NUL separators; zero
-arguments produce an empty file, distinct from one empty argument. QEMU reads
-that relative `argv` file through `-fw_cfg`, so changing arguments never
-rebuilds the guest and adds no share. The `qemu_fw_cfg` driver exposes the blob
-in sysfs; privileged `ExecStartPre` installs it into the service's private
-runtime directory. The unprivileged guest wrapper reads it with Bash `mapfile`
-and executes the shell-quoted fixed `exe` with the resulting array. No argument
-string is evaluated as shell syntax. Keep the executable's Nix string context
-intact: it supplies the package dependency without a separate package field.
+`extraPackages` and Git enter executable PATH and the guest system profile,
+including child shells resetting PATH to `/run/current-system/sw/bin`.
+Identity-aware launchers select a relay session and seed committed work; see
+`sandbox-identities.md` for launch ordering and no-door cases. Guest Git
+settings arrive through `ai.sandbox.git` (`sandbox-git.md`). Never log a harness
+into a provider inside the VM; VM-only CPA client keys supply authentication
+through `sandbox.inference.clientKey` (`sandbox-inference.md`).
 
-The pinned QEMU microvm machine exposes fw_cfg with the existing ACPI setup. The
-sysfs raw file reports size zero despite containing data; streaming reads work,
-including payloads larger than a page. This narrow read-only blob replaces the
-need for any host control-directory share.
+The public `lib.ai.mkSandbox pkgs` factory requires `exe` (an absolute
+executable path whose Nix string context retains its package) and `outName` (a
+single executable name). Optional defaults are `doors = []`, `gitConfig = null`,
+`homeFiles = {}`, `inference = null`, `memory = 1024` MiB, `packages = []`,
+`repo = false`, `repoConfig = false`, `signing = null`, and `vcpus = 1`. Memory
+must be at least 128 MiB and CPUs at least one. The factory owns the guest and
+`bin/<outName>` launcher. The pinned microvm source is bound through
+`ai.internal.mkSandbox`; consumers need no extra module arguments.
+
+`ai.sandboxes.<name> = {exe; outName?;}` remains for one release. A non-empty
+value warns to migrate runtime guests to `ai.sandbox`, or standalone guests to
+`lib.ai.mkSandbox`. Its default `outName` is the attribute name. Collisions
+between legacy entries or with runtime sandbox commands fail through the same
+claims registry. An empty configuration installs no sandbox and forces no guest.
+
+The host store is shared read-only at `/nix/.ro-store`; upstream overlays
+`/nix/store` with tmpfs upper/work directories beneath `/nix/.rw-store`. Root is
+tmpfs too. No host disk, home or workspace is shared by default; only doors add
+a NIC and only repo mode adds the object/seed mounts described below. The entire
+host store is readable, beyond the executable's closure.
+
+QEMU's upstream runner uses `-no-reboot` because its microvm machine can hang on
+poweroff. Privileged `ExecStopPost` writes systemd's main-process `EXIT_CODE`
+and `EXIT_STATUS` to `/dev/virtio-ports/sandbox.status`, then requests reboot
+even if reporting fails. The unit waits for that device; root-only udev rules
+prevent the guest command from forging completion. Preparation failures and
+other service results produce no record. The file chardev writes into the
+private host runtime directory; console output is never parsed. Virtio serial
+uses the PCI bus already enabled by the store share. Serial gettys are disabled.
+
+The launcher accepts zero arguments or strips one leading `--`; other prefixes
+fail before KVM checks or runtime allocation. Arguments are NUL-separated in a
+relative `argv` file delivered through QEMU `-fw_cfg`, without rebuilding or a
+control-directory share. Zero arguments differ from one empty argument.
+`qemu_fw_cfg` exposes the blob in sysfs; privileged `ExecStartPre` installs it
+in the service runtime directory, and Bash `mapfile` restores the array for the
+shell-quoted executable. No argument string is evaluated as shell syntax.
+Streaming sysfs reads work beyond a page despite the raw file reporting size
+zero; the pinned machine exposes fw_cfg through its existing ACPI setup.
 
 After a successful runner exit, the host validates the completion record and
 returns the guest exit code (0–255), or 128 plus the signal number for a killed
@@ -64,14 +88,75 @@ completion and VM failure return 125 with a diagnostic, so a normal VM shutdown
 alone cannot imply guest success. Guest exit 125 shares that numerical value but
 has no infrastructure diagnostic.
 
-The runner executes inside that directory, and the wrapper's exit trap removes
-it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
-trap.
+The runner executes in the private runtime directory. Its caller must retain the
+shell and EXIT trap, which reap doors, release repository pins, and remove the
+directory after recovery has finished.
 
-The user-facing contract and host preparation are documented in
-`packages/microvm/modules/README.md`. The owner checks cover empty imports,
-installation parity, factory validation, and guest boundaries. Real guest boot
-requires a Linux host with KVM access and is a separate smoke test.
+Each door is `{port; command; arguments ? []; environment ? {};}` with a unique
+TCP port, absolute host executable and string arguments/environment. QEMU runs a
+fresh wrapper per connection with socket stdin/stdout; the command gets only its
+declared environment, and host stderr stays in the launcher's private runtime
+directory. The restricted user network exposes only those forwarded guest ports.
+Each connection has its own process group. Launcher cleanup checks the recorded
+PID's start time and group before killing the whole group, tolerating vanished
+or incomplete records so repository cleanup and exit status survive. With
+`repo = true`, launch from a Git checkout (including a linked worktree or an
+unborn branch). The guest starts in `/home/sandbox/repo` at that checkout's
+committed HEAD, preserving its branch name or detached state. Uncommitted host
+changes are excluded. Shallow, partial, and alternates-using repositories are
+refused; supported object formats are SHA-1 and SHA-256. These factory
+parameters do not add module options. `repoConfig = true` requires repo mode and
+an absolute `SANDBOX_REPO_CONFIG` file at launch. The runtime session launcher
+uses it to deliver origin and identity through fw_cfg, included last in the
+clone after replacing its seed origin URL.
+
+Optional `signing = {port; socket;}` adds a door to the absolute host
+`ssh-agent` socket. A guest bridge publishes `SSH_AUTH_SOCK` without sharing the
+private key or its directory. `lib.ai.mkSshSigner pkgs` starts a dedicated host
+agent, loads one key, and leaves it running until the signer is stopped.
+
+The launcher creates an isolated bare seed with templates disabled and the
+host's object format. Selected push-remote tracking refs become seed branches;
+HEAD becomes `refs/sandbox/head`. Selection is `branch.<name>.pushRemote`,
+`remote.pushDefault`, `branch.<name>.remote`, then `origin`. Unborn seeds are
+empty. Seed and host common `objects/` are separate read-only 9p exports,
+relative to the runtime directory; host config, hooks, refs and worktree
+metadata stay out. The guest uses `clone --shared --no-checkout`, with system
+Git trust limited to the seed/object mount paths. All host objects are readable,
+including objects outside seeded refs: this share provides no object-level
+confidentiality.
+
+Before boot the launcher holds `<common>/sandbox-locks/<token>` and creates
+`refs/sandbox/<token>/<n>` in the host for every borrowed root, including a
+linked worktree's detached HEAD. These refs retain reachable objects even across
+`git gc --prune=now`. Pin publication coordinates with Git GC and maintenance
+locks and checks the full borrowed object graph before boot. Another sandbox
+launch, an active collector, or a maintenance operation holding these locks
+causes a retry diagnostic; the publication locks are released before the guest
+starts. Forced GC and direct pruning that bypass Git locking are unsupported
+during publication. The exit trap removes its pins; the next launch removes pins
+from sessions whose locks are no longer held. Lock files remain to avoid locking
+different inodes for the same session. Pin creation fails the launch if
+concurrent maintenance already removed a required object.
+
+On graceful service completion, the guest exports committed work through a
+separate virtio bundle port. It includes local refs and detached HEAD and
+excludes only the immutable seeded commits, which the host retains. Changes to
+`origin/*` inside the guest cannot introduce unknown bundle prerequisites. The
+host verifies the bundle against the host repository, validates its pack in an
+isolated temporary repository, and makes it self-contained before saving it at
+`$XDG_STATE_HOME/ai-sandbox/bundles/<token>.bundle` (default state root:
+`~/.local/state`) and printing a fetch command. Saved bundles remain recoverable
+after session pins are removed and host maintenance prunes the original commits.
+Empty exports need no recovery. Export or verification failures are reported
+separately from guest completion. Runner failures are reported even when
+recovery also fails; nonempty failed exports are retained as
+`<token>.failed.bundle`. Recovery covers committed work on graceful completion
+only. Forced VM shutdown, host termination, and uncommitted files are not
+recoverable through this path.
+
+See `packages/microvm/modules/README.md` for host setup, `sandbox-inference.md`
+for sandbox inference, and the checks for Linux/KVM guest smoke tests.
 
 ## Git access
 
@@ -103,3 +188,421 @@ before the next goes wider. Do not resume a broad all-features build.
 Merge a stack of sandbox PRs bottom-up. For each PR, review it against `main`,
 merge it, then move the rest of the stack onto `main`. Mark PRs ready one at a
 time, because review triggers when a PR becomes ready.
+
+<!-- Fragment: packages/microvm/docs/sandbox-git.md -->
+
+# MicroVM sandbox Git settings
+
+<!-- cspell:ignore maxstack rerere sshcommand -->
+
+> **Last verified:** 2026-11-01 — `ai.sandbox.git` options, per-runtime
+> copy-down, guest-fixed keys, and delivery as the guest's system Git
+> configuration.
+
+`ai.sandbox.git` configures Git inside every enabled runtime's guest. The option
+types are the host's, so one value plugs into host and sandbox alike: `settings`
+is the same ini tree as `git.settings` (lib/git-tool-settings/ini-type.nix), and
+each tool's typed settings are the owner's generated tree, the same one
+`git.<tool>` declares on the host.
+
+```nix
+{pkgs, ...}: {
+  ai.sandbox.git = {
+    settings.core.editor = "nano";
+    absorb.enable = true;
+    branchless.settings.restack.defaultRevset = "main()";
+  };
+  ai.codex.sandbox.git.settings.core.editor = "vim";
+}
+```
+
+Every runtime mirrors the whole tree at `ai.<runtime>.sandbox.git`, including
+each tool's `{enable, settings}`. Tool `enable` installs the tool's package into
+that runtime's guest package list; a runtime `enable` replaces the shared root's
+at any priority.
+
+## Copy-down semantics
+
+The raw `settings` tree copies down by DEFINITIONS, not evaluated values: a
+runtime `git.settings` definition replaces the root's whole value, and otherwise
+the root's definitions forward with their nested `mkOverride` wrappers intact.
+So a nested `mkDefault` key at the root still loses to a runtime value or a
+typed tool leaf for that key, and an equal-priority disagreement stays a loud
+conflict — exactly as the host's `git.settings` behaves. A runtime that defines
+only a typed tool leaf keeps the inherited raw keys. A typed leaf's definitions
+reach the runtime's typed tree forwarded at the root's own priority — a leaf
+both sides define arbitrates by that priority — so the owner's per-tool
+assertions (git-branchless's `test.jobs`/`test.strategy` coupling, say) read
+root and runtime values together, wherever the tree mounts. And because the
+system file is the lowest Git scope the guest reads, an unset leaf there is
+upstream's default: git-branchless's lowest-scope check rejects a `test.jobs`
+above 1 without `test.strategy = "worktree"`, exactly as the Home Manager
+user-global tree already does.
+
+## Guest-fixed keys
+
+Two keys are forced on top of everything, because the guest is not a trusted Git
+client:
+
+- `core.sshCommand` runs a store script that refuses: it prints that pushes go
+  through the guest's `origin` remote, which the host relay serves, and exits
+  non-zero. The guest holds no credentials.
+- `safe.directory` trusts `/run/sandbox/seed` and `/mnt/objects`, the paths
+  `repo-guest.nix` reads, even though the host owns them.
+
+A consumer value for either key loses wholly; a `safe.directory` list is
+replaced, never appended. Git folds the case of section and key names and Nix
+does not, so a key differing from one of these only by case renders as a second
+key Git reads as the same one — and the line that renders last wins. Such a key
+fails evaluation, with a message naming the fixed key.
+
+## Delivery
+
+The merged tree renders per runtime (`lib.generators.toGitINI`) and installs as
+the guest's SYSTEM configuration, `/etc/gitconfig`:
+
+- the protected scope `safe.directory` is honored in — Git ignores it in
+  repository-local files — and a file, because git-absorb and git-revise are
+  libgit2 and read files only;
+- the guest's lowest Git scope. `safe.directory` cannot be re-added by a
+  repository-local file (protected scope), but `core.sshCommand` follows
+  ordinary Git precedence: a guest process can override it through `--global`,
+  repository-local or `-c` configuration. The forced system value refuses an
+  ordinary push and names `origin`; it is not an SSH boundary. The boundary is
+  the guest itself, which holds no SSH credentials — pushes are meant to go
+  through `origin`, which the host relay serves.
+
+The standalone factory takes the same render explicitly:
+
+```nix
+inputs.nix-agentic-tools.lib.ai.mkSandbox pkgs {
+  exe = lib.getExe pkgs.hello;
+  gitConfig = lib.generators.toGitINI {
+    core.editor = "nano";
+    safe.directory = ["/mnt/objects" "/run/sandbox/seed"];
+  };
+  outName = "sandbox-hello";
+}
+```
+
+`gitConfig` defaults to null: no system configuration, and the factory call is
+byte-identical to before the parameter existed. A non-repo call passes null and
+a repo call keeps its own `safe.directory` default; a given `gitConfig` replaces
+that default.
+
+## Checks
+
+`packages/microvm/checks/git.nix` covers the priority matrix (raw-only, raw plus
+typed leaf, nested default versus typed, whole-option replacement,
+equal-priority conflict, forced keys), enable propagation into the guest package
+list, the `test.jobs`/`test.strategy` coupling holding across the
+root-to-runtime typed copy-down, case-variant guest-fixed keys refused, the
+rendered file parsing with real Git, and the module-built launcher's guest
+carrying the file and an enabled tool's package. The `microvm-git-launcher`
+check is a hand-run KVM smoke launcher asserting `git config --system` in a live
+guest; CI boots no VM.
+
+<!-- Fragment: packages/microvm/docs/sandbox-identities.md -->
+
+# Sandbox Git identities
+
+> **Last verified:** 2026-11-02 — signer services and session-only relay wiring
+> are checked on Home Manager and devenv. Real guest boots verify signed and
+> unsigned identity launches; see [signing](sandbox-signing.md).
+
+`ai.sandbox.git.identities` supplies author details and explicit push keys:
+
+```nix
+{inputs, ...}: let
+  redact = inputs.nix-agentic-tools.lib.redact;
+in {
+  ai.claude.enable = true;
+  ai.sandbox = {
+    enable = true;
+    git.identities.bot = {
+      push.key = redact.file "/run/secrets/bot-push-key";
+      remotes."github.com" = {};
+      user = {email = "bot@example.invalid"; name = "Example Bot";};
+    };
+  };
+}
+```
+
+Every runtime mirrors `git.identities` and `git.forges`. A runtime assignment,
+including `mkDefault`, replaces the whole root set. To keep selected entries,
+use
+`ai.codex.sandbox.git.identities = { inherit (config.ai.sandbox.git.identities) bot; };`.
+Omit entries to remove them; there is no identity `enable` option. Runtime
+definitions do not flow back to the root.
+
+`user.name`, `user.email`, and `push.key` are required. `push.key` has the
+relay's `redact.types.secretFile` type, so plaintext keys are refused without
+printing their contents. `signing.key` accepts the same reference type or null
+(default). A non-null signing key creates one dedicated signer per routed
+runtime and identity. Null means unsigned commits and no signing door.
+
+Each `remotes.<token>.forge` defaults to `<token>`. The token is the host
+exactly as written in the remote URL, including case and SSH aliases. For
+example, `remotes.github-work.forge = "github.com"` maps
+`git@github-work:org/repo.git` to the real forge without reading
+`~/.ssh/config`. Two identities claiming the same token in a sandbox-enabled
+runtime fail an assertion naming the token and both identity option paths.
+Tokens and forge hosts use the relay's DNS/IPv4 grammar.
+
+`git.forges.<host>.hostKeys`, `sshPort`, and `sshUser` default to null. Non-null
+fields override the shared relay forge facts independently; null retains those
+facts. Codeberg, GitHub, and GitLab have built-in pins. Endpoint defaults are
+port 22 and user `git`. A custom forge needs explicit nonempty `hostKeys`:
+
+```nix
+ai.sandbox.git.forges."git.example.org" = {
+  hostKeys = "[git.example.org]:2222 ssh-ed25519 <public-host-key>";
+  sshPort = 2222;
+  sshUser = "bot";
+};
+```
+
+There is no first-use trust. Every declared identity's remote must resolve to
+pins, even if that runtime is disabled. Runtime `forges` assignment also
+replaces the root set before merging non-null fields over built-ins. Active
+runtimes sharing a forge must resolve identical pins; divergent pins fail
+evaluation with both runtime option paths.
+
+The standalone `sandbox-select <table.json>` reads the current checkout's raw
+Git config. Push-remote precedence is `branch.<name>.pushRemote`,
+`remote.pushDefault`, `branch.<name>.remote`, then the sole configured remote or
+`origin`. A detached HEAD skips branch-specific settings.
+`remote.<name>.pushurl` takes precedence over `url`; multiple selected URLs
+refuse selection and list the URLs. `insteadOf` and SSH configuration never
+rewrite the token.
+
+Accepted URL forms are `ssh://[user@]host[:port]/path`, `[user@]host:path`,
+`https://host[:port]/path`, and `git://host/path`. Selection uses only the
+token; local/file URLs and unmatched tokens refuse with the runtime's
+identity/token list. SSH URL users and explicit SSH ports override forge
+defaults; HTTPS ports do not become SSH ports. Repository paths are preserved,
+including existing `.git` suffixes and the distinction between home-relative SCP
+paths and absolute SSH URL paths. Nothing appends `.git`.
+
+Success is JSON `{credential, upstream, token, identity}`; no repository or no
+push remote emits JSON `null` and exits zero, meaning no doors. The pure table
+builder records each token's identity, `<runtime>-<identity>` credential, real
+forge, endpoint defaults, and store pin file. Keys never enter that table.
+
+When a guest-routed runtime has identities, the module creates
+`ai.git-relay.instances.sandbox` with `settings.sessions = true` and no static
+repositories. Home Manager defaults to port 19418; devenv to 19419. Set the
+instance's native `port` option to move it. No identities means no generated
+instance. Runtimes without guest routes contribute no credentials.
+
+Each credential carries the identity's push key and a deduplicated list of its
+real forge hosts. The relay checks that current list on every push, so removing
+the credential or its last route to a forge revokes forwarding there. Removing
+one alias while another still authorizes the same forge retains that forge's
+authorization. Native credential and forge-pin definitions win over generated
+defaults. Generated pins have priority 900 to beat the relay's built-in
+`mkDefault` pins; ordinary consumer definitions have priority 100. Static
+repositories and turning off session-only mode are refused for this instance,
+preventing guest access to predictable static repository URLs.
+
+A runtime launcher with identities runs selection before boot. Its single notice
+lists the runtime's identities, remote token and selected identity. It mentions
+replacement semantics only when that runtime defines its own identity set. An
+unmatched remote refuses launch. Outside a repository it boots with no doors;
+inside a repository with no push remote it still seeds committed work, with no
+relay door or identity. Runtimes without identities retain their existing
+launcher. Kiro, Kimchi and Copilot still have no guest route.
+
+For a match, the launcher creates a random 128-bit session token and holds its
+lock before opening the relay session. It reads the relay package, port and
+state directory from `ai.git-relay.instances.sandbox`, including native
+overrides and backend-specific state roots. Session management uses the
+service's public config template to validate credential references; it never
+reads push keys or writes pin files. Session creation requires existing daemon
+pins, so an old launcher cannot restore rotated or removed pins. The running
+daemon and forwarding hooks use its resolved config and current pins. A
+`git ls-remote` probe of the new session must succeed before boot; failures name
+the instance's `port` option. Start the relay first (`devenv up` on devenv).
+
+The guest receives a port-9418 door to that relay and a launch-time Git config
+through fw_cfg; a signing identity also gets a dedicated agent door. The random
+session URL never enters the store or kernel command line. After cloning the
+object seed, its final config include supplies `user.name`, `user.email`,
+commit/tag signing settings, and the session's `remote.origin.url`. Fetch and
+push share that URL, `remote.origin.prune` is false, and an attached or unborn
+branch tracks its same-named origin branch. Detached HEAD remains detached. The
+final include overrides consumer identity settings; no operator identity, key or
+agent is inherited.
+
+The relay session borrows the host common object directory, so Git advertises
+existing objects and pushes transfer new objects. The factory pins seeded roots
+before the guest starts and retains its graceful-shutdown recovery behavior.
+Shallow, partial and alternates-using repositories remain refused. Matched
+SHA-256 repositories are refused because the relay initializes SHA-1 sessions;
+no-door object seeds still support both formats. Fetch exposes this session's
+pushed refs; refreshing from upstream remains deferred. On exit the launcher
+closes its session before releasing the lock. Concurrent relay GC skips held
+locks, including sessions whose guest is running.
+
+<!-- Fragment: packages/microvm/docs/sandbox-inference.md -->
+
+# Sandbox inference
+
+> **Last verified:** 2026-11-02 — client-key option inheritance, the inference
+> door, per-launch key transport and the guest user configs, on Home Manager and
+> devenv. The guest carries no consumer native Claude/Codex settings.
+
+`ai.sandbox.inference.clientKey` names the VM-only client of the runtime's
+selected proxy instance (`ai.<runtime>.settings.inference`). Null disables
+sandbox inference; a selected instance with a null client never falls back to
+the host client.
+
+```nix
+{inputs, ...}: let
+  redact = inputs.nix-agentic-tools.lib.redact;
+in {
+  ai = {
+    claude.enable = true;
+    cliproxyapi.instances.main = {
+      clientKeys = {
+        desktop.key = redact.file "/run/secrets/cpa-desktop";
+        sandbox.key = redact.file "/run/secrets/cpa-sandbox";
+      };
+      port = 8317;
+    };
+    sandbox = {enable = true; inference.clientKey = "sandbox";};
+    settings.inference = {clientKey = "desktop"; instance = "main";};
+  };
+}
+```
+
+## Selection
+
+Every runtime mirrors the option; a runtime value, including `mkDefault`,
+replaces the root value, and nothing flows back up. The guest selection reuses
+the runtime's selected instance and substitutes only the client, so the VM
+client's routes and models resolve independently of the host client's.
+
+A requested client is refused when the selection is missing or disabled, the
+client does not exist, or the runtime selected an external `url` instead of an
+instance. Sandbox inference supports `cliproxyapi` instances only, and a client
+that an enabled host harness also selects in the same evaluation is refused:
+revoking a shared key would cut a host harness too. Give every guest one
+dedicated client so a single revocation cuts them all. VM-only key provisioning
+is an operator obligation; equal bytes behind different references are not
+checked.
+
+## What crosses the boundary
+
+The guest config is exactly the owner lowering's output for the guest selection.
+Phase 6 carries no consumer native Claude or Codex settings into the guest:
+Claude gets a guest `~/.claude/settings.json` (door URL, key-file helper, quiet
+defaults), Codex a guest `~/.codex/config.toml` (provider table with command
+auth). No host config file, login, environment wrapper or home directory is
+copied.
+
+The client key is read on the host at launch through the shared inference key
+helper, written to a 0600 file in the launcher's private runtime directory,
+carried as a fw_cfg blob, and installed in the guest as
+`/run/sandbox-inference/key`, mode 0400, owned by the sandbox user. It never
+enters a Nix value, a store path, an argument vector or the kernel command line.
+fw_cfg is guest-visible by design: the key is for the guest, not protected from
+guest root. The guest file is a launch snapshot; rotation needs a relaunch, and
+CPA-side revocation refuses subsequent authenticated requests.
+
+## Door and launch refusal
+
+Inference traffic crosses one factory door: guest port 8317 on the door address,
+`socat` to the instance's native loopback port. The guest endpoint URL names the
+door, not the host origin. No proxy, second NIC or other credential crosses with
+it.
+
+Before QEMU starts, the launcher probes the instance's `/v1/models` with the
+staged key, supplied to curl through its stdin config. A connection failure,
+timeout, rejected key, non-200 status or non-list response refuses the launch,
+naming the instance, client and port only. The proxy is never auto-started and
+no other provider is tried. With inference inactive there is no door, blob,
+probe or helper at all.
+
+<!-- Fragment: packages/microvm/docs/sandbox-signing.md -->
+
+# Sandbox commit signing
+
+Add a signing key reference to an identity to sign its guest commits and tags:
+
+```nix
+{inputs, ...}: let
+  redact = inputs.nix-agentic-tools.lib.redact;
+in {
+  ai.claude.enable = true;
+  ai.sandbox = {
+    enable = true;
+    git.identities.bot = {
+      push.key = redact.file "/run/secrets/bot-push-key";
+      remotes."github.com" = {};
+      signing.key = redact.file "/run/secrets/bot-signing-key";
+      user = {email = "bot@example.invalid"; name = "Example Bot";};
+    };
+  };
+}
+```
+
+`signing.key = null` is the default: commits and tags are unsigned and there is
+no signing door. The signer never inherits the operator's agent or keys. A
+signing key has the same `redact.types.secretFile` type as the push key;
+plaintext keys fail evaluation without printing their contents. Reusing a key
+for pushing and signing requires explicitly setting both references.
+
+Each sandbox-enabled runtime with a guest route gets one service for each
+identity with a signing key: `sandbox-signer-<runtime>-<identity>`. The example
+creates `sandbox-signer-claude-bot`. Home Manager emits a systemd user service;
+devenv emits a process started by `devenv up`. Start the relay and signer before
+launching the sandbox. Runtimes without a guest route generate no signers.
+
+`ai.services` delivers the private key in a mode-0600 file inside the service's
+mode-0700 runtime directory. The dedicated SSH agent loads only that key, using
+an explicitly bound `SSH_AUTH_SOCK`. Home Manager's directory follows its
+runtime environment; devenv uses `config.devenv.runtime`, keeping evaluations
+separate. The sandbox launcher reads the directory from the evaluated service.
+Neither private keys nor key paths enter the guest, its command line, or its
+identity blob. The guest can request signatures through the dedicated agent
+socket.
+
+After URL identity selection, the launcher runs `ssh-add -L` against that
+identity's socket. A stopped, empty, locked or multi-key agent refuses launch
+before boot and names the service to start or restart. An unsigned identity
+needs no signer. No repository or no push remote still means no doors.
+
+For a signing identity, the final repository configuration contains
+`gpg.format = ssh`, `user.signingKey = key::<public key>`, and enabled
+`commit.gpgSign` and `tag.gpgSign`. Its `gpg.ssh.allowedSignersFile` points to a
+public file containing `<user.email> <public key>`; signing email principals
+must be nonempty, contain no whitespace or commas, and not start with `#`,
+checked at evaluation. This file and the identity configuration travel through
+fw_cfg at launch. Run `git verify-commit HEAD` inside the guest to verify a
+commit against that file.
+
+The factory connects guest TCP port 2222 to the selected host socket. A guest
+service bridges `/run/sandbox-signing/agent.sock` to that port, and the guest
+command gets that socket as `SSH_AUTH_SOCK`. The relay still transports commits
+and signatures unchanged to the upstream repository. No general host SSH agent
+is forwarded.
+
+A reference-file change restarts its signer through `ai.services`. A running VM
+keeps its original public signing key, so signing fails after key rotation until
+relaunch. Guests sharing a runtime and identity share one agent: a guest can
+empty or lock it, preventing other such guests from signing until the signer is
+restarted. Agent filtering and per-session agents remain deferred.
+
+The standalone factory still accepts `signing = {port; socket;}`. The runtime
+identity launcher uses `socket = null` and supplies `SANDBOX_SIGNING_SOCKET` at
+launch; the factory records it in the private runner directory for its door. A
+signed `repoConfig` guest also requires `SANDBOX_ALLOWED_SIGNERS`, transported
+alongside `SANDBOX_REPO_CONFIG` as public verification data.
+
+`microvm-signing-*` checks cover both backends, service cardinality, key typing
+and both halves of the door. `microvm-sandbox-session-boot` generates its own
+keys, starts the evaluated signer service, signs and verifies guest commits,
+verifies upstream signatures, refuses unavailable or non-single-key signers, and
+runs an unsigned identity with no signing socket. It boots guests one at a time
+and requires KVM.
