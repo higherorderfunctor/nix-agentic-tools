@@ -20,6 +20,9 @@
       lib.removePrefix "${name}." (lib.removeSuffix ".fixture" fixture);
 
     cases = {
+      # An indented --- inside a block scalar is content, not a closing fence;
+      # the duplicate after it must still be found.
+      frontmatter-block-scalar.expected = "frontmatter-block-scalar.md: duplicate key /nested/a (line 7)";
       frontmatter-duplicate.expected = "frontmatter-duplicate.md: duplicate key /nested/a (line 4)";
       json-array-duplicate.expected = "json-array-duplicate.json: duplicate key /0/a";
       json-duplicate.expected = "json-duplicate.json: duplicate key /nested/a";

@@ -94,12 +94,14 @@ def parse_yaml_text(text, filename):
 
 def parse_markdown(text, filename):
     lines = text.removeprefix("\ufeff").splitlines()
-    if not lines or lines[0].strip() != "---":
+    # A fence closes frontmatter only at column zero; an indented delimiter
+    # is content, such as a line inside a block scalar.
+    if not lines or lines[0].rstrip() != "---":
         return
     closings = [
         index
         for index, line in enumerate(lines[1:], 1)
-        if line.strip() in {"---", "..."}
+        if line.rstrip() in {"---", "..."}
     ]
     if not closings:
         return
