@@ -236,20 +236,36 @@ if (emptySeed) {
   composerGlobalName = composers[0].global.expression.text;
 }
 
-// Callers resolve the merge by spelling alone, so every occurrence of its name
-// must be the discovered declaration or a call of it. Any second binding,
-// write, destructuring target, alias or escape would change what runs.
-function checkMergeNameUses(node) {
-  if (
-    ts.isIdentifier(node) &&
-    node.text === merge.name.text &&
-    node !== merge.name &&
-    !(ts.isCallExpression(node.parent) && node.parent.expression === node)
-  )
-    fail("workspace merge name is mutated, shadowed, or escapes");
-  ts.forEachChild(node, checkMergeNameUses);
+// Callers resolve the merge and the composer by spelling alone, so every
+// occurrence of either name must be its discovered declaration or a call of
+// it. Any second binding, write, destructuring target, alias or escape would
+// change what runs. A non-computed property key or member name (`{x:1}`,
+// `o.x`) is not a use of the binding; a shorthand property or destructuring
+// target still is.
+const isPropertyName = (node) => {
+  const parent = node.parent;
+  return (
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.propertyName === node)
+  );
+};
+function checkNameUses(declaration, label) {
+  const visit = (node) => {
+    if (
+      ts.isIdentifier(node) &&
+      node.text === declaration.name.text &&
+      node !== declaration.name &&
+      !isPropertyName(node) &&
+      !(ts.isCallExpression(node.parent) && node.parent.expression === node)
+    )
+      fail(`workspace ${label} name is mutated, shadowed, or escapes`);
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
 }
-checkMergeNameUses(file);
+checkNameUses(merge, "merge");
+if (composer) checkNameUses(composer, "composer");
 
 const hasCalls = [];
 function checkMergeUses(node) {

@@ -66,6 +66,10 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert len(modern_result["workspaceOverridableSettings"]) == 11, modern_result
     assert "chat.defaultModel" in modern_result["workspaceOverridableSettings"]
 
+    # A property key that only shares the merge's spelling is not a use of it.
+    unrelated = run(bundle(merge=empty_seed + composer + "const o={merge:1};o.merge;"))
+    assert unrelated.returncode == 0, unrelated.stderr
+
     cases = {
         "accept all": (
             bundle(merge=merge_with_guard("Cq.has(k)||true")),
@@ -82,6 +86,14 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
         "composer with a parameter": (
             bundle(merge=empty_seed + "function compose(a){return{...globalLoad(),...merge()}}"),
             "unsupported loader shape",
+        ),
+        "composer assigned": (
+            bundle(merge=empty_seed + composer + "compose=function(){return{}};"),
+            "composer name is mutated, shadowed, or escapes",
+        ),
+        "composer redeclared": (
+            bundle(merge=empty_seed + composer + "function compose(){return globalLoad()}"),
+            "composer name is mutated, shadowed, or escapes",
         ),
         "computed allowlist member": (
             bundle(allowlist=f'Cq=new Set([{",".join(members)},pn["CHAT_TEST_00"]]);'),
