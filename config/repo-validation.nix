@@ -7,6 +7,8 @@
   shellStrict = import ./shell-strict.nix;
   strictShellApplication = import ../lib/strict-shell-application.nix pkgs;
 
+  uniqueMapKeys = import ../checks/repository/unique-map-keys.nix {inherit pkgs;};
+
   rejectDefaultBranchCommit = strictShellApplication {
     name = "reject-default-branch-commit";
     text = ''
@@ -143,6 +145,16 @@
         stages = ["pre-commit"];
       };
       ci = null;
+    };
+    unique-map-keys = {
+      role = "validator";
+      hook = {
+        enable = true;
+        name = "unique-map-keys";
+        entry = lib.getExe uniqueMapKeys;
+        files = "\\.(json5?|jsonc|jsonl|lock|md|nix|toml|ya?ml)$";
+      };
+      ci.backend = "git-hooks";
     };
   };
 

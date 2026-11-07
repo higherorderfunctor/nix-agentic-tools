@@ -1,0 +1,5 @@
+ok: true
+---
+nested:
+  a: 1
+  a: 2

@@ -1,0 +1,4 @@
+{
+  // JSONC comments and a trailing comma remain JSONC input.
+  "nested": {"a": 1, "a": 2},
+}
