@@ -40,7 +40,7 @@ example `probe "$KB" --v3 chat --wrap=foo --help`.
   input and starts the KAS agent runtime. Put `--help` last and before any `--`.
 - **Print the whole table first.** Run the full set of probes once, showing each
   argument list, exit code and first output line, before adding or changing any
-  assertion. A check written from one probe has shipped wrong claims.
+  assertion.
 
 ## Where measured facts live
 
