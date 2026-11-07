@@ -9,11 +9,11 @@ Per-platform binary packages store versions and hashes in a
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-10-16 — source paths and ownership guidance follow
-> native package assembly; generated Markdown, JSON, TOML and YAML are formatted
-> and checked in `lib/generated.nix`'s `mkTree`; standalone scripts use
-> `lib/strict-shell-application.nix`; `dev/tasks/generate.nix` has one writer,
-> `copy_out`.
+> **Last verified:** 2026-11-06 — `lib/` holds only generic code; source paths
+> and ownership guidance follow native package assembly; generated Markdown,
+> JSON, TOML and YAML are formatted and checked in `lib/generated.nix`'s
+> `mkTree`; standalone scripts use `lib/strict-shell-application.nix`;
+> `dev/tasks/generate.nix` has one writer, `copy_out`.
 >
 > Full lineage:
 > `git show 6d2fbeef:dev/fragments/nix-standards/nix-standards.md`.
@@ -221,6 +221,16 @@ pkg.overrideAttrs (_finalAttrs: _old: {
 `passthru` (e.g., `overrideModAttrs`, `overridePythonAttrs`). Replacing
 `passthru` entirely drops these, triggering evaluation warnings and breaking
 downstream overrides.
+
+### Keep `lib/` generic
+
+`lib/` holds generic, target-agnostic code: fragment composition, MCP entry
+helpers, frontmatter emitters. A type or helper with one consumer lives with
+that consumer: in the package directory, exported through `passthru` when other
+modules need it, or in a sibling file of the one module that uses it. Promote it
+to `lib/` only when unrelated consumers share it. Otherwise `lib/` becomes a
+drawer for anything attribute-shaped, and typed config tied to one package hides
+its dependency chain behind a path readers expect to be reusable.
 
 ### Flake Source Visibility
 

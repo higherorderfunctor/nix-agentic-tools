@@ -1,7 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-29 — extracted facts self-heal through visible PR
-> CI commits, with Linux carrying its facts before Darwin measures.
+> **Last verified:** 2026-11-06 — a pnpm repin comes from the update tooling;
+> extracted facts self-heal through visible PR CI commits, with Linux carrying
+> its facts before Darwin measures.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -648,10 +649,10 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   mismatch, exit 0. Measured 2026-09-10 on the 3.9.1 repin, where
   `nix build .#…oxlint.pnpmDeps` fetched `…-oxlint-pnpm-deps` from cachix while
   the new source in fact hashes to
-  `sha256-bIbBs6+QYoJsRqCV2q7enpw5UIw1ugzRJff4OUOGQ+s=`. Force the real value by
-  writing a fake hash and reading `got:` — the same trick nix-update performs
-  with `outputHash = ""`, which is why the sweep gets this right and a manual
-  repin has to ask for it.
+  `sha256-bIbBs6+QYoJsRqCV2q7enpw5UIw1ugzRJff4OUOGQ+s=`. nix-update forces the
+  real value with `outputHash = ""`, which is why the sweep gets this right;
+  derive a repin with that tooling, in CI or by running the update script
+  locally (see the update pipeline fragment).
 
   The structural fix is a versioned name, so every bump moves the path and the
   fetch must verify the hash. kimchi derives one `versionedName` from its
@@ -676,8 +677,8 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   old path still substitutes. The build then consumes the old dependency set,
   and `fix_sidecar_hashes` — which builds against the recorded hash — reports
   `ok` without re-deriving it. The input PR opens red if that set no longer
-  builds; it never commits a wrong hash. A fresh `got:` still needs the
-  fake-hash trick above.
+  builds; it never commits a wrong hash. A fresh `got:` still needs the update
+  tooling's `outputHash = ""` run above.
 
   `cargoDeps` cannot be masked this way: `fetchCargoVendor` names its staging
   output `${pname}-${version}-vendor-staging`, and `vu.mkVersion` puts the short
