@@ -21,7 +21,7 @@ in {
     };
     "Orchestrator session" = {
       always = true;
-      enable = false;
+      enable = true;
       source = ../fragments/orchestrator-session.md;
     };
     "Pool drain" = {

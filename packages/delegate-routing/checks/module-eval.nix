@@ -214,13 +214,10 @@
     };
     workflowName = "Work and review";
     workflowHeader = "Use when a delegate makes a change someone will act on";
-    # A runtime replacement supplies the portable wording explicitly.
-    runtimeCatalogEnabled = change {
-      ai.programs.delegate-routing.runtimes.claude.routing."Orchestrator session" = {
-        always = true;
-        enable = true;
-        source = ../fragments/orchestrator-session.md;
-      };
+    # A runtime record turns the enabled-by-default entry off for its own
+    # runtime only; sibling runtimes keep the shipped default.
+    runtimeCatalogDisabled = change {
+      ai.programs.delegate-routing.runtimes.claude.routing."Orchestrator session".enable = false;
     };
     # A runtime workflow record that sets no text keeps the portable header.
     runtimeWorkflowStep = change {
@@ -235,9 +232,15 @@
     catalogOverridden = change {
       ai.programs.delegate-routing.routing."Orchestrator session".text = "CUSTOM ORCHESTRATOR GUIDANCE";
     };
+    catalogDisabled = change {
+      ai.programs.delegate-routing.routing."Orchestrator session".enable = false;
+    };
+    # Every always-on entry off removes the rule; fails if a shipped always
+    # entry stays on after a consumer disables the set.
     alwaysDisabled = change {
       ai.programs.delegate-routing.routing = {
         "Load delegate-routing".enable = false;
+        "Orchestrator session".enable = false;
         "Pool drain".enable = false;
         "Validate the result".enable = false;
       };
@@ -869,9 +872,11 @@
         }))
       );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
+      # Fails if "Orchestrator session" ships off or any other entry default moves.
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
-      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Pool drain" "Size the work" "Validate the result"]
-      && !routingDefaults."Orchestrator session".enable
+      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Orchestrator session" "Pool drain" "Size the work" "Validate the result"]
+      && routingDefaults."Orchestrator session".enable
+      && routingDefaults."Orchestrator session".always
       && routingDefaults."Load delegate-routing".always
       && routingDefaults."Pool drain".always
       && routingDefaults."Validate the result".always
@@ -879,8 +884,10 @@
       && lib.hasInfix "## Routing" claude
       && hasLoadInstruction stub
       && lib.hasInfix "### Pool drain" stub
+      && lib.hasInfix "### Orchestrator session" stub
       && lib.hasInfix "### Validate the result" stub
       && !(lib.hasInfix "### Load delegate-routing" claude)
+      && !(lib.hasInfix "### Orchestrator session" claude)
       && !(lib.hasInfix "### Pool drain" claude)
       && !(lib.hasInfix "### Validate the result" claude)
       && !(lib.hasInfix "### Size the work" stub)
@@ -898,6 +905,15 @@
       && lib.hasInfix "### Choose execution" (readSkill routingReplaced "claude")
       && ordered (readSkill routingInserted "claude") ["Follow the user's request" "Size the work" "Consumer guidance" "Choose execution"]
       && lib.hasInfix "CUSTOM INSERTED GUIDANCE" (readSkill routingInserted "claude")
+      # Fails if a consumer text override stops rendering once the entry ships on.
+      && catalogOverridden.config.ai.programs.delegate-routing.routing."Orchestrator session".enable
+      && lib.hasInfix "### Orchestrator session" (ruleText catalogOverridden)
+      && lib.hasInfix "CUSTOM ORCHESTRATOR GUIDANCE" (ruleText catalogOverridden)
+      && !(lib.hasInfix "Keep this session" (ruleText catalogOverridden))
+      # Fails if a plain consumer enable = false cannot turn the entry off.
+      && !catalogDisabled.config.ai.programs.delegate-routing.routing."Orchestrator session".enable
+      && !(lib.hasInfix "### Orchestrator session" (ruleText catalogDisabled))
+      && !(lib.hasInfix "Keep this session" (ruleText catalogDisabled))
     );
     "module-delegate-routing-${name}-routing-runtime" = mkTest "delegate-routing-${name}-routing-runtime" (
       lib.hasInfix "CLAUDE GUIDANCE" (readSkill runtimeRouting "claude")
@@ -906,8 +922,9 @@
       && lib.hasInfix "PORTABLE GUIDANCE" runtimeRouting.config.ai.codex.rules.delegate-routing-router.text
       && !(lib.hasInfix "### Size the work" (readSkill runtimeRouting "claude"))
       && lib.hasInfix "### Size the work" (readSkill runtimeRouting "codex")
-      && lib.hasInfix "### Orchestrator session" (ruleText runtimeCatalogEnabled)
-      && !(lib.hasInfix "### Orchestrator session" runtimeCatalogEnabled.config.ai.codex.rules.delegate-routing-router.text)
+      # Fails if a runtime record cannot turn the shipped entry off for itself.
+      && !(lib.hasInfix "### Orchestrator session" (ruleText runtimeCatalogDisabled))
+      && lib.hasInfix "### Orchestrator session" runtimeCatalogDisabled.config.ai.codex.rules.delegate-routing-router.text
     );
     "module-delegate-routing-${name}-workflows" = mkTest "delegate-routing-${name}-workflows" (
       result.config.ai.programs.delegate-routing.workflows.${workflowName}.enable
@@ -927,8 +944,6 @@
       && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
       && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
       && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")
-      && !catalogOverridden.config.ai.programs.delegate-routing.routing."Orchestrator session".enable
-      && !(lib.hasInfix "CUSTOM ORCHESTRATOR GUIDANCE" (readSkill catalogOverridden "claude"))
       && lib.hasInfix "CUSTOM WORKFLOW STEP" (readSkill workflowInserted "claude")
       && (let
         text = readSkill workflowInserted "claude";

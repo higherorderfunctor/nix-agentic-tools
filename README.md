@@ -1115,14 +1115,14 @@ only for manual delegation, disable its own delegate-routing program with
 because its delegation controls are unestablished.
 
 Portable `routing.<name>` entries carry `enable`, `always`, `before`, `after`
-and `text` or `source`. Four routing defaults and the always-on load-skill stub
-ship enabled, along with the "Work and review" workflow. Enable the optional
-"Orchestrator session" entry with `routing."Orchestrator session".enable`.
-Workflows expose named `steps` with the same entry fields, so a consumer can
-change one step. Entries with `always = true` become runtime rules; other
-entries live in the skill. Ordering uses named `before` and `after` edges.
-Missing or disabled anchors are ignored, cycles fail, and ties have no promised
-order.
+and `text` or `source`. Every shipped routing entry and the always-on load-skill
+stub are enabled by default, along with the "Work and review" workflow. Disable
+the "Orchestrator session" entry with
+`routing."Orchestrator session".enable = false`. Workflows expose named `steps`
+with the same entry fields, so a consumer can change one step. Entries with
+`always = true` become runtime rules; other entries live in the skill. Ordering
+uses named `before` and `after` edges. Missing or disabled anchors are ignored,
+cycles fail, and ties have no promised order.
 
 Runtime `ai.programs.delegate-routing.runtimes.<runtime>.routing` and
 `workflows` compose with portable maps by key. A present runtime entry replaces

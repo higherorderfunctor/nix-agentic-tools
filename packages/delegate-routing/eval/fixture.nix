@@ -92,7 +92,6 @@
           parallelism limit for native subagents or workflow nodes.
         '';
       };
-      "Orchestrator session".enable = true;
     };
     runtimes = {
       claude = {
