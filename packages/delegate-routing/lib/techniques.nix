@@ -15,6 +15,16 @@ in {
       # docs/delegates/tools.md Claude `Agent`: depth 3 below main (claude:depth)
       runsOwnSubagents = "supported (headless)";
     };
+    "Agent with generated agent file" = {
+      kind = "subagent";
+      modelArg = "the generated agent file pinning";
+      modes = ["interactive" "headless"];
+      notes = "call `Agent` with `subagent_type: \"<family>\"`: the generated `.claude/agents/<family>.md` pins the full model id and the family's default effort. delegate-routing is the skill that authorizes setting effort; call `effort` overrides the file. `CLAUDE_CODE_SUBAGENT_EFFORT` is an existing lower-precedence fallback, not a launch route.";
+      pinsEffort = true;
+      pinsModel = true;
+      # docs/delegates/tools.md Claude `Agent`: depth 3 below main (claude:depth)
+      runsOwnSubagents = "supported (headless)";
+    };
     Workflow = {
       kind = "workflow";
       modelArg = "full model id";

@@ -5,6 +5,7 @@
   models,
   techniques,
   pools ? {},
+  resolvedAgentFiles ? null,
   routing ? {},
   skill,
   workflows ? {},
@@ -16,6 +17,11 @@
   inherit (import ./vocabulary.nix) delegateKinds tiers;
   runtimes = automatic {inherit runtime extraRuntimes manualExternalDelegates;};
   extras = lib.tail runtimes;
+  agentFiles = import ./agent-files.nix {inherit lib;};
+  agentSet =
+    if resolvedAgentFiles != null
+    then resolvedAgentFiles
+    else agentFiles.resolve agentFiles.facts.models (selected "claude");
   selected = target: select families models.${target};
   targets = family: builtins.filter (target: builtins.elem family (selected target)) runtimes;
   candidates = selection.candidates families models runtimes;
@@ -82,7 +88,7 @@
     (a: b: kindOrder.${techniques.${target}.${a}.kind} < kindOrder.${techniques.${target}.${b}.kind})
     (builtins.attrNames eligible);
   launch = family: target: let
-    names = launchTechnique target (target != runtime);
+    names = builtins.filter (name: name != "Agent with generated agent file" || agentSet ? ${family.name}) (launchTechnique target (target != runtime));
     # Refused where both delivery paths render it (the module and the public
     # mkSkill helper meet here): a reach must name a technique, and a route
     # composes that technique's model value spelling, so every eligible
@@ -97,7 +103,10 @@
       else
         phrase "Launch route" {
           inherit (node) modelArg;
-          model = launchId family target;
+          model =
+            if name == "Agent with generated agent file"
+            then "`${agentSet.${family.name}.id}`"
+            else launchId family target;
           technique = name;
         };
   in

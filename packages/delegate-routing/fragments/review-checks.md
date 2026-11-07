@@ -6,9 +6,11 @@ vendor's runtime that runs its own subagents (the technique table's "Runs own
 subagents" column), such as `codex exec` for work Claude wrote. It runs all
 three checks itself, mixing models, and returns each issue's outcome with
 evidence. When no such runtime is reachable, split the roles from this session
-through tools that pin model and effort: the Workflow tool's agent call, or an
-external launcher (`claude -p`, `codex exec`). Skipping the vendor requirement
-because one tool's enum lacks the model is a loop failure; report it as one.
+through tools that pin model and effort: plain Agent calls with generated agent
+files for cross-vendor checks from a Claude writer, the Workflow tool's agent
+call, or an external launcher (`claude -p`, `codex exec`). Skipping the vendor
+requirement because one tool's enum lacks the model is a loop failure; report it
+as one.
 
 One exception, on any forge (GitHub pull requests, GitLab merge requests or
 others): a change inside a stack of pull or merge requests gets one reviewer
