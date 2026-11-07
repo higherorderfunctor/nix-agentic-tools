@@ -789,6 +789,8 @@
       && lib.hasInfix "kiro-cli chat --no-interactive --model <id> --effort <effort>" claude
       && lib.hasInfix "always pass `thinking` explicitly" (techniqueRow kimchi "Agent")
       && techniqueCells kimchi "Agent" == ["`Agent`" "subagent" "true" "true" "acp+headless+interactive"]
+      # Fails if Claude's Agent row loses its effort or alias model pin.
+      && techniqueCells claude "Agent" == ["`Agent`" "subagent" "true" "true" "interactive+headless"]
       && lib.hasInfix "**models (introspect):** `kimchi --list-models`" kimchi
       && !(lib.hasInfix "(usage)" kimchi)
       && lib.hasInfix "### kimchi techniques" claude
@@ -946,7 +948,7 @@
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       # Fails if "Orchestrator session" ships off or any other entry default moves.
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
-      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Orchestrator session" "Pool drain" "Size the work" "Validate the result"]
+      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Orchestrator session" "Pool drain" "Size the work" "Tune these rules" "Validate the result"]
       && routingDefaults."Orchestrator session".enable
       && routingDefaults."Orchestrator session".always
       && routingDefaults."Load delegate-routing".always
@@ -963,6 +965,8 @@
       && !(lib.hasInfix "### Pool drain" claude)
       && !(lib.hasInfix "### Validate the result" claude)
       && !(lib.hasInfix "### Size the work" stub)
+      && lib.hasInfix "### Tune these rules" claude
+      && !(lib.hasInfix "### Tune these rules" stub)
       && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
       && !(alwaysDisabled.config.ai.codex.rules ? delegate-routing-router)
       && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")

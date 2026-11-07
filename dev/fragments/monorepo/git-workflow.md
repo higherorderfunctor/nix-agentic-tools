@@ -176,37 +176,20 @@ that would earn a re-request under the test above — a new file or mechanism, o
 an approach rewritten rather than corrected.
 
 **You cannot review your own diff.** The reasoning that wrote the code is the
-reasoning evaluating it, so reading it back produces agreement. Dispatch a
-reviewer that did not write the diff, from a different vendor. Give it the
-requirements and diff; the PR body is an argument, not evidence. Report
-dismissed findings as well as fixes.
+reasoning evaluating it, so reading it back produces agreement. Run the local
+review under the delegate-routing review rule, with no check run by the writer.
+Give it the requirements and diff; the PR body is an argument, not evidence.
+Report dismissed findings as well as fixes.
 
 github.com Copilot fails here often enough that separate-agent review is the
 common case, not a fallback for one outage.
 
-### Escalating past one reviewer: three blind checks
+### Local review
 
-**Settled — do not relitigate:** never trigger escalation on a change's
-"complexity": that word routed the decision before, and two agents reached
-opposite answers.
+The delegate-routing skill's **Work and review** workflow owns the rubric, the
+review rule (how many checks and from whom) and the loop; this guide does not
+restate it.
 
-Use all three checks when either trigger holds:
-
-- You intend to dismiss a reviewer finding rather than fix it; scope the checks
-  to disputed findings.
-- The diff touches a shared abstraction: `lib/**`, `packages/*/lib/**`, carried
-  patches under `packages/*/patches/**` or `packages/*/packages/**/*.nix`; or a
-  hunk under `packages/*/modules/**` or `lib/ai/**` adds, removes or retypes a
-  `mkOption`.
-
-Everything else uses one reviewer. Follow the delegate-routing skill's **Work
-and review** workflow for the rubric, checks and loop.
-
-**Scope, deliberately narrow:**
-
-- Only for changes going to `main`. A draft PR, or a long-lived experiment
-  branch where the design is not settled yet, forgoes it — if it is a draft, it
-  is not ready for this.
 - **Local runtimes only, always.** Never hand this to github.com Copilot: it
   cannot be given a model or an effort level, and the cost belongs where those
   controls exist.
@@ -552,9 +535,10 @@ other PR's. Nothing else deletes them: 349 had piled up by 2026-10-17, when the
 operator cleared them.
 
 **Stack fix lanes.** Run one serial lane per stack, in its own worktree, one
-unit at a time: a writer, then one reviewer from another vendor, then fixes. A
-fix lands in the commit that introduced the defect, and the branches above it
-are restacked. Push `archive/<slug>/before-<unit>` before each rewrite.
+unit at a time: a writer, then review under the delegate-routing rule for a
+stacked change, then fixes. A fix lands in the commit that introduced the
+defect, and the branches above it are restacked. Push
+`archive/<slug>/before-<unit>` before each rewrite.
 
 **Rebases, absorbs and fixups do not run commit hooks.** After any of them, run
 `prek run --files <changed files>`. Pass `-c rebase.autosquash=false` to a plain

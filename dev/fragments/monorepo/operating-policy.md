@@ -66,19 +66,15 @@ qualify. Further paid review needs such a change or the operator's instruction.
 Do not restore the Devenv Diagnostic as a required or automatic PR context; read
 the guide's evidence and the live ruleset before changing repository gates.
 
-Use a separate reviewer from a different vendor when Copilot errors, lacks
-quota, never reviewed a draft, or the change since its last review meets the
-re-request test. Give requirements and the diff; the PR body is not evidence.
-Report dismissed findings as well as fixes. Never review your own diff.
+When Copilot errors, lacks quota, never reviewed a draft, or the change since
+its last review meets the re-request test, review locally under
+delegate-routing's rule. Give requirements and the diff; the PR body is not
+evidence. Report dismissed findings as well as fixes. Never review your own
+diff.
 
-For work going to `main`, use delegate-routing's **Work and review** workflow.
-Use its three blind checks when dismissing a reviewer finding, or when a diff
-touches `lib/**`, `packages/*/lib/**`, `packages/*/patches/**`,
-`packages/*/packages/**/*.nix`, or adds, removes or retypes a `mkOption` under
-`packages/*/modules/**` or `lib/ai/**`. Otherwise use one reviewer. Drafts and
-unsettled experiment branches forgo this escalation. Run these checks locally,
-never through github.com Copilot, and size each role separately. Do not route
-escalation on an undefined judgment of "complexity".
+Review every change with delegate-routing's **Work and review** workflow; its
+Review step alone sets how many checks a change gets. Run these checks locally,
+never through github.com Copilot, and size each role separately.
 
 ### Instruction and validation changes
 

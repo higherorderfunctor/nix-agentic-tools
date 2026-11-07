@@ -36,10 +36,13 @@ overlap; use separate worktrees when they need different bases.
 
 One delegate on a model this runtime can reach goes through the first technique
 in the family table's Launch column for this runtime that is in your tool list;
-Claude's Agent tool is never listed because it pins only a model alias and never
-effort. Launch delegate CLIs from the current directory. That directory decides
-their permissions and configuration. Say in every external launch brief that the
-delegate is non-interactive and reports to an orchestrator, not a person.
+Claude's Agent tool is never listed because it pins effort but only an alias
+from its own enum as the model. A role that needs any other model goes through
+the Workflow tool or an external launcher; a subagent without the Workflow tool
+uses `claude -p` or `codex exec`. Launch delegate CLIs from the current
+directory. That directory decides their permissions and configuration. Say in
+every external launch brief that the delegate is non-interactive and reports to
+an orchestrator, not a person.
 
 Use another vendor's harness for a model this runtime can reach only when that
 harness runs the whole multi-step job itself: hand the entire job to one

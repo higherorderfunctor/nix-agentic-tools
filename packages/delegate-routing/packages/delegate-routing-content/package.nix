@@ -32,6 +32,18 @@
   };
   techniqueType = import ../../lib/technique-type.nix {inherit lib;};
   entryTypes = import ../../lib/entry-type.nix {inherit lib;};
+  # Caller techniques for mkSkill get the same option defaults as the shipped set.
+  normalizeTechniques = techniques:
+    (lib.evalModules {
+      modules = [
+        {
+          options.techniques = lib.mkOption {
+            type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
+          };
+          config = {inherit techniques;};
+        }
+      ];
+    }).config.techniques;
   normalized =
     (lib.evalModules {
       modules = [
@@ -58,7 +70,10 @@
         type = "markdown";
         text = frontmatter.render {
           data = skillData;
-          body = import ../../lib/render.nix ({inherit lib;} // defaults // args);
+          body = import ../../lib/render.nix ({inherit lib;}
+            // defaults
+            // args
+            // lib.optionalAttrs (args ? techniques) {techniques = normalizeTechniques args.techniques;});
         };
       };
       guards.parseCompare = true;

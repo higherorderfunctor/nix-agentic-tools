@@ -33,6 +33,10 @@ in {
       after = ["Follow the user's request"];
       source = ../fragments/size-the-work.md;
     };
+    "Tune these rules" = {
+      after = ["Choose execution"];
+      source = ../fragments/tune-these-rules.md;
+    };
     "Validate the result" = {
       after = ["Choose execution"];
       always = true;
@@ -60,7 +64,7 @@ in {
       }
       {
         name = "Review";
-        source = ../fragments/review-one-reviewer.md;
+        source = ../fragments/review-checks.md;
       }
       {
         name = "Loop";

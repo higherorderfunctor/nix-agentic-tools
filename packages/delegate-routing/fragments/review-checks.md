@@ -1,21 +1,34 @@
-For a change outside shared abstractions, use one reviewer from a different
-vendor than the worker, following the first check below. Its supported issues
-are accepted findings for the loop. For a shared abstraction (`lib/**`,
-`packages/*/lib/**`, option declarations or carried patches), use all three
-checks in fresh contexts. Use different models for the two checks where
-possible. Report disagreements only.
+Review every change with all three checks below, each in a fresh context. The
+first check, the second check and the judge each run on a vendor other than the
+writer's. Use different models for the two checks where possible. Report
+disagreements only. Hand the whole review as one job to a delegate on another
+vendor's runtime that runs its own subagents (the technique table's "Runs own
+subagents" column), such as `codex exec` for work Claude wrote. It runs all
+three checks itself, mixing models, and returns each issue's outcome with
+evidence. When no such runtime is reachable, split the roles from this session
+through tools that pin model and effort: the Workflow tool's agent call, or an
+external launcher (`claude -p`, `codex exec`). Skipping the vendor requirement
+because one tool's enum lacks the model is a loop failure; report it as one.
+
+One exception, on any forge (GitHub pull requests, GitLab merge requests or
+others): a change inside a stack of pull or merge requests gets one reviewer
+from a different vendor than the writer while it is stacked, following the first
+check below; that reviewer's supported issues are accepted findings for the
+loop. The change gets all three checks when it becomes ready to merge into the
+default branch. A pure rebase or restack of the stack gets no review; rework
+done during a rebase is a change, and the rules above apply to it.
 
 When the draft exceeds the Size row, the reviewer also names each specific cut
 or collapse with evidence: what breaks if it is deleted and the simpler form.
 The reviewer never judges its own proposed cuts, and neither does the writer.
 Whoever judges the cuts — the Judge in three-check review, a separate agent in
-one-reviewer review, never the orchestrator — comes from a different model
-family than the writer and the cut's proposer where a pool allows; otherwise the
-report says so. That judge gets the cuts and their evidence with authorship
-stripped (it is not told which agent wrote the code or proposed the cut) and in
-neutral order, under the neutral-brief rule. The writer applies only accepted
-cuts, and an accepted cut lands only if checks still pass. The user remains the
-final spot-check and is not consulted about cuts.
+stacked one-reviewer review, never the orchestrator — comes from a different
+model family than the writer and the cut's proposer. That judge gets the cuts
+and their evidence with authorship stripped (it is not told which agent wrote
+the code or proposed the cut) and in neutral order, under the neutral-brief
+rule. The writer applies only accepted cuts, and an accepted cut lands only if
+checks still pass. The user remains the final spot-check and is not consulted
+about cuts.
 
 **First check:** gets the draft, the description's guarantee claims (never its
 review history or the writer's notes) and the rubric file verbatim. Grades the
@@ -50,11 +63,6 @@ already survived a check. Pass outcomes and evidence, not arguments. An issue or
 rebuttal without evidence does not count. Reviewers never see the round number,
 previous verdict or writer's account of fixes. Send the writer only accepted
 issues, with location and severity.
-
-Set the review tier by blast radius, meaning what reads or depends on the
-change, not by line count. Prose and docs are not exempt. A change that repeats
-an existing pattern gets one narrow question: how it differs from its named
-precedent.
 
 A model on trial, with no review track record in this setup, may be an extra
 finder but never the second check or the Judge. Blend vendors across review

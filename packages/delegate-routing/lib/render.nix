@@ -44,9 +44,9 @@
     pool = selection.poolFor family target;
   in
     lib.optionalString (pool != null) " (pool ${pool})";
-  # Every enabled technique pinning both model and effort is eligible, in kind
-  # order; from another harness only an external command runs, so in-harness
-  # tools drop out of external reaches.
+  # Every enabled technique pinning both model and effort is eligible unless
+  # its launchRoute is false, in kind order; from another harness only an
+  # external command runs, so in-harness tools drop out of external reaches.
   launchTechnique = target: externalOnly: let
     kindOrder = {
       external = 3;
@@ -55,6 +55,7 @@
     };
     eligible = lib.filterAttrs (_: node:
       node.enable
+      && node.launchRoute
       && builtins.elem node.kind delegateKinds
       && node.pinsModel == true
       && node.pinsEffort == true
@@ -68,8 +69,8 @@
     names = launchTechnique target (target != runtime);
     # Refused where both delivery paths render it (the module and the public
     # mkSkill helper meet here): a reach must name a technique, and a route
-    # composes that technique's model value spelling, so every enabled
-    # technique pinning model and effort is named, in kind order, as fallbacks
+    # composes that technique's model value spelling, so every eligible
+    # technique is named, in kind order, as fallbacks
     # and each must carry a spelling. Disabled techniques are never named and
     # not refused.
     route = name: let
@@ -196,7 +197,7 @@ in ''
 
   ## delegate sizing
 
-  Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`). The Orchestration column names the default orchestrators and the families reserved for hard work. The Launch column lists, per harness, the techniques that pin both model and effort, in order, with the id spelling each takes; use the first one present in your tool list; a concrete id there is the family's current pick, and "the highest id matching" instructs the resolution above.
+  Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`). The Orchestration column names the default orchestrators and the families reserved for hard work. The Launch column lists, per harness, the techniques that pin both model and effort and take a full id or pattern, in order, with the id spelling each takes; use the first one present in your tool list; a concrete id there is the family's current pick, and "the highest id matching" instructs the resolution above.
 
   ${poolsText}${lib.concatMapStringsSep "\n" tier tiers}
   Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.

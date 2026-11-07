@@ -15,6 +15,11 @@ lib.types.submodule {
       type = lib.types.enum (import ./vocabulary.nix).kinds;
       description = "The technique's role.";
     };
+    launchRoute = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether a launch route may name this technique; false for one that pins only model aliases, which cannot take the full id or pattern a route composes.";
+    };
     modelArg = lib.mkOption {
       type = lib.types.str;
       default = "";
