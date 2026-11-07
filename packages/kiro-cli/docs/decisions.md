@@ -10,24 +10,22 @@ there; the last section only points at them.
 
 - **Release: v3 only, no backwards compatibility.** Options are pinned to the
   current release and there is no engine option or v2 path. The package owns the
-  unwrapped derivation, built from the upstream tarballs, and its own Linux
-  `buildFHSEnv`, whose `bin/` holds only `kiro-cli`. The updater reads the
-  upstream release manifest, and bumps run through the `update.yml` workflow
-  with `targets=kiro-cli` (`gh workflow run update.yml -f targets=kiro-cli`),
-  never by hand. A compatibility layer would need a conflict list that rots
-  every release. See `packages/kiro-cli/lib/release.nix`,
-  `packages/kiro-cli/registry.nix` (`update.targets.kiro-cli`),
-  `.github/workflows/update.yml` and `fhs-sandbox.md`.
+  unwrapped derivation, built from the upstream tarballs, and its own Linux FHS
+  layer (`fhs-sandbox.md`). The updater reads the upstream release manifest, and
+  bumps run through the `update.yml` workflow with `targets=kiro-cli`
+  (`gh workflow run update.yml -f targets=kiro-cli`), never by hand. A
+  compatibility layer would need a conflict list that rots every release. See
+  `packages/kiro-cli/lib/release.nix`, `packages/kiro-cli/registry.nix`
+  (`update.targets.kiro-cli`) and `.github/workflows/update.yml`.
 - **No new config root.** The wrapper and modules never set `KIRO_HOME`,
   `KIRO_DATA_DIR`, `KIRO_AGENT_CONFIG_DIR` or a similar root, so Nix-managed
   configuration composes with the user's own instead of hiding it. The wrapper
-  also carries no secret: `KIRO_API_KEY` stays out of it. Anything Kiro reads
-  from outside the project is delivered by Home Manager into the user's own
-  `~/.kiro`; devenv has no equivalent, and a surface that needs one is a devenv
-  gap that warns through `surfaceSupport`. See
-  `packages/kiro-cli/lib/mkKiro.nix` (the `surfaceSupport` record and the note
-  on the missing root) and `packages/kiro-cli/checks/kiro-wrapper-argv.nix`,
-  which fails a launcher carrying `KIRO_HOME` or `KIRO_DATA_DIR`.
+  also carries no secret: `KIRO_API_KEY` stays out of it. Tool trust shows the
+  cost: "Tool trust is `permissions.yaml`, never a flag" in `launcher-argv.md`
+  explains why devenv cannot deliver it. See `packages/kiro-cli/lib/mkKiro.nix`
+  (the note on the missing root) and
+  `packages/kiro-cli/checks/kiro-wrapper-argv.nix`, which fails a launcher
+  carrying `KIRO_HOME` or `KIRO_DATA_DIR`.
 - **Options come in two tiers.** `ai.kiro.cli.<setting>` holds settings valid in
   the repo-local `.kiro/settings.json`, plus knobs valid for both `chat` and
   `acp`. `ai.kiro.cli.chat.*` and `ai.kiro.cli.acp.*` hold knobs that exist only
@@ -37,17 +35,17 @@ there; the last section only points at them.
   a devenv gap that warns. This keeps each option's scope readable from its
   path. See `packages/kiro-cli/lib/cliOptions.nix` and
   `packages/kiro-cli/lib/mkKiro.nix`.
-- **Flag tables come from the extractor.** The binary's clap help fills the
-  `cli.options.*` facts. Every extracted option is classified in
-  `packages/kiro-cli/lib/cliOptions.nix` as a setting or as excluded with a
-  reason, and CI fails on an unclassified or stale row. An environment variable
-  joins that table only once it has been measured (see `probing.md`). A check
+- **Flag tables come from the extractor.** The classification of every extracted
+  `cli.options.*` row, and the check that fails on an unclassified or stale one,
+  is described under "Consumer options for `chat` and `acp`" in
+  `launcher-argv.md`. Two rules sit on top of it. An environment variable joins
+  the table only once it has been measured (`probing.md`); the table reads the
+  `--help` tables only, so an unmeasured variable would be a guess. A check
   holds an exact expectation only where this package's code consumes the value;
   every other row is a membership expectation, so an upstream addition is drift
-  that regeneration clears instead of a red check. This keeps classification
-  from drifting silently across releases. See
-  `packages/kiro-cli/checks/kiro-cli-extracted.nix`,
-  `packages/kiro-cli/extracted/` and the Tests section of `launcher-argv.md`.
+  that regeneration clears instead of a red check. See
+  `packages/kiro-cli/lib/cliOptions.nix` and
+  `packages/kiro-cli/checks/kiro-cli-extracted.nix`.
 
 ## Decided in `launcher-argv.md`
 

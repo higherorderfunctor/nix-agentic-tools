@@ -465,14 +465,16 @@ follow the extracted registry; background execution can be rebound with
 ## Re-measuring on a version bump
 
 Run against the **unwrapped** binary — a bare `PATH` lookup finds the wrapper,
-which is the thing under test. One binary serves both platforms.
+which is the thing under test. One binary serves both platforms. Every command
+goes through `probe`, the scrubbed-environment launcher in
+[`probing.md`](probing.md), never with only a scratch `HOME`.
 
 ```bash
 K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.unwrapped); KB="$K/bin/kiro-cli"
 
 # 1. globals still parse BEFORE a subcommand, and still fail after it
-"$KB" --v3 whoami >/dev/null && echo "prepend ok"
-"$KB" whoami --v3 2>&1 | grep -q "unexpected argument" && echo "append still fails"
+probe "$KB" --v3 whoami >/dev/null && echo "prepend ok"
+probe "$KB" whoami --v3 2>&1 | grep -q "unexpected argument" && echo "append still fails"
 
 # 2. the acp engine resolution: rerun kiro-kas-dispatch and read its MEASURE
 #    rows; a listed client that starts KAS under plain `acp` means upstream's
@@ -482,7 +484,7 @@ K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.unw
 # 3. the v3 conflict set on acp: "not supported with --agent-engine=v3: <opt>"
 #    (exit 2) means conflict; the empty baseline must not conflict.
 for opt in "" "--agent x" "--model auto" "--effort low" "--trust-tools=x" "-a"; do
-  out=$("$KB" acp --agent-engine v3 $opt </dev/null 2>&1)
+  out=$(probe "$KB" acp --agent-engine v3 $opt 2>&1)
   echo "[$opt] $? ${out%%$'\n'*}"
 done
 ```
@@ -492,9 +494,6 @@ Read `--help-all` for the launcher's own options (that Options block is what
 parse probe rather than trusting help text — use an argument that fails
 validation LATE, so "unexpected argument" versus "invalid value" distinguishes a
 parse rejection from an accepted flag.
-
-Probe in a scrubbed environment, never with only a scratch `HOME`; the full
-procedure is in [`probing.md`](probing.md).
 
 The option tables of `kiro-cli`, `chat` and `acp` need no hand re-measure: the
 `kiro-cli-extracted` check runs `extract/cli-help.py` against the Linux payload,

@@ -31,8 +31,8 @@ bwrap --dev-bind / / --tmpfs "$HOME" --bind "$h" "$h" --tmpfs /run/user \
   timeout 10 "$kb" "$@" </dev/null
 ```
 
-Call it with the arguments under test, for example
-`--v3 chat --wrap=foo --help`.
+Save it as `probe` and call it with the binary and the arguments under test, for
+example `probe "$KB" --v3 chat --wrap=foo --help`.
 
 ## Rules
 
@@ -41,11 +41,6 @@ Call it with the arguments under test, for example
 - **Print the whole table first.** Run the full set of probes once, showing each
   argument list, exit code and first output line, before adding or changing any
   assertion. A check written from one probe has shipped wrong claims.
-- **Fail late to tell parse errors apart.** Use an argument that fails
-  validation after parsing, so "unexpected argument" and "invalid value"
-  separate a rejected flag from an accepted one.
-- **Option tables need no hand probe.** `kiro-cli-extracted` reads them from the
-  binary's help and fails on drift; regenerate rather than re-measure.
 
 ## Where measured facts live
 
