@@ -935,6 +935,7 @@
       };
       bound = change {ai.programs.delegate-routing = settings;};
       text = readSkill bound "claude";
+      lines = lib.splitString "\n" text;
       overridden = change {
         ai.programs.delegate-routing =
           settings
@@ -949,8 +950,10 @@
       && lib.hasInfix "## Pools" text
       && lib.hasInfix "| Pool " text
       && lib.hasInfix "go-plus: unlimited" text
-      && lib.hasInfix "native (go-budget); via codex external (go-budget)" text
-      && lib.hasInfix "- go-kimi-k3 (opencode-go) `kimi-k3` (go-budget): go-plus:" text
+      # The bound pool follows each reach in the Launch cell, and follows the
+      # launch in a manual-only list item, ahead of the plan's pool hint.
+      && builtins.match ".*claude: [^|]* \\(pool go-budget\\); via codex: [^|]* \\(pool go-budget\\) \\|.*" (lib.findFirst (lib.hasPrefix "| go-kimi-k3 (opencode-go)") "" lines) != null
+      && lib.any (line: builtins.match "- go-kimi-k3 \\(opencode-go\\) `kimi-k3`: .* \\(pool go-budget\\); go-plus: .*" line != null) (lib.splitString "\n" (lib.replaceStrings ["\n  "] [" "] text))
       && passes overridden
       && overridden.config.ai.programs.delegate-routing.families.opencode-go.go-kimi-k3.pools.claude == null
       && poolFailsWith (change {ai.programs.delegate-routing = settings // {pools = {};};})
