@@ -1412,7 +1412,7 @@
         && !(lib.hasInfix "Each row is a family" text)
         && positionOf "## Common workflows" < positionOf "### frontier"
         && positionOf "### frontier" < positionOf "### claude techniques"
-        && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Launch"]
+        && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Pool" "Launch"]
         && !(lib.hasInfix "default orchestrator" text)
         # An enabled column the renderer has no cell for is refused, not
         # rendered as an empty column.
