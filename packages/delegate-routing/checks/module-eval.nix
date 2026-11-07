@@ -58,6 +58,9 @@
     passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
     failsWith = evaluation: option: lib.any (item: !item.assertion && lib.hasInfix option item.message) evaluation.config.assertions;
     evaluationFails = evaluation: !(builtins.tryEval (builtins.deepSeq evaluation.config.ai.programs.delegate-routing.runtimes.claude true)).success;
+    # The rendered skill itself refuses bad input by throwing, so a failing
+    # scenario is one whose skill cannot be rendered.
+    skillFails = config: !(builtins.tryEval (builtins.deepSeq (skill config) true)).success;
     hasProse = needle: text: lib.hasInfix needle (lib.replaceStrings ["\n"] [" "] text);
     native = change {ai.programs.delegate-routing.runtimes.claude.extraRuntimes = [];};
     nativeClaude = readSkill native "claude";
@@ -433,7 +436,7 @@
     "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
       poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown pool `missing`"
       && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown: `unknown` is not a runtime"
-      && lib.hasInfix "claude: `Workflow` with full model id `claude-opus-*`; via codex: `codex exec` with slug `claude-opus-*` (pool configured)" (readSkill (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
+      && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`; via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
     );
     "module-delegate-routing-${name}-pools-empty" = mkTest "delegate-routing-${name}-pools-empty" (
       result.config.ai.programs.delegate-routing.pools
@@ -492,9 +495,9 @@
         && lib.hasInfix "| configured | none | configured: 12.500000 units per month, resets day 28; current use unknown | |" text
         && lib.hasInfix "| measured | `read-pool --current` | measured | SHARED \\| BUDGET DESCRIPTION |" text
         && lib.hasInfix "**pool-reader (usage):** `read-pool --current`" text
-        && lib.hasInfix "claude: `Workflow` with full model id `claude-opus-*` (pool measured); via codex: `codex exec` with slug `claude-opus-*` (pool configured)" text
-        && lib.hasInfix "- opus (anthropic) `claude-opus-*`: `kiro-cli chat` with model_id `claude-opus-*` (pool measured)" text
-        && lib.hasInfix "codex: `spawn_agent` with slug `claude-opus-*` (pool configured)" (readSkill poolResult "codex")
+        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" text
+        && lib.hasInfix "- opus (anthropic) `claude-opus-*`: `kiro-cli chat` with model_id the highest id matching `claude-opus-*` (pool measured)" text
+        && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
         && readSkill (poolChange {pools.measured.window = window;}) "claude" == poolSkill
         && ruleText poolResult == stub
@@ -530,10 +533,10 @@
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
       passes result
       && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]
-      && lib.hasInfix "claude: `Workflow` with full model id `claude-opus-*`" nativeClaude
+      && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" nativeClaude
       && !(lib.hasInfix "(openai)" nativeClaude)
       && lib.all (family: lib.hasInfix "${family} (openai)" claude) ["astra" "luna" "sol" "terra"]
-      && lib.hasInfix "via codex: `codex exec` with slug `gpt-*-sol`" claude
+      && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-sol`" claude
       && lib.hasInfix "(openai)" codex
       && !(lib.hasInfix "(anthropic)" codex)
       && lib.hasInfix "## manual-only external delegates" claude
@@ -543,38 +546,63 @@
     );
     # A launch route must name the one technique a sized delegate takes, so a
     # renderer that names an inheriting technique, an in-harness tool of another
-    # runtime, a bare pattern when an example id is maintained, or no spelling
-    # at all fails here.
+    # runtime, no spelling at all, or the old ambiguous "native (pool)" reach
+    # fails here. The no-native guard reads a pools-bound scenario: the old
+    # renderer emitted "native (pool)" only there.
     "module-delegate-routing-${name}-launch-routes" = mkTest "delegate-routing-${name}-launch-routes" (
       let
         noWorkflow = skill {ai.programs.delegate-routing.runtimes.claude.techniques.Workflow.enable = false;};
-        withExample = skill {ai.programs.delegate-routing.families.anthropic.opus.example = "claude-opus-4.6";};
+        withExample = skill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
+        glm = skill {
+          ai.programs.delegate-routing = {
+            families.zhipu.glm = {
+              example.claude = "glm-5.3";
+              match = "glm-*";
+              pools.claude = "zai-coding";
+              tier = "strong";
+              useFor = "TEST GLM";
+            };
+            pools.zai-coding.window = {
+              limit = 100;
+              resetDay = 1;
+              unit = "credits";
+            };
+            runtimes.claude.models = [{families = ["glm"];}];
+          };
+        };
       in
-        lib.hasInfix "claude: `Workflow` with full model id `claude-opus-*`" nativeClaude
+        lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" nativeClaude
         && !(lib.hasInfix "claude: `Agent`" nativeClaude)
-        && lib.hasInfix "via codex: `codex exec` with slug `gpt-*-astra`" claude
+        && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-astra`" claude
         && !(lib.hasInfix "via codex: `spawn_agent`" claude)
-        && lib.hasInfix "kiro: `kiro-cli chat` with model_id `claude-opus-*`" kiro
-        && lib.hasInfix "kimchi: `Agent` with `--list-models` id `test-flash-*`" kimchi
-        && lib.hasInfix "claude: `claude -p` with full model id `claude-opus-*`" noWorkflow
+        && lib.hasInfix "kiro: `kiro-cli chat` with model_id the highest id matching `claude-opus-*`" kiro
+        && lib.hasInfix "kimchi: `Agent` with `--list-models` id the highest id matching `test-flash-*`" kimchi
+        && lib.hasInfix "claude: `claude -p` with full model id the highest id matching `claude-opus-*`" noWorkflow
         && lib.hasInfix "claude: `Workflow` with full model id `claude-opus-4.6`" withExample
-        && !(lib.hasInfix "claude: `Workflow` with full model id `claude-opus-*`" withExample)
-        && lib.all (runtime: !(lib.hasInfix "native (" (readSkill result runtime))) runtimes
-        && failsWith (change {ai.programs.delegate-routing.runtimes.claude.techniques."claude -p".modelArg = "";}) "techniques.\"claude -p\".modelArg: name the model value spelling"
+        && !(lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" withExample)
+        && lib.hasInfix "glm (zhipu) `glm-*`" glm
+        && lib.hasInfix "claude: `Workflow` with full model id `glm-5.3` (pool zai-coding)" glm
+        && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
+        && skillFails {
+          ai.programs.delegate-routing.runtimes.claude.techniques = {
+            Workflow.enable = false;
+            "claude -p".modelArg = "";
+          };
+        }
     );
     # Orchestration marks render from family data: a renderer that hard-writes
     # the shipped marks or drops a consumer override fails here.
     "module-delegate-routing-${name}-orchestration" = mkTest "delegate-routing-${name}-orchestration" (
       let
         familyRow = text: family: lib.findFirst (lib.hasInfix "${family} (") "" (lib.splitString "\n" text);
-        custom = skill {ai.programs.delegate-routing.families.anthropic.haiku.orchestration = "hard work";};
+        custom = skill {ai.programs.delegate-routing.families.anthropic.haiku.orchestration = "CUSTOM ORCHESTRATION";};
       in
         lib.hasInfix "default orchestrator" (familyRow claude "opus")
         && lib.hasInfix "default orchestrator" (familyRow claude "sol")
-        && lib.hasInfix "hard work" (familyRow claude "astra")
-        && lib.hasInfix "hard work" (familyRow claude "fable")
+        && lib.hasInfix "reserved for hard work" (familyRow claude "astra")
+        && lib.hasInfix "reserved for hard work" (familyRow claude "fable")
         && !(lib.hasInfix "orchestrator" (familyRow claude "haiku"))
-        && lib.hasInfix "hard work" (familyRow custom "haiku")
+        && lib.hasInfix "CUSTOM ORCHESTRATION" (familyRow custom "haiku")
     );
     "module-delegate-routing-${name}-kiro-workflows" = mkTest "delegate-routing-${name}-kiro-workflows" (let
       enabled = change {ai.kiro.cli.workflows.enable = true;};
@@ -621,7 +649,7 @@
       })
       && !(lib.hasInfix "`run_workflow`" kiro)
       && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
-      && lib.hasInfix "kiro: `run_workflow` with modelId `claude-opus-*`" enabledSkill
+      && lib.hasInfix "kiro: `run_workflow` with modelId the highest id matching `claude-opus-*`" enabledSkill
       && techniqueCells enabledSkill "run_workflow" == ["`run_workflow`" "workflow" "true" "true" "interactive+headless+acp"]
       && hidden {ai.kiro.cli.native.settings.chat.enableWorkflows = false;}
       && hidden {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = false;}
@@ -734,16 +762,9 @@
       && passes (invalidNode {
         command = "external-command";
         kind = "external";
-        modelArg = "slug";
         pinsEffort = true;
         pinsModel = true;
       })
-      && failsWith (invalidNode {
-        command = "external-command";
-        kind = "external";
-        pinsEffort = true;
-        pinsModel = true;
-      }) "techniques.Invalid.modelArg: name the model value spelling"
     );
     "module-delegate-routing-${name}-techniques" = mkTest "delegate-routing-${name}-techniques" (
       !(lib.hasInfix "`Agent`" disabledNode)
