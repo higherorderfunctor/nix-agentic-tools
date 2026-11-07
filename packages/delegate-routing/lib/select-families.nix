@@ -38,6 +38,13 @@ in {
   # technique enable cannot advertise a workflow the CLI config disables.
   effectiveTechniques = config: let
     cli = config.ai.kiro.cli or {};
+    portable = config.ai.programs.delegate-routing;
+    agentFilesAvailable =
+      (config.ai.claude.enable or false)
+      && (import ../../../lib/ai/ai-common.nix {inherit lib;}).resolveOverride {
+        topValue = portable.enable;
+        cliValue = portable.runtimes.claude.enable or null;
+      };
     workflowAvailable =
       (cli.workflows.enable or false)
       && (cli.native.settings.chat.enableWorkflows or null) != false;
@@ -46,7 +53,10 @@ in {
       lib.mapAttrs (name: node:
         node
         // {
-          enable = node.enable && (runtime != "kiro" || name != "run_workflow" || workflowAvailable);
+          enable =
+            node.enable
+            && (runtime != "kiro" || name != "run_workflow" || workflowAvailable)
+            && (runtime != "claude" || name != "Agent with generated agent file" || agentFilesAvailable);
         })
       settings.techniques)
     config.ai.programs.delegate-routing.runtimes;

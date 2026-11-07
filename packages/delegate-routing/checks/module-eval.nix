@@ -438,10 +438,122 @@
     poolWindowFails = window:
       !(builtins.tryEval (builtins.deepSeq (poolChange {pools.configured.window = window;}).config.ai.programs.delegate-routing.pools true)).success;
   in {
+    # Fails on lexical ordering, catalog-only resolution, missing pins, or a
+    # route advertised when its family has no delivered agent file.
+    "module-delegate-routing-${name}-agent-files" = mkTest "delegate-routing-${name}-agent-files" (
+      let
+        agents = result.config.ai.claude.agents;
+        resolver = import ../lib/agent-files.nix {inherit lib;};
+        off = change {ai.programs.delegate-routing.runtimes.claude.techniques."Agent with generated agent file".enable = false;};
+        missing = change {ai.programs.delegate-routing.runtimes.claude.models = [{families = ["flash"];}];};
+        example = change {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
+        glmExample = change {
+          ai.programs.delegate-routing = {
+            families.zhipu.glm = {
+              example.claude = "glm-5.3";
+              match = "glm-*";
+              tier = "strong";
+            };
+            runtimes.claude.models = [{families = ["glm"];}];
+          };
+        };
+        programOff = change {ai.programs.delegate-routing.runtimes.claude.enable = false;};
+        runtimeOff = change {ai.claude.enable = lib.mkForce false;};
+        picker = change {
+          ai = {
+            internal.inferenceInstances.test = {
+              backend = "cliproxyapi";
+              url = "http://127.0.0.1:8317";
+              clients.reader = {
+                key = redact.file "/run/secrets/client";
+                credentials = [
+                  {
+                    name = "test";
+                    models = ["glm-5.3"];
+                  }
+                ];
+              };
+            };
+            claude.settings.inference = {
+              instance = "test";
+              clientKey = "reader";
+            };
+            programs.delegate-routing = {
+              families.zhipu.glm = {
+                match = "glm-[0-9]*.[0-9]";
+                tier = "strong";
+              };
+              runtimes.claude.models = [{families = ["glm"];}];
+            };
+          };
+        };
+      in
+        lib.all (family: agents ? ${family}) ["fable" "haiku" "opus" "sonnet"]
+        && techniqueCells claude "Agent with generated agent file" == ["`Agent with generated agent file`" "subagent" "true" "true" "interactive+headless"]
+        && ownSubagents claude "Agent with generated agent file" == "supported (headless)"
+        && lib.hasInfix "delegate-routing is the skill that authorizes setting effort" claude
+        && lib.hasInfix "existing lower-precedence fallback, not a launch route" claude
+        && lib.hasInfix "model: \"claude-opus-5-5\"" agents.opus
+        && lib.hasInfix "effort: \"medium\"" agents.opus
+        && lib.hasInfix "name: \"opus\"" agents.opus
+        && lib.hasInfix "model: \"claude-fable-5-1\"" agents.fable
+        && lib.hasInfix "effort: \"medium\"" agents.fable
+        && lib.hasInfix "model: \"claude-sonnet-5-5\"" agents.sonnet
+        && lib.hasInfix "effort: \"medium\"" agents.sonnet
+        && lib.hasInfix "model: \"claude-haiku-5-5\"" agents.haiku
+        && !(lib.hasInfix "effort:" agents.haiku)
+        && lib.hasInfix "model: \"claude-opus-4.6\"" example.config.ai.claude.agents.opus
+        # Numeric segment order: 10 > 9, 5-1 > 5, 6.1 > 6 > 5.6, and zero-padded
+        # dated segments compare as numbers instead of aborting.
+        && lib.all (case:
+          (resolver.resolve case.ids [
+            {
+              name = "t";
+              inherit (case) match;
+              example = {};
+            }
+          ]).t.id
+          == case.expected) [
+          {
+            ids = ["test-m-9" "test-m-10"];
+            match = "test-m-*";
+            expected = "test-m-10";
+          }
+          {
+            ids = ["t-5" "t-5-1"];
+            match = "t-*";
+            expected = "t-5-1";
+          }
+          {
+            ids = ["t-6.1" "t-5.6" "t-6"];
+            match = "t-*";
+            expected = "t-6.1";
+          }
+          {
+            ids = ["t-2024-08-06" "t-2024-09-01"];
+            match = "t-*";
+            expected = "t-2024-09-01";
+          }
+        ]
+        && lib.all (family: result.config.ai.files ? ${".claude/agents/${family}.md"}) ["fable" "haiku" "opus" "sonnet"]
+        && !(result.config.ai.agents ? opus)
+        && lib.hasInfix "model: \"glm-5.3\"" glmExample.config.ai.claude.agents.glm
+        && programOff.config.ai.claude.agents == {}
+        && runtimeOff.config.ai.claude.agents == {}
+        && off.config.ai.claude.agents == {}
+        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" (readSkill off "claude")
+        && missing.config.ai.claude.agents == {}
+        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `test-flash-*`" (readSkill missing "claude")
+        && lib.hasInfix "model: \"glm-5.3\"" picker.config.ai.claude.agents.glm
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`" (readSkill picker "claude")
+        && result.config.ai.programs.delegate-routing.families.anthropic.opus.defaultEffort == "medium"
+        && result.config.ai.programs.delegate-routing.families.anthropic.haiku.defaultEffort == null
+        && !(builtins.tryEval (builtins.deepSeq (change {ai.programs.delegate-routing.families.anthropic.opus.defaultEffort = "invalid";}).config.ai.programs.delegate-routing.families true)).success
+    );
     "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
       poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown pool `missing`"
       && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown: `unknown` is not a runtime"
-      && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`; via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`; via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
     );
     "module-delegate-routing-${name}-pools-empty" = mkTest "delegate-routing-${name}-pools-empty" (
       result.config.ai.programs.delegate-routing.pools
@@ -500,7 +612,7 @@
         && lib.hasInfix "| configured | none | configured: 12.500000 units per month, resets day 28; current use unknown | |" text
         && lib.hasInfix "| measured | `read-pool --current` | measured | SHARED \\| BUDGET DESCRIPTION |" text
         && lib.hasInfix "**pool-reader (usage):** `read-pool --current`" text
-        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" text
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" text
         && lib.hasInfix "- opus (anthropic) `claude-opus-*`: `kiro-cli chat` with model_id the highest id matching `claude-opus-*` (pool measured)" text
         && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `claude-opus-*`, else `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
@@ -538,7 +650,7 @@
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
       passes result
       && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]
-      && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`" nativeClaude
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`" nativeClaude
       && !(lib.hasInfix "(openai)" nativeClaude)
       && lib.all (family: lib.hasInfix "${family} (openai)" claude) ["astra" "luna" "sol" "terra"]
       && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-sol`" claude
@@ -578,18 +690,18 @@
           };
         };
       in
-        lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`" nativeClaude
+        lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`" nativeClaude
         && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `gpt-*-astra`, else `codex exec` with slug the highest id matching `gpt-*-astra`" codex
         && !(lib.hasInfix "claude: `Agent`" nativeClaude)
         && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-astra`" claude
         && !(lib.hasInfix "via codex: `spawn_agent`" claude)
         && lib.hasInfix "kiro: `kiro-cli chat` with model_id the highest id matching `claude-opus-*`" kiro
         && lib.hasInfix "kimchi: `Agent` with `--list-models` id the highest id matching `test-flash-*`" kimchi
-        && lib.hasInfix "claude: `claude -p` with full model id the highest id matching `claude-opus-*`" noWorkflow
-        && lib.hasInfix "claude: `Workflow` with full model id `claude-opus-4.6`" withExample
-        && !(lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" withExample)
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `claude -p` with full model id the highest id matching `claude-opus-*`" noWorkflow
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-4.6`, else `Workflow` with full model id `claude-opus-4.6`" withExample
+        && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`" withExample)
         && lib.hasInfix "glm (zhipu) `glm-*`" glm
-        && lib.hasInfix "claude: `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`, else `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
         && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
         && skillFails {
           ai.programs.delegate-routing.runtimes.claude.techniques = {
@@ -778,7 +890,8 @@
       })
     );
     "module-delegate-routing-${name}-techniques" = mkTest "delegate-routing-${name}-techniques" (
-      !(lib.hasInfix "`Agent`" disabledNode)
+      techniqueRow disabledNode "Agent"
+      == ""
       && lib.hasInfix "`Workflow`" disabledNode
       && lib.hasInfix "CUSTOM CODEX COMMAND" modifiedNode
       && !(lib.hasInfix "| workflow" codex)

@@ -161,9 +161,9 @@ the family's concrete current id for one harness, and that harness's launch
 route shows it instead of the pattern. Package fields use `mkDefault`, so
 consumers can override a field or add a family. `lib/families.nix` carries the
 package families without concrete model versions or Kimchi-served vendors, so a
-shipped launch route instructs the reader to take the highest id matching the
-pattern. Consumers selecting Kimchi models declare the corresponding vendor
-families in their delegate-routing configuration.
+launch route without a generated agent file instructs the reader to take the
+highest id matching the pattern. Consumers selecting Kimchi models declare the
+corresponding vendor families in their delegate-routing configuration.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
@@ -184,9 +184,10 @@ effort, the id spelling it takes and any bound pool.
 
 Resolve concrete models at launch time: inspect the runtime's live list, compare
 version segments to find the highest version matching the family pattern, and
-use that runtime's spelling. Claude's Agent tool takes aliases such as `opus`;
-Workflow `agent()` takes full model ids from configured model-picker rows,
-including ids published by the operator's proxy routes.
+use that runtime's spelling. Claude's Agent tool names a generated agent file
+through `subagent_type` to pin a full id; plain calls without a file take
+aliases such as `opus`. Workflow `agent()` takes full model ids from configured
+model-picker rows, including ids published by the operator's proxy routes.
 
 `runtimes.<runtime>.techniques` is a keyed set of workflow, subagent, external,
 introspect and usage nodes. Delegate nodes describe model and effort pinning,
@@ -197,16 +198,42 @@ composition, a technique that pins model and effort but names no spelling, and a
 reach into a harness with no enabled technique pinning model and effort (from
 another harness, only an external one counts), so both the module and the public
 `mkSkill` helper enforce it; every enabled technique that pins model and effort
-is listed in kind order (subagent, workflow, external) as fallbacks, each must
-name a spelling, and disabled techniques are not listed or refused. The
-exception is `launchRoute = false`: a technique that pins only model aliases,
-such as Claude's `Agent`, is neither listed nor refused. From another harness
-only an external technique can launch, so external reaches name external
-techniques only. Modes describe usual availability, not session-mode detection;
-use only tools present in the current session and external commands on PATH.
-Introspection and usage nodes describe how to obtain live evidence. Usage
-commands remain part of the existing technique catalog. Each package field uses
-`mkDefault`; consumers can override fields, add nodes or disable a node.
+is listed in kind order (subagent, workflow, external) as fallbacks when its
+family resolves the file that technique needs; each must name a spelling, and
+disabled techniques are not listed or refused. The exception is
+`launchRoute = false`: a technique that pins only model aliases, such as
+Claude's plain `Agent` call without a generated file, is neither listed nor
+refused. From another harness only an external technique can launch, so external
+reaches name external techniques only. Modes describe usual availability, not
+session-mode detection; use only tools present in the current session and
+external commands on PATH. Introspection and usage nodes describe how to obtain
+live evidence. Usage commands remain part of the existing technique catalog.
+Each package field uses `mkDefault`; consumers can override fields, add nodes or
+disable a node.
+
+### Generated Claude agent files
+
+The common module writes `ai.claude.agents.<family>` at `mkDefault` priority;
+the runtime delivers `.claude/agents/<family>.md` on both Home Manager and
+devenv. Ordinary consumer agent entries override these files. The filename and
+frontmatter `name` are the family name, unique across vendors.
+
+For families selected by `runtimes.claude.models`, `example.claude` wins;
+otherwise the highest matching id comes from Claude's extracted catalog plus the
+configured inference lowering's published picker rows. Version segments compare
+numerically. An unresolved family gets no file and skips the generated agent
+technique in its Launch route. Files and routes share the resolved set.
+
+`families.<vendor>.<family>.defaultEffort` is nullable, typed against Claude's
+extracted effort enum, and defaults to null (no `effort:` line). Package
+`mkDefault`s set medium for fable, opus and sonnet; haiku keeps null. A launch
+call's effort overrides the file's default. The shared frontmatter renderer
+writes the pins and a fixed delegate body.
+
+There is no separate file enable option. Set
+`runtimes.claude.techniques."Agent with generated agent file".enable = false` to
+withhold both files and the route. The effective technique is also disabled when
+the Claude runtime or its delegate-routing program is off.
 
 `runsOwnSubagents` fills the technique table's "Runs own subagents" column,
 which "Choose execution" points readers at. It is a hand-declared string,
