@@ -1,5 +1,5 @@
 Append these rows to the rubric file, continuing its numbering, for the worker
-and every reviewer:
+and every reviewer. Grade a proposed fix against the same rows:
 
 - **Callers.** Each added line must name a caller or the concrete input it
   refuses (value, path or environment); otherwise remove it. A guard with a real
@@ -21,3 +21,15 @@ and every reviewer:
   and delete the later guard. If nothing refuses it yet, add the refusal there
   rather than a guard downstream. Do not size a guard to an input that only a
   fallback or an over-broad argument lets through.
+- **Necessity.** A missing test is a finding only once the code is shown needed:
+  a caller or real input in the repository reaches it. Otherwise the finding is
+  to delete the code.
+- **One source of truth.** Each behavior is implemented once, and callers use it
+  rather than wrapping it.
+- **Readable in one pass.** A reader can state what the code does in two
+  sentences without opening another file.
+- **Abstract on the third repeat.** Repetition is a defect only when it
+  duplicates a decision. If removing it would force a reader to jump between
+  files to follow one idea, it stays.
+- **Data over control flow.** Prefer one function driven by a table of cases
+  over a chain of special cases. A case-specific branch needs a stated reason.

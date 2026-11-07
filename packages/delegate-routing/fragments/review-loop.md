@@ -10,3 +10,7 @@ PRs' findings is a loop failure, not a deliverable. Stop early when no accepted
 issue is medium severity or higher; otherwise repeat write then review, up to 3
 rounds. If the same defect survives 2 rounds, change the brief instead of
 repeating it. At the cap, return the result, open defects and decision needed.
+
+A finding that breaks neither the happy path nor a guarantee the task or prior
+art lists goes on the report's gap list, not into a fix. Never split a change to
+get past the round cap.
