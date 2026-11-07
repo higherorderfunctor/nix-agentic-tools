@@ -51,6 +51,8 @@
         (row (map (_: "---") shown))
       ]
       ++ map (item: row (map (filler: filler item) fillers)) items);
+  opencodeGo = import ./opencode-go.nix {inherit lib;};
+  goRendered = lib.any (family: family.vendor == opencodeGo.vendor) (candidates ++ lib.concatMap selected manualExternalDelegates);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
   # The id a launch route names for one harness: the family's current example
   # id for that target, or — for a family with no example there, as package
@@ -179,6 +181,7 @@
           Family = familyLabel;
           Launch = family: lib.concatMapStringsSep "; " (reach family) (targets family);
           Orchestration = family: family.orchestration or "";
+          Pool = family: family.pool or "";
           "Use for" = family: family.useFor;
         }
         members}
@@ -213,13 +216,13 @@
   manual = target: ''
     ${phrase "Manual delegate heading" {harness = target;}}
 
-    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}") (selected target)}
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}${lib.optionalString (family.pool or "" != "") (phrase "Manual pool hint" {inherit (family) pool;})}") (selected target)}
 
     ${techniqueBlock target true}
     ${phrase "Manual delegate note" {}}
   '';
   blocks = {
-    families = lib.concatMapStringsSep "\n" tier tiers;
+    families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n\n" + phrase "OpenCode Go note" {});
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
     pools = poolsText;
     routing = routingText;

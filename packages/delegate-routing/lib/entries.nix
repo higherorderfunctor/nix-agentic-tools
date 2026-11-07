@@ -52,7 +52,7 @@ in {
   };
   skill = {
     columns = {
-      families = columns ["Family" "Orchestration" "Use for" "Avoid for" "Effort (delegate)" "Launch"];
+      families = columns ["Family" "Orchestration" "Use for" "Avoid for" "Effort (delegate)" "Pool" "Launch"];
       pools = columns ["Name" "Reader" "Measure" "Description"];
       techniques = columns ["Technique" "Kind" "Pins model" "Pins effort" "Modes" "Runs own subagents" "Notes" "Command"];
     };
@@ -97,8 +97,10 @@ in {
       "Launch route" = {text = "`{technique}` with {modelArg} {model}";};
       "Manual delegate heading" = {text = "### {harness}";};
       "Manual delegate note" = {text = "Not a candidate for auto-selection; use only when the user names it.";};
+      "Manual pool hint" = {text = "; {pool}";};
       "Model pattern" = {text = "the highest id matching `{match}`";};
       "Native reach" = {text = "{harness}: {launch}{pool}";};
+      "OpenCode Go note" = {text = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";};
       "Pool binding" = {text = " (pool {pool})";};
       "Pool measured" = {text = "measured";};
       "Pool reader missing" = {text = "none";};

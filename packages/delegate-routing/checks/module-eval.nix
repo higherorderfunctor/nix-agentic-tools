@@ -910,6 +910,148 @@
         };
       }) "family names must be unique across vendors"
     );
+    "module-delegate-routing-${name}-opencode-go-pool" = mkTest "delegate-routing-${name}-opencode-go-pool" (let
+      expectedBindings = lib.genAttrs ["claude" "codex" "kiro"] (_: "go-budget");
+      settings = {
+        opencodeGo = {
+          plan = "go-plus";
+          pool = "go-budget";
+        };
+        pools.go-budget.window = {
+          limit = 100;
+          resetDay = 1;
+          unit = "credits";
+        };
+        runtimes = {
+          claude.models = [{vendors = ["opencode-go"];}];
+          codex.models = [{families = ["go-kimi-k3"];}];
+          kiro.models = [
+            {
+              vendors = ["opencode-go"];
+              families = ["go-kimi-k3"];
+            }
+          ];
+        };
+      };
+      bound = change {ai.programs.delegate-routing = settings;};
+      text = readSkill bound "claude";
+      lines = lib.splitString "\n" text;
+      overridden = change {
+        ai.programs.delegate-routing =
+          settings
+          // {
+            families.opencode-go.go-kimi-k3.pools.claude = null;
+          };
+      };
+    in
+      passes bound
+      && lib.all (family: family.pools == expectedBindings)
+      (builtins.attrValues bound.config.ai.programs.delegate-routing.families.opencode-go)
+      && lib.hasInfix "## Pools" text
+      && lib.hasInfix "| Pool " text
+      && lib.hasInfix "go-plus: unlimited" text
+      # The bound pool follows each reach in the Launch cell, and follows the
+      # launch in a manual-only list item, ahead of the plan's pool hint.
+      && builtins.match ".*claude: [^|]* \\(pool go-budget\\); via codex: [^|]* \\(pool go-budget\\) \\|.*" (lib.findFirst (lib.hasPrefix "| go-kimi-k3 (opencode-go)") "" lines) != null
+      && lib.any (line: builtins.match "- go-kimi-k3 \\(opencode-go\\) `kimi-k3`: .* \\(pool go-budget\\); go-plus: .*" line != null) (lib.splitString "\n" (lib.replaceStrings ["\n  "] [" "] text))
+      && passes overridden
+      && overridden.config.ai.programs.delegate-routing.families.opencode-go.go-kimi-k3.pools.claude == null
+      && poolFailsWith (change {ai.programs.delegate-routing = settings // {pools = {};};})
+      "unknown pool `go-budget`"
+      && lib.all (family: family.pools == expectedBindings)
+      (builtins.attrValues
+        (change {
+          ai.programs.delegate-routing =
+            settings
+            // {
+              opencodeGo = {
+                plan = null;
+                pool = "go-budget";
+              };
+            };
+        }).config.ai.programs.delegate-routing.families.opencode-go));
+    "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let
+      goSelected = plan:
+        change {
+          ai.programs.delegate-routing = {
+            opencodeGo = {inherit plan;};
+            runtimes.claude = {
+              extraRuntimes = [];
+              manualExternalDelegates = [];
+              models = [{vendors = ["opencode-go"];}];
+            };
+          };
+        };
+      kimi = {
+        match = "kimi-k3*";
+        tier = "strong";
+      };
+      overlapping = families: models:
+        change {
+          ai.programs.delegate-routing = {
+            inherit families;
+            runtimes.claude.models = [{vendors = ["opencode-go"];}] ++ models;
+          };
+        };
+      note = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
+      planned = readSkill (goSelected "go-plus") "claude";
+      unplanned = readSkill (goSelected null) "claude";
+    in
+      # Presets ship but render only when selected; the default skill has no
+      # provisional note; the Pool column remains even without pool guidance.
+      !(lib.hasInfix "(opencode-go)" claude)
+      && lib.hasInfix "| Pool " claude
+      && !(hasProse note claude)
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
+      && hasProse note planned
+      && !(hasProse note (readSkill (change {
+        ai.programs.delegate-routing = {
+          runtimes.claude.models = [{vendors = ["opencode-go"];}];
+          skill.entries."Family tables".enable = false;
+        };
+      }) "claude"))
+      && lib.hasInfix "| Pool " planned
+      && lib.hasInfix "go-plus: $60 of list-price use empties the monthly pool" planned
+      && lib.hasInfix "go-plus: unlimited" planned
+      && lib.hasInfix "go-kimi-k3 (opencode-go)" unplanned
+      && lib.hasInfix "| Pool " unplanned
+      && lib.all (line: let
+        cells = lib.splitString "|" line;
+      in
+        lib.trim (builtins.elemAt cells (builtins.length cells - 3)) == "")
+      (builtins.filter (line: lib.hasPrefix "| go-" line) (lib.splitString "\n" unplanned))
+      && passes (goSelected "go-plus")
+      # A manual-only target's Go families carry the same pool hint on their
+      # own list item; the formatter wraps list items onto indented lines.
+      && lib.any (line: lib.hasPrefix "- go-kimi-k3 (opencode-go) `kimi-k3`: " line && lib.hasSuffix "; go-plus: $60 of list-price use empties the monthly pool" line) (lib.splitString "\n" (lib.replaceStrings ["\n  "] [" "] (skill {
+        ai.programs.delegate-routing = {
+          opencodeGo.plan = "go-plus";
+          runtimes.kimchi.models = [{vendors = ["opencode-go"];}];
+        };
+      })))
+      # A selected preset and another family, of any vendor, matching the
+      # same Go catalog model on one runtime fail; on different runtimes, or
+      # with no preset selected, they pass.
+      && lib.all (failsWith (overlapping {example.kimi = kimi;} [{families = ["kimi"];}])) ["kimi-k3 (" "example.kimi" "opencode-go.go-kimi-k3"]
+      && failsWith (overlapping {opencode-go.mine = kimi;} []) "opencode-go.mine"
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families.example.kimi = kimi;
+          runtimes = {
+            claude.models = [{families = ["kimi"];}];
+            codex.models = [{vendors = ["opencode-go"];}];
+          };
+        };
+      })
+      && passes (change {
+        ai.programs.delegate-routing = {
+          families = {
+            example.kimi = kimi;
+            other.kimi-exact = kimi // {match = "kimi-k3";};
+          };
+          runtimes.claude.models = [{families = ["kimi" "kimi-exact"];}];
+        };
+      }));
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
       failsWith (invalidNode {
         kind = "subagent";
@@ -1270,7 +1412,7 @@
         && !(lib.hasInfix "Each row is a family" text)
         && positionOf "## Common workflows" < positionOf "### frontier"
         && positionOf "### frontier" < positionOf "### claude techniques"
-        && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Launch"]
+        && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Pool" "Launch"]
         && !(lib.hasInfix "default orchestrator" text)
         # An enabled column the renderer has no cell for is refused, not
         # rendered as an empty column.

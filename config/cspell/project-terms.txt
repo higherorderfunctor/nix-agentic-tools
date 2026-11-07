@@ -18,6 +18,7 @@ DONT
 forall
 GHOSTTY
 globalconfig
+gmtime
 GOARCH
 GOTOOLCHAIN
 GOWORK
@@ -26,6 +27,7 @@ interprocedural
 intraprocedural
 libxcb
 Menlo
+mktime
 nonliteral
 NOSYSTEM
 NPROCESSORS
@@ -322,6 +324,7 @@ mergetool
 metacharacter
 microvm
 microvms
+mimo
 minishlab
 misordered
 mitmdump
