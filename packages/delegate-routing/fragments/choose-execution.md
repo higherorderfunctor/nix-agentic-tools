@@ -1,9 +1,8 @@
-List the parts of the work before choosing execution. Size each part to a
-reviewable step: a few hundred lines of implementation at most, not counting
-checks, tests and docs. Checks, tests and docs that exist only for that part
-ship in the same change and do not count against its size; when a part's checks
-run past twice its implementation, say why in the brief. Name the files each
-part writes and its dependencies.
+List the parts of the work before choosing execution. Size each part with the
+Work and review rubric's Size row and follow that row's split rule. Checks,
+tests and docs that exist only for a part ship in the same change as that part,
+so a split never moves a part's tests to another PR. Name the files each part
+writes and its dependencies.
 
 Use a tool from the table that exists in this session's mode. A single
 self-contained task needs one delegate. Use a workflow when the work has

@@ -1,9 +1,10 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-03 — routing ships an always-on "Pool drain" entry,
+> **Last verified:** 2026-11-06 — routing ships an always-on "Pool drain" entry,
 > the usage helpers share one schema with UTC reset times, portable pools
-> resolve usage readers and label family reaches on both backends, and
-> proxy-accounted-usage reads a Manager+ accounted monthly budget.
+> resolve usage readers and label family reaches on both backends,
+> proxy-accounted-usage reads a Manager+ accounted monthly budget, and the
+> always-on stub names the source for steering its rules.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -43,7 +44,9 @@ The package ships one enabled workflow, "Work and review", with the steps
 Rubric, Subtractive, Work, Describe, Review and Loop chained by `after`. The
 rubric is a saved file, pasted verbatim into the worker's and every reviewer's
 brief. Review embeds the checks; they are not separate steps. Add, replace,
-disable or reorder a step by key. A workflow can have introductory text or only
+disable or reorder a step by key. "Choose execution" and the Review step
+reference the Rubric step's Size row; a consumer who disables that step moves or
+restates the size rule with it. A workflow can have introductory text or only
 steps; an enabled step needs content.
 
 **Breaking migration:** remove overrides of `steps.Prosecute`, `steps.Defend`
@@ -56,7 +59,9 @@ Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`
 selects the destination for its header and numbered steps together; steps retain
 their order within that workflow. The always-on stub tells the agent to load the
-skill in each turn that delegates. When the always-on render is empty, no router
+skill in each turn that delegates and names the source for steering these rules:
+the package's fragments, or for a consumer its `ai.programs.delegate-routing`
+routing and workflows entries. When the always-on render is empty, no router
 rule is emitted. Keep model tables and harness details in the skill.
 
 Within one scope, named submodules merge by key and package fields use
