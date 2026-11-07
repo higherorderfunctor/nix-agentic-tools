@@ -102,6 +102,28 @@ $ systemctl --user stop airlock-main.service
 On devenv, use `devenv processes up` and `devenv processes down`. Restart Claude
 and other selected runtimes after changing the selection.
 
+An instance can also intercept selected destinations:
+
+```nix
+ai.airlock.instances.main.settings.interception = {
+  destinations = ["api.anthropic.com:443"];
+  upstream_roots = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"; # optional
+};
+```
+
+The service runs `airlock ca init --instance <name>` before
+`serve --instance <name>` starts, so `ca.pem` exists before any client reads it.
+On Home Manager the CA uses the default layout in
+`$XDG_RUNTIME_DIR/airlock/<name>/` (see [Local CA](#local-ca)); on devenv the
+service sets `AIRLOCK_HOME` to `airlock` under the project's devenv runtime
+root, which init refuses when devenv falls back to the shared `/tmp`. Restarts
+and updates reuse the CA; a reboot or logout clears the runtime directory, the
+next start creates a new CA, and running clients must be relaunched to load it.
+Nothing installs trust: a client must trust that `ca.pem` itself.
+
+The CA key is readable by same-user processes; isolating the service under a
+separate uid is future work.
+
 ## Selective TLS interception
 
 Add `interception` to the JSON configuration to select exact DNS names and
@@ -226,7 +248,8 @@ deadlines, owned tunnel shutdown, local CA validation and CLI signals.
 points.
 
 `checks.airlock-instances` covers module wiring, port and name claims, proxy
-registration, selection defaults and overrides, and Claude settings delivery.
-`checks.airlock-instance-runtime` starts each backend's generated service
-launcher and requests `/health` at a configured nondefault port. Rust protocol
+registration, interception settings, selection defaults and overrides, and
+Claude settings delivery. `checks.airlock-instance-runtime` starts each
+backend's generated service launcher, requests `/health` at a configured
+nondefault port and checks the runtime CA's reuse across restarts. Rust protocol
 tests run through the Nix package's `doCheck`.
