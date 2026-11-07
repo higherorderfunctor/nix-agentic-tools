@@ -1,9 +1,10 @@
 # MicroVM sandbox implementation
 
-<!-- cspell:ignore ACPI chardev sysfs virtio -->
+<!-- cspell:ignore ACPI chardev guestfwd sysfs virtio -->
 
-> **Last verified:** 2026-10-12 — the launcher forwards guest completion through
-> a root-only virtio serial port.
+> **Last verified:** 2026-11-06 — the launcher forwards guest completion through
+> a root-only virtio serial port; the sandbox is built and merged one bounded
+> capability at a time.
 
 The public `lib.ai.mkSandbox pkgs {exe; outName;}` factory owns the guest
 definition and standalone launcher. The shared host option `ai.sandboxes` has
@@ -64,3 +65,34 @@ The user-facing contract and host preparation are documented in
 `packages/microvm/modules/README.md`. The owner checks cover empty imports,
 installation parity, factory validation, and guest boundaries. Real guest boot
 requires a Linux host with KVM access and is a separate smoke test.
+
+## Git access
+
+These details extend the architecture fragment's `ai.sandbox` rule, which is not
+implemented on `main` yet.
+
+- A runtime opts back in to a root identity with
+  `inherit (config.ai.sandbox.git.identities) x;`.
+- An identity is a user, a required `push.key`, an optional `signing.key` and
+  `remotes.<host>.forge`, with no `enable`. With no push remote, or outside a
+  repository, the VM boots with no doors.
+- Under the pass-through ref policy, force pushes and deletes go through and the
+  forge protects `main`.
+- The relay sets `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`.
+  git-branchless and git-absorb read config files only, so VM git config must be
+  files. A same-uid agent on the host can still read keys, so the relay is a
+  boundary only once agents run in the VM or under another uid.
+- Harnesses in the VM use fake or VM-only cliproxyapi client keys routed to
+  low-cost upstreams. The VM excludes the cliproxyapi manager panel, MCP servers
+  and proxies that carry account authority (gitlab-mcp, Jira, Confluence,
+  Slack), ssh and gpg agents, D-Bus and the user's runtime directory.
+
+## Building and merging the stack
+
+Build the sandbox one bounded capability at a time. Each capability records its
+trust boundary and its host prerequisites (in `modules/README.md`) and merges
+before the next goes wider. Do not resume a broad all-features build.
+
+Merge a stack of sandbox PRs bottom-up. For each PR, review it against `main`,
+merge it, then move the rest of the stack onto `main`. Mark PRs ready one at a
+time, because review triggers when a PR becomes ready.

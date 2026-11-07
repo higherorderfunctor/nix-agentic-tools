@@ -55,6 +55,9 @@ group and logging out and back in. A NixOS host can declare the appropriate
 The sandbox module installs no host NixOS services and needs no host root at
 launch. The launcher reports a clear error when `/dev/kvm` access is missing.
 
+This section lists every host prerequisite that Home Manager and devenv cannot
+arrange. A capability that adds one records it here.
+
 ## Guest boundaries and console limits
 
 The guest runs the selected `exe` as the unprivileged `sandbox` user, with
@@ -84,6 +87,7 @@ so program output cannot forge success.
 This is a serial console wrapper, not a transparent replacement for the program:
 boot logs share its output and interactive terminal behavior differs. It
 forwards no host environment, credentials, workspace, or network. There is no
-usable authenticated project or coding-harness workflow yet. Use a small
-deterministic command to check the primitive before trying an interactive
-program.
+usable authenticated project or coding-harness workflow yet. Green microvm CI is
+not evidence that an authenticated harness works in the VM; claim nothing until
+a live run shows it. Start live tests with a small deterministic command before
+trying an interactive program.
