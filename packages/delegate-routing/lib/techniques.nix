@@ -29,7 +29,7 @@ in {
       kind = "workflow";
       modelArg = "full model id";
       modes = ["interactive" "headless"];
-      notes = "`agent(prompt, {model, effort})` per node; accepts full model ids, including ids outside the Agent enum, from configured model-picker rows (the ids operator proxy routes publish); a single node is the way to pin one delegate";
+      notes = "`agent(prompt, {model, effort})` per node; accepts full model ids, including ids outside the Agent enum, from configured model-picker rows (the ids operator proxy routes publish); a single node is the way to pin one delegate; pass `args` again on resume (open regression anthropics/claude-code#103657); keep the working directory fixed for a run (a cwd change orphans persisted scripts, anthropics/claude-code#99517)";
       pinsEffort = true;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Workflow` fn 14: nodes lack Agent/Workflow (claude:wf_allowed)

@@ -521,3 +521,24 @@ deadlines are cleanup; the wire and tool results establish the behavior.
 Workflow cancel/abort fixtures wait for an active provider request, and the
 abort fixture waits 10 s before its status check. The Kimchi prompt map is
 replayed by the `claude:sp-*` cases.
+
+## Workflow resume directories
+
+When Claude's effective Workflow technique and source runtime are enabled,
+delegate-routing contributes `~/.claude/projects` to
+`ai.claude.native.settings.permissions.additionalDirectories`. This is a plain
+list definition: consumer plain lists concatenate with it; `lib.mkForce`
+replaces the whole list to opt out. Home Manager delivers user settings; devenv
+delivers project settings through the same native option.
+
+On devenv, with a managed Claude package, it also contributes that directory to
+`ai.claude.untrustedProjectAdditionalDirectories`. The launcher silently adds
+`--add-dir` for an untrusted launch directory, and a SessionStart hook returns a
+transcript-only `systemMessage` describing the fallback. Consumer SessionStart
+entries concatenate with this hook. Home Manager intentionally has neither this
+option nor this hook: user settings already deliver the same access
+independently of project trust. A null package suppresses the launcher
+contribution and notice; the settings contribution remains.
+
+Pass `args` again on Workflow resume (anthropics/claude-code#103657), and keep
+the working directory fixed for a run (anthropics/claude-code#99517).

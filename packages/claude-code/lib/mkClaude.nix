@@ -782,7 +782,24 @@ in
           ai.claude._generatedFiles.".mcp.json" = staged "mcpServers" "json" {value.mcpServers = renderedServers;};
         }))
       ];
-    devenv.options.native.settings = nativeSettingsOption;
+    devenv.options = {
+      native.settings = nativeSettingsOption;
+      untrustedProjectAdditionalDirectories = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = ''
+          Directories the managed launcher silently appends as `--add-dir` when
+          the launch directory is not trusted, preserving the effect of project
+          settings. Trust is read from
+          `''${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json`,
+          `.projects."<launch directory>".hasTrustDialogAccepted`.
+          Leading `~/` expands to `$HOME`; unset HOME leaves argv unchanged.
+          This option has no effect when `ai.claude.package = null`, because
+          there is no managed launcher.
+          Devenv only: Home Manager delivers trust-independent user settings.
+        '';
+      };
+    };
     # Home Manager only: devenv never writes HOME, so on devenv the option
     # does not exist and setting it is an unknown-option evaluation error.
     hm.options.native = {

@@ -32,7 +32,7 @@ in {
       python ${./checks/usage-runtime.py} ${./scripts}
       touch "$out"
     '';
-  imports = [./checks/module-eval.nix ./checks/reminder-runtime.nix];
+  imports = [./checks/module-eval.nix ./checks/reminder-runtime.nix ./checks/workflow-resume-runtime.nix];
   testing.moduleProbes = [
     {
       ai = {

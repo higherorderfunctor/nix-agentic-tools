@@ -550,6 +550,58 @@
         && result.config.ai.programs.delegate-routing.families.anthropic.haiku.defaultEffort == null
         && !(builtins.tryEval (builtins.deepSeq (change {ai.programs.delegate-routing.families.anthropic.opus.defaultEffort = "invalid";}).config.ai.programs.delegate-routing.families true)).success
     );
+    # Reject missing delivery, mkDefault list replacement, and an entry mkForce cannot replace.
+    "module-delegate-routing-${name}-workflow-resume-settings" = mkTest "delegate-routing-${name}-workflow-resume-settings" (let
+      directories = evaluation: evaluation.config.ai.claude.native.settings.permissions.additionalDirectories;
+      consumer = change {ai.claude.native.settings.permissions.additionalDirectories = ["/opt/other"];};
+      forced = change {ai.claude.native.settings.permissions.additionalDirectories = lib.mkForce ["/opt/only"];};
+    in
+      directories result
+      == ["~/.claude/projects"]
+      && lib.sort builtins.lessThan (directories consumer) == ["/opt/other" "~/.claude/projects"]
+      && directories forced == ["/opt/only"]);
+    # Reject unconditional writes and a notice naming a nonexistent package wrapper.
+    "module-delegate-routing-${name}-workflow-resume-gates" = mkTest "delegate-routing-${name}-workflow-resume-gates" (let
+      hooks = evaluation: evaluation.config.ai.claude.hooks.SessionStart or [];
+      fallback = evaluation: evaluation.config.ai.claude.untrustedProjectAdditionalDirectories or [];
+      directories = evaluation: let
+        value = evaluation.config.ai.claude.native.settings.permissions.additionalDirectories or null;
+      in
+        if value == null
+        then []
+        else value;
+      off = [
+        (change {ai.programs.delegate-routing.runtimes.claude.techniques.Workflow.enable = false;})
+        (change {ai.claude.enable = lib.mkForce false;})
+        (change {ai.programs.delegate-routing.enable = false;})
+      ];
+      noPackage = change {ai.claude.package = null;};
+      forcedFallback = change {ai.claude.untrustedProjectAdditionalDirectories = lib.mkForce ["/somewhere"];};
+      consumer = change {ai.claude.hooks.SessionStart = [{hooks = [{command = "/consumer-hook";}];}];};
+    in
+      lib.all (evaluation: directories evaluation == [] && fallback evaluation == [] && hooks evaluation == []) off
+      && directories noPackage == ["~/.claude/projects"]
+      && fallback noPackage == []
+      && hooks noPackage == []
+      && (
+        if name == "hm"
+        then
+          !(lib.hasAttrByPath ["ai" "claude" "untrustedProjectAdditionalDirectories"] result.options)
+          && hooks result == []
+        else
+          fallback result
+          == ["~/.claude/projects"]
+          && builtins.length (hooks result) == 1
+          && lib.hasInfix "delegate-routing-workflow-resume" (builtins.head (builtins.head (hooks result)).hooks).command
+          && builtins.length (hooks consumer) == 2
+          && fallback forcedFallback == ["/somewhere"]
+          && hooks forcedFallback == []
+      ));
+    # Reject notes omitted from the delivered Claude technique table.
+    "module-delegate-routing-${name}-workflow-resume-notes" = mkTest "delegate-routing-${name}-workflow-resume-notes" (
+      hasProse "pass `args` again on resume" claude
+      && hasProse "keep the working directory fixed for a run" claude
+    );
     "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
       poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown pool `missing`"
       && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown: `unknown` is not a runtime"
