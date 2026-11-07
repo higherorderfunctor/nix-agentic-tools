@@ -5,9 +5,9 @@ description: >-
   running its review loop. Covers reading a Copilot review without missing the
   suppressed bucket, the API traps that silently report a clean round, the
   separate-agent substitute when Copilot does not review, and the pointer to
-  delegate-routing for three blind checks. Load it when you are actually
-  operating the loop; the trigger and the decision rules are always-on in the
-  repository operating policy.
+  delegate-routing for the review rule. Load it when you are actually operating
+  the loop; the trigger and the decision rules are always-on in the repository
+  operating policy.
 ---
 
 # PR review loop — mechanics
@@ -137,9 +137,9 @@ when `autoMergeRequest` is set. Ask for a merge only when the PR is `OPEN` with
 
 A stacked PR (base is another PR's branch) gets no automatic checks, so an empty
 check list there is expected, not a failure. After a substantive change, not a
-pure rebase, dispatch CI and watch that one run with the script below, beside
-`pr-watch.sh`. It is separate because it waits on one Actions run, not on the
-PR: any other check on the commit, such as Copilot's, would satisfy
+pure rebase or restack, dispatch CI and watch that one run with the script
+below, beside `pr-watch.sh`. It is separate because it waits on one Actions run,
+not on the PR: any other check on the commit, such as Copilot's, would satisfy
 `checks-green` before the dispatched run exists.
 
 ```bash
@@ -234,10 +234,10 @@ client config, so match on the trailing segment rather than the full name.
 
 The repository operating policy owns the triggers and scope. For local review,
 follow the delegate-routing skill's **Work and review** workflow, including its
-Subtractive rubric, single-reviewer path and three blind checks. Keep reviewers
-read-only: forbid mutating git commands because sibling worktrees hold live
-edits. Record dismissed findings by title and count, and their dispositions in
-the PR body.
+Subtractive rubric and its Review step, which sets how many checks a change
+gets. Keep reviewers read-only: forbid mutating git commands because sibling
+worktrees hold live edits. Record dismissed findings by title and count, and
+their dispositions in the PR body.
 
 Findings are unbounded, so bound the contest before adding lenses: a 94-line
 docs PR once produced 28 findings and a 59-agent run.
