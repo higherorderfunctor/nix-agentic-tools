@@ -11,7 +11,7 @@
 > `ai.kiro.cli.acp.authMethod`) add their flag the same way, and a bare launch
 > is rewritten to `chat` when a chat option is set. The 3.0.0 facts below are
 > read from the binary and asserted by `kiro-kas-dispatch`; 2.x measurements are
-> labelled as such.
+> labelled as such. Engine-start probes need the fixture key (`probing.md`).
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -21,7 +21,10 @@
 >   measured vs. sourced-to-file — and re-measure rather than reason.
 > - The module runs only the v3 engine. There is no engine option and no v2
 >   path; a caller who types `--agent-engine=v2` reaches upstream unmodified,
->   which this repo does not test.
+>   which this repo does not test. When the binary ships several agent engines,
+>   the wrapper pins the newest one it ships, and when an upstream release drops
+>   the selector, the wrapper drops the flag; both are measured from that
+>   release's `--help` at bump time, never assumed.
 
 ## What is injected where
 
@@ -81,11 +84,15 @@ binary, not from help text):
 Top-level `--v3` and `KIRO_AGENT_ENGINE` are **not inputs**. CI measured, on the
 stock binary: `--v3 acp` and `acp` start KAS for `nix-check` and for EOF, but an
 `acp-smoke` initialize gets the v2 engine; `acp --agent-engine=v3` starts KAS
-for all three. So the wrapper adds `--agent-engine=v3` to `acp` unless an
-`--agent-engine` token, in either spelling, is already before `--`. The scan
-reads presence only; a caller's own selector, whatever its value, is left to
-upstream. The selector goes in front of an end-of-options `--` (a token past it
-is a positional) and last when argv has no `--`: `acp --` becomes
+for all three. That start needs the CI harness
+(`packages/kiro-cli/checks/kas-dispatch.py`), which supplies the `KIRO_API_KEY`
+fixture, the package bin on `PATH` and its own node through
+`KIRO_KAS_NODE_PATH`; without credentials the 3.0.0 binary stops first at the
+login gate (`probing.md`). So the wrapper adds `--agent-engine=v3` to `acp`
+unless an `--agent-engine` token, in either spelling, is already before `--`.
+The scan reads presence only; a caller's own selector, whatever its value, is
+left to upstream. The selector goes in front of an end-of-options `--` (a token
+past it is a positional) and last when argv has no `--`: `acp --` becomes
 `acp --agent-engine=v3 --`. `kiro-usage exec` applies the same rule to a command
 named `kiro-cli`, reusing its launcher-global scan to find `acp`.
 
@@ -187,6 +194,14 @@ the modes (`--sessions`, `--no-interactive`, `--output-format`, `--cloud`,
 `--repo`) and `--tui`/`--legacy-ui`, which the pinned v3 launch supersedes. The
 same four options exist on Home Manager and devenv, and `package = null` warns
 when one is set, because they need the managed wrapper.
+
+Two rules sit on the classification. An environment variable joins it only once
+it has been measured (`probing.md`), because `lib/cliOptions.nix` reads the
+`--help` tables only and exposes nothing for a variable. In
+`packages/kiro-cli/checks/kiro-cli-extracted.nix` a check holds an exact
+expectation only where this package's code consumes the value; every other row
+is a membership expectation, so an upstream addition is drift that regeneration
+clears instead of a red check.
 
 A configured option becomes one `--name=value` word, added only when the caller
 passed none of its spellings before `--`: the long name and aliases as `--x v`
@@ -467,24 +482,30 @@ follow the extracted registry; background execution can be rebound with
 Run against the **unwrapped** binary — a bare `PATH` lookup finds the wrapper,
 which is the thing under test. One binary serves both platforms. Every command
 goes through `probe`, the scrubbed-environment launcher in
-[`probing.md`](probing.md), never with only a scratch `HOME`.
+[`probing.md`](probing.md), never with only a scratch `HOME`. Step 1 is a flag
+probe and steps 2 and 3 are dispatch probes there, so none starts the agent
+server.
 
 ```bash
 K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.unwrapped); KB="$K/bin/kiro-cli"
 
 # 1. globals still parse BEFORE a subcommand, and still fail after it
-probe "$KB" --v3 whoami >/dev/null && echo "prepend ok"
-probe "$KB" whoami --v3 2>&1 | grep -q "unexpected argument" && echo "append still fails"
+probe "$KB" --v3 whoami --help >/dev/null && echo "prepend ok"
+probe "$KB" whoami --v3 --help 2>&1 | grep -q "unexpected argument" && echo "append still fails"
 
-# 2. the acp engine resolution: rerun kiro-kas-dispatch and read its MEASURE
-#    rows; a listed client that starts KAS under plain `acp` means upstream's
-#    default changed, and one that does not under `acp --agent-engine=v3`
-#    breaks the wrapper's selector.
+# 2. the acp engine resolution, as dispatch probes: plain `acp` shows
+#    upstream's default, `acp --agent-engine v3` must print "KAS spawned:".
+#    The kiro-kas-dispatch check's MEASURE rows in CI cover the raw
+#    `acp --agent-engine=v3` for EOF, nix-check and acp-smoke; each must show
+#    "started": true.
+PROBE_CLASS=dispatch probe "$KB" acp
+PROBE_CLASS=dispatch probe "$KB" acp --agent-engine v3
 
-# 3. the v3 conflict set on acp: "not supported with --agent-engine=v3: <opt>"
-#    (exit 2) means conflict; the empty baseline must not conflict.
+# 3. the v3 conflict set on acp: a conflict exits 2 with "not supported with
+#    --agent-engine=v3: <opt>" and spawns no KAS; the empty baseline exits 0
+#    and prints "KAS spawned:".
 for opt in "" "--agent x" "--model auto" "--effort low" "--trust-tools=x" "-a"; do
-  out=$(probe "$KB" acp --agent-engine v3 $opt 2>&1)
+  out=$(PROBE_CLASS=dispatch probe "$KB" acp --agent-engine v3 $opt 2>&1)
   echo "[$opt] $? ${out%%$'\n'*}"
 done
 ```
