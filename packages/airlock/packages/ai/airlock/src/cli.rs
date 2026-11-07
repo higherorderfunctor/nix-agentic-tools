@@ -42,4 +42,10 @@ pub enum CaCommand {
         #[arg(long, value_name = "NAME", default_value = "default")]
         instance: Instance,
     },
+    /// Print the instance's CA directory as init resolves it, without creating it.
+    Directory {
+        /// The instance whose runtime directory holds the CA.
+        #[arg(long, value_name = "NAME", default_value = "default")]
+        instance: Instance,
+    },
 }

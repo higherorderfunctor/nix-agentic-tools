@@ -7,6 +7,7 @@
 backend: {
   config,
   lib,
+  pkgs,
   ...
 }: let
   # Home Manager's user manager sets XDG_RUNTIME_DIR, which Airlock uses by
@@ -26,15 +27,16 @@ backend: {
       then throw "ai.airlock.instances.${instance.name}: an intercepting instance's name must be ASCII letters, digits, `_` or `-`, because it names the CA's runtime directory"
       else " --instance ${lib.escapeShellArg instance.name}"
     );
+  owner = "airlock";
+  trust = import ../lib/trust.nix {inherit home lib pkgs;};
   withoutNulls = lib.filterAttrs (_: value: value != null);
 in {
   imports = [
     (instances.module {
       arguments = instance: ''serve --config "$AIRLOCK_CONFIG"'' + instanceArgument instance;
-      inherit backend;
+      inherit backend owner;
       defaultPort = 8318;
       derived = {instance, ...}: {listen = "127.0.0.1:${toString instance.port}";};
-      owner = "airlock";
       packagePath = "airlock";
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "airlock";
       # `serve` only loads a CA, so `ca init` creates it before `serve` starts.
@@ -85,10 +87,19 @@ in {
   config.ai = {
     airlock.claims.proxy-instance = builtins.attrNames config.ai.airlock.instances;
     internal.proxyInstances =
-      lib.mapAttrs (_: instance: {
+      lib.mapAttrs (name: instance: {
         inherit (instance) enable;
         http = instances.origin instance;
         https = instances.origin instance;
+        trust =
+          if instance.settings.interception == null
+          then null
+          else
+            trust.helper {
+              inherit name;
+              inherit (instance) package;
+              service = instances.serviceName owner name;
+            };
       })
       config.ai.airlock.instances;
   };

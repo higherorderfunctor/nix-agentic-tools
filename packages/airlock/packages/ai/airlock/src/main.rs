@@ -32,11 +32,13 @@ fn run(cli: Cli) -> Result<(), String> {
             };
             server::run(config).map_err(|error| error.to_string())
         }
-        Command::Ca {
-            command: CaCommand::Init { instance },
-        } => {
+        Command::Ca { command } => {
             let base = ca::RuntimeBase::from_environment()?;
-            println!("{}", ca::init(&base, &instance)?.display());
+            let path = match command {
+                CaCommand::Init { instance } => ca::init(&base, &instance)?,
+                CaCommand::Directory { instance } => ca::directory(&base, &instance)?,
+            };
+            println!("{}", path.display());
             Ok(())
         }
     }
