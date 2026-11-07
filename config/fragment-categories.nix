@@ -309,7 +309,10 @@
         "packages/*/packages/**"
         "packages/*/registry.nix"
       ];
-      sources = ["package-ownership"];
+      sources = [
+        "check-fixtures"
+        "package-ownership"
+      ];
     };
     # flake: binary cache config + flake-level settings. Scoped to
     # files that touch nixConfig or cachix settings so consumers
