@@ -55,25 +55,25 @@
                 type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
               };
             };
-          config = lib.mapAttrsRecursive (_: lib.mkDefault) {inherit (rawDefaults) routing workflows techniques;};
+          config = lib.mapAttrsRecursive (_: lib.mkDefault) {inherit (rawDefaults) routing skill workflows techniques;};
         }
       ];
     }).config;
-  defaults = rawDefaults // {inherit (normalized) routing workflows techniques;};
+  defaults = rawDefaults // {inherit (normalized) routing skill workflows techniques;};
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
   # The skill in the house prose style. No table check: this package set's
   # pkgs carries no overlay, so the overlay's linters are not in it.
-  mkSkill = args:
+  # Defaults merge before the overridable builder, so a direct caller's
+  # `.override (prev: ...)` reads the shipped inputs, `prev.skill` included.
+  mkSkill = args: lib.makeOverridable buildSkill (defaults // args);
+  buildSkill = args:
     generated.mkTree {
       name = "delegate-routing-${args.runtime}-skill";
       files."SKILL.md" = {
         type = "markdown";
         text = frontmatter.render {
           data = skillData;
-          body = import ../../lib/render.nix ({inherit lib;}
-            // defaults
-            // args
-            // lib.optionalAttrs (args ? techniques) {techniques = normalizeTechniques args.techniques;});
+          body = import ../../lib/render.nix ({inherit lib;} // args // {techniques = normalizeTechniques args.techniques;});
         };
       };
       guards.parseCompare = true;
@@ -87,7 +87,7 @@ in
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
       inherit mkSkill render skills usageScripts;
-      inherit (defaults) families models techniques routing workflows;
+      inherit (defaults) families models techniques routing skill workflows;
     };
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).

@@ -37,6 +37,17 @@
       description = "Named workflow steps, composed and ordered independently.";
     };
   };
+  phraseType = aiTypes.optionalTextSource {
+    autoEnable = false;
+    description = "skill phrase";
+    enableDefault = true;
+    textType = lib.types.str;
+  };
+  columnsOption = lib.mkOption {
+    type = lib.types.attrsOf stepType;
+    default = {};
+    description = "Header text, order and presence of one table's columns, keyed by column; a disabled column drops its header and cells.";
+  };
 in {
   inherit entryType stepType workflowType;
   options = {
@@ -44,6 +55,35 @@ in {
       type = lib.types.attrsOf entryType;
       default = {};
       description = "Named routing guidance; runtime names atomically replace portable names.";
+    };
+    skill = lib.mkOption {
+      type = lib.types.submodule {
+        options = {
+          columns = lib.mkOption {
+            type = lib.types.submodule {
+              options = {
+                families = columnsOption;
+                pools = columnsOption;
+                techniques = columnsOption;
+              };
+            };
+            default = {};
+            description = "Table header text, order and presence keyed by column.";
+          };
+          entries = lib.mkOption {
+            type = lib.types.attrsOf stepType;
+            default = {};
+            description = "Ordered body of the skill; text may use the {routing}, {workflows}, {pools}, {families}, {techniques} and {manual} placeholders, and an entry whose placeholder renders nothing is omitted.";
+          };
+          phrases = lib.mkOption {
+            type = lib.types.attrsOf phraseType;
+            default = {};
+            description = "Templates used inside generated blocks; a disabled phrase renders nothing.";
+          };
+        };
+      };
+      default = {};
+      description = "Skill text: body entries, table columns and phrases; runtime keys replace portable keys atomically.";
     };
     workflows = lib.mkOption {
       type = lib.types.attrsOf workflowType;

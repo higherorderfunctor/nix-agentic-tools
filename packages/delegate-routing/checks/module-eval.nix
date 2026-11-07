@@ -1046,6 +1046,59 @@
         && lib.hasInfix "PORTABLE FIRST STEP" codexRule
         && !(lib.hasInfix "CLAUDE MIDDLE STEP" codexRule)
     );
+    "module-delegate-routing-${name}-skill-entry-override" = mkTest "delegate-routing-${name}-skill-entry-override" (
+      let
+        overridden = change {
+          ai.programs.delegate-routing = {
+            runtimes.claude.skill.phrases."Model pattern".text = "newest `{match}`";
+            skill.entries."Technique availability".text = "CUSTOM TECHNIQUE AVAILABILITY";
+          };
+        };
+        text = readSkill overridden "claude";
+        beforeCustom = builtins.head (lib.splitString "CUSTOM TECHNIQUE AVAILABILITY" text);
+        afterCustom = builtins.elemAt (lib.splitString "CUSTOM TECHNIQUE AVAILABILITY" text) 1;
+      in
+        # Fails if the renderer keeps the literal and ignores the entry (old
+        # text stays, custom text absent), if an override drops the shipped
+        # `after` edges (custom text leaves its position between the family
+        # tables and the technique tables), or if a runtime phrase leaks to
+        # other runtimes (codex loses "the highest id matching").
+        lib.hasInfix "CUSTOM TECHNIQUE AVAILABILITY" text
+        && !(lib.hasInfix "Use a technique only if it appears" text)
+        && lib.hasInfix "### small" beforeCustom
+        && lib.hasInfix "### claude techniques" afterCustom
+        && !(lib.hasInfix "### small" afterCustom)
+        && lib.hasInfix "newest `claude-opus-*`" text
+        && lib.hasInfix "the highest id matching" (readSkill overridden "codex")
+        && !(lib.hasInfix "newest `" (readSkill overridden "codex"))
+    );
+    "module-delegate-routing-${name}-skill-entry-disable" = mkTest "delegate-routing-${name}-skill-entry-disable" (
+      let
+        disabledEntries = change {
+          ai.programs.delegate-routing.skill = {
+            columns.families.Orchestration.enable = false;
+            entries."Delegate sizing".enable = false;
+          };
+        };
+        text = readSkill disabledEntries "claude";
+        header = lib.findFirst (lib.hasPrefix "| Family") "" (lib.splitString "\n" text);
+        headerCells = lib.filter (cell: cell != "") (map lib.trim (lib.splitString "|" header));
+        positionOf = needle: builtins.stringLength (builtins.head (lib.splitString needle text));
+      in
+        # Fails if enable is ignored (sizing paragraph or column stays), if
+        # disabling an entry loses the order of later entries (workflows, tiers and
+        # technique tables change order), or if a disabled column keeps its
+        # cells (the opus row still says "default orchestrator").
+        !(lib.hasInfix "## delegate sizing" text)
+        && !(lib.hasInfix "Each row is a family" text)
+        && positionOf "## Common workflows" < positionOf "### frontier"
+        && positionOf "### frontier" < positionOf "### claude techniques"
+        && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Launch"]
+        && !(lib.hasInfix "default orchestrator" text)
+        # An enabled column the renderer has no cell for is refused, not
+        # rendered as an empty column.
+        && skillFails {ai.programs.delegate-routing.skill.columns.families.Unknown.text = "Unknown";}
+    );
     "module-delegate-routing-${name}-content-validation" = mkTest "delegate-routing-${name}-content-validation" (
       !(builtins.tryEval (builtins.deepSeq
         (change {
@@ -1093,6 +1146,23 @@
 in {
   checks =
     {
+      # The public builder is overridable from the shipped inputs. Fails if
+      # mkSkill returns no `.override`, if `prev` lacks the shipped `skill`, or
+      # if the override does not reach the render; the second half fails if
+      # overriding leaks into the un-overridden skill.
+      module-delegate-routing-builder-override = let
+        content = (evalHm scenario).config.ai.internal.roots.delegate-routing-content;
+        base = content.passthru.mkSkill {runtime = "claude";};
+        overridden = base.override (prev: {
+          skill = lib.recursiveUpdate prev.skill {phrases."Launch fallback".text = ", or ";};
+        });
+      in
+        mkTest "delegate-routing-builder-override" (
+          lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, or `claude -p`" overridden.text
+          && !(lib.hasInfix ", else `claude -p`" overridden.text)
+          && lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p`" base.text
+          && base.text == content.passthru.skills.claude.text
+        );
       # tryEval cannot expose the diagnostic; evaluate the resolver in a subprocess.
       module-delegate-routing-cycle-message = let
         probe = pkgs.writeText "delegate-routing-cycle.nix" ''

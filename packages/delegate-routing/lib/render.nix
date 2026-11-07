@@ -6,6 +6,7 @@
   techniques,
   pools ? {},
   routing ? {},
+  skill,
   workflows ? {},
   extraRuntimes ? [],
   manualExternalDelegates ? [],
@@ -21,14 +22,29 @@
   entryRenderer = import ./render-entries.nix {inherit lib;};
   routingText = entryRenderer.routing false routing;
   workflowText = entryRenderer.workflows false workflows;
+  entrySort = import ./resolve-entries.nix {inherit lib;};
+  # One pass: placeholders inside replacement text stay as written.
+  fill = template: values: lib.replaceStrings (map (key: "{${key}}") (builtins.attrNames values)) (builtins.attrValues values) template;
+  phrase = name: values: let
+    declared = skill.phrases.${name} or (throw "delegate-routing.skill.phrases.${name}: missing");
+  in
+    if declared.enable
+    then fill declared.text values
+    else "";
   cell = lib.replaceStrings ["|" "\n"] ["\\|" " "];
   row = cells: "| ${lib.concatMapStringsSep " | " cell cells} |";
-  table = columns: rows:
+  # Header text, order and presence come from the skill's column entries; each
+  # column key names the function that fills its cell from one item.
+  table = scope: columns: cells: items: let
+    shown = entrySort.sort "delegate-routing.skill.columns.${scope}" columns;
+    cellFor = column: cells.${column.name} or (throw "delegate-routing.skill.columns.${scope}.${column.name}: unknown column");
+    fillers = map cellFor shown;
+  in
     lib.concatStringsSep "\n" ([
-        (row columns)
-        (row (map (_: "---") columns))
+        (row (map (column: column.value.text) shown))
+        (row (map (_: "---") shown))
       ]
-      ++ map row rows);
+      ++ map (item: row (map (filler: filler item) fillers)) items);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
   # The id a launch route names for one harness: the family's current example
   # id for that target, or — for a family with no example there, as package
@@ -39,11 +55,11 @@
   in
     if lib.trim id != ""
     then "`${id}`"
-    else "the highest id matching `${family.match}`";
+    else phrase "Model pattern" {inherit (family) match;};
   poolSuffix = family: target: let
     pool = selection.poolFor family target;
   in
-    lib.optionalString (pool != null) " (pool ${pool})";
+    lib.optionalString (pool != null) (phrase "Pool binding" {inherit pool;});
   # Every enabled technique pinning both model and effort is eligible unless
   # its launchRoute is false, in kind order; from another harness only an
   # external command runs, so in-harness tools drop out of external reaches.
@@ -78,7 +94,12 @@
     in
       if lib.trim node.modelArg == ""
       then throw "ai.programs.delegate-routing.runtimes.${target}.techniques.${lib.strings.escapeNixIdentifier name}.modelArg: name the model value spelling for techniques that pin model and effort"
-      else "`${name}` with ${node.modelArg} ${launchId family target}";
+      else
+        phrase "Launch route" {
+          inherit (node) modelArg;
+          model = launchId family target;
+          technique = name;
+        };
   in
     if names == []
     then
@@ -87,19 +108,37 @@
         then "; from another harness it must be an external technique, otherwise ${target} must not be reached"
         else ""
       }"
-    else lib.concatMapStringsSep ", else " route names;
+    else lib.concatMapStringsSep (phrase "Launch fallback" {}) route names;
   reach = family: target:
-    (
+    phrase (
       if target == runtime
-      then "${runtime}: "
-      else "via ${target}: "
-    )
-    + launch family target
-    + poolSuffix family target;
-  poolsText = lib.optionalString (pools != {}) ''
-    ## Pools
-
-    ${table ["Name" "Reader" "Measure" "Description"] (lib.mapAttrsToList (name: declared: let
+      then "Native reach"
+      else "External reach"
+    ) {
+      harness = target;
+      launch = launch family target;
+      pool = poolSuffix family target;
+    };
+  poolsText = lib.optionalString (pools != {}) (table "pools" skill.columns.pools {
+      Description = item: item.pool.description;
+      Measure = item:
+        if item.pool.usage != null
+        then phrase "Pool measured" {}
+        else if item.pool.window == null
+        then phrase "Pool unmeasured" {}
+        else
+          phrase "Pool window" {
+            limit = toString item.pool.window.limit;
+            resetDay = toString item.pool.window.resetDay;
+            inherit (item.pool.window) unit;
+          };
+      Name = item: item.name;
+      Reader = item:
+        if item.command == null
+        then phrase "Pool reader missing" {}
+        else "`${item.command}`";
+    }
+    (lib.mapAttrsToList (name: declared: let
         # The public render and mkSkill helpers pass pool declarations
         # without the module's defaults, so default the optional fields here.
         pool =
@@ -109,46 +148,31 @@
             window = null;
           }
           // declared;
+      in {
+        inherit name pool;
         # Assertions own invalid-reader diagnostics, even if delivery forces
         # rendering before it collects the module's assertions.
         command =
           if pool.usage == null
           then null
           else techniques.${pool.usage.runtime}.${pool.usage.technique}.command or null;
-      in [
-        name
-        (
-          if command == null
-          then "none"
-          else "`${command}`"
-        )
-        (
-          if pool.usage != null
-          then "measured"
-          else if pool.window == null
-          then "unknown"
-          else "configured: ${toString pool.window.limit} ${pool.window.unit} per month, resets day ${toString pool.window.resetDay}; current use unknown"
-        )
-        pool.description
-      ])
-      pools)}
-
-  '';
+      })
+      pools));
   tier = name: let
     members = builtins.filter (family: family.tier == name) candidates;
   in
     lib.optionalString (members != []) ''
-      ### ${name}
+      ${phrase "Family table heading" {tier = name;}}
 
-      ${table ["Family" "Orchestration" "Use for" "Avoid for" "Effort (delegate)" "Launch"] (map (family: [
-          (familyLabel family)
-          (family.orchestration or "")
-          family.useFor
-          family.avoidFor
-          family.effort
-          (lib.concatMapStringsSep "; " (reach family) (targets family))
-        ])
-        members)}
+      ${table "families" skill.columns.families {
+          "Avoid for" = family: family.avoidFor;
+          "Effort (delegate)" = family: family.effort;
+          Family = familyLabel;
+          Launch = family: lib.concatMapStringsSep "; " (reach family) (targets family);
+          Orchestration = family: family.orchestration or "";
+          "Use for" = family: family.useFor;
+        }
+        members}
     '';
   techniqueBlock = target: externalOnly: let
     nodes = lib.filterAttrs (_: node:
@@ -161,50 +185,40 @@
     command = node: lib.optionalString (node.command != null) "`${node.command}`";
   in
     lib.optionalString (nodes != {}) ''
-      ### ${target} techniques
+      ${phrase "Technique table heading" {harness = target;}}
 
-      ${lib.optionalString (delegates != {}) (table
-        (["Technique" "Kind" "Pins model" "Pins effort" "Modes" "Runs own subagents" "Notes"] ++ lib.optional hasCommand "Command")
-        (lib.mapAttrsToList (name: node:
-          [
-            "`${name}`"
-            node.kind
-            (builtins.toJSON node.pinsModel)
-            (builtins.toJSON node.pinsEffort)
-            (lib.concatStringsSep "+" node.modes)
-            node.runsOwnSubagents
-            node.notes
-          ]
-          ++ lib.optional hasCommand (command node))
-        delegates))}
+      ${lib.optionalString (delegates != {}) (table "techniques" (lib.removeAttrs skill.columns.techniques (lib.optional (!hasCommand) "Command")) {
+          Command = item: command item.node;
+          Kind = item: item.node.kind;
+          Modes = item: lib.concatStringsSep "+" item.node.modes;
+          Notes = item: item.node.notes;
+          "Pins effort" = item: builtins.toJSON item.node.pinsEffort;
+          "Pins model" = item: builtins.toJSON item.node.pinsModel;
+          "Runs own subagents" = item: item.node.runsOwnSubagents;
+          Technique = item: "`${item.name}`";
+        }
+        (lib.mapAttrsToList (name: node: {inherit name node;}) delegates))}
 
       ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}") info)}
     '';
   manual = target: ''
-    ### ${target}
+    ${phrase "Manual delegate heading" {harness = target;}}
 
     ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}: ${launch family target}${poolSuffix family target}") (selected target)}
 
     ${techniqueBlock target true}
-    Not a candidate for auto-selection; use only when the user names it.
+    ${phrase "Manual delegate note" {}}
   '';
-in ''
-  ## Routing
-
-  ${routingText}
-
-  ${lib.optionalString (workflowText != "") "## Common workflows\n\n${workflowText}"}
-
-  ## delegate sizing
-
-  Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`). The Orchestration column names the default orchestrators and the families reserved for hard work. The Launch column lists, per harness, the techniques that pin both model and effort and take a full id or pattern, in order, with the id spelling each takes; use the first one present in your tool list; a concrete id there is the family's current pick, and "the highest id matching" instructs the resolution above.
-
-  ${poolsText}${lib.concatMapStringsSep "\n" tier tiers}
-  Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
-
-  ${techniqueBlock runtime false}
-  ${lib.concatMapStringsSep "\n" (target: techniqueBlock target true) extras}
-
-  ${lib.optionalString (manualExternalDelegates != [])
-    ("## manual-only external delegates\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}
-''
+  blocks = {
+    families = lib.concatMapStringsSep "\n" tier tiers;
+    manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
+    pools = poolsText;
+    routing = routingText;
+    techniques = lib.concatStringsSep "\n" ([(techniqueBlock runtime false)] ++ map (target: techniqueBlock target true) extras);
+    workflows = workflowText;
+  };
+  # An entry naming a block that renders nothing is omitted whole.
+  present = entry: lib.all (key: !(lib.hasInfix "{${key}}" entry.value.text) || blocks.${key} != "") (builtins.attrNames blocks);
+  body = map (entry: lib.removeSuffix "\n" (lib.trimWith {end = true;} (fill entry.value.text blocks))) (builtins.filter present (entrySort.sort "delegate-routing.skill.entries" skill.entries));
+in
+  lib.concatStringsSep "\n\n" body + "\n"
