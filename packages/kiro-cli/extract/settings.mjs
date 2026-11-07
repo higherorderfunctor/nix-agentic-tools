@@ -144,6 +144,10 @@ if (declarations !== 1 || assignments !== 1)
   fail("workspace allowlist binding is ambiguous");
 
 const merge = warningFunctions[0];
+// The extracted merge must itself be top-level: a nested declaration would
+// not be the binding that top-level callers resolve by spelling.
+if (merge.parent !== file)
+  fail("workspace merge has an unsupported loader shape");
 const statements = merge.body?.statements;
 const globalStatement = statements?.[0];
 const tryStatement = statements?.[1];
@@ -228,30 +232,24 @@ if (emptySeed) {
   findComposers(file);
   if (composers.length !== 1)
     fail("workspace merge has an unsupported loader shape");
-  // The composer calls `merge` by spelling alone, so the name must resolve to
-  // the one discovered top-level function: a nested or sloppy-mode redeclared
-  // binding would make the composer call something else.
-  let mergeDeclarations = 0;
-  const countMergeDeclarations = (node) => {
-    if (
-      (ts.isFunctionDeclaration(node) ||
-        ts.isFunctionExpression(node) ||
-        ts.isClassDeclaration(node) ||
-        ts.isVariableDeclaration(node) ||
-        ts.isParameter(node)) &&
-      node.name &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === merge.name.text
-    )
-      mergeDeclarations += 1;
-    ts.forEachChild(node, countMergeDeclarations);
-  };
-  countMergeDeclarations(file);
-  if (mergeDeclarations !== 1)
-    fail("workspace merge has an unsupported loader shape");
   composer = composers[0].node;
   composerGlobalName = composers[0].global.expression.text;
 }
+
+// Callers resolve the merge by spelling alone, so every occurrence of its name
+// must be the discovered declaration or a call of it. Any second binding,
+// write, destructuring target, alias or escape would change what runs.
+function checkMergeNameUses(node) {
+  if (
+    ts.isIdentifier(node) &&
+    node.text === merge.name.text &&
+    node !== merge.name &&
+    !(ts.isCallExpression(node.parent) && node.parent.expression === node)
+  )
+    fail("workspace merge name is mutated, shadowed, or escapes");
+  ts.forEachChild(node, checkMergeNameUses);
+}
+checkMergeNameUses(file);
 
 const hasCalls = [];
 function checkMergeUses(node) {

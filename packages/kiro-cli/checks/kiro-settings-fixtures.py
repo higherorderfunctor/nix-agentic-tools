@@ -116,9 +116,30 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             ),
             "unsupported loader shape",
         ),
+        "merge assigned": (
+            bundle(merge=empty_seed + composer + "merge=function(){return{}};"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
+        "merge assigned by destructuring": (
+            bundle(merge=empty_seed + composer + "({merge}=globalLoad());"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
+        "merge nested beside top-level composer": (
+            bundle(
+                merge="function outer(){"
+                + empty_seed
+                + "}"
+                + composer
+            ),
+            "unsupported loader shape",
+        ),
+        "merge rebound by var destructuring": (
+            bundle(merge=empty_seed + composer + "var {merge}=globalLoad();"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
         "redeclared merge": (
             bundle(merge=empty_seed + composer + "function merge(){return{...globalLoad()}}"),
-            "unsupported loader shape",
+            "merge name is mutated, shadowed, or escapes",
         ),
         "reversed composer spread": (
             bundle(merge=empty_seed + "function compose(){return{...merge(),...globalLoad()}}"),
@@ -126,7 +147,7 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
         ),
         "shadowed merge beside composer": (
             bundle(merge=empty_seed + composer + "function outer(){let merge=1}"),
-            "unsupported loader shape",
+            "merge name is mutated, shadowed, or escapes",
         ),
         "two composers": (
             bundle(merge=empty_seed + composer + composer.replace("compose", "composeAgain")),
