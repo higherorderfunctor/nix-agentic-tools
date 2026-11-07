@@ -67,8 +67,8 @@ the one `writeShellApplication` that adds the full strict-mode header and the
 shared shellcheck flags from `config/shell-strict.nix`. Do not restate
 `bashOptions` or the `shopt` line by hand.
 
-**Enforcement:** `checks/shell/bare-commands.nix` (part of `nix flake check`)
-runs two scans.
+**Enforcement:** `checks/shell/bare-commands.nix` (part of `nix flake check`,
+and alone as `.#checks.x86_64-linux.bare-commands`) runs two scans.
 
 The **whole-line scan** covers `lib/`, `packages/*/lib/`, and the single file
 `lib/packaging.nix`, looking for a coreutils command in any of four
