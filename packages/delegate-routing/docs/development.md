@@ -32,11 +32,12 @@ and expose the same surface.
 
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
 `source`. Names become headings. The package ships the always-on "Load
-delegate-routing" stub and five enabled entries: "Follow the user's request",
-"Size the work", "Choose execution", "Pool drain" and "Validate the result".
-"Pool drain" and "Validate the result" are always-on too. The "Orchestrator
-session" catalog entry ships disabled. Policy belongs in these entries rather
-than renderer string literals.
+delegate-routing" stub and six enabled entries: "Follow the user's request",
+"Size the work", "Choose execution", "Pool drain", "Validate the result" and
+"Orchestrator session". "Pool drain", "Validate the result" and "Orchestrator
+session" are always-on too. "Orchestrator session" ships enabled; disable it
+with `routing."Orchestrator session".enable = false`. Policy belongs in these
+entries rather than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
@@ -341,7 +342,8 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 
 ## Per-turn reminder
 
-The default wording is Claude's user-voiced grant against the heron_brook clamp.
+The default wording is Claude's user-voiced standing request against the
+heron_brook clamp; it grants delegation and states the default for bulk work.
 Before changing it, read `packages/claude-code/docs/heron-brook-clamp.md`.
 Consumer delivery and enable controls are documented in the `reminder` option;
 the hook pools own conflict diagnostics.
