@@ -5,6 +5,7 @@
       avoidFor = "routine delegate work (2× Opus cost); research at low effort (answers from memory); over-prescriptive prompts degrade it";
       effort = "medium for bounded judgment, high for investigation, xhigh only for runs over 30 min, max buys nothing over xhigh";
       match = "claude-fable-*";
+      orchestration = "reserved for hard work";
       tier = "frontier";
       useFor = "hardest and longest autonomous runs; taste and architecture judgment when it already holds the context; final polish";
     };
@@ -19,6 +20,7 @@
       avoidFor = "mechanical work (10× Haiku price)";
       effort = "medium default, high when more reasoning is needed; returns flatten after medium";
       match = "claude-opus-*";
+      orchestration = "default orchestrator";
       tier = "strong";
       useFor = "adversarial review, judging, design, synthesis; complex reasoning across files";
     };
@@ -35,6 +37,7 @@
       avoidFor = "ultra (spawns subagents, cost unknown)";
       effort = "medium sweet spot, high = operator's config default, xhigh only for named-hard; flat above medium";
       match = "gpt-*-astra";
+      orchestration = "reserved for hard work";
       tier = "frontier";
       useFor = "hardest coding and agentic work on the Codex pool; long implementation runs; computer use; novel reasoning";
     };
@@ -49,6 +52,7 @@
       avoidFor = "sole grader or judge; ultra";
       effort = "medium default, high when the task needs more reasoning";
       match = "gpt-*-sol";
+      orchestration = "default orchestrator";
       tier = "strong";
       useFor = "code writer; long-horizon coding; recall-heavy code review (finds more, filters less); written deliverables";
     };

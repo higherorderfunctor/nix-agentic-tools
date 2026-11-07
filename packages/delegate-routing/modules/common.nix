@@ -161,9 +161,19 @@ in {
               default = "";
               description = "Delegate effort guidance.";
             };
+            example = lib.mkOption {
+              type = lib.types.attrsOf lib.types.str;
+              default = {};
+              description = "Concrete current model id by target harness, shaped like pools; that harness's launch route names it in place of the match pattern, and a target with no entry names the pattern instead.";
+            };
             match = lib.mkOption {
               type = lib.types.str;
               description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
+            };
+            orchestration = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "Orchestration suitability shown in the family table, such as \"default orchestrator\" or \"reserved for hard work\"; empty shows nothing.";
             };
             pools = lib.mkOption {
               type = lib.types.attrsOf (lib.types.nullOr lib.types.str);

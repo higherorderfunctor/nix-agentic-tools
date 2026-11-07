@@ -101,12 +101,16 @@ Repository runtime and skill ownership is documented in
 ## Families and runtime capabilities
 
 `families.<vendor>.<family>` is the portable decision table. Each record has a
-capability tier, task and effort guidance, and a required normalized live-model
-pattern. Package fields use `mkDefault`, so consumers can override a field or
-add a family. `lib/families.nix` carries the package families without concrete
-model versions or Kimchi-served vendors. Consumers selecting Kimchi models
-declare the corresponding vendor families in their delegate-routing
-configuration.
+capability tier, task and effort guidance, an optional orchestration mark
+("default orchestrator" or "reserved for hard work"), and a required normalized
+live-model pattern; an optional per-target `example`, shaped like `pools`, names
+the family's concrete current id for one harness, and that harness's launch
+route shows it instead of the pattern. Package fields use `mkDefault`, so
+consumers can override a field or add a family. `lib/families.nix` carries the
+package families without concrete model versions or Kimchi-served vendors, so a
+shipped launch route instructs the reader to take the highest id matching the
+pattern. Consumers selecting Kimchi models declare the corresponding vendor
+families in their delegate-routing configuration.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
@@ -122,7 +126,8 @@ runtime to be enabled. `manualExternalDelegates` requires an explicit user
 request and also requires the target runtime to be enabled. Disabled targets in
 either list fail evaluation with a message naming the list and runtime.
 Manual-only wins if a target occurs in both lists. Selected families appear once
-per tier with all applicable native and external reaches.
+per tier, each reach naming its harness, the technique that pins both model and
+effort, the id spelling it takes and any bound pool.
 
 Resolve concrete models at launch time: inspect the runtime's live list, compare
 version segments to find the highest version matching the family pattern, and
@@ -132,11 +137,21 @@ including ids published by the operator's proxy routes.
 
 `runtimes.<runtime>.techniques` is a keyed set of workflow, subagent, external,
 introspect and usage nodes. Delegate nodes describe model and effort pinning,
-and mode availability. Modes describe usual availability, not session-mode
-detection; use only tools present in the current session and external commands
-on PATH. Introspection and usage nodes describe how to obtain live evidence.
-Usage commands remain part of the existing technique catalog. Each package field
-uses `mkDefault`; consumers can override fields, add nodes or disable a node.
+and mode availability; `modelArg` names the model value spelling a delegate
+technique passes (such as "full model id", "slug" or "modelId"), composed with
+the family's `example` id or `match` pattern. The renderer refuses, at
+composition, a technique that pins model and effort but names no spelling, and a
+reach into a harness with no enabled technique pinning model and effort (from
+another harness, only an external one counts), so both the module and the public
+`mkSkill` helper enforce it; every enabled technique that pins model and effort
+is listed in kind order (subagent, workflow, external) as fallbacks, each must
+name a spelling, and disabled techniques are not listed or refused. From another
+harness only an external technique can launch, so external reaches name external
+techniques only. Modes describe usual availability, not session-mode detection;
+use only tools present in the current session and external commands on PATH.
+Introspection and usage nodes describe how to obtain live evidence. Usage
+commands remain part of the existing technique catalog. Each package field uses
+`mkDefault`; consumers can override fields, add nodes or disable a node.
 
 `runsOwnSubagents` fills the technique table's "Runs own subagents" column,
 which "Choose execution" points readers at. It is a hand-declared string,

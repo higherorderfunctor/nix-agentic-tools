@@ -15,6 +15,11 @@ lib.types.submodule {
       type = lib.types.enum (import ./vocabulary.nix).kinds;
       description = "The technique's role.";
     };
+    modelArg = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "The model value spelling this technique passes, such as \"full model id\", \"slug\" or \"modelId\"; a launch route composes it with the family's example id or match pattern, and refuses a technique that pins model and effort but leaves it empty.";
+    };
     modes = lib.mkOption {
       type = lib.types.listOf (lib.types.enum ["acp" "headless" "interactive"]);
       default = [];
