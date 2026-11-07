@@ -24,6 +24,14 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
+    # Every servable OpenCode Go catalog model belongs to exactly one preset,
+    # and every preset matches a catalog model.
+    delegate-routing-opencode-go-presets = let
+      inherit (import ./lib/opencode-go.nix {inherit lib;}) drift;
+    in
+      harness.mkTest "delegate-routing-opencode-go-presets" (
+        drift == [] || throw "delegate-routing opencode-go presets drift from the pinned catalog: ${lib.concatStringsSep "; " drift}"
+      );
     delegate-routing-usage-runtime =
       pkgs.runCommand "delegate-routing-usage-runtime" {
         nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3];
@@ -33,14 +41,6 @@ in {
         python ${./checks/usage-runtime.py} ${./scripts}
         touch "$out"
       '';
-    # Every servable OpenCode Go catalog model belongs to exactly one preset,
-    # and every preset matches a catalog model.
-    delegate-routing-opencode-go-presets = let
-      inherit (import ./lib/opencode-go.nix {inherit lib;}) drift;
-    in
-      harness.mkTest "delegate-routing-opencode-go-presets" (
-        drift == [] || throw "delegate-routing opencode-go presets drift from the pinned catalog: ${lib.concatStringsSep "; " drift}"
-      );
   };
   imports = [./checks/module-eval.nix ./checks/reminder-runtime.nix ./checks/workflow-resume-runtime.nix];
   testing.moduleProbes = [

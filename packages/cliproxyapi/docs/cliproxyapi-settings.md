@@ -90,8 +90,8 @@ OAuth), so OpenCode would only duplicate them. The Responses API keeps Grok and
 Muse Spark. `toolAliases` and `codexShellArgCleanup` stay off. An API override
 replaces that API's whole default, so restate its `base-url`; the flake's
 `lib.cliproxyapi.providers.vendors.opencode-go.apis` holds the defaults to start
-from. Go asks clients for a session header to improve routing and caching; CPA
-forwards Claude Code's own on the Anthropic API, while chat sends none.
+from. Go refuses a request without a session header, so the vendor sets
+`x-opencode-session` to CPA's own session ID (`$CPA-SESSION-ID`) on every API.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The
 existing per-client-key model list carries model IDs for picker rows, without
