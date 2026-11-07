@@ -11,20 +11,21 @@ Writers on disjoint files may run in parallel in one working tree, with one
 committer staging and committing for all of them. Serialize writers whose files
 overlap; use separate worktrees when they need different bases.
 
-One delegate on a model this runtime can reach goes through this runtime's
-technique named in the family table's Launch column; in Claude that is a
-single-node Workflow, since Agent pins only a model alias and never effort, and
-claude -p only when there is no Workflow tool. Launch delegate CLIs from the
-current directory. That directory decides their permissions and configuration.
-Say in every external launch brief that the delegate is non-interactive and
-reports to an orchestrator, not a person.
+One delegate on a model this runtime can reach goes through the first technique
+in the family table's Launch column for this runtime that is in your tool list;
+Claude's Agent tool is never listed because it pins only a model alias and never
+effort. Launch delegate CLIs from the current directory. That directory decides
+their permissions and configuration. Say in every external launch brief that the
+delegate is non-interactive and reports to an orchestrator, not a person.
 
-Use another vendor's harness only when that harness runs the whole multi-step
-job itself: hand the entire job to one delegate there that can run its own
-subagents (the table's "Runs own subagents" column), such as Codex orchestrating
-a three-check review with GLM. If that column says unknown, probe it in the
-launcher you plan to use before relying on it. If no runtime can, orchestrate
-from this session:
+Use another vendor's harness for a model this runtime can reach only when that
+harness runs the whole multi-step job itself: hand the entire job to one
+delegate there that can run its own subagents (the table's "Runs own subagents"
+column), such as Codex orchestrating a three-check review with GLM. A model no
+technique of this runtime reaches keeps the Launch column's external technique
+for one delegate, a single cross-vendor reviewer included. If that column says
+unknown, probe it in the launcher you plan to use before relying on it. If no
+runtime can, orchestrate from this session:
 
 1. Use this session's workflow tool, if it has one.
 2. Otherwise run the steps yourself: launch each external worker, wait for it,

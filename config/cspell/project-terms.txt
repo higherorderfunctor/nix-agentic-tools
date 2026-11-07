@@ -589,5 +589,6 @@ ymtdzzz
 zdiff
 zebrafish
 zereight
+zhipu
 zstd
 gnupatch

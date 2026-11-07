@@ -162,9 +162,9 @@ in {
               description = "Delegate effort guidance.";
             };
             example = lib.mkOption {
-              type = lib.types.str;
-              default = "";
-              description = "Concrete current model id named in launch routes; empty names the match pattern instead.";
+              type = lib.types.attrsOf lib.types.str;
+              default = {};
+              description = "Concrete current model id by target harness, shaped like pools; that harness's launch route names it in place of the match pattern, and a target with no entry names the pattern instead.";
             };
             match = lib.mkOption {
               type = lib.types.str;
@@ -173,7 +173,7 @@ in {
             orchestration = lib.mkOption {
               type = lib.types.str;
               default = "";
-              description = "Orchestration suitability shown in the family table, such as \"default orchestrator\" or \"hard work\"; empty shows nothing.";
+              description = "Orchestration suitability shown in the family table, such as \"default orchestrator\" or \"reserved for hard work\"; empty shows nothing.";
             };
             pools = lib.mkOption {
               type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
@@ -406,13 +406,6 @@ in {
             {
               assertion = node.kind != "external" || node.command != null;
               message = "${techniquePath}.command is required for an external technique.";
-            }
-            {
-              # Launch routes compose modelArg with the family id for the
-              # techniques they name; an empty one leaves the cell naming no
-              # spelling. Techniques that pin nothing never appear in a route.
-              assertion = !delegate || !(node.pinsModel == true && node.pinsEffort == true) || lib.trim node.modelArg != "";
-              message = "${techniquePath}.modelArg: name the model value spelling for techniques that pin model and effort.";
             }
           ])
           techniques.${runtime}))
