@@ -9,7 +9,7 @@ import argparse
 from pathlib import Path
 import sys
 
-WORKTREE_PARAGRAPH = rb"""When a task should run in a worktree, say so in the brief and name the base branch (the branch checked out in the user\'s repo, not necessarily the default). The workflow\'s first step creates `.worktrees/<name>` on a branch named from the task, its last step rebases onto the base and fast-forwards it from the user\'s checkout (`git -C <repo> merge --ff-only <branch>`, since git will not move a branch checked out in another worktree), and you remove the worktree and branch after the run. Do not create the worktree yourself.\n\n"""
+WORKTREE_PARAGRAPH = rb"""When a task should run in a worktree, say so in the brief and name the base: what the user\'s repo has checked out (`git -C <repo> rev-parse HEAD`, and the branch when it is on one), not a default branch you assume. The workflow\'s first step creates `.worktrees/<name>` on a branch named from the task, off that base; its last step rebases onto the base (the branch\'s current tip when there is one) and fast-forwards the user\'s checkout, branch or detached HEAD (`git -C <repo> merge --ff-only <branch>`, since git will not move a branch checked out in another worktree), and you remove the worktree and branch after the run. Do not create the worktree yourself.\n\n"""
 FILE_CHECK_PARAGRAPH = rb"""5. **Every path is absolute**, in prompts and in `fileCheck.path`: step agents run in the parent session\'s workspace, not in a worktree, and a `fileCheck.path` that never resolves spins the loop to `maxIterations`. Tell worktree steps to use `git -C <absolute worktree>`."""
 # Our authored replacement, spelled out so the text Kiro receives is readable
 # here. The stop-condition file is the exception to absolute paths: the
