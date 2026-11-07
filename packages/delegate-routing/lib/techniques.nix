@@ -8,6 +8,8 @@ in {
     Agent = {
       kind = "subagent";
       modes = ["interactive" "headless"];
+      # docs/delegates/tools.md Claude `Agent` fn 1: model is sonnet/opus/haiku/fable.
+      modelArg = "enum alias";
       notes = "`model` takes only an alias from the tool's own enum; effort is inherited";
       pinsEffort = false;
       pinsModel = true;
@@ -17,6 +19,7 @@ in {
     Workflow = {
       kind = "workflow";
       modes = ["interactive" "headless"];
+      modelArg = "full model id";
       notes = "`agent(prompt, {model, effort})` per node; accepts full model ids, including ids outside the Agent enum, from configured model-picker rows (the ids operator proxy routes publish); a single node is the way to pin one delegate";
       pinsEffort = true;
       pinsModel = true;
@@ -27,6 +30,7 @@ in {
       command = ''claude -p --model <id> --effort <effort> "<prompt>"'';
       kind = "external";
       modes = ["headless"];
+      modelArg = "full model id";
       notes = "omit --effort for Haiku; use the harness's own background mechanism, never nohup or a trailing &";
       pinsEffort = true;
       pinsModel = true;
@@ -48,6 +52,7 @@ in {
       command = ''codex exec --model <slug> --config 'model_reasoning_effort="<level>"' --json --output-last-message <out>.md - < <prompt-file>'';
       kind = "external";
       modes = ["headless"];
+      modelArg = "slug";
       notes = "launch from cwd with a full brief and a fresh output path; use no -C, --worktree, bypass or trust flags. The terminal `-` already closes stdin, so do not add `</dev/null` (it wins the redirect and sends an empty prompt); check the exit code and `turn.failed`/`error` events, then verify the output";
       pinsEffort = true;
       pinsModel = true;
@@ -62,6 +67,7 @@ in {
     spawn_agent = {
       kind = "subagent";
       modes = ["interactive" "headless"];
+      modelArg = "slug";
       notes = ''`collaboration.spawn_agent` with `fork_turns: "none"`, `model`, `reasoning_effort`, `task_name` and the full brief; without fork_turns "none" it inherits and refuses overrides; never select `ultra`'';
       pinsEffort = true;
       pinsModel = true;
@@ -78,6 +84,7 @@ in {
     Agent = {
       kind = "subagent";
       modes = ["acp" "headless" "interactive"];
+      modelArg = "`--list-models` id";
       notes = "always pass `thinking` explicitly: an omitted one falls back to the persona default, not the parent's level; an omitted `model` uses the session's, or the role model when multi-model is on; with multi-model on, an explicit `model` must be in the allowed pool; runs in the background by default when a UI is attached";
       pinsEffort = true;
       pinsModel = true;
@@ -88,6 +95,7 @@ in {
       command = ''kimchi -p --mode json --no-session --model <id> --thinking <level> "<prompt>"'';
       kind = "external";
       modes = ["headless"];
+      modelArg = "`--list-models` id";
       notes = "thinking levels: off, minimal, low, medium, high, xhigh, max. An unknown model exits 1, but an invalid --thinking only warns and runs, so validate it yourself; loads the project AGENTS.md, so no prompt is small; the answer is the last assistant message in the `agent_end` event's `messages`";
       pinsEffort = true;
       pinsModel = true;
@@ -114,6 +122,7 @@ in {
       kind = "external";
       # docs/delegates/tools.md: codex:R3 v3-headless.
       modes = ["headless"];
+      modelArg = "model_id";
       notes = "models with no effort control ignore --effort";
       pinsEffort = true;
       pinsModel = true;
@@ -137,6 +146,7 @@ in {
       kind = "workflow";
       # docs/delegates/system-prompt.md: pr-hl-wf, pr-acp-wf; tools.md: claude:k-wfpins.
       modes = ["interactive" "headless" "acp"];
+      modelArg = "modelId";
       notes = "`modelId`/`effortLevel` per step (step > workflow > session); hidden unless workflows are enabled; an unknown modelId fails mid-run, so put pinned steps first";
       pinsEffort = true;
       pinsModel = true;

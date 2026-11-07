@@ -20,6 +20,11 @@ lib.types.submodule {
       default = [];
       description = "Session modes exposing this technique.";
     };
+    modelArg = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "The model value spelling this technique passes, such as \"full model id\", \"slug\" or \"enum alias\"; composed with the family id in launch routes. Required and non-empty for techniques that pin model and effort.";
+    };
     notes = lib.mkOption {
       type = lib.types.str;
       default = "";
