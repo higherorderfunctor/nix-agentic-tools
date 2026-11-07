@@ -8,8 +8,6 @@ in {
     Agent = {
       kind = "subagent";
       modes = ["interactive" "headless"];
-      # docs/delegates/tools.md Claude `Agent` fn 1: model is sonnet/opus/haiku/fable.
-      modelArg = "enum alias";
       notes = "`model` takes only an alias from the tool's own enum; effort is inherited";
       pinsEffort = false;
       pinsModel = true;

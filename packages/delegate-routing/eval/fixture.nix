@@ -7,7 +7,7 @@
 }: {
   imports = [../../../checks/instructions/fixtures/local-runtimes.nix];
   # Acceptance cases exercise Kiro workflows independently of the build probe.
-  ai.kiro.cli.workflows.enable = true;
+  ai.kiro.cli.workflows.enable = lib.mkDefault true;
   ai.programs.delegate-routing = {
     enable = true;
     # The package ships no Kimchi-served families.

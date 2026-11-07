@@ -30,13 +30,16 @@
       ]
       ++ map row rows);
   familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
-  # The concrete id a launch route names: the family's current example id, or
-  # its match pattern when no example is maintained.
-  launchId = family: (
-    if (family.example or "") != ""
-    then family.example
-    else family.match
-  );
+  # The id a launch route names for one harness: the family's current example
+  # id for that target, or — for a family with no example there, as package
+  # families are by design — an instruction the reader resolves against the
+  # live model list.
+  launchId = family: target: let
+    id = family.example.${target} or "";
+  in
+    if lib.trim id != ""
+    then "`${id}`"
+    else "the highest id matching `${family.match}`";
   poolSuffix = family: target: let
     pool = selection.poolFor family target;
   in
@@ -80,7 +83,10 @@
     else let
       name = builtins.head names;
       node = techniques.${target}.${name};
-    in "`${name}` with ${node.modelArg} `${launchId family}`";
+    in
+      if lib.trim node.modelArg == ""
+      then throw "ai.programs.delegate-routing.runtimes.${target}.techniques.${lib.strings.escapeNixIdentifier name}.modelArg: name the model value spelling for techniques that pin model and effort"
+      else "`${name}` with ${node.modelArg} ${launchId family target}";
   reach = family: target:
     (
       if target == runtime
@@ -190,7 +196,7 @@ in ''
 
   ## delegate sizing
 
-  Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`). The Launch column names, per harness, the technique that pins both model and effort and the id spelling it takes; a concrete id there is the family's current pick, otherwise resolve the highest version matching the pattern.
+  Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (the Claude Agent tool takes the alias, e.g. `opus`). The Orchestration column names the default orchestrators and the families reserved for hard work. The Launch column names, per harness, the technique that pins both model and effort and the id spelling it takes; a concrete id there is the family's current pick, and "the highest id matching" instructs the resolution above.
 
   ${poolsText}${lib.concatMapStringsSep "\n" tier tiers}
   Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
