@@ -110,13 +110,11 @@ Every heading and sentence is an entry, a column or a phrase under `skill`, at
 runtime key replaces the portable key atomically.
 
 `skill.entries` is the ordered body: Routing, Common workflows, Delegate sizing,
-Pools, Family tables, OpenCode Go note, Technique availability, Technique tables
-and Manual-only external delegates. Entry text may use `{routing}`,
-`{workflows}`, `{pools}`, `{families}`, `{opencodeGo}`, `{techniques}` and
-`{manual}`, each filled with its generated block; `{opencodeGo}` is the
-`opencode-go` vendor name when one of its families renders, else empty. An entry
-whose placeholder block renders nothing, such as Pools with no pools declared,
-is omitted.
+Pools, Family tables, Technique availability, Technique tables and Manual-only
+external delegates. Entry text may use `{routing}`, `{workflows}`, `{pools}`,
+`{families}`, `{techniques}` and `{manual}`, each filled with its generated
+block. An entry whose placeholder block renders nothing, such as Pools with no
+pools declared, is omitted.
 
 `skill.columns.<families|pools|techniques>` set header text, order and presence
 keyed by column. A disabled column drops its header and cells; an enabled key
@@ -131,9 +129,12 @@ its cells are empty when a family has no pool guidance.
 `"Pool binding"` and `"Manual pool hint"` (`{pool}`), `"Pool window"`
 (`{limit}`, `{unit}`, `{resetDay}`), `"Family table heading"` (`{tier}`),
 `"Technique table heading"` and `"Manual delegate heading"` (`{harness}`).
-`"Launch fallback"`, `"Manual delegate note"`, `"Pool measured"`,
-`"Pool unmeasured"` and `"Pool reader missing"` take none. A disabled phrase
-renders nothing; a phrase the renderer reads but cannot find fails naming it.
+`"Launch fallback"`, `"Manual delegate note"`, `"OpenCode Go note"`,
+`"Pool measured"`, `"Pool unmeasured"` and `"Pool reader missing"` take none. A
+disabled phrase renders nothing; a phrase the renderer reads but cannot find
+fails naming it. The families block emits "OpenCode Go note" after the family
+tables only when a Go family renders. Disabling the Family tables entry also
+drops that note.
 
 Shipped entries and columns carry `after` edges to every predecessor, so
 disabling any one keeps the rest in order. For example, this replaces one
@@ -183,8 +184,8 @@ as `kimi-k3`. Presets render only when a runtime selects them, for example
 like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
 field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
 fact: the list-price dollars that empty the account's monthly pool, so a lower
-limit weighs more. The skill shows a Pool column only when a selected family
-carries pool text, alongside each reach’s registered pool label. Set
+limit weighs more. The skill always shows a Pool column, empty when a family has
+no pool text, alongside each reach’s registered pool label. Set
 `opencodeGo.pool = "<pool>"` to bind every generated preset to that registered
 pool on each runtime that selects the `opencode-go` vendor. If one runtime
 selects a preset and another family of any vendor, a custom `opencode-go` one

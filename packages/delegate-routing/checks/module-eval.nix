@@ -993,7 +993,7 @@
             runtimes.claude.models = [{vendors = ["opencode-go"];}] ++ models;
           };
         };
-      note = "The opencode-go families come from per-model research";
+      note = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
       planned = readSkill (goSelected "go-plus") "claude";
       unplanned = readSkill (goSelected null) "claude";
     in
@@ -1004,6 +1004,12 @@
       && !(hasProse note claude)
       && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
       && hasProse note planned
+      && !(hasProse note (readSkill (change {
+        ai.programs.delegate-routing = {
+          runtimes.claude.models = [{vendors = ["opencode-go"];}];
+          skill.entries."Family tables".enable = false;
+        };
+      }) "claude"))
       && lib.hasInfix "| Pool " planned
       && lib.hasInfix "go-plus: $60 of list-price use empties the monthly pool" planned
       && lib.hasInfix "go-plus: unlimited" planned

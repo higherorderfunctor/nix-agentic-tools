@@ -222,9 +222,8 @@
     ${phrase "Manual delegate note" {}}
   '';
   blocks = {
-    families = lib.concatMapStringsSep "\n" tier tiers;
+    families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n\n" + phrase "OpenCode Go note" {});
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
-    opencodeGo = lib.optionalString goRendered opencodeGo.vendor;
     pools = poolsText;
     routing = routingText;
     techniques = lib.concatStringsSep "\n" ([(techniqueBlock runtime false)] ++ map (target: techniqueBlock target true) extras);

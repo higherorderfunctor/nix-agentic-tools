@@ -78,10 +78,6 @@ in {
         text = "{families}";
       }
       {
-        name = "OpenCode Go note";
-        text = "The {opencodeGo} families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
-      }
-      {
         name = "Technique availability";
         text = "Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.";
       }
@@ -104,6 +100,7 @@ in {
       "Manual pool hint" = {text = "; {pool}";};
       "Model pattern" = {text = "the highest id matching `{match}`";};
       "Native reach" = {text = "{harness}: {launch}{pool}";};
+      "OpenCode Go note" = {text = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";};
       "Pool binding" = {text = " (pool {pool})";};
       "Pool measured" = {text = "measured";};
       "Pool reader missing" = {text = "none";};
