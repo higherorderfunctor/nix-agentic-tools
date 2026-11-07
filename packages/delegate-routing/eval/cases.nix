@@ -109,13 +109,18 @@
         task = single;
       }) [true false]) ["claude" "kiro"];
   # Task shape: a single task wants one delegate, a dependent chain a workflow.
+  # Kiro with workflows enabled routes even one delegate through run_workflow,
+  # so its single case disables them to keep testing the one-delegate route.
   shapes = lib.concatMap (runtime: [
-    (mkCase {
-      inherit runtime;
-      expect = "one-delegate";
-      id = "${runtime}-single";
-      task = single;
-    })
+    (mkCase ({
+        inherit runtime;
+        expect = "one-delegate";
+        id = "${runtime}-single";
+        task = single;
+      }
+      // lib.optionalAttrs (runtime == "kiro") {
+        switches.ai.kiro.cli.workflows.enable = lib.mkForce false;
+      }))
     (mkCase {
       inherit runtime;
       expect = "workflow";

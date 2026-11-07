@@ -23,7 +23,7 @@ lib.types.submodule {
     modelArg = lib.mkOption {
       type = lib.types.str;
       default = "";
-      description = "The model value spelling this technique passes, such as \"full model id\", \"slug\" or \"enum alias\"; composed with the family id in launch routes. Required and non-empty for techniques that pin model and effort.";
+      description = "The model value spelling this technique passes, such as \"full model id\", \"slug\" or \"modelId\"; a launch route composes it with the family's example id or match pattern, and refuses a technique that pins model and effort but leaves it empty.";
     };
     notes = lib.mkOption {
       type = lib.types.str;
