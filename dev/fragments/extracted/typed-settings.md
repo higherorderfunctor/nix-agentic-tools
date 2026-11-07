@@ -6,7 +6,8 @@
 > node with a secret or secret-file descendant; a refinement row on a list node
 > receives its element type; `render.nix` lifts secrets and secret files into
 > `{$NAME}` placeholders and refuses a malformed `_redact` marker; `goTest` runs
-> each owner's loader check.
+> each owner's loader check; kiro-cli types its four `chat`/`acp` launch options
+> from `--help` tables through it.
 
 Two owners, CLIProxyAPI and CPA Manager Plus, get typed settings from their
 reconciled facts through one generator. The four older generators
@@ -15,6 +16,14 @@ reconciled facts through one generator. The four older generators
 `lib/git-tool-settings/`) predate it and each carry their own scalar switch,
 null rule and hand tables. Moving them onto it is separate work; do not add a
 fifth.
+
+kiro-cli uses the generator for argv, not for a file:
+`packages/kiro-cli/lib/cliOptions.nix` builds one node per setting from its
+extracted `cli.options` record (`enum` from the possible values, `bool` for a
+flag with none) and takes the options as they come. It passes no `exclusions`:
+its classification table is the input, so the generator's `staleExclusions` can
+find neither an extracted option with no row nor a stale setting row, and
+`cliOptions.report` diffs the table against the extraction directly.
 
 ## The generator (`lib/extracted/options.nix`)
 

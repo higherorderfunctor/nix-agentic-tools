@@ -17,7 +17,10 @@
   kiroWrapper = import ./wrapPackage.nix {inherit lib pkgs;};
   inherit (kiroWrapper) wrapperReasons;
   usageTracking = import ./usageTracking.nix {inherit lib pkgs;};
+  cliOptions = import ./cliOptions.nix {inherit lib;};
   wrapKiroPackage = kiroWrapper.wrapPackage;
+  # The consumer's `ai.kiro.cli.{acp,chat}` values, as the launcher reads them.
+  launchOptionsOf = cfg: {inherit (cfg.cli) acp chat;};
 
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
   frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
@@ -1082,6 +1085,7 @@
   }:
     wrapKiroPackage {
       inherit (cfg.cli) extraPackages usageTracking useFhsSandbox;
+      launchOptions = launchOptionsOf cfg;
       package = resolvePackage cfg;
       environmentDefaults = launcherEnvironmentDefaults;
       # A false global setting must also release the package's environment guard.
@@ -1194,6 +1198,10 @@ in
     };
     options = {
       cli = {
+        # Options Kiro takes only as an `acp` or `chat` flag, typed from the
+        # extracted `--help` tables (./cliOptions.nix) and delivered by the
+        # launcher on both backends.
+        inherit (cliOptions.options) acp;
         allowUnrecognizedSettings = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [];
@@ -1205,6 +1213,7 @@ in
           '';
         };
         backgroundExecution.enable = lib.mkEnableOption "background execution; rebind cli.native.settings.chat.keybindings.moveToBackground globally when needed";
+        inherit (cliOptions.options) chat;
         codeToSpec.enable = lib.mkEnableOption "Code-to-Spec Explore and analysis tools (devenv also needs global chat.enableC2s)";
         extraPackages = lib.mkOption {
           type = lib.types.listOf lib.types.package;
@@ -1580,6 +1589,7 @@ in
         environmentDefaults = map (field: ["ai" "kiro" "proxy" field]) (proxyLib.fields ++ ["instance"]);
         environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "cli" "environmentVariables"]];
         extraPackages = [["ai" "kiro" "cli" "extraPackages"]];
+        launchOptions = cliOptions.paths;
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
         usageTracking = [["ai" "kiro" "cli" "usageTracking" "enable"]];
       };
@@ -1590,6 +1600,7 @@ in
           environmentDefaults = launcherEnvironmentDefaults;
           environmentVariables = mergedEnvironmentVariables;
           inherit (cfg.cli) extraPackages usageTracking;
+          launchOptions = launchOptionsOf cfg;
           inherit (kiroSecrets) secretEnv;
         });
       # Beside the wrapper's own reasons: package-dependent options the

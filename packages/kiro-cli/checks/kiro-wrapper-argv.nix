@@ -1,3 +1,4 @@
+# cspell:ignore vwalways walways
 # Behavioral test for packages/kiro-cli/lib/wrapPackage.nix — the argv the
 # kiro-cli wrapper actually forwards.
 #
@@ -65,6 +66,21 @@
     # extraPackages only: the wrapper prepends its bins without discarding the
     # caller's PATH.
     pathWrapped = wrap {extraPackages = [extraSentinel];};
+    # All four launch options set.
+    optionsWrapped = wrap {
+      launchOptions = {
+        acp.authMethod = "client";
+        chat = {
+          mode = "spec";
+          requireMcpStartup = true;
+          wrap = "never";
+        };
+      };
+    };
+    # Only an acp option, and a chat option that adds nothing (false): neither
+    # may change what a chat or bare launch becomes.
+    acpOnlyWrapped = wrap {launchOptions.acp.authMethod = "cli";};
+    chatFalseWrapped = wrap {launchOptions.chat.requireMcpStartup = false;};
   in
     pkgs.runCommandLocal "kiro-wrapper-argv-check" {
       nativeBuildInputs = [pkgs.coreutils pkgs.gnugrep pkgs.gnused];
@@ -99,6 +115,9 @@
       V=${plainWrapped}/bin/kiro-cli
       E=${envWrapped}/bin/kiro-cli
       P=${pathWrapped}/bin/kiro-cli
+      O=${optionsWrapped}/bin/kiro-cli
+      A=${acpOnlyWrapped}/bin/kiro-cli
+      F=${chatFalseWrapped}/bin/kiro-cli
 
       # ── the global lands BEFORE the subcommand, never after ─────────────────
       # `kiro-cli acp --v3` is "error: unexpected argument found", while
@@ -169,6 +188,118 @@
       expect "a bare launch prompt gets nothing more" \
         '--v3|offline prompt'                                             "$V" 'offline prompt'
 
+      # ── configured chat and acp options ─────────────────────────────────────
+      # `chat` takes its options after the subcommand (and after INPUT), `acp`
+      # takes its own after the engine selector; each is one `--name=value` word
+      # and goes before an end-of-options `--`. A wrapper that put a chat option
+      # in front of `chat`, or an acp option on `chat`, fails these.
+      expect "chat gets every configured option" \
+        '--v3|chat|--mode=spec|--require-mcp-startup|--wrap=never'        "$O" chat
+      expect "chat INPUT stays before the options" \
+        '--v3|chat|hello|--mode=spec|--require-mcp-startup|--wrap=never'  "$O" chat hello
+      expect "acp gets its engine and its option, no chat option" \
+        '--v3|acp|--agent-engine=v3|--auth-method=client'                 "$O" acp
+      expect "mcp gets neither tier" \
+        '--v3|mcp|list'                                                   "$O" mcp list
+      # The caller's own option wins, in each spelling; a repeat would abort with
+      # "cannot be used multiple times" (measured on 3.0.0).
+      expect "caller's --wrap=never is not doubled" \
+        '--v3|chat|--wrap=never|--mode=spec|--require-mcp-startup'        "$O" chat --wrap=never
+      expect "caller's --wrap always wins over the configured never" \
+        '--v3|chat|--wrap|always|--mode=spec|--require-mcp-startup'       "$O" chat --wrap always
+      expect "caller's -w is the --wrap option" \
+        '--v3|chat|-w|always|--mode=spec|--require-mcp-startup'           "$O" chat -w always
+      expect "caller's attached -walways is the --wrap option" \
+        '--v3|chat|-walways|--mode=spec|--require-mcp-startup'            "$O" chat -walways
+      # A short option inside a cluster is the option (clap reads `-vw always` as
+      # `-v -w always`, and `-wv` as `-w` with the value `v`), so injecting beside
+      # it repeats the option and aborts (measured). A scan that matched whole
+      # tokens only fails these; so does one that read on after a value.
+      expect "caller's clustered -vw is the --wrap option" \
+        '--v3|chat|-vw|always|--mode=spec|--require-mcp-startup'          "$O" chat -vw always
+      expect "caller's clustered -vwalways is the --wrap option" \
+        '--v3|chat|-vwalways|--mode=spec|--require-mcp-startup'           "$O" chat -vwalways
+      expect "-wv is --wrap with the value v" \
+        '--v3|chat|-wv|--mode=spec|--require-mcp-startup'                 "$O" chat -wv
+      # `-d` takes a value, so the `w` after it is its value: no --wrap passed.
+      expect "-dw is --delete-session with the value w" \
+        '--v3|chat|-dw|--mode=spec|--require-mcp-startup|--wrap=never'    "$O" chat -dw
+      expect "-v alone is not --wrap" \
+        '--v3|chat|-v|--mode=spec|--require-mcp-startup|--wrap=never'     "$O" chat -v
+      expect "caller's --require-mcp-startup is not doubled" \
+        '--v3|chat|--require-mcp-startup|--mode=spec|--wrap=never'        "$O" chat --require-mcp-startup
+      expect "caller's acp --authMethod alias is the --auth-method option" \
+        '--v3|acp|--authMethod=cli|--agent-engine=v3'                     "$O" acp --authMethod=cli
+      expect "caller's acp --auth-method value is not doubled" \
+        '--v3|acp|--auth-method|cli|--agent-engine=v3'                    "$O" acp --auth-method cli
+      expect "caller's acp --authMethod value is not doubled" \
+        '--v3|acp|--authMethod|cli|--agent-engine=v3'                     "$O" acp --authMethod cli
+      # A caller's chat --mode wins in both spellings, even though `mode = spec`
+      # is configured: no second --mode is added.
+      expect "caller's --mode value wins over the configured spec" \
+        '--v3|chat|--mode|default|--require-mcp-startup|--wrap=never'     "$O" chat --mode default
+      expect "caller's --mode=default wins over the configured spec" \
+        '--v3|chat|--mode=default|--require-mcp-startup|--wrap=never'     "$O" chat --mode=default
+      # A token past `--` is a positional: it neither suppresses nor receives.
+      expect "chat options go before --, and a --wrap past it does not count" \
+        '--v3|chat|--mode=spec|--require-mcp-startup|--wrap=never|--|--wrap=always' "$O" chat -- --wrap=always
+      expect "chat INPUT then -- keeps the options before the marker" \
+        '--v3|chat|hello|--mode=spec|--require-mcp-startup|--wrap=never|--|--x' "$O" chat hello -- --x
+      expect "acp -- keeps the options before the marker" \
+        '--v3|acp|--agent-engine=v3|--auth-method=client|--|x'            "$O" acp -- x
+
+      # ── a bare launch becomes `chat` only when a chat option is configured ──
+      # Without that, a wrapper that always rewrote would change the argv of a
+      # consumer who set none.
+      expect "bare launch becomes chat with its options" \
+        '--v3|chat|--mode=spec|--require-mcp-startup|--wrap=never'        "$O"
+      expect "bare launch keeps its top-level option before chat" \
+        '--v3|--agent|a|chat|--mode=spec|--require-mcp-startup|--wrap=never' "$O" --agent a
+      expect "no chat option: a bare launch stays bare"        '--v3'     "$V"
+      expect "an acp-only option leaves a bare launch bare"    '--v3'     "$A"
+      expect "an acp-only option adds nothing to chat"         '--v3|chat' "$A" chat
+      expect "an acp-only option reaches acp" \
+        '--v3|acp|--agent-engine=v3|--auth-method=cli'                    "$A" acp
+      expect "a false chat option leaves a bare launch bare"   '--v3'     "$F"
+      expect "a false chat option adds nothing to chat"        '--v3|chat' "$F" chat
+      # The once-per-invocation top-level options and every non-chat subcommand
+      # are untouched: `chat` rejects `-V` and `--help-all` (measured), and an
+      # inserted `chat` would turn `login` or `--resume-id x` into something else.
+      expect "--version is not rewritten"      '--v3|--version'           "$O" --version
+      expect "-V is not rewritten"             '--v3|-V'                  "$O" -V
+      expect "--help is not rewritten"         '--v3|--help'              "$O" --help
+      expect "-h is not rewritten"             '--v3|-h'                  "$O" -h
+      # Clustered one-offs: `-rv` is `-r -v`, both once-per-invocation, so the
+      # launch is not rewritten. A scan that matched whole tokens only turns
+      # `-rv` into `chat -rv`.
+      expect "-v alone is not rewritten"       '--v3|-v'                  "$O" -v
+      expect "-rv is not rewritten"            '--v3|-rv'                 "$O" -rv
+      expect "-vr is not rewritten"            '--v3|-vr'                 "$O" -vr
+      expect "--help-all is not rewritten"     '--v3|--help-all'          "$O" --help-all
+      expect "--resume-id VALUE is not rewritten" \
+        '--v3|--resume-id|x'                                              "$O" --resume-id x
+      expect "settings is not rewritten"       '--v3|settings|all'        "$O" settings all
+      expect "login is not rewritten"          '--v3|login'               "$O" login
+      expect "a bare launch prompt is not rewritten" \
+        '--v3|offline prompt'                                             "$O" 'offline prompt'
+      # One-off options with no chat meaning, and the `--list` alias of
+      # `--resume-picker`, leave a bare launch untouched.
+      expect "--resume-picker is not rewritten" '--v3|--resume-picker'    "$O" --resume-picker
+      expect "--list is not rewritten"         '--v3|--list'              "$O" --list
+      # An empty-string argument is a positional (a subcommand of no name), not
+      # the absence of one, so `chat` is inserted for neither.
+      expect "an empty argument is not rewritten" \
+        '--v3|'                                                           "$O" ""
+      expect "an empty argument before settings is not rewritten" \
+        '--v3||settings'                                                  "$O" "" settings
+      # A scan that reads a lone `-` as an option would append chat here.
+      expect "a lone dash is not rewritten" '--v3|-' "$O" -
+      expect "-- is not rewritten"             '--v3|--'                  "$O" --
+      expect "-- then options is not rewritten" '--v3|--|--wrap'          "$O" -- --wrap
+      # `chat` appended after a value option that has no value would be read as
+      # that value: `--agent chat` names an agent.
+      expect "a dangling --agent is not rewritten" '--v3|--agent'         "$O" --agent
+
       # ── no trust flag reaches any argv ──────────────────────────────────────
       # Under v3 tool trust is permissions.yaml alone (kiro-kas-dispatch); the
       # bare-launch parser rejects `--trust-tools` and `acp --agent-engine=v3`
@@ -178,6 +309,14 @@
       else
         ok "launcher script carries no --trust-tools"
       fi
+      # Nor any other trust flag, nor a Kiro home, once every option is set.
+      for forbidden in --trust KIRO_HOME KIRO_DATA_DIR; do
+        if grep -qF -- "$forbidden" "$(readlink -f "$O")"; then
+          bad "configured launcher script carries $forbidden"
+        else
+          ok "configured launcher script carries no $forbidden"
+        fi
+      done
 
       # ── env and extraPackages ride the same launcher ────────────────────────
       expect "env launcher keeps the selectors" '--v3|acp|--agent-engine=v3' "$E" acp
