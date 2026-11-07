@@ -259,7 +259,7 @@
     # Architecture decisions apply to every repository task.
     architecture = {
       scopes = null;
-      sources = ["architecture"];
+      sources = ["architecture" "architecture-isolation"];
     };
     # devenv: devenv files.* internals + skills layout walker. Scoped
     # to per-package devenv modules and the helper file.
