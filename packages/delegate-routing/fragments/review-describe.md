@@ -6,4 +6,4 @@ rewrites the description; it does not append to it. A change presented as ready
 and a line breakdown by kind, as added and removed lines per kind: hand-written
 code, counting shipped agent-instruction prose (skills, fragments, prompts);
 tests, fixtures and checks; generated content; docs; and pins or lockfiles when
-present.
+present. A deleted file counts as one removed line.

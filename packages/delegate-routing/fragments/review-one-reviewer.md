@@ -7,14 +7,15 @@ possible. Report disagreements only.
 
 When the draft exceeds the Size row, the reviewer also names each specific cut
 or collapse with evidence: what breaks if it is deleted and the simpler form.
-The reviewer never judges its own proposed cuts, and neither does the writer. In
-three-check review, the Judge decides which cuts stand; in one-reviewer review,
-a separate agent does, never the orchestrator. That agent comes from a different
-model family than the writer and the reviewer, and gets the cuts and their
-evidence with authorship stripped (it is not told which agent wrote the code or
-proposed the cut) and in neutral order, under the neutral-brief rule. The writer
-applies only accepted cuts, and an accepted cut lands only if checks still pass.
-The user remains the final spot-check and is not consulted about cuts.
+The reviewer never judges its own proposed cuts, and neither does the writer.
+Whoever judges the cuts — the Judge in three-check review, a separate agent in
+one-reviewer review, never the orchestrator — comes from a different model
+family than the writer and the cut's proposer where a pool allows; otherwise the
+report says so. That judge gets the cuts and their evidence with authorship
+stripped (it is not told which agent wrote the code or proposed the cut) and in
+neutral order, under the neutral-brief rule. The writer applies only accepted
+cuts, and an accepted cut lands only if checks still pass. The user remains the
+final spot-check and is not consulted about cuts.
 
 **First check:** gets the draft, the description's guarantee claims (never its
 review history or the writer's notes) and the rubric file verbatim. Grades the
