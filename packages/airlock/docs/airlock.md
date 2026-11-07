@@ -2,7 +2,7 @@
 
 <!-- cspell:ignore cutover sqlx -->
 
-> **Last verified:** 2026-11-06 — the code quality bar, extraction rules and
+> **Last verified:** 2026-11-07 — the code quality bar, extraction rules and
 > stack process for rebuilding the Airlock egress proxy as small PRs.
 
 Airlock is rebuilt as a stack of small PRs; the rule is in
@@ -44,9 +44,7 @@ Airlock is rebuilt as a stack of small PRs; the rule is in
    plus one- to three-line comments that say why.
 4. Integration tests live in `tests/`, with shared fixtures in `tests/common`.
    Inline tests are only for private units.
-5. Each PR stands alone. A fix goes in the commit that introduced the code,
-   which is stricter than the repository-wide rule that a fix may live anywhere
-   in its PR's commit range.
+5. Each PR stands alone. A fix goes in the commit that introduced the code.
 
 ## Extraction rules
 
