@@ -1,8 +1,10 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-27 — automatic PR CI runs only for PRs targeting
+> **Last verified:** 2026-11-06 — automatic PR CI runs only for PRs targeting
 > `main`; stacked PRs dispatch CI by hand after a substantive change; PR waits
-> use the review-loop skill's pr-watch.sh.
+> use the review-loop skill's pr-watch.sh; repository-wide gates run before
+> folding stack work; stack fix lanes are serial; rebases and absorbs do not run
+> commit hooks.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -134,6 +136,12 @@ head commit, so the PR shows them. Required checks gate merges into `main` only.
 Moving a PR to `main` does not start CI by itself: the rebase push that follows
 a squash merge does. If a PR reaches `main` with nothing to push, dispatch CI
 once so its required checks exist.
+
+**Before folding lane or stack work into its target, run the repository-wide
+gates the branch's scope touches.** A stacked PR's own CI never ran them. The
+names are examples, not a list: `module-ai-no-root-pool-writes-*`,
+`bare-commands`, `module-kiro-cli-*`, and a Darwin eval of any newly added
+check.
 
 ### Copilot reviews once, automatically. Do not trigger the first one
 
@@ -494,6 +502,15 @@ it. Name each one `archive/<slug>/<what>`, with `<slug>` the PR's worktree slug,
 so teardown's `archive/<slug>/*` pattern finds every backup that PR made and no
 other PR's. Nothing else deletes them: 349 had piled up by 2026-10-17, when the
 operator cleared them.
+
+**Stack fix lanes.** Run one serial lane per stack, in its own worktree, one
+unit at a time: a writer, then one reviewer from another vendor, then fixes. A
+fix lands in the commit that introduced the defect, and the branches above it
+are restacked. Push `archive/<slug>/before-<unit>` before each rewrite.
+
+**Rebases, absorbs and fixups do not run commit hooks.** After any of them, run
+`prek run --files <changed files>`. Pass `-c rebase.autosquash=false` to a plain
+`git rebase`, because the user's git config may set `rebase.autosquash` true.
 
 Lockfile conflicts (`flake.lock`, `devenv.lock`) during a rebase are
 **regenerated, never hand-merged**: take the base's copy, then re-run
