@@ -163,6 +163,9 @@ with tempfile.TemporaryDirectory() as scratch:
         assert tool_names == expected_tools, "missing or unexpected submit tools after saved-trust bootstrap: " + repr(observation)
         # Invalid handoffs must stay steps; ordinary sessions must stay hosts.
         assert command_names == expected_commands, observation
+        # Project-over-user precedence: a surviving user copy registers the same names.
+        scopes = {entry["sourceInfo"]["scope"] for entry in observation["submit"] + observation["workflowCommands"]}
+        assert scopes <= {"project"}, observation
         if expected_tools:
             # A generic submit schema would lose the step's required answer.
             assert observation["submit"][0]["parameters"]["properties"]["result"] == output_schema, observation

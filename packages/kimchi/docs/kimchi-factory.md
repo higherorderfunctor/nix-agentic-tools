@@ -2,7 +2,14 @@
 
 > **Last verified:** 2026-11-07 — package precedence and the shared background
 > step handoff contract account for trust bootstrap initializing a shadowed user
-> copy.
+> copy; bundled skills gated off by `requires-resource` leave each visible skill
+> as its own in-place root; config guards include the helpers readConfigExtras
+> hands `parsed.<key>` to, and a `delete` target is not a read; pi 1.3 settings
+> follow reexports and inherited TypeBox properties through lock-pinned
+> declaration entrypoints; scope follows settings accessors, with unread JSON
+> Schema metadata explicitly ignored. The sidecar carries CodeQL environment,
+> network, resource definition, region registry and request guard facts on
+> x86_64-linux.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
