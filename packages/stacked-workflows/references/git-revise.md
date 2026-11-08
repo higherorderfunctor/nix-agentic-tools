@@ -379,11 +379,14 @@ operations where speed matters and no other branch sits in the rewritten range.
 
 ### With git-absorb
 
-Complementary workflow:
+Complementary workflow: stage only one named target's hunks and repeat
+separately for each target. The base is the target's parent; verify every
+proposed target in the dry run.
 
 ```bash
-git add -p                         # stage fixes
-git absorb                         # create fixup! commits (no rebase)
+git add -p                         # stage only this target's hunks
+git absorb --dry-run --base <target>^
+git absorb --base <target>^         # create fixup! commits (no rebase)
 old_head="$(git rev-parse HEAD)"
 git revise --autosquash            # in-memory autosquash (fast)
 git hide --no-delete-branches "only($old_head, HEAD)"   # the pre-revise commits
@@ -392,8 +395,8 @@ git hide --no-delete-branches "only($old_head, HEAD)"   # the pre-revise commits
 > **Caveat:** This workflow requires `absorb.fixupTargetAlwaysSHA = false`. With
 > the recommended config (`= true`), absorb creates `fixup! <SHA>` messages that
 > git-revise `--autosquash` cannot match (mystor/git-revise#79). Prefer
-> `git absorb --and-rebase` instead, which uses git's native autosquash and
-> handles SHA-based fixup targets correctly.
+> `git absorb --and-rebase --base <target>^` instead, which uses git's native
+> autosquash and handles SHA-based fixup targets correctly.
 
 ### Signing Support
 

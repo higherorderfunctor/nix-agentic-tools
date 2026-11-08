@@ -54,9 +54,9 @@ patches "commute" (apply identically regardless of order). It examines a range
 of recent commits (default: 10), identifies which ones modified the staged
 lines, and creates `fixup!` commits accordingly.
 
-The key insight: if a staged hunk modifies lines that were last touched by
-exactly one ancestor commit, that hunk can be unambiguously attributed to that
-commit. git-absorb creates fixup commits for each such match.
+The key mechanism is patch commutation, described below. Its chosen commit can
+differ from the semantic target of a fix; review the mapping before creating
+fixup commits.
 
 ## Installation & Setup
 
@@ -66,13 +66,13 @@ crates.io: `cargo install git-absorb`.
 ### Recommended Configuration
 
 ```bash
-# Increase stack depth for branchless workflows (default: 10)
+# Stack depth when no --base is supplied (default: 10; ignored with --base)
 git config absorb.maxStack 50
 
 # One fixup per commit (cleaner history)
 git config absorb.oneFixupPerCommit true
 
-# Auto-stage tracked changes if nothing staged
+# Auto-stage only when all tracked changes belong to the same target
 git config absorb.autoStageIfNothingStaged true
 
 # Always reference targets by SHA (stable across rewording)
@@ -83,10 +83,57 @@ git config absorb.fixupTargetAlwaysSHA true
 
 ### Patch Commutation
 
-git-absorb checks whether a staged hunk can be unambiguously attributed to a
-single ancestor commit. If the lines modified in the hunk were last touched by
-exactly one commit in the stack, the hunk "commutes" to that commit. If multiple
-commits touched those lines, git-absorb skips the hunk (it's ambiguous).
+As described in the upstream
+[README](https://github.com/tummychow/git-absorb#how-it-works-roughly),
+git-absorb checks each staged hunk against commits from newest to oldest and
+selects the first commit that does **not** commute with it. If the hunk commutes
+with every candidate, it remains staged.
+
+### Constrain Candidates Before Absorbing
+
+A hunk depends on the lines it edits and the names it uses. Absorb sees edited
+lines but does not check name dependencies: it can choose a commit older than a
+helper the hunk uses, leaving that commit unable to build or run. Fix at HEAD,
+then name the target as the **newest commit introducing either the edited lines
+or any used name**; line proximity does not decide it.
+
+Every absorb uses `--base <target>^` to exclude older commits. `--base <X>` only
+bounds the oldest candidate (X itself is excluded): absorb walks newest to
+oldest and every newer commit remains a candidate. It pins the target only when
+the target is the newest commit. With A < B < C, `--base B^` can still send a
+hunk to C.
+
+Read every dry-run mapping. Accept a newer target only when the hunk edits lines
+introduced by that commit; forcing those edits into an older commit can conflict
+because its lines do not exist there. A choice at or after the introduction of
+every used name satisfies the name dependencies; an older choice is wrong. If
+absorb picks a commit older than the named target, rerun with a base that
+excludes it, or stage that hunk alone and use the explicit fixup below. Fixes
+spanning several commits require separate runs, staging only one target's hunks
+at a time.
+
+```bash
+git add -p
+git absorb --dry-run --base <target>^
+# After checking every hunk's target:
+git absorb --and-rebase --base <target>^ -- --update-refs
+```
+
+The base does not force a hunk into the target. A hunk that commutes with every
+candidate remains staged. Resolve the target's current hash after any rebase,
+then fold those hunks explicitly (also use this for wrong-target hunks):
+
+```bash
+git commit --fixup=<target>
+GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash --update-refs <target>^
+git diff --cached --stat
+```
+
+Before an explicit fixup, run the content hooks. If the repository's commit-msg
+hook rejects `fixup!` subjects (this repository uses convco), pass `--no-verify`
+to the transient `git commit --fixup`; absorb's own commits skip hooks. Confirm
+nothing remains staged and verify every commit in the stack still builds on its
+own after the rebase.
 
 ### Fixup Commits
 
@@ -96,19 +143,21 @@ consumed by `git rebase --autosquash` to fold into their targets. The
 
 ### Stack Depth
 
-By default, only the last 10 commits are candidates. Set `absorb.maxStack=50`
-for deeper stacks. Use `--no-limit` to consider all commits until root, a merge,
-or a different author. Use `--base <commit>` for explicit targeting.
+Without `--base`, only the last 10 commits are candidates by default;
+`absorb.maxStack` changes that limit and `--no-limit` removes it. These
+stack-sizing options do not apply with `--base`. This workflow always uses
+`--base <target>^`, so a deep target does not require raising `absorb.maxStack`.
 
 ### Stack Boundaries
 
 The revwalk stops at: the root commit, merge commits, commits by a different
-author (unless `--force-author`), or the configured depth limit.
+author (unless `--force-author`), or the configured depth limit when no `--base`
+is supplied.
 
 ## Command Reference
 
 ```
-git absorb [FLAGS] [OPTIONS]
+git absorb --base <target>^ [FLAGS] [OPTIONS]
 ```
 
 ### Flags
@@ -130,21 +179,21 @@ git absorb [FLAGS] [OPTIONS]
 
 | Option                | Description                                          |
 | --------------------- | ---------------------------------------------------- |
-| `-b, --base <commit>` | Explicit base commit for absorb range                |
+| `-b, --base <commit>` | Exclude this commit and older candidates             |
 | `-m, --message <msg>` | Body text for all generated fixup commits            |
 | `-- <REBASE_OPTIONS>` | Pass-through options for `git rebase` (must be last) |
 
 ### Configuration (`[absorb]` in .gitconfig)
 
-| Key                        | Default | Description                                  |
-| -------------------------- | ------- | -------------------------------------------- |
-| `autoStageIfNothingStaged` | false   | Auto-stage tracked changes if nothing staged |
-| `createSquashCommits`      | false   | Create squash commits instead of fixup       |
-| `fixupTargetAlwaysSHA`     | false   | Reference targets by SHA, not message        |
-| `forceAuthor`              | false   | Allow fixups to other authors' commits       |
-| `forceDetach`              | false   | Allow on detached HEAD                       |
-| `maxStack`                 | 10      | Number of ancestor commits to consider       |
-| `oneFixupPerCommit`        | false   | One fixup per target commit                  |
+| Key                        | Default | Description                                      |
+| -------------------------- | ------- | ------------------------------------------------ |
+| `autoStageIfNothingStaged` | false   | Auto-stage tracked changes if nothing staged     |
+| `createSquashCommits`      | false   | Create squash commits instead of fixup           |
+| `fixupTargetAlwaysSHA`     | false   | Reference targets by SHA, not message            |
+| `forceAuthor`              | false   | Allow fixups to other authors' commits           |
+| `forceDetach`              | false   | Allow on detached HEAD                           |
+| `maxStack`                 | 10      | Ancestor limit without `--base`; ignored with it |
+| `oneFixupPerCommit`        | false   | One fixup per target commit                      |
 
 ## Recipes
 
@@ -156,26 +205,27 @@ vim src/broken.rs
 # Stage only the fix
 git add -p
 # Create fixup and rebase in one step
-git absorb --and-rebase
+git absorb --and-rebase --base <target>^
 ```
 
 ### 2. Bulk fixes across multiple stack commits
 
 ```bash
-# Make all your fixes across multiple files
-# Stage everything
-git add -A
-# Absorb routes each hunk to the correct commit
-git absorb --and-rebase
+# Fix at HEAD, then repeat for each named target
+# Stage only that target's hunks
+git add -p
+# Preview and check every proposed target
+git absorb --dry-run --base <target>^
+git absorb --and-rebase --base <target>^
 ```
 
 ### 3. Preview what absorb would do
 
 ```bash
 git add -p
-git absorb --dry-run
+git absorb --dry-run --base <target>^
 # If satisfied:
-git absorb --and-rebase
+git absorb --and-rebase --base <target>^
 ```
 
 ### 4. Handle leftover staged changes
@@ -184,24 +234,22 @@ After absorb, any staged hunks it couldn't attribute remain staged. Check
 `git status` to see what's left; these need manual fixups:
 
 ```bash
-git add -A
-git absorb --and-rebase
+git add -p
+git absorb --and-rebase --base <target>^
 # Check if anything remains staged (absorb couldn't find a target)
 git status
 # Manually create a fixup for leftovers
-git commit --fixup=<target-hash>
-GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main
+git commit --fixup=<target>
+GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash --update-refs <target>^
+git diff --cached --stat
 ```
 
 ### 5. Absorb into a deep stack
 
 ```bash
-# Temporarily increase depth
-git absorb --and-rebase --base main
-
-# Or configure permanently
-git config absorb.maxStack 50
-git absorb --and-rebase
+# The target's parent sets the range even for deep targets; maxStack is ignored
+git absorb --dry-run --base <target>^
+git absorb --and-rebase --base <target>^
 ```
 
 ### 6. Recover from a bad absorb
@@ -215,37 +263,40 @@ git reset --soft PRE_ABSORB_HEAD
 
 ```bash
 # With config: absorb.autoStageIfNothingStaged = true
-# Don't stage anything -- absorb stages tracked changes, creates fixups,
-# then unstages whatever it couldn't absorb
-git absorb --and-rebase
+# Use only when every tracked change belongs to this one named target
+# Otherwise stage only that target's hunks with git add -p
+# Absorb stages tracked changes, creates fixups, then unstages leftovers
+git absorb --and-rebase --base <target>^
 ```
 
 ### 8. Pair programming: fixup a colleague's commits
 
 ```bash
 # Per-repo (or use absorb.forceAuthor = true in config)
-git absorb --force-author --and-rebase
+git absorb --force-author --and-rebase --base <target>^
 ```
 
 ### 9. Pass extra options to rebase
 
 ```bash
 # Run pre-commit hooks on each rebased commit
-git absorb --and-rebase -- -x "pre-commit run --all-files"
+git absorb --and-rebase --base <target>^ -- -x "pre-commit run --all-files"
 
 # Update stacked branch refs during rebase
-git absorb --and-rebase -- --update-refs
+git absorb --and-rebase --base <target>^ -- --update-refs
 ```
 
 ### 10. Use --whole-file for new-line additions
 
-When absorb can't match new lines (e.g., an `import` statement added to support
-code in an earlier commit), `--whole-file` matches to the last commit that
-touched the same file:
+`--whole-file` uses file-level matching, which does not establish the intended
+target. For new lines such as an import supporting code in an earlier commit,
+prefer the explicit fixup above. If using this flag, constrain candidates and
+check the dry-run target first:
 
 ```bash
 git add -p
-git absorb --whole-file --and-rebase
+git absorb --whole-file --dry-run --base <target>^
+git absorb --whole-file --and-rebase --base <target>^
 ```
 
 ## What Absorb Cannot Do
@@ -268,6 +319,14 @@ after absorb to see what's left, then handle manually.
 
 ## Anti-Patterns
 
+### Don't leave unintended commits in range
+
+No base, `--base origin/main`, or a stack-root base is an anti-pattern when it
+admits unintended older commits. Use the named target's parent to exclude them,
+then review the dry run: newer commits remain candidates and are correct only
+when the hunk edits their lines. Split fixes for several targets into separate
+runs.
+
 ### Don't use `--force` as a default
 
 `--force` skips all safety checks (author, detach). Use `--force-author` or
@@ -279,10 +338,10 @@ git-absorb uses libgit2 for commits, which does **not** run pre-commit hooks. If
 your workflow requires hooks, run them manually after absorb:
 
 ```bash
-git absorb --and-rebase
-pre-commit run --from-ref HEAD~5 --to-ref HEAD  # if using pre-commit framework
+git absorb --and-rebase --base <target>^
+pre-commit run --from-ref <target>^ --to-ref HEAD  # if using pre-commit framework
 # Or pass -x to rebase:
-git absorb --and-rebase -- -x "pre-commit run --all-files"
+git absorb --and-rebase --base <target>^ -- -x "pre-commit run --all-files"
 ```
 
 ### Don't rely on `includeIf` gitconfig
@@ -303,12 +362,6 @@ libgit2 limitation with no current workaround.
 git-absorb only works with linear history. Merge commits in the stack will stop
 the revwalk. Use `--base` to explicitly target past a merge if you know what
 you're doing.
-
-### Don't expect git CLI `-c` overrides to work
-
-`git -c absorb.fixupTargetAlwaysSHA=true absorb` does **not** work because
-libgit2 reads config independently from the git CLI. Use `.git/config`,
-`~/.gitconfig`, or `GIT_CONFIG_GLOBAL` env var instead.
 
 ### Don't expect new file additions to be absorbed
 
@@ -345,7 +398,7 @@ The primary workflow for stacked commits:
 ```bash
 # Make fixes to code in the stack
 git add -p
-git absorb --and-rebase -- --update-refs   # moves the branches in the range
+git absorb --and-rebase --base <target>^ -- --update-refs   # moves the branches in the range
 ```
 
 If branchless shows abandoned commits after the rebase, stop and inspect them.
@@ -353,7 +406,8 @@ An abandoned `children(<pre-rewrite-hash>)` fork can belong to a worktree
 stacked on yours. Leave that line for its owner to move from that worktree; do
 not repair it with a broad restack or subtree move.
 
-Configure `absorb.maxStack=50` to match typical branchless stack depths.
+Repeat for each named target, staging only its hunks. The base is that target's
+parent; `absorb.maxStack` does not apply with `--base`.
 
 Use `--and-rebase -- --update-refs` to keep stacked branch pointers in sync
 during the autosquash rebase. Redundant if `rebase.updateRefs = true` is
@@ -364,14 +418,14 @@ configured (see recommended-config.md).
 Alternative to `--and-rebase`:
 
 ```bash
-git absorb                    # create fixup commits only
+git absorb --base <target>^   # create fixup commits only
 git revise --autosquash       # in-memory autosquash (faster than rebase)
 ```
 
 > **Caveat:** Requires `absorb.fixupTargetAlwaysSHA = false`. With the
 > recommended config (`= true`), absorb creates `fixup! <SHA>` messages that
 > git-revise cannot match (mystor/git-revise#79). Prefer
-> `git absorb --and-rebase` with the recommended config.
+> `git absorb --and-rebase --base <target>^` with the recommended config.
 
 A native `--and-revise` flag has been requested (tummychow/git-absorb#188) but
 is not yet implemented.

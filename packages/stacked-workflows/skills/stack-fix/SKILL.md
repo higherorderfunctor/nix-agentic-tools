@@ -65,31 +65,30 @@ introduced (typos, bug fixes, adjustments to existing code).
    If nothing is staged, check for unstaged changes and ask the user what to
    stage. Suggest `git add -p` for selective staging.
 
-2. **Require a known target commit.** If the fix is from review feedback or the
-   user specified a commit, use `--base` to constrain absorb:
+2. **Fix at HEAD, then name the target for each hunk:** the newest commit that
+   introduces either the lines it edits or any name it uses. Absorb sees edited
+   lines, not name dependencies. Line proximity never decides the target. If the
+   target is unknown, stop and ask the user.
+
+   **Every absorb uses `--base <target-commit>^` to exclude older commits.** The
+   base only bounds the oldest candidate; absorb walks newest to oldest, so
+   every newer commit remains a candidate. It pins the target only when that
+   target is the newest commit. A broader base (`origin/main`, the stack root)
+   or no base admits unintended older candidates. Fixes for several commits
+   require separate targeted runs, staging only one target's hunks at a time.
 
    ```bash
-   # Target known (review feedback, specific commit):
    git absorb --dry-run --base <target-commit>^
-
    ```
 
-   If the target is unknown, stop and ask the user. Auto-discovery can search a
-   wider draft component than this worktree owns.
-
-   **Always use `--base` when the target is known.** Without it, absorb searches
-   the full stack by diff context matching and may route to a later commit that
-   has more matching context — especially for files built incrementally across
-   commits (README.md, CLAUDE.md, etc.).
-
-   **Note:** `--base <X>` means "search commits AFTER X" — the base commit
-   itself is excluded from candidates. To include commit X, use `--base <X>^`
-   (its parent). If absorb reports "no available commit to fix up" with your
-   target as the base, this is why.
-
 3. **Review the dry-run output.** Show the user which hunks will be absorbed
-   into which commits. If any hunks can't be absorbed (they commute with all
-   commits), warn that those will remain staged.
+   into which commits. Accept a newer target only when the hunk edits lines
+   introduced by that commit: those lines make it the correct dependency target.
+   A choice at or after every used name's introduction satisfies the name
+   dependencies; an older choice is wrong. If absorb picks a commit older than
+   the named target, rerun with a base that excludes it, or stage that hunk
+   alone and use the explicit fixup below. Hunks that commute with every
+   candidate may remain staged; use the same fixup for those.
 
 4. **Confirm with the user** that the mapping looks correct. If `$ARGUMENTS`
    contains `--dry-run`, stop here.
@@ -112,16 +111,31 @@ introduced (typos, bug fixes, adjustments to existing code).
    git diff --stat
    ```
 
-   If hunks remain, stop and ask the user whether to create a new commit or
-   handle the structural change in an isolated follow-up.
+   If the target's hunks commute and remain staged, fold them into the named
+   target explicitly (resolve its current hash after absorb's rebase). For this
+   fixup or a wrong-target hunk, run the content hooks first; if the
+   repository's commit-msg hook rejects `fixup!` subjects (such as this
+   repository's convco hook), pass `--no-verify` to the transient
+   `git commit --fixup`. Absorb's own commits skip hooks.
+
+   ```bash
+   git commit --fixup=<target-commit>
+   GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash --update-refs <target-commit>^
+   git diff --cached --stat
+   ```
+
+   Confirm nothing remains staged. For other changes absorb cannot route, use
+   **Structural fixes** below. Run the project's hook or lint runner after this
+   rebase too.
 
 8. **Post-fix verification** (see below).
 
 ## Structural fixes
 
-If absorb cannot route the change, stop and ask the user. Manual amend,
-git-revise, restack, and branch-repair recipes can rewrite or move a sibling,
-stacked, or detached worktree. This skill does not attempt those repairs.
+For changes absorb cannot route beyond the commuting-hunk fixup above, stop and
+ask the user. Manual amend, git-revise, restack, and branch-repair recipes can
+rewrite or move a sibling, stacked, or detached worktree. This skill does not
+attempt those repairs.
 
 ## Post-fix Verification
 
@@ -144,16 +158,16 @@ Run after either path to confirm the stack is healthy.
    For commit-message-only fixes, stop and ask the user; this skill handles
    content changes only.
 
-3. **Run tests** if a test command is readily identifiable:
+3. **Verify every commit still builds on its own after the rebase.** Use the
+   project's build or test command across `$STACK`:
 
    ```bash
    git test run -x '<test-command>' --jobs <N> '<revset>'
    ```
 
-   Pick `<revset>` per **Choosing the test revset** in
-   `references/git-branchless.md`: `heads($STACK)` for one PR with several
-   commits, `$STACK` only for a stack of independent PRs. Size `<N>` by memory,
-   not cores, and never pass `--jobs 0`.
+   Use `$STACK` for `<revset>` here so every commit is checked. Size `<N>` by
+   memory, not cores, and never pass `--jobs 0`. If no build or test command is
+   identifiable, report this verification as unknown.
 
    `$STACK` is this worktree's own stack. Plain `stack()` also holds other
    worktrees' stacks while local `main` is behind its upstream (see **Selecting

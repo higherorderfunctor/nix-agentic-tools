@@ -97,7 +97,8 @@ When to use this over individual operations:
 
 - 3+ insertions at different stack positions → batch-at-tip
 - Single insertion → `git record -I` or `git move`
-- Single fix to existing commit → `git absorb --and-rebase` or `/stack-fix`
+- Single fix to existing commit → `git absorb --and-rebase --base <target>^` or
+  `/stack-fix`
 
 **Warning:** scripted `GIT_SEQUENCE_EDITOR` reorders cascade conflicts when
 files are built incrementally across commits (e.g. README.md gaining one section
@@ -114,9 +115,11 @@ When applying multiple fixes to different commits (e.g., after a review run):
 3. **Execute earliest-first** — amend the earliest commit first, then restack.
    This minimizes cascading restacks since each amend only restacks its
    descendants.
-4. **Stage all absorb-candidates at once** — `git absorb` can route multiple
-   hunks to different commits in one pass. Use `--dry-run` first to verify
-   routing, then `--and-rebase`.
+4. **Stage one target's hunks at a time** — name the commit that introduces what
+   each hunk fixes or uses. Run `git absorb --dry-run --base <target>^` and
+   verify every proposed target, then run
+   `git absorb --and-rebase --base <target>^`. The base is the target's parent;
+   repeat separately for each target.
 5. **Handle absorb leftovers** — hunks absorb can't route (new files, multi-line
    format changes, commuting patches) remain staged. Check `git diff --cached`
    after absorb and handle manually.
@@ -163,7 +166,8 @@ The commit history should read as a clean narrative — what _should_ happen, no
 a diary of what _did_ happen during development.
 
 - Never create "addresses feedback", "fix", "WIP", or "tweaks" commits
-- Use `git absorb --and-rebase` to route fixes to the correct stack commit
+- Use `git absorb --and-rebase --base <target>^` for one named target at a time,
+  staging only its hunks; the base is that target's parent
   - **Limitation:** absorb sees a line reorder (swap A and B) as a deletion +
     addition. It may absorb the deletion but leave the addition orphaned,
     producing a net content loss. For reorders, amend directly instead.
