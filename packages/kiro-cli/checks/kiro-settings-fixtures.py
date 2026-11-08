@@ -98,6 +98,35 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             bundle(registry=registry_assignment * 2),
             "ambiguous or absent",
         ),
+        "merge with a parameter": (
+            bundle(merge=merge_with_guard("Cq.has(k)").replace("merge()", "merge(skip)", 1)),
+            "unsupported loader shape",
+        ),
+        "truthiness guard": (
+            bundle(merge=merge_with_guard("Cq.has(k)&&v")),
+            probe_mismatch,
+        ),
+        "type guard": (
+            bundle(merge=merge_with_guard('Cq.has(k)&&typeof v==="string"')),
+            probe_mismatch,
+        ),
+        "extra copy for boolean true": (
+            bundle(
+                merge=merge_with_guard(
+                    "Cq.has(k)", ';if(w["chat.surprise"]===true)e["chat.surprise"]=true'
+                )
+            ),
+            probe_mismatch,
+        ),
+        "allowlist key deleted for boolean": (
+            bundle(
+                merge=merge_with_guard(
+                    "Cq.has(k)",
+                    ';if(typeof w["chat.defaultModel"]==="boolean")delete e["chat.defaultModel"]',
+                )
+            ),
+            probe_mismatch,
+        ),
         "composer with a parameter": (
             bundle(merge=empty_seed + "function compose(a){return{...globalLoad(),...merge()}}"),
             "unsupported loader shape",

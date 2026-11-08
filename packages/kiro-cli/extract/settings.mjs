@@ -177,6 +177,9 @@ if (
       ts.isIdentifier(globalCall.expression) &&
       globalCall.arguments.length === 0)
   ) ||
+  // The probe calls the merge with no arguments, so a parameter could change
+  // what the bundle's own calls copy.
+  merge.parameters.length !== 0 ||
   !ts.isTryStatement(tryStatement) ||
   !ts.isVariableStatement(tryStatement.tryBlock.statements[0]) ||
   tryStatement.tryBlock.statements[0].declarationList.declarations.length !==
@@ -312,11 +315,15 @@ if (
 }
 
 // Execute only this small original merge helper, with inert load/read/logger
-// dependencies. The workspace is a Proxy that answers every string key with
-// its own marker and enumerates the allowlist, two opposing sentinels and every
-// string literal the merge mentions, so any key the merge copies from the
-// workspace is visible: it must be an allowlist key, and each allowlist key
-// must hold its own marker.
+// dependencies. The workspace is a Proxy that enumerates the allowlist, two
+// opposing sentinels and every string literal the merge mentions. Each
+// enumerated key holds a workspace value whose type cycles by key index
+// through every JSON value kind (string, "", true, false, 0, 1, null, array,
+// object), so a merge that copies by type, truthiness or null is caught. One
+// run per kind shifts the cycle so every key meets every kind. Each allowlist
+// key must hold exactly its workspace value (`===`); every other enumerated key
+// must keep its global value; any other key must not hold the string marker a
+// workspace read of a key outside that list returns.
 const marker = (key) => `workspace:${key}`;
 const literals = new Set();
 (function collectLiterals(node) {
@@ -331,32 +338,17 @@ const workspaceKeys = [
     ...literals,
   ]),
 ];
-const workspace = new Proxy(
-  {},
-  {
-    get: (_, key) => (typeof key === "string" ? marker(key) : undefined),
-    getOwnPropertyDescriptor: (_, key) =>
-      workspaceKeys.includes(key)
-        ? {
-            value: marker(key),
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          }
-        : undefined,
-    has: () => true,
-    ownKeys: () => workspaceKeys,
-  },
-);
-const globalSettings = Object.fromEntries(
-  workspaceKeys.map((key) => [key, `global:${key}`]),
-);
-const expectedMerged = Object.fromEntries(
-  workspaceKeys.map((key) => [
-    key,
-    values.allowlist.includes(key) ? marker(key) : globalSettings[key],
-  ]),
-);
+const workspaceValueTypes = [
+  marker,
+  () => "",
+  () => true,
+  () => false,
+  () => 0,
+  () => 1,
+  () => null,
+  () => [],
+  () => ({}),
+];
 const mergeExpression =
   `(()=>{const ${registryName}=${registry.right.getText(file)};` +
   `const ${allowlistName}=${allowlist.right.getText(file)};` +
@@ -367,32 +359,69 @@ const mergeExpression =
   (emptySeed
     ? `${merge.getText(file)};${composer.getText(file)};return ${composer.name.text}()})()`
     : `${merge.getText(file)};return ${merge.name.text}()})()`);
-let merged;
-try {
-  merged = vm.runInNewContext(
-    mergeExpression,
-    { globalSettings, workspace },
-    { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
+const runProbe = (rotation) => {
+  const workspaceValues = new Map(
+    workspaceKeys.map((key, index) => [
+      key,
+      workspaceValueTypes[(index + rotation) % workspaceValueTypes.length](key),
+    ]),
   );
-} catch {
-  fail("workspace merge could not be evaluated with isolated settings");
-}
-// Reading the result runs bundle getters, so a throw here is a refusal too.
-let exact;
-try {
-  exact =
-    Object.entries(expectedMerged).every(
-      ([key, expected]) => merged?.[key] === expected,
-    ) &&
-    Object.entries(merged).every(
-      ([key, value]) =>
-        !(typeof value === "string" && value.startsWith("workspace:")) ||
-        values.allowlist.includes(key),
+  const workspace = new Proxy(
+    {},
+    {
+      get: (_, key) =>
+        workspaceValues.has(key)
+          ? workspaceValues.get(key)
+          : typeof key === "string"
+            ? marker(key)
+            : undefined,
+      getOwnPropertyDescriptor: (_, key) =>
+        workspaceValues.has(key)
+          ? {
+              value: workspaceValues.get(key),
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            }
+          : undefined,
+      has: () => true,
+      ownKeys: () => workspaceKeys,
+    },
+  );
+  const globalSettings = Object.fromEntries(
+    workspaceKeys.map((key) => [key, `global:${key}`]),
+  );
+  let merged;
+  try {
+    merged = vm.runInNewContext(
+      mergeExpression,
+      { globalSettings, workspace },
+      { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
     );
-} catch {
-  exact = false;
-}
-if (!exact)
+  } catch {
+    fail("workspace merge could not be evaluated with isolated settings");
+  }
+  // Reading the result runs bundle getters, so a throw here is a refusal too.
+  try {
+    return (
+      workspaceKeys.every(
+        (key) =>
+          merged?.[key] ===
+          (values.allowlist.includes(key)
+            ? workspaceValues.get(key)
+            : globalSettings[key]),
+      ) &&
+      Object.entries(merged).every(
+        ([key, value]) =>
+          !(typeof value === "string" && value.startsWith("workspace:")) ||
+          values.allowlist.includes(key),
+      )
+    );
+  } catch {
+    return false;
+  }
+};
+if (!workspaceValueTypes.every((_, rotation) => runProbe(rotation)))
   fail("workspace merge does not apply exactly the extracted allowlist");
 
 process.stdout.write(
