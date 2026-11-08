@@ -2,9 +2,9 @@ Before the first delegate, invoke the absolute `delegate-routing-plan` command
 rendered in this runtime's skill with the requested roles and caller-observed
 `--launch-context`. Use its decision as canonical; do not reproduce Reader
 discovery or pace arithmetic manually. The helper must run the Reader of every
-pool in the Pools table, including pools outside this runtime's launch targets;
-the Reader column names the command, not a separate registration per target
-runtime.
+registered pool listed in its output, including pools outside this runtime's
+launch targets; Reader commands belong to registered pool keys, not separate
+registrations per target runtime.
 
 The helper ranks fitting measured pools by worst-window pace, using each
 window's reported length; a monthly pool is paced against its month, not the
