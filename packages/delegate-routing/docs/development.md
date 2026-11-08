@@ -4,16 +4,20 @@
 > routing view for launch reaches and registered readers; the packaged
 > non-launching helper consumes the same view and runtime sessionPool binding,
 > rejects incomplete Reader envelopes, and keeps runtime-specific commands in
-> skills so shared router rules remain byte-identical; routing ships an
-> always-on "Pool drain" entry and a "Tune these rules" entry, the Review step
-> holds the one review rule, the Work and review workflow builds a branch as
-> units each reviewed by one check before the next starts (all three checks at
-> the branch-level review when the PR goes ready), the usage helpers share one
-> schema with UTC reset times, portable pools resolve usage readers and label
-> family reaches on both backends, proxy-accounted-usage reads a Manager+
-> accounted monthly budget, and the always-on stub names the source for steering
-> its rules; OpenCode Go joins z.ai as an API-key pool found by base URL, with
-> opt-in Go preset families.
+> skills so shared router rules remain byte-identical; Pool drain and Review use
+> the helper as the canonical decision and retain named launch fallbacks;
+> per-runtime mode evidence below leaves automatic detection unknown; routing
+> ships an always-on "Pool drain" entry and a "Tune these rules" entry, the
+> Review step holds the one review rule, the Work and review workflow builds a
+> branch as units each reviewed by one check before the next starts (all three
+> checks at the branch-level review when the PR goes ready), the usage helpers
+> share one schema with UTC reset times, portable pools resolve usage readers
+> and label family reaches on both backends, proxy-accounted-usage reads a
+> Manager+ accounted monthly budget, and the always-on stub names the source for
+> steering its rules; OpenCode Go joins z.ai as an API-key pool found by base
+> URL, with opt-in Go preset families. Packaged-helper checks execute every
+> runtime’s delivered helper on both backends and reject null sessionPool
+> manifests.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -435,9 +439,40 @@ clock for offline tests.
 `checks/routing-plan-runtime.py scripts/delegate-routing-plan.py` exercises fake
 Readers and hand-written expectations, including a subprocess spy that rejects
 any candidate/probe launch. CI exposes it as `delegate-routing-plan-runtime`.
-Eight backend/runtime delivery fixtures and mode-detection evidence belong to
-the module/policy checks; offline helper tests do not establish live harness
-compliance.
+Eight backend/runtime delivery fixtures check the rendered helper command,
+runtime/session-pool identity in the skill, and policy prose for Reader
+completeness, the session buffer and named review fallbacks. Reader collection,
+ranking and buffer behavior are tested against the source Python helper with
+synthetic manifests. The
+`module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
+checks read each backend’s delivered `SKILL.md` for that runtime, follow its
+rendered command to the packaged wrapper and manifest, and run that wrapper with
+a fake Reader and fixed clock. Literal expectations cover the runtime, session
+pool, measured budget and launch specification; a copied manifest with
+`sessionPool = null` must fail the same assertions. CI builds these checks;
+offline results do not establish live harness compliance.
+
+### Interactive and headless discovery evidence
+
+The delegate map classifies launch kinds; that classification does not establish
+a trustworthy marker visible to a model or hook. The following source findings
+use the map's pinned versions (`docs/delegates/evidence.md:24-32`), not a new
+live capture. Verified means the cited map records the channel; unknown means it
+does not prove automatic mode detection at that pin.
+
+| Runtime / pin             | Verified channel evidence                                                                                                                                                     | Mode-detection status                                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Claude Code 2.1.292       | `docs/delegates/system-prompt.md:75` verifies CLI append reaches interactive, headless and protocol main turns; line 77 distinguishes the `-p` child append channel from TUI. | Unknown: these channel differences do not prove a model-visible or hook-visible interactive/headless marker.       |
+| Codex 0.160.1             | `docs/delegates/system-prompt.md:133` verifies developer instructions reach multiple launch kinds; line 137 verifies app-server instruction overrides.                        | Unknown: instruction reach and app-server overrides do not identify an automatic interactive/headless marker.      |
+| Kimchi 1.5.1 / Pi 0.85.1  | `docs/delegates/system-prompt.md:246` names print, RPC and ACP launchers; line 261 verifies named-agent prompt replacement/inheritance.                                       | Unknown: launcher flags and inherited prompts do not prove a marker exposed to the model or hooks.                 |
+| Kiro 2.28.0 / KAS 0.66.26 | `docs/delegates/system-prompt.md:188-190` records v3 headless and ACP launcher channels; `docs/delegates/evidence.md:35-36` distinguishes configured v3 from binary defaults. | Unknown: verified launcher channels do not establish model-visible or hook-visible interactive/headless detection. |
+
+A bounded capture of the current pin's actual model input and hook payload in
+both modes would settle each unknown; none was run for this contract. Callers
+supply `nonInteractive` from known launch context or an explicit worker brief.
+Unknown stays unknown, external launches remain unresolved, and the helper still
+collects every Reader and applies tier/pace policy without a detection
+prerequisite. No TTY or executable-name inference is permitted.
 
 ## Delivery and previews
 
