@@ -1,5 +1,5 @@
 {facetOwner, ...}: {
-  documentation.skillDescriptions.delegate-routing = "Size model and effort before calling subagents or building workflows";
+  documentation.skillDescriptions.delegate-routing = "Plan substantive work and validate sized delegate launches";
   fragments.categories.delegate-routing = {
     scopes = ["packages/${facetOwner}/**"];
     sources = [
