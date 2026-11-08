@@ -118,6 +118,13 @@
     });
   };
   resolvedAgentFiles = agentFiles.resolve (agentFiles.facts.models ++ map (row: row.model) pickerRows) (select portable.families models.claude);
+  runtimeSkill = runtime:
+    defaults.passthru.mkSkill {
+      inherit runtime models techniques resolvedAgentFiles;
+      inherit (portable) families pools;
+      inherit (resolved runtime) routing skill workflows;
+      inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates sessionPool;
+    };
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
   names = lib.unique (map (family: family.name) flattenedFamilies);
@@ -135,6 +142,11 @@
         type = lib.types.listOf (lib.types.enum (lib.remove runtime supportedRuntimes));
         default = [];
         description = "Describe external delegates for explicit user requests only; never auto-select them. Each named runtime must be enabled through ai.<runtime>.enable. Manual-only takes precedence over extraRuntimes.";
+      };
+      sessionPool = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum (builtins.attrNames portable.pools));
+        default = null;
+        description = "Registered budget spent by this runtime's session; null warns that the buffer rule cannot be certified. Set the actual pool for proxied runtimes.";
       };
       models = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
@@ -315,12 +327,7 @@ in {
       enableDescription = "delegate model and effort sizing skills and rule";
       inherit backend supportedRuntimes;
       skills = {runtime, ...}: {
-        delegate-routing = "${defaults.passthru.mkSkill {
-          inherit runtime models techniques resolvedAgentFiles;
-          inherit (portable) families pools;
-          inherit (resolved runtime) routing skill workflows;
-          inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
-        }}";
+        delegate-routing = "${runtimeSkill runtime}";
       };
       rules = {runtime, ...}:
         import ../router.nix {
@@ -421,7 +428,9 @@ in {
     ];
     warnings =
       map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
-      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes);
+      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
+      ++ map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.sessionPool is null; session budget unknown and the buffer rule cannot be certified.")
+      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.sessionPool == null) supportedRuntimes);
     assertions =
       [
         {
