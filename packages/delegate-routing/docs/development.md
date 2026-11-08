@@ -41,7 +41,10 @@ delegate-routing" stub and seven enabled entries: "Follow the user's request",
 "Orchestrator session" and "Tune these rules". "Pool drain", "Validate the
 result" and "Orchestrator session" are always-on too. "Orchestrator session"
 ships enabled; disable it with `routing."Orchestrator session".enable = false`.
-Policy belongs in these entries rather than renderer string literals.
+Its first paragraph is the short user-voiced request shared by the rule and
+per-turn reminder. Sweeps use a workflow where available, otherwise native
+subagents. Keep the details in later paragraphs. Policy belongs in these entries
+rather than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
