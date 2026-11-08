@@ -19,7 +19,7 @@ existing abstraction.
 - `dev/fragments/ai-proxy/ai-proxy.md` — the shared network proxy surface and
   its proposed instance selection.
 - `dev/fragments/extracted/extraction-method.md` — packages pin the current
-  upstream release only.
+  upstream release only; extraction methods rank CodeQL, eval, AST, regex.
 - `dev/fragments/extracted/typed-settings.md` — typed settings come from the
   extracted generator.
 - `packages/ai-module/docs/architecture.md` — files, activation, secret
