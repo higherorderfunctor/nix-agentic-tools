@@ -351,7 +351,7 @@ nix build .#dns-root-hints
 | Package | Description |
 |---------|-------------|
 | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-| `delegate-routing-content` | Per-runtime sizing skills, deterministic routing helper and a short routing rule |
+| `delegate-routing-content` | Per-runtime sizing skills, saved plans, deterministic routing validation and a short routing rule |
 | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
 Content packages are derivations with `passthru.fragments` for composable
@@ -1157,6 +1157,19 @@ caller supplies mode evidence. See the
 [helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper)
 for the launch-context schema, conservative unknown handling and per-runtime
 mode-discovery evidence.
+
+Work and review runs Rubric → Subtractive → Plan → Work → Describe → Review →
+Loop. Rubric preparation is task-goal preflight; substantive task-source
+investigation starts with a reachable strong/frontier planner from the helper,
+except for an approved bounded worker assignment. The planner saves units,
+dependencies, disjoint waves and prepared worker/reviewer briefs containing the
+full rubric verbatim. Before launch, pass `--check-plan <plan.json>` with
+current launch context and all planned roles to the rendered helper; it checks
+role/runtime/candidate/pinned line, wave/dependency shape and rubric bytes
+against a fresh Reader decision. Use `--max-concurrency <n>` for a host/user cap
+below ten. The orchestrator enforces review/commit barriers; offline validation
+makes no live compliance claim. See the
+[saved-plan contract and policy ledger](packages/delegate-routing/docs/development.md#saved-plans-and-prepared-briefs).
 
 #### Per-turn reminder
 
