@@ -11,6 +11,8 @@
 > unchanged. Plan/check-plan and the deterministic helper retain their
 > runtime/session-pool, Reader, tier/pace and verbatim-rubric contracts. Offline
 > checks establish artifact delivery and validation, not live agent compliance.
+> Opt-in helper-backed acceptance cases preserve fake-Reader receipts separately
+> from session observations; no harness compliance is inferred from dry-run.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -864,8 +866,15 @@ The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch
 plan with no harness and no login. Its `cases` passthru is the runner's fixture
 export. It also runs the offline source-attribution and event-schema regressions
-in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for
-reminder comparisons, the isolation recipe, the caps and the operator steps.
+in `eval/test_suite.py`. Helper-backed cases execute the delivered helper with
+registered fake Readers during dry-run and archive setup receipts separately
+from live session receipts. Legacy cases retain their synthetic-usage prompt and
+narrower evidence. The independent-unit case checks a shared disjoint wave in
+the saved plan; this is not proof of concurrent launches or organic planner
+compliance. Live helper-backed cases require `--helper-backed`; generated inputs
+may need realization before dry-run. No check starts a session. See
+`eval/README.md` for reminder comparisons, the isolation recipe, the caps and
+the operator steps.
 
 ## Delegate map
 
