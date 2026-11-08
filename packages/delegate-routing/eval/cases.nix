@@ -46,13 +46,20 @@
     (harness.deliveredFiles config);
     # The delegate techniques the delivered skill offers, by runtime. The
     # runner classifies logged tool calls and shell commands by these names.
+    effectiveTechniques = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques config;
     techniques = lib.mapAttrs (_: nodes:
       lib.mapAttrs (_: technique: technique.kind)
       (lib.filterAttrs (_: technique: technique.enable && builtins.elem technique.kind delegateKinds) nodes))
-    ((import ../lib/select-families.nix {inherit lib;}).effectiveTechniques config);
+    effectiveTechniques;
+    # Exact enabled reader commands, also rendered in the delivered skill.
+    usageCommands = lib.concatLists (lib.mapAttrsToList (_: nodes:
+      map (node: node.command) (lib.attrValues (lib.filterAttrs (_: node:
+        node.enable && node.kind == "usage" && node.command != null)
+      nodes)))
+    effectiveTechniques);
   in
     assert lib.assertMsg (failures == []) (lib.concatStringsSep "\n" failures); {
-      inherit expect files id runtime switches task techniques;
+      inherit expect files id runtime switches task techniques usageCommands;
       # suite.py puts these helper-shaped documents in the routing prompt.
       usage = lib.genAttrs ["claude" "codex"] (pool: let
         remaining =
@@ -99,6 +106,33 @@
       };
       task = dependent;
     }) [false true];
+  orchestratorDesign = let
+    case = mkCase {
+      expect = "workflow-before-source";
+      id = "claude-orchestrator-design";
+      runtime = "claude";
+      switches.ai.programs.delegate-routing = {
+        routing."Orchestrator session".enable = lib.mkForce true;
+        runtimes.claude = {
+          extraRuntimes = lib.mkForce [];
+          manualExternalDelegates = lib.mkForce [];
+          techniques."claude -p".enable = false;
+        };
+      };
+      task = "Investigate normalization in `task_source.py` and design a case-sensitivity setting. Preserve current behavior by default and describe the setting's contract and a validation plan.";
+    };
+  in
+    case
+    // {
+      files =
+        case.files
+        ++ [
+          {
+            path = "task_source.py";
+            text = "def normalize(word):\n    return word.strip().casefold()\n";
+          }
+        ];
+    };
   reminderPairs = lib.concatMap (runtime:
     map (on:
       mkCase {
@@ -107,7 +141,7 @@
         id = "${runtime}-reminder-${label on}";
         switches.ai.programs.delegate-routing.reminder.enable = lib.mkForce on;
         task = single;
-      }) [true false]) ["claude" "kiro"];
+      }) [true false]) ["claude" "codex" "kiro"];
   # Task shape: a single task wants one delegate, a dependent chain a workflow.
   # Kiro with workflows enabled routes even one delegate through run_workflow,
   # so its single case disables them to keep testing the one-delegate route.
@@ -129,4 +163,4 @@
     })
   ]) ["codex" "kimchi" "kiro"];
 in
-  claudeDrainPairs ++ reminderPairs ++ shapes
+  claudeDrainPairs ++ [orchestratorDesign] ++ reminderPairs ++ shapes

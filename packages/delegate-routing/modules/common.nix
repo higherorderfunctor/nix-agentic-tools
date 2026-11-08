@@ -46,6 +46,14 @@
     skill = entries.resolveSkill portable.skill local.skill;
     workflows = entries.resolveWorkflows portable.workflows local.workflows;
   };
+  # The effective entry owns both the rule and its short per-turn request.
+  reminderText = runtime: let
+    orchestrator = (resolved runtime).routing."Orchestrator session";
+    firstParagraph =
+      lib.replaceStrings ["\n"] [" "]
+      (lib.head (lib.splitString "\n\n" orchestrator.text));
+  in
+    portable.reminder.text + lib.optionalString orchestrator.enable "\n${firstParagraph}";
   enabled = runtime:
     config.ai.programs.delegate-routing.runtimes.${runtime}.enable
     or null;
@@ -288,7 +296,10 @@ in {
           Per-turn UserPromptSubmit reminder in the user's voice. Claude and Codex
           receive JSON additionalContext on both backends; Kimchi on devenv only.
           Kiro receives plain text on both. Set runtimes.<runtime>.reminder.enable
-          to false to withhold it from that runtime.
+          to false to withhold it from that runtime. This text or source supplies
+          the base request. An enabled effective routing."Orchestrator session"
+          appends its first paragraph as one line; replace that entry's text or
+          source to change the line, or disable the entry to omit it.
         '';
       };
 
@@ -406,7 +417,7 @@ in {
       })
       (lib.genAttrs reminderRuntimes (runtime:
         lib.mkIf (reminderHookEnabled runtime)
-        (reminder.hooks.${runtime} portable.reminder.text)))
+        (reminder.hooks.${runtime} (reminderText runtime))))
     ];
     warnings =
       map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")

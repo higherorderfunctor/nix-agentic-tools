@@ -1320,7 +1320,9 @@
     #### Per-turn reminder
 
     `reminder.{enable,text,source}` adds a default-on standing delegation request.
-    Its option description covers delivery and per-runtime controls. The
+    When "Orchestrator session" is enabled for a runtime, the reminder also carries
+    that entry's first paragraph. Its option description covers delivery and
+    per-runtime controls. The
     [development guide](packages/delegate-routing/docs/development.md#per-turn-reminder)
     explains the workflow opt-in rationale.
 

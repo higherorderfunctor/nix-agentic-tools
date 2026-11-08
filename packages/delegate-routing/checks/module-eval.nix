@@ -90,6 +90,22 @@
           runtimes.${runtime}.reminder.enable = true;
         };
       };
+    # Literal expectations catch a changed base grant or a missing/duplicated line.
+    reminderBaseText = "Standing request from me, the user: you may use subagents, workflows, deep research and delegates whenever they fit, and by default hand bulk reading, measuring and edit-and-test loops to them; load the delegate-routing skill in that same turn to size their model and effort.";
+    orchestratorLine = "I want this session kept interactive: hand off assigned work or questions you cannot answer quickly before gathering quick facts; send sweeps, including design, to a workflow when available, otherwise to native subagents.";
+    orchestratorOff = change {ai.programs.delegate-routing.routing."Orchestrator session".enable = false;};
+    orchestratorRuntimeOff = runtime:
+      change {ai.programs.delegate-routing.runtimes.${runtime}.routing."Orchestrator session".enable = false;};
+    orchestratorRuntimeText = runtime:
+      change {
+        ai.programs.delegate-routing = {
+          routing."Orchestrator session".enable = false;
+          runtimes.${runtime}.routing."Orchestrator session" = {
+            enable = true;
+            text = "I want runtime guidance\nkept in one line.\n\nDetails stay in the rule.";
+          };
+        };
+      };
     reminderCustomText = "CUSTOM REMINDER: \"delegate\"\nsecond line";
     reminderCustom = change {ai.programs.delegate-routing.reminder.text = reminderCustomText;};
     reminderSourcePath = ../fragments/orchestrator-session.md;
@@ -1162,7 +1178,7 @@
     );
     "module-delegate-routing-${name}-reminder" = mkTest "delegate-routing-${name}-reminder" (
       result.config.ai.programs.delegate-routing.reminder.enable
-      && result.config.ai.programs.delegate-routing.reminder.text == (import ../lib/reminder.nix {inherit lib pkgs;}).defaultText
+      && result.config.ai.programs.delegate-routing.reminder.text == reminderBaseText
       && lib.all (runtime: builtins.length (reminderCommands result runtime) == reminderCases.${runtime}) runtimes
     );
     "module-delegate-routing-${name}-reminder-disabled" = mkTest "delegate-routing-${name}-reminder-disabled" (
@@ -1217,9 +1233,21 @@
             evaluation = builtins.head pair;
             text = builtins.elemAt pair 1;
           }) [
-            [result result.config.ai.programs.delegate-routing.reminder.text]
-            [reminderCustom reminderCustomText]
-            [reminderSource (builtins.readFile reminderSourcePath)]
+            # Reject missing lines, portable-only gating and ignored runtime text.
+            [result "${reminderBaseText}\n${orchestratorLine}"]
+            [orchestratorOff reminderBaseText]
+            [(orchestratorRuntimeOff runtime) reminderBaseText]
+            [
+              (orchestratorRuntimeOff (
+                if runtime == "claude"
+                then "codex"
+                else "claude"
+              ))
+              "${reminderBaseText}\n${orchestratorLine}"
+            ]
+            [(orchestratorRuntimeText runtime) "${reminderBaseText}\nI want runtime guidance kept in one line."]
+            [reminderCustom "${reminderCustomText}\n${orchestratorLine}"]
+            [reminderSource "${builtins.readFile reminderSourcePath}\n${orchestratorLine}"]
           ]))
       hookRuntimes;
     in

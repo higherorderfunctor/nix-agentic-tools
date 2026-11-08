@@ -41,7 +41,10 @@ delegate-routing" stub and seven enabled entries: "Follow the user's request",
 "Orchestrator session" and "Tune these rules". "Pool drain", "Validate the
 result" and "Orchestrator session" are always-on too. "Orchestrator session"
 ships enabled; disable it with `routing."Orchestrator session".enable = false`.
-Policy belongs in these entries rather than renderer string literals.
+Its first paragraph is the short user-voiced request shared by the rule and
+per-turn reminder. Sweeps use a workflow where available, otherwise native
+subagents. Keep the details in later paragraphs. Policy belongs in these entries
+rather than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
@@ -477,11 +480,29 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 
 ## Per-turn reminder
 
-The default wording is Claude's user-voiced standing request against the
+The base wording is Claude's user-voiced standing request against the
 heron_brook clamp; it grants delegation and states the default for bulk work.
 Before changing it, read `packages/claude-code/docs/heron-brook-clamp.md`.
-Consumer delivery and enable controls are documented in the `reminder` option;
-the hook pools own conflict diagnostics.
+
+For each runtime, the hook appends the first paragraph of its effective
+`routing."Orchestrator session"` entry, joining wrapped lines with spaces. The
+entry's existing `enable`, `text` and `source` fields control the added line;
+runtime entry replacement applies before reading them. Disabling that entry
+leaves the base request byte-identical, without an extra newline.
+
+`reminder.text` or `reminder.source` replaces the base request; the enabled
+orchestrator entry still appends its line. Consumers wanting only their custom
+reminder also disable that entry. `reminder.enable` and
+`runtimes.<runtime>.reminder.enable` still withhold the whole hook. No second
+reminder wording or new option is declared. The hook pools own conflict
+diagnostics.
+
+Codex's delegation behavior under the reminder is unmeasured, including whether
+it has a delegation clamp. Run
+`python3 packages/delegate-routing/eval/suite.py --only='codex-reminder-*'` and
+inspect both verdicts, root logs and actual prompt/hook payload to measure it;
+behavioral non-regression remains unknown until those cases run. Preserving the
+grant is not evidence of their outcome.
 
 Kiro workflow step sessions skip the reminder so a delegated step does not
 receive another invitation to delegate (measured on kiro-cli 2.31.1 with
@@ -491,6 +512,12 @@ receive another invitation to delegate (measured on kiro-cli 2.31.1 with
 `fixtures/kiro-primitives/carried-negatives.md`, C-1). Root sessions retain the
 exact reminder; missing or unreadable session data fails open to that same
 output.
+
+Headless delivery: `claude -p` receives the reminder (see
+`docs/delegates/system-prompt.md`, hook `additionalContext`); Kiro workflow
+steps skip it and a Kiro headless root receives it (see `lib/reminder.nix` and
+`checks/reminder-runtime.nix`). Receipt by `codex exec` and `kimchi -p` is
+unmeasured.
 
 ## Acceptance suite
 

@@ -395,12 +395,39 @@ HARNESSES = {
 
 # --- assertions on the session's own logs ------------------------------------
 
+def workflow_before_source(calls, raw, case):
+    """Claude design case: allow guidance loading, then require a workflow.
+
+    Allow guidance, listed usage readers and planning notes, then refuse other preparatory tools,
+    including broad searches and shells that could read task source.
+    """
+    guidance = [file["path"] for file in case["files"]
+                if file["path"].endswith(".md") and file["path"].startswith((".claude/skills/", ".claude/agents/"))]
+    for call in raw:
+        delegated = classify(case, [call])
+        if delegated:
+            return delegated[0]["kind"] == "workflow" and delegated[0]["runtime"] == "claude"
+        value = call["input"] or {}
+        if call["name"] == "Skill" and value.get("skill") == "delegate-routing":
+            continue
+        if call["name"] in {"TaskCreate", "TaskGet", "TaskList", "TaskUpdate", "TodoRead", "TodoWrite"}:
+            continue
+        if call["name"] == "Bash" and value.get("command", "").strip() in case.get("usageCommands", []):
+            continue
+        path = value.get("file_path", "")
+        if call["name"] == "Read" and any(path == item or path.endswith("/" + item) for item in guidance):
+            continue
+        return False
+    return False
+
+
 ASSERTIONS = {
-    "codex-lane": ("an external `codex exec` launch was attempted", lambda calls: any(call["runtime"] == "codex" and call["kind"] == "external" for call in calls)),
-    "delegate": ("at least one delegate technique was invoked (subagent, workflow or external)", lambda calls: bool(calls)),
-    "observe": ("none: records the delegates and passes once the session answers", lambda calls: True),
-    "one-delegate": ("exactly one subagent or external delegate, and no workflow", lambda calls: len(calls) == 1 and calls[0]["kind"] != "workflow"),
-    "workflow": ("a workflow technique, or at least two delegates", lambda calls: any(call["kind"] == "workflow" for call in calls) or len(calls) >= 2),
+    "codex-lane": ("an external `codex exec` launch was attempted", lambda calls, raw, case: any(call["runtime"] == "codex" and call["kind"] == "external" for call in calls)),
+    "delegate": ("at least one delegate technique was invoked (subagent, workflow or external)", lambda calls, raw, case: bool(calls)),
+    "observe": ("none: records the delegates and passes once the session answers", lambda calls, raw, case: True),
+    "one-delegate": ("exactly one subagent or external delegate, and no workflow", lambda calls, raw, case: len(calls) == 1 and calls[0]["kind"] != "workflow"),
+    "workflow": ("a workflow technique, or at least two delegates", lambda calls, raw, case: any(call["kind"] == "workflow" for call in calls) or len(calls) >= 2),
+    "workflow-before-source": ("a native workflow precedes task-source access; only guidance, listed usage readers and planning tools may come first", workflow_before_source),
 }
 
 
@@ -586,6 +613,8 @@ def validate(cases):
             raise ValueError(f"{where}: no delegate techniques for {case['runtime']}")
         if case["expect"] == "codex-lane" and "external" not in case["techniques"].get("codex", {}).values():
             raise ValueError(f"{where}: codex-lane needs an external codex technique")
+        if case["expect"] == "workflow-before-source" and case["runtime"] != "claude":
+            raise ValueError(f"{where}: workflow-before-source needs Claude's ordered root tool stream")
         paths = set()
         for file in case["files"]:
             path = Path(file["path"])
@@ -935,7 +964,7 @@ def run_case(case, prepared, args):
         return {**record, "status": "ERROR", "detail": "event extractor missed delegates the hook saw"}
     if stop or not harness["answered"](events):
         return {**record, "status": "ERROR", "detail": "no answer: " + (", ".join(stop) or f"exit {code}, no completion event; stream: {stream_shape(events)}")}
-    passed = ASSERTIONS[case["expect"]][1](calls)
+    passed = ASSERTIONS[case["expect"]][1](calls, raw_calls, case)
     names = sorted(set(raw_tool_names(events)))
     summary = ", ".join(f"{call['runtime']}:{call['technique']}" for call in calls) or "no delegates; tools: " + (", ".join(names) or "none")
     return {**record, "status": "PASS" if passed else "FAIL", "detail": summary}

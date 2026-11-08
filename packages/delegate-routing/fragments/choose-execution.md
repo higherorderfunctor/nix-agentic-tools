@@ -28,11 +28,13 @@ with a tool-less probe agent or a direct API call, never with an ordinary
 workflow agent.
 
 Use a tool from the table that exists in this session's mode. A single
-self-contained task needs one delegate. Use a workflow when the work has
-dependent steps, loops or parallel parts. Start independent tasks together.
-Writers on disjoint files may run in parallel in one working tree, with one
-committer staging and committing for all of them. Serialize writers whose files
-overlap; use separate worktrees when they need different bases.
+self-contained task needs one delegate. Use a workflow where the runtime has
+one, otherwise native subagents, when the work has dependent steps, loops or
+parallel parts. With "Orchestrator session" enabled, every sweep, including
+self-contained design work, also takes that route. Start independent tasks
+together. Writers on disjoint files may run in parallel in one working tree,
+with one committer staging and committing for all of them. Serialize writers
+whose files overlap; use separate worktrees when they need different bases.
 
 One delegate on a model this runtime can reach goes through the first technique
 in the family table's Launch column for this runtime that is in your tool list;
@@ -46,6 +48,11 @@ That directory decides their permissions and configuration. Say in every
 external launch brief that the delegate is non-interactive and reports to an
 orchestrator, not a person.
 
+A non-interactive or external delegate does not launch external delegates. It
+may use its own runtime's native subagent and workflow tools. This limit governs
+every launch recommendation in this skill; report an unreachable model to the
+orchestrator.
+
 Use another vendor's harness for a model this runtime can reach only when that
 harness runs the whole multi-step job itself: hand the entire job to one
 delegate there that can run its own subagents (the table's "Runs own subagents"
@@ -53,7 +60,7 @@ column), such as Codex orchestrating a three-check review with GLM. A model no
 technique of this runtime reaches keeps the Launch column's external technique
 for one delegate, a single cross-vendor reviewer included. If that column says
 unknown, probe it in the launcher you plan to use before relying on it. If no
-runtime can, orchestrate from this session:
+runtime can, an interactive orchestrator runs the steps from this session:
 
 1. Use this session's workflow tool, if it has one.
 2. Otherwise run the steps yourself: launch each external worker, wait for it,

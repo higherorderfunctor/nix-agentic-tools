@@ -20,7 +20,8 @@
       ${pkgs.coreutils}/bin/cat -- ${reminder}
     '';
   });
-  reminder = pkgs.writeText "delegate-routing-reminder-expected" evaluated.config.ai.programs.delegate-routing.reminder.text;
+  # Independent bytes: fail if a root omits the line or a workflow step emits it.
+  reminder = pkgs.writeText "delegate-routing-reminder-expected" "Standing request from me, the user: you may use subagents, workflows, deep research and delegates whenever they fit, and by default hand bulk reading, measuring and edit-and-test loops to them; load the delegate-routing skill in that same turn to size their model and effort.\nI want this session kept interactive: hand off assigned work or questions you cannot answer quickly before gathering quick facts; send sweeps, including design, to a workflow when available, otherwise to native subagents.";
   # Measured on kiro-cli 2.31.1 --v3: step sessions carry _meta.kiro.workflow
   # (an object, type "step"); root sessions have none. Only that metadata is kept.
   sessions = pkgs.writeText "delegate-routing-reminder-sessions.json" (builtins.toJSON {
