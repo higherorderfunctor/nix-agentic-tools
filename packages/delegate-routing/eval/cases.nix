@@ -90,7 +90,8 @@
     else "off";
   single = "Implement a pure Python function `unique_words(text)` in `words.py` that returns the sorted unique words of a string; `unique_words('pear apple pear')` must return `['apple', 'pear']`.";
   dependent = "Derive a normalization specification from the examples 'Pear' -> 'pear' and 'APPLE' -> 'apple' and write it to `SPEC.md`; then implement that specification as `normalize(word)` in `normalize.py`; then validate the implementation against those examples. Each step consumes the preceding result.";
-  # On/off pairs: the switch is the only difference between the two cases.
+  # On/off pairs: Pool drain is delivered in the small skill, so the switch
+  # changes the orchestrator policy it receives before choosing a launch.
   claudeDrainPairs = map (on:
     mkCase {
       codexHeadroom = true;

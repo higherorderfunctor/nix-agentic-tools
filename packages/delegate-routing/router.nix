@@ -11,7 +11,7 @@
 in
   lib.optionalAttrs (rendered != "") {
     delegate-routing-router = {
-      description = "Load delegate-routing before delegating work";
+      description = "Load the small delegate-routing entrypoint before delegating work";
       text = "# Delegate routing\n\n${rendered}";
     };
   }
