@@ -1,7 +1,7 @@
 # Acceptance suite
 
-> **Last verified:** 2026-10-29 — Claude and Kiro each run a reminder on/off
-> pair; the other harnesses run one-task and dependent-chain cases.
+> **Last verified:** 2026-11-07 — defines Claude, Codex and Kiro reminder pairs
+> and a Claude design-order case; the new live effects are unmeasured.
 
 One manual suite of real sessions on Claude, Codex, Kiro and Kimchi. Each case
 checks what the delivered delegate-routing configuration makes an agent do with
@@ -44,13 +44,34 @@ exports every delivered file. Personal `devenv.local.nix` is outside this
 fixture configuration. The prompt is the task plus synthetic usage numbers; the
 expected behavior never enters it.
 
-| Cases                                                                                | Switch or shape                                | Assertion      |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------- | -------------- |
-| `claude-reminder-on`, `claude-reminder-off`, `kiro-reminder-on`, `kiro-reminder-off` | `ai.programs.delegate-routing.reminder.enable` | `delegate`     |
-| `codex-single`, `kimchi-single`, `kiro-single`                                       | one task                                       | `one-delegate` |
-| `codex-dependent`, `kimchi-dependent`, `kiro-dependent`                              | dependent chain                                | `workflow`     |
+| Cases                                                                                                                           | Switch or shape                                                                                       | Assertion                |
+| ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------ |
+| `claude-reminder-on`, `claude-reminder-off`, `codex-reminder-on`, `codex-reminder-off`, `kiro-reminder-on`, `kiro-reminder-off` | `ai.programs.delegate-routing.reminder.enable`                                                        | `delegate`               |
+| `claude-orchestrator-design`                                                                                                    | investigate `task_source.py` and design a setting; orchestrator enabled, only native Claude delegates | `workflow-before-source` |
+| `codex-single`, `kimchi-single`, `kiro-single`                                                                                  | one task                                                                                              | `one-delegate`           |
+| `codex-dependent`, `kimchi-dependent`, `kiro-dependent`                                                                         | dependent chain                                                                                       | `workflow`               |
 
 The reminder cases are on/off pairs: the switch is the only difference.
+
+Codex's delegation behavior under the reminder, and whether it has a delegation
+clamp, remain unmeasured. Run both Codex reminder cases and inspect their
+verdicts and root logs before claiming an effect.
+
+The design case is a headless surrogate for interactive policy with a complete
+brief supplied in the task; it does not exercise pre-handoff board/issue triage.
+It does not measure human-turn latency, overlap of quick facts with a running
+delegate, external launch order, or source-access order on Codex, Kimchi and
+Kiro. The allowlist rejects unrecognized harmless preparatory tools as well as
+source access; it accepts only exact listed usage-reader commands and does not
+interpret shell programs. Offline events match Claude's assistant tool-use
+envelopes and exclude child calls as production does. Hook payload checks cover
+entry gating on supported delivery paths.
+
+The fixture prompt supplies synthetic usage and tells the agent not to run usage
+helpers, unlike production's live usage reads. This hides reader execution,
+authentication and pool freshness; the offline ordering test separately accepts
+a routing Skill load and listed usage reads before launch, and rejects usage
+commands combined with source reads.
 
 Assertions read the session's own event log. A delegate call is a tool call
 named after a `subagent` or `workflow` technique of the case's runtime, or a
@@ -64,13 +85,14 @@ equals `thread.started`); a child's rollout is a separate file whose source is
 spawn item (V; probe `codex:L1.exec-root-ends`). Child-event exclusion for
 Kimchi and Kiro is unverified.
 
-| Assertion      | Passes when the log shows                                   |
-| -------------- | ----------------------------------------------------------- |
-| `codex-lane`   | an external `codex exec` launch                             |
-| `delegate`     | at least one delegate call                                  |
-| `observe`      | nothing more: it records the delegates once the run answers |
-| `one-delegate` | exactly one subagent or external delegate, and no workflow  |
-| `workflow`     | a workflow technique, or at least two delegates             |
+| Assertion                | Passes when the log shows                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codex-lane`             | an external `codex exec` launch                                                                                                                                                                                                                                                                                                                                                             |
+| `delegate`               | at least one delegate call                                                                                                                                                                                                                                                                                                                                                                  |
+| `observe`                | nothing more: it records the delegates once the run answers                                                                                                                                                                                                                                                                                                                                 |
+| `one-delegate`           | exactly one subagent or external delegate, and no workflow                                                                                                                                                                                                                                                                                                                                  |
+| `workflow`               | a workflow technique, or at least two delegates                                                                                                                                                                                                                                                                                                                                             |
+| `workflow-before-source` | a native Claude workflow precedes task-source access; before launch, allow only the routing Skill, Read of delivered skill/agent Markdown, exact enabled usage-reader commands from the delivered technique configuration, and `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`, `TodoRead`, `TodoWrite`; source Read, other shell commands and broad search fail; reads after launch pass |
 
 Add a case when a real routing problem shows up, not to fill a matrix.
 

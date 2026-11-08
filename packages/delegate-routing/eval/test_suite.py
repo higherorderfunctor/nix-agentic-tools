@@ -86,6 +86,50 @@ class CliRecords(unittest.TestCase):
                 (logs / "sessions" / (identity + ".jsonl")).write_text("\n".join(map(json.dumps, records)))
             self.assertEqual(suite.session_calls(case, events, logs), [{"id": "root", "name": "spawn_agent", "input": {}}])
 
+    def test_workflow_precedes_source_access(self):
+        # Match Claude's production assistant tool-use blocks, including child IDs.
+        case = {"runtime": "claude", "techniques": {"claude": {"Agent": "subagent", "Workflow": "workflow"}},
+                "files": [{"path": ".claude/agents/opus.md"}, {"path": ".claude/skills/delegate-routing/SKILL.md"}],
+                "usageCommands": ["/nix/store/fixture/bin/claude-usage", "/nix/store/fixture/bin/zai-usage claude"]}
+        call_id = 0
+        def event(name, value, child=False):
+            nonlocal call_id
+            call_id += 1
+            return {"type": "assistant", "parent_tool_use_id": "parent" if child else None,
+                    "message": {"content": [{"type": "tool_use", "id": str(call_id), "name": name, "input": value}]}}
+        guidance = event("Read", {"file_path": "/fixture/.claude/skills/delegate-routing/SKILL.md"})
+        workflow = event("Workflow", {"code": "agent('Read task_source.py and design the setting')"})
+        for prefix, expected in [
+            ([guidance], True),
+            ([event("Read", {"file_path": "/fixture/.claude/agents/opus.md"})], True),
+            ([event("Skill", {"skill": "delegate-routing"})], True),
+            ([event("Skill", {"skill": "delegate-routing"}),
+              *[event("Bash", {"command": command}) for command in case["usageCommands"]]], True),
+            ([event("Bash", {"command": case["usageCommands"][0] + "; cat task_source.py"})], False),
+            ([event("Bash", {"command": "cat task_source.py # " + case["usageCommands"][0]})], False),
+            ([event("Bash", {"command": "/unlisted/usage-reader"})], False),
+            ([event("Skill", {"skill": "unrelated"})], False),
+            ([event("TodoWrite", {"todos": []})], True),
+            ([event("TodoRead", {})], True),
+            ([event("TaskCreate", {"subject": "Design setting", "description": "Plan the handoff"})], True),
+            ([event("TaskGet", {"taskId": "1"})], True),
+            ([event("TaskList", {})], True),
+            ([event("TaskUpdate", {"taskId": "1", "status": "in_progress"})], True),
+            ([event("TodoWrite", {"todos": []}), event("Read", {"file_path": "task_source.py"})], False),
+            ([event("Read", {"file_path": "/fixture/task_source.py"})], False),
+            ([event("Bash", {"command": "cat task_source.py"})], False),
+            ([event("Grep", {"pattern": ".", "path": "."})], False),
+            ([event("Agent", {"prompt": "design the setting"})], False),
+        ]:
+            with self.subTest(prefix=prefix):
+                events = prefix + [workflow, event("Read", {"file_path": "task_source.py"})]
+                raw = suite.session_calls(case, events, Path("/unused"))
+                self.assertEqual(suite.ASSERTIONS["workflow-before-source"][1](suite.classify(case, raw), raw, case), expected)
+        child = event("Read", {"file_path": "task_source.py"}, child=True)
+        raw = suite.session_calls(case, [guidance, child, workflow], Path("/unused"))
+        self.assertTrue(suite.workflow_before_source(suite.classify(case, raw), raw, case))
+        self.assertFalse(suite.workflow_before_source([], [], case))
+
     def test_settled_session_cleanup_is_not_a_wall_timeout(self):
         with tempfile.TemporaryDirectory() as directory:
             logs = Path(directory)
