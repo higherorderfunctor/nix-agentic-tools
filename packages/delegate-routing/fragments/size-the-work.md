@@ -25,14 +25,6 @@ candidate. Otherwise set model and resolved launch effort explicitly whenever
 the tool allows it. Unpinned inheritance is unsized unless the delegate's known
 launch values match the canonical selection.
 
-When "Orchestrator session" is enabled, follow its handoff order even for a
-quick look or review. When that entry is disabled, these rules apply instead:
-answer a documented fact from the few files that decide it, or ask the user; do
-a quick review from the few files that decide it, and fan out when that check
-shows the work is wide; when unsure, do the in-session pass and offer the deeper
-one with its rough cost. In either mode, an interesting or security-adjacent
-subject alone is not a reason to fan out.
-
 Name each role's model and effort in one line in the launch message to the user,
 or in the report to the orchestrator when non-interactive, so it can be
 overridden.

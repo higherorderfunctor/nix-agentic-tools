@@ -1,28 +1,20 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-09 — shared avoid/exclude fallback and
-> all-technique machine defaults preserve floors, session gates and intentional
-> null omission; failure warnings and the fallback notice reach stderr; advisory
-> notes stay JSON-only; the renderer consumes the private shared routing view
-> for launch reaches and registered readers; Plan saves bounded units,
-> role-qualified launches and verbatim-rubric briefs, and check-plan validates
-> them against fresh helper output; planner has a strong/frontier floor; the
-> packaged non-launching helper consumes the same view and runtime sessionPool
-> binding, rejects incomplete Reader envelopes, and keeps runtime-specific
-> commands in skills so shared router rules remain byte-identical; Pool drain
-> and Review use the helper as the canonical decision and retain named launch
-> fallbacks; per-runtime mode evidence below leaves automatic detection unknown;
-> routing ships an always-on "Pool drain" entry and a "Tune these rules" entry,
-> the Review step holds the one review rule, the Work and review workflow builds
-> a branch as units each reviewed by one check before the next starts (all three
-> checks at the branch-level review when the PR goes ready), the usage helpers
-> share one schema with UTC reset times, portable pools resolve usage readers
-> and label family reaches on both backends, proxy-accounted-usage reads a
-> Manager+ accounted monthly budget, and the always-on stub names the source for
-> steering its rules; OpenCode Go joins z.ai as an API-key pool found by base
-> URL, with opt-in Go preset families. Packaged-helper checks execute every
-> runtime’s delivered helper on both backends and reject null sessionPool
-> manifests.
+> **Last verified:** 2026-11-09 — all four runtimes on Home Manager and devenv
+> receive an orchestrator `SKILL.md` plus planner/worker `PLANNER.md`; the
+> companion is built first and read through an explicit absolute store path.
+> Orchestrator duties reach the router or small skill before launch; shared
+> policy uses the same resolved sources, preserves custom entries,
+> disables/runtime replacement and direct builder overrides, and supplies worker
+> policy to prepared briefs. Runtime-neutral routers retain the exact
+> Orchestrator first paragraph; reminder/grant and existing hook exclusions are
+> unchanged. Shared avoid/exclude fallback, all-technique defaults and
+> intentional null effort remain canonical; failed Readers retry once then
+> become unreachable, and failure warnings plus fallback notices reach stderr
+> while advisory notes stay JSON-only. Plan/check-plan and the deterministic
+> helper retain their runtime/session-pool, Reader, tier/pace and
+> verbatim-rubric contracts. Offline checks establish artifact delivery and
+> validation, not live agent compliance.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -52,13 +44,15 @@ and expose the same surface.
 `source`. Names become headings. The package ships the always-on "Load
 delegate-routing" stub and seven enabled entries: "Follow the user's request",
 "Size the work", "Choose execution", "Pool drain", "Validate the result",
-"Orchestrator session" and "Tune these rules". "Pool drain", "Validate the
-result" and "Orchestrator session" are always-on too. "Orchestrator session"
+"Orchestrator session" and "Tune these rules". Only "Load delegate-routing" and
+"Orchestrator session" are always-on by default; Pool drain and Validate the
+result reach both the small skill and planner companion. "Orchestrator session"
 ships enabled; disable it with `routing."Orchestrator session".enable = false`.
 Its first paragraph is the short user-voiced request shared by the rule and
 per-turn reminder. Sweeps use a workflow where available, otherwise native
-subagents. Keep the details in later paragraphs. Policy belongs in these entries
-rather than renderer string literals.
+subagents. Its later handoff paragraphs stay in the always-on Orchestrator
+session entry, where the interactive session receives them before launching a
+planner. Policy belongs in named entries rather than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
@@ -71,10 +65,10 @@ worker already assigned an approved bounded unit. It saves one plan and prepared
 briefs, then checks them before launch with `--check-plan`. The rubric is a
 saved file, pasted verbatim into the worker's and every reviewer's brief. Review
 embeds the checks; they are not separate steps. Add, replace, disable or reorder
-a step by key. "Choose execution" and the Review step reference the Rubric
-step's Size row; a consumer who disables that step moves or restates the size
-rule with it. A workflow can have introductory text or only steps; an enabled
-step needs content.
+a step by key. The Plan and Review steps reference the Rubric step's Size row; a
+consumer who disables that step moves or restates the size rule with it. A
+workflow can have introductory text or only steps; an enabled step needs
+content.
 
 **Breaking migration:** remove overrides of `steps.Prosecute`, `steps.Defend`
 and `steps.Judge`, and move their review policy into `steps.Review.text`
@@ -83,13 +77,18 @@ setting them creates new consumer steps, and ordering against them no longer
 anchors to a shipped step. There are no compatibility aliases.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
-fan-out. Other entries render in the generated skill. A workflow's `always`
-selects the destination for its header and numbered steps together; steps retain
-their order within that workflow. The always-on stub tells the agent to load the
-skill in each turn that delegates and names the source for steering these rules:
-the package's fragments, or for a consumer its `ai.programs.delegate-routing`
-routing and workflows entries. When the always-on render is empty, no router
-rule is emitted. Keep model tables and harness details in the skill.
+fan-out. The two shipped router entries address the orchestrator and are
+excluded from the planner context. Other enabled routing entries and workflows,
+including custom always-on entries, remain in `PLANNER.md`; non-always routing
+entries also reach `SKILL.md`. A workflow's `always` controls its additional
+rule placement; steps retain their order. The small router loads the runtime
+skill on every delegating turn and carries handoff and substantive
+source-steering rules: propose delegation-policy changes to package fragments or
+consumer routing/workflow entries, never rendered files, memory or house rules.
+It contains no runtime helper path, so shared AGENTS.md contributions remain
+byte-identical. When the always-on render is empty, no router rule is emitted.
+Full review execution policy and family/technique tables belong to the planner
+reference; rubric preflight reaches the orchestrator too.
 
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
@@ -126,17 +125,50 @@ Repository runtime and skill ownership is documented in
 
 ## Skill text
 
+The skill tree contains `SKILL.md` and `PLANNER.md`. An audience table projects
+Plan and launch only to the orchestrator, Routing and Routing helper to both
+readers, and Common workflows as Rubric/Subtractive preflight plus Work,
+Describe and Loop execution duties in the small skill or the full workflow in
+the companion. The manual-only delegate table reaches both readers so the
+orchestrator can honor an explicit user request. All other skill entries,
+including consumer additions, belong to the planner. Each policy paragraph has
+one authoritative source, even when both readers need its projection. The small
+skill includes substantive-work bootstrap, family fit/route guidance, helper
+command/schema, wave validation, launch supervision, source customization and
+result evidence, review orchestration, diagnosis validation and ready-report
+requirements. Automatic family/technique tables and the detailed reviewer checks
+stay in the companion.
+
+The planner must read its absolute companion path before planning. The
+orchestrator passes prepared brief paths without loading the heavy reference for
+every delegate. Worker/reviewer briefs carry their full rubric verbatim and
+relevant execution policy; there is no extra plan-constraints channel or
+unchecked JSON field.
+
+`PLANNER.md` contains planner/worker routing, full workflow and tables,
+including enabled custom entries. The shipped Orchestrator session and Load
+delegate-routing entries stay with the orchestrator, so the planner can read
+task source without being told to hand it off. Companion content is formatted in
+a separate derivation first, then copied byte-identically into the skill tree;
+the entrypoint references that first derivation, never its own output. Kiro and
+other runtimes need no implicit sibling loading, Skill args or on-load hook.
+
 The renderer holds no skill prose, only table and list glue and diagnostics.
 Every heading and sentence is an entry, a column or a phrase under `skill`, at
 `ai.programs.delegate-routing.skill` and at `runtimes.<runtime>.skill`. A
 runtime key replaces the portable key atomically.
 
-`skill.entries` is the ordered body: Routing, Common workflows, Delegate sizing,
-Routing helper, Pools, Family tables, Technique availability, Technique tables
-and Manual-only external delegates. Entry text may use `{routing}`,
-`{workflows}`, `{pools}`, `{families}`, `{techniques}` and `{manual}`, each
+`skill.entries` is the ordered projection source: Plan and launch, Routing,
+Common workflows, Delegate sizing, Routing helper, Pools, Family tables,
+Technique availability, Technique tables and Manual-only external delegates.
+Entry text may use `{routing}`, `{workflows}`, `{pools}`, `{families}`,
+`{techniques}`, `{manual}`, `{helper}`, `{planner}` and `{bootstrap}`, each
 filled with its generated block. An entry whose placeholder block renders
-nothing, such as Pools with no pools declared, is omitted.
+nothing, such as Pools with no pools declared, is omitted. `{planner}` is the
+absolute companion path; `{bootstrap}` is compact fit/route guidance for
+configured strong/frontier families, not certification of planner fit. With no
+such family it explicitly reports a loop failure. Override or disable entries by
+their names; custom skill entries are preserved in the companion.
 
 `skill.columns.<families|pools|techniques>` set header text, order and presence
 keyed by column. A disabled column drops its header and cells; an enabled key
@@ -151,6 +183,8 @@ its cells are empty when a family has no pool guidance.
 `"Pool binding"` and `"Manual pool hint"` (`{pool}`), `"Pool window"`
 (`{limit}`, `{unit}`, `{resetDay}`), `"Family table heading"` (`{tier}`),
 `"Technique table heading"` and `"Manual delegate heading"` (`{harness}`).
+`"Planner candidate"` takes `{family}`, `{useFor}`, `{avoidFor}`, `{effort}` and
+`{routes}`. `"Planner unavailable"` supplies the no-planner diagnostic.
 `"Launch fallback"`, `"Manual delegate note"`, `"OpenCode Go note"`,
 `"Pool measured"`, `"Pool unmeasured"` and `"Pool reader missing"` take none. A
 disabled phrase renders nothing; a phrase the renderer reads but cannot find
@@ -171,7 +205,10 @@ ai.programs.delegate-routing.skill = {
 
 The public `mkSkill` builder of the `delegate-routing-content` package is
 overridable. Its `override` receives the shipped inputs, so a direct caller
-edits the skill text from `prev.skill`:
+edits either projection from `prev.skill`. `render` and `.text` return the small
+entrypoint; `mkSkill` emits both files; direct callers read
+`"${skill}/PLANNER.md"` for companion text. No legacy large-entrypoint shim
+remains:
 
 ```nix
 (content.mkSkill {runtime = "claude";}).override (prev: {
@@ -315,11 +352,11 @@ withhold both files and the route. The effective technique is also disabled when
 the Claude runtime or its delegate-routing program is off.
 
 `runsOwnSubagents` fills the technique table's "Runs own subagents" column,
-which "Choose execution" points readers at. It is a hand-declared string,
-`"unknown"` by default; a shipped value names the mode it was seen in, such as
-`"supported (headless)"`, and a one-line comment in `lib/techniques.nix` cites
-the map row and case id that executed it. Change a value only with a map row
-behind it.
+which the execution choices in `fragments/plan-work.md` point readers at. It is
+a hand-declared string, `"unknown"` by default; a shipped value names the mode
+it was seen in, such as `"supported (headless)"`, and a one-line comment in
+`lib/techniques.nix` cites the map row and case id that executed it. Change a
+value only with a map row behind it.
 
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
@@ -332,8 +369,9 @@ turn. Shared table rendering escapes cells once.
 ### Pools
 
 A pool is a budget shared by model reaches. It is not a runtime.
-`pools.<name>.description` describes it in the skill's Pools table, before the
-family tiers. The drain rule reads this table to find the budgets and readers.
+`pools.<name>.description` describes it in the planner reference's Pools table,
+before the family tiers. The helper discovers the registered budgets and readers
+from its generated manifest; the drain rule uses the helper output.
 
 Set `usage.runtime` and `usage.technique` to read a measured pool through an
 existing technique. The runtime must be enabled. The technique must be enabled,
@@ -482,10 +520,10 @@ windows, balances and bonuses are preserved. These captures verify arithmetic
 and ranking; synthetic cases verify Reader failures. CI passes the fixture store
 path explicitly in `delegate-routing-plan-runtime`. Eight backend/runtime
 delivery fixtures check the rendered helper command, runtime/session-pool
-identity in the skill, and policy prose for Reader completeness, the session
-buffer and shared avoided-family fallback. Reader collection, ranking and buffer
-behavior are tested against the source Python helper with synthetic manifests.
-The
+identity in the small skill, and planner policy prose for Reader completeness,
+the session buffer and shared avoided-family fallback. Reader collection,
+ranking and buffer behavior are tested against the source Python helper with
+synthetic manifests. The
 `module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
 checks read each backend’s delivered `SKILL.md` for that runtime, follow its
 rendered command to the packaged wrapper and manifest, and run that wrapper with
@@ -668,8 +706,9 @@ Codex's pair):
 
 `mkSkill`, `render` and `skills` consume the same family, pool, selector,
 technique and named-entry inputs. Generated skill trees use `lib.ai.generated`
-and the shared Markdown formatter; previews read the built files. Package
-discovery supplies content, both backend modules and checks.
+and the shared Markdown formatter; previews read the built entrypoint. Direct
+`mkSkill` callers receive the same companion and absolute path as common-module
+delivery. Package discovery supplies content, both backend modules and checks.
 
 Run these from the repository root to print skills without launching delegates:
 
@@ -686,10 +725,11 @@ The resolved Work and review workflow's Plan step (`fragments/plan-work.md`)
 defines the saved JSON fields and the prepared brief contract. Before
 task-source investigation, an orchestrator runs its own runtime's helper for
 `planner`, selects a fitted pinned candidate and passes the task, paths, saved
-rubric and resolved routing/workflow context. No reachable qualified planner
-after shared avoided-family fallback is a loop failure. An assigned worker
-executing an approved bounded unit does not recursively invoke a planner for it.
-New scope requires replanning the affected portion.
+rubric and absolute `PLANNER.md` path. The planner must read that resolved
+context before planning. No reachable qualified planner after shared
+avoided-family fallback is a loop failure. An assigned worker executing an
+approved bounded unit does not recursively invoke a planner for it. New scope
+requires replanning the affected portion.
 
 The planner saves `task`, originating launch `runtime`, the complete captured
 helper JSON as `snapshot`, `rubric`, `units` and `waves` in the
@@ -745,36 +785,57 @@ proves deterministic artifact checks, not live planner/harness compliance.
 
 ### Policy placement ledger
 
-The Plan step adds a saved artifact and validation caller; existing policy
-paragraphs retain their authoritative fragment and compulsory readers. No source
-is removed or hidden by this change. This ledger names the current destination
-of each execution clause so later context delivery can preserve its audience
-without copying authoritative paragraphs.
+The ledger assigns each moved clause to its compulsory reader. Shared
+planner/orchestrator policy is projected from one source, never copied into a
+second authoritative paragraph. Worker policy travels in prepared briefs.
+Fragment paths below are relative to `packages/delegate-routing/fragments/`.
 
-| Policy substance                                                                                                                         | Source and compulsory destination/reader                                                                                                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parts, Size, same-change docs/tests, file ownership and dependencies                                                                     | `choose-execution.md` remains resolved routing context; Plan consumes these as saved unit fields before returning a plan.                                                                   |
-| At most ten, isolated/read-only reviewers, tree inspection after delegates                                                               | `choose-execution.md` remains execution policy; Plan records wave bounds and briefs carry relevant constraints; the orchestrator enforces them.                                             |
-| Change a running brief instead of stopping, prevent damage, salvage diffs, retain finished work                                          | `choose-execution.md` remains compulsory execution context and is attached to relevant worker briefs; orchestrator supervision retains these duties.                                        |
-| Brief before launch, detach long jobs, wait for exit, outside-repository paths, transient 5xx reroute, vendor refusals, tool-less probes | `choose-execution.md` remains compulsory planner/executor context and supplies the relevant prepared launch briefs.                                                                         |
-| One delegate versus workflow, independent starts, disjoint writers, serialization                                                        | `choose-execution.md` remains the decision procedure; Plan records its units, owners, dependencies and waves.                                                                               |
-| First available pinning route, generated Claude agent files, concrete named fallbacks, launch cwd                                        | `choose-execution.md` plus helper route output remains planner launch context; prepared briefs carry exact pinned choices and working directory.                                            |
-| Every external brief declares a non-interactive delegate reporting to an orchestrator, not a person                                      | `choose-execution.md` remains the source; Plan explicitly requires that declaration in every external-launch brief.                                                                         |
-| Non-interactive/external delegates never launch external delegates                                                                       | `choose-execution.md` remains an unconditional launch-context constraint; Plan requires it in worker briefs and helper checks refuse headless external candidates.                          |
-| Another harness for an entire multi-step job, unknown reach probes, runtime workflow/self-run fallback sequence                          | `choose-execution.md` remains planner/executor context; the plan records the relevant decision and launch exception.                                                                        |
-| Rubric, Subtractive, Work hard rules, full Review policy and trial/fit restrictions                                                      | The resolved Work and review steps remain compulsory workflow context; Plan saves the full rubric first and includes it verbatim in every prepared worker/reviewer brief.                   |
-| Result validation and evidence chain                                                                                                     | `validate-the-result.md` remains orchestrator-visible; prepared briefs carry relevant evidence duties and the orchestrator validates receipts.                                              |
-| Pre-handoff triage of what the user pointed at; quick facts only while a delegate runs; skill/usage reads count as handoff               | `orchestrator-session.md` remains always-on orchestrator context; Plan's rubric preflight adds no task-source investigation exception.                                                      |
-| Read only delegate-cited output lines; pass the next delegate a file path rather than pasted content                                     | `orchestrator-session.md` remains always-on orchestrator context; prepared brief paths let the orchestrator comply.                                                                         |
-| Aim for every pool to reach reset near empty; do not report pool numbers unless asked                                                    | `pool-drain.md` remains always-on execution context; helper output does not waive either obligation.                                                                                        |
-| Source customization and rule steering                                                                                                   | `tune-these-rules.md` and `load-delegate-routing.md` retain their resolved/always-on placement; portable/runtime entry replacement, disables and direct builder overrides remain unchanged. |
+| Clause                                                                                                                                                                                | Reader                                        | Authoritative source and delivery                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Parts, Size, same-change docs/tests, ownership and dependencies                                                                                                                       | Planner                                       | `plan-work.md` → planner workflow and saved unit fields.                                                                            |
+| At most ten, isolated/read-only reviewers, tree inspection after delegates                                                                                                            | Orchestrator; planner for waves and briefs    | `choose-execution.md` → shared Routing; `plan-work.md` → wave contract.                                                             |
+| Change a running brief instead of stopping; prevent damage; salvage; retain finished work                                                                                             | Orchestrator; planner for supervision briefs  | `choose-execution.md` → shared Routing.                                                                                             |
+| Brief before launch; detach long jobs; wait; outside-repository paths; transient 5xx reroute; vendor refusal; tool-less probes                                                        | Orchestrator; planner for launch briefs       | `choose-execution.md` → shared Routing and relevant prepared briefs.                                                                |
+| One delegate versus workflow; independent starts; disjoint writers; serialize overlapping files                                                                                       | Planner; orchestrator executes waves          | `plan-work.md` → execution choices, units and waves.                                                                                |
+| First pinning route; generated agent files; named fallbacks; launch cwd                                                                                                               | Planner; orchestrator binds tools             | `plan-work.md` → planner execution choices; helper supplies exact records; `choose-execution.md` keeps launch cwd in small Routing. |
+| External briefs declare non-interactive status and reporting to an orchestrator                                                                                                       | Orchestrator; planner prepares briefs         | `choose-execution.md` → shared Routing, including the planner's own external launch.                                                |
+| No external launches from non-interactive/external delegates                                                                                                                          | Worker; planner; orchestrator when headless   | `choose-execution.md` → shared Routing and prepared briefs; helper excludes headless external routes.                               |
+| Another harness for a whole multi-step job; unknown reach probes; workflow/self-run fallback                                                                                          | Planner; orchestrator executes choices        | `plan-work.md` → planner execution choices and prepared launch choices.                                                             |
+| Standing rubric rows; Subtractive rows; verbatim rubric copying                                                                                                                       | Orchestrator prepares rubric; planner; worker | `review-rubric.md` and `review-subtractive.md` → small preflight and full planner workflow; prepared briefs contain the rubric.     |
+| Detailed reviewer checks; fit/trial restrictions                                                                                                                                      | Planner; worker                               | Resolved full workflow → `PLANNER.md`, then relevant worker/reviewer briefs.                                                        |
+| Evidence chain; verified/retracted/unknown; rerun command claims; judge reading claims in full context                                                                                | Orchestrator; planner; worker                 | `load-delegate-routing.md` → always-on validation duty; `validate-the-result.md` → shared Routing and prepared briefs.              |
+| Name why failure occurred; fix execution slips; bring only real decisions to the user                                                                                                 | Orchestrator                                  | `validate-the-result.md` → small Routing.                                                                                           |
+| Handoff before task-source investigation; triage reads allowed; quick facts only while a delegate runs; skill/usage reads count as handoff                                            | Orchestrator                                  | `orchestrator-session.md` → always-on router, excluded from planner context.                                                        |
+| Bulk reading/searching/measuring/tracing/edit-test loops/moves/writing to delegates; one task; short evidence summary; stay on current item                                           | Orchestrator                                  | `orchestrator-session.md` → always-on router.                                                                                       |
+| Read only cited output lines; pass file paths instead of pasted content                                                                                                               | Orchestrator                                  | `orchestrator-session.md` → always-on router.                                                                                       |
+| Reader completeness; monthly/worst-window pace; buffer; unmeasured/fit-only/exhaustion policy                                                                                         | Planner; orchestrator                         | `pool-drain.md` → shared Routing; deterministic helper computes decisions.                                                          |
+| Aim pools near empty at reset; no pool numbers unless asked                                                                                                                           | Orchestrator; planner reports to orchestrator | `pool-drain.md` → small and planner Routing.                                                                                        |
+| Honor named model/effort/runtime/tool or report unavailable                                                                                                                           | Orchestrator; planner                         | `follow-the-users-request.md` → shared Routing.                                                                                     |
+| Pin model/effort; name each role's model and effort in launch message/report                                                                                                          | Orchestrator; planner                         | `size-the-work.md` → shared Routing.                                                                                                |
+| Disabled-Orchestrator-session quick fact/review/in-session fallback and no topic-only fan-out                                                                                         | Orchestrator                                  | Plan and launch in `entries.nix` → small skill, independent of router enablement.                                                   |
+| Rule steering to source; no rendered edits or memory/house rules                                                                                                                      | Orchestrator                                  | `load-delegate-routing.md` → always-on router; `tune-these-rules.md` keeps override mechanics.                                      |
+| Portable/runtime source customization, disables, overrides and workflow-step settings                                                                                                 | Orchestrator; planner; worker editing rules   | `tune-these-rules.md` → shared Routing and relevant briefs.                                                                         |
+| Planner bootstrap/non-recursion; check-plan/current snapshot; exclusions; manual authorization; review/commit barriers                                                                | Orchestrator                                  | Plan and launch in `entries.nix` → small skill; planner artifact/schema remains in `plan-work.md`.                                  |
+| Writer/fixer hard rules; one surface/unit per writer; serialize shared-worktree writers and commit at boundaries                                                                      | Orchestrator; planner; worker                 | `review-work.md` → shared Work step and prepared briefs.                                                                            |
+| Review brief ownership and claimed-review artifact verification; unit and branch-level review cadence; fix-sized checks                                                               | Orchestrator; planner prepares briefs         | `review-work.md` → shared Work step, moved from `work-and-review.md`.                                                               |
+| Root-cause diagnosis validated before a different fixer acts                                                                                                                          | Orchestrator; planner; worker                 | `review-work.md` → shared Work step.                                                                                                |
+| Judge never orchestrator; cut-judge avoids writer/proposer families with shared fallback; unresolved-question validation; neutral second-check/judge inputs after first check returns | Orchestrator; planner prepares briefs         | `review-work.md` → shared Work step, moved from `review-checks.md`.                                                                 |
+| Pin unit/fix/branch review bases; fix in introducing PR and restack; stop early; three-round cap; change brief after two rounds; gap list                                             | Orchestrator; planner; worker                 | `review-loop.md` → shared Loop step.                                                                                                |
+| Ready report file count and added/removed line breakdown, including shipped instructions                                                                                              | Orchestrator; planner; worker                 | `review-describe.md` → shared Describe step.                                                                                        |
+| Manual-only delegates require the user to name them                                                                                                                                   | Orchestrator; planner                         | Manual-only external delegates entry → both projections; excluded from automatic selection.                                         |
 
-Fragment paths in this ledger are relative to
-`packages/delegate-routing/fragments/`. The Orchestrator session first
-paragraph, reminder grant and hook exclusions remain unchanged. The helper
-invocation remains in each runtime's skill; the always-on router is
-runtime-neutral. No separate planner companion or reduced entrypoint is emitted
-by this contract alone.
+The Orchestrator session first paragraph, reminder grant and hook exclusions
+remain unchanged. All eight backend/runtime deliveries and direct `mkSkill`
+callers emit both projections. The shipped pre-split skill baselines
+(Claude/Codex defaults; explicit Anthropic selectors for otherwise unselected
+Kimchi/Kiro) are 42,559 / 39,372 / 39,743 / 39,769 bytes, plus a 5,233-byte
+router each. The size comparison renders Claude/Codex defaults without extra or
+manual runtimes, and selects all Anthropic families for Kimchi/Kiro to match
+those baselines; audience checks retain their custom Kimchi and restricted Kiro
+scenario. Delivery checks require combined small-skill/router bytes below three
+quarters of the original combined entry, exclude automatic family tables and
+detailed reviewer checks and assert hand-written audience anchors; byte
+reduction never substitutes for policy conservation.
 
 ## Per-turn reminder
 
