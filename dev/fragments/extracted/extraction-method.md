@@ -14,10 +14,9 @@
   (`dev/fragments/pipeline/update-pipeline.md`) and
   `dev/fragments/extracted/extraction-method.md`, rule "Support only the pinned
   version".
-- **Methods rank CodeQL, eval, AST, regex.** CodeQL for any code-flow question,
-  or whenever it is honestly the simpler route; eval when it easily produces the
-  exact value; AST as the preferred parser style; regex as the last resort.
-  Vetted 2026-11-08. See the tiers below.
+- **Methods rank CodeQL, eval, AST, regex.** Use a tier only when the ones above
+  it do not fit, because a hand-written walker that re-derives code flow misses
+  the next shape. Vetted 2026-11-08. See the tiers below.
 
 Every extractor picks the least brittle method its source allows. The method
 follows the SOURCE, not the author's habit.
