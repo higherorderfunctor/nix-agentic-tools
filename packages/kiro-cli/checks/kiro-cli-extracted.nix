@@ -124,7 +124,7 @@
         shopt -s inherit_errexit 2>/dev/null || :
         ${pkgs.python3}/bin/python3 - ${(import ../lib/packaging.nix).kiroRolloutExtractScript pkgs} <<'PY'
         import json, pathlib, subprocess, sys
-        manifest = {"v3_prompt": {"description": "", "treatment_percent": 10, "internal_treatment_percent": 50}}
+        manifest = {"example_rollout": {"description": "", "treatment_percent": 10, "internal_treatment_percent": 50}}
         data = json.dumps(manifest, indent=2).encode()
         path = pathlib.Path("binary")
         for blob, error in [(data + b'\0' + json.dumps({"other": {"description": ""}}, indent=2).encode(), "conflicting rollout copies"), (b"no manifest", "no rollout manifest found"), (data[:-2], "rollout manifest end not found")]:

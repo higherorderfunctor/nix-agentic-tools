@@ -34,9 +34,9 @@ raw unforked, and every system's projection is that raw.
 
 ```json
 {
-  "rolloutFeatures": ["standalone_toolbox", "v3_prompt"],
+  "rolloutFeatures": ["example_other", "example_rollout"],
   "rolloutPatchability": {
-    "v3_prompt": {
+    "example_rollout": {
       "patchable": false,
       "unmatchedSites": {
         "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
