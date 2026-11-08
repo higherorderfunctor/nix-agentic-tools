@@ -1,7 +1,10 @@
 # External workflows
 
 > **Last verified:** 2026-11-07 — background step handoffs survive trust
-> bootstrap and package shadowing, covered by `kimchi-workflows-smoke`.
+> bootstrap and package shadowing, covered by `kimchi-workflows-smoke`; the
+> identity hunk is rebased onto pi 1.3.0; pnpm's bounded hunk-position search
+> and packed-archive reverse checks use the released patch context; the Linux
+> clipboard binding links libxcb.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's workflows dependency pin.
