@@ -1210,7 +1210,7 @@ in {
         && soleSame (drvOf {features.background_execution.enable = true;})
         (drvOf {package = pkgs.ai.kiro-cli.withRolloutFeatures ["background_execution"];})
         && lib.all (name: soleSame (drvOf {}) (drvOf {features.${name}.enable = true;}))
-        ["remote_changelog" "test"]
+        ["cloud_config" "test"]
         && soleFork (drvOf {features.background_execution.enable = true;}) (drvOf {
           features = {
             background_execution.enable = true;
