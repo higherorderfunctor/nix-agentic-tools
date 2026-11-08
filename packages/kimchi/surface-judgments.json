@@ -693,7 +693,7 @@
       "evidenceHash": "sha256:3c03dfdacb065c463c00b65ee0f5f6c0c4064556a875a3f3d73466320a564efd",
       "id": "request-extensions-memory-backend-fetch-available-model-ids-0",
       "rationale": "The worker and configured-model early returns establish local suppression separately from session memory registration, so a resource switch is not presented as a universal worker gate.",
-      "scope": "Original pinned Kimchi 1.26.0 memory extraction-model discovery, including detached worker entry; excludes package resource switches, disabled self-update and telemetry setup, dependency/runtime availability and gateway services.",
+      "scope": "Original pinned Kimchi 1.29.0 memory extraction-model discovery, including detached worker entry; excludes package resource switches, disabled self-update and telemetry setup, dependency/runtime availability and gateway services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -801,7 +801,7 @@
       "evidenceHash": "sha256:ef8259982e51b259d7d97603943f853a50b43ed8dbf08bf85837c467cbff96e4",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-0",
       "rationale": "The early origin test forwards the original input and init, so this occurrence cannot be assigned the enablement of memory alone.",
-      "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 0; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
+      "scope": "Original pinned Kimchi 1.29.0 fetch-interceptor branch 0; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -887,7 +887,7 @@
       "evidenceHash": "sha256:1207ed4c265db35262300638c8a7a1c5979f23d1e86250ec460f20dc07df0c8c",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-1",
       "rationale": "The matching-origin, body and header branches select the tagged send with organization headers; installation alone does not invoke it.",
-      "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 1; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
+      "scope": "Original pinned Kimchi 1.29.0 fetch-interceptor branch 1; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -978,7 +978,7 @@
       "evidenceHash": "sha256:8c5b51ce89447b2805918bf64cc8d6f06fbe26ec8aaccaaf0be3917d4002d57c",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-2",
       "rationale": "Absent organization state selects the tagged-body send without added headers after the origin and body checks.",
-      "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 2; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
+      "scope": "Original pinned Kimchi 1.29.0 fetch-interceptor branch 2; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -1068,7 +1068,7 @@
       "evidenceHash": "sha256:5e74430483d8c445ce330aa83fe3776055060dbf6035c2d88022a1e8ff8d0115",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-3",
       "rationale": "The final header-bearing send is reached only after the origin check and failure or omission of the embedding-body return.",
-      "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 3; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
+      "scope": "Original pinned Kimchi 1.29.0 fetch-interceptor branch 3; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -1157,7 +1157,7 @@
       "evidenceHash": "sha256:0d826f4350a00dab0127de75b98eb802003df46df6f3d068646008d58038d1fd",
       "id": "request-extensions-memory-backend-tag-embedding-requests-intercepted-4",
       "rationale": "The last unchanged-input send requires matching origin and no saved organizationId after the embedding path falls through.",
-      "scope": "Original pinned Kimchi 1.26.0 fetch-interceptor branch 4; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
+      "scope": "Original pinned Kimchi 1.29.0 fetch-interceptor branch 4; excludes changes made by the Nix package (remote-resource switches, self-update removal and telemetry setup), runtime transport availability and destination services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -1248,7 +1248,7 @@
       "evidenceHash": "sha256:0432e278773f864306f32ffe8b42400aa31ebaa04403f1f901895f084d6f7ec4",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-0",
       "rationale": "The guarded action invocation and lock lifecycle support dispatch-time consent, rather than treating callback registration as proof of invocation.",
-      "scope": "Original pinned Kimchi 1.26.0 PR cost event uploads; excludes packaging controls for resources, self-update and telemetry, observed delivery, and server acceptance.",
+      "scope": "Original pinned Kimchi 1.29.0 PR cost event uploads; excludes packaging controls for resources, self-update and telemetry, observed delivery, and server acceptance.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -1458,7 +1458,7 @@
       "evidenceHash": "sha256:183b030dd24ddb164d985a8da5c6f004fc383a377a26359adc74308020e5e734",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-fetch-bounded-0",
       "rationale": "The reporting subscription, mutable supervisor callback and verifyApiKey injection are explicitly cited; they connect the request to reporting consent beyond the bounded caller rows.",
-      "scope": "Original pinned Kimchi 1.26.0 event-delivery credential verification; excludes Nix resource switches, disabled self-update/telemetry setup, execution, and platform availability.",
+      "scope": "Original pinned Kimchi 1.29.0 event-delivery credential verification; excludes Nix resource switches, disabled self-update/telemetry setup, execution, and platform availability.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -1659,7 +1659,7 @@
       "evidenceHash": "sha256:568d95e56fe3aec01ebeb930265b7349b81ded4e5765e97f58544f072d266c28",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-snapshots-fetch-bounded-0",
       "rationale": "The frozen-snapshot guards apply both to verification and upload through the injected fetch. Account matching is checked once after verification; before each dispatch, fetchBounded rechecks unchanged credential token and endpoint, enabled reporting, hold state and pending frozen content, plus lease and abort state.",
-      "scope": "Original pinned Kimchi 1.26.0 legacy PR snapshot transport; excludes Nix remote-resource toggles and self-update/telemetry changes, runtime connectivity, and remote storage semantics.",
+      "scope": "Original pinned Kimchi 1.29.0 legacy PR snapshot transport; excludes Nix remote-resource toggles and self-update/telemetry changes, runtime connectivity, and remote storage semantics.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -2029,7 +2029,7 @@
       "evidenceHash": "sha256:814d100f59ba9eecc28fdc662ba82df85f9c4f5d19868b8e0bf0d0cfaaabb30f",
       "id": "request-extensions-session-name-suggest-session-name-fetch-impl-0",
       "rationale": "Naming-state and credential checks determine automatic eligibility. The naming caller supplies the completion URL and the retry helper invokes its fetch callback.",
-      "scope": "Original pinned Kimchi 1.26.0 automatic session naming; excludes Nix resource overrides and self-update/telemetry setup, provider execution, and service reachability.",
+      "scope": "Original pinned Kimchi 1.29.0 automatic session naming; excludes Nix resource overrides and self-update/telemetry setup, provider execution, and service reachability.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -2366,7 +2366,7 @@
       "evidenceHash": "sha256:81c31aca8491c671f0d44b9a0125d26445af51e1117c21721a21af2459a4eb13",
       "id": "request-extensions-work-attribution-cost-sync-reconcile-work-costs-fetch-bounded-0",
       "rationale": "Repository-wide non-test source search finds subscribeCostReconciliation only at its declaration; it is the only subscriber for the costs channel, and runChannel returns when that channel is absent. The local pass, bounded fetch and endpoint construction are established.",
-      "scope": "Original pinned Kimchi 1.26.0 work-cost reconciliation; excludes Nix remote resources, self-update and telemetry changes, actual scheduling, and billing API availability.",
+      "scope": "Original pinned Kimchi 1.29.0 work-cost reconciliation; excludes Nix remote resources, self-update and telemetry changes, actual scheduling, and billing API availability.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -2491,7 +2491,7 @@
       "evidenceHash": "sha256:3482ad6f27878494e7ef73280f833c115b63a97fe7fe0a679db0c9c2ef1a1d71",
       "id": "request-http-proxy-create-dispatcher-0",
       "rationale": "The entry call, environment return and dispatcher binding establish construction and its inputs; the selected occurrence does not send a request in Kimchi source.",
-      "scope": "Original pinned Kimchi 1.26.0 client source; excludes Nix remote-resource switches, self-update and telemetry changes, runtime availability and services.",
+      "scope": "Original pinned Kimchi 1.29.0 client source; excludes Nix remote-resource switches, self-update and telemetry changes, runtime availability and services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -2669,7 +2669,7 @@
       "evidenceHash": "sha256:82b34da999f0ac18739b8614df81d915a4ec99030b7580064c70d6a91f138c46",
       "id": "request-ollama-enrich-from-show-0",
       "rationale": "The tags response and per-entry reference gate show enrichment; the shared resolver binds both requests to the same startup host.",
-      "scope": "Original pinned Kimchi 1.26.0 per-model Ollama enrichment; packaging overrides for resources, updates and telemetry, runtime connectivity and Ollama service behavior are outside this judgment.",
+      "scope": "Original pinned Kimchi 1.29.0 per-model Ollama enrichment; packaging overrides for resources, updates and telemetry, runtime connectivity and Ollama service behavior are outside this judgment.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -2744,7 +2744,7 @@
       "evidenceHash": "sha256:67d09706408e36a56d2e91def94a1b8b6f2147e03396b58c4e23c0716218d33e",
       "id": "request-ollama-probe-ollama-models-0",
       "rationale": "Startup call sites and the host resolver show a conditional startup probe with destination overrides, rather than an enablement environment variable.",
-      "scope": "Original pinned Kimchi 1.26.0 Ollama tags discovery; excludes package-specific remote-resource controls, disabled updater and telemetry setup, server availability and transport execution.",
+      "scope": "Original pinned Kimchi 1.29.0 Ollama tags discovery; excludes package-specific remote-resource controls, disabled updater and telemetry setup, server availability and transport execution.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
@@ -3742,7 +3742,7 @@
       "evidenceHash": "sha256:636e7568c4a74feb75a52aea9cd6c3892e407fc513730a2b30ef226cdb90b906",
       "id": "request-utils-http-fetch-with-retry-0",
       "rationale": "The required URL and fetch selection bind routing to each invocation. Loop, response and abort branches establish retry controls without inventing a common caller gate; cliMain and initOrgPolicy establish a startup use that precedes telemetry policy.",
-      "scope": "Original pinned Kimchi 1.26.0 retry sink and the cited startup policy path; caller-specific feature scheduling remains with the callers. Excludes package remote-resource overrides, removed self-update or telemetry setup, runtime availability and remote services.",
+      "scope": "Original pinned Kimchi 1.29.0 retry sink and the cited startup policy path; caller-specific feature scheduling remains with the callers. Excludes package remote-resource overrides, removed self-update or telemetry setup, runtime availability and remote services.",
       "selector": {
         "fact": {
           "kind": "requestCallers",
