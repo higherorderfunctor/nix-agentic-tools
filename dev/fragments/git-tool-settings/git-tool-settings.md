@@ -1,12 +1,14 @@
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-10-29 — measured-once git-tool facts are one unforked
+> **Last verified:** 2026-11-08 — measured-once git-tool facts are one unforked
 > `extracted.json`, checked by `mkOwnerCheck`; PR CI invokes the owner check’s
-> `passthru.regenerate` after input or package pins change.
+> `passthru.regenerate` after input or package pins change; the method order
+> follows the extraction-method ranking.
 >
 > **Settled — do not relitigate.**
 >
-> - **Extraction method order is eval > AST > regex.** Eval: the program reports
+> - **Extraction method order is CodeQL > eval > AST > regex** (ranked in
+>   `dev/fragments/extracted/extraction-method.md`). Eval: the program reports
 >   or executes its own schema. AST: walk typed nodes (tree-sitter-rust through
 >   `rust_tree.py`; Python's `ast`). Locating a site with a tree query and then
 >   running a regex over the matched code text is NOT AST extraction; the first

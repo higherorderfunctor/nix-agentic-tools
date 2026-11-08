@@ -1,9 +1,9 @@
-# Extraction method: eval, then AST, then regex
+# Extraction method: CodeQL, then eval, then AST, then regex
 
-> **Last verified:** 2026-11-07 — carries the architecture decision to pin only
-> the current upstream release; added the rule to identify a binding by its
-> checker symbol, and its spelling fallback where the global is undeclared; a
-> dataflow question goes to CodeQL, between eval and AST.
+> **Last verified:** 2026-11-08 — carries the architecture decisions to pin only
+> the current upstream release and to rank methods CodeQL, eval, AST, regex;
+> identifies a binding by its checker symbol, with its spelling fallback where
+> the global is undeclared.
 
 ## Architecture decisions
 
@@ -14,42 +14,48 @@
   (`dev/fragments/pipeline/update-pipeline.md`) and
   `dev/fragments/extracted/extraction-method.md`, rule "Support only the pinned
   version".
+- **Methods rank CodeQL, eval, AST, regex.** Use a tier only when the ones above
+  it do not fit, because a hand-written walker that re-derives code flow misses
+  the next shape. Vetted 2026-11-08. See the tiers below.
 
 Every extractor picks the least brittle method its source allows. The method
 follows the SOURCE, not the author's habit.
 
-1. **Eval or copy.** Ask the program for its own answer: run it, call tsserver
-   or the TypeScript compiler API, import the module and print the computed
-   object. When the source is JSON (a file, or a JSON block embedded in a
-   binary), parse it with a JSON parser and copy it. Copy the whole value; take
-   a subtree or normalize only for a named reader, never a 10% slice. This only
-   breaks when the file or the anchor (a variable name, a key) goes away.
-2. **AST.** When eval is not feasible: ast-grep, tree-sitter, Python `ast`. It
-   survives code moving around as long as the shape matches. A pattern may
-   wildcard what we don't care about (a string literal's wording, an argument we
-   ignore); that is still the AST tier. Walk the typed nodes for the VALUES we
-   do care about. Locating with AST and then running a regex over the matched
-   code text to pull values out is the regex tier, not the AST tier. A regex
-   over an already-decoded string value is fine.
-3. **Regex.** Last resort, for prose or an already-decoded string that no parser
-   can read. Each use carries a comment saying why tiers 1 and 2 cannot supply
+1. **CodeQL**, for a code-flow question, or whenever a query is honestly simpler
+   than the alternatives. "Which names does this program read from
+   `process.env`, through whatever alias", or "which keys can reach this object
+   from that one", is not a shape match: the answer flows through assignments,
+   destructuring, defaults and imports. A hand-written AST walker re-derives
+   that flow one shape at a time and misses the next one silently. CodeQL's
+   standard library already has the flow, so the query names the question and
+   the fixtures hold the shapes (`packages/kimchi/ql/`, with the database layers
+   in `packages/kimchi/docs/kimchi-codeql.md`). It costs an engine and a
+   database build, and runs on x86_64-linux only, so the fact's rows declare
+   that system.
+2. **Eval or copy**, when it easily produces the exact value. Ask the program
+   for its own answer: run it, call tsserver or the TypeScript compiler API,
+   import the module and print the computed object. When the source is JSON (a
+   file, or a JSON block embedded in a binary), parse it with a JSON parser and
+   copy it. Copy the whole value; take a subtree or normalize only for a named
+   reader, never a 10% slice. This only breaks when the file or the anchor (a
+   variable name, a key) goes away.
+3. **AST**, the preferred parser style when neither of the above fits: ast-grep,
+   tree-sitter, Python `ast`. It survives code moving around as long as the
+   shape matches. A pattern may wildcard what we don't care about (a string
+   literal's wording, an argument we ignore); that is still the AST tier. Walk
+   the typed nodes for the VALUES we do care about. Locating with AST and then
+   running a regex over the matched code text to pull values out is the regex
+   tier, not the AST tier. A regex over an already-decoded string value is fine.
+4. **Regex.** Last resort, for prose or an already-decoded string that no parser
+   can read. Each use carries a comment saying why tiers 1 to 3 cannot supply
    it, and a fixture a naive pattern gets wrong. A fact that measures a byte
    patcher's own matcher (Kiro's `rolloutPatchability`) is exempt: the matcher
    is the thing measured.
 
-**CodeQL sits between eval and AST, for a dataflow question.** "Which names does
-this program read from `process.env`, through whatever alias" is not a shape
-match: the answer flows through assignments, destructuring, defaults and
-imports. A hand-written AST walker re-derives that flow, one shape at a time,
-and misses the next one silently. CodeQL's standard library already has the
-flow, so the query names the question and the fixtures hold the shapes
-(`packages/kimchi/ql/`, with the database layers in
-`packages/kimchi/docs/kimchi-codeql.md`). It costs an engine and a database
-build, and runs on x86_64-linux only, so the fact's rows declare that system.
-
 Locating a JSON block inside a binary with a short anchor pattern, then decoding
-it with `json.JSONDecoder().raw_decode`, is tier 1. The anchor bounds the block,
-the parser reads the value, and a missing bound fails with its own message.
+it with `json.JSONDecoder().raw_decode`, is tier 2 (eval or copy). The anchor
+bounds the block, the parser reads the value, and a missing bound fails with its
+own message.
 
 ## Rules
 
