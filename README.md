@@ -190,7 +190,7 @@ git-branchless, git-absorb, and git-revise.
 <!-- prettier-ignore -->
 | Skill | Description |
 |-------|-------------|
-| `/delegate-routing` | Size model and effort before calling subagents or building workflows |
+| `/delegate-routing` | Plan substantive work and validate sized delegate launches |
 | `/kimchi-docs` | Search the pinned Kimchi docs snapshot and independently pinned workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable |
 | `/peer-communication` | Write replies a person reads: answer first, plain words, easy to scan |
 | `/stack-fix` | Absorb fixes into correct stack commits |
@@ -351,7 +351,7 @@ nix build .#dns-root-hints
 | Package | Description |
 |---------|-------------|
 | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-| `delegate-routing-content` | Per-runtime sizing skills, saved plans, deterministic routing validation and a short routing rule |
+| `delegate-routing-content` | Small runtime entrypoints, full planner companions, saved plans and deterministic launch validation |
 | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
 Content packages are derivations with `passthru.fragments` for composable
@@ -1120,9 +1120,13 @@ stub are enabled by default, along with the "Work and review" workflow. Disable
 the "Orchestrator session" entry with
 `routing."Orchestrator session".enable = false`. Workflows expose named `steps`
 with the same entry fields, so a consumer can change one step. Entries with
-`always = true` become runtime rules; other entries live in the skill. Ordering
-uses named `before` and `after` edges. Missing or disabled anchors are ignored,
-cycles fail, and ties have no promised order.
+`always = true` also become runtime rules. Load delegate-routing and
+Orchestrator session are always-on by default and address only the orchestrator.
+Other enabled entries reach the planner companion; non-always routing, rubric
+preflight and the Work, Describe and Loop execution steps also reach the small
+skill. Manual-only delegates are visible there for explicit user requests.
+Ordering uses named `before` and `after` edges. Missing or disabled anchors are
+ignored, cycles fail, and ties have no promised order.
 
 Runtime `ai.programs.delegate-routing.runtimes.<runtime>.routing` and
 `workflows` compose with portable maps by key. A present runtime entry replaces
@@ -1157,6 +1161,24 @@ caller supplies mode evidence. See the
 [helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper)
 for the launch-context schema, conservative unknown handling and per-runtime
 mode-discovery evidence.
+
+Each runtime skill tree ships an orchestrator `SKILL.md` and planner/worker
+`PLANNER.md` from the same resolved sources, on Home Manager and devenv. The
+router carries handoff and substantive source-steering rules: propose
+delegation-policy changes to package fragments or consumer routing/workflow
+entries, never rendered files, memory or house rules; the small skill supplies
+planner bootstrap, rubric preflight, the helper invocation/schema, launch/result
+checks, review orchestration and ready-report requirements. Before planning, the
+planner must read its explicit absolute store reference. Its companion includes
+planner/worker routing, the full workflow, custom entries and tables. Shared
+paragraphs have one authoritative source; disabled entries and runtime
+replacements remain effective. The companion is built first to avoid a
+self-reference cycle and copied into the skill tree, so no implicit sibling
+loading or Skill args are needed. Prepared briefs carry the full rubric verbatim
+and relevant worker policy; the orchestrator receives its execution duties
+directly and validates each wave without rereading the heavy reference per
+delegate. Direct `mkSkill` emits the same companions; `render` and `.text`
+return the small entrypoint.
 
 Work and review runs Rubric → Subtractive → Plan → Work → Describe → Review →
 Loop. Rubric preparation is task-goal preflight; substantive task-source
