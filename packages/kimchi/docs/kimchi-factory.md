@@ -1,13 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-29 — bundled skills gated off by
-> `requires-resource` leave each visible skill as its own in-place root; config
-> guards include the helpers readConfigExtras hands `parsed.<key>` to, and a
-> `delete` target is not a read; pi 1.3 settings follow reexports and inherited
-> TypeBox properties through lock-pinned declaration entrypoints; scope follows
-> settings accessors, with unread JSON Schema metadata explicitly ignored. The
-> sidecar carries CodeQL environment, network, resource definition, region
-> registry and request guard facts on x86_64-linux.
+> **Last verified:** 2026-11-07 — package precedence and the shared background
+> step handoff contract account for trust bootstrap initializing a shadowed user
+> copy.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -697,10 +692,12 @@ becomes empty. See the source citations and smoke contract in
 [external workflows](kimchi-workflows.md).
 
 Named local packages share their npm identity across harness directories. Pi
-keeps the project entry over the user entry instead of loading the same
-extension twice. Unnamed/unreadable packages keep path identity; explicit
-autoload deltas keep their user base. The dependency-owned patch and offline
-regression contract are described in [external workflows](kimchi-workflows.md).
+keeps the project entry over the user entry in the final extension set; trust
+bootstrap may first initialize the shadowed user copy, so both workflows copies
+must carry the process-wide output-tool handoff patch. Unnamed/unreadable
+packages keep path identity; explicit autoload deltas keep their user base. The
+dependency-owned patch and offline regression contract are described in
+[external workflows](kimchi-workflows.md).
 
 Kimchi's source patch removes the workflows static import, managed factory
 entry, and resource definition. Its locked package may still be fetched, but

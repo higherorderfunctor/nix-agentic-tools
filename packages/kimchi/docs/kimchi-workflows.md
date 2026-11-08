@@ -1,9 +1,7 @@
 # External workflows
 
-> **Last verified:** 2026-10-22 (commit d5f613ea) — the identity hunk is rebased
-> onto pi 1.3.0; pnpm's bounded hunk-position search and packed-archive reverse
-> checks use the released patch context; the Linux clipboard binding links
-> libxcb.
+> **Last verified:** 2026-11-07 — background step handoffs survive trust
+> bootstrap and package shadowing, covered by `kimchi-workflows-smoke`.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's workflows dependency pin.
@@ -220,18 +218,18 @@ normalizes paths without resolving symlinks (`dist/utils/paths.js:82-86`). NAT's
 `package-identity.patch` gives a local directory with a non-empty string
 `package.json.name` the identity `npm:<name>`. Pi's existing deduplication then
 keeps the project entry over the user entry, including a user npm installation
-of that name. This removes duplicate configured-package loads that can consume
-the workflow step's one-use output-tool handoff twice. Top-level extension
-auto-discovery remains separate and deduplicates by real path, which is why
-package links must stay outside its roots. Missing, unreadable, invalid or
-unnamed manifests retain their absolute path identity; npm and git identities
-are unchanged. Pi's explicit project `autoload = false` delta still keeps its
-user base. Install/remove matching and Plugins row IDs remain based on source
-strings/paths. Moving the delivery source changes each resource id from
-`plugins.package.extensions-<key>` to `plugins.package.packages-<key>` (Kimchi
-lowercases and replaces non-alphanumeric runs with `-`). Consumers must rename
-any corresponding `native.harnessSettings.resources` keys or saved user toggles;
-old toggle keys no longer match. For workflows the new id is
+of that name. This avoids loading the same configured extension twice in the
+final extension set. Top-level extension auto-discovery remains separate and
+deduplicates by real path, which is why package links must stay outside its
+roots. Missing, unreadable, invalid or unnamed manifests retain their absolute
+path identity; npm and git identities are unchanged. Pi's explicit project
+`autoload = false` delta still keeps its user base. Install/remove matching and
+Plugins row IDs remain based on source strings/paths. Moving the delivery source
+changes each resource id from `plugins.package.extensions-<key>` to
+`plugins.package.packages-<key>` (Kimchi lowercases and replaces
+non-alphanumeric runs with `-`). Consumers must rename any corresponding
+`native.harnessSettings.resources` keys or saved user toggles; old toggle keys
+no longer match. For workflows the new id is
 `plugins.package.packages-workflows`. Kimchi discovers a Plugins row from each
 configured package (`src/resources/package-resources.ts:19-31,85-94`). Its
 disable filter matches both package paths and the original metadata source
@@ -241,6 +239,15 @@ directory link preserves the package toggle. Resource overrides remain user
 scope even for project packages (`src/resources/store.ts:9-12,37-44`): Home
 Manager can declare the row's id under `native.harnessSettings.resources`;
 devenv cannot disable a user resource.
+
+Pi's trust bootstrap can initialize a user copy that the final pass then shadows
+with the project copy. On first read, kimchi-workflows parks a background step's
+output-tool handoff process-wide so the surviving copy still registers
+`workflow_submit_result`. It still removes `KIMCHI_WORKFLOW_STEP_OUTPUT_TOOLS`
+immediately so descendant processes never inherit it. Both copies must carry
+`step-output-handoff.patch`: an older user copy still consumes the handoff
+before the project copy can park it. `kimchi-workflows-smoke` covers this with
+saved project trust and distinct package entry paths.
 
 `externalized-extensions.nix` is the one list the package's exact-match patch
 consumes. For workflows it removes
