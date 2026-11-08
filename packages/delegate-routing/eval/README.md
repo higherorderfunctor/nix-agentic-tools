@@ -1,7 +1,8 @@
 # Acceptance suite
 
-> **Last verified:** 2026-11-07 — defines Claude, Codex and Kiro reminder pairs
-> and a Claude design-order case; the new live effects are unmeasured.
+> **Last verified:** 2026-11-08 — helper-backed cases execute fake Readers
+> through the delivered helper during offline dry-run and preserve receipts.
+> Harness compliance remains unmeasured.
 
 One manual suite of real sessions on Claude, Codex, Kiro and Kimchi. Each case
 checks what the delivered delegate-routing configuration makes an agent do with
@@ -41,8 +42,9 @@ those needs proof that child messages never reach the parent stream.
 `cases.nix` evaluates repository delivery (`dev/ai.nix`) with explicit suite
 runtime and delegate-routing settings, then applies each case's switches and
 exports every delivered file. Personal `devenv.local.nix` is outside this
-fixture configuration. The prompt is the task plus synthetic usage numbers; the
-expected behavior never enters it.
+fixture configuration. Legacy prompts contain the task plus synthetic usage
+numbers. Helper-backed prompts instead request helper and plan artifacts and
+permit Reader execution.
 
 | Cases                                                                                                                           | Switch or shape                                                                                       | Assertion                |
 | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------ |
@@ -67,11 +69,11 @@ interpret shell programs. Offline events match Claude's assistant tool-use
 envelopes and exclude child calls as production does. Hook payload checks cover
 entry gating on supported delivery paths.
 
-The fixture prompt supplies synthetic usage and tells the agent not to run usage
-helpers, unlike production's live usage reads. This hides reader execution,
-authentication and pool freshness; the offline ordering test separately accepts
-a routing Skill load and listed usage reads before launch, and rejects usage
-commands combined with source reads.
+Legacy fixture prompts supply synthetic usage and tell the agent not to run
+usage helpers, unlike production's live usage reads. This hides reader
+execution, authentication and pool freshness; the offline ordering test
+separately accepts a routing Skill load and listed usage reads before launch,
+and rejects usage commands combined with source reads.
 
 Assertions read the session's own event log. A delegate call is a tool call
 named after a `subagent` or `workflow` technique of the case's runtime, or a
@@ -95,6 +97,50 @@ Kimchi and Kiro is unverified.
 | `workflow-before-source` | a native Claude workflow precedes task-source access; before launch, allow only the routing Skill, Read of delivered skill/agent Markdown, exact enabled usage-reader commands from the delivered technique configuration, and `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`, `TodoRead`, `TodoWrite`; source Read, other shell commands and broad search fail; reads after launch pass |
 
 Add a case when a real routing problem shows up, not to fill a matrix.
+
+## Helper-backed cases
+
+Live helper-backed cases are opt-in:
+`python3 packages/delegate-routing/eval/suite.py --helper-backed --only='codex-helper-*'`.
+This command starts real sessions and spends model turns; it requires operator
+authorization. `--dry-run` includes these cases automatically and starts no
+harness.
+
+The two `codex-helper-*` cases are `independent-wave` and `routing-controls`.
+Both assert cross-runtime Reader execution, outside-before-session selection and
+under-tier reviewer exclusion; `independent-wave` additionally checks
+independent units. Their separate `eval/helper-fixture.nix` module registers
+three fake Readers: outside and session on Codex, and cross-runtime on Kiro
+outside the automatic launch set. Reader output deliberately names a different
+`.pool`; registry keys remain authoritative. The session has less headroom than
+the outside pool; a mid-tier family is available to writers but excluded from
+review. Native delegate commands remain real, with no launch stubs. The
+independent task owns `words.py` and `square.py` separately and checks their
+saved plan for a shared disjoint wave.
+
+Offline preparation invokes the absolute helper command read from the delivered
+skill with explicit launch evidence. `logs/setup-helper.json` records argv, exit
+code and helper JSON; `logs/setup-reader-receipts.jsonl` records executed Reader
+identities. It checks all three Readers, outside-before-session selection and
+the under-tier exclusion. The independent case also records successful helper
+`--check-plan` validation of a hand-authored two-unit wave and rubric-bearing
+briefs in `logs/setup-plan-validation.json`. These receipts prove fixture
+wiring, not agent behavior. The Python regression invokes the helper source with
+child Reader processes and mutates each expected control to prove the assertions
+reject it.
+
+Live sessions write separate `logs/session-reader-receipts.jsonl` receipts. The
+runner archives the requested `routing-evidence.json` and `routing-plan.json` as
+`logs/routing-artifacts.json` before cleanup and reports missing or inconsistent
+evidence as FAIL. Reader receipts and saved wave shape alone do not prove
+organic planner compliance, concurrent execution, review independence,
+authentication or live budget freshness; inspect actual helper and launch calls
+before making those claims. No live helper-backed sessions have been measured.
+
+The standalone default `--dry-run` may realize generated Nix inputs, including
+the packaged helper and fake Readers. In environments prohibiting builds, use an
+already realized `--fixtures` export or report that limitation; Python
+regressions need no Nix realization.
 
 ## Running
 
