@@ -2,10 +2,12 @@
 """Offline regressions for source attribution and the captured CLI schemas."""
 
 from contextlib import redirect_stdout
+from copy import deepcopy
 import io
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import sys
 import tempfile
@@ -16,6 +18,68 @@ import suite
 
 # The Nix build sandbox has no /usr/bin/env: name the bash on PATH.
 STRICT_BASH = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
+
+
+class HelperFixtures(unittest.TestCase):
+    def test_prompt_modes(self):
+        legacy = {"task": "implement a function", "usage": {"synthetic": True}}
+        self.assertIn("do not run a usage helper", suite.helper_prompt(legacy))
+        prompt = suite.helper_prompt({**legacy, "helperBacked": True})
+        self.assertNotIn("do not run", prompt)
+        self.assertNotIn("synthetic", prompt)
+        self.assertIn("registered Readers", prompt)
+
+    def test_real_helper_and_reader_receipts(self):
+        # No harness: execute the same helper source through a packaged-shaped
+        # command, with real child Reader processes and literal expectations.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            logs = root / "logs"
+            logs.mkdir()
+            reader = root / "reader"
+            reader.write_text(f"#!{sys.executable}\n" +
+                "from datetime import datetime, timedelta, timezone\nimport json, os, sys\n" +
+                "name, remaining = sys.argv[1], int(sys.argv[2])\n" +
+                "with open(os.environ['ROUTING_EVAL_RECEIPTS'], 'a') as output:\n" +
+                "    output.write(json.dumps({'reader': name}) + '\\n')\n" +
+                "print(json.dumps({'account': {'auth_index': None, 'name': 'fixture', 'plan': None}, 'balances': [], 'bonuses': [], 'pool': 'wrong-key', 'windows': {'5h': {'remainingPercent': remaining, 'usedPercent': 100 - remaining, 'status': 'ok', " +
+                "'resetsAt': (datetime.now(timezone.utc) + timedelta(seconds=9000)).isoformat(), 'windowSeconds': 18000}}}))\n")
+            reader.chmod(0o755)
+            routes = [{"family": {"name": name, "tier": tier}, "pool": pool, "target": "codex",
+                       "techniques": [{"agent": None, "model": {"isPattern": False, "value": "gpt-6.1-sol"},
+                                       "name": "spawn_agent", "node": {"command": None, "kind": "subagent", "modelArg": "slug", "notes": "native fixture"}}]}
+                      for name, tier, pool in [("outside", "strong", "outside"), ("session", "strong", "session"), ("under-tier", "mid", "outside")]]
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"runtime": "codex", "runtimes": ["codex"], "sessionPool": "session",
+                "manualRoutes": [], "routes": routes, "readers": [
+                    {"name": name, "command": shlex.join([str(reader), name, str(remaining)])}
+                    for name, remaining in [("cross-runtime", 90), ("outside", 80), ("session", 30)]]}))
+            wrapper = root / "delegate-routing-plan"
+            wrapper.write_text(STRICT_BASH + "exec " + shlex.join([sys.executable,
+                os.environ.get("ROUTING_PLAN_SOURCE", str(suite.HERE.parent / "scripts/delegate-routing-plan.py")), "--manifest", str(manifest),
+                "--reader-shell", shutil.which("bash")]) + ' "$@"\n')
+            wrapper.chmod(0o755)
+            with patch.object(suite, "helper_command", return_value=str(wrapper)):
+                suite.exercise_helper({"id": "codex-helper-independent-wave", "runtime": "codex"}, root, logs)
+            record = json.loads((logs / "setup-helper.json").read_text())
+            receipts = suite.helper_receipts(logs / "setup-reader-receipts.jsonl")
+            self.assertEqual(record["exitCode"], 0)
+            self.assertEqual(len(receipts), 6)
+            validation = json.loads((logs / "setup-plan-validation.json").read_text())
+            self.assertEqual(validation["output"]["validation"]["waves"], 1)
+            self.assertFalse((logs / "session-reader-receipts.jsonl").exists())
+            # These mutations reproduce inventory filtering, session-first ranking
+            # and a tier filter silently omitted from the helper implementation.
+            with self.assertRaisesRegex(ValueError, "every registered"):
+                suite.check_helper_evidence(record["output"], [row for row in receipts if row["reader"] != "cross-runtime"])
+            broken = deepcopy(record["output"])
+            broken["roles"]["writer"]["candidates"][0]["pool"] = "session"
+            with self.assertRaisesRegex(ValueError, "outside pool"):
+                suite.check_helper_evidence(broken, receipts)
+            broken = deepcopy(record["output"])
+            broken["roles"]["first-check"]["exclusions"] = []
+            with self.assertRaisesRegex(ValueError, "mid-tier reviewer"):
+                suite.check_helper_evidence(broken, receipts)
 
 
 class SourceAttribution(unittest.TestCase):
