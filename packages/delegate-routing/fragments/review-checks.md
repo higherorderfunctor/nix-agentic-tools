@@ -1,3 +1,11 @@
+For finder, first-check, second-check and judge, use the rendered
+`delegate-routing-plan` command with caller-qualified family and observed launch
+evidence. It enforces the strong/frontier floor before pool ranking; never step
+down a tier; report a loop failure if no qualified route remains. A tier pass
+does not establish task fit, trial eligibility or cross-maker independence;
+provider-vendor identity is provisional for aggregator routes. Honor those
+exclusions before launch.
+
 Review every change with all three checks below, each in a fresh context. The
 first check, the second check and the judge each run on a vendor other than the
 writer's. Use different models for the two checks where possible. Report
