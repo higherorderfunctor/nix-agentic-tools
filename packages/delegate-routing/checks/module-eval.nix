@@ -453,7 +453,125 @@
       poolFailsWith (poolChange settings) "pools.measured.usage.technique: reference an enabled usage technique with a non-empty command.";
     poolWindowFails = window:
       !(builtins.tryEval (builtins.deepSeq (poolChange {pools.configured.window = window;}).config.ai.programs.delegate-routing.pools true)).success;
+    routingFixture = poolChange {
+      pools.outside.usage = {
+        runtime = "kimchi";
+        technique = "outside-reader";
+      };
+      runtimes = {
+        claude = {
+          extraRuntimes = ["codex" "kiro"];
+          manualExternalDelegates = ["kiro"];
+          models = [{families = ["flash" "opus"];}];
+          techniques.Workflow.enable = false;
+        };
+        kimchi.techniques.outside-reader = {
+          command = "read-outside --current";
+          kind = "usage";
+        };
+      };
+    };
+    routingArgs = let
+      portable = routingFixture.config.ai.programs.delegate-routing;
+      selection = import ../lib/select-families.nix {inherit lib;};
+    in {
+      inherit lib;
+      inherit (portable) families pools;
+      inherit (portable.runtimes.claude) extraRuntimes manualExternalDelegates;
+      models = lib.mapAttrs (_: settings: settings.models) portable.runtimes;
+      runtime = "claude";
+      techniques = selection.effectiveTechniques routingFixture.config;
+    };
+    routingView = import ../lib/routing-view.nix routingArgs;
   in {
+    # Fails if automatic routes admit a disabled technique, unresolved agent,
+    # manual-only target or another harness's native tool; reader inventory
+    # must still include a registered runtime outside all launch targets.
+    # Hiding launch prose must not bypass missing model-spelling rejection.
+    "module-delegate-routing-${name}-routing-view" = mkTest "delegate-routing-${name}-routing-view" (
+      let
+        text = readSkill routingFixture "claude";
+        routes =
+          map (route: {
+            family = route.family.name;
+            inherit (route) pool target;
+            techniques = map (technique: technique.name) route.techniques;
+          })
+          routingView.routes;
+        resolved = import ../lib/routing-view.nix (routingArgs
+          // {
+            # A module-supplied picker resolution must beat catalog fallback.
+            resolvedAgentFiles.opus = {
+              family.defaultEffort = "high";
+              id = "proxy-opus-123";
+            };
+          });
+        agent = builtins.head (builtins.head resolved.routes).techniques;
+      in
+        passes routingFixture
+        && routingView.runtimes == ["claude" "codex"]
+        && routes
+        == [
+          {
+            family = "opus";
+            pool = "measured";
+            target = "claude";
+            techniques = ["Agent with generated agent file" "claude -p"];
+          }
+          {
+            family = "opus";
+            pool = "configured";
+            target = "codex";
+            techniques = ["codex exec"];
+          }
+          {
+            family = "flash";
+            pool = null;
+            target = "claude";
+            techniques = ["claude -p"];
+          }
+        ]
+        && routingView.manualRoutes != []
+        && lib.all (route: route.target == "kiro") routingView.manualRoutes
+        && map (reader: {inherit (reader) command name;}) routingView.readers
+        == [
+          {
+            command = null;
+            name = "configured";
+          }
+          {
+            command = "read-pool --current";
+            name = "measured";
+          }
+          {
+            command = "read-outside --current";
+            name = "outside";
+          }
+        ]
+        && agent.model
+        == {
+          isPattern = false;
+          value = "proxy-opus-123";
+        }
+        && agent.agent.family.defaultEffort == "high"
+        && (builtins.head (lib.last routingView.routes).techniques).model
+        == {
+          isPattern = true;
+          value = "test-flash-*";
+        }
+        && lib.hasInfix "claude: `claude -p` with full model id the highest id matching `test-flash-*`" text
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `claude -p`" text
+        && !(lib.hasInfix "`Workflow`" text)
+        && !(lib.hasInfix "via kiro:" text)
+        && hasProse "| outside | `read-outside --current` | measured |" text
+        && !(lib.hasInfix "**outside-reader (usage):**" text)
+        && skillFails {
+          ai.programs.delegate-routing = {
+            runtimes.claude.techniques."claude -p".modelArg = "";
+            skill.phrases."Launch route".enable = false;
+          };
+        }
+    );
     # Fails on lexical ordering, catalog-only resolution, missing pins, or a
     # route advertised when its family has no delivered agent file.
     "module-delegate-routing-${name}-agent-files" = mkTest "delegate-routing-${name}-agent-files" (
