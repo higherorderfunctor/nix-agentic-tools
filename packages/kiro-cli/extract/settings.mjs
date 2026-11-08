@@ -305,20 +305,49 @@ if (
 }
 
 // Execute only this small original merge helper, with inert load/read/logger
-// dependencies. Opposing global/workspace sentinels prove every extracted key
-// overrides and an unknown key does not; a negated or incidental .has fails.
-const workspace = Object.fromEntries(
-  [...values.allowlist, "kiro.extractor.unknown", "kiro.extractor.other"].map(
-    (key) => [key, `workspace:${key}`],
-  ),
+// dependencies. The workspace is a Proxy that answers every string key with
+// its own marker and enumerates the allowlist, two opposing sentinels and every
+// string literal the merge mentions, so any key the merge copies from the
+// workspace is visible: it must be an allowlist key, and each allowlist key
+// must hold its own marker.
+const marker = (key) => `workspace:${key}`;
+const literals = new Set();
+(function collectLiterals(node) {
+  if (ts.isStringLiteralLike(node)) literals.add(node.text);
+  ts.forEachChild(node, collectLiterals);
+})(merge);
+const workspaceKeys = [
+  ...new Set([
+    ...values.allowlist,
+    "kiro.extractor.unknown",
+    "kiro.extractor.other",
+    ...literals,
+  ]),
+];
+const workspace = new Proxy(
+  {},
+  {
+    get: (_, key) => (typeof key === "string" ? marker(key) : undefined),
+    getOwnPropertyDescriptor: (_, key) =>
+      workspaceKeys.includes(key)
+        ? {
+            value: marker(key),
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          }
+        : undefined,
+    has: () => true,
+    ownKeys: () => workspaceKeys,
+  },
 );
 const globalSettings = Object.fromEntries(
-  Object.keys(workspace).map((key) => [key, `global:${key}`]),
+  workspaceKeys.map((key) => [key, `global:${key}`]),
 );
 const expectedMerged = Object.fromEntries(
-  Object.keys(workspace).map((key) => [
+  workspaceKeys.map((key) => [
     key,
-    values.allowlist.includes(key) ? workspace[key] : globalSettings[key],
+    values.allowlist.includes(key) ? marker(key) : globalSettings[key],
   ]),
 );
 const mergeExpression =
@@ -341,10 +370,23 @@ try {
 } catch {
   fail("workspace merge could not be evaluated with isolated settings");
 }
-for (const [key, expected] of Object.entries(expectedMerged)) {
-  if (merged?.[key] !== expected)
-    fail("workspace merge does not apply exactly the extracted allowlist");
+// Reading the result runs bundle getters, so a throw here is a refusal too.
+let exact;
+try {
+  exact =
+    Object.entries(expectedMerged).every(
+      ([key, expected]) => merged?.[key] === expected,
+    ) &&
+    Object.entries(merged).every(
+      ([key, value]) =>
+        !(typeof value === "string" && value.startsWith("workspace:")) ||
+        values.allowlist.includes(key),
+    );
+} catch {
+  exact = false;
 }
+if (!exact)
+  fail("workspace merge does not apply exactly the extracted allowlist");
 
 process.stdout.write(
   JSON.stringify({

@@ -17,24 +17,29 @@ members = ["pn.CHAT_DEFAULT_MODEL", "pn.CHAT_MODEL_DEFAULTS"] + [
 registry_assignment = f'pn={{{",".join(properties)}}};'
 
 
-def merge_with_guard(guard):
+def merge_fn(seed, loop):
     return (
-        'function merge(){let e=globalLoad();try{let w=readWorkspace(path());'
-        f'for(const [k,v] of Object.entries(w))if({guard})e[k]=v'
+        f'function merge(){{let e={seed};try{{let w=readWorkspace(path());{loop}'
         f'}}catch(err){{logger.warn("{warning}",err)}}return e}}'
     )
 
 
-def merge_with_empty_seed(guard):
-    return (
-        'function merge(){let e={};try{let w=readWorkspace(path());'
-        f'for(const [k,v] of Object.entries(w))if({guard})e[k]=v'
-        f'}}catch(err){{logger.warn("{warning}",err)}}return e}}'
-    )
+def guarded_loop(guard, extra=""):
+    return f"for(const [k,v] of Object.entries(w))if({guard})e[k]=v{extra}"
+
+
+def merge_with_guard(guard, extra=""):
+    return merge_fn("globalLoad()", guarded_loop(guard, extra))
+
+
+def merge_with_empty_seed(guard, extra=""):
+    return merge_fn("{}", guarded_loop(guard, extra))
 
 
 composer = "function compose(){return{...globalLoad(),...merge()}}"
 empty_seed = merge_with_empty_seed("Cq.has(k)")
+extra_copy = ';if("chat.surprise" in w)e["chat.surprise"]=w["chat.surprise"]'
+probe_mismatch = "does not apply exactly"
 
 
 def bundle(*, registry=None, allowlist=None, merge=None):
@@ -73,11 +78,11 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     cases = {
         "accept all": (
             bundle(merge=merge_with_guard("Cq.has(k)||true")),
-            "does not apply exactly",
+            probe_mismatch,
         ),
         "accept sentinel": (
             bundle(merge=merge_with_guard('Cq.has(k)||k==="kiro.extractor.unknown"')),
-            "does not apply exactly",
+            probe_mismatch,
         ),
         "ambiguous registry": (
             bundle(registry=registry_assignment * 2),
@@ -94,6 +99,70 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
         "composer redeclared": (
             bundle(merge=empty_seed + composer + "function compose(){return globalLoad()}"),
             "composer name is mutated, shadowed, or escapes",
+        ),
+        "compound guard beside composer": (
+            bundle(merge=merge_with_empty_seed('Cq.has(k)||k.startsWith("mcp.")') + composer),
+            probe_mismatch,
+        ),
+        "extra copy after the loop (3.0.0)": (
+            bundle(merge=merge_with_guard("Cq.has(k)", extra_copy)),
+            probe_mismatch,
+        ),
+        "extra copy after the loop (3.1.0)": (
+            bundle(merge=merge_with_empty_seed("Cq.has(k)", extra_copy) + composer),
+            probe_mismatch,
+        ),
+        "second inline gate": (
+            bundle(
+                merge=merge_with_empty_seed('Cq.has(k)||new Set(["chat.surprise"]).has(k)')
+                + composer
+            ),
+            probe_mismatch,
+        ),
+        "second set statement": (
+            bundle(
+                merge=merge_fn(
+                    "{}",
+                    'const extra=new Set(["chat.surprise"]);for(const [k,v] of Object.entries(w))if(Cq.has(k)||extra.has(k))e[k]=v;',
+                )
+                + composer
+            ),
+            probe_mismatch,
+        ),
+        "assign whole workspace": (
+            bundle(merge=merge_fn("{}", "for(const [k,v] of Object.entries(w))if(Cq.has(k))Object.assign(e,w)") + composer),
+            probe_mismatch,
+        ),
+        "block copy beside guarded copy (3.0.0)": (
+            bundle(
+                merge=merge_fn(
+                    "globalLoad()",
+                    'for(const [k,v] of Object.entries(w)){if(Cq.has(k))e[k]=v;e["chat.surprise"]=w["chat.surprise"]}',
+                )
+            ),
+            probe_mismatch,
+        ),
+        "block copy beside guarded copy (3.1.0)": (
+            bundle(
+                merge=merge_fn(
+                    "{}",
+                    'for(const [k,v] of Object.entries(w))if(Cq.has(k)){e[k]=v;e["chat.surprise"]=w["chat.surprise"]}',
+                )
+                + composer
+            ),
+            probe_mismatch,
+        ),
+        "comma copy beside guarded copy (3.0.0)": (
+            bundle(merge=merge_with_guard("Cq.has(k)", ',e["chat.surprise"]=w["chat.surprise"]')),
+            probe_mismatch,
+        ),
+        "derived copy key": (
+            bundle(merge=merge_fn("{}", 'for(const [k,v] of Object.entries(w))if(Cq.has(k)){e[k]=v;e[k+".copy"]=v}') + composer),
+            probe_mismatch,
+        ),
+        "swapped loop binding (3.0.0)": (
+            bundle(merge=merge_fn("globalLoad()", "for(const [v,k] of Object.entries(w))if(Cq.has(v))e[k]=v")),
+            probe_mismatch,
         ),
         "computed allowlist member": (
             bundle(allowlist=f'Cq=new Set([{",".join(members)},pn["CHAT_TEST_00"]]);'),
@@ -112,7 +181,7 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
         "mutated allowlist": (bundle() + 'Cq.add("chat.unknown");', "mutated, shadowed, or escapes"),
         "negated guard": (
             bundle(merge=merge_with_guard("!Cq.has(k)")),
-            "does not apply exactly",
+            probe_mismatch,
         ),
         "missing registry control": (
             bundle(registry=f'pn={{{",".join(properties[1:])}}};'),
