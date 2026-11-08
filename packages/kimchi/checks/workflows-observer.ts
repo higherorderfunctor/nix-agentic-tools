@@ -5,11 +5,25 @@ export default function observe(pi: any) {
       .getCommands()
       .filter((command: any) => command.name === "workflow");
     console.error("E2E_COMMANDS " + JSON.stringify(workflow));
+    console.error(
+      "E2E_HANDOFF " +
+        JSON.stringify({
+          handoffEnvPresent: "KIMCHI_WORKFLOW_STEP_OUTPUT_TOOLS" in process.env,
+          submit: pi
+            .getAllTools()
+            .filter((tool: any) => tool.name.startsWith("workflow_submit_")),
+          workflowCommands: workflow,
+        }),
+    );
     const notify = ctx.ui.notify.bind(ctx.ui);
     ctx.ui.notify = (message: string, level: string) => {
       console.error("E2E_NOTIFY " + JSON.stringify({ message, level }));
       return notify(message, level);
     };
+  });
+  pi.registerCommand("e2e_probe", {
+    description: "Inspect workflow registration without inference",
+    handler: async () => {},
   });
   pi.on("input", () => {
     counts.input++;
