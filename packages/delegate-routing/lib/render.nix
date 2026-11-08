@@ -1,10 +1,12 @@
 {
   lib,
+  audience,
   runtime,
   families,
   models,
   techniques,
   pools ? {},
+  plannerReference,
   helperInstruction ? "",
   resolvedAgentFiles ? null,
   routing ? {},
@@ -19,8 +21,43 @@
   inherit (import ./vocabulary.nix) delegateKinds tiers;
   inherit (view) candidates;
   entryRenderer = import ./render-entries.nix {inherit lib;};
-  routingText = entryRenderer.routing false routing;
-  workflowText = entryRenderer.workflows false workflows;
+  # Unknown consumer entries remain planner context. Shared entries project the
+  # same source for both readers, rather than maintaining copied paragraphs.
+  entryAudiences = {
+    "Common workflows" = ["orchestrator" "planner"];
+    "Manual-only external delegates" = ["orchestrator" "planner"];
+    "Plan and launch" = ["orchestrator"];
+    "Routing" = ["orchestrator" "planner"];
+    "Routing helper" = ["orchestrator" "planner"];
+  };
+  # These always-on duties address the interactive session, not its planner.
+  routerOnly = ["Load delegate-routing" "Orchestrator session"];
+  routingText = entryRenderer.routing false (lib.mapAttrs (_: entry: entry // {always = false;}) (
+    lib.filterAttrs (name: entry:
+      if audience == "planner"
+      then !(builtins.elem name routerOnly)
+      else !entry.always)
+    routing
+  ));
+  orchestratorSteps = {"Work and review" = ["Describe" "Loop" "Rubric" "Subtractive" "Work"];};
+  workflowText = entryRenderer.workflows false (lib.mapAttrs (name: entry:
+    entry
+    // {
+      always = false;
+    }
+    // lib.optionalAttrs (audience == "orchestrator") {
+      text = "";
+      steps = lib.filterAttrs (step: _: builtins.elem step orchestratorSteps.${name}) entry.steps;
+    }) (
+    if audience == "planner"
+    then workflows
+    else
+      lib.filterAttrs (
+        name: entry:
+          !entry.always && builtins.hasAttr name orchestratorSteps && lib.any (step: entry.steps.${step}.enable or false) orchestratorSteps.${name}
+      )
+      workflows
+  ));
   entrySort = import ./resolve-entries.nix {inherit lib;};
   # One pass: placeholders inside replacement text stay as written.
   fill = template: values: lib.replaceStrings (map (key: "{${key}}") (builtins.attrNames values)) (builtins.attrValues values) template;
@@ -142,10 +179,24 @@
     ${techniqueBlock target true}
     ${phrase "Manual delegate note" {}}
   '';
+  bootstrapFamilies = builtins.filter (family: builtins.elem family.tier ["strong" "frontier"]) candidates;
+  bootstrap =
+    if bootstrapFamilies == []
+    then phrase "Planner unavailable" {}
+    else
+      lib.concatMapStringsSep "\n" (family:
+        phrase "Planner candidate" {
+          inherit (family) avoidFor effort useFor;
+          family = familyLabel family;
+          routes = lib.concatMapStringsSep "; " reach (builtins.filter (route: route.family == family) view.routes);
+        })
+      bootstrapFamilies;
   blocks = {
-    helper = helperInstruction;
+    inherit bootstrap;
     families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n\n" + phrase "OpenCode Go note" {});
+    helper = helperInstruction;
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
+    planner = plannerReference;
     pools = poolsText;
     routing = routingText;
     techniques = lib.concatStringsSep "\n" ([(techniqueBlock runtime false)] ++ map (target: techniqueBlock target true) (lib.tail view.runtimes));
@@ -153,6 +204,9 @@
   };
   # An entry naming a block that renders nothing is omitted whole.
   present = entry: lib.all (key: !(lib.hasInfix "{${key}}" entry.value.text) || blocks.${key} != "") (builtins.attrNames blocks);
-  body = map (entry: lib.removeSuffix "\n" (lib.trimWith {end = true;} (fill entry.value.text blocks))) (builtins.filter present (entrySort.sort "delegate-routing.skill.entries" skill.entries));
+  shown =
+    builtins.filter (entry: builtins.elem audience (entryAudiences.${entry.name} or ["planner"]))
+    (entrySort.sort "delegate-routing.skill.entries" skill.entries);
+  body = map (entry: lib.removeSuffix "\n" (lib.trimWith {end = true;} (fill entry.value.text blocks))) (builtins.filter present shown);
 in
   lib.concatStringsSep "\n\n" body + "\n"
