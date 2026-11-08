@@ -12,6 +12,7 @@
   toolchainConfiguration = pkgs.writeText "kimchi-workflow-toolchain.json" (builtins.toJSON {
     gitCommand = lib.getExe pkgs.gitMinimal;
     packages = ["@earendil-works/pi-coding-agent" "@earendil-works/pi-tui" "typebox"];
+    inherit (kimchi) patchedDependencies;
     patchedSource = kimchi.src;
     tarCommand = lib.getExe pkgs.gnutar;
   });

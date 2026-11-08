@@ -76,7 +76,7 @@
           mutant "$kimchi" config-second-shape src/config.ts \
             'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
           mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
-            'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
+            'import { homedir } from "node:os"' $'import { homedir } from "node:os"\nconst ModelCustomMetadataSchema = 0'
           mutant "$kimchi" hand-shape-new-member src/config.ts \
             '		const enabled = parsed?.teleport?.compactHint?.enabled' $'\t\tif (typeof parsed?.teleport?.delayMs === "number") return false\n\t\tconst enabled = parsed?.teleport?.compactHint?.enabled'
           mutant "$kimchi" hand-shape-retyped src/config.ts \
@@ -175,8 +175,8 @@
             "config.json validation shape changed" >> "$TMPDIR/proof"
           expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
             "config.json validation shape changed" >> "$TMPDIR/proof"
-          # A dead copy of a schema is invisible; importing it makes two live
-          # ones, which must stop the extraction rather than pick one.
+          # A second same-named declaration in a live module makes the schema
+          # ambiguous, which must stop the extraction rather than pick one.
           expect_rejection duplicate-live-schema "$TMPDIR/duplicate-live-schema-source" \
             'TypeScript declaration ModelCustomMetadataSchema is declared 2 times' >> "$TMPDIR/proof"
           expect_rejection hand-shape-new-member "$TMPDIR/hand-shape-new-member-source" \

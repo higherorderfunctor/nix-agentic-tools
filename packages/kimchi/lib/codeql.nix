@@ -16,6 +16,8 @@
   kimchi,
   # The npm packages carried for extraction (pi and its MCP adapter).
   dependencies,
+  # Validated JSON from Kimchi's pnpm-workspace.yaml, shared with install-runtime.mjs.
+  patchedDependencies,
   pkgs,
   version,
 }: let
@@ -55,8 +57,7 @@
       # Missing pi packages fail; other uncarried packages may remain absent
       # only when their patch adds no environment reads. A patch is a diff,
       # not a program a parser can read, so that last check is a word match.
-      jq -r '.pnpm.patchedDependencies | to_entries[] | "\(.key)\t\(.value)"' \
-        ${kimchi}/package.json > patches
+      jq -r 'to_entries[] | "\(.key)\t\(.value)"' ${patchedDependencies} > patches
       while IFS=$'\t' read -r key file; do
         dest="$out/${nodeModules}/''${key%@*}"
         if [ ! -f "$dest/package.json" ]; then

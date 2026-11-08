@@ -4,19 +4,19 @@ Every command spawns through the registry with these local operations.
 
 --- a/src/extensions/bash-background/index.ts
 +++ b/src/extensions/bash-background/index.ts
-@@ -22,6 +22,7 @@
-  */
+@@ -23,6 +23,7 @@
  import type { ExtensionAPI, SessionShutdownEvent, SessionStartEvent } from "@earendil-works/pi-coding-agent"
  import { resolveBashProcessLimitSeconds } from "../../cli-args.js"
+ import { SHELLS_STATUS_KEY } from "../../components/status-line.js"
 +import { getSettingsManager } from "../../settings-watcher.js"
  import { bashToolDescription } from "../bash-tool-guard.js"
+ import { readE2eSeam } from "../e2e-seam.js"
  import { createBackgroundBashToolDefinition } from "./bash-background-tool.js"
- import { CommandsPanel } from "./commands-panel.js"
-@@ -83,6 +84,7 @@
+@@ -109,6 +110,7 @@
  		// though our registration wins the tool-name slot.
  		const tool = createBackgroundBashToolDefinition(sessionCtx.cwd, {
  			state,
 +			shellPath: getSettingsManager()?.getShellPath(),
- 		})
- 		const toolWithSteering = {
- 			...tool,
+ 			// Live availability of the companion tool: a session whose tool set
+ 			// drops bash_control (an allowlist the CLI coupling could not extend,
+ 			// an explicit --exclude-tools, or a plan-mode tool-profile snapshot)
