@@ -16,7 +16,7 @@ in
     sources = [
       {
         path = "go.md";
-        url = "https://opencode.ai/v2/docs/console/go/";
+        url = "https://opencode.ai/docs/console/go/";
       }
       {
         # Every response stamps each model's `created` with the fetch time.
@@ -32,7 +32,7 @@ in
     '';
     meta = {
       description = "Pinned OpenCode Go model catalog and plan limits documentation for CLIProxyAPI defaults";
-      homepage = "https://opencode.ai/v2/docs/console/go/";
+      homepage = "https://opencode.ai/docs/console/go/";
       license = pkgs.lib.licenses.unfree;
       platforms = pkgs.lib.platforms.unix;
     };
