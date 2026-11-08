@@ -1,16 +1,3 @@
-Treat an assigned repository change, or investigation/design/bulk reading beyond
-a quick fact from named documents, as substantive. Prepare the rubric from the
-task goal as preflight; this does not authorize task-source investigation.
-Before that investigation, use this runtime's rendered helper with
-`--role planner --launch-context <json-path>` to select a reachable, fitted
-strong/frontier planner. Pin its model and effort from a canonical candidate,
-pass the task, source paths, saved rubric and the resolved routing/workflow
-context. Use a native subagent or workflow when non-interactive; if no qualified
-pinned planner is reachable, report a loop failure rather than doing the design
-in the orchestrator. A worker assigned an approved bounded unit does not
-recursively plan that assignment. Replan only the affected portion when scope
-changes.
-
 The planner runs the actual launching runtime's rendered helper with
 `--launch-context <json-path> --role <worker-role> --role <reviewer-role>`,
 repeating `--role` for every planned worker and reviewer role, before selecting
@@ -54,34 +41,56 @@ plan; writer file ownership is repository-relative):
   sharing a branch run through that same barrier before the next writer. Review
   wave membership is not permission to launch an entire unrevised branch.
 
-Before approving a wave, run the rendered helper with
-`--check-plan <plan-path> --launch-context <current-json-path> --role <role>`
-repeated for every planned role and `--max-concurrency <host-or-user-cap>` when
-below ten. It collects a fresh Reader snapshot and checks role + launching
-runtime + candidate + pinned line, dependency cycles/order, exact normalized
-file overlap, wave bounds and rubric bytes in every prepared brief. A zero exit
-with `validation.status = "valid"` approves only those current specifications;
-the orchestrator must still enforce review/commit barriers and verify receipts.
-Read the returned exclusions and warnings. An all-pools-unmeasured fit-only
-decision remains possible with explicit budget/session uncertainty; an
-unresolved model, effort or technique never becomes an approved launch.
-Manual-only routes stay outside automatic approval; handle an explicit user
-request separately under its authorization.
+The saved helper snapshot records provenance. Execution uses the current
+snapshot returned by the orchestrator's check-plan operation. Do not add age
+limits or fingerprints of unrelated configuration. A downstream delegate that
+launches work in another runtime needs a separate plan/check using that
+runtime's rendered helper and session pool, even if a planner in another harness
+prepares it. The helper validates specifications and reads registered Readers;
+it never executes a delegate or probe.
 
-The saved helper snapshot records provenance and is never an allowlist or proof
-of current pace. Changed launch context or a new usage read requires validation
-against the current helper output; use that returned snapshot for execution. Do
-not add age limits or fingerprints of unrelated configuration. A downstream
-delegate that launches work in another runtime needs a separate plan/check using
-that runtime's rendered helper and session pool, even if a planner in another
-harness prepares it. The helper validates specifications and reads registered
-Readers; it never executes a delegate or probe.
+Prepare briefs using the relevant resolved Choose execution, Work, Review and
+Validate the result policy, including external-launch declarations, the
+non-interactive limit, hard rules, evidence, isolation and trial restrictions.
+The orchestrator receives its launch and supervision duties directly in the
+router and small skill.
 
-Execution constraints remain compulsory: Choose execution owns launch selection,
-supervision, retries, isolation and named fallbacks; Work owns hard-rules
-briefs; Review owns independence and trial limits; Validate the result owns
-receipts and evidence. Attach the relevant resolved execution policy to each
-prepared brief. Every external-launch brief says the delegate is non-interactive
-and reports to an orchestrator, not a person; a non-interactive delegate never
-launches external delegates. The orchestrator enforces these constraints before
-launching and checks the working tree after every delegate with shell access.
+**Execution choices**
+
+List the parts of the work before choosing execution. Size each part with the
+Work and review rubric's Size row and follow that row's split rule. Checks,
+tests and docs that exist only for a part ship in the same change as that part,
+so a split never moves a part's tests to another PR. Name the files each part
+writes and its dependencies.
+
+Use a tool from the table that exists in the launching session's mode. A single
+self-contained task needs one delegate. Use a workflow where the runtime has
+one, otherwise native subagents, when the work has dependent steps, loops or
+parallel parts. With "Orchestrator session" enabled, every sweep, including
+self-contained design work, also takes that route. Start independent tasks
+together. Writers on disjoint files may run in parallel in one working tree,
+with one committer staging and committing for all of them. Serialize writers
+whose files overlap; use separate worktrees when they need different bases.
+
+One delegate on a model the launching runtime can reach goes through the first
+technique in the family table's Launch column for the launching runtime that is
+in the launching session's tool list; Claude's Agent tool with a generated agent
+file pins the family's full model id and default effort, including cross-vendor
+models published in its picker. Name the family with `subagent_type`; a plain
+Agent call without a file stays alias-locked and is not listed. A family without
+a generated file uses the next listed technique, such as the Workflow tool or an
+external launcher (`claude -p`, `codex exec`).
+
+Use another vendor's harness for a model the launching runtime can reach only
+when that harness runs the whole multi-step job itself: hand the entire job to
+one delegate there that can run its own subagents (the table's "Runs own
+subagents" column), such as Codex orchestrating a three-check review with GLM. A
+model no technique of the launching runtime reaches keeps the Launch column's
+external technique for one delegate, a single cross-vendor reviewer included. If
+that column says unknown, probe it in the launcher you plan to use before
+relying on it. If no runtime can, an interactive orchestrator runs the steps
+from its launching session:
+
+1. Use the launching session's workflow tool, if it has one.
+2. Otherwise run the steps yourself: launch each external worker, wait for it,
+   check its output, then start the next step, such as the reviewer.
