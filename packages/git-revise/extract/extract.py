@@ -26,7 +26,8 @@ Exit  : non-zero when any guard trips:
       does not model)
   R15 a floor is missed
 
-Method order, as the repo requires:
+Methods (the repository ranks CodeQL above all three; see
+`dev/fragments/extracted/extraction-method.md`):
   eval    `build_parser()` is imported from the pinned source and asked for
           its own flags (dest -> option strings).
   AST     Python's `ast` for every config read, its key, type, default,
