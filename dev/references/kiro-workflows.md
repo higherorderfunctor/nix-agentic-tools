@@ -52,10 +52,11 @@ original versions and dates.
 It is reachable two ways, and an earlier version of this section wrongly claimed
 only the second existed:
 
-- **Seven feature-gated slash commands in the TUI**, all keyed on the same
-  `workflows` rollout feature (§1.1) — six `/workflow*` commands plus `/goal`,
-  which shares the flag without sharing the prefix. Two are visible in the
-  palette and five are `hidden`:
+- **Seven feature-gated slash commands in the TUI**, all tied to the same
+  workflows feature (§1.1; the 3.1.0 gate for the slash commands themselves is
+  unmeasured) — six `/workflow*` commands plus `/goal`, which shares the flag
+  without sharing the prefix. Two are visible in the palette and five are
+  `hidden`:
 
   | command            | description                                 | visible |
   | ------------------ | ------------------------------------------- | ------- |
@@ -98,8 +99,8 @@ Consequences for adoption:
 
 ### 1.1 Prerequisite: v3 and the global client setting (Extracted, module contract)
 
-The pinned `workflows` rollout state is 100% for all users without a channel
-restriction. No binary patch is needed. Configure:
+Kiro CLI 3.1.0 has no `workflows` rollout entry; the only gate is the global
+`chat.enableWorkflows` client setting. No binary patch is needed. Configure:
 
 ```nix
 ai.kiro.cli.workflows.enable = true;
