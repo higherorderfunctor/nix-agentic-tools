@@ -78,7 +78,10 @@
     httpProxy = "http://proxy.invalid:3128";
     lastTerminalWarnings.kitty = "0.35.0";
     modelMetadata.example.description = "Example model";
-    modelRoles.builder = "provider/model";
+    modelRoles = {
+      builder = "provider/model";
+      sessionNamer = "kimchi-dev/title-model";
+    };
     statusLine.pinned = ["model"];
   };
   userScopeOnlyHarnessSettingValue = key:
@@ -885,6 +888,7 @@ in {
         rendered = withRoles {
           builder = ["a/b" "c/d"];
           orchestrator = "a/b";
+          sessionNamer = "kimchi-dev/title-model";
         };
       in
         valid rendered
@@ -892,6 +896,7 @@ in {
         == {
           builder = ["a/b" "c/d"];
           orchestrator = "a/b";
+          sessionNamer = "kimchi-dev/title-model";
         }
         && typeChecks "provider/model"
         && !(typeChecks "")
@@ -903,6 +908,10 @@ in {
         && !(rolesTypeCheck {orchestrator = ["a/b"];})
         && !(rolesTypeCheck {compactor = ["a/b"];})
         && rolesTypeCheck {compactor = "a/b";}
+        && !(rolesTypeCheck {sessionNamer = ["kimchi-dev/title-model"];})
+        && !(rolesTypeCheck {sessionNamer = "";})
+        && !(rolesTypeCheck {sessionNamer = "  ";})
+        && rolesTypeCheck {sessionNamer = null;}
     );
 
     # Kimchi 1.1.37 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`

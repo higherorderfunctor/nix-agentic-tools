@@ -52,7 +52,7 @@
             chmod -R u+w "$TMPDIR/$2-source"
             substituteInPlace "$TMPDIR/$2-source/$3" --replace-fail "$4" "$5"
           }
-          kimchi=${extractionSources.kimchi}
+          kimchi=${package.passthru.patchedSource}
           pi=${extractionSources.pi}
 
           mutant "$kimchi" collision src/config.ts \
@@ -197,6 +197,11 @@
             "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
 
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
+          # Reading the release tree would omit the patched naming role.
+          ${pkgs.jq}/bin/jq -e \
+            '.harness.keys.modelRoles.properties.sessionNamer | .type == "string" and .optional == true' \
+            "$TMPDIR/real.json" > /dev/null
+          echo 'real (exit 0): extracted optional single-string sessionNamer from the patched tree' >> "$TMPDIR/proof"
           ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
           if ${pkgs.jq}/bin/jq -e \
             '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and
