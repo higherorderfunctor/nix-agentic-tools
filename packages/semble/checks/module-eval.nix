@@ -1087,10 +1087,12 @@ in {
             --path "$HOME/.kiro/agents/invalid-search.json" \
             >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
             || invalid_status=$?
-          # Kiro currently exits zero for an invalid file. The stderr assertion is
-          # the real validation signal; the status check pins the trap so a future
-          # behavior change cannot make this negative control vacuous.
-          test "$invalid_status" -eq 0 || {
+          # Kiro 3.1.0 exits non-zero for an invalid file (earlier releases
+          # exited zero). The stderr assertion names the cause; the status check
+          # pins the trap so a future behavior change cannot make this negative
+          # control vacuous.
+          test "$invalid_status" -ne 0 || {
+            echo "invalid agent validated with exit status $invalid_status" >&2
             cat "$TMPDIR/invalid.stderr" >&2
             exit 1
           }

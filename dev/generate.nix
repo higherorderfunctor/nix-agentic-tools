@@ -723,7 +723,7 @@
     Agents, hooks, permissions, MCP, context, rules and skills stay shared.
     Workflows are generally available since Kiro 2.26.0; the switch selects
     the v3 engine's client setting without a binary patch. Friendly switches
-    also cover `backgroundExecution`, `codeToSpec`, `kvim` and `sandbox`.
+    also cover `backgroundExecution`, `codeToSpec` and `kvim`.
     `cli.features.<name>.enable` exposes every extracted rollout name, while
     `cli.native.settings.chat.keybindings` types the extracted key bindings.
     Home Manager implies workflows and Code-to-Spec's global chat settings;

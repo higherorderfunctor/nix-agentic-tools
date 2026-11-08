@@ -467,11 +467,11 @@ entries already available to every user preserve the stock package. Patch
 feasibility comes from `rolloutPatchability.<name>.patchable`. Enabling an
 unpatchable feature fails at evaluation and names the extracted flag.
 
-Workflows are GA since 2.26.0 and need no binary patch. `cli.workflows.enable`
-still requires the global `chat.enableWorkflows` setting; Home Manager implies
-it and devenv warns when it is absent. `codeToSpec`, `backgroundExecution`,
-`kvim` and `sandbox` are friendly switches over restricted rollout names, with
-client-setting and launch prerequisites described in
+Workflows have no rollout entry since 3.1.0 and need no binary patch.
+`cli.workflows.enable` still requires the global `chat.enableWorkflows` setting;
+Home Manager implies it and devenv warns when it is absent. `codeToSpec`,
+`backgroundExecution` and `kvim` are friendly switches over restricted rollout
+names, with client-setting and launch prerequisites described in
 [`workflow-gating.md`](workflow-gating.md). Raw feature switches change
 availability only. Typed `cli.native.settings.chat.keybindings` declarations
 follow the extracted registry; background execution can be rebound with

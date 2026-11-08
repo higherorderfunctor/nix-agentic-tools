@@ -1374,7 +1374,6 @@ in
             so it tracks version bumps instead of being curated here.
           '';
         };
-        sandbox.enable = lib.mkEnableOption "local sandbox availability. Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
         # bundle from the pinned release, without changing its prompt bytes.

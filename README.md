@@ -555,8 +555,8 @@ trusted tools, tweaks, rollout features and FHS selection all use `cli`. Agents,
 hooks, permissions, MCP, context, rules and skills stay shared. Workflows are
 generally available since Kiro 2.26.0; the switch selects the v3 engine's client
 setting without a binary patch. Friendly switches also cover
-`backgroundExecution`, `codeToSpec`, `kvim` and `sandbox`.
-`cli.features.<name>.enable` exposes every extracted rollout name, while
+`backgroundExecution`, `codeToSpec` and `kvim`. `cli.features.<name>.enable`
+exposes every extracted rollout name, while
 `cli.native.settings.chat.keybindings` types the extracted key bindings. Home
 Manager implies workflows and Code-to-Spec's global chat settings; devenv
 requires those settings in the user's global config and warns when a friendly

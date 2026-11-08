@@ -89,11 +89,11 @@ ai.kiro.cli.workflows.enable = true;
 Home Manager implies the setting at default priority; devenv cannot write this
 global-only key and warns when it is missing. Set it in
 `~/.kiro/settings/cli.json` (or `$KIRO_HOME/settings/cli.json`) and start a
-fresh session. The friendly `codeToSpec`, `backgroundExecution`, `kvim` and
-`sandbox` switches cover other feature surfaces; `features.<name>.enable`
-exposes every extracted rollout name, and `native.settings.chat.keybindings`
-types the extracted binding keys. Their scope and launch requirements are
-documented in the feature-gating reference above.
+fresh session. The friendly `codeToSpec`, `backgroundExecution` and `kvim`
+switches cover other feature surfaces; `features.<name>.enable` exposes every
+extracted rollout name, and `native.settings.chat.keybindings` types the
+extracted binding keys. Their scope and launch requirements are documented in
+the feature-gating reference above.
 
 The historical `KIRO_ENABLED_FEATURES` probe on 2.16.0 showed the Rust client
 overwriting the parent variable before spawning the TUI. That explains why the

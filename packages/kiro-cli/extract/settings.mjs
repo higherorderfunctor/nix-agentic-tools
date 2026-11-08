@@ -144,6 +144,10 @@ if (declarations !== 1 || assignments !== 1)
   fail("workspace allowlist binding is ambiguous");
 
 const merge = warningFunctions[0];
+// The extracted merge must itself be top-level: a nested declaration would
+// not be the binding that top-level callers resolve by spelling.
+if (merge.parent !== file)
+  fail("workspace merge has an unsupported loader shape");
 const statements = merge.body?.statements;
 const globalStatement = statements?.[0];
 const tryStatement = statements?.[1];
@@ -151,7 +155,14 @@ const returnStatement = statements?.[2];
 const globalDecl = globalStatement?.declarationList?.declarations?.[0];
 const workspaceDecl =
   tryStatement?.tryBlock?.statements?.[0]?.declarationList?.declarations?.[0];
-const globalCall = globalDecl?.initializer;
+const globalInit = globalDecl?.initializer;
+// 3.0.0 seeds the merge from a global-loader call (`let e=ti()`). 3.1.0 seeds
+// it with `{}` and a separate caller composes `{...globalLoader(),...merge()}`.
+const globalCall = ts.isCallExpression(globalInit) ? globalInit : undefined;
+const emptySeed =
+  globalInit !== undefined &&
+  ts.isObjectLiteralExpression(globalInit) &&
+  globalInit.properties.length === 0;
 const workspaceCall = workspaceDecl?.initializer;
 const pathCall = workspaceCall?.arguments?.[0];
 const catchCall = tryStatement?.catchClause?.block?.statements?.[0]?.expression;
@@ -160,9 +171,15 @@ if (
   !ts.isVariableStatement(globalStatement) ||
   globalStatement.declarationList.declarations.length !== 1 ||
   !ts.isIdentifier(globalDecl.name) ||
-  !ts.isCallExpression(globalCall) ||
-  !ts.isIdentifier(globalCall.expression) ||
-  globalCall.arguments.length !== 0 ||
+  !(
+    emptySeed ||
+    (globalCall &&
+      ts.isIdentifier(globalCall.expression) &&
+      globalCall.arguments.length === 0)
+  ) ||
+  // The probe calls the merge with no arguments, so a parameter could change
+  // what the bundle's own calls copy.
+  merge.parameters.length !== 0 ||
   !ts.isTryStatement(tryStatement) ||
   !ts.isVariableStatement(tryStatement.tryBlock.statements[0]) ||
   tryStatement.tryBlock.statements[0].declarationList.declarations.length !==
@@ -183,6 +200,82 @@ if (
   returnStatement.expression.text !== globalDecl.name.text
 )
   fail("workspace merge has an unsupported loader shape");
+
+// 3.1.0 only: exactly one zero-argument function whose whole body returns
+// `{...globalLoader(),...merge()}`, in that order and nothing else.
+let composer;
+let composerGlobalName;
+if (emptySeed) {
+  const composers = [];
+  const isZeroArgCall = (node, name) =>
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.arguments.length === 0 &&
+    (name === undefined || node.expression.text === name);
+  const findComposers = (node) => {
+    const ret = ts.isFunctionDeclaration(node)
+      ? node.body?.statements?.[0]
+      : undefined;
+    const object =
+      ret && ts.isReturnStatement(ret) ? ret.expression : undefined;
+    if (
+      object &&
+      node.parent === file &&
+      node.parameters.length === 0 &&
+      node.body.statements.length === 1 &&
+      ts.isObjectLiteralExpression(object) &&
+      object.properties.length === 2 &&
+      object.properties.every(ts.isSpreadAssignment) &&
+      isZeroArgCall(object.properties[0].expression) &&
+      isZeroArgCall(object.properties[1].expression, merge.name.text)
+    )
+      composers.push({ node, global: object.properties[0].expression });
+    ts.forEachChild(node, findComposers);
+  };
+  findComposers(file);
+  if (composers.length !== 1)
+    fail("workspace merge has an unsupported loader shape");
+  composer = composers[0].node;
+  composerGlobalName = composers[0].global.expression.text;
+}
+
+// Callers resolve the merge and the composer by spelling alone, so every
+// occurrence of either name must be its discovered declaration or a call of
+// it. Any second binding, write, destructuring target, alias or escape would
+// change what runs. A non-computed property key or member name (`{x:1}`,
+// `o.x`, `{x(){}}`, `class{x=1}`, `get x(){}`) and a statement label (`x:`,
+// `break x`) are not uses of the binding; a shorthand property, computed key
+// or destructuring target still is.
+const isPropertyName = (node) => {
+  const parent = node.parent;
+  return (
+    ((ts.isPropertyAccessExpression(parent) ||
+      ts.isPropertyAssignment(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isAccessor(parent)) &&
+      parent.name === node) ||
+    ((ts.isLabeledStatement(parent) || ts.isBreakOrContinueStatement(parent)) &&
+      parent.label === node) ||
+    (ts.isBindingElement(parent) && parent.propertyName === node)
+  );
+};
+function checkNameUses(declaration, label) {
+  const visit = (node) => {
+    if (
+      ts.isIdentifier(node) &&
+      node.text === declaration.name.text &&
+      node !== declaration.name &&
+      !isPropertyName(node) &&
+      !(ts.isCallExpression(node.parent) && node.parent.expression === node)
+    )
+      fail(`workspace ${label} name is mutated, shadowed, or escapes`);
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+}
+checkNameUses(merge, "merge");
+if (composer) checkNameUses(composer, "composer");
 
 const hasCalls = [];
 function checkMergeUses(node) {
@@ -222,44 +315,114 @@ if (
 }
 
 // Execute only this small original merge helper, with inert load/read/logger
-// dependencies. Opposing global/workspace sentinels prove every extracted key
-// overrides and an unknown key does not; a negated or incidental .has fails.
-const workspace = Object.fromEntries(
-  [...values.allowlist, "kiro.extractor.unknown", "kiro.extractor.other"].map(
-    (key) => [key, `workspace:${key}`],
-  ),
-);
-const globalSettings = Object.fromEntries(
-  Object.keys(workspace).map((key) => [key, `global:${key}`]),
-);
-const expectedMerged = Object.fromEntries(
-  Object.keys(workspace).map((key) => [
-    key,
-    values.allowlist.includes(key) ? workspace[key] : globalSettings[key],
+// dependencies. The workspace is a Proxy that enumerates the allowlist, two
+// opposing sentinels and every string literal the merge mentions. Each
+// enumerated key holds a workspace value whose type cycles by key index
+// through every JSON value kind (string, "", true, false, 0, 1, null, array,
+// object), so a merge that copies by type, truthiness or null is caught. One
+// run per kind shifts the cycle so every key meets every kind. Each allowlist
+// key must hold exactly its workspace value (`===`); every other enumerated key
+// must keep its global value; any other key must not hold the string marker a
+// workspace read of a key outside that list returns.
+const marker = (key) => `workspace:${key}`;
+const literals = new Set();
+(function collectLiterals(node) {
+  if (ts.isStringLiteralLike(node)) literals.add(node.text);
+  ts.forEachChild(node, collectLiterals);
+})(merge);
+const workspaceKeys = [
+  ...new Set([
+    ...values.allowlist,
+    "kiro.extractor.unknown",
+    "kiro.extractor.other",
+    ...literals,
   ]),
-);
+];
+const workspaceValueTypes = [
+  marker,
+  () => "",
+  () => true,
+  () => false,
+  () => 0,
+  () => 1,
+  () => null,
+  () => [],
+  () => ({}),
+];
 const mergeExpression =
   `(()=>{const ${registryName}=${registry.right.getText(file)};` +
   `const ${allowlistName}=${allowlist.right.getText(file)};` +
-  `const ${globalCall.expression.text}=()=>({...globalSettings});` +
+  `const ${emptySeed ? composerGlobalName : globalCall.expression.text}=()=>({...globalSettings});` +
   `const ${pathCall.expression.text}=()=>"fixture-path";` +
   `const ${workspaceCall.expression.text}=(path)=>{if(path!=="fixture-path")throw Error("path");return workspace};` +
   `const ${catchCall.expression.expression.text}={warn:()=>{throw Error("workspace read failed")}};` +
-  `${merge.getText(file)};return ${merge.name.text}()})()`;
-let merged;
-try {
-  merged = vm.runInNewContext(
-    mergeExpression,
-    { globalSettings, workspace },
-    { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
+  (emptySeed
+    ? `${merge.getText(file)};${composer.getText(file)};return ${composer.name.text}()})()`
+    : `${merge.getText(file)};return ${merge.name.text}()})()`);
+const runProbe = (rotation) => {
+  const workspaceValues = new Map(
+    workspaceKeys.map((key, index) => [
+      key,
+      workspaceValueTypes[(index + rotation) % workspaceValueTypes.length](key),
+    ]),
   );
-} catch {
-  fail("workspace merge could not be evaluated with isolated settings");
-}
-for (const [key, expected] of Object.entries(expectedMerged)) {
-  if (merged?.[key] !== expected)
-    fail("workspace merge does not apply exactly the extracted allowlist");
-}
+  const workspace = new Proxy(
+    {},
+    {
+      get: (_, key) =>
+        workspaceValues.has(key)
+          ? workspaceValues.get(key)
+          : typeof key === "string"
+            ? marker(key)
+            : undefined,
+      getOwnPropertyDescriptor: (_, key) =>
+        workspaceValues.has(key)
+          ? {
+              value: workspaceValues.get(key),
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            }
+          : undefined,
+      has: () => true,
+      ownKeys: () => workspaceKeys,
+    },
+  );
+  const globalSettings = Object.fromEntries(
+    workspaceKeys.map((key) => [key, `global:${key}`]),
+  );
+  let merged;
+  try {
+    merged = vm.runInNewContext(
+      mergeExpression,
+      { globalSettings, workspace },
+      { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
+    );
+  } catch {
+    fail("workspace merge could not be evaluated with isolated settings");
+  }
+  // Reading the result runs bundle getters, so a throw here is a refusal too.
+  try {
+    return (
+      workspaceKeys.every(
+        (key) =>
+          merged?.[key] ===
+          (values.allowlist.includes(key)
+            ? workspaceValues.get(key)
+            : globalSettings[key]),
+      ) &&
+      Object.entries(merged).every(
+        ([key, value]) =>
+          !(typeof value === "string" && value.startsWith("workspace:")) ||
+          values.allowlist.includes(key),
+      )
+    );
+  } catch {
+    return false;
+  }
+};
+if (!workspaceValueTypes.every((_, rotation) => runProbe(rotation)))
+  fail("workspace merge does not apply exactly the extracted allowlist");
 
 process.stdout.write(
   JSON.stringify({
