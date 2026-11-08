@@ -294,5 +294,9 @@ CI builds both packages on Linux and Darwin through package discovery. Checks:
   the Plugins package row, `/workflow list` dispatch with zero model turns, and
   absence of `/workflow` when that row's resource id is disabled in user
   settings. An absent-package control also consumes unknown input before model
-  dispatch. Fresh HOME/XDG paths isolate resource and credential state; each
-  process has a 60-second deadline.
+  dispatch. A second set of cases declares the package in both scopes at
+  distinct entry paths, trusts the project through `trust.json` alone and hands
+  the child a step contract: a valid contract must register
+  `workflow_submit_result` and no `/workflow`, a malformed one neither, and no
+  contract the ordinary `/workflow`. Fresh HOME/XDG paths isolate resource and
+  credential state; each process has a 60-second deadline.
