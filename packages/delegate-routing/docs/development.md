@@ -1,14 +1,16 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-07 — routing ships an always-on "Pool drain" entry
-> and a "Tune these rules" entry, the Review step holds the one review rule, the
-> Work and review workflow builds a branch as units each reviewed by one check
-> before the next starts (all three checks at the branch-level review when the
-> PR goes ready), the usage helpers share one schema with UTC reset times,
-> portable pools resolve usage readers and label family reaches on both
-> backends, proxy-accounted-usage reads a Manager+ accounted monthly budget, and
-> the always-on stub names the source for steering its rules; OpenCode Go joins
-> z.ai as an API-key pool found by base URL, with opt-in Go preset families.
+> **Last verified:** 2026-11-07 — the renderer consumes the private shared
+> routing view for launch reaches and registered readers; routing ships an
+> always-on "Pool drain" entry and a "Tune these rules" entry, the Review step
+> holds the one review rule, the Work and review workflow builds a branch as
+> units each reviewed by one check before the next starts (all three checks at
+> the branch-level review when the PR goes ready), the usage helpers share one
+> schema with UTC reset times, portable pools resolve usage readers and label
+> family reaches on both backends, proxy-accounted-usage reads a Manager+
+> accounted monthly budget, and the always-on stub names the source for steering
+> its rules; OpenCode Go joins z.ai as an API-key pool found by base URL, with
+> opt-in Go preset families.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -244,6 +246,19 @@ external commands on PATH. Introspection and usage nodes describe how to obtain
 live evidence. Usage commands remain part of the existing technique catalog.
 Each package field uses `mkDefault`; consumers can override fields, add nodes or
 disable a node.
+
+The private `lib/routing-view.nix` owns automatic and manual reach selection,
+eligible technique ordering, concrete model ids versus unresolved patterns,
+generated agent availability and pool bindings. `lib/render.nix` consumes those
+records for Launch cells and the Pools table; it keeps skill phrases and table
+formatting. The view reuses `select-families.nix` and takes the module's
+effective techniques, including the Kiro workflow gate, and its already resolved
+Claude agent records so proxy picker ids and family default effort remain
+available. Direct builders retain catalog resolution when no resolved agent set
+is supplied. Its reader inventory resolves every registered pool independently
+of launch targets, including readers whose runtime is absent from both automatic
+and manual reaches. Manual reaches stay separate from automatic candidates; this
+view is private implementation data, not a public manifest or option.
 
 ### Generated Claude agent files
 
