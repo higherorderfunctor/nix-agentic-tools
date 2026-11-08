@@ -1,7 +1,8 @@
 Pick the model family whose "use for" fits the task and whose "avoid for"
-doesn't. Use the effort its row suggests. When a mid-tier model isn't enough,
-step up the model before the effort. Big models gain little past their first
-effort step. A cheaper model owes the same evidence as an expensive one.
+doesn't. Use the pinned effort in the helper's candidate launch. When a mid-tier
+model isn't enough, step up the model before the effort. Big models gain little
+past their first effort step. A cheaper model owes the same evidence as an
+expensive one.
 
 Set model and effort explicitly whenever the tool allows it. A technique that
 does not pin a value inherits it from the session. An interactive session cannot
@@ -10,14 +11,6 @@ them. So treat an inheriting technique as unsized there. A headless delegate
 inherits the values it was launched with. So state the model and effort in every
 external launch brief. A delegate told its launch values may use an inheriting
 technique when those values match its choice.
-
-When "Orchestrator session" is enabled, follow its handoff order even for a
-quick look or review. When that entry is disabled, these rules apply instead:
-answer a documented fact from the few files that decide it, or ask the user; do
-a quick review from the few files that decide it, and fan out when that check
-shows the work is wide; when unsure, do the in-session pass and offer the deeper
-one with its rough cost. In either mode, an interesting or security-adjacent
-subject alone is not a reason to fan out.
 
 Name each role's model and effort in one line in the launch message to the user,
 or in the report to the orchestrator when non-interactive, so it can be
