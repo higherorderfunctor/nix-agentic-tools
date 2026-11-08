@@ -424,6 +424,7 @@ def workflow_before_source(calls, raw, case):
 ASSERTIONS = {
     "codex-lane": ("an external `codex exec` launch was attempted", lambda calls, raw, case: any(call["runtime"] == "codex" and call["kind"] == "external" for call in calls)),
     "delegate": ("at least one delegate technique was invoked (subagent, workflow or external)", lambda calls, raw, case: bool(calls)),
+    "helper-receipts": ("a delegate was attempted and registered fake Readers were observed; inspect planner behavior separately", lambda calls, raw, case: bool(calls)),
     "observe": ("none: records the delegates and passes once the session answers", lambda calls, raw, case: True),
     "one-delegate": ("exactly one subagent or external delegate, and no workflow", lambda calls, raw, case: len(calls) == 1 and calls[0]["kind"] != "workflow"),
     "workflow": ("a workflow technique, or at least two delegates", lambda calls, raw, case: any(call["kind"] == "workflow" for call in calls) or len(calls) >= 2),
@@ -593,6 +594,91 @@ def render_fixture(case, root, state):
             path.write_text(file["text"])
 
 
+def helper_command(case, repo):
+    skill = (repo / HARNESSES[case["runtime"]]["skill"]).read_text()
+    found = re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role <role> --launch-context <json-path>`", skill)
+    if not found:
+        raise ValueError("delivered skill lacks its packaged helper invocation")
+    return found[1]
+
+
+def helper_prompt(case):
+    if not case.get("helperBacked"):
+        return case["task"] + "\n\nCurrent usage (use these numbers; do not run a usage helper):\n" + json.dumps(case["usage"], sort_keys=True)
+    return (case["task"] + "\n\nUse the delivered routing helper and its registered Readers. "
+            "Readers are offline fixtures; delegate launches remain real. Save the helper JSON for planner, writer and first-check "
+            "to routing-evidence.json, and the approved unit plan to routing-plan.json. "
+            "Use this repository as the working-data directory for the plan and prepared briefs. "
+            "No live budget or model-quality claim can be made from these fixture Readers.")
+
+
+def helper_receipts(path):
+    return parse_lines(path.read_text()) if path.exists() else []
+
+
+def check_helper_evidence(snapshot, receipts):
+    # Literal expectations reject current-runtime-only inventory, session-first
+    # ranking and allowing a mid-tier review candidate. They are not live claims.
+    if {row.get("reader") for row in receipts} != {"cross-runtime", "outside", "session"}:
+        raise ValueError("helper fixture did not execute every registered fake Reader")
+    if snapshot["runtime"] != "codex" or snapshot["sessionPool"] != "session":
+        raise ValueError("helper fixture lost launching runtime/session binding")
+    for role in ("planner", "writer", "first-check"):
+        result = snapshot["roles"][role]
+        if not result["candidates"] or result["candidates"][0]["pool"] != "outside":
+            raise ValueError(f"{role}: outside pool must precede the behind-pace session")
+    reviewers = snapshot["roles"]["first-check"]
+    if not any(row["family"] == "under-tier" and row["reason"] == "below role tier floor" for row in reviewers["exclusions"]):
+        raise ValueError("mid-tier reviewer must be excluded before ranking")
+    if any(row["launch"]["family"] == "under-tier" for row in reviewers["candidates"]):
+        raise ValueError("mid-tier reviewer entered candidates")
+
+
+def exercise_helper(case, repo, logs):
+    """Offline setup proof; its receipts never stand in for session receipts."""
+    qualification = {"avoidFor": "bounded fixture excludes sole judging", "fit": "bounded fixture task", "trial": "not a trial", "useFor": "Python task"}
+    context = {"nonInteractive": True,
+               "roles": {role: {"effort": "medium", "families": {name: qualification for name in ("outside", "session", "under-tier")}}
+                         for role in ("planner", "writer", "first-check")},
+               "techniques": [{"efforts": ["medium"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+    context_path = logs / "setup-launch-context.json"
+    write_json(context_path, context)
+    argv = [helper_command(case, repo), "--launch-context", str(context_path)]
+    for role in context["roles"]:
+        argv += ["--role", role]
+    receipt_path = logs / "setup-reader-receipts.jsonl"
+    result = subprocess.run(argv, cwd=repo, env={**os.environ, "ROUTING_EVAL_RECEIPTS": str(receipt_path)},
+                            capture_output=True, text=True, check=True, timeout=60)
+    snapshot = json.loads(result.stdout)
+    write_json(logs / "setup-helper.json", {"argv": argv, "exitCode": result.returncode, "output": snapshot})
+    check_helper_evidence(snapshot, helper_receipts(receipt_path))
+    if case.get("id", "").endswith("independent-wave"):
+        rubric = "1. each function satisfies its literal examples.\n2. independent files have separate verifications.\n"
+        (logs / "setup-rubric.md").write_text(rubric)
+        (logs / "setup-brief.md").write_text("Offline artifact fixture; never launch these records.\n" + rubric)
+        units = []
+        for name, command in (("words", "unique_words('pear apple pear') == ['apple', 'pear']"), ("square", "square(3) == 9")):
+            launches = []
+            for role in ("writer", "first-check"):
+                candidate = snapshot["roles"][role]["candidates"][0]
+                launches.append({"brief": "setup-brief.md", "candidate": candidate["launch"],
+                                 "line": candidate["line"], "role": role, "runtime": "codex"})
+            units.append({"audience": "Python function caller", "checks": [], "dependencies": [], "docs": [],
+                          "files": [name + ".py"], "goal": command, "id": name, "launches": launches,
+                          "size": {"code": {"added": 3, "removed": 0}},
+                          "verification": {"command": command, "wrongImplementation": "constant or unsorted result"}})
+        plan_path = logs / "setup-plan.json"
+        write_json(plan_path, {"rubric": "setup-rubric.md", "runtime": "codex", "snapshot": snapshot,
+                               "task": "independent pure functions", "units": units, "waves": [["words", "square"]]})
+        checked_argv = argv + ["--check-plan", str(plan_path)]
+        checked = subprocess.run(checked_argv, cwd=repo, env={**os.environ, "ROUTING_EVAL_RECEIPTS": str(receipt_path)},
+                                 capture_output=True, text=True, check=True, timeout=60)
+        output = json.loads(checked.stdout)
+        if output["validation"] != {"status": "valid", "task": "independent pure functions", "units": 2, "waves": 1}:
+            raise ValueError("helper did not validate the independent two-unit wave")
+        write_json(logs / "setup-plan-validation.json", {"argv": checked_argv, "exitCode": checked.returncode, "output": output})
+
+
 def validate(cases):
     if not isinstance(cases, list) or not cases:
         raise ValueError("cases must be a nonempty list")
@@ -731,7 +817,9 @@ def prepare(case, out, args, live):
             raise ValueError(f"no model matches {baseline['model']}")
         ctx["requested"]["model"] = max(models, key=lambda model: (tuple(map(int, re.findall(r"\d+", model))), model))
     ctx["baseline_argv"] = [arg.format(**ctx["requested"]) for arg in baseline["argv"]]
-    ctx["prompt"] = case["task"] + "\n\nCurrent usage (use these numbers; do not run a usage helper):\n" + json.dumps(case["usage"], sort_keys=True)
+    ctx["prompt"] = helper_prompt(case)
+    if case.get("helperBacked") and not live:
+        exercise_helper(case, ctx["repo"], ctx["logs"])
     # A `claude setup-token` token; ~/.claude credentials are never read.
     ctx["claude_token"] = ("file", args.claude_token_file) if args.claude_token_file else (
         ("env", "CLAUDE_CODE_OAUTH_TOKEN") if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") else None)
@@ -751,6 +839,7 @@ def prepare(case, out, args, live):
         "XDG_CONFIG_HOME": str(ctx["home"] / ".config"),
         "XDG_DATA_HOME": str(ctx["home"] / ".local/share"),
         "XDG_STATE_HOME": str(ctx["home"] / ".local/state"),
+        **({"ROUTING_EVAL_RECEIPTS": str(ctx["logs"] / "session-reader-receipts.jsonl")} if case.get("helperBacked") else {}),
         **plan["env"],
     }
     return {"secrets": {}, **plan, "ctx": ctx, "env": env}
@@ -965,6 +1054,21 @@ def run_case(case, prepared, args):
     if stop or not harness["answered"](events):
         return {**record, "status": "ERROR", "detail": "no answer: " + (", ".join(stop) or f"exit {code}, no completion event; stream: {stream_shape(events)}")}
     passed = ASSERTIONS[case["expect"]][1](calls, raw_calls, case)
+    if case.get("helperBacked"):
+        receipts = helper_receipts(logs / "session-reader-receipts.jsonl")
+        snapshot = read_json(ctx["repo"] / "routing-evidence.json", {})
+        plan = read_json(ctx["repo"] / "routing-plan.json", {})
+        write_json(logs / "routing-artifacts.json", {"plan": plan, "snapshot": snapshot})
+        record["readerReceipts"] = receipts
+        try:
+            check_helper_evidence(snapshot, receipts)
+            if case["id"].endswith("independent-wave"):
+                units = {unit["id"]: unit for unit in plan["units"]}
+                if not any(len(wave) == 2 and not set(units[wave[0]]["files"]) & set(units[wave[1]]["files"])
+                           and not units[wave[0]]["dependencies"] and not units[wave[1]]["dependencies"] for wave in plan["waves"]):
+                    raise ValueError("independent units did not share a disjoint wave")
+        except (KeyError, TypeError, ValueError) as error:
+            return {**record, "status": "FAIL", "detail": f"helper evidence: {error}"}
     names = sorted(set(raw_tool_names(events)))
     summary = ", ".join(f"{call['runtime']}:{call['technique']}" for call in calls) or "no delegates; tools: " + (", ".join(names) or "none")
     return {**record, "status": "PASS" if passed else "FAIL", "detail": summary}
@@ -1004,6 +1108,7 @@ def main():
     parser.add_argument("--claude-token-file", help="file holding a `claude setup-token` token; else $CLAUDE_CODE_OAUTH_TOKEN")
     parser.add_argument("--dry-run", action="store_true", help="validate every case and print each launch; start nothing")
     parser.add_argument("--fixtures", help="case JSON exported from the check; default: evaluate it with Nix")
+    parser.add_argument("--helper-backed", action="store_true", help="opt in to fake-Reader cases; live delegates still spend model turns")
     parser.add_argument("--harness", action="append", default=[], choices=sorted(HARNESSES), help="harness (repeatable); default all")
     parser.add_argument("--keep", action="store_true", help="keep each case's fixture and scratch HOME")
     parser.add_argument("--list", action="store_true", help="print every case id, harness and assertion; start nothing")
@@ -1020,6 +1125,9 @@ def main():
         raise ValueError(f"unknown cases: {sorted(unknown)}")
     cases = [case for case in cases if (not args.case or case["id"] in args.case) and (not args.harness or case["runtime"] in args.harness)]
     cases = select(cases, args.only, lambda case: [case["id"]])
+    cases = [case for case in cases if not case.get("helperBacked") or args.helper_backed or args.dry_run or args.list]
+    if not cases:
+        raise ValueError("no selected cases; helper-backed live cases require --helper-backed")
     if args.list:
         for case in cases:
             print(f"{case['id']}\t{case['runtime']}\t{case['expect']}")
