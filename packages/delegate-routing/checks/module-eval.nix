@@ -42,6 +42,8 @@
   };
   hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.toLower (lib.replaceStrings ["\n" "`"] [" " ""] text));
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
+  # Manifest bytes may change while the compared prose stays identical.
+  withoutHelperPath = text: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" text));
   optionTree = result: path: lib.getAttrFromPath path result.options;
   checkBackend = {
     name,
@@ -483,7 +485,184 @@
       techniques = selection.effectiveTechniques routingFixture.config;
     };
     routingView = import ../lib/routing-view.nix routingArgs;
+    sessionPools = {
+      claude = "claude";
+      codex = "codex";
+      kimchi = "kimchi-proxy";
+      kiro = "kiro-proxy";
+    };
+    # Build each runtime's delivered skill on both backends with a registered fake
+    # Reader, not a Python-authored manifest or a helper passthru shortcut.
+    readerOutput = pkgs.writeText "routing-reader.json" (builtins.toJSON {
+      account = {
+        auth_index = null;
+        name = "fixture";
+        plan = null;
+      };
+      balances = [];
+      bonuses = [];
+      pool = "not-the-registration";
+      windows.monthly = {
+        remainingPercent = 50;
+        resetsAt = "2026-12-01T00:00:00Z";
+        status = "ok";
+        usedPercent = 50;
+        windowSeconds = 2592000;
+      };
+    });
+    packagedHelperCases = {
+      claude = {
+        pool = "claude";
+        technique = "Workflow";
+      };
+      codex = {
+        pool = "codex";
+        technique = "spawn_agent";
+      };
+      kimchi = {
+        pool = "kimchi-proxy";
+        technique = "Agent";
+      };
+      kiro = {
+        pool = "kiro-proxy";
+        technique = "run_workflow";
+      };
+    };
+    packagedHelperDelivery = runtime:
+      change {
+        ai.kiro.cli.workflows.enable = true;
+        ai.programs.delegate-routing = {
+          families.fixture.packaged = {
+            example.${runtime} = "fixture-model";
+            match = "fixture-model";
+            pools.${runtime} = sessionPools.${runtime};
+            tier = "strong";
+          };
+          pools = lib.mkForce {
+            ${sessionPools.${runtime}}.usage = {
+              inherit runtime;
+              technique = "fixture-reader";
+            };
+          };
+          runtimes.${runtime} = {
+            extraRuntimes = lib.mkForce [];
+            manualExternalDelegates = lib.mkForce [];
+            models = lib.mkForce [{vendors = ["fixture"];}];
+            sessionPool = sessionPools.${runtime};
+            techniques.fixture-reader = {
+              command = "${pkgs.coreutils}/bin/cat ${readerOutput}";
+              kind = "usage";
+            };
+          };
+        };
+      };
+    sessionDelivery = change {
+      ai.programs.delegate-routing = {
+        pools = lib.genAttrs ["claude" "codex" "kimchi-proxy" "kiro-proxy"] (_: {
+          window = {
+            limit = 100;
+            resetDay = 1;
+            unit = "credits";
+          };
+        });
+        runtimes = {
+          claude.sessionPool = "claude";
+          codex.sessionPool = "codex";
+          kimchi.sessionPool = "kimchi-proxy";
+          kiro.sessionPool = "kiro-proxy";
+        };
+      };
+    };
+    # Like mkWrapperGrepTest, realize the module output and inspect what ships.
+    # Rejects a manifest with sessionPool = null even when skill prose is correct.
+    packagedHelperCheck = runtime: let
+      expected = packagedHelperCases.${runtime};
+    in
+      pkgs.runCommand "delegate-routing-${name}-${runtime}-packaged-helper" {
+        # Read the delivered file with its store-reference context so the
+        # advertised helper and manifest are inputs to this check's sandbox.
+        expectedPool = expected.pool;
+        expectedTechnique = expected.technique;
+        passAsFile = ["skill"];
+        inherit runtime;
+        skill = readSkill (packagedHelperDelivery runtime) runtime;
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${pkgs.python3}/bin/python3 - <<'PYTHON'
+        import json
+        import os
+        from pathlib import Path
+        import re
+        import subprocess
+
+        runtime = os.environ["runtime"]
+        expected_pool = os.environ["expectedPool"]
+        technique = os.environ["expectedTechnique"]
+        skill = Path(os.environ["skillPath"]).read_text()
+        command = re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role <role> --launch-context <json-path>`", skill)
+        assert command, "delivered skill lacks the complete helper invocation"
+        wrapper = Path(command[1])
+        script = wrapper.read_text()
+        manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
+        manifest = json.loads(Path(manifest_path).read_text())
+        context = Path("launch-context.json")
+        context.write_text(json.dumps({
+            "nonInteractive": True,
+            "roles": {"writer": {"effort": "high", "families": {"packaged": {
+                "avoidFor": "fixture has no exclusions", "fit": "fixture writer",
+                "trial": "not a trial", "useFor": "fixture task",
+            }}}},
+            "techniques": [{"efforts": ["high"], "model": "fixture-model", "runtime": runtime, "technique": technique}],
+        }))
+
+        def check(executable):
+            result = subprocess.run([str(executable), "--role", "writer", "--launch-context", str(context), "--now", "2026-11-15T00:00:00Z"], capture_output=True, text=True, check=True)
+            output = json.loads(result.stdout)
+            assert output["sessionPool"] == expected_pool, f"sessionPool must be {expected_pool}"
+            assert output["runtime"] == runtime, output
+            assert output["automaticRuntimes"] == [runtime], output
+            assert output["snapshot"] == "2026-11-15T00:00:00+00:00", output
+            assert output["pools"] == {expected_pool: {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, output
+            candidates = output["roles"]["writer"]["candidates"]
+            assert len(candidates) == 1, output
+            expected = f"role=writer runtime={runtime} family=packaged technique={technique} model=fixture-model effort=high"
+            assert candidates[0]["line"] == expected, output
+            assert candidates[0]["pool"] == expected_pool, output
+            assert candidates[0]["budget"] == "measured", output
+            assert result.stderr.strip() == expected, result.stderr
+
+        check(wrapper)
+        # Reproduce the broken generated-manifest change with the same packaged
+        # script and helper, changing only its manifest path to a writable copy.
+        manifest["sessionPool"] = None
+        broken_manifest = Path("broken-manifest.json").resolve()
+        broken_manifest.write_text(json.dumps(manifest))
+        broken_wrapper = Path("broken-wrapper").resolve()
+        broken_wrapper.write_text(script.replace(manifest_path, str(broken_manifest)))
+        broken_wrapper.chmod(0o700)
+        try:
+            check(broken_wrapper)
+        except AssertionError as error:
+            assert str(error) == f"sessionPool must be {expected_pool}", error
+        else:
+            raise AssertionError("sessionPool = null mutation escaped the packaged check")
+        print("PASS: ${name}/${runtime} delivered skill -> wrapper -> manifest -> fake Reader; sessionPool = null rejected")
+        PYTHON
+        ${pkgs.coreutils}/bin/touch "$out"
+      '';
   in {
+    "module-delegate-routing-${name}-claude-packaged-helper" = packagedHelperCheck "claude";
+    "module-delegate-routing-${name}-codex-packaged-helper" = packagedHelperCheck "codex";
+    "module-delegate-routing-${name}-kimchi-packaged-helper" = packagedHelperCheck "kimchi";
+    "module-delegate-routing-${name}-kiro-packaged-helper" = packagedHelperCheck "kiro";
+    # Fails if common-module delivery drops sessionPool or renders another
+    # runtime's identity or pool. All four skills are supported on both
+    # backends; HM Kimchi's reminder-hook exclusion does not exclude its skill.
+    "module-delegate-routing-${name}-session-pool-delivery" = mkTest "delegate-routing-${name}-session-pool-delivery" (
+      passes sessionDelivery
+      && lib.all (runtime: lib.hasInfix "Runtime: ${runtime}; session pool: ${sessionPools.${runtime}}." (readSkill sessionDelivery runtime)) runtimes
+    );
     # Fails if automatic routes admit a disabled technique, unresolved agent,
     # manual-only target or another harness's native tool; reader inventory
     # must still include a registered runtime outside all launch targets.
@@ -746,14 +925,14 @@
       == {}
       && lib.all (runtime:
         !(lib.hasInfix "## Pools" (readSkill result runtime))
-        && readSkill result runtime
-        == readSkill (change {
-          ai.programs.delegate-routing = {
-            families.anthropic.opus.pools.claude = null;
-            pools = {};
-          };
-        })
-        runtime)
+        && withoutHelperPath (readSkill result runtime)
+        == withoutHelperPath (readSkill (change {
+            ai.programs.delegate-routing = {
+              families.anthropic.opus.pools.claude = null;
+              pools = {};
+            };
+          })
+          runtime))
       runtimes
       && lib.all (family: family.pools == {}) ((import ../lib/select-families.nix {inherit lib;}).flatten result.config.ai.programs.delegate-routing.families)
     );
@@ -802,7 +981,7 @@
         && lib.hasInfix "- opus (anthropic) `claude-opus-*`: `kiro-cli chat` with model_id the highest id matching `claude-opus-*` (pool measured)" text
         && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `claude-opus-*`, else `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
-        && readSkill (poolChange {pools.measured.window = window;}) "claude" == poolSkill
+        && withoutHelperPath (readSkill (poolChange {pools.measured.window = window;}) "claude") == withoutHelperPath poolSkill
         && ruleText poolResult == stub
         && poolResult.config.ai.programs.delegate-routing.pools.configured.description == ""
         && poolResult.config.ai.programs.delegate-routing.pools.configured.usage == null
@@ -1425,6 +1604,7 @@
       && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
       && !(alwaysDisabled.config.ai.codex.rules ? delegate-routing-router)
       && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
+      # Shared AGENTS.md targets require byte-identical runtime rule contributions.
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-routing-router.text == stub) runtimes
     );
     "module-delegate-routing-${name}-routing-consumer" = mkTest "delegate-routing-${name}-routing-consumer" (
