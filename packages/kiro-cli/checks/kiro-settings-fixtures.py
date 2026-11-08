@@ -71,9 +71,19 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert len(modern_result["workspaceOverridableSettings"]) == 11, modern_result
     assert "chat.defaultModel" in modern_result["workspaceOverridableSettings"]
 
-    # A property key that only shares the merge's spelling is not a use of it.
-    unrelated = run(bundle(merge=empty_seed + composer + "const o={merge:1};o.merge;"))
-    assert unrelated.returncode == 0, unrelated.stderr
+    # A property key or member name that only shares the merge's or the
+    # composer's spelling is not a use of it.
+    for member in [
+        "const o={merge:1};o.merge;",
+        "const o={merge(){return 1}};",
+        "class C{merge(){return 1}};",
+        "class D{compose=2};",
+        "const o={get compose(){return 1},set merge(v){}};",
+        "merge:for(;;)break merge;",
+        "compose:for(;;)continue compose;",
+    ]:
+        unrelated = run(bundle(merge=empty_seed + composer + member))
+        assert unrelated.returncode == 0, (member, unrelated.stderr)
 
     cases = {
         "accept all": (
@@ -225,6 +235,14 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
         "reversed composer spread": (
             bundle(merge=empty_seed + "function compose(){return{...merge(),...globalLoad()}}"),
             "unsupported loader shape",
+        ),
+        "computed merge key": (
+            bundle(merge=empty_seed + composer + "const o={[merge](){return 1}};"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
+        "computed composer class field": (
+            bundle(merge=empty_seed + composer + "class D{[compose]=1};"),
+            "composer name is mutated, shadowed, or escapes",
         ),
         "shadowed merge beside composer": (
             bundle(merge=empty_seed + composer + "function outer(){let merge=1}"),

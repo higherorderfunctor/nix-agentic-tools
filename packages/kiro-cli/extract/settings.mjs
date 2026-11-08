@@ -240,13 +240,20 @@ if (emptySeed) {
 // occurrence of either name must be its discovered declaration or a call of
 // it. Any second binding, write, destructuring target, alias or escape would
 // change what runs. A non-computed property key or member name (`{x:1}`,
-// `o.x`) is not a use of the binding; a shorthand property or destructuring
-// target still is.
+// `o.x`, `{x(){}}`, `class{x=1}`, `get x(){}`) and a statement label (`x:`,
+// `break x`) are not uses of the binding; a shorthand property, computed key
+// or destructuring target still is.
 const isPropertyName = (node) => {
   const parent = node.parent;
   return (
-    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    ((ts.isPropertyAccessExpression(parent) ||
+      ts.isPropertyAssignment(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isAccessor(parent)) &&
+      parent.name === node) ||
+    ((ts.isLabeledStatement(parent) || ts.isBreakOrContinueStatement(parent)) &&
+      parent.label === node) ||
     (ts.isBindingElement(parent) && parent.propertyName === node)
   );
 };
