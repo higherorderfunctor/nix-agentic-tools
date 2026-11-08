@@ -3,10 +3,12 @@
 import argparse
 from datetime import datetime, timedelta, timezone
 import fnmatch
+from graphlib import TopologicalSorter
 import json
 import math
 import os
 from pathlib import Path
+import posixpath
 import signal
 import subprocess
 import sys
@@ -18,6 +20,7 @@ ROLE_TIERS = {
     "investigator": {"small", "mid", "strong", "frontier"},
     "judge": {"strong", "frontier"},
     "mechanical": {"small", "mid", "strong", "frontier"},
+    "planner": {"strong", "frontier"},
     "second-check": {"strong", "frontier"},
     "writer": {"small", "mid", "strong", "frontier"},
 }
@@ -229,8 +232,111 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     return result
 
 
+def check_plan(artifact, current, directory, max_concurrency=10):
+    """Check saved launch choices against a fresh decision, never a plan allowlist."""
+    if not 1 <= max_concurrency <= 10:
+        raise ValueError("concurrency cap must be between 1 and 10")
+    if not isinstance(artifact.get("task"), str) or not artifact["task"].strip():
+        raise ValueError("plan requires task identity")
+    if artifact["runtime"] != current["runtime"]:
+        raise ValueError("plan must use the actual launching runtime's helper")
+    # The saved snapshot is provenance, not authority for current pace or routes.
+    snapshot = artifact["snapshot"]
+    snapshot_types = {"automaticRuntimes": list, "manualOnly": list, "pools": dict, "roles": dict, "runtime": str, "sessionPool": (str, type(None)), "snapshot": str, "warnings": list}
+    if not isinstance(snapshot, dict) or any(field not in snapshot or not isinstance(snapshot[field], kind) for field, kind in snapshot_types.items()):
+        raise ValueError("saved helper snapshot must be a complete helper snapshot")
+    utc(snapshot["snapshot"])
+    if snapshot["runtime"] != artifact["runtime"]:
+        raise ValueError("saved helper snapshot requires matching runtime")
+
+    def read_artifact(path):
+        # Rubric and brief artifacts cannot name absolute or upward paths.
+        if not isinstance(path, str) or not path.strip() or Path(path).is_absolute() or ".." in Path(path).parts:
+            raise ValueError("artifact paths must be plan-relative, without absolute or upward components")
+        return (directory / path).read_bytes()
+
+    rubric = read_artifact(artifact["rubric"])
+    if not rubric.strip():
+        raise ValueError("saved rubric must not be empty")
+    units = artifact["units"]
+    if not isinstance(units, list) or not units:
+        raise ValueError("plan requires units")
+    indexed = {}
+    for unit in units:
+        identity = unit["id"]
+        if not isinstance(identity, str) or not identity.strip() or identity in indexed:
+            raise ValueError("unit ids must be nonempty and unique")
+        indexed[identity] = unit
+        for field in ("audience", "goal"):
+            if not isinstance(unit[field], str) or not unit[field].strip():
+                raise ValueError(f"{identity}: {field} required")
+        for field in ("command", "wrongImplementation"):
+            if not isinstance(unit["verification"][field], str) or not unit["verification"][field].strip():
+                raise ValueError(f"{identity}: verification {field} required")
+        for field in ("checks", "dependencies", "docs", "files"):
+            if not isinstance(unit[field], list) or not all(isinstance(value, str) and value.strip() for value in unit[field]):
+                raise ValueError(f"{identity}: {field} must be a path/id list")
+        if not unit["files"] or not unit["size"]:
+            raise ValueError(f"{identity}: file ownership and per-kind size required")
+        if not set(unit["docs"] + unit["checks"]) <= set(unit["files"]):
+            raise ValueError(f"{identity}: associated docs/checks need writer ownership")
+        for path in unit["files"]:
+            if path.startswith("/") or posixpath.normpath(path) in (".", "..") or posixpath.normpath(path).startswith("../"):
+                raise ValueError(f"{identity}: writer files must be repository-relative")
+        for counts in unit["size"].values():
+            if not isinstance(counts, dict) or set(counts) != {"added", "removed"} or any(type(value) is not int or value < 0 for value in counts.values()):
+                raise ValueError(f"{identity}: size needs nonnegative added/removed counts per kind")
+        launches = unit["launches"]
+        if not isinstance(launches, list) or not launches:
+            raise ValueError(f"{identity}: prepared worker/reviewer launches required")
+        roles = [record["role"] for record in launches]
+        if "planner" in roles or not set(roles) <= ROLE_TIERS.keys():
+            raise ValueError(f"{identity}: only worker and reviewer roles are allowed in approved units")
+        if len(set(roles)) != len(roles) or sum(role in ("investigator", "mechanical", "writer") for role in roles) != 1 or "first-check" not in roles:
+            raise ValueError(f"{identity}: one worker and a first-check review barrier required")
+        for record in launches:
+            role = record["role"]
+            if record["runtime"] != current["runtime"]:
+                raise ValueError(f"{identity}: launch runtime requires its own helper validation")
+            candidates = current["roles"].get(role, {}).get("candidates", [])
+            if not any(record["candidate"] == candidate["launch"] and record["line"] == candidate["line"] for candidate in candidates):
+                raise ValueError(f"{identity}: {role} candidate/line absent from current helper output")
+            if rubric not in read_artifact(record["brief"]):
+                raise ValueError(f"{identity}: {role} brief must contain the full rubric verbatim")
+    for identity, unit in indexed.items():
+        if any(dependency not in indexed for dependency in unit["dependencies"]):
+            raise ValueError(f"{identity}: unknown dependency")
+    # CycleError is a ValueError; report the graph's involved unit ids to callers.
+    tuple(TopologicalSorter({identity: unit["dependencies"] for identity, unit in indexed.items()}).static_order())
+    waves, seen = artifact["waves"], set()
+    if not isinstance(waves, list) or not waves:
+        raise ValueError("plan requires launch waves")
+    for wave in waves:
+        if not isinstance(wave, list) or not wave:
+            raise ValueError("wave must contain unit ids")
+        owners = set()
+        for identity in wave:
+            if identity not in indexed or identity in seen or wave.count(identity) != 1:
+                raise ValueError("each known unit must appear in exactly one wave")
+            unit = indexed[identity]
+            if not set(unit["dependencies"]) <= seen:
+                raise ValueError(f"{identity}: dependencies require an earlier reviewed/committed wave")
+            files = {posixpath.normpath(path) for path in unit["files"]}
+            if owners & files:
+                raise ValueError(f"{identity}: overlapping same-wave writer files")
+            owners.update(files)
+        if sum(len(indexed[identity]["launches"]) for identity in wave) > max_concurrency:
+            raise ValueError(f"wave must contain 1..{max_concurrency} delegates across all unit launches")
+        seen.update(wave)
+    if seen != set(indexed):
+        raise ValueError("each known unit must appear in exactly one wave")
+    return {"status": "valid", "task": artifact["task"], "units": len(units), "waves": len(waves)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check-plan", help="validate saved JSON and prepared briefs against this invocation")
+    parser.add_argument("--max-concurrency", type=int, default=10, help="explicit host/user cap, at most ten")
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--reader-shell", required=True)
     parser.add_argument("--launch-context", required=True)
@@ -239,7 +345,10 @@ def main():
     args = parser.parse_args()
     try:
         result = plan(json.loads(Path(args.manifest).read_text()), json.loads(Path(args.launch_context).read_text()), args.role, utc(args.now) if args.now else datetime.now(timezone.utc), args.reader_shell)
-    except (KeyError, TypeError, ValueError, OSError) as error:
+        if args.check_plan:
+            path = Path(args.check_plan).resolve()
+            result["validation"] = check_plan(json.loads(path.read_text()), result, path.parent, args.max_concurrency)
+    except (AttributeError, KeyError, TypeError, ValueError, OSError) as error:
         parser.exit(2, f"delegate-routing-plan: {error}\n")
     print(json.dumps(result, sort_keys=True))
     for role in args.role:

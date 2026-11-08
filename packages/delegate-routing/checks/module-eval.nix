@@ -1643,7 +1643,7 @@
       && lib.hasInfix "### ${workflowName}" codex
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
-      && lib.hasInfix "6. **Loop:**" claude
+      && lib.hasInfix "7. **Loop:**" claude
       # Fails if units lose their definition, cadence or vendor separation,
       # fixes re-review the whole branch or retain its base, or mid-build
       # units remain subject to the opening three-check rule, or the
@@ -1656,11 +1656,11 @@
       && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
-      && lib.hasInfix "6. **Loop:**" (readSkill runtimeWorkflowStep "claude")
+      && lib.hasInfix "7. **Loop:**" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix workflowHeader (readSkill runtimeCatalogHeader "claude"))
       && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogHeader "claude")
-      && lib.hasInfix "6. **Loop:**" (readSkill runtimeCatalogHeader "claude")
+      && lib.hasInfix "7. **Loop:**" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
       && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
       && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")
