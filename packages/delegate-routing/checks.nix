@@ -13,6 +13,7 @@ in {
     delegate-routing-eval-structure =
       pkgs.runCommand "delegate-routing-eval-structure" {
         nativeBuildInputs = [pkgs.diffutils pkgs.git pkgs.python3];
+        ROUTING_PLAN_SOURCE = ./scripts/delegate-routing-plan.py;
         passthru = {inherit cases;};
       } ''
         set -euETo pipefail
