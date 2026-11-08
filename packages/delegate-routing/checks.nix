@@ -32,6 +32,15 @@ in {
       harness.mkTest "delegate-routing-opencode-go-presets" (
         drift == [] || throw "delegate-routing opencode-go presets drift from the pinned catalog: ${lib.concatStringsSep "; " drift}"
       );
+    delegate-routing-plan-runtime =
+      pkgs.runCommand "delegate-routing-plan-runtime" {
+        nativeBuildInputs = [pkgs.bash pkgs.python3];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        python3 ${./checks/routing-plan-runtime.py} ${./scripts/delegate-routing-plan.py}
+        touch "$out"
+      '';
     delegate-routing-usage-runtime =
       pkgs.runCommand "delegate-routing-usage-runtime" {
         nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3];

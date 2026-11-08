@@ -351,7 +351,7 @@ nix build .#dns-root-hints
 | Package | Description |
 |---------|-------------|
 | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-| `delegate-routing-content` | Per-runtime model/effort sizing skills and a short routing rule |
+| `delegate-routing-content` | Per-runtime sizing skills, deterministic routing helper and a short routing rule |
 | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
 Content packages are derivations with `passthru.fragments` for composable
@@ -1138,6 +1138,20 @@ introspection and usage. Override a node's fields or disable it with
 from the live runtime list, using its own spelling. Usage commands come from the
 existing technique catalog. Both Home Manager and devenv expose the same
 options.
+
+The skill renders an absolute non-launching `delegate-routing-plan` command, its
+runtime and session pool; the always-on router stays runtime-neutral for shared
+AGENTS.md targets. Pass `--role writer --launch-context <json-path>` with
+caller-observed techniques, concrete model/effort support and qualified family
+evidence. The helper collects all registered Readers once, ranks worst-window
+pace and enforces the strong/frontier review floor. Configure
+`runtimes.<runtime>.sessionPool` with the actual registered pool key (for
+example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
+warns that the session buffer cannot be certified. With no pools it reports
+fit-only budget uncertainty. Output is JSON plus canonical routing
+specifications; the command never launches delegates. See the
+[helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper)
+for the launch-context schema and unknown handling.
 
 #### Per-turn reminder
 

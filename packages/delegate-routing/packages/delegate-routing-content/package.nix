@@ -66,19 +66,50 @@
   # pkgs carries no overlay, so the overlay's linters are not in it.
   # Defaults merge before the overridable builder, so a direct caller's
   # `.override (prev: ...)` reads the shipped inputs, `prev.skill` included.
-  mkSkill = args: lib.makeOverridable buildSkill (defaults // args);
-  buildSkill = args:
+  mkSkill = args: lib.makeOverridable buildSkill (defaults // {sessionPool = null;} // args);
+  buildSkill = args: let
+    techniques = normalizeTechniques args.techniques;
+    view = import ../../lib/routing-view.nix {
+      inherit lib techniques;
+      inherit (args) runtime families models;
+      pools = args.pools or {};
+      resolvedAgentFiles = args.resolvedAgentFiles or null;
+      extraRuntimes = args.extraRuntimes or [];
+      manualExternalDelegates = args.manualExternalDelegates or [];
+    };
+    pools = args.pools or {};
+    manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
+      if args.sessionPool != null && !(builtins.hasAttr args.sessionPool pools)
+      then throw "delegate-routing.runtimes.${args.runtime}.sessionPool: unknown pool `${args.sessionPool}`"
+      else view // {inherit (args) runtime sessionPool;}
+    ));
+    helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
+      name = "delegate-routing-plan";
+      text = ''
+        exec ${pkgs.python3}/bin/python3 ${../../scripts/delegate-routing-plan.py} "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
+      '';
+    };
+    helperCommand = lib.getExe helper;
+    helperInstruction = "Runtime: ${args.runtime}; session pool: ${
+      if args.sessionPool == null
+      then "unknown (buffer cannot be certified)"
+      else args.sessionPool
+    }. Run `${helperCommand} --role <role> --launch-context <json-path>` before choosing a route. The command collects registered Readers and prints JSON and canonical routing specifications; it never launches delegates. Load the skill for launch-context guidance.";
+  in
     generated.mkTree {
       name = "delegate-routing-${args.runtime}-skill";
       files."SKILL.md" = {
         type = "markdown";
         text = frontmatter.render {
           data = skillData;
-          body = import ../../lib/render.nix ({inherit lib;} // args // {techniques = normalizeTechniques args.techniques;});
+          body = import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["sessionPool"] // {inherit helperInstruction techniques;});
         };
       };
       guards.parseCompare = true;
-      passthru.text = render args;
+      passthru = {
+        inherit helperCommand helperInstruction manifest;
+        text = render args;
+      };
       inherit (args) runtime;
       inherit treefmt;
     };

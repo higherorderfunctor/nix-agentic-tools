@@ -42,6 +42,8 @@
   };
   hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.toLower (lib.replaceStrings ["\n" "`"] [" " ""] text));
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
+  # Manifest bytes may change while the compared prose stays identical.
+  withoutHelperPath = text: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" text));
   optionTree = result: path: lib.getAttrFromPath path result.options;
   checkBackend = {
     name,
@@ -483,7 +485,61 @@
       techniques = selection.effectiveTechniques routingFixture.config;
     };
     routingView = import ../lib/routing-view.nix routingArgs;
+    sessionPools = {
+      claude = "claude";
+      codex = "codex";
+      kimchi = "kimchi-proxy";
+      kiro = "kiro-proxy";
+    };
+    sessionDelivery = change {
+      # Inspect the production builder's manifest before the module coerces
+      # its result to a delivered path, without rebuilding its arguments.
+      ai.internal.rootsFor = lib.mkForce (packageSet: let
+        roots = result.config.ai.internal.rootsFor packageSet;
+        content = roots.delegate-routing-content;
+      in
+        roots
+        // {
+          delegate-routing-content =
+            content
+            // {
+              passthru =
+                content.passthru
+                // {
+                  mkSkill = args: let
+                    built = content.passthru.mkSkill args;
+                    manifest = builtins.fromJSON built.manifest.text;
+                  in
+                    assert manifest.runtime == args.runtime;
+                    assert manifest.sessionPool == sessionPools.${args.runtime}; built;
+                };
+            };
+        });
+      ai.programs.delegate-routing = {
+        pools = lib.genAttrs ["claude" "codex" "kimchi-proxy" "kiro-proxy"] (_: {
+          window = {
+            limit = 100;
+            resetDay = 1;
+            unit = "credits";
+          };
+        });
+        runtimes = {
+          claude.sessionPool = "claude";
+          codex.sessionPool = "codex";
+          kimchi.sessionPool = "kimchi-proxy";
+          kiro.sessionPool = "kiro-proxy";
+        };
+      };
+    };
   in {
+    # Fails if common-module delivery drops sessionPool, reuses Claude's pool,
+    # or renders a pool without carrying it into the helper's manifest.
+    # All four skill deliveries are supported on both backends; HM Kimchi's
+    # named reminder-hook exclusion does not exclude its skill or manifest.
+    "module-delegate-routing-${name}-session-pool-delivery" = mkTest "delegate-routing-${name}-session-pool-delivery" (
+      passes sessionDelivery
+      && lib.all (runtime: lib.hasInfix "Runtime: ${runtime}; session pool: ${sessionPools.${runtime}}." (readSkill sessionDelivery runtime)) runtimes
+    );
     # Fails if automatic routes admit a disabled technique, unresolved agent,
     # manual-only target or another harness's native tool; reader inventory
     # must still include a registered runtime outside all launch targets.
@@ -746,14 +802,14 @@
       == {}
       && lib.all (runtime:
         !(lib.hasInfix "## Pools" (readSkill result runtime))
-        && readSkill result runtime
-        == readSkill (change {
-          ai.programs.delegate-routing = {
-            families.anthropic.opus.pools.claude = null;
-            pools = {};
-          };
-        })
-        runtime)
+        && withoutHelperPath (readSkill result runtime)
+        == withoutHelperPath (readSkill (change {
+            ai.programs.delegate-routing = {
+              families.anthropic.opus.pools.claude = null;
+              pools = {};
+            };
+          })
+          runtime))
       runtimes
       && lib.all (family: family.pools == {}) ((import ../lib/select-families.nix {inherit lib;}).flatten result.config.ai.programs.delegate-routing.families)
     );
@@ -802,7 +858,7 @@
         && lib.hasInfix "- opus (anthropic) `claude-opus-*`: `kiro-cli chat` with model_id the highest id matching `claude-opus-*` (pool measured)" text
         && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `claude-opus-*`, else `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
-        && readSkill (poolChange {pools.measured.window = window;}) "claude" == poolSkill
+        && withoutHelperPath (readSkill (poolChange {pools.measured.window = window;}) "claude") == withoutHelperPath poolSkill
         && ruleText poolResult == stub
         && poolResult.config.ai.programs.delegate-routing.pools.configured.description == ""
         && poolResult.config.ai.programs.delegate-routing.pools.configured.usage == null
@@ -1425,6 +1481,7 @@
       && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
       && !(alwaysDisabled.config.ai.codex.rules ? delegate-routing-router)
       && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
+      # Shared AGENTS.md targets require byte-identical runtime rule contributions.
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-routing-router.text == stub) runtimes
     );
     "module-delegate-routing-${name}-routing-consumer" = mkTest "delegate-routing-${name}-routing-consumer" (

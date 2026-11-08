@@ -1,7 +1,10 @@
 # Delegate routing package
 
 > **Last verified:** 2026-11-07 — the renderer consumes the private shared
-> routing view for launch reaches and registered readers; routing ships an
+> routing view for launch reaches and registered readers; the packaged
+> non-launching helper consumes the same view and runtime sessionPool binding,
+> rejects incomplete Reader envelopes, and keeps runtime-specific commands in
+> skills so shared router rules remain byte-identical; routing ships an
 > always-on "Pool drain" entry and a "Tune these rules" entry, the Review step
 > holds the one review rule, the Work and review workflow builds a branch as
 > units each reviewed by one check before the next starts (all three checks at
@@ -328,6 +331,113 @@ The pool registry and family bindings default to `{}`. A consumer with one
 vendor and one harness writes nothing extra. Without pools, the family tables
 still render an empty Pool column. The package does not infer budgets from
 vendors or add account names to its defaults.
+
+### Deterministic routing helper
+
+Each generated skill names its literal runtime, session pool and absolute
+packaged `delegate-routing-plan` executable. The always-on router stays
+runtime-neutral so contributions to shared AGENTS.md targets are byte-identical.
+The wrapper binds the manifest and Bash store paths; no PATH installation is
+needed. `mkSkill` and `render`, including overrides, use the same builder as
+both module backends. The manifest serializes `lib/routing-view.nix` directly,
+including automatic runtime inventory, registered readers, manual-only routes,
+technique guidance and full resolved generated-agent records. It never
+re-derives reach selection in Python.
+
+Set `runtimes.<runtime>.sessionPool` to the registered budget actually spent by
+that session. For registered keys `claude` and `codex`, the migration is
+`runtimes.claude.sessionPool = "claude";` and
+`runtimes.codex.sessionPool = "codex";`. Bind Kimchi, Kiro and proxied runtimes
+to their actual configured keys. Descriptions are neutral budget descriptions,
+not session identity data. The default is null: the module warns and the helper
+cannot certify the buffer. Unknown keys fail option/manifest validation. No
+pools preserves fit-only operation with explicit budget/session uncertainty.
+
+Invoke the rendered command with `--role writer --launch-context <json-path>`
+(repeat `--role` to share one snapshot). Supported roles are writer,
+investigator, mechanical, finder, first-check, second-check and judge. The last
+four require strong/frontier tiers before ranking; an empty qualified set exits
+nonzero with “never step down a tier; report a loop failure.” The helper
+certifies tier and pace, not semantic fit, trial eligibility or maker
+independence. Provider-vendor identity remains provisional for aggregator
+independence until explicit maker data exists.
+
+The caller supplies observed availability, one concrete model id per technique
+evidence record and supported effort values, plus requested effort and qualified
+family evidence per role. For example, for a configured `sol` route:
+
+```json
+{
+  "nonInteractive": false,
+  "roles": {
+    "writer": {
+      "effort": "high",
+      "families": {
+        "sol": {
+          "avoidFor": "task avoids sole grading",
+          "fit": "bounded implementation against this spec",
+          "trial": "not a trial",
+          "useFor": "coding with executable acceptance checks"
+        }
+      }
+    }
+  },
+  "techniques": [
+    {
+      "efforts": ["high"],
+      "model": "gpt-6.1-sol",
+      "runtime": "codex",
+      "technique": "spawn_agent"
+    }
+  ]
+}
+```
+
+A generated Claude agent supplies its resolved id and structured default effort
+when no effort is requested. Unresolved model patterns, ambiguous concrete
+evidence and unsupported efforts cannot produce certified lines. The first
+eligible caller-observed technique wins; the JSON retains eligible named
+alternatives and invocation/argument guidance, including generated agent
+records. Manual-only routes remain separately labelled. Canonical lines such as
+`role=writer runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high`
+are specifications, not shell commands. The launching orchestrator binds
+task/prompt/output paths and calls native tools natively. Explicit headless
+status excludes external delegates; unknown status reports that condition
+unresolved. No TTY inference, catalog command, live probe or delegate launch
+occurs.
+
+The helper runs every registered Reader once on one UTC snapshot, including
+Readers owned by runtimes outside automatic targets; identical commands share
+one read. Only that inventory can reach subprocess execution. Trusted configured
+shell commands run under full strict Bash mode with a ten-second timeout that
+kills the reader process group. Failed, malformed, partial, multi-account,
+expired, missing-duration, unstarted-null-reset and model-scoped streams are
+unmeasured with reasons; no account routing or missing resets are invented. The
+shared schema is required before pace arithmetic: `account` contains
+`auth_index`, `name` and `plan` (including null values), `pool` is a nonempty
+string, `balances` and `bonuses` are arrays, each window's `status` is a string
+or null, and each `resetsAt` is a UTC timestamp or null. Missing fields or wrong
+shapes make the whole stream unmeasured. Registration keys determine budget
+identity, never reader `.pool` output.
+
+Each measured pool uses the minimum window pace
+`(remainingPercent / 100) / ((resetsAt - now) / windowSeconds)` and the minimum
+remaining share as its buffer. Reported calendar-month durations remain intact.
+Higher pace sorts first, with deterministic family/runtime ties; an eligible
+session pool wins an equal-pace tie only above the strict 20% buffer. A measured
+session may be selected only if every other fitting measured pool is behind or
+level. Exhaustion stays measured and never becomes a fit-only fallback.
+Unmeasured candidates are excluded while fitted measured candidates exist; with
+none, output explicitly states fit-only budget/session uncertainty. JSON is
+printed to stdout and concise launch specifications to stderr. `--now` fixes the
+clock for offline tests.
+
+`checks/routing-plan-runtime.py scripts/delegate-routing-plan.py` exercises fake
+Readers and hand-written expectations, including a subprocess spy that rejects
+any candidate/probe launch. CI exposes it as `delegate-routing-plan-runtime`.
+Eight backend/runtime delivery fixtures and mode-detection evidence belong to
+the module/policy checks; offline helper tests do not establish live harness
+compliance.
 
 ## Delivery and previews
 
