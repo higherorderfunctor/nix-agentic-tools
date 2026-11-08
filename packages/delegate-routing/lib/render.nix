@@ -5,6 +5,7 @@
   models,
   techniques,
   pools ? {},
+  helperInstruction ? "",
   resolvedAgentFiles ? null,
   routing ? {},
   skill,
@@ -142,6 +143,7 @@
     ${phrase "Manual delegate note" {}}
   '';
   blocks = {
+    helper = helperInstruction;
     families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n\n" + phrase "OpenCode Go note" {});
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
     pools = poolsText;
