@@ -35,6 +35,7 @@
       "help",
       "hooks",
       "idle-probe",
+      "language",
       "memory",
       "memory-residency",
       "multi-model",
@@ -280,8 +281,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-xFVchFYxqy9e/5xCV/NxY4EdHyOHYi55Qg8M+/ZoLMY=",
-      "kimchiVersion": "1.26.0",
+      "kimchiSourceHash": "sha256-IxUmRjUNks6i2rHt/0Km2fEenaoZh5vOKhBaGbz0BTQ=",
+      "kimchiVersion": "1.29.0",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -299,8 +300,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-xFVchFYxqy9e/5xCV/NxY4EdHyOHYi55Qg8M+/ZoLMY=",
-      "kimchiVersion": "1.26.0",
+      "kimchiSourceHash": "sha256-IxUmRjUNks6i2rHt/0Km2fEenaoZh5vOKhBaGbz0BTQ=",
+      "kimchiVersion": "1.29.0",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -406,7 +407,7 @@
     },
     {
       "callSites": [
-        "src/cli-auth/oauth.ts:308",
+        "src/cli-auth/oauth.ts:315",
         "src/extensions/pr-cost-reporting/worker.ts:259",
         "src/extensions/pr-cost-reporting/worker.ts:480",
         "src/extensions/work-attribution/cost-sync.ts:331",
@@ -443,7 +444,7 @@
     },
     {
       "callSites": [
-        "src/cli-auth/oauth.ts:308",
+        "src/cli-auth/oauth.ts:315",
         "src/extensions/pr-cost-reporting/worker.ts:259",
         "src/extensions/pr-cost-reporting/worker.ts:480",
         "src/extensions/work-attribution/cost-sync.ts:331",
@@ -630,7 +631,7 @@
     },
     {
       "callSites": [],
-      "files": ["src/oauth-config.ts", "src/regions.ts"],
+      "files": ["src/regions.ts"],
       "value": "app.kimchi.dev"
     },
     {
@@ -917,12 +918,12 @@
       "value": "localhost"
     },
     {
-      "callSites": ["src/cli-auth/oauth.ts:171"],
+      "callSites": ["src/cli-auth/oauth.ts:178"],
       "files": ["src/oauth-config.ts"],
       "value": "login.eu.kimchi.dev"
     },
     {
-      "callSites": ["src/cli-auth/oauth.ts:171"],
+      "callSites": ["src/cli-auth/oauth.ts:178"],
       "files": ["src/oauth-config.ts"],
       "value": "login.kimchi.dev"
     },
@@ -3389,19 +3390,19 @@
       "bundledModule": null,
       "file": "src/cli-auth/oauth.ts",
       "library": "fetch",
-      "line": 171,
+      "line": 178,
       "readBy": "kimchi",
       "targets": [
         {
           "host": "login.eu.kimchi.dev",
           "kind": "url",
-          "origin": "src/oauth-config.ts:62",
+          "origin": "src/oauth-config.ts:64",
           "value": "https://login.eu.kimchi.dev/oauth/token"
         },
         {
           "host": "login.kimchi.dev",
           "kind": "url",
-          "origin": "src/oauth-config.ts:57",
+          "origin": "src/oauth-config.ts:59",
           "value": "https://login.kimchi.dev/oauth/token"
         }
       ]
@@ -3410,7 +3411,7 @@
       "bundledModule": null,
       "file": "src/cli-auth/oauth.ts",
       "library": "fetch",
-      "line": 308,
+      "line": 315,
       "readBy": "kimchi",
       "targets": [
         {
@@ -3437,7 +3438,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:823",
+          "origin": "src/config.ts:882",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3464,7 +3465,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:823",
+          "origin": "src/config.ts:882",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3506,7 +3507,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:823",
+          "origin": "src/config.ts:882",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3593,7 +3594,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:906",
+          "origin": "src/config.ts:965",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3635,7 +3636,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:906",
+          "origin": "src/config.ts:965",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3722,7 +3723,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:906",
+          "origin": "src/config.ts:965",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3794,7 +3795,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:823",
+          "origin": "src/config.ts:882",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3875,7 +3876,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:906",
+          "origin": "src/config.ts:965",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3887,43 +3888,43 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1214",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1227",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1228",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1241",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:532",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:545",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:572",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:585",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:622",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:635",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:672",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:685",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:715",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:728",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -4046,13 +4047,13 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:823",
+          "origin": "src/config.ts:882",
           "value": "KIMCHI_BASE_URL"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:906",
+          "origin": "src/config.ts:965",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -5358,7 +5359,7 @@
       "file": "src/cli-auth/oauth.ts",
       "guards": [],
       "library": "fetch",
-      "line": 171,
+      "line": 178,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5367,7 +5368,7 @@
       "file": "src/cli-auth/oauth.ts",
       "guards": [],
       "library": "fetch",
-      "line": 308,
+      "line": 315,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -6520,6 +6521,10 @@
     {
       "files": ["pi/dist/bundle/chunks/src-UK77SYZE.js"],
       "value": "/node-fetch/node-fetch/issues/1167"
+    },
+    {
+      "files": ["kimchi/src/extensions/agents/prompt/brief-skill-loader.ts"],
+      "value": "/nonexistent-skills"
     },
     {
       "files": [
