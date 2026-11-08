@@ -65,3 +65,43 @@ runtime can, an interactive orchestrator runs the steps from this session:
 1. Use this session's workflow tool, if it has one.
 2. Otherwise run the steps yourself: launch each external worker, wait for it,
    check its output, then start the next step, such as the reviewer.
+
+## Orchestrator handoff
+
+Save compulsory execution constraints alongside the plan for the orchestrator to
+read before launching each wave. Include the applicable handoff, supervision,
+routing, pool, source-steering and evidence clauses from this reference and the
+resolved workflow; relevant clauses also travel in each prepared worker/reviewer
+brief.
+
+Task source is the code or documents the work will change. Reading what the user
+pointed at, such as a board or issue, to triage and write the brief is fine
+before handoff. Hand off before investigating task source; gather quick facts in
+this session only while that delegate runs. Loading delegate-routing and running
+its usage reads before the launch are part of the handoff, not quick facts. A
+sweep is the deep check or investigation; design work, such as choosing a new
+setting, is a sweep however little code it needs. Keep this session for talking
+with the user, deciding, and checking results.
+
+Hand bulk reading, searching, measuring, tracing, edit-and-test loops, file
+moves and document writing to delegates. Give each delegate one task: one part
+of the system, or one question. Have them write large output to files and report
+a short summary with evidence. Stay on the current item until it is done or
+blocked.
+
+Read a delegate's summary and only the output lines it cites, never its whole
+result. Point the next delegate at a file path instead of pasting content into
+its brief.
+
+## Rule steering
+
+The resolved planner reference lists the models and tools you can use, and how
+to set model and effort for each.
+
+Delegate-routing owns these delegation and review rules; the small router is
+their always-on entrypoint. When someone steers how they should work, propose a
+change to their source — the delegate-routing package's fragments, or for a
+consumer its `ai.programs.delegate-routing` routing and workflows entries — so
+it is committed and distributed. Do not edit a rendered rule or skill file, and
+do not record that steering in memory or as a house rule that changes how the
+skill is read.

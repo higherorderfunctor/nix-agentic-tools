@@ -33,7 +33,6 @@ in {
     };
     "Pool drain" = {
       after = ["Size the work"];
-      always = true;
       source = ../fragments/pool-drain.md;
     };
     "Size the work" = {
@@ -46,7 +45,6 @@ in {
     };
     "Validate the result" = {
       after = ["Choose execution"];
-      always = true;
       source = ../fragments/validate-the-result.md;
     };
   };
@@ -57,6 +55,20 @@ in {
       techniques = columns ["Technique" "Kind" "Pins model" "Pins effort" "Modes" "Runs own subagents" "Notes" "Command"];
     };
     entries = chain [
+      {
+        name = "Plan and launch";
+        text = ''
+          ## Plan and launch
+
+          An assigned repository change or investigation/design/bulk reading beyond a quick fact from named documents is substantive. Before task-source investigation, prepare the task-goal rubric and run the helper below with `--role planner --launch-context <json-path>`. Qualify a reachable strong/frontier design family using the bootstrap guidance and observed tools; pin the returned model and effort. Pass the task, paths, saved rubric, an orchestrator-provided working-data directory and the absolute planner reference `{planner}` to one planner, which must read that reference before planning. No qualified pinned planner means a loop failure. A worker with an approved bounded unit does not recursively plan it; replan only changed scope.
+
+          {bootstrap}
+
+          The planner returns the saved plan and prepared worker/reviewer brief paths, each containing the full task rubric verbatim and relevant execution policy. Before each wave, run the same helper with `--check-plan <plan-path> --launch-context <current-json-path>` and `--role <role>` for every planned role; supply `--max-concurrency <n>` for a host/user cap below ten. Require a successful exit and `validation.status = "valid"`; inspect exclusions/warnings and bind each exact role/runtime/candidate/pinned line to its native tool or named launcher. Changed context or a new usage read requires validation again. Budget uncertainty may permit fit-only operation; unresolved model/effort/technique never authorizes a launch. Manual-only routes need explicit user authorization.
+
+          Read the plan's compulsory execution constraints before launching its prepared briefs, without reloading the planner reference for each delegate. Enforce disjoint writers, at most ten simultaneous delegates, isolated/read-only reviewers, and writer → review → fix/check → commit barriers before dependent work or the next writer on a shared branch. Non-interactive/external delegates may use native subagents/workflows but never launch external delegates; report unreachable routes. Check the working tree after each shell-capable delegate. Validate launch/result receipts and every reported claim with cited evidence: rerun command claims or use a separate check, judge reading claims in the full context, and retain verified/retracted/unknown status. An exit code alone is insufficient evidence. The planner reference owns the full supervision, retry, evidence and source-steering policy; the planner attaches the relevant clauses to the execution constraints and briefs.
+        '';
+      }
       {
         name = "Routing";
         text = "## Routing\n\n{routing}";
@@ -111,6 +123,8 @@ in {
       "Model pattern" = {text = "the highest id matching `{match}`";};
       "Native reach" = {text = "{harness}: {launch}{pool}";};
       "OpenCode Go note" = {text = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";};
+      "Planner candidate" = {text = "- {family}: use for {useFor}; avoid {avoidFor}; effort guidance: {effort}. Routes: {routes}";};
+      "Planner unavailable" = {text = "No configured strong/frontier planner reach; report a loop failure.";};
       "Pool binding" = {text = " (pool {pool})";};
       "Pool measured" = {text = "measured";};
       "Pool reader missing" = {text = "none";};

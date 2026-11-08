@@ -11,7 +11,7 @@
   frontmatter = import ../../../../lib/frontmatter.nix {inherit lib;};
   treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ../../../../lib/treefmt-module.nix).config;
   skillData = {
-    description = "Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.";
+    description = "Plan substantive work, validate launches and size delegates with the runtime routing helper.";
     name = "delegate-routing";
   };
   mkUsageScript = name: runtimeInputs: parts:
@@ -93,24 +93,44 @@
       if args.sessionPool == null
       then "unknown (buffer cannot be certified)"
       else args.sessionPool
-    }. Run `${helperCommand} --role <role> --launch-context <json-path>` before choosing a route. The command collects registered Readers and prints JSON and canonical routing specifications; it never launches delegates. Load the skill for launch-context guidance.";
+    }. Run `${helperCommand} --role <role> --launch-context <json-path>` before choosing a route. The command collects registered Readers and prints JSON and canonical routing specifications; it never launches delegates. Use the launch-context guidance below.";
+    # Build the compulsory heavy context first. Its absolute path can then be
+    # embedded in SKILL.md without referring to that skill's own output.
+    renderContext = plannerReference:
+      builtins.appendContext
+      (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["sessionPool"] // {inherit helperInstruction plannerReference techniques;}))
+      (builtins.getContext helperInstruction);
+    planner = generated.mkTree {
+      name = "delegate-routing-${args.runtime}-planner";
+      files."PLANNER.md" = {
+        type = "markdown";
+        text = renderContext null;
+      };
+      guards.parseCompare = true;
+      inherit (args) runtime;
+      inherit treefmt;
+    };
+    plannerReference = "${planner}/PLANNER.md";
   in
     generated.mkTree {
       name = "delegate-routing-${args.runtime}-skill";
-      files."SKILL.md" = {
-        type = "markdown";
-        text = frontmatter.render {
-          data = skillData;
-          # Prose trimming can discard context; retain the advertised helper
-          # as a dependency of the delivered file, including its manifest.
-          body =
-            builtins.appendContext
-            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["sessionPool"] // {inherit helperInstruction techniques;}))
-            (builtins.getContext helperInstruction);
+      files = {
+        "PLANNER.md" = {
+          type = "raw";
+          source = plannerReference;
+        };
+        "SKILL.md" = {
+          type = "markdown";
+          text = frontmatter.render {
+            data = skillData;
+            body = renderContext plannerReference;
+          };
         };
       };
       guards.parseCompare = true;
       passthru = {
+        inherit plannerReference;
+        plannerText = builtins.readFile plannerReference;
         text = render args;
       };
       inherit (args) runtime;

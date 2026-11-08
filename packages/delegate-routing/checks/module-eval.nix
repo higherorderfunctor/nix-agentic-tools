@@ -41,6 +41,7 @@
     };
   };
   hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.toLower (lib.replaceStrings ["\n" "`"] [" " ""] text));
+  readPlanner = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/PLANNER.md";
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
   # Manifest bytes may change while the compared prose stays identical.
   withoutHelperPath = text: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" text));
@@ -50,13 +51,13 @@
     evaluate,
   }: let
     result = evaluate scenario;
-    claude = readSkill result "claude";
-    codex = readSkill result "codex";
-    kimchi = readSkill result "kimchi";
-    kiro = readSkill result "kiro";
+    claude = readPlanner result "claude";
+    codex = readPlanner result "codex";
+    kimchi = readPlanner result "kimchi";
+    kiro = readPlanner result "kiro";
     stub = result.config.ai.claude.rules.delegate-routing-router.text;
     change = config: evaluate (lib.recursiveUpdate scenario config);
-    skill = config: readSkill (change config) "claude";
+    skill = config: readPlanner (change config) "claude";
     passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
     failsWith = evaluation: option: lib.any (item: !item.assertion && lib.hasInfix option item.message) evaluation.config.assertions;
     evaluationFails = evaluation: !(builtins.tryEval (builtins.deepSeq evaluation.config.ai.programs.delegate-routing.runtimes.claude true)).success;
@@ -67,7 +68,7 @@
     # prose is matched with every whitespace run collapsed to one space.
     hasProse = needle: text: lib.hasInfix needle (lib.concatStringsSep " " (builtins.filter (part: builtins.isString part && part != "") (builtins.split "[[:space:]]+" text)));
     native = change {ai.programs.delegate-routing.runtimes.claude.extraRuntimes = [];};
-    nativeClaude = readSkill native "claude";
+    nativeClaude = readPlanner native "claude";
     disabled = evaluate {
       ai.programs.delegate-routing.enable = true;
       ai.programs.delegate-routing.runtimes.codex.enable = false;
@@ -444,7 +445,7 @@
       };
     };
     poolResult = change {ai.programs.delegate-routing = poolConfig;};
-    poolSkill = readSkill poolResult "claude";
+    poolSkill = readPlanner poolResult "claude";
     poolChange = settings: change {ai.programs.delegate-routing = lib.recursiveUpdate poolConfig settings;};
     # Print the actual diagnostic as evidence that rejection names the bad key.
     poolFailsWith = evaluation: expected: let
@@ -652,6 +653,82 @@
         ${pkgs.coreutils}/bin/touch "$out"
       '';
   in {
+    # Fails if one backend/runtime loses the companion, its absolute load path,
+    # resolved always-on/custom policy, or still loads heavy tables per launch.
+    "module-delegate-routing-${name}-planner-context-delivery" = mkTest "delegate-routing-${name}-planner-context-delivery" (
+      lib.all (runtime: let
+        entry = readSkill result runtime;
+        context = readPlanner result runtime;
+        reference = builtins.head (builtins.match ".*`(/nix/store/[^`]+/PLANNER.md)`.*" (lib.replaceStrings ["\n"] [" "] entry));
+      in
+        builtins.readFile reference
+        == context
+        && builtins.stringLength entry * 2 < builtins.stringLength context
+        && builtins.stringLength stub < 1500 # measured baseline: 5233 bytes
+        && !(lib.hasInfix "| Family" entry)
+        && !(lib.hasInfix "1. **Rubric:**" entry)
+        && hasProse "must read that reference before planning" entry
+        && hasProse "without reloading the planner reference for each delegate" entry
+        && hasProse "does not recursively plan it" entry
+        && lib.hasInfix "--role planner --launch-context <json-path>" entry
+        && lib.hasInfix "--check-plan <plan-path>" entry
+        && lib.hasInfix "validation.status = \"valid\"" entry
+        && hasProse "Non-interactive/external delegates may use native subagents/workflows but never launch external delegates" entry
+        && hasProse "A non-interactive or external delegate does not launch external delegates" context
+        && hasProse "Say in every external launch brief that the delegate is non-interactive and reports to an orchestrator, not a person" context
+        && lib.all (needle: hasProse needle context) [
+          "Reading what the user pointed at"
+          "gather quick facts in this session only while that delegate runs"
+          "Loading delegate-routing and running its usage reads before the launch are part of the handoff"
+          "only the output lines it cites"
+          "Point the next delegate at a file path instead of pasting content"
+          "Do not edit a rendered rule or skill file"
+          "Change a running delegate's task with a new brief rather than stopping it"
+          "When a vendor's safety filter refuses a brief, route the task to another vendor"
+          "A unit is a bounded change with one reader and one verification"
+        ]
+        && lib.hasInfix "| Family" context
+        && lib.hasInfix "1. **Rubric:**" context
+        && lib.hasInfix "3. **Plan:**" context
+        && lib.hasInfix "### Pool drain" context
+        && lib.hasInfix "### Validate the result" context)
+      runtimes
+    );
+    # Reject hard-coded default-only projection: disabled entries stay absent,
+    # custom always-on entries and runtime replacements also reach the planner.
+    "module-delegate-routing-${name}-planner-custom-context" = mkTest "delegate-routing-${name}-planner-custom-context" (let
+      custom = change {
+        ai.programs.delegate-routing = {
+          routing = {
+            "Custom execution" = {
+              always = true;
+              text = "CUSTOM EXECUTION POLICY";
+            };
+            "Size the work".enable = false;
+          };
+          skill.entries."Custom planner note".text = "CUSTOM PLANNER NOTE";
+          runtimes.claude.routing."Custom execution".text = "RUNTIME EXECUTION POLICY";
+        };
+      };
+    in
+      lib.all (runtime: let
+        text = readPlanner custom runtime;
+      in
+        lib.hasInfix "CUSTOM PLANNER NOTE" text
+        && !(lib.hasInfix "### Size the work" text)
+        && lib.hasInfix (
+          if runtime == "claude"
+          then "RUNTIME EXECUTION POLICY"
+          else "CUSTOM EXECUTION POLICY"
+        )
+        text
+        && !(lib.hasInfix (
+            if runtime == "claude"
+            then "CUSTOM EXECUTION POLICY"
+            else "RUNTIME EXECUTION POLICY"
+          )
+          text))
+      runtimes);
     "module-delegate-routing-${name}-claude-packaged-helper" = packagedHelperCheck "claude";
     "module-delegate-routing-${name}-codex-packaged-helper" = packagedHelperCheck "codex";
     "module-delegate-routing-${name}-kimchi-packaged-helper" = packagedHelperCheck "kimchi";
@@ -666,7 +743,7 @@
     # Rejects manual Reader discovery/arithmetic, runtime-specific shared rules,
     # lost buffer/unknown policy, an under-tier review fallback or unnamed launches.
     "module-delegate-routing-${name}-helper-policy-contract" = mkTest "delegate-routing-${name}-helper-policy-contract" (
-      lib.all (text: hasProse text stub || throw "missing router policy: ${text}") [
+      lib.all (text: hasProse text claude || throw "missing planner policy: ${text}") [
         "invoke the absolute `delegate-routing-plan` command rendered in this runtime's skill"
         "Use its decision as canonical"
         "run the Reader of every pool in the Pools table"
@@ -684,7 +761,7 @@
       && !(lib.hasInfix "remaining share divided by" stub)
       && !(lib.hasInfix "/bin/delegate-routing-plan" stub)
       && lib.all (runtime: let
-        text = readSkill sessionDelivery runtime;
+        text = readPlanner sessionDelivery runtime;
       in
         sessionDelivery.config.ai.${runtime}.rules.delegate-routing-router.text
         == sessionDelivery.config.ai.claude.rules.delegate-routing-router.text
@@ -705,7 +782,7 @@
     # Hiding launch prose must not bypass missing model-spelling rejection.
     "module-delegate-routing-${name}-routing-view" = mkTest "delegate-routing-${name}-routing-view" (
       let
-        text = readSkill routingFixture "claude";
+        text = readPlanner routingFixture "claude";
         routes =
           map (route: {
             family = route.family.name;
@@ -890,11 +967,11 @@
         && programOff.config.ai.claude.agents == {}
         && runtimeOff.config.ai.claude.agents == {}
         && off.config.ai.claude.agents == {}
-        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" (readSkill off "claude")
+        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" (readPlanner off "claude")
         && missing.config.ai.claude.agents == {}
-        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `test-flash-*`" (readSkill missing "claude")
+        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `test-flash-*`" (readPlanner missing "claude")
         && lib.hasInfix "model: \"glm-5.3\"" picker.config.ai.claude.agents.glm
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`" (readSkill picker "claude")
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`" (readPlanner picker "claude")
         && result.config.ai.programs.delegate-routing.families.anthropic.opus.defaultEffort == "medium"
         && result.config.ai.programs.delegate-routing.families.anthropic.haiku.defaultEffort == null
         && !(builtins.tryEval (builtins.deepSeq (change {ai.programs.delegate-routing.families.anthropic.opus.defaultEffort = "invalid";}).config.ai.programs.delegate-routing.families true)).success
@@ -954,15 +1031,15 @@
     "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
       poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown pool `missing`"
       && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown: `unknown` is not a runtime"
-      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`; via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`; via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readPlanner (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
     );
     "module-delegate-routing-${name}-pools-empty" = mkTest "delegate-routing-${name}-pools-empty" (
       result.config.ai.programs.delegate-routing.pools
       == {}
       && lib.all (runtime:
-        !(lib.hasInfix "## Pools" (readSkill result runtime))
-        && withoutHelperPath (readSkill result runtime)
-        == withoutHelperPath (readSkill (change {
+        !(lib.hasInfix "## Pools" (readPlanner result runtime))
+        && withoutHelperPath (readPlanner result runtime)
+        == withoutHelperPath (readPlanner (change {
             ai.programs.delegate-routing = {
               families.anthropic.opus.pools.claude = null;
               pools = {};
@@ -1015,9 +1092,9 @@
         && lib.hasInfix "**pool-reader (usage):** `read-pool --current`" text
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" text
         && lib.hasInfix "- opus (anthropic) `claude-opus-*`: `kiro-cli chat` with model_id the highest id matching `claude-opus-*` (pool measured)" text
-        && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `claude-opus-*`, else `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill poolResult "codex")
+        && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `claude-opus-*`, else `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readPlanner poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
-        && withoutHelperPath (readSkill (poolChange {pools.measured.window = window;}) "claude") == withoutHelperPath poolSkill
+        && withoutHelperPath (readPlanner (poolChange {pools.measured.window = window;}) "claude") == withoutHelperPath poolSkill
         && ruleText poolResult == stub
         && poolResult.config.ai.programs.delegate-routing.pools.configured.description == ""
         && poolResult.config.ai.programs.delegate-routing.pools.configured.usage == null
@@ -1103,7 +1180,7 @@
         && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`" withExample)
         && lib.hasInfix "glm (zhipu) `glm-*`" glm
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`, else `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
-        && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
+        && lib.all (runtime: !(lib.hasInfix "native (" (readPlanner poolResult runtime))) ["claude" "codex" "kiro"]
         && skillFails {
           ai.programs.delegate-routing.runtimes.claude.techniques = {
             Workflow.enable = false;
@@ -1128,7 +1205,7 @@
     );
     "module-delegate-routing-${name}-kiro-workflows" = mkTest "delegate-routing-${name}-kiro-workflows" (let
       enabled = change {ai.kiro.cli.workflows.enable = true;};
-      enabledSkill = readSkill enabled "kiro";
+      enabledSkill = readPlanner enabled "kiro";
       tweaksOn = result:
         result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
         && result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
@@ -1136,7 +1213,7 @@
         !result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
         && !result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
       workflowChange = config: change (lib.recursiveUpdate {ai.kiro.cli.workflows.enable = true;} config);
-      hidden = config: !(lib.hasInfix "`run_workflow`" (readSkill (workflowChange config) "kiro"));
+      hidden = config: !(lib.hasInfix "`run_workflow`" (readPlanner (workflowChange config) "kiro"));
       effective = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques;
     in
       tweaksOff result
@@ -1170,12 +1247,12 @@
         };
       })
       && !(lib.hasInfix "`run_workflow`" kiro)
-      && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
+      && !(lib.hasInfix "`run_workflow`" (readPlanner (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
       && lib.hasInfix "kiro: `run_workflow` with modelId the highest id matching `claude-opus-*`" enabledSkill
       && techniqueCells enabledSkill "run_workflow" == ["`run_workflow`" "workflow" "true" "true" "interactive+headless+acp"]
       && hidden {ai.kiro.cli.native.settings.chat.enableWorkflows = false;}
       && hidden {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = false;}
-      && !(lib.hasInfix "`run_workflow`" (readSkill enabled "claude"))
+      && !(lib.hasInfix "`run_workflow`" (readPlanner enabled "claude"))
       && (effective enabled.config).kiro.run_workflow.enable
       && !(effective result.config).kiro.run_workflow.enable);
 
@@ -1283,7 +1360,7 @@
         };
       };
       bound = change {ai.programs.delegate-routing = settings;};
-      text = readSkill bound "claude";
+      text = readPlanner bound "claude";
       lines = lib.splitString "\n" text;
       overridden = change {
         ai.programs.delegate-routing =
@@ -1343,8 +1420,8 @@
           };
         };
       note = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
-      planned = readSkill (goSelected "go-plus") "claude";
-      unplanned = readSkill (goSelected null) "claude";
+      planned = readPlanner (goSelected "go-plus") "claude";
+      unplanned = readPlanner (goSelected null) "claude";
     in
       # Presets ship but render only when selected; the default skill has no
       # provisional note; the Pool column remains even without pool guidance.
@@ -1353,7 +1430,7 @@
       && !(hasProse note claude)
       && lib.hasInfix "go-kimi-k3 (opencode-go)" planned
       && hasProse note planned
-      && !(hasProse note (readSkill (change {
+      && !(hasProse note (readPlanner (change {
         ai.programs.delegate-routing = {
           runtimes.claude.models = [{vendors = ["opencode-go"];}];
           skill.entries."Family tables".enable = false;
@@ -1467,10 +1544,10 @@
       failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false. Enable it with ai.kiro.cli.enable = true."
       && failsWith manualMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
       && passes manualManaged
-      && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readSkill manualManaged "claude")
-      && lib.hasInfix "### kiro techniques" (readSkill manualManaged "claude")
+      && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readPlanner manualManaged "claude")
+      && lib.hasInfix "### kiro techniques" (readPlanner manualManaged "claude")
       && passes manualOverlap
-      && readSkill manualOverlap "claude" == readSkill manualManaged "claude"
+      && readPlanner manualOverlap "claude" == readPlanner manualManaged "claude"
       && failsWith extraProgramDisabledKiroMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
       && passes extraProgramDisabledKiro
     );
@@ -1622,36 +1699,36 @@
       && routingDefaults."Orchestrator session".enable
       && routingDefaults."Orchestrator session".always
       && routingDefaults."Load delegate-routing".always
-      && routingDefaults."Pool drain".always
-      && routingDefaults."Validate the result".always
+      && !routingDefaults."Pool drain".always
+      && !routingDefaults."Validate the result".always
       && ordered claude ["Follow the user's request" "Size the work" "Choose execution"]
       && lib.hasInfix "## Routing" claude
       && hasLoadInstruction stub
-      && lib.hasInfix "### Pool drain" stub
+      && !(lib.hasInfix "### Pool drain" stub)
       && lib.hasInfix "### Orchestrator session" stub
-      && lib.hasInfix "### Validate the result" stub
-      && !(lib.hasInfix "### Load delegate-routing" claude)
-      && !(lib.hasInfix "### Orchestrator session" claude)
-      && !(lib.hasInfix "### Pool drain" claude)
-      && !(lib.hasInfix "### Validate the result" claude)
+      && !(lib.hasInfix "### Validate the result" stub)
+      && lib.hasInfix "### Load delegate-routing" claude
+      && lib.hasInfix "### Orchestrator session" claude
+      && lib.hasInfix "### Pool drain" claude
+      && lib.hasInfix "### Validate the result" claude
       && !(lib.hasInfix "### Size the work" stub)
       && lib.hasInfix "### Tune these rules" claude
       && !(lib.hasInfix "### Tune these rules" stub)
       && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
       && !(alwaysDisabled.config.ai.codex.rules ? delegate-routing-router)
-      && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
+      && lib.hasInfix "## Routing" (readPlanner alwaysDisabled "claude")
       # Shared AGENTS.md targets require byte-identical runtime rule contributions.
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-routing-router.text == stub) runtimes
     );
     "module-delegate-routing-${name}-routing-consumer" = mkTest "delegate-routing-${name}-routing-consumer" (
-      !(lib.hasInfix "### Size the work" (readSkill routingDisabled "claude"))
-      && lib.hasInfix "### Follow the user's request" (readSkill routingDisabled "claude")
-      && lib.hasInfix "### Choose execution" (readSkill routingDisabled "claude")
-      && lib.hasInfix "CUSTOM REQUEST GUIDANCE" (readSkill routingReplaced "claude")
-      && lib.hasInfix "### Size the work" (readSkill routingReplaced "claude")
-      && lib.hasInfix "### Choose execution" (readSkill routingReplaced "claude")
-      && ordered (readSkill routingInserted "claude") ["Follow the user's request" "Size the work" "Consumer guidance" "Choose execution"]
-      && lib.hasInfix "CUSTOM INSERTED GUIDANCE" (readSkill routingInserted "claude")
+      !(lib.hasInfix "### Size the work" (readPlanner routingDisabled "claude"))
+      && lib.hasInfix "### Follow the user's request" (readPlanner routingDisabled "claude")
+      && lib.hasInfix "### Choose execution" (readPlanner routingDisabled "claude")
+      && lib.hasInfix "CUSTOM REQUEST GUIDANCE" (readPlanner routingReplaced "claude")
+      && lib.hasInfix "### Size the work" (readPlanner routingReplaced "claude")
+      && lib.hasInfix "### Choose execution" (readPlanner routingReplaced "claude")
+      && ordered (readPlanner routingInserted "claude") ["Follow the user's request" "Size the work" "Consumer guidance" "Choose execution"]
+      && lib.hasInfix "CUSTOM INSERTED GUIDANCE" (readPlanner routingInserted "claude")
       # Fails if a consumer text override stops rendering once the entry ships on.
       && catalogOverridden.config.ai.programs.delegate-routing.routing."Orchestrator session".enable
       && lib.hasInfix "### Orchestrator session" (ruleText catalogOverridden)
@@ -1663,12 +1740,12 @@
       && !(lib.hasInfix "Keep this session" (ruleText catalogDisabled))
     );
     "module-delegate-routing-${name}-routing-runtime" = mkTest "delegate-routing-${name}-routing-runtime" (
-      lib.hasInfix "CLAUDE GUIDANCE" (readSkill runtimeRouting "claude")
-      && !(lib.hasInfix "PORTABLE GUIDANCE" (readSkill runtimeRouting "claude"))
+      lib.hasInfix "CLAUDE GUIDANCE" (readPlanner runtimeRouting "claude")
+      && !(lib.hasInfix "PORTABLE GUIDANCE" (readPlanner runtimeRouting "claude"))
       && !(lib.hasInfix "### Portable guidance" (ruleText runtimeRouting))
       && lib.hasInfix "PORTABLE GUIDANCE" runtimeRouting.config.ai.codex.rules.delegate-routing-router.text
-      && !(lib.hasInfix "### Size the work" (readSkill runtimeRouting "claude"))
-      && lib.hasInfix "### Size the work" (readSkill runtimeRouting "codex")
+      && !(lib.hasInfix "### Size the work" (readPlanner runtimeRouting "claude"))
+      && lib.hasInfix "### Size the work" (readPlanner runtimeRouting "codex")
       # Fails if a runtime record cannot turn the shipped entry off for itself.
       && !(lib.hasInfix "### Orchestrator session" (ruleText runtimeCatalogDisabled))
       && lib.hasInfix "### Orchestrator session" runtimeCatalogDisabled.config.ai.codex.rules.delegate-routing-router.text
@@ -1691,19 +1768,19 @@
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one reviewer" claude
       && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
-      && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
-      && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
-      && lib.hasInfix "7. **Loop:**" (readSkill runtimeWorkflowStep "claude")
-      && lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "claude")
-      && !(lib.hasInfix workflowHeader (readSkill runtimeCatalogHeader "claude"))
-      && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogHeader "claude")
-      && lib.hasInfix "7. **Loop:**" (readSkill runtimeCatalogHeader "claude")
-      && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
-      && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
-      && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")
-      && lib.hasInfix "CUSTOM WORKFLOW STEP" (readSkill workflowInserted "claude")
+      && lib.hasInfix workflowHeader (readPlanner runtimeWorkflowStep "claude")
+      && lib.hasInfix "CLAUDE WORKFLOW STEP" (readPlanner runtimeWorkflowStep "claude")
+      && lib.hasInfix "7. **Loop:**" (readPlanner runtimeWorkflowStep "claude")
+      && lib.hasInfix "CLAUDE CATALOG INTRO" (readPlanner runtimeCatalogHeader "claude")
+      && !(lib.hasInfix workflowHeader (readPlanner runtimeCatalogHeader "claude"))
+      && lib.hasInfix "1. **Rubric:**" (readPlanner runtimeCatalogHeader "claude")
+      && lib.hasInfix "7. **Loop:**" (readPlanner runtimeCatalogHeader "claude")
+      && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readPlanner runtimeCatalogHeader "codex"))
+      && !(lib.hasInfix "### ${workflowName}" (readPlanner runtimeWorkflowDisabled "claude"))
+      && lib.hasInfix "### ${workflowName}" (readPlanner runtimeWorkflowDisabled "codex")
+      && lib.hasInfix "CUSTOM WORKFLOW STEP" (readPlanner workflowInserted "claude")
       && (let
-        text = readSkill workflowInserted "claude";
+        text = readPlanner workflowInserted "claude";
         rubric = builtins.head (lib.splitString "CUSTOM WORKFLOW STEP" text);
         remainder = builtins.elemAt (lib.splitString "CUSTOM WORKFLOW STEP" text) 1;
       in
@@ -1711,7 +1788,7 @@
     );
     "module-delegate-routing-${name}-workflow-runtime" = mkTest "delegate-routing-${name}-workflow-runtime" (
       let
-        text = readSkill runtimeWorkflow "claude";
+        text = readPlanner runtimeWorkflow "claude";
         codexRule = runtimeWorkflow.config.ai.codex.rules.delegate-routing-router.text;
       in
         lib.hasInfix "CLAUDE WORKFLOW INTRO" text
@@ -1735,7 +1812,7 @@
             skill.entries."Technique availability".text = "CUSTOM TECHNIQUE AVAILABILITY";
           };
         };
-        text = readSkill overridden "claude";
+        text = readPlanner overridden "claude";
         beforeCustom = builtins.head (lib.splitString "CUSTOM TECHNIQUE AVAILABILITY" text);
         afterCustom = builtins.elemAt (lib.splitString "CUSTOM TECHNIQUE AVAILABILITY" text) 1;
       in
@@ -1750,8 +1827,8 @@
         && lib.hasInfix "### claude techniques" afterCustom
         && !(lib.hasInfix "### small" afterCustom)
         && lib.hasInfix "newest `claude-opus-*`" text
-        && lib.hasInfix "the highest id matching" (readSkill overridden "codex")
-        && !(lib.hasInfix "newest `" (readSkill overridden "codex"))
+        && lib.hasInfix "the highest id matching" (readPlanner overridden "codex")
+        && !(lib.hasInfix "newest `" (readPlanner overridden "codex"))
     );
     "module-delegate-routing-${name}-skill-entry-disable" = mkTest "delegate-routing-${name}-skill-entry-disable" (
       let
@@ -1761,7 +1838,7 @@
             entries."Delegate sizing".enable = false;
           };
         };
-        text = readSkill disabledEntries "claude";
+        text = readPlanner disabledEntries "claude";
         header = lib.findFirst (lib.hasPrefix "| Family") "" (lib.splitString "\n" text);
         headerCells = lib.filter (cell: cell != "") (map lib.trim (lib.splitString "|" header));
         positionOf = needle: builtins.stringLength (builtins.head (lib.splitString needle text));
@@ -1839,10 +1916,15 @@ in {
         });
       in
         mkTest "delegate-routing-builder-override" (
-          lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, or `claude -p`" overridden.text
-          && !(lib.hasInfix ", else `claude -p`" overridden.text)
-          && lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p`" base.text
+          lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, or `claude -p`" overridden.plannerText
+          && !(lib.hasInfix ", else `claude -p`" overridden.plannerText)
+          && lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p`" base.plannerText
           && base.text == content.passthru.skills.claude.text
+          && builtins.readFile "${base}/PLANNER.md" == base.plannerText
+          && builtins.readFile base.plannerReference == base.plannerText
+          && lib.hasInfix (builtins.unsafeDiscardStringContext base.plannerReference) base.text
+          && lib.hasInfix "--role planner" base.text
+          && !(lib.hasInfix "| Family" base.text)
         );
       # tryEval cannot expose the diagnostic; evaluate the resolver in a subprocess.
       module-delegate-routing-cycle-message = let

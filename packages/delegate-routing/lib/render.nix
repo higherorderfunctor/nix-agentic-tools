@@ -5,6 +5,7 @@
   models,
   techniques,
   pools ? {},
+  plannerReference ? null,
   helperInstruction ? "",
   resolvedAgentFiles ? null,
   routing ? {},
@@ -19,8 +20,10 @@
   inherit (import ./vocabulary.nix) delegateKinds tiers;
   inherit (view) candidates;
   entryRenderer = import ./render-entries.nix {inherit lib;};
-  routingText = entryRenderer.routing false routing;
-  workflowText = entryRenderer.workflows false workflows;
+  # The planner consumes every resolved entry, including always-on policy.
+  # Preserve custom keys, disabled entries and runtime replacements via the resolver.
+  routingText = entryRenderer.routing false (lib.mapAttrs (_: entry: entry // {always = false;}) routing);
+  workflowText = entryRenderer.workflows false (lib.mapAttrs (_: entry: entry // {always = false;}) workflows);
   entrySort = import ./resolve-entries.nix {inherit lib;};
   # One pass: placeholders inside replacement text stay as written.
   fill = template: values: lib.replaceStrings (map (key: "{${key}}") (builtins.attrNames values)) (builtins.attrValues values) template;
@@ -142,10 +145,27 @@
     ${techniqueBlock target true}
     ${phrase "Manual delegate note" {}}
   '';
+  bootstrapFamilies = builtins.filter (family: builtins.elem family.tier ["strong" "frontier"]) candidates;
+  bootstrap =
+    if bootstrapFamilies == []
+    then phrase "Planner unavailable" {}
+    else
+      lib.concatMapStringsSep "\n" (family:
+        phrase "Planner candidate" {
+          inherit (family) avoidFor effort useFor;
+          family = familyLabel family;
+          routes = lib.concatMapStringsSep "; " reach (builtins.filter (route: route.family == family) view.routes);
+        })
+      bootstrapFamilies;
   blocks = {
-    helper = helperInstruction;
+    inherit bootstrap;
     families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n\n" + phrase "OpenCode Go note" {});
+    helper = helperInstruction;
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
+    planner =
+      if plannerReference == null
+      then ""
+      else plannerReference;
     pools = poolsText;
     routing = routingText;
     techniques = lib.concatStringsSep "\n" ([(techniqueBlock runtime false)] ++ map (target: techniqueBlock target true) (lib.tail view.runtimes));
@@ -153,6 +173,13 @@
   };
   # An entry naming a block that renders nothing is omitted whole.
   present = entry: lib.all (key: !(lib.hasInfix "{${key}}" entry.value.text) || blocks.${key} != "") (builtins.attrNames blocks);
-  body = map (entry: lib.removeSuffix "\n" (lib.trimWith {end = true;} (fill entry.value.text blocks))) (builtins.filter present (entrySort.sort "delegate-routing.skill.entries" skill.entries));
+  # The two named entrypoint entries are customizable like the full context.
+  # All other entries, including consumer additions, belong to the companion.
+  shown = builtins.filter (entry:
+    if plannerReference == null
+    then entry.name != "Plan and launch"
+    else builtins.elem entry.name ["Plan and launch" "Routing helper"])
+  (entrySort.sort "delegate-routing.skill.entries" skill.entries);
+  body = map (entry: lib.removeSuffix "\n" (lib.trimWith {end = true;} (fill entry.value.text blocks))) (builtins.filter present shown);
 in
   lib.concatStringsSep "\n\n" body + "\n"
