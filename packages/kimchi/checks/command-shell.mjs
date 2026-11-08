@@ -21,6 +21,8 @@ let sessionStart;
 const registry = {
   displaySnapshot: () => ({}),
   getEntry() {},
+  onRunningCountChange() {},
+  persistOutput: () => "/output.log",
   snapshotSince: () => ({}),
   snapshotTail: () => ({ text: "" }),
   spawn: (operations) => {
@@ -30,13 +32,17 @@ const registry = {
 };
 const dependencies = {
   "../../cli-args.js": { resolveBashProcessLimitSeconds() {} },
+  "../../components/status-line.js": { SHELLS_STATUS_KEY: "shells" },
   "../../settings-watcher.js": {
     getSettingsManager: () => ({ getShellPath: () => shellPath }),
   },
+  "../agents/subagent-bash-clamp.js": { DEFAULT_BASH_TIMEOUT_SECONDS: 120 },
   "../bash-tool-guard.js": { bashToolDescription: () => "bash" },
+  "../e2e-seam.js": { readE2eSeam() {} },
   "../work-attribution/commits.js": {
     createWorkCommitTrackingOperations: (_ctx, _id, operations) => operations,
   },
+  "./bash-control-tool.js": { BASH_CONTROL_TOOL_NAME: "bash_control" },
   "./bash-display.js": { createBashRenderers: () => ({}) },
   "./commands-panel.js": { CommandsPanel: class {} },
   "./process-registry.js": {
@@ -50,14 +56,16 @@ const dependencies = {
       handleSpawned() {},
     }),
   },
+  "./session-policy.js": { bashSessionKindFromContext: () => "unattended" },
   "./session-registry.js": { getSessionState() {}, setSessionState() {} },
   "./status-text.js": {
     handoffGuidanceText: () => "",
+    outputLogNoticeText: () => "",
     runningResultText: () => "",
     terminalResultText: () => "",
   },
   "./terminal-delivery.js": { createTerminalDelivery: () => ({}) },
-  "./terminal-status.js": { throwIfTerminal() {} },
+  "./terminal-status.js": { appendStatus() {}, throwIfTerminal() {} },
   "@earendil-works/pi-coding-agent": {
     createBashToolDefinition: () => ({ description: "bash" }),
     createLocalBashOperations: (options) => options,
@@ -94,6 +102,10 @@ const entry = load("entry");
 await entry.link(load);
 await entry.evaluate();
 entry.namespace.bashBackgroundExtension({
+  // Keep the registered tool on its real background execution path.
+  getActiveTools: () => [
+    dependencies["./bash-control-tool.js"].BASH_CONTROL_TOOL_NAME,
+  ],
   on: (event, callback) => {
     if (event === "session_start") sessionStart = callback;
   },
@@ -106,15 +118,20 @@ for (const value of ["/configured/shell", undefined]) {
   shellPath = value;
   sessionStart(
     {},
-    { cwd: "/project", sessionManager: { getSessionId: () => "session" } },
+    {
+      cwd: "/project",
+      sessionManager: { getSessionId: () => "session" },
+      ui: { setStatus() {} },
+    },
   );
-  await registered.execute(
+  const result = await registered.execute(
     "call",
     { command: "true" },
     undefined,
     undefined,
     {},
   );
+  assert.equal(result.details.handoff, true);
   assert.deepEqual(calls.splice(0), [value]);
 }
 console.log(
