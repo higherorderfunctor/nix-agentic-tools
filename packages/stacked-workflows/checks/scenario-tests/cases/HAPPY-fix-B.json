@@ -3,17 +3,72 @@
     "scenario": "amend",
     "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
   },
+  "assertions": [
+    {
+      "id": "base-leaves-newer-candidates",
+      "pattern": "base\\s+only\\s+bounds\\s+the\\s+oldest\\s+candidate;\\s+absorb\\s+walks\\s+newest\\s+to\\s+oldest,\\s+so\\s+every\\s+newer\\s+commit\\s+remains\\s+a\\s+candidate\\.\\s+It\\s+pins\\s+the\\s+target\\s+only\\s+when\\s+that\\s+target\\s+is\\s+the\\s+newest\\s+commit",
+      "present": true
+    },
+    {
+      "id": "commuting-hunks-use-explicit-fixup-and-check-leftovers",
+      "pattern": "If the target's hunks commute and remain staged,.*?git commit --fixup=<target-commit>\\s+GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash --update-refs <target-commit>\\^\\s+git diff --cached --stat",
+      "present": true
+    },
+    {
+      "id": "dry-run-uses-target-parent",
+      "pattern": "git absorb --dry-run --base <target-commit>\\^",
+      "present": true
+    },
+    {
+      "id": "explicit-fixup-runs-content-hooks-before-conditional-bypass",
+      "pattern": "run\\s+the\\s+content\\s+hooks\\s+first;\\s+if\\s+the\\s+repository.s\\s+commit-msg\\s+hook\\s+rejects\\s+`fixup!`\\s+subjects.*?convco\\s+hook.*?pass\\s+`--no-verify`\\s+to\\s+the\\s+transient\\s+`git\\s+commit\\s+--fixup`\\.\\s+Absorb.s\\s+own\\s+commits\\s+skip\\s+hooks",
+      "present": true
+    },
+    {
+      "id": "leftover-check-covers-staged-and-unstaged",
+      "pattern": "Check for leftover changes.*?git diff --cached --stat\\s+git diff --stat",
+      "present": true
+    },
+    {
+      "id": "newer-target-requires-edited-lines",
+      "pattern": "Accept\\s+a\\s+newer\\s+target\\s+only\\s+when\\s+the\\s+hunk\\s+edits\\s+lines\\s+introduced\\s+by\\s+that\\s+commit",
+      "present": true
+    },
+    {
+      "id": "older-target-requires-exclusion-or-explicit-fixup",
+      "pattern": "If\\s+absorb\\s+picks\\s+a\\s+commit\\s+older\\s+than\\s+the\\s+named\\s+target,\\s+rerun\\s+with\\s+a\\s+base\\s+that\\s+excludes\\s+it,\\s+or\\s+stage\\s+that\\s+hunk\\s+alone\\s+and\\s+use\\s+the\\s+explicit\\s+fixup\\s+below",
+      "present": true
+    },
+    {
+      "id": "one-target-per-run",
+      "pattern": "Fixes\\s+for\\s+several\\s+commits\\s+require\\s+separate\\s+targeted\\s+runs,\\s+staging\\s+only\\s+one\\s+target's\\s+hunks\\s+at\\s+a\\s+time",
+      "present": true
+    },
+    {
+      "id": "rebase-uses-target-parent-and-updates-refs",
+      "pattern": "git absorb --and-rebase --base <target-commit>\\^ -- --update-refs",
+      "present": true
+    },
+    {
+      "id": "structural-changes-absorb-cannot-place-still-stop",
+      "pattern": "For changes absorb cannot route beyond the commuting-hunk fixup above, stop and\\s+ask the user",
+      "present": true
+    },
+    {
+      "id": "target-covers-line-and-name-dependencies",
+      "pattern": "name\\s+the\\s+target\\s+for\\s+each\\s+hunk:.*?newest\\s+commit\\s+that\\s+introduces\\s+either\\s+the\\s+lines\\s+it\\s+edits\\s+or\\s+any\\s+name\\s+it\\s+uses\\.\\s+Absorb\\s+sees\\s+edited\\s+lines,\\s+not\\s+name\\s+dependencies",
+      "present": true
+    }
+  ],
   "block_ids": [],
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Dependency-aware absorb excludes older candidates, checks newer targets, and permits explicit fixups with content hooks",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "HAPPY-fix-B",
-  "kind": "static",
+  "kind": "static-set",
   "path": "skills/stack-fix/SKILL.md",
-  "pattern": "If absorb cannot route the change, stop and ask the user",
-  "present": true,
   "topology": "T4"
 }

@@ -25,9 +25,10 @@ These prevent common pain points in stacked workflows.
 [absorb]
   # Route fixes by SHA, not message — stable across rewording
   # Note: breaks `git revise --autosquash` (see git-revise.md).
-  # Prefer `git absorb --and-rebase` with this setting.
+  # Prefer `git absorb --and-rebase --base <target>^` with this setting.
+  # The base is the target's parent; stage one target's hunks per run.
   fixupTargetAlwaysSHA = true
-  # Default stack depth is 10; stacks regularly exceed this
+  # Depth limit without --base only; ignored with a target-specific --base
   maxStack = 50
   # One fixup per commit prevents ambiguous routing
   oneFixupPerCommit = true
@@ -151,7 +152,7 @@ Convenience settings that some users prefer.
 
 ```gitconfig
 [absorb]
-  # Auto-stage all tracked changes if nothing is staged
+  # Use only when all tracked changes belong to one named target
   autoStageIfNothingStaged = true
 
 [column]
@@ -190,7 +191,7 @@ Convenience settings that some users prefer.
 | `absorb.fixupTargetAlwaysSHA`     | bool | `false` | Use SHA in fixup messages (stable across reword) |
 | `absorb.forceAuthor`              | bool | `false` | Target commits by any author                     |
 | `absorb.forceDetach`              | bool | `false` | Allow on detached HEAD                           |
-| `absorb.maxStack`                 | int  | `10`    | Max commits to search for fixup targets          |
+| `absorb.maxStack`                 | int  | `10`    | Commit limit without `--base`; ignored with it   |
 | `absorb.oneFixupPerCommit`        | bool | `false` | One fixup per target commit (not per hunk)       |
 
 ### git-revise (all config keys)

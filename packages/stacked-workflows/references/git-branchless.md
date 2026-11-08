@@ -864,8 +864,9 @@ git next -a                    # return to stack tip
 
 # Option B: amend from anywhere with git-absorb
 # make changes in working tree that fix a specific earlier commit
-git add -p                     # stage the fix
-git absorb --and-rebase        # auto-routes to correct commit
+git add -p                     # stage only this target's hunks
+git absorb --dry-run --base <target>^   # verify every proposed target
+git absorb --and-rebase --base <target>^   # base is the target's parent
 
 # Option C: make fix commit, then combine
 git record -m "fixup! original message"
@@ -1152,14 +1153,18 @@ wanted"). Community arxanas/git-branchless#1538 pending.
 
 ### With git-absorb
 
-Routes staged fixup changes to the correct commit in the stack automatically.
+Name the commit each fix belongs to, then repeat this workflow separately for
+each target, staging only its hunks. The base is the target's parent; check the
+dry-run output because newer commits remain candidates.
 
 ```bash
-git add -p                     # stage the fix
-git absorb --and-rebase        # finds target commit, creates fixup, rebases
+git add -p                     # stage only this target's hunks
+git absorb --dry-run --base <target>^
+git absorb --and-rebase --base <target>^
 ```
 
-Set `git config absorb.maxStack 50` for deeper stacks.
+`absorb.maxStack` does not apply when `--base` is supplied, even for deep
+targets.
 
 ### With git-revise
 
