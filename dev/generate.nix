@@ -517,7 +517,7 @@
     | Package | Description |
     |---------|-------------|
     | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-    | `delegate-routing-content` | Per-runtime sizing skills, deterministic routing helper and a short routing rule |
+    | `delegate-routing-content` | Per-runtime sizing skills, saved plans, deterministic routing validation and a short routing rule |
     | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
     Content packages are derivations with `passthru.fragments` for
@@ -1318,6 +1318,8 @@
     technique catalog. Both Home Manager and devenv expose the same options.
 
     The skill renders an absolute non-launching `delegate-routing-plan` command, its runtime and session pool; the always-on router stays runtime-neutral for shared AGENTS.md targets. Pass `--role writer --launch-context <json-path>` with caller-observed techniques, concrete model/effort support and qualified family evidence. The helper collects all registered Readers once, ranks worst-window pace and enforces the strong/frontier review floor. Configure `runtimes.<runtime>.sessionPool` with the actual registered pool key (for example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null warns that the session buffer cannot be certified. With no pools it reports fit-only budget uncertainty. Output is JSON plus canonical routing specifications; the command never launches delegates. Pool drain and Review use this helper as the canonical decision, retaining role fit/trial checks and named fallback launchers. Unknown interactive/headless status never blocks Reader collection or tier/pace policy; external launches remain unresolved until the caller supplies mode evidence. See the [helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper) for the launch-context schema, conservative unknown handling and per-runtime mode-discovery evidence.
+
+    Work and review runs Rubric → Subtractive → Plan → Work → Describe → Review → Loop. Rubric preparation is task-goal preflight; substantive task-source investigation starts with a reachable strong/frontier planner from the helper, except for an approved bounded worker assignment. The planner saves units, dependencies, disjoint waves and prepared worker/reviewer briefs containing the full rubric verbatim. Before launch, pass `--check-plan <plan.json>` with current launch context and all planned roles to the rendered helper; it checks role/runtime/candidate/pinned line, wave/dependency shape and rubric bytes against a fresh Reader decision. Use `--max-concurrency <n>` for a host/user cap below ten. The orchestrator enforces review/commit barriers; offline validation makes no live compliance claim. See the [saved-plan contract and policy ledger](packages/delegate-routing/docs/development.md#saved-plans-and-prepared-briefs).
 
     #### Per-turn reminder
 
