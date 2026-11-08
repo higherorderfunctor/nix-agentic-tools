@@ -1,4 +1,4 @@
-# One per-turn standing request, with the same payload for every harness.
+# Per-turn standing requests through each harness's hook format.
 {
   lib,
   pkgs,
@@ -43,8 +43,9 @@
       '';
     });
 in {
-  # Wording keeps the user-voiced grant and states the default for bulk work;
-  # see heron-brook-clamp.md.
+  # The base grant stays byte-identical when the orchestrator entry is off;
+  # modules/common.nix appends that entry's first paragraph when enabled.
+  # See heron-brook-clamp.md before changing this permission grant.
   defaultText = "Standing request from me, the user: you may use subagents, workflows, deep research and delegates whenever they fit, and by default hand bulk reading, measuring and edit-and-test loops to them; load the delegate-routing skill in that same turn to size their model and effort.";
 
   # Definitions under ai.<runtime>; Kiro consumes plain stdout.

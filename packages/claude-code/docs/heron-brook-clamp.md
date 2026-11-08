@@ -47,8 +47,12 @@ Re-derive these properties before rewording the permission grant:
    instruction it cannot point at.
 3. It is first-person: the user’s voice carries the request even when the hook
    channel is visible.
-4. It grants permission rather than mandating delegation; the agent retains
-   judgment about whether delegation fits the task.
+4. The base request grants permission and leaves judgment about fit to the
+   agent. When the effective "Orchestrator session" entry is enabled, its first
+   paragraph adds the user's explicit request to hand work off first and keep
+   the session interactive. That separate request uses the permission; it does
+   not tell the agent to ignore the clamp. Disabling the entry leaves the base
+   grant unchanged. Both parts stay first-person and affirmative.
 
 ### Checking upstream by hand
 
