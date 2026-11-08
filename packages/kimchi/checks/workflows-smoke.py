@@ -140,7 +140,9 @@ with tempfile.TemporaryDirectory() as scratch:
             settings = json.loads(Path(delivered[scope]["settings"]).read_text())
             # Keep both production declarations; a one-scope fixture hides the bug.
             assert settings["packages"] == [source], settings
-            settings["defaultProjectTrust"] = "ask"
+            if scope == "global":
+                # User scope only, as in production: trust then comes from trust.json alone.
+                settings["defaultProjectTrust"] = "ask"
             (harness / "settings.json").write_text(json.dumps(settings))
         (home / ".config/kimchi/harness/trust.json").write_text(json.dumps({str(cwd): True}))
         if handoff is not None:
