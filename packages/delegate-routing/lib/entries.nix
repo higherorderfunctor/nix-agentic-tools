@@ -70,6 +70,16 @@ in {
         text = "## delegate sizing\n\nEach row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (Claude Agent calls name the generated agent file to pin a full id; plain calls without a file take aliases such as `opus`). The Orchestration column names the default orchestrators and the families reserved for hard work. The Launch column lists, per harness, the techniques that pin both model and effort and take a full id or pattern, in order, with the id spelling each takes; use the first one present in your tool list; a concrete id there is the family's current pick, and \"the highest id matching\" instructs the resolution above.";
       }
       {
+        name = "Routing helper";
+        text = ''
+          ## Routing helper
+
+          {helper}
+
+          Write `--launch-context` JSON with `nonInteractive` (true, false or null), `roles` and `techniques`. Each role maps to a requested `effort` (string or null) and a `families` map keyed by caller-qualified family name. Each family qualification supplies nonempty `fit`, `useFor`, `avoidFor` and `trial` evidence strings. Each observed technique supplies `runtime`, `technique`, one concrete `model` and its supported `efforts` list. Repeat an observed technique for different models only when the family pattern remains unambiguous. Available roles: writer, investigator, mechanical, finder, first-check, second-check, judge. Unknown/headless contexts cannot certify external launches. A null effort can use a resolved generated agent's default; prose effort guidance never supplies a value. JSON goes to stdout; concise routing lines go to stderr. Treat lines as specifications for native calls or orchestrator-bound external launches, never executable shell text. Provider identity is provisional for maker independence; caller fit/trial evidence remains required even above the tier floor.
+        '';
+      }
+      {
         name = "Pools";
         text = "## Pools\n\n{pools}";
       }
