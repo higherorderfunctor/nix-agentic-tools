@@ -1,4 +1,5 @@
 """Offline, literal routing expectations: no catalogs, live readers or launches."""
+from copy import deepcopy
 import importlib.util
 import json
 from pathlib import Path
@@ -179,7 +180,7 @@ class Routing(unittest.TestCase):
                 if tier in ("small", "mid"):
                     self.assertEqual(result["roles"][role]["error"], "never step down a tier; report a loop failure.")
         with self.assertRaisesRegex(ValueError, "unknown role"):
-            self.run_plan(roles=("planner",))
+            self.run_plan(roles=("unknown",))
         result, _ = self.run_plan(launch_context=context(names=()))
         self.assertEqual(result["roles"]["writer"]["candidates"], [])
 
@@ -224,6 +225,271 @@ class Routing(unittest.TestCase):
             measured = helper.collect([{"command": "while :; do :; done", "name": "stuck"}], NOW, SHELL)
         self.assertEqual(measured["stuck"]["status"], "unmeasured")
         self.assertIn("timed out", measured["stuck"]["reason"])
+
+    def prepared_plan(self, root, count=2):
+        # Hand-authored launches: the plan cannot supply its own allowlist.
+        rubric = b"1. Scope: change the assigned files.\n2. Checks: reject an invented launch.\n"
+        (root / "rubric.md").write_bytes(rubric)
+        roles = ("writer", "first-check", "second-check", "judge")
+        launches = []
+        for role in roles:
+            brief = f"{role}.md"
+            (root / brief).write_bytes(b"Hard rules and task.\n" + rubric + b"Report evidence.\n")
+            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "qualification": QUALIFIED, "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
+        units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace not validated launch choices", "id": str(index), "launches": deepcopy(launches), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
+        return {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
+
+    def test_planner_bootstrap_floor_native_and_workflow(self):
+        # Wrong: planner unregistered, high-pace mid chosen, or no pinned bootstrap.
+        config = manifest([route("fast", "mid", "session"), route("design", "frontier")])
+        for node in (technique(), technique("Workflow", "workflow")):
+            config["routes"][1]["techniques"] = [node]
+            ctx = context(("planner",), ("design", "fast"), techniques=[{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": node["name"]}], non_interactive=True)
+            result, _ = self.run_plan(config, ctx, ("planner",), outputs={"reader-session": stream({"monthly": window(99)})})
+            self.assertEqual(result["roles"]["planner"]["candidates"][0]["launch"]["family"], "design")
+            self.assertIn({"family": "fast", "reason": "below role tier floor", "runtime": "codex"}, result["roles"]["planner"]["exclusions"])
+        config["routes"] = [route("fast", "mid")]
+        result, _ = self.run_plan(config, context(("planner",), ("fast",)), ("planner",))
+        self.assertEqual(result["roles"]["planner"]["error"], "never step down a tier; report a loop failure.")
+
+    def test_plan_role_qualified_launch_mutations(self):
+        # Wrong: transcript substring match, trusting saved candidates, stale context.
+        roles = ("writer", "first-check", "second-check", "judge")
+        current, _ = self.run_plan(roles=roles)
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            self.assertEqual(helper.check_plan(artifact, current, root), {"status": "valid", "task": "validate assigned routing work", "units": 2, "waves": 1})
+            for field, value in (("effort", "low"), ("family", "manual"), ("model", "invented"), ("technique", "absent"), ("model", "gpt-*-sol")):
+                with self.subTest(field=field, value=value):
+                    changed = deepcopy(artifact)
+                    changed["units"][0]["launches"][0]["candidate"][field] = value
+                    with self.assertRaisesRegex(ValueError, "absent from current helper output"):
+                        helper.check_plan(changed, current, root)
+            for field, value, reason in (("line", "role=judge runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "absent from current"), ("role", "finder", "one worker"), ("runtime", "claude", "own helper validation")):
+                changed = deepcopy(artifact)
+                changed["units"][0]["launches"][0][field] = value
+                with self.assertRaisesRegex(ValueError, reason):
+                    helper.check_plan(changed, current, root)
+            changed = deepcopy(current)
+            changed["roles"]["first-check"]["candidates"] = []
+            with self.assertRaisesRegex(ValueError, "first-check candidate/line absent"):
+                helper.check_plan(artifact, changed, root)
+            changed = deepcopy(artifact)
+            changed["runtime"] = "claude"
+            with self.assertRaisesRegex(ValueError, "actual launching runtime"):
+                helper.check_plan(changed, current, root)
+            changed = deepcopy(artifact)
+            changed["snapshot"]["runtime"] = "claude"
+            with self.assertRaisesRegex(ValueError, "saved helper snapshot"):
+                helper.check_plan(changed, current, root)
+            # Even a saved allowlist containing a forged model cannot approve it.
+            changed = deepcopy(artifact)
+            for launch in (changed["units"][0]["launches"][0], changed["snapshot"]["roles"]["writer"]["candidates"][0]):
+                candidate = launch.get("candidate", launch.get("launch"))
+                candidate["model"] = "invented"
+            with self.assertRaisesRegex(ValueError, "absent from current helper output"):
+                helper.check_plan(changed, current, root)
+            # A new context or budget decision, not the old plan's snapshot, wins.
+            for ctx, outputs in ((context(roles, effort="low"), None), (context(roles), {"reader-outside": stream({"monthly": window(0)})})):
+                changed, _ = self.run_plan(launch_context=ctx, roles=roles, outputs=outputs)
+                with self.assertRaisesRegex(ValueError, "absent from current helper output"):
+                    helper.check_plan(artifact, changed, root)
+            config = manifest([route(pool=None)])
+            config["readers"] = []
+            fit_only, _ = self.run_plan(config, roles=roles)
+            self.assertEqual(helper.check_plan(artifact, fit_only, root)["status"], "valid")
+            self.assertEqual(fit_only["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
+
+    def test_plan_rejects_recursive_planner(self):
+        # Wrong: a valid planner candidate can recursively plan an approved unit.
+        current, _ = self.run_plan(roles=("writer", "first-check", "second-check", "judge", "planner"))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            launch = deepcopy(artifact["units"][0]["launches"][0])
+            launch.update(role="planner", candidate=current["roles"]["planner"]["candidates"][0]["launch"], line=current["roles"]["planner"]["candidates"][0]["line"])
+            artifact["units"][0]["launches"].append(launch)
+            with self.assertRaisesRegex(ValueError, "only worker and reviewer roles"):
+                helper.check_plan(artifact, current, root)
+
+    def test_plan_artifact_paths_stay_relative(self):
+        # Wrong: joining an absolute or upward rubric/brief path reads outside.
+        current, _ = self.run_plan(roles=("writer", "first-check", "second-check", "judge"))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            nested = root / "plans"
+            nested.mkdir()
+            for path in root.glob("*.md"):
+                (nested / path.name).write_bytes(path.read_bytes())
+            for field, filename in (("rubric", "rubric.md"), ("brief", "writer.md")):
+                for path in (str(root / filename), f"../{filename}"):
+                    changed = deepcopy(artifact)
+                    target = changed if field == "rubric" else changed["units"][0]["launches"][0]
+                    target[field] = path
+                    with self.subTest(field=field, path=path), self.assertRaisesRegex(ValueError, "plan-relative.*absolute or upward"):
+                        helper.check_plan(changed, current, nested)
+
+    def test_plan_artifact_symlinks_stay_inside_directory(self):
+        # Wrong: relative symlinks let rubric/brief reads escape the plan directory.
+        current, _ = self.run_plan(roles=("writer", "first-check", "second-check", "judge"))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            nested = root / "plan"
+            nested.mkdir()
+            artifact = self.prepared_plan(nested)
+            for field, filename in (("rubric", "rubric.md"), ("brief", "writer.md")):
+                (root / filename).write_bytes((nested / filename).read_bytes())
+                (nested / f"link-{filename}").symlink_to(f"../{filename}")
+                changed = deepcopy(artifact)
+                target = changed if field == "rubric" else changed["units"][0]["launches"][0]
+                target[field] = f"link-{filename}"
+                with self.subTest(field=field), self.assertRaisesRegex(ValueError, "inside the plan directory"):
+                    helper.check_plan(changed, current, nested)
+
+    def test_plan_requires_complete_helper_snapshot(self):
+        # Wrong: accepting provenance without the helper's runtime/route warnings.
+        current, _ = self.run_plan(roles=("writer", "first-check", "second-check", "judge"))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            for field in ("automaticRuntimes", "manualOnly", "sessionPool", "warnings"):
+                changed = deepcopy(artifact)
+                del changed["snapshot"][field]
+                with self.subTest(missing=field), self.assertRaisesRegex(ValueError, "complete helper snapshot"):
+                    helper.check_plan(changed, current, root)
+
+    def test_plan_snapshot_requires_launched_candidates_and_bound_pools(self):
+        # Wrong: empty or partial role/pool maps count as captured helper output.
+        current, _ = self.run_plan(roles=("writer", "first-check", "second-check", "judge"))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            mutations = [
+                ("empty pools", lambda snapshot: snapshot.update(pools={})),
+                ("empty roles", lambda snapshot: snapshot.update(roles={})),
+                ("missing reviewer", lambda snapshot: snapshot["roles"].pop("first-check")),
+                ("empty candidates", lambda snapshot: snapshot["roles"]["writer"].update(candidates=[])),
+                ("changed candidate", lambda snapshot: snapshot["roles"]["writer"]["candidates"][0]["launch"].update(model="invented")),
+                ("missing pool binding", lambda snapshot: snapshot["roles"]["writer"]["candidates"][0].pop("pool")),
+                ("absent bound pool", lambda snapshot: snapshot["roles"]["writer"]["candidates"][0].update(pool="missing")),
+            ]
+            for label, mutate in mutations:
+                changed = deepcopy(artifact)
+                mutate(changed["snapshot"])
+                with self.subTest(mutation=label), self.assertRaisesRegex(ValueError, "saved helper snapshot"):
+                    helper.check_plan(changed, current, root)
+
+    def test_plan_dependencies_waves_and_ownership(self):
+        # Wrong: cycle acceptance, ordering ignored, runtime cap, forced serialization.
+        current, _ = self.run_plan(roles=("writer", "first-check", "second-check", "judge"))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            cases = []
+            changed = deepcopy(artifact)
+            changed["units"][0]["dependencies"] = ["missing"]
+            cases.append((changed, "unknown dependency"))
+            changed = deepcopy(artifact)
+            changed["units"][0]["dependencies"] = ["1"]
+            changed["units"][1]["dependencies"] = ["0"]
+            cases.append((changed, "cycle"))
+            changed = deepcopy(artifact)
+            changed["units"][1]["dependencies"] = ["0"]
+            cases.append((changed, "earlier reviewed/committed wave"))
+            changed = deepcopy(artifact)
+            changed["units"][1]["files"].append("src/../src/0.py")
+            cases.append((changed, "overlapping same-wave writer files"))
+            changed = deepcopy(artifact)
+            changed["units"][0]["id"] = "1"
+            cases.append((changed, "unique"))
+            changed = deepcopy(artifact)
+            changed["units"][0]["files"].append("../outside.py")
+            cases.append((changed, "repository-relative"))
+            changed = deepcopy(artifact)
+            changed["units"][0]["docs"].append("unowned.md")
+            cases.append((changed, "need writer ownership"))
+            changed = deepcopy(artifact)
+            changed["units"][0]["size"]["code"]["added"] = -1
+            cases.append((changed, "nonnegative"))
+            changed = deepcopy(artifact)
+            changed["units"][0]["verification"]["wrongImplementation"] = ""
+            cases.append((changed, "wrongImplementation required"))
+            changed = deepcopy(artifact)
+            changed["waves"] = [["0"]]
+            cases.append((changed, "exactly one wave"))
+            changed = deepcopy(artifact)
+            changed["waves"] = [["0", "0"], ["1"]]
+            cases.append((changed, "exactly one wave"))
+            changed = deepcopy(artifact)
+            changed["units"][0]["launches"] = changed["units"][0]["launches"][:1]
+            cases.append((changed, "review barrier"))
+            for changed, reason in cases:
+                with self.subTest(reason=reason), self.assertRaisesRegex(ValueError, reason):
+                    helper.check_plan(changed, current, root)
+            artifact["units"][1]["dependencies"] = ["0"]
+            artifact["waves"] = [["0"], ["1"]]
+            self.assertEqual(helper.check_plan(artifact, current, root, 4)["waves"], 2)
+            # Wrong: sequential worker/review launches consume separate wave slots.
+            ten_units = self.prepared_plan(root, 10)
+            self.assertEqual(helper.check_plan(ten_units, current, root), {"status": "valid", "task": "validate assigned routing work", "units": 10, "waves": 1})
+            with self.assertRaisesRegex(ValueError, "1..9 concurrent units"):
+                helper.check_plan(ten_units, current, root, 9)
+            with self.assertRaisesRegex(ValueError, "1..10 concurrent units"):
+                helper.check_plan(self.prepared_plan(root, 11), current, root)
+            with self.assertRaisesRegex(ValueError, "1..1 concurrent units"):
+                helper.check_plan(self.prepared_plan(root), current, root, 1)
+
+    def test_prepared_brief_rubric_bytes(self):
+        # Wrong: rubric paths/summary/one mutated row accepted as full rubric.
+        current, _ = self.run_plan(roles=("writer", "first-check", "second-check", "judge"))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            for role in ("writer", "first-check", "second-check", "judge"):
+                brief = root / f"{role}.md"
+                original = brief.read_bytes()
+                for replacement in (b"See rubric.md", b"1. Scope: change the assigned files.\n", original.replace(b"invented", b"supported")):
+                    brief.write_bytes(replacement)
+                    with self.subTest(role=role), self.assertRaisesRegex(ValueError, "full rubric verbatim"):
+                        helper.check_plan(artifact, current, root)
+                brief.write_bytes(original)
+            self.assertEqual(helper.check_plan(artifact, current, root)["status"], "valid")
+
+    def test_check_plan_cli_uses_current_readers_and_briefs(self):
+        # Wrong: check-plan bypasses the production Reader/CLI path or launches.
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            config = manifest()
+            log = root / "reads"
+            config["readers"] = [{"command": f"printf 'outside\\n' >> '{log}'; printf '%s' '{stream()}'", "name": "outside"}]
+            roles = ("writer", "first-check", "second-check", "judge")
+            for name, value in (("plan", artifact), ("manifest", config), ("context", context(roles))):
+                (root / f"{name}.json").write_text(json.dumps(value))
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--check-plan", str(root / "plan.json"), "--now", "2026-11-15T00:00:00Z"]
+            for role in roles:
+                command.extend(["--role", role])
+            # Wrong: refusing invalid caps only after reading inputs and Readers.
+            for cap in (0, 11):
+                with self.subTest(cap=cap):
+                    proc = subprocess.run(command + ["--max-concurrency", str(cap)], capture_output=True, text=True)
+                    self.assertEqual(proc.returncode, 2)
+                    self.assertIn("argument --max-concurrency: invalid choice", proc.stderr)
+                    self.assertEqual(proc.stdout, "")
+                    self.assertFalse(log.exists())
+            command.extend(["--max-concurrency", "2"])
+            proc = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(json.loads(proc.stdout)["validation"]["status"], "valid")
+            self.assertEqual(log.read_text(), "outside\n")
+            (root / "writer.md").write_text("summary only")
+            proc = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("full rubric verbatim", proc.stderr)
+            self.assertEqual(proc.stdout, "")
+            self.assertEqual(log.read_text(), "outside\noutside\n")
 
     def test_real_cli_only_fake_reader_and_nonzero_loop(self):
         # Exact CLI path exercises shell collection; launch command is a sentinel.

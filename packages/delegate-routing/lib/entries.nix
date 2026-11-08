@@ -76,7 +76,7 @@ in {
 
           {helper}
 
-          Write `--launch-context` JSON with `nonInteractive` (true, false or null), `roles` and `techniques`. Each role maps to a requested `effort` (string or null) and a `families` map keyed by caller-qualified family name. Each family qualification supplies nonempty `fit`, `useFor`, `avoidFor` and `trial` evidence strings. Each observed technique supplies `runtime`, `technique`, one concrete `model` and its supported `efforts` list. Repeat an observed technique for different models only when the family pattern remains unambiguous. Available roles: writer, investigator, mechanical, finder, first-check, second-check, judge. Unknown/headless contexts cannot certify external launches. A null effort can use a resolved generated agent's default; prose effort guidance never supplies a value. JSON goes to stdout; concise routing lines go to stderr. Treat lines as specifications for native calls or orchestrator-bound external launches, never executable shell text. Provider identity is provisional for maker independence; caller fit/trial evidence remains required even above the tier floor.
+          Write `--launch-context` JSON with `nonInteractive` (true, false or null), `roles` and `techniques`. Each role maps to a requested `effort` (string or null) and a `families` map keyed by caller-qualified family name. Each family qualification supplies nonempty `fit`, `useFor`, `avoidFor` and `trial` evidence strings. Each observed technique supplies `runtime`, `technique`, one concrete `model` and its supported `efforts` list. Repeat an observed technique for different models only when the family pattern remains unambiguous. Available roles: finder, first-check, investigator, judge, mechanical, planner, second-check, writer. Planner and all four review roles require strong/frontier tiers. Unknown/headless contexts cannot certify external launches. A null effort can use a resolved generated agent's default; prose effort guidance never supplies a value. JSON goes to stdout; concise routing lines go to stderr. Treat lines as specifications for native calls or orchestrator-bound external launches, never executable shell text. Provider identity is provisional for maker independence; caller fit/trial evidence remains required even above the tier floor.
         '';
       }
       {
@@ -129,6 +129,10 @@ in {
       {
         name = "Subtractive";
         source = ../fragments/review-subtractive.md;
+      }
+      {
+        name = "Plan";
+        source = ../fragments/plan-work.md;
       }
       {
         name = "Work";
