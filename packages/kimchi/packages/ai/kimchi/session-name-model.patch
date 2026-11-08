@@ -116,7 +116,25 @@ Exercise settings resolution through the naming request and work attribution.
  		expect(DEFAULT_MODEL_ROLES.compactor).toBe(DEFAULT_COMPACTOR_MODEL)
 --- a/src/extensions/orchestration/model-roles.ts
 +++ b/src/extensions/orchestration/model-roles.ts
-@@ -75,12 +75,14 @@
+@@ -9,6 +9,7 @@
+  *   - researcher: research beyond codebase — web search, documentation lookup
+  *   - judge: ferment verification and final grading calls
+  *   - compactor: context summarization model.
++ *   - sessionNamer: session auto-naming model (kimchi-dev refs only).
+  *
+  * Delegable roles (planner, builder, reviewer, explorer) accept either a
+  * single model string or an array of candidates. When multiple models are
+@@ -21,7 +22,8 @@
+  * Defaults are hardcoded in DEFAULT_MODEL_ROLES.
+  *
+  * Users can override in ~/.config/kimchi/harness/settings.json under the
+- * "modelRoles" key. Supports any provider/model-id string.
++ * "modelRoles" key. Supports any provider/model-id string, except
++ * sessionNamer, which accepts kimchi-dev/<id> refs only.
+  *
+  * Example settings.json:
+  * ```json
+@@ -75,12 +77,14 @@
  	judge: RoleModelAssignment
  	/** Context summarization model. */
  	compactor?: string
@@ -134,7 +152,7 @@ Exercise settings resolution through the naming request and work attribution.
  	"planner",
  	"builder",
  	"reviewer",
-@@ -88,7 +90,10 @@
+@@ -88,7 +92,10 @@
  	"researcher",
  	"judge",
  ]
@@ -146,7 +164,7 @@ Exercise settings resolution through the naming request and work attribution.
  
  /** Hardcoded default model-to-role assignment. Users override via /multi-model. */
  export const DEFAULT_MODEL_ROLES: Readonly<ModelRoles> = {
-@@ -183,6 +188,21 @@
+@@ -183,6 +190,21 @@
  		}
  	}
  
@@ -168,7 +186,7 @@ Exercise settings resolution through the naming request and work attribution.
  	return { roles, warnings }
  }
  
-@@ -214,6 +234,9 @@
+@@ -214,6 +236,9 @@
  	if (roles.compactor !== undefined && roles.compactor !== DEFAULT_MODEL_ROLES.compactor) {
  		rolesObj.compactor = roles.compactor
  	}
@@ -178,7 +196,7 @@ Exercise settings resolution through the naming request and work attribution.
  
  	if (Object.keys(rolesObj).length === 0) {
  		rolesObj = undefined
-@@ -343,9 +366,8 @@
+@@ -343,9 +368,8 @@
  	for (const key of ROLE_KEYS) {
  		if (!isEqualRoleValue(a[key], b[key])) return false
  	}

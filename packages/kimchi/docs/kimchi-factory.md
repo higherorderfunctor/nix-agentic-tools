@@ -404,9 +404,9 @@ declaration.
 delegable roles a non-empty list of them. The role names, and which roles take
 one string (`orchestrator`, `compactor` and `sessionNamer`), come from the
 sidecar's `modelRoles` properties. Any other shape is discarded with a runtime
-warning (`src/extensions/orchestration/model-roles.ts:117-181`), so the option
-type rejects it at evaluation: an unknown role is an unknown option. Locked by
-`module-kimchi-model-roles-shape`.
+warning (`parseModelRoles` in `src/extensions/orchestration/model-roles.ts`), so
+the option type rejects it at evaluation: an unknown role is an unknown option.
+Locked by `module-kimchi-model-roles-shape`.
 
 Home Manager exposes
 `ai.kimchi.native.harnessSettings.modelRoles.sessionNamer = "kimchi-dev/<model>";`.
