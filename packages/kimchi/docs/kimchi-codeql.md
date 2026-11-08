@@ -44,12 +44,14 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
 kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
 ```
 
-- **Kimchi's GitHub release source, not the build's patched tree.** This is the
-  tree `extract.mjs` reads, so a CodeQL fact and an `extract.mjs` fact describe
-  the same code. This repository's packaging patches (`command-shell.patch`,
-  `package-identity.patch`, ...) are not in it, and neither is Kimchi's upstream
-  postinstall rewrite: `scripts/patch-pi-ai-oauth.js` replaces pi-ai's
-  `dist/utils/oauth-page.js`, and `extract.mjs` does not apply it.
+- **Kimchi's GitHub release source, not the build's patched tree.** CodeQL,
+  `scan.mjs` and surface judgments read the pinned release tree. `extract.mjs`
+  reads the shared patched build tree so settings declarations include packaging
+  additions such as `modelRoles.sessionNamer`. This repository's packaging
+  patches (`command-shell.patch`, `package-identity.patch`, ...) are not in the
+  CodeQL source root, and neither is Kimchi's upstream postinstall rewrite:
+  `scripts/patch-pi-ai-oauth.js` replaces pi-ai's `dist/utils/oauth-page.js`,
+  and `extract.mjs` does not apply it.
 - **pi's four packages sit under `kimchi/node_modules`**, where Kimchi's imports
   resolve them. The database holds all four `dist/` trees, patched.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every

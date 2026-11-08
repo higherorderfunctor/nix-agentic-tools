@@ -4647,6 +4647,12 @@
             "optional": true,
             "type": "union",
             "typeExpression": "string | string[]"
+          },
+          "sessionNamer": {
+            "description": "Session auto-naming model: one kimchi-dev/<id> string; unset uses the naming default.",
+            "optional": true,
+            "type": "string",
+            "typeExpression": "string"
           }
         },
         "source": "kimchi",

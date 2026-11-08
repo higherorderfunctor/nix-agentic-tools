@@ -32,9 +32,8 @@
   # nothing: buildGoModule already names it <pname>-<version>-go-modules.
   versionedName = "kimchi-${sources.version}";
 
-  # The release source is pinned ONCE, under `extraction.kimchiSource`: the
-  # build compiles it and the extractor reads it, so the two can never be
-  # pointed at different trees.
+  # One release pin feeds the patched build/settings tree and the release
+  # tree retained by CodeQL, the egress scanner and surface judgments.
   kimchiSource = fetchzip {
     name = "${versionedName}-source";
     inherit (extraction.kimchiSource) hash url;
@@ -72,6 +71,16 @@
   piPatchPath = "patches/@earendil-works__pi-coding-agent@${extraction.piPackage.version}.patch";
   patchedSource = pkgs.applyPatches {
     src = kimchiSource;
+    # Apply source patches once for both the build and settings extractor.
+    patchFlags = ["-p1" "--fuzz=0"];
+    patches = [
+      ./command-shell.patch
+      ./disable-self-update.patch
+      ./keep-telemetry-opt-out.patch
+      ./remote-feature-toggles.patch
+      ./session-name-model.patch
+      ./store-skills.patch
+    ];
     postPatch = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -97,7 +106,7 @@
   requestEvidence = import ../../../lib/request-evidence.nix {inherit codeql network pkgs;};
   # The `environment` surface (../../../extract/environment.nix) and the
   # `network` fact come from the database; extract.mjs reads declarations
-  # from the release source. scan.mjs adds egressScan over the original pinned
+  # from patchedSource. scan.mjs adds egressScan over the original pinned
   # Kimchi and pi trees below. The engine runs on x86_64-linux only, which is the
   # one system every facts.json row declares, so the raw exists on that
   # system alone.
@@ -143,7 +152,7 @@
       ${pkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
         --annotations ${../../../extract/annotations.json} \
         --kimchi-lock kimchi-lock.json \
-        --kimchi-source ${kimchiSource} \
+        --kimchi-source ${patchedSource} \
         --kimchi-source-url ${lib.escapeShellArg extraction.kimchiSource.url} \
         --kimchi-version ${sources.version} \
         --out - \
@@ -158,7 +167,8 @@
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this
   # runs first and writes every hash-verified source input: the release
-  # source that both the build and the extractor read, then pi's packages.
+  # source that patchedSource patches for the build and the extractor, then
+  # pi's packages.
   # The dependency fixers that follow it build against that source pin.
   refreshExtraction = ''
     kimchi_source_url="https://github.com/getkimchi/kimchi/archive/refs/tags/v$latest.tar.gz"
@@ -284,17 +294,6 @@ in
     inherit (sources) version;
     src = patchedSource;
 
-    # Source changes, one concern per patch; each opens with its own rationale.
-    # Refuse changed hunk context on upstream drift instead of applying fuzz.
-    patchFlags = ["-p1" "--fuzz=0"];
-    patches = [
-      ./command-shell.patch
-      ./disable-self-update.patch
-      ./keep-telemetry-opt-out.patch
-      ./remote-feature-toggles.patch
-      ./store-skills.patch
-    ];
-
     preBuild = ''
       cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
     '';
@@ -373,11 +372,14 @@ in
     checkPhase = ''
       runHook preCheck
       pnpm exec vitest run --maxWorkers=2 \
+        src/extensions/orchestration/model-roles.test.ts \
+        src/extensions/prompt-construction/prompt-enrichment.test.ts \
+        src/extensions/session-name.test.ts \
+        src/ollama.test.ts \
         src/shared/skill-discovery/resolve-skill-roots.disables-skills.test.ts \
         src/shared/skill-discovery/resolve-skill-roots.requires-resource.test.ts \
         src/shared/skill-discovery/resolve-skill-roots.test.ts \
-        src/shared/skill-discovery/store-skills.test.ts \
-        src/extensions/prompt-construction/prompt-enrichment.test.ts
+        src/shared/skill-discovery/store-skills.test.ts
       runHook postCheck
     '';
 
@@ -419,7 +421,7 @@ in
             ../../../surface-judgments.json
           ];
         };
-        inherit extractionSources;
+        inherit extractionSources patchedSource;
         extractionSourceUrls.kimchi = extraction.kimchiSource.url;
         goUpdateExtract = goUpdate.extract;
         updateScript = packageLib.mkUpdateScript {

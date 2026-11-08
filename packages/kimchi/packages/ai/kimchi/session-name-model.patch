@@ -1,0 +1,399 @@
+Make session auto-naming use the optional modelRoles.sessionNamer setting.
+Naming calls the Kimchi gateway, so reject other providers in the role parser
+and keep upstream's model when unset or invalid. Preserve the role across
+settings saves and Ollama augmentation without adding it to /multi-model;
+Ollama augmentation now copies every role, so it also stops dropping a
+configured compactor.
+Exercise settings resolution through the naming request and work attribution.
+
+--- a/src/extensions/orchestration/model-roles-command.ts
++++ b/src/extensions/orchestration/model-roles-command.ts
+@@ -70,7 +70,7 @@
+ 	return []
+ }
+ 
+-const ROLE_LABELS: Record<keyof ModelRoles, { label: string; description: string }> = {
++const ROLE_LABELS: Record<keyof Omit<ModelRoles, "sessionNamer">, { label: string; description: string }> = {
+ 	orchestrator: { label: "Orchestrator", description: "main model, delegates work" },
+ 	planner: { label: "Planner", description: "designs the approach, writes specs" },
+ 	builder: { label: "Builder", description: "code implementation" },
+@@ -82,11 +82,11 @@
+ 	compactor: { label: "Compactor", description: "summarizes ferment stage-boundary handoffs" },
+ }
+ 
+-// "compactor" is excluded here (not just from the arrays): it's optional and
+-// config-file only — this interactive picker doesn't surface it, and indexing
++// Optional roles are excluded here and from the arrays: they are
++// config-file only — this interactive picker doesn't surface them, and indexing
+ // roles[key]/DEFAULT_MODEL_ROLES[key] for key in these arrays must stay
+-// narrowed away from compactor's `string | undefined` type.
+-const DELEGABLE_KEYS: (keyof Omit<ModelRoles, "orchestrator" | "compactor">)[] = [
++// narrowed away from their `string | undefined` type.
++const DELEGABLE_KEYS: (keyof Omit<ModelRoles, "orchestrator" | "compactor" | "sessionNamer">)[] = [
+ 	"planner",
+ 	"builder",
+ 	"reviewer",
+@@ -95,7 +95,7 @@
+ 	"judge",
+ ]
+ 
+-const ROLE_KEYS: (keyof Omit<ModelRoles, "compactor">)[] = ["orchestrator", ...DELEGABLE_KEYS]
++const ROLE_KEYS: (keyof Omit<ModelRoles, "compactor" | "sessionNamer">)[] = ["orchestrator", ...DELEGABLE_KEYS]
+ 
+ /**
+  * Whether `collectModelMetadata()` produced something worth persisting.
+@@ -119,7 +119,10 @@
+ 	return arrA.length === arrB.length && arrA.every((v, i) => v === arrB[i])
+ }
+ 
+-export function formatRoleSummaryBlock(role: keyof Omit<ModelRoles, "compactor">, value: RoleModelAssignment): string {
++export function formatRoleSummaryBlock(
++	role: keyof Omit<ModelRoles, "compactor" | "sessionNamer">,
++	value: RoleModelAssignment,
++): string {
+ 	const info = ROLE_LABELS[role]
+ 	const models = normalizeRoleModels(value)
+ 	const isDefault = isEqualAssignment(value, DEFAULT_MODEL_ROLES[role])
+@@ -133,7 +136,10 @@
+ 	return `${info.label}:\n${modelLines.join("\n")}`
+ }
+ 
+-export function formatRoleDisplay(role: keyof Omit<ModelRoles, "compactor">, value: RoleModelAssignment): string {
++export function formatRoleDisplay(
++	role: keyof Omit<ModelRoles, "compactor" | "sessionNamer">,
++	value: RoleModelAssignment,
++): string {
+ 	const info = ROLE_LABELS[role]
+ 	const isDefault = isEqualAssignment(value, DEFAULT_MODEL_ROLES[role])
+ 	const suffix = isDefault ? " (default)" : ""
+@@ -458,7 +464,9 @@
+ 				await showMainMenu()
+ 			}
+ 
+-			const showSingleModelEditor = async (roleKey: keyof Omit<ModelRoles, "compactor">): Promise<void> => {
++			const showSingleModelEditor = async (
++				roleKey: keyof Omit<ModelRoles, "compactor" | "sessionNamer">,
++			): Promise<void> => {
+ 				const info = ROLE_LABELS[roleKey]
+ 				const currentModels = normalizeRoleModels(roles[roleKey])
+ 
+@@ -501,7 +509,9 @@
+ 				}
+ 			}
+ 
+-			const showMultiModelEditor = async (roleKey: keyof Omit<ModelRoles, "compactor">): Promise<void> => {
++			const showMultiModelEditor = async (
++				roleKey: keyof Omit<ModelRoles, "compactor" | "sessionNamer">,
++			): Promise<void> => {
+ 				const info = ROLE_LABELS[roleKey]
+ 				const selected = new Set(normalizeRoleModels(roles[roleKey]))
+ 
+--- a/src/extensions/orchestration/model-roles.test.ts
++++ b/src/extensions/orchestration/model-roles.test.ts
+@@ -598,6 +598,23 @@
+ 	})
+ })
+ 
++describe("sessionNamer role", () => {
++	afterEach(() => rmSync(testDir, { recursive: true, force: true }))
++
++	it("retains the naming override when /multi-model saves another role", () => {
++		const { roles } = parseModelRoles({ sessionNamer: "kimchi-dev/title-model" })
++		saveModelRoles({ ...roles, builder: "kimchi-dev/builder-model" })
++		const saved = JSON.parse(readFileSync(testPath, "utf-8"))
++		expect(saved.modelRoles).toEqual({ builder: "kimchi-dev/builder-model", sessionNamer: "kimchi-dev/title-model" })
++		expect(getAllowedMultiModelRefs()).not.toContain("kimchi-dev/title-model")
++	})
++
++	it("does not discard a transform that only changes sessionNamer", () => {
++		applyRoleAugmentation((roles) => ({ ...roles, sessionNamer: "kimchi-dev/title-model" }))
++		expect(getModelRoles().sessionNamer).toBe("kimchi-dev/title-model")
++	})
++})
++
+ describe("compactor role", () => {
+ 	it("defaults to deepseek-v4-flash-0731", () => {
+ 		expect(DEFAULT_MODEL_ROLES.compactor).toBe(DEFAULT_COMPACTOR_MODEL)
+--- a/src/extensions/orchestration/model-roles.ts
++++ b/src/extensions/orchestration/model-roles.ts
+@@ -9,6 +9,7 @@
+  *   - researcher: research beyond codebase — web search, documentation lookup
+  *   - judge: ferment verification and final grading calls
+  *   - compactor: context summarization model.
++ *   - sessionNamer: session auto-naming model (kimchi-dev refs only).
+  *
+  * Delegable roles (planner, builder, reviewer, explorer) accept either a
+  * single model string or an array of candidates. When multiple models are
+@@ -21,7 +22,8 @@
+  * Defaults are hardcoded in DEFAULT_MODEL_ROLES.
+  *
+  * Users can override in ~/.config/kimchi/harness/settings.json under the
+- * "modelRoles" key. Supports any provider/model-id string.
++ * "modelRoles" key. Supports any provider/model-id string, except
++ * sessionNamer, which accepts kimchi-dev/<id> refs only.
+  *
+  * Example settings.json:
+  * ```json
+@@ -75,12 +77,14 @@
+ 	judge: RoleModelAssignment
+ 	/** Context summarization model. */
+ 	compactor?: string
++	/** Session auto-naming model: one kimchi-dev/<id> string; unset uses the naming default. */
++	sessionNamer?: string
+ }
+ 
+-// "compactor" is excluded from these key types (not just omitted from the arrays):
+-// it's optional and single-model-only, so indexing roles[key] for key in ROLE_KEYS
++// Optional single-model roles are excluded from these key types and arrays:
++// indexing roles[key] for key in ROLE_KEYS
+ // must stay narrowed to the always-present, non-optional role keys.
+-const DELEGABLE_ROLE_KEYS: readonly (keyof Omit<ModelRoles, "orchestrator" | "compactor">)[] = [
++const DELEGABLE_ROLE_KEYS: readonly (keyof Omit<ModelRoles, "orchestrator" | "compactor" | "sessionNamer">)[] = [
+ 	"planner",
+ 	"builder",
+ 	"reviewer",
+@@ -88,7 +92,10 @@
+ 	"researcher",
+ 	"judge",
+ ]
+-const ROLE_KEYS: readonly (keyof Omit<ModelRoles, "compactor">)[] = ["orchestrator", ...DELEGABLE_ROLE_KEYS]
++const ROLE_KEYS: readonly (keyof Omit<ModelRoles, "compactor" | "sessionNamer">)[] = [
++	"orchestrator",
++	...DELEGABLE_ROLE_KEYS,
++]
+ 
+ /** Hardcoded default model-to-role assignment. Users override via /multi-model. */
+ export const DEFAULT_MODEL_ROLES: Readonly<ModelRoles> = {
+@@ -183,6 +190,21 @@
+ 		}
+ 	}
+ 
++	// Session naming calls the Kimchi gateway directly, so other providers
++	// and empty model IDs cannot be routed by this caller.
++	const sessionNamerValue = obj.sessionNamer
++	if (sessionNamerValue != null) {
++		if (typeof sessionNamerValue !== "string" || !/^kimchi-dev\/\S+$/.test(sessionNamerValue.trim())) {
++			warnings.push({
++				role: "sessionNamer",
++				configuredModel: String(sessionNamerValue),
++				message: "modelRoles.sessionNamer must be a non-empty kimchi-dev/<id> string. Ignoring.",
++			})
++		} else {
++			roles.sessionNamer = sessionNamerValue.trim()
++		}
++	}
++
+ 	return { roles, warnings }
+ }
+ 
+@@ -214,6 +236,9 @@
+ 	if (roles.compactor !== undefined && roles.compactor !== DEFAULT_MODEL_ROLES.compactor) {
+ 		rolesObj.compactor = roles.compactor
+ 	}
++	if (roles.sessionNamer !== undefined) {
++		rolesObj.sessionNamer = roles.sessionNamer
++	}
+ 
+ 	if (Object.keys(rolesObj).length === 0) {
+ 		rolesObj = undefined
+@@ -343,9 +368,8 @@
+ 	for (const key of ROLE_KEYS) {
+ 		if (!isEqualRoleValue(a[key], b[key])) return false
+ 	}
+-	// compactor is excluded from ROLE_KEYS (optional, not part of the generic
+-	// loop's types — see the ROLE_KEYS comment), so it needs its own comparison.
+-	return a.compactor === b.compactor
++	// Optional roles are outside ROLE_KEYS, so augmentation compares them here.
++	return a.compactor === b.compactor && a.sessionNamer === b.sessionNamer
+ }
+ 
+ /**
+--- a/src/extensions/session-name.test.ts
++++ b/src/extensions/session-name.test.ts
+@@ -53,6 +53,14 @@
+ 	loadConfig: mockLoadConfig,
+ }))
+ 
++vi.mock("../config/json.js", async (importOriginal) => {
++	const original = await importOriginal<typeof import("../config/json.js")>()
++	return {
++		...original,
++		readJsonCached: () => original.readJsonCached(join(attributionDir, "settings.json")),
++	}
++})
++
+ vi.mock("node:path", async () => {
+ 	const actual = await vi.importActual<typeof import("node:path")>("node:path")
+ 	return { ...actual, basename: () => "my-project" }
+@@ -61,6 +69,7 @@
+ let attributionDir: string
+ beforeEach(() => {
+ 	attributionDir = mkdtempSync(join(tmpdir(), "name-attribution-"))
++	writeFileSync(join(attributionDir, "settings.json"), "{}")
+ 	vi.stubEnv("PI_CODING_AGENT_DIR", attributionDir)
+ 	// Isolate from the ambient Kimchi agent dir: keyless configs now fall back
+ 	// to $KIMCHI_CODING_AGENT_DIR/auth.json, and a developer shell's real login
+@@ -202,6 +211,83 @@
+ })
+ 
+ describe("suggestSessionName", () => {
++	it.each([
++		{
++			label: "configured role overrides the hardcoded model",
++			value: "kimchi-dev/title-model",
++			model: "title-model",
++			warning: false,
++		},
++		{
++			label: "surrounding whitespace is trimmed",
++			value: "  kimchi-dev/title-model  ",
++			model: "title-model",
++			warning: false,
++		},
++		{
++			label: "gateway model path keeps its inner slash",
++			value: "kimchi-dev/anthropic/title-model",
++			model: "anthropic/title-model",
++			warning: false,
++		},
++		{ label: "unset keeps upstream's default", value: undefined, model: "deepseek-v4-flash-0731", warning: false },
++		{ label: "null is unset", value: null, model: "deepseek-v4-flash-0731", warning: false },
++		{ label: "empty string is ignored", value: "", model: "deepseek-v4-flash-0731", warning: true },
++		{ label: "blank string is ignored", value: "  ", model: "deepseek-v4-flash-0731", warning: true },
++		{ label: "non-string is ignored", value: 42, model: "deepseek-v4-flash-0731", warning: true },
++		{
++			label: "model array is ignored",
++			value: ["kimchi-dev/title-model"],
++			model: "deepseek-v4-flash-0731",
++			warning: true,
++		},
++		{
++			label: "other provider cannot use the gateway",
++			value: "openai/title-model",
++			model: "deepseek-v4-flash-0731",
++			warning: true,
++		},
++		{ label: "missing provider is ignored", value: "title-model", model: "deepseek-v4-flash-0731", warning: true },
++		{ label: "empty gateway model is ignored", value: "kimchi-dev/", model: "deepseek-v4-flash-0731", warning: true },
++	])("$label in the naming request and attribution", async ({ value, model, warning }) => {
++		writeFileSync(join(attributionDir, "settings.json"), JSON.stringify({ modelRoles: { sessionNamer: value } }))
++		mockLoadConfig.mockReturnValue({ apiKey: "test-key", llmEndpoint: "https://llm.test/openai/v1" })
++		const fetchMock = vi.fn(
++			async (_url: RequestInfo | URL, _init?: RequestInit) =>
++				new Response(JSON.stringify({ choices: [{ message: { content: "Name task" } }] })),
++		)
++		vi.stubGlobal("fetch", fetchMock)
++		const ctx = createContext({ cwd: attributionDir, hasUI: true })
++		expect(await suggestSessionName(ctx, "Name this task", true)).toBe("Name task")
++		expect(fetchMock).toHaveBeenCalledOnce()
++		const [url, init] = fetchMock.mock.calls[0]
++		expect(url).toBe("https://llm.test/openai/v1/chat/completions")
++		expect(JSON.parse(init?.body as string).model).toBe(model)
++		const requests = backendFor(attributionDir)
++			.readRecords({})
++			.map((row) => JSON.parse(row.body))
++		expect(requests.filter((row) => row.type === "request")).toEqual([
++			expect.objectContaining({ provider: "kimchi-dev", model }),
++		])
++		expect(requests.filter((row) => row.nativeUsage)).toEqual([
++			expect.objectContaining({
++				nativeUsage: expect.objectContaining({
++					api: "openai-completions",
++					provider: "kimchi-dev",
++					reportedModel: model,
++				}),
++			}),
++		])
++		if (warning) {
++			expect(ctx.ui.notify).toHaveBeenCalledWith(
++				"modelRoles.sessionNamer must be a non-empty kimchi-dev/<id> string. Ignoring.",
++				"warning",
++			)
++		} else {
++			expect(ctx.ui.notify).not.toHaveBeenCalled()
++		}
++	})
++
+ 	it("persists each naming retry before dispatch and pins original work and session", async () => {
+ 		vi.useFakeTimers()
+ 		mockLoadConfig.mockReturnValue({ apiKey: "test-key", llmEndpoint: "https://llm.test/openai/v1" })
+--- a/src/extensions/session-name.ts
++++ b/src/extensions/session-name.ts
+@@ -16,6 +16,7 @@
+ import { gatewayAuthHeaders, resolveGatewayCredentials } from "../auth/gateway-credentials.js"
+ import { loadConfig, RETRY_DEFAULTS } from "../config.js"
+ import { fetchWithRetry } from "../utils/http.js"
++import { resolveModelRoles } from "./orchestration/model-roles.js"
+ import { createNativeUsageCapture } from "./work-attribution/native-usage.js"
+ import { getWorkId, pinWorkContext, recordProviderRequest, warnWorkAttribution } from "./work-attribution.js"
+ 
+@@ -141,7 +142,13 @@
+ 		warnWorkAttribution(ctx, error)
+ 	}
+ 
+-	const namingModel = { provider: "kimchi-dev", id: SESSION_NAME_MODEL, api: "openai-completions" }
++	const { roles, warnings } = resolveModelRoles()
++	for (const warning of warnings.filter(({ role }) => role === "sessionNamer")) {
++		if (ctx.hasUI) ctx.ui.notify(warning.message, "warning")
++		else console.warn(`[kimchi] ${warning.message}`)
++	}
++	const model = roles.sessionNamer?.slice("kimchi-dev/".length) ?? SESSION_NAME_MODEL
++	const namingModel = { provider: "kimchi-dev", id: model, api: "openai-completions" }
+ 	let usage: ReturnType<typeof createNativeUsageCapture> | undefined
+ 	try {
+ 		const maxRetries = getSessionNameMaxRetries(ctx.cwd)
+@@ -154,7 +161,7 @@
+ 					...gatewayAuthHeaders(credentials),
+ 				},
+ 				body: JSON.stringify({
+-					model: SESSION_NAME_MODEL,
++					model,
+ 					messages: [
+ 						{ role: "system", content: SESSION_NAME_SYSTEM_PROMPT },
+ 						{
+@@ -175,11 +182,7 @@
+ 					const headers = new Headers(init?.headers)
+ 					if (workId) {
+ 						try {
+-							const request = recordProviderRequest(
+-								workContext,
+-								{ provider: "kimchi-dev", id: SESSION_NAME_MODEL },
+-								workId,
+-							)
++							const request = recordProviderRequest(workContext, namingModel, workId)
+ 							headers.set("X-Request-Id", request.requestId)
+ 							usage.bind(request.requestId)
+ 						} catch (error) {
+--- a/src/ollama.test.ts
++++ b/src/ollama.test.ts
+@@ -916,6 +916,11 @@
+ 		expect(result.researcher).toBe("anthropic/claude-sonnet-4")
+ 	})
+ 
++	it("preserves the configured session namer for subsequent role saves", () => {
++		const result = augmentModelRolesWithOllama({ ...baseRoles, sessionNamer: "kimchi-dev/title-model" }, ollamaModels)
++		expect(result.sessionNamer).toBe("kimchi-dev/title-model")
++	})
++
+ 	it("does not mutate the input roles object", () => {
+ 		const original = JSON.parse(JSON.stringify(baseRoles))
+ 		augmentModelRolesWithOllama(baseRoles, ollamaModels)
+--- a/src/ollama.ts
++++ b/src/ollama.ts
+@@ -474,15 +474,7 @@
+ ): ModelRoles {
+ 	if (models.length === 0) return roles
+ 
+-	const next: ModelRoles = {
+-		orchestrator: roles.orchestrator,
+-		planner: roles.planner,
+-		judge: roles.judge,
+-		researcher: roles.researcher,
+-		builder: roles.builder,
+-		reviewer: roles.reviewer,
+-		explorer: roles.explorer,
+-	}
++	const next: ModelRoles = { ...roles }
+ 
+ 	for (const model of models) {
+ 		const ref = refForOllamaModel(model)

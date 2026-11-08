@@ -404,11 +404,19 @@ declaration.
 
 `native.harnessSettings.modelRoles` values are provider/model strings, or for
 delegable roles a non-empty list of them. The role names, and which roles take
-one string (`orchestrator` and `compactor` in 1.1.37), come from the sidecar's
-`modelRoles` properties. Any other shape is discarded with a runtime warning
-(`src/extensions/orchestration/model-roles.ts:117-181`), so the option type
-rejects it at evaluation: an unknown role is an unknown option. Locked by
-`module-kimchi-model-roles-shape`.
+one string (`orchestrator`, `compactor` and `sessionNamer`), come from the
+sidecar's `modelRoles` properties. Any other shape is discarded with a runtime
+warning (`parseModelRoles` in `src/extensions/orchestration/model-roles.ts`), so
+the option type rejects it at evaluation: an unknown role is an unknown option.
+Locked by `module-kimchi-model-roles-shape`.
+
+Home Manager exposes
+`ai.kimchi.native.harnessSettings.modelRoles.sessionNamer = "kimchi-dev/<model>";`.
+Session naming sends the model ID after `kimchi-dev/` to the Kimchi gateway.
+Other providers and invalid values produce a warning and use upstream's
+`deepseek-v4-flash-0731` default; leaving the option unset keeps that default.
+Devenv exposes the same option type, but its existing user-scope assertion
+rejects `modelRoles`: Kimchi reads these roles from the user harness settings.
 
 `remote-feature-toggles.patch` adds `extensions.remote-run` and
 `extensions.teleport` to Kimchi's resource registry. Both default to true, so
@@ -723,15 +731,18 @@ module harness's stub executable receive the same pin.
 
 The package builds upstream's Bun executable and its Go proxy helper from the
 same pinned release. That source is pinned once, as `extraction.kimchiSource` in
-`sources.json`, because the extractor reads the same tree; a second copy of the
-URL and hash could drift from it. `pnpmDeps` and `proxyHelper.goModules` have
-independent hashes pinned beside it. `mkUpdateScript` records the version alone
-(`platforms = {}`); its `extraExtract` first refreshes the extraction-source
-pins, then `mkGoUpdateExtract` derives the new Go floor before rebuilding the
-helper vendor hash and runs the shared pnpm hash fixer. The standalone
-dependency fixers also participate in input-bump repairs. The source checkout
-reports version `0.0.0`, so upstream's `set-version.js` runs before compiling
-and staging the resources.
+`sources.json`. Source patches are applied once to `patchedSource`, shared by
+the build and `extract.mjs` for settings declarations. CodeQL, `scan.mjs` and
+surface judgments retain the release tree and its hash pins. The extractor
+checks dependency identities against the release's `pnpm-lock.yaml`; the patched
+tree keeps the same package versions. `pnpmDeps` and `proxyHelper.goModules`
+have independent hashes pinned beside it. `mkUpdateScript` records the version
+alone (`platforms = {}`); its `extraExtract` first refreshes the
+extraction-source pins, then `mkGoUpdateExtract` derives the new Go floor before
+rebuilding the helper vendor hash and runs the shared pnpm hash fixer. The
+standalone dependency fixers also participate in input-bump repairs. The source
+checkout reports version `0.0.0`, so upstream's `set-version.js` runs before
+compiling and staging the resources.
 
 The build rewrites pi 1.3.0's shared `getToolPath()` choke point after pnpm
 materializes `node_modules` and before Bun compiles the module graph. `fd` and
@@ -750,8 +761,17 @@ no toggle and no "enable auto-update" tip, and the tip rotation drops the
 auto-update tip. Every gate is a one-line condition: the patch leaves import
 blocks and user-facing text alone. So `--help` still lists
 `KIMCHI_NO_UPDATE_CHECK`, now inert, and `/update` prints upstream's notice that
-names that variable. The extractor still reads the unpatched source and records
-upstream's `KIMCHI_NO_UPDATE_CHECK` environment variable.
+names that variable. The CodeQL environment extractor still reads the release
+source and records upstream's `KIMCHI_NO_UPDATE_CHECK` environment variable.
+
+`session-name-model.patch` adds the optional single-string `sessionNamer` role
+to `ModelRoles`. The settings extractor discovers it from the patched
+declaration. The parser accepts only `kimchi-dev/<id>` because session naming
+uses the Kimchi gateway; invalid values warn and fall back to upstream's naming
+model. The request body and work attribution both use the ID without the
+provider prefix. `/multi-model` keeps the role out of its picker and preserves
+it when saving other roles. The package's check phase runs the naming and role
+tests, including settings-to-request cases and Ollama role preservation.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.
