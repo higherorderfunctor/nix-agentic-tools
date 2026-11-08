@@ -1,0 +1,125 @@
+--- a/src/host/step-output-tools.ts
++++ b/src/host/step-output-tools.ts
+@@ -159,21 +159,31 @@
+ 	return spec.asks ? [...rest, SUBMIT_RESULT_TOOL, SUBMIT_QUESTIONS_TOOL] : [...rest, SUBMIT_RESULT_TOOL]
+ }
+ 
++const STEP_OUTPUT_HANDOFF = Symbol.for("@kimchi-dev/kimchi-workflows/step-output-handoff/v1")
++
++/** Consume the child-only transport once and share its parsed contract across extension copies. */
++function processStepOutputHandoff(env: NodeJS.ProcessEnv) {
++	const shared = globalThis as typeof globalThis & {
++		[STEP_OUTPUT_HANDOFF]?: { file: string; spec: StepOutputToolSpec | undefined }
++	}
++	if (!shared[STEP_OUTPUT_HANDOFF]) {
++		const file = env[STEP_OUTPUT_TOOLS_ENV]
++		if (!file) return undefined
++		// Descendant processes inherit the environment, but must not inherit this step's contract.
++		delete env[STEP_OUTPUT_TOOLS_ENV]
++		shared[STEP_OUTPUT_HANDOFF] = { file, spec: readStepOutputToolSpec(file) }
++	}
++	return shared[STEP_OUTPUT_HANDOFF]
++}
++
+ /**
+- * Register the output tools if this process was spawned as a workflow step, and report whether it did.
+- *
+- * Returning false is the ordinary case: a normal session is not a step, and must not gain these tools.
+- *
+- * The variable is CONSUMED, not merely read: a step's own descendants inherit its environment, so a
+- * `kimchi` the step happens to launch would otherwise register another step's tools against another
+- * step's schema and lose `/workflow` with it. The handoff addresses this process alone.
++ * Register output tools for every extension copy in a spawned step; false for an ordinary session.
++ * A pre-trust copy may be shadowed by a project copy, so both need the same process-wide handoff.
+  */
+ export function registerStepOutputToolsFromEnv(pi: ExtensionAPI, env: NodeJS.ProcessEnv = process.env): boolean {
+-	const file = env[STEP_OUTPUT_TOOLS_ENV]
+-	if (!file) return false
+-	const spec = readStepOutputToolSpec(file)
+-	// Consumed, so a `kimchi` this step launches does not inherit another step's contract.
+-	delete env[STEP_OUTPUT_TOOLS_ENV]
++	const handoff = processStepOutputHandoff(env)
++	if (!handoff) return false
++	const { file, spec } = handoff
+ 	if (!spec) {
+ 		// The handoff named this process as a step, so it IS one even though the contract is unreadable:
+ 		// returning false would let it register `/workflow` and start a nested run inside the run it
+--- a/test/step-output-tools.test.ts
++++ b/test/step-output-tools.test.ts
+@@ -2,12 +2,12 @@
+  * The child-process half of the output-tool contract: the schema handoff a spawned step is given, the
+  * registration it performs from it, and the bridge wiring that produces the handoff in the first place.
+  */
+-import { existsSync, mkdtempSync, writeFileSync } from "node:fs"
++import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+ import { tmpdir } from "node:os"
+ import path from "node:path"
+ import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent"
+ import { Type } from "typebox"
+-import { describe, expect, it, vi } from "vitest"
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+ import { readSubmittedPayload, SUBMIT_QUESTIONS_TOOL, SUBMIT_RESULT_TOOL } from "../src/engine/output-tools.ts"
+ import { createPiAgentBridge, inheritedExtensionArgs } from "../src/host/pi-agent.ts"
+ import { latestSubmissionAfterCursor, type ModelRegistry } from "../src/host/pi-agent-messages.ts"
+@@ -61,6 +61,11 @@
+ // --- registration ---------------------------------------------------------
+ 
+ describe("registration inside a spawned step", () => {
++	const resetHandoff = () =>
++		Reflect.deleteProperty(globalThis, Symbol.for("@kimchi-dev/kimchi-workflows/step-output-handoff/v1"))
++	beforeEach(resetHandoff)
++	afterEach(resetHandoff)
++
+ 	it("registers workflow_submit_result typed by the step's own schema", () => {
+ 		const { pi, registerTool } = fakePi()
+ 		registerStepOutputTools(pi, outputToolSpec)
+@@ -174,7 +179,11 @@
+ 		// The handoff NAMED this process as a step, so it is one. Returning false would let it register
+ 		// `/workflow` and start a nested run inside the run it belongs to.
+ 		expect(registerStepOutputToolsFromEnv(pi, env)).toBe(true)
++		const laterCopy = fakePi()
++		expect(registerStepOutputToolsFromEnv(laterCopy.pi, {})).toBe(true)
+ 		expect(registerTool).not.toHaveBeenCalled()
++		expect(laterCopy.registerTool).not.toHaveBeenCalled()
++		expect(env[STEP_OUTPUT_TOOLS_ENV]).toBeUndefined()
+ 		expect(errors).toHaveBeenCalledWith(expect.stringContaining("missing or unreadable"))
+ 		errors.mockRestore()
+ 	})
+@@ -187,14 +196,34 @@
+ 		expect(registerTool).toHaveBeenCalledTimes(1)
+ 	})
+ 
+-	it("consumes the handoff, so a process the step itself launches does not inherit it", () => {
+-		const file = writeStepOutputToolSpec(scratch(), "step", outputToolSpec)
++	it("shares the parsed handoff with later copies after the parent removes its file", async () => {
++		const file = writeStepOutputToolSpec(scratch(), "step", { ...outputToolSpec, asks: true })
+ 		const env = { [STEP_OUTPUT_TOOLS_ENV]: file }
+ 
+ 		expect(registerStepOutputToolsFromEnv(fakePi().pi, env)).toBe(true)
+ 		expect(env[STEP_OUTPUT_TOOLS_ENV]).toBeUndefined()
++		rmSync(file)
++
++		// A separately loaded module must reuse the parsed contract, not module-local state or the file.
++		vi.resetModules()
++		const laterModule = await import("../src/host/step-output-tools.ts")
++		const laterCopy = fakePi()
++		expect(laterModule.registerStepOutputToolsFromEnv(laterCopy.pi, {})).toBe(true)
++		expect(laterCopy.registerTool.mock.calls.map(([tool]) => tool.name)).toEqual([
++			SUBMIT_RESULT_TOOL,
++			SUBMIT_QUESTIONS_TOOL,
++		])
++		expect(laterCopy.registerTool.mock.calls[0]?.[0]?.parameters).toEqual(Type.Object({ result: outputSchema }))
++	})
++
++	it("leaves descendants ordinary when they inherit the consumed environment", () => {
++		const file = writeStepOutputToolSpec(scratch(), "step", outputToolSpec)
++		const env = { [STEP_OUTPUT_TOOLS_ENV]: file }
++		expect(registerStepOutputToolsFromEnv(fakePi().pi, env)).toBe(true)
++		expect(env[STEP_OUTPUT_TOOLS_ENV]).toBeUndefined()
+ 
+-		// A descendant inheriting that environment is an ordinary session: tools stay off, /workflow stays on.
++		// Explicitly reset process state: a fresh descendant has no global slot from its parent.
++		resetHandoff()
+ 		const descendant = fakePi()
+ 		expect(registerStepOutputToolsFromEnv(descendant.pi, env)).toBe(false)
+ 		expect(descendant.registerTool).not.toHaveBeenCalled()

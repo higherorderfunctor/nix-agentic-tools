@@ -80,7 +80,7 @@ in
     pname = "kimchi-workflows";
     inherit (sources) version;
     inherit src;
-    patches = [./native-preflight.patch ./pi-agent-settled.patch ./pnpm-runtime.patch ./step-thinking.patch];
+    patches = [./native-preflight.patch ./pi-agent-settled.patch ./pnpm-runtime.patch ./step-output-handoff.patch ./step-thinking.patch];
     patchFlags = ["-p1" "--fuzz=0"];
     postPatch = ''
       set -euETo pipefail
@@ -136,7 +136,7 @@ in
       runHook preCheck
       pnpm run docs:check
       pnpm run typecheck
-      pnpm exec vitest run test/agent-settled-retry.test.ts test/thinking.test.ts
+      pnpm exec vitest run test/agent-settled-retry.test.ts test/step-output-tools.test.ts test/thinking.test.ts
       runHook postCheck
     '';
     doInstallCheck = true;
