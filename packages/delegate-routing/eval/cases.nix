@@ -11,6 +11,7 @@
   mkCase = {
     codexHeadroom ? false,
     expect,
+    helperBacked ? false,
     id,
     runtime,
     switches ? {},
@@ -19,6 +20,7 @@
     evaluated = harness.evalDevenvModules [
       (import ../../../dev/ai.nix {isCI = false;})
       ./fixture.nix
+      {_module.args.routingHelperFixture = helperBacked;}
       {config = switches;}
     ];
     inherit (evaluated) config;
@@ -59,7 +61,7 @@
     effectiveTechniques);
   in
     assert lib.assertMsg (failures == []) (lib.concatStringsSep "\n" failures); {
-      inherit expect files id runtime switches task techniques usageCommands;
+      inherit expect files helperBacked id runtime switches task techniques usageCommands;
       # suite.py puts these helper-shaped documents in the routing prompt.
       usage = lib.genAttrs ["claude" "codex"] (pool: let
         remaining =
@@ -163,5 +165,16 @@
       task = dependent;
     })
   ]) ["codex" "kimchi" "kiro"];
+  helperCases = map (scenario:
+    mkCase {
+      helperBacked = true;
+      expect = "helper-receipts";
+      id = "codex-helper-${scenario}";
+      runtime = "codex";
+      task =
+        if scenario == "independent-wave"
+        then "Implement two independent pure functions: unique_words(text) in words.py returning sorted unique words, and square(value) in square.py returning value * value. Each has its own file and verification."
+        else single;
+    }) ["cross-runtime-reader" "independent-wave" "session-behind" "under-tier-reviewer"];
 in
-  claudeDrainPairs ++ [orchestratorDesign] ++ reminderPairs ++ shapes
+  claudeDrainPairs ++ [orchestratorDesign] ++ reminderPairs ++ shapes ++ helperCases
