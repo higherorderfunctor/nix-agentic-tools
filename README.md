@@ -1149,9 +1149,14 @@ pace and enforces the strong/frontier review floor. Configure
 example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
 warns that the session buffer cannot be certified. With no pools it reports
 fit-only budget uncertainty. Output is JSON plus canonical routing
-specifications; the command never launches delegates. See the
+specifications; the command never launches delegates. Pool drain and Review use
+this helper as the canonical decision, retaining role fit/trial checks and named
+fallback launchers. Unknown interactive/headless status never blocks Reader
+collection or tier/pace policy; external launches remain unresolved until the
+caller supplies mode evidence. See the
 [helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper)
-for the launch-context schema and unknown handling.
+for the launch-context schema, conservative unknown handling and per-runtime
+mode-discovery evidence.
 
 #### Per-turn reminder
 

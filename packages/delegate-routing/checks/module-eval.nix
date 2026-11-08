@@ -663,6 +663,42 @@
       passes sessionDelivery
       && lib.all (runtime: lib.hasInfix "Runtime: ${runtime}; session pool: ${sessionPools.${runtime}}." (readSkill sessionDelivery runtime)) runtimes
     );
+    # Rejects manual Reader discovery/arithmetic, runtime-specific shared rules,
+    # lost buffer/unknown policy, an under-tier review fallback or unnamed launches.
+    "module-delegate-routing-${name}-helper-policy-contract" = mkTest "delegate-routing-${name}-helper-policy-contract" (
+      lib.all (text: hasProse text stub || throw "missing router policy: ${text}") [
+        "invoke the absolute `delegate-routing-plan` command rendered in this runtime's skill"
+        "Use its decision as canonical"
+        "run the Reader of every pool in the Pools table"
+        "worst-window pace"
+        "a monthly pool is paced against its month, not the week"
+        "minimum remaining share across applicable windows is strictly more than a fifth"
+        "every other fitting measured pool is behind or level in pace"
+        "unknown session identity cannot certify it"
+        "With no measurable fitting pool, use fit alone"
+        "Never treat exhaustion as unmeasured"
+        "Aim for every pool to reach its reset near empty"
+        "Do not report pool numbers unless asked"
+        "never step down a tier; report a loop failure"
+      ]
+      && !(lib.hasInfix "remaining share divided by" stub)
+      && !(lib.hasInfix "/bin/delegate-routing-plan" stub)
+      && lib.all (runtime: let
+        text = readSkill sessionDelivery runtime;
+      in
+        sessionDelivery.config.ai.${runtime}.rules.delegate-routing-router.text
+        == sessionDelivery.config.ai.claude.rules.delegate-routing-router.text
+        && lib.hasInfix "/bin/delegate-routing-plan --role <role> --launch-context <json-path>" text
+        && (hasProse "It enforces the strong/frontier floor before pool ranking" text || throw "missing ${runtime} review floor")
+        && hasProse "never step down a tier; report a loop failure" text
+        && lib.all (launch: hasProse launch text || throw "missing ${runtime} review fallback: ${launch}") [
+          "Agent calls that name a generated agent"
+          "Workflow tool's agent"
+          "`claude -p`"
+          "`codex exec`"
+        ])
+      runtimes
+    );
     # Fails if automatic routes admit a disabled technique, unresolved agent,
     # manual-only target or another harness's native tool; reader inventory
     # must still include a registered runtime outside all launch targets.
