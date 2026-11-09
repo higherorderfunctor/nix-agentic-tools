@@ -623,16 +623,20 @@ def helper_receipts(path):
 
 def check_helper_evidence(snapshot, receipts):
     # Literal expectations reject current-runtime-only inventory, session-first
-    # ranking and allowing a mid-tier review candidate. They are not live claims.
+    # ranking and allowing a same-maker or mid-tier reviewer. They are not live claims.
     if {row.get("reader") for row in receipts} != {"cross-runtime", "outside", "session"}:
         raise ValueError("helper fixture did not execute every registered fake Reader")
     if snapshot["runtime"] != "codex" or snapshot["sessionPool"] != "session":
         raise ValueError("helper fixture lost launching runtime/session binding")
-    for role in ("planner", "writer", "first-check"):
+    for role in ("planner", "writer"):
         result = snapshot["roles"][role]
         if not result["candidates"] or result["candidates"][0]["pool"] != "outside":
             raise ValueError(f"{role}: outside pool must precede the behind-pace session")
     reviewers = snapshot["roles"]["first-check"]
+    if [row["launch"]["family"] for row in reviewers["candidates"]] != ["session"]:
+        raise ValueError("different-maker session reviewer must be selected")
+    if not any(row["family"] == "outside" and row["reason"] == "same maker as writer: fixture-outside" for row in reviewers["exclusions"]):
+        raise ValueError("same-maker outside reviewer must be excluded")
     if not any(row["family"] == "under-tier" and row["reason"] == "below role tier floor" for row in reviewers["exclusions"]):
         raise ValueError("mid-tier reviewer must be excluded before ranking")
     if any(row["launch"]["family"] == "under-tier" for row in reviewers["candidates"]):
@@ -646,6 +650,7 @@ def exercise_helper(case, repo, logs):
                "roles": {role: {"effort": "medium", "families": {name: qualification for name in ("outside", "session", "under-tier")}}
                          for role in ("planner", "writer", "first-check")},
                "techniques": [{"efforts": ["medium"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+    context["roles"]["first-check"]["writer"] = "outside"
     context_path = logs / "setup-launch-context.json"
     write_json(context_path, context)
     argv = [helper_command(case, repo), "--launch-context", str(context_path)]

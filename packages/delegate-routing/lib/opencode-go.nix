@@ -49,10 +49,14 @@
   matchesId = family: id: builtins.match (globRegex family.match) id != null;
   matches = family: lib.filter (matchesId family) catalog;
 
+  # Static ownership from opencodeGo.models.*.canonical_id in
+  # packages/cliproxyapi/extracted/extracted.json: zhipuai -> zhipu and
+  # moonshotai -> moonshot match direct consumers. Iceman is undisclosed.
   families = {
     go-beam-free = {
       avoidFor = "sole judging; reasoning across huge documents; time-critical work that depends on free capacity";
       effort = "high for bounded reasoning; max is vendor advice, gains above high unknown";
+      maker = "reflection";
       match = "beam-free";
       tier = "mid";
       useFor = "bounded rule reasoning; checkable implementation attempts while free capacity lasts";
@@ -60,6 +64,7 @@
     go-deepseek-v4-pro = {
       avoidFor = "image input; sole final judge; trusting April preview scores for the served checkpoint";
       effort = "high default, max for named hard reasoning; best setting untested on Go";
+      maker = "deepseek";
       match = "deepseek-v4-pro";
       tier = "strong";
       useFor = "bounded code repair and implementation; repository investigation with independent verification";
@@ -67,6 +72,7 @@
     "go-deepseek-v4.1-flash" = {
       avoidFor = "sole correctness judge; hardest autonomous tasks without review";
       effort = "high; low for mechanical tasks; max only after a task-specific check";
+      maker = "deepseek";
       match = "deepseek-v4.1-flash";
       tier = "strong";
       useFor = "bounded implementation; tests drafted against explicit behavior; image-assisted repository tasks";
@@ -74,6 +80,7 @@
     go-gemini-4-argon = {
       avoidFor = "routine cheap work; trusting full 1M recall; output over 65K tokens through Go";
       effort = "medium default, high for hard multi-file work, low for extraction";
+      maker = "google";
       match = "gemini-4-argon";
       tier = "strong";
       useFor = "hard terminal and coding tasks; multimodal document analysis; large-context reasoning with checks";
@@ -81,6 +88,7 @@
     "go-grok-4.7" = {
       avoidFor = "cheap mechanical work; xhigh by default; relying on full-window recall";
       effort = "high (vendor default); xhigh only for named hard tasks, at high token use";
+      maker = "xai";
       match = "grok-4.7";
       tier = "strong";
       useFor = "agentic knowledge work; coding with acceptance checks; an alternate-vendor implementer";
@@ -88,6 +96,7 @@
     go-hy3 = {
       avoidFor = "image input; sole judging; hardest architecture or long unattended runs";
       effort = "none, low or high; vendor recommends high for coding";
+      maker = "tencent";
       match = "hy3";
       tier = "mid";
       useFor = "provisional: bounded code writing and text agent tasks with verification";
@@ -95,6 +104,7 @@
     go-hy4-preview = {
       avoidFor = "hardest autonomous terminal work; latency-sensitive tasks; sole judging";
       effort = "none or high; high for coding";
+      maker = "tencent";
       match = "hy4-preview";
       tier = "mid";
       useFor = "provisional: bounded coding, migrations, tests and web apps with review";
@@ -102,6 +112,7 @@
     go-iceman-contributor-free = {
       avoidFor = "long autonomous tool loops; sole judging; inputs that must not be used for training";
       effort = "leave unset; no effort levels advertised";
+      maker = null;
       match = "iceman-contributor-free";
       tier = "small";
       useFor = "provisional: disposable tool-free experiments and drafts with human checks; maker undisclosed";
@@ -109,6 +120,7 @@
     "go-kimi-k2.7-code" = {
       avoidFor = "sole judging; forced tool choice; general writing or analysis without a task check";
       effort = "always thinks; no effort levels";
+      maker = "moonshot";
       match = "kimi-k2.7-code";
       tier = "mid";
       useFor = "repo repairs and terminal implementation with test feedback";
@@ -116,6 +128,7 @@
     go-kimi-k3 = {
       avoidFor = "routine extraction; latency-sensitive work; final presentation polish; sole judge";
       effort = "always thinks; max only on Go";
+      maker = "moonshot";
       match = "kimi-k3";
       tier = "strong";
       useFor = "multi-turn coding repairs and implementation; analytical work with verifiable deliverables";
@@ -123,6 +136,7 @@
     "go-kimi-k3.1-pro" = {
       avoidFor = "latency-sensitive routine work at max; sole finance or legal auditor; trusting full-window accuracy";
       effort = "max default and the tested hard-task setting; low for bounded latency-sensitive work";
+      maker = "moonshot";
       match = "kimi-k3.1-pro";
       tier = "strong";
       useFor = "difficult terminal coding and tool-driven implementation; source-grounded research with checks";
@@ -130,6 +144,7 @@
     "go-longcat-2.0" = {
       avoidFor = "image input; sole judging; unattended long-horizon work";
       effort = "thinking on or off only; no effort levels";
+      maker = "meituan";
       match = "longcat-2.0";
       tier = "mid";
       useFor = "provisional: bounded coding help with tests and review";
@@ -137,6 +152,7 @@
     "go-mimo-v2.6-flash" = {
       avoidFor = "sole final judge; latency-critical work; long unattended tool runs (repetition untested)";
       effort = "thinks by default; on/off switch, no effort levels";
+      maker = "xiaomi";
       match = "mimo-v2.6-flash";
       tier = "strong";
       useFor = "low-cost coding and automation with executable acceptance criteria";
@@ -144,6 +160,7 @@
     "go-mimo-v2.6-pro" = {
       avoidFor = "latency-sensitive routine work; sole final judgment; trusting the full 1M context";
       effort = "thinks by default; on/off switch, no effort levels";
+      maker = "xiaomi";
       match = "mimo-v2.6-pro";
       tier = "strong";
       useFor = "implementation and tool-driven investigation with concrete tests";
@@ -151,6 +168,7 @@
     go-minimax-m3 = {
       avoidFor = "sole factual judge; hardest autonomous runs; trusting full 1M recall";
       effort = "thinking on or off only; on for reasoning, off for simple turns";
+      maker = "minimax";
       match = "minimax-m3";
       tier = "mid";
       useFor = "provisional: bounded coding and tool-assisted implementation; visual code investigation with checks";
@@ -158,6 +176,7 @@
     "go-minimax-m3.1-flash" = {
       avoidFor = "latency-sensitive interaction; unchecked numeric claims; hardest unattended runs; sole judging";
       effort = "always adaptive; max is the vendor default and evaluated setting";
+      maker = "minimax";
       match = "minimax-m3.1-flash";
       tier = "mid";
       useFor = "bounded code writing and background analytics with executable checks";
@@ -166,6 +185,7 @@
     go-muse-spark-contributor = {
       avoidFor = "content that must stay out of training; sole judging; trusting full-window recall";
       effort = "minimal to xhigh, no max; xhigh has independent task evidence";
+      maker = "meta";
       match = "muse-spark-1.[23]-contributor";
       tier = "strong";
       useFor = "tool-driven coding and professional deliverables with checks, when training on inputs is acceptable";
@@ -173,6 +193,7 @@
     "go-qwen3.7-plus" = {
       avoidFor = "sole diagnostic judgment; latency-sensitive work; million-token reasoning";
       effort = "thinking on for analysis, off for mechanical work; no effort levels";
+      maker = "alibaba";
       match = "qwen3.7-plus";
       tier = "mid";
       useFor = "provisional: bounded tool-assisted analysis";
@@ -180,6 +201,7 @@
     "go-qwen3.8-flash" = {
       avoidFor = "sole judging; hard synthesis; final prose polish; long autonomous runs";
       effort = "medium; low or off for mechanical work; xhigh for named hard tasks";
+      maker = "alibaba";
       match = "qwen3.8-flash";
       tier = "mid";
       useFor = "provisional: bounded code, CLI, documentation and tool tasks";
@@ -187,6 +209,7 @@
     "go-qwen3.8-max" = {
       avoidFor = "sole judge; unverified autonomous delivery; latency-sensitive tasks";
       effort = "low, medium or xhigh plus a thinking switch; medium for bounded tasks (untested)";
+      maker = "alibaba";
       match = "qwen3.8-max";
       tier = "mid";
       useFor = "provisional: bounded repair candidates with executable validation";
@@ -194,6 +217,7 @@
     go-step-5-preview = {
       avoidFor = "hardest proof work; sole judging; long autonomous runs without tests";
       effort = "medium (vendor advice); high for complex code analysis, low for extraction";
+      maker = "stepfun";
       match = "step-5-preview";
       tier = "strong";
       useFor = "provisional: bounded coding and scientific programming; multimodal documents with checks";

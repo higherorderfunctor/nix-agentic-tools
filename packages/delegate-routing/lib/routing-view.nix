@@ -67,7 +67,9 @@
         };
       };
   in {
-    inherit family target;
+    inherit target;
+    # Direct callers can omit the module's nullable option default.
+    family = {maker = null;} // family;
     pool = selection.poolFor family target;
     techniques =
       if names == []
