@@ -18,7 +18,7 @@ helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 NOW = helper.utc("2026-11-15T00:00:00Z")
 SHELL = shutil.which("bash")
-QUALIFIED = {"avoidFor": "checked: task avoids exclusions", "fit": "approved for this task", "trial": "not a trial", "useFor": "task matches guidance"}
+QUALIFIED = {"avoidFor": "checked: task avoids exclusions", "fit": "approved for this task", "useFor": "task matches guidance"}
 
 
 def window(remaining=50, seconds=2592000, reset="2026-12-01T00:00:00Z"):
@@ -33,8 +33,8 @@ def technique(name="spawn_agent", kind="subagent", model="gpt-6.1-sol", pattern=
     return {"agent": agent, "model": {"isPattern": pattern, "value": model}, "name": name, "node": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "kind": kind, "modelArg": "slug", "notes": "caller binds task/output paths"}}
 
 
-def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, maker="openai", cost=3):
-    return {"family": {"avoidFor": "sole judge", "cost": cost, "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
+def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, maker="openai", cost=3, trial=False):
+    return {"family": {"avoidFor": "sole judge", "cost": cost, "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "trial": trial, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
 def manifest(routes=None, session=None):
@@ -100,6 +100,47 @@ class Routing(unittest.TestCase):
                     else:
                         config[collection][0]["family"]["cost"] = cost
                     with self.assertRaisesRegex(ValueError, "family .* cost must be an integer from 0 to 5"):
+                        self.run_plan(config, context(names=()))
+
+    def test_trial_policy_for_review_roles(self):
+        # Wrong: an essay admits trial judges, or the gate bans trial finders.
+        roles = ("finder", "first-check", "second-check", "judge")
+        for trial, expected in ((False, [True, True, True, True]), (True, [True, True, False, False])):
+            with self.subTest(trial=trial):
+                facts = context(roles)
+                for role in roles:
+                    facts["roles"][role]["families"]["sol"] = QUALIFIED | {"trial": "not a trial"}
+                result, _ = self.run_plan(manifest([route(trial=trial)]), facts, roles)
+                self.assertEqual([bool(result["roles"][role]["candidates"]) for role in roles], expected)
+                if trial:
+                    for role in ("second-check", "judge"):
+                        self.assertIn("trial family excluded from second-check and judge", [item["reason"] for item in result["roles"][role]["exclusions"]])
+
+    def test_qualification_needs_no_trial_essay_and_does_not_echo_it(self):
+        # Wrong: the removed trial essay is required or copied into launches.
+        for legacy in (False, True):
+            with self.subTest(legacy=legacy):
+                evidence = QUALIFIED.copy()
+                if legacy:
+                    evidence["trial"] = "not a trial"
+                facts = context(("judge",))
+                facts["roles"]["judge"]["families"]["sol"] = evidence
+                result, _ = self.run_plan(launch_context=facts, roles=("judge",))
+                candidates = result["roles"]["judge"]["candidates"]
+                self.assertEqual(len(candidates), 1)
+                self.assertEqual(candidates[0]["launch"]["qualification"], {"avoidFor": "checked: task avoids exclusions", "fit": "approved for this task", "useFor": "task matches guidance"})
+
+    def test_raw_trial_metadata_required_before_selection(self):
+        # Wrong: missing or non-boolean policy reaches even an unqualified route.
+        for collection in ("manualRoutes", "routes"):
+            for trial in (None, 0, 1, "false", [], {}):
+                with self.subTest(collection=collection, trial=trial):
+                    config = manifest()
+                    if trial is None:
+                        del config[collection][0]["family"]["trial"]
+                    else:
+                        config[collection][0]["family"]["trial"] = trial
+                    with self.assertRaisesRegex(ValueError, "family .* trial must be a boolean"):
                         self.run_plan(config, context(names=()))
 
     def test_cli_collects_before_recoverable_failures(self):

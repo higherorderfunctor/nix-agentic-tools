@@ -15,6 +15,8 @@ import signal
 import subprocess
 import sys
 
+QUALIFICATION_FIELDS = ("avoidFor", "fit", "useFor")
+
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
 ROLE_POLICY = {
     "finder": {"review": True, "tiers": {"strong", "frontier"}},
@@ -199,7 +201,7 @@ def launch(route, context, qualification, requested):
             "family": route["family"]["name"],
             "guidance": {key: node[key] for key in ("command", "modelArg", "notes")},
             "model": evidence[0]["model"],
-            "qualification": qualification,
+            "qualification": {key: qualification[key] for key in QUALIFICATION_FIELDS},
             "runtime": route["target"],
             "technique": name,
         })
@@ -242,6 +244,8 @@ def plan(manifest, context, roles, now, pools):
         family = route["family"]
         if type(family.get("cost")) is not int or not 0 <= family["cost"] <= 5:
             raise ValueError(f"family {family['name']} cost must be an integer from 0 to 5")
+        if type(family.get("trial")) is not bool:
+            raise ValueError(f"family {family['name']} trial must be a boolean")
         if route["pool"] is not None and route["pool"] not in pool_names:
             raise ValueError(f"unknown route pool: {route['pool']}")
     if not isinstance(context.get("techniques"), list) or not isinstance(context.get("roles"), dict):
@@ -255,7 +259,7 @@ def plan(manifest, context, roles, now, pools):
             raise ValueError(f"{role}: expected families evidence map and requested effort string/null")
         if ROLE_POLICY[role]["review"] and (not isinstance(request.get("writer"), str) or not request["writer"].strip()):
             raise ValueError(f"{role}: review role requires writer family name")
-    warnings = ["maker independence uses declared family metadata; fit/trial remain caller assessments"]
+    warnings = ["maker independence uses declared family metadata; fit remains a caller assessment"]
     # A Reader scope matches an exact family name in that pool, not a model glob.
     # Include manual routes so warnings describe configuration, not availability.
     family_paces, invalid_families = {}, set()
@@ -289,8 +293,11 @@ def plan(manifest, context, roles, now, pools):
             if family["tier"] not in ROLE_POLICY[role]["tiers"]:
                 excluded.append(record | {"reason": "below role tier floor"})
                 continue
-            if not all(isinstance(qualification.get(key), str) and qualification[key].strip() for key in ("fit", "useFor", "avoidFor", "trial")):
-                excluded.append(record | {"reason": "caller fit/useFor/avoidFor/trial evidence required"})
+            if family["trial"] and role in ("second-check", "judge"):
+                excluded.append(record | {"reason": "trial family excluded from second-check and judge"})
+                continue
+            if not all(isinstance(qualification.get(key), str) and qualification[key].strip() for key in QUALIFICATION_FIELDS):
+                excluded.append(record | {"reason": "caller fit/useFor/avoidFor evidence required"})
                 continue
             reason = maker_exclusion(family, request, role, families)
             if reason:

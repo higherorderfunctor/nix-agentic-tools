@@ -38,9 +38,9 @@ plan; writer file ownership is repository-relative):
   candidate's complete `launch` object), `line` (that same candidate's exact
   pinned routing line), and `brief` (prepared artifact path). Include every
   finder, first-check, second-check and judge that will run; the helper's floor
-  never proves fit or trial eligibility; review candidates also require known
-  maker independence from the writer and, for cut judgment, the proposer. Honor
-  explicit avoidFor guidance and the Review step's trial restrictions.
+  enforces family trial restrictions and requires known maker independence from
+  the writer and, for cut judgment, the proposer. It never proves fit; honor
+  explicit avoidFor guidance.
 - `waves`: ordered lists of unit ids. Put at most ten simultaneous delegates in
   a wave, honoring lower host/user caps. Each unit contributes one concurrent
   delegate because its worker and reviewers run in sequence. Writers in one wave
