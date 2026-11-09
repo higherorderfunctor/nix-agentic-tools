@@ -132,10 +132,14 @@ When rebuilding a stack from scratch (`git reset --soft` + recommit):
   `git add -u` will stage all modified tracked files, not just the ones intended
   for the current commit. Always use explicit `git add <file>` to avoid pulling
   unrelated changes into the wrong commit.
-- **Stacked PRs auto-close on force-push** — force-pushing a branch that's the
-  base of a stacked PR can auto-close the dependent PR on GitHub. After
-  restructuring a stack, expect to create new PRs rather than reopen closed
-  ones.
+- **Keep open PR heads unreachable from their bases** — in a GitHub probe, an
+  unrelated force-push of the base left the stacked PR OPEN. Pushing a base tip
+  containing the unchanged stacked head recorded `BaseRefForcePushedEvent`,
+  `MergedEvent` and `ClosedEvent` in the same second; the PR became MERGED. With
+  `delete_branch_on_merge` enabled, GitHub also deleted its head branch
+  (`HeadRefDeletedEvent`). Never push a base tip containing a still-open stacked
+  PR's head. When rebuilding, order branch pushes (or retarget first) so no open
+  PR's head becomes reachable from its base.
 
 ### Dependency Audit Before `git move -x`
 

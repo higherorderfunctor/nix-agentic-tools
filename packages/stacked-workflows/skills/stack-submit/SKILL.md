@@ -369,6 +369,10 @@ pre-flight step 5 and step 2's selection and checks, keeping the original lease
 snapshot. Preview with `push_selected --dry-run`, then push with `push_selected`
 after the required approval.
 
+Never push a base branch tip containing a still-open stacked PR's head. GitHub
+then marks that PR merged, and deletes its head branch when the repository
+deletes branches on merge.
+
 Never refresh the expected tips after the rewrite. Bare `--force-with-lease`
 compares against remote-tracking refs, which any fetch (including another
 worktree's fetch) can update. The explicit SHA captured before rewriting still
