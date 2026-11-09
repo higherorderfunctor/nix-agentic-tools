@@ -3,6 +3,16 @@
   claudeUsageScript,
   codexUsageScript,
 }: {
+  classifiers = [
+    {
+      effort = "medium";
+      family = "luna";
+    }
+    {
+      effort = "medium";
+      family = "sonnet";
+    }
+  ];
   # Only these package-owned groups are keyed by their model maker. Custom
   # families remain unknown unless their consumer declares maker explicitly.
   families =
