@@ -88,9 +88,87 @@ class Routing(unittest.TestCase):
             result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-session": stream({"monthly": window(60), "5h": window(remaining, 18000, "2026-11-15T00:30:00Z")})})
             self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)
 
+    def test_live_claude_scopes_preserve_pool_measurement(self):
+        # Wrong: any colon makes the pool unmeasured, or scopes set pool pace/buffer.
+        for remaining in (52, 10, 0):
+            with self.subTest(remaining=remaining):
+                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(remaining, 604800, "2026-11-18T12:00:00Z")})})
+                pool = result["pools"]["outside"]
+                self.assertEqual(pool["status"], "measured")
+                self.assertEqual(pool["pace"], 0.34)
+                self.assertEqual(pool["buffer"], 0.17)
+                candidates = {item["launch"]["family"]: item["pace"] for item in result["roles"]["writer"]["candidates"]}
+                self.assertEqual(candidates, {52: {"fable": 0.34, "sol": 0.34}, 10: {"fable": 0.2, "sol": 0.34}, 0: {"sol": 0.34}}[remaining])
+                if remaining == 0:
+                    self.assertEqual(result["roles"]["writer"]["exclusions"][-1]["reason"], "model-scoped window exhausted")
+
+    def test_live_claude_unstarted_scope_and_inactive_limit(self):
+        # Wrong: an unused Opus window fails the pool, or inactive limits are ignored.
+        windows = {
+            "7d": {"remainingPercent": 52, "resetsAt": "2026-11-18T12:00:00Z", "status": None, "usedPercent": 48, "windowSeconds": 604800},
+            "7d:fable": {"remainingPercent": 17, "resetsAt": "2026-11-18T12:00:00Z", "status": "inactive", "usedPercent": 83, "windowSeconds": 604800},
+            "7d:opus": {"remainingPercent": 100, "resetsAt": None, "status": None, "usedPercent": 0, "windowSeconds": 604800},
+        }
+        result, _ = self.run_plan(manifest([route("fable"), route("opus"), route("sol")]), context(names=("fable", "opus", "sol")), outputs={"reader-outside": stream(windows)})
+        self.assertEqual(result["pools"]["outside"], {"buffer": 0.52, "pace": 1.04, "scopedPaces": {"7d:fable": 0.34, "7d:opus": None}, "status": "measured"})
+        self.assertEqual({item["launch"]["family"]: item["pace"] for item in result["roles"]["writer"]["candidates"]}, {"fable": 0.34, "opus": 1.04, "sol": 1.04})
+
+    def test_malformed_scopes_refuse_only_the_named_family(self):
+        # Wrong: malformed scoped data fails the pool or silently drops its limit.
+        cases = [
+            ([], "window must be an object"),
+            ({"remainingPercent": 50}, "'windowSeconds'"),
+            (window(50, 604800, None), "unstarted null reset unresolved"),
+            (window(50, 604800, "2026-11-14T00:00:00Z"), "expired reset or reset beyond window duration"),
+            (window(101, 604800, None), "invalid remainingPercent/windowSeconds"),
+        ]
+        for value, reason in cases:
+            with self.subTest(reason=reason):
+                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": value})})
+                self.assertEqual(result["pools"]["outside"]["status"], "measured")
+                self.assertEqual(result["pools"]["outside"]["pace"], 1.04)
+                self.assertEqual(result["pools"]["outside"]["buffer"], 0.52)
+                self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 1.04)])
+                self.assertEqual(result["roles"]["writer"]["exclusions"][-1]["reason"], "model-scoped window invalid")
+                self.assertIn(f"outside: scoped window 7d:fable invalid; refusing its family: {reason}", result["warnings"])
+
+    def test_invalid_scope_does_not_block_another_session_family(self):
+        # Wrong: an invalid family's pool pace blocks a valid session candidate.
+        result, _ = self.run_plan(manifest([route("fable"), route("sol", pool="session")], "session"), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(50, 604800, None)})})
+        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.9375)])
+
+    def test_scopes_are_limited_to_the_bound_pool_and_worst_window(self):
+        # Wrong: a scope follows the family across pools, or last scoped window wins.
+        config = manifest([route("fable"), route("fable", pool="session")])
+        result, _ = self.run_plan(config, context(names=("fable",)), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "5h:fable": window(10, 18000, "2026-11-15T02:30:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})})
+        self.assertEqual([(item["pool"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("session", 0.9375), ("outside", 0.2)])
+
+    def test_scoped_pace_ranking_and_session_comparison(self):
+        # Wrong: applying family pace only at sorting, after the session comparison.
+        config = manifest([route("fable", pool="session"), route("sol")], "session")
+        outputs = {"reader-outside": stream({"7d": window(30, 604800, "2026-11-18T12:00:00Z")}), "reader-session": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})}
+        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], ["sol"])
+        self.assertEqual(result["roles"]["writer"]["exclusions"][-1]["reason"], "another fitting pool is ahead of session pace")
+        # Scope share below 20% must not consume the session pool's buffer.
+        outputs["reader-outside"] = stream({"7d": window(10, 604800, "2026-11-18T12:00:00Z")})
+        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("fable", 0.34), ("sol", 0.2)])
+        # The same family pace also ranks ordinary non-session candidates.
+        config["sessionPool"] = None
+        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
+
+    def test_unknown_scope_warns_without_failing_pool(self):
+        # Wrong: silently ignoring a scope, or failing its otherwise valid pool.
+        result, _ = self.run_plan(outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:unknown-model": window(0, 604800, "2026-11-18T12:00:00Z")})})
+        self.assertEqual(result["pools"]["outside"]["status"], "measured")
+        self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
+        self.assertIn("outside: scoped window 7d:unknown-model matches no configured family", result["warnings"])
+
     def test_unmeasured_streams_and_exhaustion(self):
-        # Wrong: first-document-only parse, fabricated weekly resets, silent scopes.
-        cases = [(stream() + "garbage", "Expecting value"), (stream() + "\n" + stream(), "account-to-route"), (stream({"5h": window(reset=None)}), "null reset"), (stream({"5h": window(reset="2026-11-14T00:00:00Z")}), "expired reset"), (stream({"5h:model": window()}), "model-scoped"), (stream({"5h": {"remainingPercent": 50}}), "windowSeconds"), (subprocess.TimeoutExpired("fake", 10), "timed out"), (subprocess.CompletedProcess("fake", 7, ""), "Reader exited 7"), (stream({"bad": []}), "window must be an object"), ("[]", "missing account"), (stream({"bad": window(float("nan"))}), "invalid remainingPercent"), (stream({"bad": window(reset="2027-01-01T00:00:00Z")}), "beyond window duration")]
+        # Wrong: first-document-only parse, fabricated weekly resets, or accepting malformed windows.
+        cases = [(stream() + "garbage", "Expecting value"), (stream() + "\n" + stream(), "account-to-route"), (stream({"5h": window(reset=None)}), "null reset"), (stream({"7d:fable": window()}), "missing unscoped windows"), (stream({"5h": window(reset="2026-11-14T00:00:00Z")}), "expired reset"), (stream({"5h": {"remainingPercent": 50}}), "windowSeconds"), (subprocess.TimeoutExpired("fake", 10), "timed out"), (subprocess.CompletedProcess("fake", 7, ""), "Reader exited 7"), (stream({"bad": []}), "window must be an object"), ("[]", "missing account"), (stream({"bad": window(float("nan"))}), "invalid remainingPercent"), (stream({"bad": window(reset="2027-01-01T00:00:00Z")}), "beyond window duration")]
         for value, reason in cases:
             with self.subTest(reason=reason):
                 result, _ = self.run_plan(outputs={"reader-outside": value})

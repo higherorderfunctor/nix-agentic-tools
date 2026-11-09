@@ -35,8 +35,31 @@ def utc(value):
     return result.astimezone(timezone.utc)
 
 
+def window_pace(window, now, scoped):
+    if not isinstance(window, dict):
+        raise ValueError("window must be an object")
+    remaining, seconds = window["remainingPercent"], window["windowSeconds"]
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (remaining, seconds)):
+        raise ValueError("invalid remainingPercent/windowSeconds")
+    if not 0 <= remaining <= 100 or seconds <= 0:
+        raise ValueError("invalid remainingPercent/windowSeconds")
+    used = window["usedPercent"]
+    if isinstance(used, bool) or not isinstance(used, (int, float)) or not math.isfinite(used) or not math.isclose(used + remaining, 100):
+        raise ValueError("invalid/inconsistent usedPercent")
+    if window["status"] is not None and not isinstance(window["status"], str):
+        raise ValueError("window status must be a string or null")
+    if scoped and window["resetsAt"] is None and used == 0 and remaining == 100:
+        return None  # The Reader reports an unused family allowance with no reset.
+    if window["resetsAt"] is None:
+        raise ValueError("unstarted null reset unresolved")
+    left = (utc(window["resetsAt"]) - now).total_seconds()
+    if not 0 < left <= seconds:
+        raise ValueError("expired reset or reset beyond window duration")
+    return (remaining / 100) / (left / seconds)
+
+
 def measure(stream, now):
-    """Reject partial/account-ambiguous streams and unresolved windows wholesale."""
+    """Validate the stream; measure pool windows separately from family limits."""
     decoder, documents, rest = json.JSONDecoder(), [], stream.strip()
     while rest:
         document, end = decoder.raw_decode(rest)
@@ -61,30 +84,30 @@ def measure(stream, now):
     windows = document["windows"]
     if not isinstance(windows, dict) or not windows:
         raise ValueError("missing windows")
-    paces, shares = [], []
+    paces, shares, scoped, scoped_errors = [], [], {}, {}
     for name, window in windows.items():
-        if not isinstance(window, dict):
-            raise ValueError("window must be an object")
-        if ":" in name:
-            raise ValueError("model-scoped window applicability unresolved")
-        remaining, seconds = window["remainingPercent"], window["windowSeconds"]
-        if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (remaining, seconds)):
-            raise ValueError("invalid remainingPercent/windowSeconds")
-        if not 0 <= remaining <= 100 or seconds <= 0:
-            raise ValueError("invalid remainingPercent/windowSeconds")
-        used = window["usedPercent"]
-        if isinstance(used, bool) or not isinstance(used, (int, float)) or not math.isfinite(used) or not math.isclose(used + remaining, 100):
-            raise ValueError("invalid/inconsistent usedPercent")
-        if window["status"] is not None and not isinstance(window["status"], str):
-            raise ValueError("window status must be a string or null")
-        if window["resetsAt"] is None:
-            raise ValueError("unstarted null reset unresolved")
-        left = (utc(window["resetsAt"]) - now).total_seconds()
-        if not 0 < left <= seconds:
-            raise ValueError("expired reset or reset beyond window duration")
-        paces.append((remaining / 100) / (left / seconds))
-        shares.append(remaining / 100)
-    return {"buffer": min(shares), "pace": min(paces), "status": "measured"}
+        is_scoped = ":" in name
+        try:
+            pace = window_pace(window, now, is_scoped)
+        except (KeyError, TypeError, ValueError) as error:
+            if not is_scoped:
+                raise
+            scoped[name] = None
+            scoped_errors[name] = str(error)
+            continue
+        if is_scoped:
+            scoped[name] = pace
+        else:
+            paces.append(pace)
+            shares.append(window["remainingPercent"] / 100)
+    if not paces:
+        raise ValueError("missing unscoped windows for pool pace/buffer")
+    result = {"buffer": min(shares), "pace": min(paces), "status": "measured"}
+    if scoped:
+        result["scopedPaces"] = scoped
+    if scoped_errors:
+        result["scopedErrors"] = scoped_errors
+    return result
 
 
 def run_reader(argv, **kwargs):
@@ -176,6 +199,22 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             raise ValueError(f"{role}: expected families evidence map and requested effort string/null")
     pools = collect(manifest["readers"], now, shell, run)
     warnings = ["provider-vendor identity is provisional; fit/trial/maker independence are caller assessments"]
+    # A Reader scope matches an exact family name in that pool, not a model glob.
+    # Include manual routes so warnings describe configuration, not availability.
+    family_paces, invalid_families = {}, set()
+    for name, pool in pools.items():
+        families = {route["family"]["name"] for route in manifest["routes"] + manifest["manualRoutes"] if route["pool"] == name}
+        for window, pace in pool.get("scopedPaces", {}).items():
+            scope = window.split(":", 1)[1]
+            error = pool.get("scopedErrors", {}).get(window)
+            if error is not None:
+                warnings.append(f"{name}: scoped window {window} invalid; refusing its family: {error}")
+                invalid_families.add((name, scope))
+            if scope not in families:
+                warnings.append(f"{name}: scoped window {window} matches no configured family")
+            elif pace is not None:
+                key = (name, scope)
+                family_paces[key] = min(family_paces.get(key, pool["pace"]), pace)
     if session is None:
         warnings.append("session pool unknown; buffer rule cannot be certified")
     elif pools[session]["status"] != "measured":
@@ -198,7 +237,11 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             alternatives, unresolved = launch(route, context, qualification, request.get("effort"))
             excluded.extend(record | item for item in unresolved)
             if alternatives:
-                candidates.append({"alternatives": alternatives[1:], "launch": alternatives[0], "pool": route["pool"], "tier": family["tier"]})
+                if (route["pool"], family["name"]) in invalid_families:
+                    excluded.append(record | {"reason": "model-scoped window invalid"})
+                    continue
+                pace = family_paces.get((route["pool"], family["name"]), pools.get(route["pool"], {}).get("pace"))
+                candidates.append({"alternatives": alternatives[1:], "launch": alternatives[0], "pace": pace, "pool": route["pool"], "tier": family["tier"]})
         measured = [item for item in candidates if pools.get(item["pool"], {}).get("status") == "measured"]
         usable = []
         for item in candidates:
@@ -208,15 +251,16 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
                 reason = "unmeasured pool excluded while measured candidates exist"
             elif pool.get("buffer") == 0:
                 reason = "pool exhausted"
+            elif item["pace"] == 0:
+                reason = "model-scoped window exhausted"
             elif session is not None and item["pool"] == session and pool.get("status") == "measured":
                 if pool.get("buffer", 0) <= 0.2:
                     reason = "session buffer must be strictly greater than 20%"
-                elif any(pools[other["pool"]]["pace"] > pool["pace"] for other in measured if other["pool"] != session):
+                elif any(other["pace"] > item["pace"] for other in measured if other["pool"] != session):
                     reason = "another fitting pool is ahead of session pace"
             if reason:
                 excluded.append({"family": item["launch"]["family"], "reason": reason, "runtime": item["launch"]["runtime"]})
             else:
-                item["pace"] = pool.get("pace")
                 item["budget"] = "measured" if measured else "fit-only; budget and session buffer unknown"
                 usable.append(item)
         usable.sort(key=lambda item: (-(item["pace"] or 0), item["pool"] != session, item["launch"]["family"], item["launch"]["runtime"]))
