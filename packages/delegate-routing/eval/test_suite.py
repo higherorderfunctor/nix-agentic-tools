@@ -45,7 +45,7 @@ class HelperFixtures(unittest.TestCase):
                 "print(json.dumps({'account': {'auth_index': None, 'name': 'fixture', 'plan': None}, 'balances': [], 'bonuses': [], 'pool': 'wrong-key', 'windows': {'5h': {'remainingPercent': remaining, 'usedPercent': 100 - remaining, 'status': 'ok', " +
                 "'resetsAt': (datetime.now(timezone.utc) + timedelta(seconds=9000)).isoformat(), 'windowSeconds': 18000}}}))\n")
             reader.chmod(0o755)
-            routes = [{"family": {"name": name, "tier": tier}, "pool": pool, "target": "codex",
+            routes = [{"family": {"maker": "fixture-" + name, "name": name, "tier": tier}, "pool": pool, "target": "codex",
                        "techniques": [{"agent": None, "model": {"isPattern": False, "value": "gpt-6.1-sol"},
                                        "name": "spawn_agent", "node": {"command": None, "kind": "subagent", "modelArg": "slug", "notes": "native fixture"}}]}
                       for name, tier, pool in [("outside", "strong", "outside"), ("session", "strong", "session"), ("under-tier", "mid", "outside")]]
@@ -77,7 +77,7 @@ class HelperFixtures(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "outside pool"):
                 suite.check_helper_evidence(broken, receipts)
             broken = deepcopy(record["output"])
-            broken["roles"]["first-check"]["exclusions"] = []
+            broken["roles"]["first-check"]["exclusions"] = [row for row in broken["roles"]["first-check"]["exclusions"] if row["family"] != "under-tier"]
             with self.assertRaisesRegex(ValueError, "mid-tier reviewer"):
                 suite.check_helper_evidence(broken, receipts)
 
