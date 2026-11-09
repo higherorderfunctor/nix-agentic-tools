@@ -578,20 +578,56 @@ def plan(manifest, context, roles, now, pools, *, semantic):
     return result
 
 
+def feasible_unit(manifest, context, records, semantic, worker, current):
+    """Keep ranked workers that admit one consistent independent review assignment."""
+    def eligible(role, participants):
+        record = records[role]
+        request = {key: record[key] for key in ("brief", "effort", "requirements", "pins") if key in record}
+        request.update(participants)
+        decision = plan(manifest, context | {"roles": {role: request}}, [role], utc(current["snapshot"]), current["pools"], semantic=semantic[role])
+        current["warnings"] = list(dict.fromkeys(current["warnings"] + decision["warnings"]))
+        return decision["roles"][role]
+
+    workers = eligible(worker, {})
+    feasible, witness = [], None
+    failures = set()
+    for candidate in workers["candidates"]:
+        participants = {"writer": candidate["launch"]["family"]}
+        reviews = {role: eligible(role, participants) for role in records if role not in (worker, "judge")}
+        if all(review["candidates"] for review in reviews.values()) and "judge" in records:
+            proposer = records["judge"].get("cutProposer")
+            choices = [candidate] if proposer == worker else reviews[proposer]["candidates"] if proposer else [None]
+            for choice in choices:
+                judged = eligible("judge", participants | ({"cutProposer": choice["launch"]["family"]} if proposer else {}))
+                reviews["judge"] = judged
+                if judged["candidates"]:
+                    if proposer and proposer != worker:
+                        reviews[proposer] = reviews[proposer] | {"candidates": [choice]}
+                    break
+        if all(review["candidates"] for review in reviews.values()) and ("judge" not in records or "judge" in reviews):
+            feasible.append(candidate)
+            if witness is None:
+                witness = reviews
+        else:
+            failures.update(item["reason"] for review in reviews.values() if not review["candidates"] for item in review["exclusions"])
+            workers["exclusions"].append({"family": candidate["launch"]["family"], "reason": "no independent review assignment", "runtime": candidate["launch"]["runtime"]})
+    workers["candidates"] = feasible
+    if not feasible:
+        failures.update(item["reason"] for item in workers["exclusions"])
+        raise ValueError("no feasible worker/review assignment: " + "; ".join(sorted(failures)))
+    workers.pop("error", None)
+    return {worker: workers} | witness
+
+
 def check_plan(artifact, current, directory, max_concurrency=10, *, manifest, context):
-    """Validate each unit-role receipt before comparing fresh pinned launches."""
-    if not isinstance(artifact.get("task"), str) or not artifact["task"].strip():
-        raise ValueError("plan requires task identity")
+    """Validate role intent, receipts and current whole-unit feasibility."""
+    if not isinstance(artifact, dict) or type(artifact.get("schemaVersion")) is not int or artifact["schemaVersion"] != 2:
+        raise ValueError("replan with schemaVersion=2 role intent; unversioned/pinned plans are no longer supported")
+    closed(artifact, ("schemaVersion", "task", "runtime", "rubric", "units", "waves"), ("snapshot",))
+    nonempty(artifact["task"])
     if artifact["runtime"] != current["runtime"]:
         raise ValueError("plan must use the actual launching runtime's helper")
-    # The saved snapshot is provenance, not authority for current pace or routes.
-    snapshot = artifact["snapshot"]
-    snapshot_types = {"automaticRuntimes": list, "manualOnly": list, "pools": dict, "roles": dict, "runtime": str, "sessionPool": (str, type(None)), "snapshot": str, "warnings": list}
-    if not isinstance(snapshot, dict) or any(field not in snapshot or not isinstance(snapshot[field], kind) for field, kind in snapshot_types.items()):
-        raise ValueError("saved helper snapshot must be a complete helper snapshot")
-    utc(snapshot["snapshot"])
-    if snapshot["runtime"] != artifact["runtime"]:
-        raise ValueError("saved helper snapshot requires matching runtime")
+    # Historical snapshots are optional provenance, never launch authority.
 
     rubric = confined_read(directory, artifact["rubric"], RESULT_LIMIT, "plan").decode("utf-8")
     if not rubric.strip():
@@ -624,54 +660,52 @@ def check_plan(artifact, current, directory, max_concurrency=10, *, manifest, co
         for counts in unit["size"].values():
             if not isinstance(counts, dict) or set(counts) != {"added", "removed"} or any(type(value) is not int or value < 0 for value in counts.values()):
                 raise ValueError(f"{identity}: size needs nonnegative added/removed counts per kind")
-        launches = unit["launches"]
-        if not isinstance(launches, list) or not launches:
-            raise ValueError(f"{identity}: prepared worker/reviewer launches required")
-        roles = [record["role"] for record in launches]
-        if set(roles) & {"classifier", "planner"} or not set(roles) <= ROLE_POLICY.keys():
+        if "launches" in unit:
+            raise ValueError(f"{identity}: replan pinned launches as schemaVersion=2 roles")
+        records = unit["roles"]
+        if not isinstance(records, list) or not records:
+            raise ValueError(f"{identity}: prepared worker/reviewer roles required")
+        for record in records:
+            if isinstance(record, dict) and record.keys() & {"candidate", "line"}:
+                raise ValueError(f"{identity}: replan candidate/line authority as role intent")
+            closed(record, ("role", "runtime", "brief", "effort", "requirements", "receipt"), ("cutProposer", "pins", "writer"))
+        roles = [record["role"] for record in records]
+        if any(not isinstance(role, str) or role not in ROLE_POLICY or role in ("classifier", "planner") for role in roles):
             raise ValueError(f"{identity}: only worker and reviewer roles are allowed in approved units")
         if len(set(roles)) != len(roles) or sum(role in ("investigator", "mechanical", "writer") for role in roles) != 1 or "first-check" not in roles:
             raise ValueError(f"{identity}: one worker and a first-check review barrier required")
-        worker = next(record["candidate"]["family"] for record in launches if record["role"] in ("investigator", "mechanical", "writer"))
-        for record in launches:
+        worker = next(role for role in roles if not ROLE_POLICY[role]["review"])
+        requests, semantic = {}, {}
+        for record in records:
             role = record["role"]
             if record["runtime"] != current["runtime"]:
                 raise ValueError(f"{identity}: launch runtime requires its own helper validation")
             if role not in context["roles"]:
                 raise ValueError(f"{identity}: {role} missing from --role coverage/context")
             validate_role_record(context["roles"][role])
+            if ROLE_POLICY[role]["review"]:
+                if record.get("writer") != worker:
+                    raise ValueError(f"{identity}: {role} requires the unit worker role reference")
+            elif "writer" in record:
+                raise ValueError(f"{identity}: worker cannot have a writer role reference")
+            if "cutProposer" in record and (role != "judge" or record["cutProposer"] not in roles or record["cutProposer"] == role):
+                raise ValueError(f"{identity}: judge requires a distinct planned proposer role reference")
             if rubric not in confined_read(directory, record["brief"], RESULT_LIMIT, "plan").decode("utf-8"):
                 raise ValueError(f"{identity}: {role} brief must contain the full rubric verbatim")
             request_record = {key: record[key] for key in ("brief", "effort", "requirements")}
-            request_record.update({key: record[key] for key in ("cutProposer", "pins") if key in record})
-            request_record["pins"] = request_record.get("pins", {}) | context["roles"][role].get("pins", {})
-            request_record["writer"] = worker
+            request_record["pins"] = record.get("pins", {}) | context["roles"][role].get("pins", {})
             current.setdefault("decisions", {})[f"{identity}/{role}"] = user_pins(request_record)
             unit_context = context | {"roles": {role: request_record}, "rubric": artifact["rubric"], "subject": {"task": artifact["task"], "unit": identity}}
             request, digest = classification_request(manifest, unit_context, role, directory)
             receipt = strict_json(confined_read(directory, record["receipt"], RESULT_LIMIT, "plan").decode("utf-8"))
             validate_receipt(receipt, manifest, request, digest)
-            decision = plan(manifest, unit_context, [role], utc(current["snapshot"]), current["pools"], semantic=semantic_evidence(receipt, request))
-            current.setdefault("unitRoles", {})[f"{identity}/{role}"] = decision["roles"][role]
-            current["warnings"] = list(dict.fromkeys(current["warnings"] + decision["warnings"]))
-            candidates = decision["roles"][role]["candidates"]
-            if not any(record["candidate"] == candidate["launch"] and record["line"] == candidate["line"] for candidate in candidates):
-                reasons = "; ".join(item["reason"] for item in decision["roles"][role]["exclusions"] if item["family"] == record["candidate"]["family"])
-                raise ValueError(f"{identity}: {role} candidate/line absent from current helper output: {reasons}")
-            # Empty/partial snapshots cannot prove the launches and bound budgets
-            # were captured, even when the fresh helper still allows the launch.
-            saved_role = snapshot["roles"].get(role)
-            if not isinstance(saved_role, dict) or not isinstance(saved_role.get("candidates"), list):
-                raise ValueError(f"saved helper snapshot requires {role} candidates")
-            saved_candidates = saved_role["candidates"]
-            for candidate in saved_candidates:
-                if not isinstance(candidate, dict) or not isinstance(candidate.get("launch"), dict) or not isinstance(candidate.get("line"), str) or "pool" not in candidate:
-                    raise ValueError("saved helper snapshot requires complete candidates")
-                pool = candidate["pool"]
-                if pool is not None and (not isinstance(pool, str) or not isinstance(snapshot["pools"].get(pool), dict)):
-                    raise ValueError("saved helper snapshot requires candidate-bound pools")
-            if not any(record["candidate"] == candidate["launch"] and record["line"] == candidate["line"] for candidate in saved_candidates):
-                raise ValueError(f"saved helper snapshot lacks {role} candidate/line")
+            requests[role] = record | request_record
+            semantic[role] = semantic_evidence(receipt, request)
+        try:
+            decisions = feasible_unit(manifest, context, requests, semantic, worker, current)
+        except ValueError as error:
+            raise ValueError(f"{identity}: {error}") from error
+        current.setdefault("unitRoles", {}).update({f"{identity}/{role}": decision for role, decision in decisions.items()})
     for identity, unit in indexed.items():
         if any(dependency not in indexed for dependency in unit["dependencies"]):
             raise ValueError(f"{identity}: unknown dependency")

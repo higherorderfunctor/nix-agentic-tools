@@ -899,21 +899,20 @@ class Routing(unittest.TestCase):
             root = Path(directory)
             artifact = self.prepared_plan(root)
             for unit in artifact["units"]:
-                for record in unit["launches"]:
+                for record in unit["roles"]:
                     brief = f"{unit['id']}-{record['role']}.md"
                     (root / brief).write_text(f"Actual unit {unit['id']} role {record['role']}\n" + (root / "rubric.md").read_text())
                     record.update(brief=brief, effort="high", requirements={"constraints": [], "inputKinds": ["text"]}, receipt=brief + ".json")
                     keep = {"0": {"writer": "author", "review": "sol"}, "1": {"writer": "sol", "review": "author"}}[unit["id"]]["writer" if record["role"] == "writer" else "review"]
-                    previous = record["candidate"]["family"]
-                    record["candidate"]["family"] = keep
-                    record["line"] = record["line"].replace(f"family={previous}", f"family={keep}")
-                    if keep != previous:
-                        artifact["snapshot"]["roles"][record["role"]]["candidates"].append({"launch": deepcopy(record["candidate"]), "line": record["line"], "pool": "outside"})
                     save_plan_receipt(root, config, artifact, unit, record, keep)
             self.assertEqual(helper.check_plan(artifact, current, root, manifest=config, context=facts)["status"], "valid")
             self.assertEqual(current["unitRoles"]["1/writer"]["candidates"][0]["launch"]["family"], "sol")
-            first, second = [unit["launches"][0] for unit in artifact["units"]]
+            first, second = [unit["roles"][0] for unit in artifact["units"]]
             first["receipt"], second["receipt"] = second["receipt"], first["receipt"]
+            with self.assertRaisesRegex(ValueError, "request hash mismatch"):
+                helper.check_plan(artifact, current, root, manifest=config, context=facts)
+            first["receipt"], second["receipt"] = second["receipt"], first["receipt"]
+            first["receipt"] = artifact["units"][0]["roles"][1]["receipt"]
             with self.assertRaisesRegex(ValueError, "request hash mismatch"):
                 helper.check_plan(artifact, current, root, manifest=config, context=facts)
 
@@ -925,44 +924,21 @@ class Routing(unittest.TestCase):
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "caller.*classification"):
                 self.run_plan(launch_context=facts)
 
-    def test_plan_reviewers_use_each_units_worker(self):
-        # Wrong: one context writer certifies all units, including a Sol worker.
-        roles = ("writer", "first-check", "second-check", "judge")
-        ctx = self.prepared_context()
-        ctx["roles"]["writer"].pop("pins")
-        current, _ = self.run_plan(self.prepared_manifest(), ctx, roles)
-        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
-            root = Path(directory)
-            artifact = self.prepared_plan(root)
-            cuts = deepcopy(ctx)
-            artifact["units"][0]["launches"][-1]["cutProposer"] = "sol"
-            with self.assertRaisesRegex(ValueError, "judge candidate/line absent.*same maker as cut proposer: openai"):
-                helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=cuts)
-            artifact["units"][0]["launches"][-1].pop("cutProposer")
-            worker = artifact["units"][1]["launches"][0]
-            worker["candidate"]["family"] = "sol"
-            worker["line"] = "role=writer runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high"
-            artifact["snapshot"]["roles"]["writer"]["candidates"].append({"launch": deepcopy(worker["candidate"]), "line": worker["line"], "pool": "outside"})
-            with self.assertRaisesRegex(ValueError, "1: first-check candidate/line absent.*same maker as writer: openai"):
-                helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=ctx)
-
     def prepared_plan(self, root, count=2):
-        # Hand-authored launches: the plan cannot supply its own allowlist.
+        # Receipts bind actual unit briefs, never a saved launch allowlist.
         rubric = b"1. Scope: change the assigned files.\n2. Checks: reject an invented launch.\n"
         (root / "rubric.md").write_bytes(rubric)
-        roles = ("writer", "first-check", "second-check", "judge")
-        launches = []
-        for role in roles:
+        records = []
+        for role in ("writer", "first-check", "second-check", "judge"):
             brief = f"{role}.md"
             (root / brief).write_bytes(b"Hard rules and task.\n" + rubric + b"Report evidence.\n")
-            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "author" if role == "writer" else "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family={'author' if role == 'writer' else 'sol'} technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
-        units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace not validated launch choices", "id": str(index), "launches": deepcopy(launches), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
-        artifact = {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
-
+            records.append({"brief": brief, "effort": "high", "requirements": {"constraints": [], "inputKinds": ["text"]}, "role": role, "runtime": "codex", **({"writer": "writer"} if role != "writer" else {})})
+        units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace pinned launch authority", "id": str(index), "roles": deepcopy(records), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
+        artifact = {"rubric": "rubric.md", "runtime": "codex", "schemaVersion": 2, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
         config = self.prepared_manifest()
         for unit in units:
-            for record in unit["launches"]:
-                record.update(effort="high", requirements={"constraints": [], "inputKinds": ["text"]}, receipt=f"{unit['id']}-{record['role']}.json")
+            for record in unit["roles"]:
+                record["receipt"] = f"{unit['id']}-{record['role']}.json"
                 save_plan_receipt(root, config, artifact, unit, record)
         return artifact
 
@@ -979,65 +955,45 @@ class Routing(unittest.TestCase):
         result, _ = self.run_plan(config, context(("planner",)), ("planner",))
         self.assertEqual(result["roles"]["planner"]["error"], "never step down a tier; report a loop failure.")
 
-    def test_plan_role_qualified_launch_mutations(self):
-        # Wrong: transcript substring match, trusting saved candidates, stale context.
-        roles = ("writer", "first-check", "second-check", "judge")
-        current, _ = self.run_prepared_plan(roles=roles)
+    def test_plan_role_intent_schema_and_coverage(self):
+        # Wrong: old pinned plans, extra launch authority or uncovered roles pass.
+        current, _ = self.run_prepared_plan()
+        config, facts = self.prepared_manifest(), self.prepared_context()
         with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
             root = Path(directory)
             artifact = self.prepared_plan(root)
-            self.assertEqual(helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=self.prepared_context()), {"status": "valid", "task": "validate assigned routing work", "units": 2, "waves": 1})
-            for field, value in (("effort", "low"), ("family", "manual"), ("model", "invented"), ("technique", "absent"), ("model", "gpt-*-sol")):
-                with self.subTest(field=field, value=value):
-                    changed = deepcopy(artifact)
-                    changed["units"][0]["launches"][0]["candidate"][field] = value
-                    with self.assertRaisesRegex(ValueError, "absent from current helper output"):
-                        helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
-            for field, value, reason in (("line", "role=judge runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "absent from current"), ("role", "finder", "one worker"), ("runtime", "claude", "own helper validation")):
+            mutations = [
+                (lambda p: p.pop("schemaVersion"), "replan"),
+                (lambda p: p.update(schemaVersion=True), "replan"),
+                (lambda p: p.update(schemaVersion=1), "replan"),
+                (lambda p: p["units"][0].update(launches=[]), "replan"),
+                (lambda p: p["units"][0]["roles"][0].update(candidate={}), "replan"),
+                (lambda p: p["units"][0]["roles"][0].update(line="old pinned line"), "replan"),
+                (lambda p: p["units"][0]["roles"][0].update(runtime="claude"), "own helper validation"),
+                (lambda p: p["units"][0]["roles"][0].pop("receipt"), "expected object fields"),
+                (lambda p: p["units"][0]["roles"][1].update(writer="missing"), "worker role reference"),
+                (lambda p: p["units"][0]["roles"][-1].update(cutProposer="missing"), "proposer role reference"),
+                (lambda p: p["units"][0]["roles"][-1].update(cutProposer="judge"), "proposer role reference"),
+                (lambda p: p.update(runtime="claude"), "actual launching runtime"),
+                (lambda p: p.update(task=" "), "nonempty string"),
+                (lambda p: p["units"][0]["roles"].append(deepcopy(p["units"][0]["roles"][1])), "one worker"),
+                (lambda p: p["units"][0]["roles"][1].update(role="mechanical"), "one worker"),
+            ]
+            for mutate, reason in mutations:
                 changed = deepcopy(artifact)
-                changed["units"][0]["launches"][0][field] = value
-                with self.assertRaisesRegex(ValueError, reason):
-                    helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
-            changed = deepcopy(current)
-            changed["roles"] = {}
-            self.assertEqual(helper.check_plan(artifact, changed, root, manifest=self.prepared_manifest(), context=self.prepared_context())["status"], "valid")
-            changed = deepcopy(artifact)
-            changed["runtime"] = "claude"
-            with self.assertRaisesRegex(ValueError, "actual launching runtime"):
-                helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
-            changed = deepcopy(artifact)
-            changed["snapshot"]["runtime"] = "claude"
-            with self.assertRaisesRegex(ValueError, "saved helper snapshot"):
-                helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
-            # Even a saved allowlist containing a forged model cannot approve it.
-            changed = deepcopy(artifact)
-            for launch in (changed["units"][0]["launches"][0], changed["snapshot"]["roles"]["writer"]["candidates"][0]):
-                candidate = launch.get("candidate", launch.get("launch"))
-                candidate["model"] = "invented"
-            with self.assertRaisesRegex(ValueError, "absent from current helper output"):
-                helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
-            # A new context or budget decision, not the old plan's snapshot, wins.
-            for ctx, outputs in ((context(roles), {"reader-outside": stream({"monthly": window(0)})}),):
-                changed, _ = self.run_prepared_plan(launch_context=ctx, roles=roles, outputs=outputs)
-                with self.assertRaisesRegex(ValueError, "absent from current helper output"):
-                    helper.check_plan(artifact, changed, root, manifest=self.prepared_manifest(), context=self.prepared_context())
-            config = manifest([route(pool=None)])
-            config["readers"] = []
-            fit_only, _ = self.run_prepared_plan(config, roles=roles)
-            self.assertEqual(helper.check_plan(artifact, fit_only, root, manifest=self.prepared_manifest(), context=self.prepared_context())["status"], "valid")
-            self.assertEqual(fit_only["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
-
-    def test_plan_rejects_recursive_planner(self):
-        # Wrong: a valid planner candidate can recursively plan an approved unit.
-        current, _ = self.run_prepared_plan(roles=("writer", "first-check", "second-check", "judge", "planner"))
-        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
-            root = Path(directory)
-            artifact = self.prepared_plan(root)
-            launch = deepcopy(artifact["units"][0]["launches"][0])
-            launch.update(role="planner", candidate=current["roles"]["planner"]["candidates"][0]["launch"], line=current["roles"]["planner"]["candidates"][0]["line"])
-            artifact["units"][0]["launches"].append(launch)
-            with self.assertRaisesRegex(ValueError, "only worker and reviewer roles"):
-                helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
+                mutate(changed)
+                with self.subTest(reason=reason), self.assertRaisesRegex(ValueError, reason):
+                    helper.check_plan(changed, current, root, manifest=config, context=facts)
+            for role in ("classifier", "planner"):
+                changed = deepcopy(artifact)
+                changed["units"][0]["roles"][0]["role"] = role
+                with self.subTest(role=role), self.assertRaisesRegex(ValueError, "only worker and reviewer roles"):
+                    helper.check_plan(changed, current, root, manifest=config, context=facts)
+            for role in facts["roles"]:
+                changed = deepcopy(facts)
+                changed["roles"].pop(role)
+                with self.subTest(role=role), self.assertRaisesRegex(ValueError, "missing from --role coverage"):
+                    helper.check_plan(artifact, current, root, manifest=config, context=changed)
 
     def test_plan_artifact_paths_stay_relative(self):
         # Wrong: joining an absolute or upward rubric/brief path reads outside.
@@ -1052,7 +1008,7 @@ class Routing(unittest.TestCase):
             for field, filename in (("rubric", "rubric.md"), ("brief", "writer.md"), ("receipt", "0-writer.json")):
                 for path in (str(root / filename), f"../{filename}"):
                     changed = deepcopy(artifact)
-                    target = changed if field == "rubric" else changed["units"][0]["launches"][0]
+                    target = changed if field == "rubric" else changed["units"][0]["roles"][0]
                     target[field] = path
                     with self.subTest(field=field, path=path), self.assertRaisesRegex(ValueError, "plan-relative.*absolute or upward"):
                         helper.check_plan(changed, current, nested, manifest=self.prepared_manifest(), context=self.prepared_context())
@@ -1069,43 +1025,98 @@ class Routing(unittest.TestCase):
                 (root / filename).write_bytes((nested / filename).read_bytes())
                 (nested / f"link-{filename}").symlink_to(f"../{filename}")
                 changed = deepcopy(artifact)
-                target = changed if field == "rubric" else changed["units"][0]["launches"][0]
+                target = changed if field == "rubric" else changed["units"][0]["roles"][0]
                 target[field] = f"link-{filename}"
                 with self.subTest(field=field), self.assertRaisesRegex(ValueError, "inside the plan directory"):
                     helper.check_plan(changed, current, nested, manifest=self.prepared_manifest(), context=self.prepared_context())
 
-    def test_plan_requires_complete_helper_snapshot(self):
-        # Wrong: accepting provenance without the helper's runtime/route warnings.
-        current, _ = self.run_prepared_plan(roles=("writer", "first-check", "second-check", "judge"))
+    def test_plan_snapshot_is_optional_provenance(self):
+        # Wrong: historical candidates or incomplete provenance control approval.
+        current, _ = self.run_prepared_plan()
         with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
             root = Path(directory)
             artifact = self.prepared_plan(root)
-            for field in ("automaticRuntimes", "manualOnly", "sessionPool", "warnings"):
-                changed = deepcopy(artifact)
-                del changed["snapshot"][field]
-                with self.subTest(missing=field), self.assertRaisesRegex(ValueError, "complete helper snapshot"):
-                    helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
+            for snapshot in (None, {}, {"runtime": "another-runtime", "roles": {"writer": {"candidates": []}}}):
+                if snapshot is not None:
+                    artifact["snapshot"] = snapshot
+                with self.subTest(snapshot=snapshot):
+                    self.assertEqual(helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())["status"], "valid")
 
-    def test_plan_snapshot_requires_launched_candidates_and_bound_pools(self):
-        # Wrong: empty or partial role/pool maps count as captured helper output.
-        current, _ = self.run_prepared_plan(roles=("writer", "first-check", "second-check", "judge"))
+    def test_plan_current_eligibility_replaces_pinned_launches(self):
+        # Wrong: pace movement, Reader loss or a depleted old family invalidates intent.
+        config = self.prepared_manifest(manifest([route(), route("replacement", pool="session")], session="session"))
+        facts = self.prepared_context()
+        facts["roles"]["writer"].pop("pins")
         with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
             root = Path(directory)
             artifact = self.prepared_plan(root)
-            mutations = [
-                ("empty pools", lambda snapshot: snapshot.update(pools={})),
-                ("empty roles", lambda snapshot: snapshot.update(roles={})),
-                ("missing reviewer", lambda snapshot: snapshot["roles"].pop("first-check")),
-                ("empty candidates", lambda snapshot: snapshot["roles"]["writer"].update(candidates=[])),
-                ("changed candidate", lambda snapshot: snapshot["roles"]["writer"]["candidates"][0]["launch"].update(model="invented")),
-                ("missing pool binding", lambda snapshot: snapshot["roles"]["writer"]["candidates"][0].pop("pool")),
-                ("absent bound pool", lambda snapshot: snapshot["roles"]["writer"]["candidates"][0].update(pool="missing")),
-            ]
-            for label, mutate in mutations:
-                changed = deepcopy(artifact)
-                mutate(changed["snapshot"])
-                with self.subTest(mutation=label), self.assertRaisesRegex(ValueError, "saved helper snapshot"):
-                    helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
+            for unit in artifact["units"]:
+                for record in unit["roles"]:
+                    save_plan_receipt(root, config, artifact, unit, record)
+            for outputs in ({}, {"reader-outside": stream({"monthly": window(90)}), "reader-session": stream({"monthly": window(95)})}, {"reader-outside": "invalid"}, {"reader-outside": "invalid", "reader-session": "invalid"}, {"reader-outside": stream({"monthly": window(50), "monthly:sol": window(0)})}):
+                current, _ = self.run_plan(config, facts, ("writer",), outputs=outputs)
+                with self.subTest(outputs=outputs):
+                    self.assertEqual(helper.check_plan(artifact, current, root, manifest=config, context=facts)["status"], "valid")
+                    if outputs.get("reader-session") == "invalid":
+                        self.assertEqual(current["unitRoles"]["0/writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
+                    if "monthly:sol" in outputs.get("reader-outside", ""):
+                        self.assertEqual(current["unitRoles"]["0/first-check"]["candidates"][0]["launch"]["family"], "replacement")
+            current, _ = self.run_plan(config, facts, ("writer",), outputs={"reader-outside": stream({"monthly": window(0)}), "reader-session": stream({"monthly": window(0)})})
+            with self.assertRaisesRegex(ValueError, "no feasible worker/review assignment"):
+                helper.check_plan(artifact, current, root, manifest=config, context=facts)
+
+    def test_plan_requires_whole_independent_assignment(self):
+        # Wrong: nonempty role lists suffice, or only the first worker is tried.
+        config, facts = self.prepared_manifest(), self.prepared_context()
+        config["routes"][1]["family"]["cost"] = 4
+        facts["roles"]["writer"].pop("pins")
+        current, _ = self.run_plan(config, facts, ("writer",))
+        self.assertEqual(current["roles"]["writer"]["candidates"][0]["launch"]["family"], "sol")
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            for unit in artifact["units"]:
+                for record in unit["roles"]:
+                    save_plan_receipt(root, config, artifact, unit, record, "sol" if record["role"] != "writer" else None)
+            self.assertEqual(helper.check_plan(artifact, current, root, manifest=config, context=facts)["status"], "valid")
+            self.assertEqual([row["launch"]["family"] for row in current["unitRoles"]["0/writer"]["candidates"]], ["author"])
+            config["routes"][1]["family"]["maker"] = "openai"
+            with self.assertRaisesRegex(ValueError, "no feasible worker/review assignment"):
+                helper.check_plan(artifact, current, root, manifest=config, context=facts)
+
+    def test_plan_future_cut_proposer_is_one_consistent_assignment(self):
+        # Wrong: judge is independent of a different hypothetical proposer per pair.
+        config = self.prepared_manifest(manifest([route(), route("third", maker="third-maker")]))
+        facts = self.prepared_context()
+        current, _ = self.run_plan(config, facts, ("writer",))
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            for unit in artifact["units"]:
+                unit["roles"][-1]["cutProposer"] = "first-check"
+                for record in unit["roles"]:
+                    save_plan_receipt(root, config, artifact, unit, record, {"writer": "author", "first-check": None, "second-check": "sol", "judge": "sol"}[record["role"]])
+            self.assertEqual(helper.check_plan(artifact, current, root, manifest=config, context=facts)["status"], "valid")
+            self.assertEqual(current["unitRoles"]["0/first-check"]["candidates"][0]["launch"]["family"], "third")
+            self.assertEqual(current["unitRoles"]["0/judge"]["candidates"][0]["launch"]["family"], "sol")
+            for maker in ("openai", "anthropic", None):
+                config["routes"][1]["family"]["maker"] = maker
+                with self.subTest(maker=maker), self.assertRaisesRegex(ValueError, "no feasible worker/review assignment"):
+                    helper.check_plan(artifact, current, root, manifest=config, context=facts)
+
+    def test_plan_receipt_rejects_enriched_brief(self):
+        # Wrong: a prior receipt authorizes a review brief with new evidence.
+        current, _ = self.run_prepared_plan()
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            with (root / "first-check.md").open("a") as brief:
+                brief.write("Earlier check evidence.\n")
+            with self.assertRaisesRegex(ValueError, "request hash mismatch"):
+                helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
+            for unit in artifact["units"]:
+                save_plan_receipt(root, self.prepared_manifest(), artifact, unit, unit["roles"][1])
+            self.assertEqual(helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())["status"], "valid")
 
     def test_plan_dependencies_waves_and_ownership(self):
         # Wrong: cycle acceptance, ordering ignored, runtime cap, forced serialization.
@@ -1149,7 +1160,7 @@ class Routing(unittest.TestCase):
             changed["waves"] = [["0", "0"], ["1"]]
             cases.append((changed, "exactly one wave"))
             changed = deepcopy(artifact)
-            changed["units"][0]["launches"] = changed["units"][0]["launches"][:1]
+            changed["units"][0]["roles"] = changed["units"][0]["roles"][:1]
             cases.append((changed, "review barrier"))
             for changed, reason in cases:
                 with self.subTest(reason=reason), self.assertRaisesRegex(ValueError, reason):
