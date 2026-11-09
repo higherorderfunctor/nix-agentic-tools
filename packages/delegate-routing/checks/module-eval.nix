@@ -946,7 +946,7 @@
           && !(hasProse "Qualify a reachable" text)
           && !(hasProse "family qualification supplies" text)) [entry companion]
         && lib.hasInfix "--role classifier --classify-role planner" entry
-        && hasProse "a receipt cannot be shared between different units" companion
+        && hasProse "receipts cannot be shared across units or roles" companion
         && hasProse "Family tables are reference material" companion)
       runtimes
     );
