@@ -1,6 +1,6 @@
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-11-05 — both patches apply to CPA 8.0.56 with no fuzz;
+> **Last verified:** 2026-11-08 — both patches apply to CPA 8.0.61 with no fuzz;
 > loading rejects duplicate client keys and startup exits 1 on refusal. Hot
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
@@ -152,7 +152,7 @@ revocation and could fail open, so that reorder was rejected.
 ## Credential tool shims
 
 `patches/zai-tool-shims.patch` adds two opt-in credential settings for the
-pinned CPA 8.0.56. They repair measured z.ai compatibility failures without
+pinned CPA 8.0.61. They repair measured z.ai compatibility failures without
 changing credential selection. Named credentials with `vendor = "z-ai"` default
 both on: `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` and
 `apiKey.codexShellArgCleanup = true`. Set them to `{}` and `false` to disable
