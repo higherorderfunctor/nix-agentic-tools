@@ -177,4 +177,19 @@
         else single;
     }) ["independent-wave" "routing-controls"];
 in
-  claudeDrainPairs ++ [orchestratorDesign] ++ reminderPairs ++ shapes ++ helperCases
+  claudeDrainPairs
+  ++ [orchestratorDesign]
+  ++ reminderPairs
+  ++ shapes
+  ++ helperCases
+  ++ [
+    # Fails if pool/runtime identity replaces maker independence: the outside
+    # writer's maker must be excluded and the different-maker session admitted.
+    (mkCase {
+      expect = "helper-receipts";
+      helperBacked = true;
+      id = "codex-helper-maker-independence";
+      runtime = "codex";
+      task = "${single} Use the helper's writer choice and request first-check with that writer family. Save the review candidates and their exclusions alongside the writer choice so review independence can be checked.";
+    })
+  ]
