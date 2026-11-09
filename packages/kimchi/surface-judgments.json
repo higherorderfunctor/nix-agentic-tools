@@ -79,6 +79,50 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
+      "evidenceHash": "sha256:67c47c0ded92e84eb572a97bfde593ec7be19f6a4192c51572d346284bb01da8",
+      "id": "request-cli-auth-oauth-fetch-organization-name-0",
+      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
+      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
+      "verdict": "unknown",
+      "selector": {
+        "fact": {
+          "kind": "requestCallers",
+          "where": {
+            "request": {
+              "anchor": {
+                "role": {
+                  "callee": "call:fetch",
+                  "kind": "call",
+                  "ordinal": 0
+                },
+                "symbol": [["function:fetchOrganizationName", 0]]
+              },
+              "path": "src/cli-auth/oauth.ts"
+            }
+          }
+        },
+        "sources": []
+      },
+      "evidence": {
+        "call": "sha256:43ecc43d9899815a044bb25a1220af1fafef78eb2a67c9c327df5c87f8fd4c76",
+        "root": "sha256:7de54d1e2b31698b96f417bcfa6220bcecfd184d59986fd3972b0142a152a147",
+        "rows": [
+          "sha256:0d69911f4e84c7215181a151e76ab95bcd973e805ca9b5767064c7a96e1d42f9",
+          "sha256:15ae6e76c56b5b8c454c6e16eaa8df567814ac473e4cbedcf52cd34b935fa1a1",
+          "sha256:9aa003c9dcc0eafccc1a5a149b280c6dbb6dee195a66949ce8022762dc42da64",
+          "sha256:d7533f6d5b9d2e872ef975c2268df5d50a111ac47c4e353842f514ec9fa764eb"
+        ],
+        "statement": "sha256:ae48fa5f46a1b36dc7ab5d05377e90d86b48e73648ffdf6eca75de0f35c7299f"
+      }
+    },
+    {
+      "claim": {
+        "default": "Unknown: whether this request occurs under the default configuration has not been judged.",
+        "destination": "Unknown: the effective destination, including configuration and overrides, has not been judged.",
+        "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
+        "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
+      },
       "evidenceHash": "sha256:c131639a03eed7c36564e8ebac8d4cbcde2bebd1f909d07b479dcf81e14af24d",
       "id": "request-cli-auth-oauth-list-user-organizations-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
@@ -1672,7 +1716,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:fee950f012c0018aaaae54c4c7b6e64671c36f3a47e53673d0f4f250ec164e46",
+      "evidenceHash": "sha256:21d473aecfb19d68bb73bfb7ffd8f4a05c4afc78c68aaf6fee4a8a590ad096dd",
       "id": "request-utils-http-fetch-with-retry-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
@@ -1718,6 +1762,9 @@
           "sha256:1329bb75909c84883c8718f3f3e13b7c1a217f5ca144f1b9ffef76de5ca03781",
           "sha256:1387ec83a1d340e7175d3592380891a56ed6706929b9a7b20f997aa12c45822b",
           "sha256:14db8d7bc99dc10e5db3471a05b27c09db0eabcbdd441a3a9b8f4dc24a0526b6",
+          "sha256:165fc3bcf8256a8dd924bbd4298e462a93b57b60b596a30b838550eed7ff8ad5",
+          "sha256:1911bc1ec61b96421a9a643c72860e4f14573d469fe9c7cde15dcbcae0522c30",
+          "sha256:19260252d0ab50fa0f3c0c4885215c177db212886e4d284671948d7c6dce3b7f",
           "sha256:1932e766e668ef2931ebcd9a963710826224ffc8b6f58b61f258b5d75c8a3b93",
           "sha256:1c49be9b47723317c00df36680007e39a472ca0e9a33aadd6197d61a165808b1",
           "sha256:2087f560068951aaf754e04519756868ac112c7a8759b1a4d129c12663ec9f4e",
@@ -1769,7 +1816,6 @@
           "sha256:7141f4e5b32660d3748893327c35355a6ec23c16f3563fea6cf2d6067af182d8",
           "sha256:733f24d2d2576c130cbda0f6ce1316eba572ca9da80ac17556dd89c44d8c690b",
           "sha256:7458a4395bb18faa356403c1a6ee0d2b8b6805c3fb3e5c674f5c718ad4690536",
-          "sha256:74b79d16049d18ba0e4e7114378ef395c8b74609fccf759b4a7a391de2a8711e",
           "sha256:75ae9bb5ee3b6c71bc51b65e3041166e9db294d6c5a4f848e614cae9fb140930",
           "sha256:76c815c621448ba5bfd874f746676b8f82d7e4a0fab2f962aa60d1b0eff876f3",
           "sha256:7994f3dd6b2460c52006ce57f08c5cfd7783be551d1cfcecbafc9d29d838031e",
@@ -1845,6 +1891,7 @@
           "sha256:d8cb6a06d9cd426d2ed72de8974119b5e0bb70949a4ac4122d2c1218c5ad3088",
           "sha256:d9e33a81c61d415e401ff71c6adbc2deb546e7b9dfcc5696ce8f89764db0c504",
           "sha256:df295f905401f5cfe8c07dd1fc3393fd801c4892f16ec79e9943eea525b27f27",
+          "sha256:df758dc21c6f65116988d138c800a90b271ec38ed3b8452f927f626534f31196",
           "sha256:df8921ef14b87afab3ba6de3cf4a63c4a42be6fd283e45c29b0d7873cc1a3f73",
           "sha256:dfbb1eb87fe61f4a8ec4acb27a68a275c45f209e711d603754d4160bccbb9ff5",
           "sha256:e1a84eb1b24348757f0afd392618e363a215a9c98c9aebd19708b81763d0ad01",
