@@ -254,7 +254,7 @@ def launch(route, context, qualification, requested, avoided, scale):
     return alternatives, exclusions
 
 
-def plan(manifest, context, roles, now, shell, run=run_reader):
+def plan(manifest, context, roles, now, pools):
     for role in roles:
         if role not in ROLE_TIERS:
             raise ValueError(f"unknown role: {role}")
@@ -279,7 +279,6 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             values = request.get(field, [])
             if not isinstance(values, list) or not all(isinstance(value, str) and value in family_names for value in values):
                 raise ValueError(f"{role}: {field} requires a list of exact configured family names")
-    pools = collect(manifest["readers"], now, shell, run)
     warnings = ["provider-vendor identity is provisional; fit/trial/maker independence are caller assessments"] + pool_diagnostics(manifest["readers"], pools)
     # A Reader scope matches an exact family name in that pool, not a model glob.
     # Include manual routes so warnings describe configuration, not availability.
@@ -495,8 +494,27 @@ def check_plan(artifact, current, directory, max_concurrency=10):
     return {"status": "valid", "task": artifact["task"], "units": len(units), "waves": len(waves)}
 
 
+class RoutingParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise ValueError(message)
+
+
+def collection_arguments(argv):
+    # Recover Reader inputs when unrelated request options or values are invalid.
+    values = {}
+    for name in ("manifest", "now", "reader-shell"):
+        parser = RoutingParser(add_help=False)
+        parser.add_argument("--" + name)
+        try:
+            args, _ = parser.parse_known_args(argv)
+            values[name] = getattr(args, name.replace("-", "_"))
+        except ValueError:
+            values[name] = None
+    return values
+
+
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = RoutingParser(description=__doc__)
     parser.add_argument("--check-plan", help="validate saved JSON and prepared briefs against this invocation")
     parser.add_argument("--max-concurrency", type=int, choices=range(1, 11), default=10, help="explicit host/user cap, at most ten")
     parser.add_argument("--manifest", required=True)
@@ -504,24 +522,59 @@ def main():
     parser.add_argument("--launch-context", required=True)
     parser.add_argument("--role", action="append", required=True, choices=sorted(ROLE_TIERS))
     parser.add_argument("--now", help="fixed UTC evaluation time for offline fixtures")
-    args = parser.parse_args()
+    argv = sys.argv[1:]
+    if "--help" in argv or "-h" in argv:
+        parser.print_help()
+        return 0
+    inputs = collection_arguments(argv)
+    now = datetime.now(timezone.utc)
+    time_error = None
+    if inputs["now"] is not None:
+        try:
+            now = utc(inputs["now"])
+        except ValueError as error:
+            time_error = error
+    result = {"errors": [], "inventory": "inventory-unavailable", "pools": {}, "roles": {}, "snapshot": now.isoformat(), "status": "error", "warnings": []}
+    code = 2
     try:
-        result = plan(json.loads(Path(args.manifest).read_text()), json.loads(Path(args.launch_context).read_text()), args.role, utc(args.now) if args.now else datetime.now(timezone.utc), args.reader_shell)
+        if inputs["manifest"] is None:
+            raise ValueError("inventory-unavailable: manifest path could not be recovered")
+        manifest = json.loads(Path(inputs["manifest"]).read_text())
+        readers = manifest["readers"]
+        # Direct JSON manifests must identify every registration before collection.
+        if not isinstance(readers, list) or any(not isinstance(reader, dict) or not isinstance(reader.get("name"), str) or not reader["name"].strip() or "command" not in reader or (reader["command"] is not None and not isinstance(reader["command"], str)) for reader in readers):
+            raise ValueError("inventory-unavailable: readers require names and command strings/null")
+        if len({reader["name"] for reader in readers}) != len(readers):
+            raise ValueError("inventory-unavailable: Reader registration names must be unique")
+        result.update({key: manifest[key] for key in ("runtime", "sessionPool") if key in manifest})
+        result.update({"automaticRuntimes": manifest.get("runtimes"), "inventory": "available", "manualOnly": manifest.get("manualRoutes")})
+        result["pools"] = collect(readers, now, inputs["reader-shell"] or "", run_reader)
+        result["warnings"] = pool_diagnostics(readers, result["pools"])
+        args = parser.parse_args(argv)
+        if time_error is not None:
+            raise time_error
+        context = json.loads(Path(args.launch_context).read_text())
+        result.update(plan(manifest, context, args.role, now, result["pools"]))
+        result["errors"].extend(f"{role}: {value['error']}" for role, value in result["roles"].items() if "error" in value)
         if args.check_plan:
             path = Path(args.check_plan).resolve()
             result["validation"] = check_plan(json.loads(path.read_text()), result, path.parent, args.max_concurrency)
+        code = int(bool(result["errors"]))
     except (AttributeError, KeyError, TypeError, ValueError, OSError) as error:
-        parser.exit(2, f"delegate-routing-plan: {error}\n")
+        result["errors"].append(str(error))
+    result["status"] = "ok" if code == 0 else "error"
     print(json.dumps(result, sort_keys=True))
-    for warning in result["warnings"]:
-        if warning.startswith("WARNING:"):
-            print(warning, file=sys.stderr)
-    for role in args.role:
-        for item in result["roles"][role]["candidates"]:
+    for message in result["warnings"]:
+        if message.startswith("WARNING:"):
+            print(message, file=sys.stderr)
+    for role, value in result["roles"].items():
+        for item in value["candidates"]:
             print(item["line"], file=sys.stderr)
-        if "error" in result["roles"][role]:
-            print(result["roles"][role]["error"], file=sys.stderr)
-    return int(any("error" in result["roles"][role] for role in args.role))
+        if "error" in value:
+            print(f"delegate-routing-plan: {role}: {value['error']}", file=sys.stderr)
+    if code == 2:
+        print(f"delegate-routing-plan: {result['errors'][-1]}", file=sys.stderr)
+    return code
 
 
 if __name__ == "__main__":

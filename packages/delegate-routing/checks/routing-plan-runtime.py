@@ -1,6 +1,8 @@
 """Offline, literal routing expectations: no catalogs, live readers or launches."""
+from contextlib import redirect_stderr, redirect_stdout
 from copy import deepcopy
 import importlib.util
+import io
 import json
 from pathlib import Path
 import shlex
@@ -60,8 +62,120 @@ class Routing(unittest.TestCase):
                 return value
             return subprocess.CompletedProcess(argv, 0, value)
         with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")), patch("time.sleep"):
-            result = helper.plan(config or manifest(), launch_context or context(roles), roles, now, SHELL, reader)
+            config = config or manifest()
+            pools = helper.collect(config["readers"], now, SHELL, reader)
+            result = helper.plan(config, launch_context or context(roles), roles, now, pools)
         return result, calls
+
+    def run_cli(self, extra=(), config=None, ctx=None, reader_value=None, raw_files=None):
+        files = {"manifest.json": json.dumps(config if config is not None else manifest()), "context.json": json.dumps(ctx if ctx is not None else context()), "plan.json": "{", "bad-plan.json": "{}"}
+        files.update(raw_files or {})
+        argv = ["helper", "--manifest", "manifest.json", "--reader-shell", SHELL, "--launch-context", "context.json", "--role", "writer", "--now", "2026-11-15T00:00:00Z"]
+        out, err = io.StringIO(), io.StringIO()
+        def reader(args, **kwargs):
+            if args[0] in ("", "/no/such/shell"):
+                raise OSError("private shell failure")
+            return reader_value or subprocess.CompletedProcess([], 0, stream())
+        with patch.object(sys, "argv", argv + list(extra)), patch.object(Path, "read_text", lambda path: files[path.name]), patch.object(helper, "run_reader", side_effect=reader) as reads, patch("time.sleep"), redirect_stdout(out), redirect_stderr(err):
+            code = helper.main()
+        return code, json.loads(out.getvalue()), err.getvalue(), reads.call_args_list
+
+    def test_cli_collects_before_request_failures(self):
+        # Wrong: request parsing/context/plan validation discards the Reader snapshot.
+        config = manifest()
+        config["readers"].append({"command": "reader-outside", "name": "alias"})
+        cases = [
+            (["--max-concurrency", "0"], None, "argument --max-concurrency: invalid choice:"),
+            (["--max-concurrency"], None, "expected one argument"),
+            (["--unknown"], None, "unrecognized arguments: --unknown"),
+            (["--role", "unknown"], None, "invalid choice: 'unknown'"),
+            ([], [], "'list' object has no attribute 'get'"),
+            ([], {"roles": {}}, "launch context requires techniques and roles"),
+            (["--check-plan", "plan.json"], None, "Expecting property name"),
+            (["--check-plan", "bad-plan.json"], None, "plan requires task identity"),
+        ]
+        expected_pool = {"buffer": 0.5, "pace": 0.9375, "status": "measured"}
+        for extra, ctx, error in cases:
+            with self.subTest(extra=extra, ctx=ctx):
+                code, result, stderr, reads = self.run_cli(extra, config, ctx)
+                self.assertEqual(code, 2)
+                self.assertEqual({key: result[key] for key in ("inventory", "snapshot", "status")}, {"inventory": "available", "snapshot": "2026-11-15T00:00:00+00:00", "status": "error"})
+                self.assertEqual(result["pools"], {"alias": expected_pool, "hidden": expected_pool, "outside": expected_pool, "session": expected_pool})
+                self.assertEqual(len(result["errors"]), 1)
+                self.assertIn(error, result["errors"][0])
+                self.assertEqual([read.args[0][4].split("\n", 1)[1] for read in reads], ["reader-outside", "reader-session", "reader-hidden-runtime"])
+                self.assertNotIn("pool=", stderr)
+
+    def test_cli_malformed_json_keeps_recoverable_envelope(self):
+        # Wrong: malformed manifest/context JSON exits through argparse without JSON.
+        for files, inventory, count in [
+            ({"manifest.json": "{"}, "inventory-unavailable", 0),
+            ({"context.json": "{"}, "available", 3),
+        ]:
+            with self.subTest(files=files):
+                code, result, stderr, reads = self.run_cli(raw_files=files)
+                self.assertEqual(code, 2)
+                self.assertEqual(result["inventory"], inventory)
+                self.assertEqual(result["status"], "error")
+                self.assertEqual(result["roles"], {})
+                self.assertEqual(result["snapshot"], "2026-11-15T00:00:00+00:00")
+                self.assertEqual(len(reads), count)
+                self.assertIn("Expecting property name", result["errors"][0])
+                if count == 0:
+                    self.assertEqual(result["pools"], {})
+
+    def test_cli_unavailable_inventory_has_literal_failure_shape(self):
+        # Wrong: bad/missing inventory claims an observed pool set or omits JSON.
+        for extra, config, error in [
+            (["--manifest"], None, "inventory-unavailable: manifest path could not be recovered"),
+            ([], {"readers": "bad"}, "inventory-unavailable: readers require names and command strings/null"),
+            ([], {"readers": [{"name": "same", "command": None}, {"name": "same", "command": None}]}, "inventory-unavailable: Reader registration names must be unique"),
+        ]:
+            with self.subTest(extra=extra, config=config):
+                code, result, stderr, reads = self.run_cli(extra, config)
+                self.assertEqual(code, 2)
+                self.assertEqual(result, {"errors": [error], "inventory": "inventory-unavailable", "pools": {}, "roles": {}, "snapshot": "2026-11-15T00:00:00+00:00", "status": "error", "warnings": []})
+                self.assertEqual(reads, [])
+                self.assertEqual(stderr, f"delegate-routing-plan: {error}\n")
+
+    def test_cli_shell_failure_is_per_reader_and_role_errors_are_named(self):
+        # Wrong: shell refusal turns unreachable Readers into unmeasured fit-only routes.
+        for extra, expected_code, expected_reads in [
+            (["--reader-shell", "/no/such/shell"], 1, 3),
+            (["--reader-shell"], 2, 3),
+        ]:
+            with self.subTest(extra=extra):
+                code, result, stderr, reads = self.run_cli(extra)
+                self.assertEqual(code, expected_code)
+                self.assertEqual(len(reads), expected_reads)
+                failed = {"reason": "Reader could not execute", "status": "unreachable"}
+                self.assertEqual(result["pools"], {"hidden": failed, "outside": failed, "session": failed})
+                self.assertEqual(result["inventory"], "available")
+                self.assertEqual(result["status"], "error")
+                self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:")], ["WARNING: Reader for hidden failed: Reader could not execute. Report this failure to the user.", "WARNING: Reader for outside failed: Reader could not execute. Report this failure to the user.", "WARNING: Reader for session failed: Reader could not execute. Report this failure to the user."])
+                if expected_code == 1:
+                    self.assertEqual(result["errors"], ["writer: never step down a tier; report a loop failure."])
+                    self.assertEqual(result["roles"]["writer"]["candidates"], [])
+                self.assertNotIn("pool=", stderr)
+                self.assertNotIn("private shell failure", stderr)
+
+    def test_cli_failure_warnings_survive_request_error(self):
+        # Wrong: collect succeeds but malformed context loses failed-Reader warnings.
+        code, result, stderr, reads = self.run_cli(ctx=[], reader_value=subprocess.CompletedProcess([], 7, "", "private Reader stderr"))
+        self.assertEqual(code, 2)
+        self.assertEqual(len(reads), 6)
+        self.assertEqual(result["warnings"], ["WARNING: Reader for hidden failed: Reader exited 7. Report this failure to the user.", "WARNING: Reader for outside failed: Reader exited 7. Report this failure to the user.", "WARNING: Reader for session failed: Reader exited 7. Report this failure to the user."])
+        self.assertEqual(stderr, "WARNING: Reader for hidden failed: Reader exited 7. Report this failure to the user.\nWARNING: Reader for outside failed: Reader exited 7. Report this failure to the user.\nWARNING: Reader for session failed: Reader exited 7. Report this failure to the user.\ndelegate-routing-plan: 'list' object has no attribute 'get'\n")
+
+    def test_cli_invalid_time_collects_with_recovery_clock(self):
+        # Wrong: a bad --now value skips collection or appears as a valid snapshot.
+        code, result, stderr, reads = self.run_cli(["--now", "bad"])
+        self.assertEqual(code, 2)
+        self.assertEqual(len(reads), 3)
+        self.assertEqual(result["inventory"], "available")
+        self.assertEqual(result["status"], "error")
+        self.assertIn("Invalid isoformat string", result["errors"][0])
+        self.assertIsNotNone(helper.utc(result["snapshot"]))
 
     def test_frozen_reader_corpus(self):
         # Wrong: idle null/skewed resets add window errors; envelopes lose registration identity, monthly duration or scoped pace.
@@ -162,9 +276,8 @@ class Routing(unittest.TestCase):
                     with self.subTest(role=role, field=field, value=value):
                         ctx = context((role,), ("sol", "other"))
                         ctx["roles"][role][field] = value
-                        with patch.object(helper, "collect", side_effect=AssertionError("invalid lists reached Readers")):
-                            with self.assertRaisesRegex(ValueError, field):
-                                self.run_plan(config, ctx, (role,))
+                        with self.assertRaisesRegex(ValueError, field):
+                            self.run_plan(config, ctx, (role,))
             for lists in ({}, {"avoid": [], "exclude": []}, {"avoid": ["manual", "dormant"], "exclude": ["dormant"]}):
                 ctx = context((role,), ("sol", "other"))
                 ctx["roles"][role].update(lists)
@@ -1081,14 +1194,15 @@ class Routing(unittest.TestCase):
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--check-plan", str(root / "plan.json"), "--now", "2026-11-15T00:00:00Z"]
             for role in roles:
                 command.extend(["--role", role])
-            # Wrong: refusing invalid caps only after reading inputs and Readers.
+            # Wrong: invalid caps skip Readers or discard the failure envelope.
             for cap in (0, 11):
                 with self.subTest(cap=cap):
                     proc = subprocess.run(command + ["--max-concurrency", str(cap)], capture_output=True, text=True)
                     self.assertEqual(proc.returncode, 2)
                     self.assertIn("argument --max-concurrency: invalid choice", proc.stderr)
-                    self.assertEqual(proc.stdout, "")
-                    self.assertFalse(log.exists())
+                    self.assertEqual(json.loads(proc.stdout)["status"], "error")
+                    self.assertEqual(json.loads(proc.stdout)["pools"], {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}})
+                    log.unlink()
             command.extend(["--max-concurrency", "2"])
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -1098,7 +1212,7 @@ class Routing(unittest.TestCase):
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 2)
             self.assertIn("full rubric verbatim", proc.stderr)
-            self.assertEqual(proc.stdout, "")
+            self.assertEqual(json.loads(proc.stdout)["errors"], ["0: writer brief must contain the full rubric verbatim"])
             self.assertEqual(log.read_text(), "outside\noutside\n")
 
     def test_real_cli_only_fake_reader_and_nonzero_loop(self):

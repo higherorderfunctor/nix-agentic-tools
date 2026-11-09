@@ -1,6 +1,6 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-09 — all four runtimes on Home Manager and devenv
+> **Last verified:** 2026-11-10 — all four runtimes on Home Manager and devenv
 > receive an orchestrator `SKILL.md` plus planner/worker `PLANNER.md`; the
 > companion is built first and read through an explicit absolute store path.
 > Orchestrator duties reach the router or small skill before launch; shared
@@ -16,6 +16,7 @@
 > JSON-only. Plan/check-plan and the deterministic helper retain their
 > runtime/session-pool, Reader, tier/pace and verbatim-rubric contracts. Offline
 > checks establish artifact delivery and validation, not live agent compliance.
+> Recoverable helper errors retain a JSON envelope and any collected budgets.
 > Opt-in helper-backed acceptance cases preserve fake-Reader receipts separately
 > from session observations; no harness compliance is inferred from dry-run.
 >
@@ -501,11 +502,24 @@ Idle windows bypass reset validation; all-idle pools use pace 1.0 and full
 buffer. Scoped `status` is ignored because inactive has unknown meaning. Ties
 sort non-session pools first, then family/runtime deterministically.
 
-JSON goes to stdout and canonical lines to stderr. JSON includes all warnings;
-stderr includes failure warnings and the fallback notice; advisory notes stay
-JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
-the UTC snapshot for offline tests. No TTY inference, catalog command, live
-probe or delegate launch occurs.
+JSON goes to stdout and canonical lines to stderr. Success and recoverable
+failure include `snapshot`, `status` (`ok` or `error`), `errors`, `inventory`,
+`pools`, `roles` and `warnings`. The helper collects registered Readers before
+validating request arguments, launch context or saved plans whenever the
+manifest path and inventory can be recovered. Missing or malformed inventory
+reports `inventory-unavailable` with an empty pool map. An invalid `--now` uses
+the current UTC time for collection, then reports the time error. Help skips
+collection. An unavailable Reader shell follows per-Reader unreachable handling;
+it never restores fit-only candidates from failed Readers.
+
+JSON includes all warnings; stderr includes failure warnings and the fallback
+notice, including on recoverable request failures. Advisory notes stay
+JSON-only; there are no routine per-pool status lines. Exit 0 means every
+requested role has candidates and any plan validation passed; exit 1 means a
+role has no eligible candidate, with its role name in `errors`; exit 2 means an
+argument, context, manifest or plan error. `--now` fixes the UTC snapshot for
+offline tests. No TTY inference, catalog command, live probe or delegate launch
+occurs.
 
 From this package directory, run the offline runtime suite with its explicit
 fixture input:
@@ -515,18 +529,20 @@ python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/f
 ```
 
 It exercises fake Readers and hand-written expectations, including a subprocess
-spy that rejects any candidate/probe launch. The fixture preserves five full
-successful Reader envelopes captured live from the five registered pools,
-evaluated at `2026-11-10T00:08:41Z`. Only `account.auth_index` and
-`account.name` are replaced with stable synthetic strings; nulls, field types,
-windows, balances and bonuses are preserved. These captures verify arithmetic
-and ranking; synthetic cases verify Reader failures. CI passes the fixture store
-path explicitly in `delegate-routing-plan-runtime`. Eight backend/runtime
-delivery fixtures check the rendered helper command, runtime/session-pool
-identity in the small skill, and planner policy prose for Reader completeness,
-the session buffer and shared avoided-family fallback. Reader collection,
-ranking and buffer behavior are tested against the source Python helper with
-synthetic manifests. The
+spy that rejects any candidate/probe launch. Recoverable argument, context,
+inventory and plan failures have literal envelope expectations; per-Reader shell
+failures stay unreachable and named role failures retain exit 1. The fixture
+preserves five full successful Reader envelopes captured live from the five
+registered pools, evaluated at `2026-11-10T00:08:41Z`. Only `account.auth_index`
+and `account.name` are replaced with stable synthetic strings; nulls, field
+types, windows, balances and bonuses are preserved. These captures verify
+arithmetic and ranking; synthetic cases verify Reader failures. CI passes the
+fixture store path explicitly in `delegate-routing-plan-runtime`. Eight
+backend/runtime delivery fixtures check the rendered helper command,
+runtime/session-pool identity in the small skill, and planner policy prose for
+Reader completeness, the session buffer and shared avoided-family fallback.
+Reader collection, ranking and buffer behavior are tested against the source
+Python helper with synthetic manifests. The
 `module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
 checks read each backend’s delivered `SKILL.md` for that runtime, follow its
 rendered command to the packaged wrapper and manifest, and run that wrapper with
