@@ -645,7 +645,7 @@ def check_helper_evidence(snapshot, receipts):
 
 def exercise_helper(case, repo, logs):
     """Offline setup proof; its receipts never stand in for session receipts."""
-    qualification = {"avoidFor": "bounded fixture excludes sole judging", "fit": "bounded fixture task", "trial": "not a trial", "useFor": "Python task"}
+    qualification = {"avoidFor": "bounded fixture excludes sole judging", "fit": "bounded fixture task", "useFor": "Python task"}
     context = {"nonInteractive": True,
                "roles": {role: {"effort": "medium", "families": {name: qualification for name in ("outside", "session", "under-tier")}}
                          for role in ("planner", "writer", "first-check")},

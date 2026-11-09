@@ -40,9 +40,10 @@ fifth is the buffer for the person using the session; unknown session identity
 cannot certify it. Aim for every pool to reach its reset near empty. Do not
 report pool numbers unless asked.
 
-Tier and pace do not establish role fit, trial eligibility, live availability or
-cross-maker independence. Supply that evidence in the launch context and honor
-exclusions. For finder, first-check, second-check and judge, never step down a
-tier; report a loop failure when no qualified strong/frontier route is
-available. The helper launches no delegates; canonical launch lines are routing
-specifications for the orchestrator to bind to native tools or named launchers.
+Tier and pace do not establish role fit or live availability. Supply that
+evidence in the launch context, and honor the helper's exclusions, including its
+trial and maker exclusions from family data. For finder, first-check,
+second-check and judge, never step down a tier; report a loop failure when no
+qualified strong/frontier route is available. The helper launches no delegates;
+canonical launch lines are routing specifications for the orchestrator to bind
+to native tools or named launchers.

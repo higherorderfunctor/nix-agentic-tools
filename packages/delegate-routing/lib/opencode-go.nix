@@ -52,7 +52,7 @@
   # Static ownership from opencodeGo.models.*.canonical_id in
   # packages/cliproxyapi/extracted/extracted.json: zhipuai -> zhipu and
   # moonshotai -> moonshot match direct consumers. Iceman is undisclosed.
-  families = {
+  families = lib.mapAttrs (_: family: {inherit ((import ./vocabulary.nix).familyDefaults) trial;} // family) {
     go-beam-free = {
       avoidFor = "sole judging; reasoning across huge documents";
       cost = 0;

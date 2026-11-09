@@ -6,7 +6,13 @@
   # Only these package-owned groups are keyed by their model maker. Custom
   # families remain unknown unless their consumer declares maker explicitly.
   families =
-    lib.mapAttrs (maker: lib.mapAttrs (_: family: family // {inherit maker;})) (import ./families.nix)
+    lib.mapAttrs (maker:
+      lib.mapAttrs (_: family:
+        family
+        // {
+          inherit maker;
+          trial = false;
+        })) (import ./families.nix)
     // {opencode-go = (import ./opencode-go.nix {inherit lib;}).families;};
   models = {
     claude = [

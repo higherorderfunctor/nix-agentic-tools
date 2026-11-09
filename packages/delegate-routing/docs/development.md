@@ -246,6 +246,16 @@ evidence without claiming complete availability discovery. Reusable use/avoid
 guidance retains capability, latency, privacy and tool limitations; economic
 preferences live in cost metadata instead.
 
+`families.<vendor>.<family>.trial` is a boolean: all eight shipped direct
+families default to false, all 21 Go presets and custom families to true.
+Modules and direct `mkSkill` calls share these defaults; consumers may override
+them, including promoting a Go family to `trial = false` after establishing its
+review track record. Raw JSON manifests must include a boolean `trial`; missing
+or non-boolean values fail before selection. Trial families cannot be
+second-check or judge. Finder and first-check remain possible under the same
+tier, maker, fit and launch gates; false never overrides those gates. The caller
+supplies no trial essay, and launches echo only fit/useFor/avoidFor evidence.
+
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
 catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
 (`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
@@ -433,15 +443,15 @@ Invoke the rendered command with `--role writer --launch-context <json-path>`
 first-check, investigator, judge, mechanical, planner, second-check and writer.
 Planner and the four review roles require strong/frontier tiers before ranking;
 an empty qualified set exits nonzero with “never step down a tier; report a loop
-failure.” The helper certifies tier, pace and declared maker independence, not
-semantic fit or trial eligibility. Each review role request supplies `writer`,
-the writer family name; a missing or blank `writer` is a launch-context error,
-reported after the pools are collected and before any ranking. A judge assessing
-cuts also supplies `cutProposer`, the proposer family name. Names resolve
-against automatic and manual manifest routes. The helper excludes a candidate
-with the same maker as either required participant, or with an unknown
-candidate/participant maker, and returns the specific reason. Omit `cutProposer`
-only when no cuts are being judged. Run a fresh decision for each
+failure.” The helper enforces tier, pace, family trial policy and declared maker
+independence; semantic fit remains a caller assessment. Each review role request
+supplies `writer`, the writer family name; a missing or blank `writer` is a
+launch-context error, reported after the pools are collected and before any
+ranking. A judge assessing cuts also supplies `cutProposer`, the proposer family
+name. Names resolve against automatic and manual manifest routes. The helper
+excludes a candidate with the same maker as either required participant, or with
+an unknown candidate/participant maker, and returns the specific reason. Omit
+`cutProposer` only when no cuts are being judged. Run a fresh decision for each
 worker/proposer choice. The saved-plan checker compares each unit’s review
 candidates against its own worker family, and its judge against the cut
 proposer, using current manifest makers; a shared context writer cannot certify
@@ -476,7 +486,6 @@ family evidence per role. For example, for a configured `sol` route:
         "sol": {
           "avoidFor": "task avoids sole grading",
           "fit": "bounded implementation against this spec",
-          "trial": "not a trial",
           "useFor": "coding with executable acceptance checks"
         }
       }
@@ -832,8 +841,8 @@ completion receipts. The orchestrator enforces writer → independent review →
 fix/check → commit barriers before dependent waves or the next writer on a
 shared branch. Reviewers retain isolated worktrees or read-only tools, and the
 orchestrator checks the working tree after every shell-capable delegate. Model
-fit, avoidFor guidance and trial restrictions remain caller assessments; the
-helper enforces declared maker independence separately from the strong/frontier
+fit and avoidFor guidance remain caller assessments; the helper enforces family
+trial policy and declared maker independence separately from the strong/frontier
 floor. Offline validation proves deterministic artifact checks, not live
 planner/harness compliance.
 
@@ -856,7 +865,7 @@ Fragment paths below are relative to `packages/delegate-routing/fragments/`.
 | No external launches from non-interactive/external delegates                                                                                       | Worker; planner; orchestrator when headless   | `choose-execution.md` → shared Routing and prepared briefs; helper excludes headless external routes.                               |
 | Another harness for a whole multi-step job; unknown reach probes; workflow/self-run fallback                                                       | Planner; orchestrator executes choices        | `plan-work.md` → planner execution choices and prepared launch choices.                                                             |
 | Standing rubric rows; Subtractive rows; verbatim rubric copying                                                                                    | Orchestrator prepares rubric; planner; worker | `review-rubric.md` and `review-subtractive.md` → small preflight and full planner workflow; prepared briefs contain the rubric.     |
-| Detailed reviewer checks; fit/trial restrictions                                                                                                   | Planner; worker                               | Resolved full workflow → `PLANNER.md`, then relevant worker/reviewer briefs.                                                        |
+| Detailed reviewer checks; fit and family trial restrictions                                                                                        | Planner; worker                               | Resolved full workflow → `PLANNER.md`, then relevant worker/reviewer briefs.                                                        |
 | Evidence chain; verified/retracted/unknown; rerun command claims; judge reading claims in full context                                             | Orchestrator; planner; worker                 | `load-delegate-routing.md` → always-on validation duty; `validate-the-result.md` → shared Routing and prepared briefs.              |
 | Name why failure occurred; fix execution slips; bring only real decisions to the user                                                              | Orchestrator                                  | `validate-the-result.md` → small Routing.                                                                                           |
 | Handoff before task-source investigation; triage reads allowed; quick facts only while a delegate runs; skill/usage reads count as handoff         | Orchestrator                                  | `orchestrator-session.md` → always-on router, excluded from planner context.                                                        |

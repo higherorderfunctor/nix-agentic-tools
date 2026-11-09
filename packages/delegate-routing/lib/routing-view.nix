@@ -19,7 +19,10 @@
       normalized = familyDefaults // {maker = null;} // family;
     in
       if builtins.isInt normalized.cost && normalized.cost >= 0 && normalized.cost <= 5
-      then normalized
+      then
+        if builtins.isBool normalized.trial
+        then normalized
+        else throw "ai.programs.delegate-routing.families.${vendor}.${name}.trial: expected a boolean"
       else throw "ai.programs.delegate-routing.families.${vendor}.${name}.cost: expected an integer from 0 to 5"))
   families;
   selected = target: selection.select normalizedFamilies models.${target};

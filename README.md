@@ -1153,6 +1153,13 @@ plan selection and pool state. These are neither per-task prices nor measured
 capability, free capacity or workload ranking quality. Capability use/avoid
 strings retain latency, privacy and tool limitations separately.
 
+Family `trial` is a boolean: the eight direct families default to false, the 21
+Go presets and custom families to true. Consumers may override it. The helper
+excludes trial families from second-check and judge; finder and first-check
+still require tier, maker, fit and launch eligibility. Raw manifests require the
+normalized boolean. Caller qualification contains fit/useFor/avoidFor evidence,
+with no trial essay.
+
 The skill renders an absolute non-launching `delegate-routing-plan` command, its
 runtime and session pool; the always-on router stays runtime-neutral for shared
 AGENTS.md targets. Pass `--role writer --launch-context <json-path>` with
@@ -1177,10 +1184,11 @@ bounded reason and an instruction to report the failure to the user; report it
 even when another pool permits routing. Missing Readers get explicit unmeasured
 warnings; scoped errors warn only for their families. Numerical measurements
 stay in JSON. The command never launches delegates. Pool drain and Review use
-this helper as the canonical decision, retaining role fit/trial checks and named
-fallback launchers. Unknown interactive/headless status never blocks Reader
-collection or tier/pace policy; external launches remain unresolved until the
-caller supplies mode evidence. See the
+this helper as the canonical decision, enforcing family trial policy alongside
+caller role-fit checks and named fallback launchers. Unknown
+interactive/headless status never blocks Reader collection or tier/pace policy;
+external launches remain unresolved until the caller supplies mode evidence. See
+the
 [helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper)
 for the launch-context schema, conservative unknown handling and per-runtime
 mode-discovery evidence.
