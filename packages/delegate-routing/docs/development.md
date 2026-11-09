@@ -414,27 +414,42 @@ The helper runs every registered Reader once on one UTC snapshot, including
 Readers owned by runtimes outside automatic targets; identical commands share
 one read. Only that inventory can reach subprocess execution. Trusted configured
 shell commands run under full strict Bash mode with a ten-second timeout that
-kills the reader process group. Failed, malformed, partial, multi-account,
-expired, missing-duration, unstarted-null-reset and model-scoped streams are
-unmeasured with reasons; no account routing or missing resets are invented. The
-shared schema is required before pace arithmetic: `account` contains
-`auth_index`, `name` and `plan` (including null values), `pool` is a nonempty
-string, `balances` and `bonuses` are arrays, each window's `status` is a string
-or null, and each `resetsAt` is a UTC timestamp or null. Missing fields or wrong
-shapes make the whole stream unmeasured. Registration keys determine budget
-identity, never reader `.pool` output.
+kills the reader process group. Failed, partial or multi-account Readers are
+unmeasured; malformed, expired, missing-duration or unstarted-null-reset
+unscoped windows also make streams unmeasured with reasons. No account routing
+or missing resets are invented. The shared schema is required before pace
+arithmetic: `account` contains `auth_index`, `name` and `plan` (including null
+values), `pool` is a nonempty string, `balances` and `bonuses` are arrays, each
+window's `status` is a string or null, and each `resetsAt` is a UTC timestamp or
+null. Missing fields or wrong shapes make the whole stream unmeasured, except
+malformed scoped windows, which warn and refuse only their named family.
+Registration keys determine budget identity, never reader `.pool` output.
 
-Each measured pool uses the minimum window pace
+Each measured pool uses the minimum unscoped window pace
 `(remainingPercent / 100) / ((resetsAt - now) / windowSeconds)` and the minimum
-remaining share as its buffer. Reported calendar-month durations remain intact.
+unscoped remaining share as its buffer; at least one unscoped window is
+required. Reported calendar-month durations remain intact. A scoped window
+`<window>:<model>` matches `<model>` by exact configured family name within that
+pool, not by a model pattern. Each matching candidate uses the worse (minimum)
+of its pool pace and all its scoped paces for both ranking and session
+comparison. A scoped window at 0% excludes only that family and never consumes
+the session pool's buffer. Unknown scopes produce a visible warning naming the
+pool and window without making the pool unmeasured. A consistent unstarted
+scoped window (0% used, 100% remaining, null reset) adds no family limit;
+malformed scoped windows warn and refuse only their named family, preserving
+pool measurement. A scoped window's `status` (the Reader maps `is_active` to
+active/inactive) is not used: its limit applies regardless of status because
+inactive has unknown meaning and applying the limit protects that model's
+allowance.
+
 Higher pace sorts first, with deterministic family/runtime ties; an eligible
-session pool wins an equal-pace tie only above the strict 20% buffer. A measured
-session may be selected only if every other fitting measured pool is behind or
-level. Exhaustion stays measured and never becomes a fit-only fallback.
-Unmeasured candidates are excluded while fitted measured candidates exist; with
-none, output explicitly states fit-only budget/session uncertainty. JSON is
-printed to stdout and concise launch specifications to stderr. `--now` fixes the
-clock for offline tests.
+session pool wins an equal-pace tie only above the strict 20% unscoped buffer. A
+measured session candidate may be selected only if every other fitting measured
+pool's candidate is behind or level in effective pace. Exhaustion stays measured
+and never becomes a fit-only fallback. Unmeasured candidates are excluded while
+fitted measured candidates exist; with none, output explicitly states fit-only
+budget/session uncertainty. JSON is printed to stdout and concise launch
+specifications to stderr. `--now` fixes the clock for offline tests.
 
 `checks/routing-plan-runtime.py scripts/delegate-routing-plan.py` exercises fake
 Readers and hand-written expectations, including a subprocess spy that rejects
