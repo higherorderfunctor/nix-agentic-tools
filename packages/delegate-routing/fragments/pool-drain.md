@@ -1,19 +1,21 @@
 Before the first delegate, invoke the absolute `delegate-routing-plan` command
-rendered in this runtime's skill with the requested roles and caller-observed
-`--launch-context`. Use its decision as canonical; do not reproduce Reader
+rendered in this runtime's skill with the classifier exchange in Routing helper
+and caller-observed `--launch-context`; reuse a valid receipt when the actual
+unit-role inputs match. Use its decision as canonical; do not reproduce Reader
 discovery or pace arithmetic manually. The helper must run the Reader of every
 registered pool listed in its output, including pools outside this runtime's
 launch targets; Reader commands belong to registered pool keys, not separate
 registrations per target runtime. Collection precedes request and saved-plan
-validation. On success and failure, stdout contains JSON with `status` (`ok` or
-`error`), pools and diagnostics; an unreadable inventory explicitly reports
-`inventory-unavailable` rather than claiming all pools were observed. Stderr
-lists every registered pool alphabetically as `pool=<name> status=<status>`.
-Each failed Reader command emits one WARNING naming all registrations sharing
-it, with a bounded reason and the instruction to report the failure to the user.
-Report that failure to the user even when another pool permits routing. Missing
-Readers receive explicit unmeasured warnings; scoped errors warn only for their
-families. Keep numerical measurements in JSON, not status lines.
+validation. On success and failure, stdout contains JSON with `status` (`ok`,
+`classification-required` or `error`), pools and diagnostics; an unreadable
+inventory explicitly reports `inventory-unavailable` rather than claiming all
+pools were observed. Stderr lists every registered pool alphabetically as
+`pool=<name> status=<status>`. Each failed Reader command emits one WARNING
+naming all registrations sharing it, with a bounded reason and the instruction
+to report the failure to the user. Report that failure to the user even when
+another pool permits routing. Missing Readers receive explicit unmeasured
+warnings; scoped errors warn only for their families. Keep numerical
+measurements in JSON, not status lines.
 
 The helper ranks fitting measured candidates by worst-window pace, using each
 window's reported length; a monthly pool is paced against its month, not the
@@ -40,10 +42,10 @@ fifth is the buffer for the person using the session; unknown session identity
 cannot certify it. Aim for every pool to reach its reset near empty. Do not
 report pool numbers unless asked.
 
-Tier and pace do not establish role fit or live availability. Supply that
-evidence in the launch context, and honor the helper's exclusions, including its
-trial and maker exclusions from family data. For finder, first-check,
-second-check and judge, never step down a tier; report a loop failure when no
-qualified strong/frontier route is available. The helper launches no delegates;
-canonical launch lines are routing specifications for the orchestrator to bind
-to native tools or named launchers.
+Tier and pace do not establish role fit or live availability. Supply observed
+techniques and an independent capability receipt, and honor the helper's
+exclusions, including its trial and maker exclusions from family data. For
+finder, first-check, second-check and judge, never step down a tier; report a
+loop failure when no qualified strong/frontier route is available. The helper
+launches no delegates; canonical launch lines are routing specifications for the
+orchestrator to bind to native tools or named launchers.

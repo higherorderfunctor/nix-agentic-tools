@@ -18,7 +18,6 @@ helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 NOW = helper.utc("2026-11-15T00:00:00Z")
 SHELL = shutil.which("bash")
-QUALIFIED = {"avoidFor": "checked: task avoids exclusions", "fit": "approved for this task", "useFor": "task matches guidance"}
 
 
 def window(remaining=50, seconds=2592000, reset="2026-12-01T00:00:00Z"):
@@ -34,15 +33,22 @@ def technique(name="spawn_agent", kind="subagent", model="gpt-6.1-sol", pattern=
 
 
 def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, maker="openai", cost=3, trial=False):
-    return {"family": {"avoidFor": "sole judge", "cost": cost, "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "trial": trial, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
+    return {"family": {"avoidFor": "sole judge", "cost": cost, "defaultEffort": "high", "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "trial": trial, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
 def manifest(routes=None, session=None):
     return {"manualRoutes": [route("manual", pool=None, maker="anthropic")], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
-def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
-    return {"nonInteractive": non_interactive, "roles": {role: {"effort": effort, "families": {name: QUALIFIED for name in names}, **({"writer": "manual"} if role in ("finder", "first-check", "second-check", "judge") else {})} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+def context(roles=("writer",), techniques=None, non_interactive=False, effort="high"):
+    return {"nonInteractive": non_interactive, "roles": {role: {"brief": "brief.md", "effort": effort, "requirements": {"constraints": [], "inputKinds": ["text"]}, **({"writer": "manual"} if role in ("finder", "first-check", "second-check", "judge") else {})} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+
+
+def save_plan_receipt(root, config, artifact, unit, record, keep=None):
+    facts = {"roles": {record["role"]: {key: record[key] for key in ("brief", "effort", "requirements")}}, "rubric": artifact["rubric"], "subject": {"task": artifact["task"], "unit": unit["id"]}, "techniques": context()["techniques"]}
+    request, digest = helper.classification_request(config, facts, record["role"], root)
+    body = {"classifier": {"family": "sol", "effort": "high", "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent", "pool": "outside"}, "decisions": [{"family": family["name"], "decision": "keep" if keep is None or family["name"] == keep else "task-mismatch", "reason": "Supplied fixture criteria assessed."} for family in request["families"]], "requestHash": digest, "schemaVersion": 1}
+    (root / record["receipt"]).write_text(json.dumps(body | {"receiptHash": helper.receipt_hash(body)}))
 
 
 class Classification(unittest.TestCase):
@@ -350,7 +356,16 @@ class Routing(unittest.TestCase):
         with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")):
             config = config or manifest()
             pools = helper.collect(config["readers"], NOW, SHELL, reader)
-            result = helper.plan(config, launch_context or context(roles), roles, NOW, pools)
+            facts = launch_context or context(roles)
+            result = None
+            for role in roles:
+                evidence = {"decisions": {item["family"]["name"]: "keep" for item in config["routes"]}, "efforts": {item["family"]["name"]: facts["roles"][role]["effort"] if facts["roles"][role]["effort"] is not None else item["family"].get("defaultEffort") for item in config["routes"]}}
+                decision = helper.plan(config, facts, [role], NOW, pools, semantic=evidence)
+                if result is None:
+                    result = decision
+                else:
+                    result["roles"].update(decision["roles"])
+
         return result, calls
 
     def test_cost_ranking_after_pace_and_session(self):
@@ -365,13 +380,13 @@ class Routing(unittest.TestCase):
         for label, rows, session, outputs, expected in cases:
             with self.subTest(case=label):
                 routes = [route(name, pool=pool, cost=cost) for name, cost, pool in rows]
-                result, _ = self.run_plan(manifest(routes, session), context(names=expected), outputs=outputs)
+                result, _ = self.run_plan(manifest(routes, session), context(), outputs=outputs)
                 self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], expected)
 
     def test_cost_order_without_measurements(self):
         # Wrong: unknown pace loses cost/session ordering or hides uncertainty.
         routes = [route("session-cheap", pool="session", cost=0), route("astra", cost=4), route("luna", cost=1)]
-        result, _ = self.run_plan(manifest(routes, "session"), context(names=("session-cheap", "astra", "luna")), outputs={command: "invalid" for command in ("reader-outside", "reader-session", "reader-hidden-runtime")})
+        result, _ = self.run_plan(manifest(routes, "session"), context(), outputs={command: "invalid" for command in ("reader-outside", "reader-session", "reader-hidden-runtime")})
         candidates = result["roles"]["writer"]["candidates"]
         self.assertEqual([item["launch"]["family"] for item in candidates], ["luna", "astra", "session-cheap"])
         self.assertTrue(all(item["budget"] == "fit-only; budget and session buffer unknown" for item in candidates))
@@ -388,7 +403,7 @@ class Routing(unittest.TestCase):
                     else:
                         config[collection][0]["family"]["cost"] = cost
                     with self.assertRaisesRegex(ValueError, "family .* cost must be an integer from 0 to 5"):
-                        self.run_plan(config, context(names=()))
+                        self.run_plan(config, context())
 
     def test_trial_policy_for_review_roles(self):
         # Wrong: an essay admits trial judges, or the gate bans trial finders.
@@ -396,27 +411,11 @@ class Routing(unittest.TestCase):
         for trial, expected in ((False, [True, True, True, True]), (True, [True, True, False, False])):
             with self.subTest(trial=trial):
                 facts = context(roles)
-                for role in roles:
-                    facts["roles"][role]["families"]["sol"] = QUALIFIED | {"trial": "not a trial"}
                 result, _ = self.run_plan(manifest([route(trial=trial)]), facts, roles)
                 self.assertEqual([bool(result["roles"][role]["candidates"]) for role in roles], expected)
                 if trial:
                     for role in ("second-check", "judge"):
                         self.assertIn("trial family excluded from second-check and judge", [item["reason"] for item in result["roles"][role]["exclusions"]])
-
-    def test_qualification_needs_no_trial_essay_and_does_not_echo_it(self):
-        # Wrong: the removed trial essay is required or copied into launches.
-        for legacy in (False, True):
-            with self.subTest(legacy=legacy):
-                evidence = QUALIFIED.copy()
-                if legacy:
-                    evidence["trial"] = "not a trial"
-                facts = context(("judge",))
-                facts["roles"]["judge"]["families"]["sol"] = evidence
-                result, _ = self.run_plan(launch_context=facts, roles=("judge",))
-                candidates = result["roles"]["judge"]["candidates"]
-                self.assertEqual(len(candidates), 1)
-                self.assertEqual(candidates[0]["launch"]["qualification"], {"avoidFor": "checked: task avoids exclusions", "fit": "approved for this task", "useFor": "task matches guidance"})
 
     def test_raw_trial_metadata_required_before_selection(self):
         # Wrong: missing or non-boolean policy reaches even an unqualified route.
@@ -429,7 +428,7 @@ class Routing(unittest.TestCase):
                     else:
                         config[collection][0]["family"]["trial"] = trial
                     with self.assertRaisesRegex(ValueError, "family .* trial must be a boolean"):
-                        self.run_plan(config, context(names=()))
+                        self.run_plan(config, context())
 
     def test_cli_collects_before_recoverable_failures(self):
         # Wrong: invalid input exits without JSON or skips registered Readers.
@@ -567,7 +566,7 @@ class Routing(unittest.TestCase):
                 candidate["family"]["vendor"] = "opencode-go"
                 config = manifest([candidate])
                 config["manualRoutes"] = [route("author", pool="outside", maker=writer_maker)]
-                ctx = context(roles, (name,), techniques=[{"efforts": ["high"], "model": model, "runtime": "claude", "technique": "spawn_agent"}])
+                ctx = context(roles, techniques=[{"efforts": ["high"], "model": model, "runtime": "claude", "technique": "spawn_agent"}])
                 for request in ctx["roles"].values():
                     request["writer"] = "author"
                 result, _ = self.run_plan(config, ctx, roles)
@@ -589,8 +588,8 @@ class Routing(unittest.TestCase):
                 name = "go-iceman-contributor-free" if candidate_maker is None else "sol"
                 config = manifest([route(name, maker=candidate_maker)])
                 config["manualRoutes"][0]["family"]["maker"] = writer_maker
-                ctx = context(("writer", "first-check"), (name,))
-                ctx["roles"]["first-check"].update(writer=writer, maker="different-provider")
+                ctx = context(("writer", "first-check"))
+                ctx["roles"]["first-check"].update(writer=writer)
                 result, _ = self.run_plan(config, ctx, ("writer", "first-check"))
                 self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
                 self.assertEqual(result["roles"]["first-check"]["candidates"], [])
@@ -651,18 +650,18 @@ class Routing(unittest.TestCase):
         config = manifest([route("own", pool="session"), route("other")], "session")
         for own, other, expected in [(60, 45, "own"), (60, 60, "other"), (45, 60, "other"), (20, 10, "other"), (20.01, 10, "own")]:
             with self.subTest(own=own, other=other):
-                result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-outside": stream({"5h": window(other, 18000, "2026-11-15T02:30:00Z")}), "reader-session": stream({"5h": window(own, 18000, "2026-11-15T02:30:00Z")})})
+                result, _ = self.run_plan(config, context(), outputs={"reader-outside": stream({"5h": window(other, 18000, "2026-11-15T02:30:00Z")}), "reader-session": stream({"5h": window(own, 18000, "2026-11-15T02:30:00Z")})})
                 self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)
         # Own pace leads despite the tighter buffer: max-share buffering fails.
         for remaining, expected in [(20, "other"), (20.01, "own")]:
-            result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-session": stream({"monthly": window(60), "5h": window(remaining, 18000, "2026-11-15T00:30:00Z")})})
+            result, _ = self.run_plan(config, context(), outputs={"reader-session": stream({"monthly": window(60), "5h": window(remaining, 18000, "2026-11-15T00:30:00Z")})})
             self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)
 
     def test_live_claude_scopes_preserve_pool_measurement(self):
         # Wrong: any colon makes the pool unmeasured, or scopes set pool pace/buffer.
         for remaining in (52, 10, 0):
             with self.subTest(remaining=remaining):
-                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(remaining, 604800, "2026-11-18T12:00:00Z")})})
+                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(), outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(remaining, 604800, "2026-11-18T12:00:00Z")})})
                 pool = result["pools"]["outside"]
                 self.assertEqual(pool["status"], "measured")
                 self.assertEqual(pool["pace"], 0.34)
@@ -679,7 +678,7 @@ class Routing(unittest.TestCase):
             "7d:fable": {"remainingPercent": 17, "resetsAt": "2026-11-18T12:00:00Z", "status": "inactive", "usedPercent": 83, "windowSeconds": 604800},
             "7d:opus": {"remainingPercent": 100, "resetsAt": None, "status": None, "usedPercent": 0, "windowSeconds": 604800},
         }
-        result, _ = self.run_plan(manifest([route("fable"), route("opus"), route("sol")]), context(names=("fable", "opus", "sol")), outputs={"reader-outside": stream(windows)})
+        result, _ = self.run_plan(manifest([route("fable"), route("opus"), route("sol")]), context(), outputs={"reader-outside": stream(windows)})
         self.assertEqual(result["pools"]["outside"], {"buffer": 0.52, "pace": 1.04, "scopedPaces": {"7d:fable": 0.34, "7d:opus": None}, "status": "measured"})
         self.assertEqual({item["launch"]["family"]: item["pace"] for item in result["roles"]["writer"]["candidates"]}, {"fable": 0.34, "opus": 1.04, "sol": 1.04})
 
@@ -694,7 +693,7 @@ class Routing(unittest.TestCase):
         ]
         for value, reason in cases:
             with self.subTest(reason=reason):
-                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": value})})
+                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": value})})
                 self.assertEqual(result["pools"]["outside"]["status"], "measured")
                 self.assertEqual(result["pools"]["outside"]["pace"], 1.04)
                 self.assertEqual(result["pools"]["outside"]["buffer"], 0.52)
@@ -704,29 +703,29 @@ class Routing(unittest.TestCase):
 
     def test_invalid_scope_does_not_block_another_session_family(self):
         # Wrong: an invalid family's pool pace blocks a valid session candidate.
-        result, _ = self.run_plan(manifest([route("fable"), route("sol", pool="session")], "session"), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(50, 604800, None)})})
+        result, _ = self.run_plan(manifest([route("fable"), route("sol", pool="session")], "session"), context(), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(50, 604800, None)})})
         self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.9375)])
 
     def test_scopes_are_limited_to_the_bound_pool_and_worst_window(self):
         # Wrong: a scope follows the family across pools, or last scoped window wins.
         config = manifest([route("fable"), route("fable", pool="session")])
-        result, _ = self.run_plan(config, context(names=("fable",)), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "5h:fable": window(10, 18000, "2026-11-15T02:30:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})})
+        result, _ = self.run_plan(config, context(), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "5h:fable": window(10, 18000, "2026-11-15T02:30:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})})
         self.assertEqual([(item["pool"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("session", 0.9375), ("outside", 0.2)])
 
     def test_scoped_pace_ranking_and_session_comparison(self):
         # Wrong: applying family pace only at sorting, after the session comparison.
         config = manifest([route("fable", pool="session"), route("sol")], "session")
         outputs = {"reader-outside": stream({"7d": window(30, 604800, "2026-11-18T12:00:00Z")}), "reader-session": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})}
-        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        result, _ = self.run_plan(config, context(), outputs=outputs)
         self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], ["sol"])
         self.assertEqual(result["roles"]["writer"]["exclusions"][-1]["reason"], "another fitting pool is ahead of session pace")
         # Scope share below 20% must not consume the session pool's buffer.
         outputs["reader-outside"] = stream({"7d": window(10, 604800, "2026-11-18T12:00:00Z")})
-        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        result, _ = self.run_plan(config, context(), outputs=outputs)
         self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("fable", 0.34), ("sol", 0.2)])
         # The same family pace also ranks ordinary non-session candidates.
         config["sessionPool"] = None
-        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        result, _ = self.run_plan(config, context(), outputs=outputs)
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
 
     def test_unknown_scope_warns_without_failing_pool(self):
@@ -807,7 +806,7 @@ class Routing(unittest.TestCase):
 
     def test_fit_only_and_measured_exclusion(self):
         config = manifest([route("unknown", pool=None), route()])
-        result, _ = self.run_plan(config, context(names=("sol", "unknown")))
+        result, _ = self.run_plan(config, context())
         self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["sol"])
         config["readers"] = []
         config["routes"] = [route(pool=None)]
@@ -821,15 +820,13 @@ class Routing(unittest.TestCase):
             candidate = route(family, tier)
             if tier in ("strong", "frontier"):
                 candidate["family"]["useFor"] = "deep synthesis"
-            result, _ = self.run_plan(manifest([candidate]), context(roles, (family,)), roles)
+            result, _ = self.run_plan(manifest([candidate]), context(roles), roles)
             for role in roles:
                 self.assertEqual(bool(result["roles"][role]["candidates"]), tier in ("strong", "frontier"))
                 if tier in ("small", "mid"):
                     self.assertEqual(result["roles"][role]["error"], "never step down a tier; report a loop failure.")
         with self.assertRaisesRegex(ValueError, "unknown role"):
             self.run_plan(roles=("unknown",))
-        result, _ = self.run_plan(launch_context=context(names=()))
-        self.assertEqual(result["roles"]["writer"]["candidates"], [])
 
     def test_generated_agent_workflow_external_and_unresolved(self):
         agent = {"family": {"defaultEffort": "high", "name": "sol"}, "id": "gpt-6.1-sol"}
@@ -876,11 +873,12 @@ class Routing(unittest.TestCase):
     def prepared_manifest(self, config=None):
         config = deepcopy(config or manifest())
         config["routes"].append(route("author", pool=config["routes"][0]["pool"], maker="anthropic"))
+        config.update({"classifierInstructions": "Classify only.\n", "classifiers": [{"family": "sol", "effort": "high"}], "familyCatalog": [item["family"] for item in config["routes"] + config["manualRoutes"]]})
         return config
 
     def prepared_context(self, ctx=None):
         ctx = deepcopy(ctx or context(("writer", "first-check", "second-check", "judge")))
-        ctx["roles"]["writer"]["families"] = {"author": QUALIFIED}
+        ctx["roles"]["writer"]["pins"] = {"family": "author"}
         for role, request in ctx["roles"].items():
             if helper.ROLE_POLICY[role]["review"]:
                 request["writer"] = "author"
@@ -889,24 +887,63 @@ class Routing(unittest.TestCase):
     def run_prepared_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None):
         return self.run_plan(self.prepared_manifest(config), self.prepared_context(launch_context or context(roles)), roles, outputs)
 
+    def test_plan_receipts_are_unit_local(self):
+        # Wrong: one role-global candidate list authorizes opposite unit exclusions.
+        config = self.prepared_manifest()
+        config.update({"classifierInstructions": "Classify only.\n", "classifiers": [{"family": "sol", "effort": "high"}], "familyCatalog": [item["family"] for item in config["routes"] + config["manualRoutes"]]})
+        roles = ("writer", "first-check", "second-check", "judge")
+        current, _ = self.run_prepared_plan(roles=roles)
+        facts = self.prepared_context()
+        facts["roles"]["writer"].pop("pins")
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            for unit in artifact["units"]:
+                for record in unit["launches"]:
+                    brief = f"{unit['id']}-{record['role']}.md"
+                    (root / brief).write_text(f"Actual unit {unit['id']} role {record['role']}\n" + (root / "rubric.md").read_text())
+                    record.update(brief=brief, effort="high", requirements={"constraints": [], "inputKinds": ["text"]}, receipt=brief + ".json")
+                    keep = {"0": {"writer": "author", "review": "sol"}, "1": {"writer": "sol", "review": "author"}}[unit["id"]]["writer" if record["role"] == "writer" else "review"]
+                    previous = record["candidate"]["family"]
+                    record["candidate"]["family"] = keep
+                    record["line"] = record["line"].replace(f"family={previous}", f"family={keep}")
+                    if keep != previous:
+                        artifact["snapshot"]["roles"][record["role"]]["candidates"].append({"launch": deepcopy(record["candidate"]), "line": record["line"], "pool": "outside"})
+                    save_plan_receipt(root, config, artifact, unit, record, keep)
+            self.assertEqual(helper.check_plan(artifact, current, root, manifest=config, context=facts)["status"], "valid")
+            self.assertEqual(current["unitRoles"]["1/writer"]["candidates"][0]["launch"]["family"], "sol")
+            first, second = [unit["launches"][0] for unit in artifact["units"]]
+            first["receipt"], second["receipt"] = second["receipt"], first["receipt"]
+            with self.assertRaisesRegex(ValueError, "request hash mismatch"):
+                helper.check_plan(artifact, current, root, manifest=config, context=facts)
+
+    def test_ranker_refuses_caller_fit(self):
+        # Wrong: the saved-plan path can still bypass receipts with caller essays.
+        for field in ("families", "fit", "useFor", "avoidFor", "trial"):
+            facts = context()
+            facts["roles"]["writer"][field] = {"sol": {"fit": "essay"}} if field == "families" else "essay"
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "caller.*classification"):
+                self.run_plan(launch_context=facts)
+
     def test_plan_reviewers_use_each_units_worker(self):
         # Wrong: one context writer certifies all units, including a Sol worker.
         roles = ("writer", "first-check", "second-check", "judge")
         ctx = self.prepared_context()
-        ctx["roles"]["writer"]["families"]["sol"] = QUALIFIED
+        ctx["roles"]["writer"].pop("pins")
         current, _ = self.run_plan(self.prepared_manifest(), ctx, roles)
         with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
             root = Path(directory)
             artifact = self.prepared_plan(root)
             cuts = deepcopy(ctx)
-            cuts["roles"]["judge"]["cutProposer"] = "sol"
-            with self.assertRaisesRegex(ValueError, "0: judge: same maker as cut proposer: openai"):
+            artifact["units"][0]["launches"][-1]["cutProposer"] = "sol"
+            with self.assertRaisesRegex(ValueError, "judge candidate/line absent.*same maker as cut proposer: openai"):
                 helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=cuts)
+            artifact["units"][0]["launches"][-1].pop("cutProposer")
             worker = artifact["units"][1]["launches"][0]
             worker["candidate"]["family"] = "sol"
             worker["line"] = "role=writer runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high"
             artifact["snapshot"]["roles"]["writer"]["candidates"].append({"launch": deepcopy(worker["candidate"]), "line": worker["line"], "pool": "outside"})
-            with self.assertRaisesRegex(ValueError, "1: first-check: same maker as writer: openai"):
+            with self.assertRaisesRegex(ValueError, "1: first-check candidate/line absent.*same maker as writer: openai"):
                 helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=ctx)
 
     def prepared_plan(self, root, count=2):
@@ -918,21 +955,28 @@ class Routing(unittest.TestCase):
         for role in roles:
             brief = f"{role}.md"
             (root / brief).write_bytes(b"Hard rules and task.\n" + rubric + b"Report evidence.\n")
-            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "author" if role == "writer" else "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "qualification": QUALIFIED, "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family={'author' if role == 'writer' else 'sol'} technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
+            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "author" if role == "writer" else "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family={'author' if role == 'writer' else 'sol'} technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
         units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace not validated launch choices", "id": str(index), "launches": deepcopy(launches), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
-        return {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
+        artifact = {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
+
+        config = self.prepared_manifest()
+        for unit in units:
+            for record in unit["launches"]:
+                record.update(effort="high", requirements={"constraints": [], "inputKinds": ["text"]}, receipt=f"{unit['id']}-{record['role']}.json")
+                save_plan_receipt(root, config, artifact, unit, record)
+        return artifact
 
     def test_planner_bootstrap_floor_native_and_workflow(self):
         # Wrong: planner unregistered, high-pace mid chosen, or no pinned bootstrap.
         config = manifest([route("fast", "mid", "session"), route("design", "frontier")])
         for node in (technique(), technique("Workflow", "workflow")):
             config["routes"][1]["techniques"] = [node]
-            ctx = context(("planner",), ("design", "fast"), techniques=[{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": node["name"]}], non_interactive=True)
+            ctx = context(("planner",), techniques=[{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": node["name"]}], non_interactive=True)
             result, _ = self.run_plan(config, ctx, ("planner",), outputs={"reader-session": stream({"monthly": window(99)})})
             self.assertEqual(result["roles"]["planner"]["candidates"][0]["launch"]["family"], "design")
             self.assertIn({"family": "fast", "reason": "below role tier floor", "runtime": "codex"}, result["roles"]["planner"]["exclusions"])
         config["routes"] = [route("fast", "mid")]
-        result, _ = self.run_plan(config, context(("planner",), ("fast",)), ("planner",))
+        result, _ = self.run_plan(config, context(("planner",)), ("planner",))
         self.assertEqual(result["roles"]["planner"]["error"], "never step down a tier; report a loop failure.")
 
     def test_plan_role_qualified_launch_mutations(self):
@@ -955,9 +999,8 @@ class Routing(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, reason):
                     helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
             changed = deepcopy(current)
-            changed["roles"]["first-check"]["candidates"] = []
-            with self.assertRaisesRegex(ValueError, "first-check candidate/line absent"):
-                helper.check_plan(artifact, changed, root, manifest=self.prepared_manifest(), context=self.prepared_context())
+            changed["roles"] = {}
+            self.assertEqual(helper.check_plan(artifact, changed, root, manifest=self.prepared_manifest(), context=self.prepared_context())["status"], "valid")
             changed = deepcopy(artifact)
             changed["runtime"] = "claude"
             with self.assertRaisesRegex(ValueError, "actual launching runtime"):
@@ -974,7 +1017,7 @@ class Routing(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "absent from current helper output"):
                 helper.check_plan(changed, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())
             # A new context or budget decision, not the old plan's snapshot, wins.
-            for ctx, outputs in ((context(roles, effort="low"), None), (context(roles), {"reader-outside": stream({"monthly": window(0)})})):
+            for ctx, outputs in ((context(roles), {"reader-outside": stream({"monthly": window(0)})}),):
                 changed, _ = self.run_prepared_plan(launch_context=ctx, roles=roles, outputs=outputs)
                 with self.assertRaisesRegex(ValueError, "absent from current helper output"):
                     helper.check_plan(artifact, changed, root, manifest=self.prepared_manifest(), context=self.prepared_context())
@@ -1004,9 +1047,9 @@ class Routing(unittest.TestCase):
             artifact = self.prepared_plan(root)
             nested = root / "plans"
             nested.mkdir()
-            for path in root.glob("*.md"):
+            for path in list(root.glob("*.md")) + list(root.glob("*.json")):
                 (nested / path.name).write_bytes(path.read_bytes())
-            for field, filename in (("rubric", "rubric.md"), ("brief", "writer.md")):
+            for field, filename in (("rubric", "rubric.md"), ("brief", "writer.md"), ("receipt", "0-writer.json")):
                 for path in (str(root / filename), f"../{filename}"):
                     changed = deepcopy(artifact)
                     target = changed if field == "rubric" else changed["units"][0]["launches"][0]
@@ -1022,7 +1065,7 @@ class Routing(unittest.TestCase):
             nested = root / "plan"
             nested.mkdir()
             artifact = self.prepared_plan(nested)
-            for field, filename in (("rubric", "rubric.md"), ("brief", "writer.md")):
+            for field, filename in (("rubric", "rubric.md"), ("brief", "writer.md"), ("receipt", "0-writer.json")):
                 (root / filename).write_bytes((nested / filename).read_bytes())
                 (nested / f"link-{filename}").symlink_to(f"../{filename}")
                 changed = deepcopy(artifact)
@@ -1086,7 +1129,7 @@ class Routing(unittest.TestCase):
             cases.append((changed, "overlapping same-wave writer files"))
             changed = deepcopy(artifact)
             changed["units"][0]["id"] = "1"
-            cases.append((changed, "unique"))
+            cases.append((changed, "request hash mismatch"))
             changed = deepcopy(artifact)
             changed["units"][0]["files"].append("../outside.py")
             cases.append((changed, "repository-relative"))
@@ -1176,6 +1219,21 @@ class Routing(unittest.TestCase):
             self.assertEqual(json.loads(proc.stdout)["status"], "error")
             self.assertEqual(sorted(json.loads(proc.stdout)["pools"]), ["outside"])
             self.assertEqual(log.read_text(), "outside\noutside\n")
+
+            (root / "writer.md").write_text("Hard rules and task.\n" + (root / "rubric.md").read_text() + "Report evidence.\n")
+            facts = self.prepared_context()
+            facts["roles"]["writer"]["pins"] = {"family": "absent"}
+            (root / "context.json").write_text(json.dumps(facts))
+            proc = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            self.assertEqual(json.loads(proc.stdout)["decisions"]["0/writer"]["pins"], {"family": "absent"})
+            self.assertIn("pin: 0/writer family=absent", proc.stderr)
+            facts["roles"]["writer"]["families"] = {}
+            (root / "context.json").write_text(json.dumps(facts))
+            proc = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("caller fit/families/useFor/avoidFor/trial fields are refused", proc.stderr)
+            self.assertIn("--role classifier --classify-role", proc.stderr)
 
     def test_real_cli_only_fake_reader_and_nonzero_loop(self):
         # Exact CLI path exercises shell collection; launch command is a sentinel.

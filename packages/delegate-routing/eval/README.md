@@ -124,15 +124,23 @@ and `square.py` separately and checks their saved plan for a shared disjoint
 wave.
 
 Offline preparation invokes the absolute helper command read from the delivered
-skill with explicit launch evidence. `logs/setup-helper.json` records argv, exit
-code and helper JSON; `logs/setup-reader-receipts.jsonl` records executed Reader
-identities. It checks all three Readers, outside-before-session selection,
-different-maker session review, same-maker outside exclusion and the under-tier
-exclusion. The independent case also records successful helper `--check-plan`
-validation of a hand-authored two-unit wave and rubric-bearing briefs in
+skill with explicit launch evidence. It prepares each actual unit-role request,
+relays synthetic classifier JSON, accepts and saves its receipt, then reuses it
+without another classifier preparation. The configured fixture approval is
+outside/medium; no live inference or usage Reader runs during offline setup.
+`logs/setup-<unit>-<role>.json` preserves preparation, acceptance and reuse; the
+matching exchange and receipt files retain actual request identities and each
+executed argv. `logs/setup-helper.json` records their paths and combined helper
+JSON; `logs/setup-reader-receipts.jsonl` records executed Reader identities. It
+checks all three Readers, outside-before-session selection, different-maker
+session review, same-maker outside exclusion and the under-tier exclusion. The
+independent case also records successful helper `--check-plan` validation of a
+hand-authored two-unit wave and rubric-bearing briefs in
 `logs/setup-plan-validation.json`. These receipts prove fixture wiring, not
-agent behavior. The Python regression invokes the helper source with child
-Reader processes and mutates each expected control to prove the assertions
+agent behavior, classifier accuracy, spend or authenticated billing. Distinct
+words/square unit-role receipts bind their own actual briefs; they are not
+role-global authorizations. The Python regression invokes the helper source with
+child Reader processes and mutates each expected control to prove the assertions
 reject it. Separate broken-output mutations remove the different-maker session
 candidate and the same-maker outside exclusion, so either maker guard
 disappearing from `check_helper_evidence` fails the regression.

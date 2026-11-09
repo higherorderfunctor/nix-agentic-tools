@@ -54,13 +54,14 @@ class HelperFixtures(unittest.TestCase):
                 "print(json.dumps({'account': {'auth_index': None, 'name': 'fixture', 'plan': None}, 'balances': [], 'bonuses': [], 'pool': 'wrong-key', 'windows': {'5h': {'remainingPercent': remaining, 'usedPercent': 100 - remaining, 'status': 'ok', " +
                 "'resetsAt': (datetime.now(timezone.utc) + timedelta(seconds=9000)).isoformat(), 'windowSeconds': 18000}}}))\n")
             reader.chmod(0o755)
-            routes = [{"family": {"cost": 3, "maker": "fixture-" + name, "name": name, "tier": tier, "trial": False}, "pool": pool, "target": "codex",
+            routes = [{"family": {"avoidFor": "sole judging", "cost": 3, "maker": "fixture-" + name, "name": name, "tier": tier, "trial": False, "useFor": "bounded Python tasks"}, "pool": pool, "target": "codex",
                        "techniques": [{"agent": None, "model": {"isPattern": False, "value": "gpt-6.1-sol"},
                                        "name": "spawn_agent", "node": {"command": None, "kind": "subagent", "modelArg": "slug", "notes": "native fixture"}}]}
                       for name, tier, pool in [("outside", "strong", "outside"), ("session", "strong", "session"), ("under-tier", "mid", "outside")]]
             manifest = root / "manifest.json"
             manifest.write_text(json.dumps({"runtime": "codex", "runtimes": ["codex"], "sessionPool": "session",
-                "manualRoutes": [], "routes": routes, "readers": [
+                "classifierInstructions": "Assess supplied criteria only.\n", "classifiers": [{"family": "outside", "effort": "medium"}],
+                "familyCatalog": [row["family"] for row in routes], "manualRoutes": [], "routes": routes, "readers": [
                     {"name": name, "command": shlex.join([str(reader), name, str(remaining)])}
                     for name, remaining in [("cross-runtime", 90), ("outside", 80), ("session", 30)]]}))
             wrapper = root / "delegate-routing-plan"
@@ -73,7 +74,16 @@ class HelperFixtures(unittest.TestCase):
             record = json.loads((logs / "setup-helper.json").read_text())
             receipts = suite.helper_receipts(logs / "setup-reader-receipts.jsonl")
             self.assertEqual(record["exitCode"], 0)
-            self.assertEqual(len(receipts), 6)
+            self.assertEqual(len(receipts), 45)
+            exchanges = sorted(logs.glob("setup-*-exchange.json"))
+            self.assertEqual(len(exchanges), 7)
+            for exchange_path in exchanges:
+                relay = json.loads(exchange_path.read_text())
+                self.assertEqual(relay["preparation"]["request"]["subject"]["task"], "independent pure functions")
+            for unit in ("words", "square"):
+                for role in ("writer", "first-check"):
+                    exchange_record = json.loads((logs / f"setup-{unit}-{role}.json").read_text())
+                    self.assertNotIn("qualification", exchange_record["acceptance"]["output"]["roles"][role]["candidates"][0]["launch"])
             validation = json.loads((logs / "setup-plan-validation.json").read_text())
             self.assertEqual(validation["output"]["validation"]["waves"], 1)
             self.assertFalse((logs / "session-reader-receipts.jsonl").exists())
