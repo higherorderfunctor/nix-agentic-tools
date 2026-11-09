@@ -54,7 +54,7 @@ class HelperFixtures(unittest.TestCase):
                 "print(json.dumps({'account': {'auth_index': None, 'name': 'fixture', 'plan': None}, 'balances': [], 'bonuses': [], 'pool': 'wrong-key', 'windows': {'5h': {'remainingPercent': remaining, 'usedPercent': 100 - remaining, 'status': 'ok', " +
                 "'resetsAt': (datetime.now(timezone.utc) + timedelta(seconds=9000)).isoformat(), 'windowSeconds': 18000}}}))\n")
             reader.chmod(0o755)
-            routes = [{"family": {"maker": "fixture-" + name, "name": name, "tier": tier}, "pool": pool, "target": "codex",
+            routes = [{"family": {"cost": 3, "maker": "fixture-" + name, "name": name, "tier": tier}, "pool": pool, "target": "codex",
                        "techniques": [{"agent": None, "model": {"isPattern": False, "value": "gpt-6.1-sol"},
                                        "name": "spawn_agent", "node": {"command": None, "kind": "subagent", "modelArg": "slug", "notes": "native fixture"}}]}
                       for name, tier, pool in [("outside", "strong", "outside"), ("session", "strong", "session"), ("under-tier", "mid", "outside")]]

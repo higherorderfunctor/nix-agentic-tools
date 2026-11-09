@@ -189,6 +189,11 @@ in {
               default = "";
               description = "Tasks this family should avoid.";
             };
+            cost = lib.mkOption {
+              type = lib.types.ints.between 0 5;
+              default = vocabulary.familyDefaults.cost;
+              description = "Qualitative cost preference: 0 free, 1 lowest, 2 low, 3 middle, 4 high, 5 highest. An ordinal class, not dollars or a capability measurement. Go defaults use a static documented allowance proxy, not actual free capacity or per-task prices.";
+            };
             defaultEffort = lib.mkOption {
               type = lib.types.nullOr (lib.types.enum agentFiles.facts.effortLevels);
               default = null;

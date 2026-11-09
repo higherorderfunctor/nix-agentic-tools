@@ -11,10 +11,19 @@
   manualExternalDelegates ? [],
 }: let
   selection = import ./select-families.nix {inherit lib;};
-  inherit (import ./vocabulary.nix) delegateKinds;
+  inherit (import ./vocabulary.nix) delegateKinds familyDefaults;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
-  selected = target: selection.select families models.${target};
-  candidates = selection.candidates families models runtimes;
+  # Normalize direct builders before selection so table rows and routes agree.
+  normalizedFamilies = lib.mapAttrs (vendor:
+    lib.mapAttrs (name: family: let
+      normalized = familyDefaults // {maker = null;} // family;
+    in
+      if builtins.isInt normalized.cost && normalized.cost >= 0 && normalized.cost <= 5
+      then normalized
+      else throw "ai.programs.delegate-routing.families.${vendor}.${name}.cost: expected an integer from 0 to 5"))
+  families;
+  selected = target: selection.select normalizedFamilies models.${target};
+  candidates = selection.candidates normalizedFamilies models runtimes;
   agentFiles = import ./agent-files.nix {inherit lib;};
   agentSet =
     if resolvedAgentFiles != null
@@ -68,8 +77,7 @@
       };
   in {
     inherit target;
-    # Direct callers can omit the module's nullable option default.
-    family = {maker = null;} // family;
+    inherit family;
     pool = selection.poolFor family target;
     techniques =
       if names == []
