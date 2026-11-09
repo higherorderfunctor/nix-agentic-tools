@@ -16,6 +16,9 @@
 > artifact delivery and validation, not live agent compliance. Opt-in
 > helper-backed acceptance cases preserve fake-Reader receipts separately from
 > session observations; no harness compliance is inferred from dry-run.
+> Classifier exchange and unit-local receipt regressions run offline; the new
+> classifier delivery/module assertions await CI evaluation, and fixture relays
+> do not establish empirical classifier quality or spend.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -134,11 +137,11 @@ the companion. The manual-only delegate table reaches both readers so the
 orchestrator can honor an explicit user request. All other skill entries,
 including consumer additions, belong to the planner. Each policy paragraph has
 one authoritative source, even when both readers need its projection. The small
-skill includes substantive-work bootstrap, family fit/route guidance, helper
-command/schema, wave validation, launch supervision, source customization and
-result evidence, review orchestration, diagnosis validation and ready-report
-requirements. Automatic family/technique tables and the detailed reviewer checks
-stay in the companion.
+skill includes substantive-work bootstrap, independent capability
+classification, helper command/schema, wave validation, launch supervision,
+source customization and result evidence, review orchestration, diagnosis
+validation and ready-report requirements. Automatic family/technique tables and
+the detailed reviewer checks stay in the companion.
 
 The planner must read its absolute companion path before planning. The
 orchestrator passes prepared brief paths without loading the heavy reference for
@@ -163,13 +166,12 @@ runtime key replaces the portable key atomically.
 Common workflows, Delegate sizing, Routing helper, Pools, Family tables,
 Technique availability, Technique tables and Manual-only external delegates.
 Entry text may use `{routing}`, `{workflows}`, `{pools}`, `{families}`,
-`{techniques}`, `{manual}`, `{helper}`, `{planner}` and `{bootstrap}`, each
-filled with its generated block. An entry whose placeholder block renders
-nothing, such as Pools with no pools declared, is omitted. `{planner}` is the
-absolute companion path; `{bootstrap}` is compact fit/route guidance for
-configured strong/frontier families, not certification of planner fit. With no
-such family it explicitly reports a loop failure. Override or disable entries by
-their names; custom skill entries are preserved in the companion.
+`{techniques}`, `{manual}`, `{helper}` and `{planner}`, each filled with its
+generated block. An entry whose placeholder block renders nothing, such as Pools
+with no pools declared, is omitted. `{planner}` is the absolute companion path.
+Planner bootstrap uses the independent classifier exchange with the actual
+assignment and rubric before task-source investigation. Override or disable
+entries by their names; custom skill entries are preserved in the companion.
 
 `skill.columns.<families|pools|techniques>` set header text, order and presence
 keyed by column. A disabled column drops its header and cells; an enabled key
@@ -184,8 +186,6 @@ its cells are empty when a family has no pool guidance.
 `"Pool binding"` and `"Manual pool hint"` (`{pool}`), `"Pool window"`
 (`{limit}`, `{unit}`, `{resetDay}`), `"Family table heading"` (`{tier}`),
 `"Technique table heading"` and `"Manual delegate heading"` (`{harness}`).
-`"Planner candidate"` takes `{family}`, `{useFor}`, `{avoidFor}`, `{effort}` and
-`{routes}`. `"Planner unavailable"` supplies the no-planner diagnostic.
 `"Launch fallback"`, `"Manual delegate note"`, `"OpenCode Go note"`,
 `"Pool measured"`, `"Pool unmeasured"` and `"Pool reader missing"` take none. A
 disabled phrase renders nothing; a phrase the renderer reads but cannot find
@@ -268,8 +268,9 @@ them, including promoting a Go family to `trial = false` after establishing its
 review track record. Raw JSON manifests must include a boolean `trial`; missing
 or non-boolean values fail before selection. Trial families cannot be
 second-check or judge. Finder and first-check remain possible under the same
-tier, maker, fit and launch gates; false never overrides those gates. The caller
-supplies no trial essay, and launches echo only fit/useFor/avoidFor evidence.
+tier, maker, capability and launch gates; false never overrides those gates.
+Caller fit/useFor/avoidFor/trial essays are refused; launch objects contain no
+qualification echo.
 
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
 catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
@@ -453,24 +454,22 @@ not session identity data. The default is null: the module warns and the helper
 cannot certify the buffer. Unknown keys fail option/manifest validation. No
 pools preserves fit-only operation with explicit budget/session uncertainty.
 
-Invoke the rendered command with `--role writer --launch-context <json-path>`
-(repeat `--role` to share one snapshot). Supported roles are finder,
-first-check, investigator, judge, mechanical, planner, second-check and writer.
-Planner and the four review roles require strong/frontier tiers before ranking;
-an empty qualified set exits nonzero with “never step down a tier; report a loop
-failure.” The helper enforces tier, pace, family trial policy and declared maker
-independence; semantic fit remains a caller assessment. Each review role request
-supplies `writer`, the writer family name; a missing or blank `writer` is a
-launch-context error, reported after the pools are collected and before any
-ranking. A judge assessing cuts also supplies `cutProposer`, the proposer family
-name. Names resolve against automatic and manual manifest routes. The helper
-excludes a candidate with the same maker as either required participant, or with
-an unknown candidate/participant maker, and returns the specific reason. Omit
-`cutProposer` only when no cuts are being judged. Run a fresh decision for each
-worker/proposer choice. The saved-plan checker compares each unit’s review
-candidates against its own worker family, and its judge against the cut
-proposer, using current manifest makers; a shared context writer cannot certify
-all units.
+Ordinary routing uses independent capability classification for one unit and one
+target role per exchange. Supported target roles are finder, first-check,
+investigator, judge, mechanical, planner, second-check and writer. Planner and
+all review roles require strong/frontier tiers; classifier accepts all tiers and
+only approved family/effort pairs. It never classifies itself. Tier, trial,
+maker, user pins, launch availability and budget gates still apply after a
+capability keep. No eligible approved classifier is a loop failure with no
+self-fit fallback.
+
+Each review request supplies actual `writer`, the writer family name; a missing
+or blank writer fails after pool collection. A judge assessing cuts also
+supplies `cutProposer`. Names resolve declared makers against automatic and
+manual routes. Unknown or matching makers exclude candidates. Omit cutProposer
+only when no cuts are being judged. The saved-plan checker compares each unit's
+reviewers against its own worker and its judge against its recorded cut
+proposer.
 
 Family `maker` is a nullable nonempty string, defaulting to null. The helper
 compares maker names after trimming surrounding whitespace and lowercasing,
@@ -487,28 +486,25 @@ because its maker is undisclosed. This metadata does not change selectors, pool
 bindings, provisional tiers or the existing catalog drift gate. Unknown makers
 remain usable for worker roles that claim no review independence.
 
-The caller supplies observed availability, one concrete model id per technique
-evidence record and supported effort values, plus requested effort and qualified
-family evidence per role. For example, for a configured `sol` route:
+The launch context contains observed availability and semantic artifacts, never
+caller families/fit/useFor/avoidFor/trial essays. Those legacy fields fail with
+instructions for preparing classification. For example:
 
 ```json
 {
   "nonInteractive": false,
   "roles": {
     "writer": {
+      "brief": "writer.md",
       "effort": "high",
-      "families": {
-        "sol": {
-          "avoidFor": "task avoids sole grading",
-          "fit": "bounded implementation against this spec",
-          "useFor": "coding with executable acceptance checks"
-        }
-      }
+      "requirements": { "constraints": [], "inputKinds": ["text"] }
     }
   },
+  "rubric": "rubric.md",
+  "subject": { "task": "routing-change", "unit": "one" },
   "techniques": [
     {
-      "efforts": ["high"],
+      "efforts": ["high", "medium"],
       "model": "gpt-6.1-sol",
       "runtime": "codex",
       "technique": "spawn_agent"
@@ -516,6 +512,45 @@ family evidence per role. For example, for a configured `sol` route:
   ]
 }
 ```
+
+Effort and pins are relayed user intent; the helper cannot authenticate their
+source. Each is echoed in JSON `decisions` and on stderr as
+`pin: <role> <value>`.
+
+Use the rendered absolute helper in this exchange:
+
+1. `--role classifier --classify-role writer --launch-context context.json`
+   reads all pools and returns
+   `classification = {launch, line, request, requestHash, brief}`. Save that
+   object and bind its exact launch to the native tool or named launcher with
+   the frozen returned brief. Explicit preparation exits 0 when ready. The
+   helper launches only registered Readers.
+2. Save
+   `exchange.json = {preparation: <classification object>, result: <classifier JSON>}`.
+   Run
+   `--role writer --classification exchange.json --launch-context context.json`.
+   Acceptance validates the relay, returns a `receipt` and ranks target
+   candidates using freshly read pools.
+3. Save the receipt and reuse with
+   `--role writer --receipt receipt.json --launch-context context.json`. Reuse
+   performs Readers only, with no second classifier request. Missing evidence
+   yields `classification-required`, exit 3, preparation instructions and no
+   target launch. Supplied stale or malformed evidence is an error. Repeated
+   `--role` is only for check-plan coverage.
+
+The bootstrap planner uses unit `bootstrap` with the actual assignment and
+task-goal rubric before task-source investigation.
+
+Bounded requests and results refuse oversized inputs; hashes bind exact request
+semantics, complete decisions and saved classifier launch provenance. Reuse
+reconstructs the request, checks both hashes and verifies the pair remains
+approved; a completed classifier need not remain today's pool winner. Pool,
+cost, maker, trial and observed-tool changes rerun gates without
+reclassification. Changing brief/rubric bytes, capabilities or effort requires
+new classification, including an enriched reviewer brief for that role only.
+This relay detects stale or malformed data; it authenticates neither inference
+nor billing. Classifier accuracy, latency, spend and complete availability
+remain unmeasured.
 
 A generated Claude agent supplies its resolved id and structured default effort
 when no effort is requested. Unresolved model patterns, ambiguous concrete
@@ -533,12 +568,13 @@ occurs.
 The helper runs every registered Reader once on one UTC snapshot, including
 Readers owned by runtimes outside automatic targets; identical commands share
 one read. Collection precedes semantic request and saved-plan validation. Both
-success and failure print a JSON envelope with `status` (`ok` or `error`),
-`pools`, `roles`, `warnings`, `errors` and `snapshot`. An unreadable inventory
-sets `inventory` to `inventory-unavailable` with empty pools; a missing or
-invalid Reader shell retains known registrations as unmeasured. Recoverable
-argument errors, malformed context JSON and rejected saved plans retain the
-collected snapshot before exiting nonzero.
+success and failure print a JSON envelope with `status` (`ok`,
+`classification-required` or `error`), `pools`, `roles`, `warnings`, `errors`
+and `snapshot`. An unreadable inventory sets `inventory` to
+`inventory-unavailable` with empty pools; a missing or invalid Reader shell
+retains known registrations as unmeasured. Recoverable argument errors,
+malformed context JSON and rejected saved plans retain the collected snapshot
+before exiting nonzero.
 
 Stderr lists every registered pool alphabetically as
 `pool=<name> status=<status>`, including unmeasured pools outside launch
@@ -550,7 +586,8 @@ Reader exit status, without Reader stderr or command text. Report failures to
 the user even when another pool permits routing. Scoped errors emit family
 warnings while the pool stays measured. Numerical measurements remain in JSON.
 Exit 0 means success, 1 means no eligible candidate, and 2 means invalid or
-unreadable input; Reader failure alone does not add a stop policy.
+unreadable input; 3 requests classification without a target launch. Reader
+failure alone does not add a stop policy.
 
 Only that inventory can reach subprocess execution. Trusted configured shell
 commands run under full strict Bash mode with a ten-second timeout that kills
@@ -804,9 +841,10 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 The resolved Work and review workflow's Plan step (`fragments/plan-work.md`)
 defines the saved JSON fields and the prepared brief contract. Before
 task-source investigation, an orchestrator runs its own runtime's helper for
-`planner`, selects a fitted pinned candidate and passes the task, paths, saved
-rubric and absolute `PLANNER.md` path. The planner must read that resolved
-context before planning. No reachable qualified planner is a loop failure. An
+`classifier --classify-role planner`, relays and accepts its result, selects a
+pinned planner candidate and passes the task, paths, saved rubric and absolute
+`PLANNER.md` path. The planner must read that resolved context before planning.
+No eligible approved classifier or strong/frontier planner is a loop failure. An
 assigned worker executing an approved bounded unit does not recursively invoke a
 planner for it. New scope requires replanning the affected portion.
 
@@ -817,49 +855,53 @@ dependencies, one audience, one verification with its wrong implementation,
 associated docs/checks, per-kind size and worker/reviewer launches. A launch
 record contains its role, launching runtime, exact selected helper `launch`
 object as `candidate`, that candidate's pinned `line`, and its prepared `brief`
-path. Rubric and brief paths resolve relative to the plan. Every worker and
-every reviewer brief contains the complete saved rubric bytes verbatim; a
-summary or a path alone fails. The orchestrator may pass the prepared brief
-artifact without reading all of it into the interactive context. The planner
-prepares a base brief for every reviewer launch, including second-check and
-judge, before returning the plan. The orchestrator adds earlier-check inputs
-after those checks return, using the neutral, role-specific input rules in the
-shared Work step. Check-plan therefore validates existing base briefs, not
-future artifacts.
+path, plus `effort`, `requirements`, optional user `pins`, optional judge
+`cutProposer` and a saved `receipt` path. Rubric, brief and receipt paths
+resolve relative to the plan. Every worker and every reviewer brief contains the
+complete saved rubric bytes verbatim; a summary or a path alone fails. The
+orchestrator may pass the prepared brief artifact without reading all of it into
+the interactive context. The planner prepares a base brief for every reviewer
+launch, including second-check and judge, before returning the plan. The
+orchestrator adds earlier-check inputs after those checks return, using the
+neutral, role-specific input rules in the shared Work step. Check-plan therefore
+validates existing base briefs, not future artifacts.
 
 Invoke the same rendered executable with
 `--check-plan <plan.json> --launch-context <current-context.json>` and repeat
 `--role` for every planned role. `--max-concurrency <n>` applies a lower
 host/user cap; the ceiling is ten. This operation collects fresh Readers and
-validates the saved choices against that current role-qualified helper output,
-not an allowlist embedded in the plan. It checks launching runtime, candidate
-and pinned line together, dependency existence/cycles/order, disjoint exact
-normalized writer paths, wave bounds and rubric bytes. A successful exit
+reconstructs every unit-role request from its own brief, rubric, effort and
+requirements, applies the Routing helper receipt protocol above, then ranks that
+unit-role against the fresh pools before the pinned candidate/line comparison.
+Two units with the same role require distinct receipts; swapping them fails.
+There is no shared role-global semantic authorization. `unitRoles` exposes each
+fresh unit/role candidate and exclusion list. It checks launching runtime,
+candidate and pinned line together, dependency existence/cycles/order, disjoint
+exact normalized writer paths, wave bounds and rubric bytes. A successful exit
 includes `validation.status = "valid"` in the returned JSON. Unknown/unresolved
 launches, automatic use of a manual-only route and invalid artifacts fail
 without an approval result. An explicit request for a manual-only route remains
 governed separately by user authorization, not this automatic validator.
 
-The saved snapshot is provenance, never a freshness certificate. Changed context
-or a new usage read requires checking against current output again; the
-validation result supplies the current snapshot. There is no date expiry or
-fingerprint over unrelated configuration. With all fitting pools unmeasured, a
-current fit-only result may validate with budget/session uncertainty; this does
-not certify an unresolved launch. A planner analyzing in another harness must
-use the actual launching runtime's helper/sessionPool. Downstream launches in
-another runtime need their own runtime-qualified plan and check. Candidate
-target runtime can differ from launching runtime through a configured reach.
+The saved snapshot is provenance; the validation result supplies the current
+snapshot under the Routing helper freshness protocol above. With all fitting
+pools unmeasured, a current fit-only result may validate with budget/session
+uncertainty; this does not certify an unresolved launch. A planner analyzing in
+another harness must use the actual launching runtime's helper/sessionPool.
+Downstream launches in another runtime need their own runtime-qualified plan and
+check. Candidate target runtime can differ from launching runtime through a
+configured reach.
 
 Independent units may share a wave on separate branches/parts with disjoint
 owned files. The helper checks the declared shape, not code dependencies or
 completion receipts. The orchestrator enforces writer → independent review →
 fix/check → commit barriers before dependent waves or the next writer on a
 shared branch. Reviewers retain isolated worktrees or read-only tools, and the
-orchestrator checks the working tree after every shell-capable delegate. Model
-fit and avoidFor guidance remain caller assessments; the helper enforces family
-trial policy and declared maker independence separately from the strong/frontier
-floor. Offline validation proves deterministic artifact checks, not live
-planner/harness compliance.
+orchestrator checks the working tree after every shell-capable delegate.
+Capability decisions use independent classifier receipts; the helper also
+enforces family trial policy and declared maker independence separately from the
+strong/frontier floor. Offline validation proves deterministic artifact checks,
+not live planner/harness compliance.
 
 ### Policy placement ledger
 
@@ -995,9 +1037,11 @@ conditionally import `eval/helper-fixture.nix`; all execute the delivered helper
 with registered fake Readers during dry-run, assert cross-runtime Reader
 execution, outside-before-session selection, different-maker session review,
 same-maker outside exclusion and under-tier reviewer exclusion, and archive
-setup receipts separately from live session receipts. The maker case requests
-review evidence for the helper-selected writer; its synthetic maker declarations
-test the rule without claiming ownership of the real launch model. Broken-output
+setup receipts separately from live session receipts. Offline setup uses a
+synthetic classifier JSON relay for each unit-role and checks each accepted
+receipt; it does not run model inference. The maker case requests review
+evidence for the helper-selected writer; its synthetic maker declarations test
+the rule without claiming ownership of the real launch model. Broken-output
 mutations in `eval/test_suite.py` separately prove that removing either maker
 guard fails. `checks/module-eval.nix` follows delivered skills to their helper
 manifests on Home Manager and devenv for all four runtimes and the public

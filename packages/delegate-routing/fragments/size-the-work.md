@@ -1,9 +1,9 @@
-Pick the model family whose "use for" fits the task and whose "avoid for"
-doesn't. Use the pinned effort in the helper's candidate launch. When a mid-tier
-model isn't enough, step up the model before the effort. Big models gain little
-past their first effort step. A cheaper model owes the same evidence as an
-expensive one. Capability guidance describes fit; the helper uses qualitative
-cost classes only after pace and session-pool ordering.
+Use the helper's independent classifier exchange for each actual unit-role
+brief, rubric, requirements and effective effort. Family tables are reference
+material; reading them never authorizes bypassing a receipt. Use the pinned
+model and effort from the freshly ranked target candidate. Capability receipts
+do not override tier, trial, maker, route or budget gates. The helper uses
+qualitative cost classes only after pace and session-pool ordering.
 
 Set model and effort explicitly whenever the tool allows it. A technique that
 does not pin a value inherits it from the session. An interactive session cannot

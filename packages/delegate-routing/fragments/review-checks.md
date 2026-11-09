@@ -1,13 +1,14 @@
 For finder, first-check, second-check and judge, use the rendered
-`delegate-routing-plan` command with caller-qualified family and observed launch
-evidence. It enforces the strong/frontier floor and declared maker independence
-before pool ranking; never step down a tier; report a loop failure if no
-qualified route remains. Supply the writer family in each review role's `writer`
-field and, when judging cuts, the proposer family in `cutProposer`. Unknown
-makers cannot certify independence. A tier or maker pass does not establish task
-fit. Family `trial = true` excludes second-check and judge; finder and
-first-check still require tier, maker and fit eligibility. Honor those
-exclusions before launch.
+`delegate-routing-plan` command with a receipt for the actual review brief and
+observed launch evidence. Prepare and accept an independent classification when
+that receipt is missing or stale. It enforces the strong/frontier floor and
+declared maker independence before pool ranking; never step down a tier; report
+a loop failure if no qualified route remains. Supply the writer family in each
+review role's `writer` field and, when judging cuts, the proposer family in
+`cutProposer`. Unknown makers cannot certify independence. A tier or maker pass
+does not establish task fit. Family `trial = true` excludes second-check and
+judge; finder and first-check still require tier, maker and fit eligibility.
+Honor those exclusions before launch.
 
 Review every change with all three checks below, each in a fresh context. The
 first check, the second check and the judge each use a model maker other than

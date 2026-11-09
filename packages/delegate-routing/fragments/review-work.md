@@ -43,6 +43,9 @@ plan, including second-check and judge, so check-plan can validate their
 existence and full rubric. After the first check returns, the orchestrator adds
 the earlier checks' inputs to those base briefs before each reviewer launches,
 using the role-specific rules below. Preserve the rubric and base policy.
+Enrichment changes the actual brief bytes: prepare and accept a new classifier
+exchange for that review role before launch; other unchanged roles reuse their
+receipts.
 
 Use neutral briefs: never say that an issue already survived a check. Pass only
 the outcomes and evidence permitted for that role, never earlier reasoning or

@@ -1,8 +1,12 @@
-The planner runs the actual launching runtime's rendered helper with
-`--launch-context <json-path> --role <worker-role> --role <reviewer-role>`,
-repeating `--role` for every planned worker and reviewer role, before selecting
-launches or writing briefs; save its complete JSON output as the plan's
-snapshot.
+The planner reads the resolved routing/workflow policy and task source once,
+then saves the full numbered rubric, and prepares each actual unit-role brief
+before routing it. Use the actual launching runtime's helper for a separate
+classifier preparation → saved JSON relay → acceptance exchange per unit and
+role, as specified in Routing helper. Never supply caller fit essays. Save each
+receipt and the complete accepted helper output as snapshot provenance; combine
+its role candidates into the plan's captured snapshot when requests are
+separate. Unchanged requests reuse receipts with fresh Readers, without new
+inference.
 
 Select the worker first, then supply its family name as `writer` in every review
 role's launch-context request. For a judge assessing proposed cuts, also supply
@@ -13,16 +17,15 @@ proposer changes. The saved-plan checker also compares every unit’s reviewers
 against that unit’s worker family and its judge against the cut proposer.
 Unknown maker identity excludes review launches.
 
-The planner reads the resolved routing/workflow policy and task source once,
-then returns a saved JSON plan and prepared human-readable launch briefs in the
-working-data directory the orchestrator provided. Never invent a scratch
+The planner returns a saved JSON plan and prepared human-readable launch briefs
+in the working-data directory the orchestrator provided. Never invent a scratch
 location. Save the full numbered rubric before writing any implementation brief.
 Every worker and every reviewer brief must include its complete text verbatim,
 not a summary or pointer. The orchestrator passes the prepared paths without
 loading every brief into the interactive context.
 
-Use this JSON contract (paths to rubric and briefs are relative to the saved
-plan; writer file ownership is repository-relative):
+Use this JSON contract (paths to rubric, briefs and receipts are relative to the
+saved plan; writer file ownership is repository-relative):
 
 - `task`: nonempty assignment identity; `runtime`: the actual launching runtime,
   not the planner's analysis harness; `snapshot`: the full captured helper JSON
@@ -36,11 +39,15 @@ plan; writer file ownership is repository-relative):
   `mechanical`) and its proposed reviewer roles, including `first-check`. Each
   record contains `role`, launching `runtime`, `candidate` (the selected helper
   candidate's complete `launch` object), `line` (that same candidate's exact
-  pinned routing line), and `brief` (prepared artifact path). Include every
+  pinned routing line), and `brief` (prepared artifact path). Also include
+  `effort`, `requirements`, optional user `pins`, optional judge `cutProposer`,
+  and `receipt` (the saved receipt path). The helper reconstructs each request
+  from the plan task, unit id, actual brief and rubric before comparing pinned
+  candidates; a receipt cannot be shared between different units. Include every
   finder, first-check, second-check and judge that will run; the helper's floor
   enforces family trial restrictions and requires known maker independence from
-  the writer and, for cut judgment, the proposer. It never proves fit; honor
-  explicit avoidFor guidance.
+  the writer and, for cut judgment, the proposer. Capability decisions come only
+  from the validated classifier receipt.
 - `waves`: ordered lists of unit ids. Put at most ten simultaneous delegates in
   a wave, honoring lower host/user caps. Each unit contributes one concurrent
   delegate because its worker and reviewers run in sequence. Writers in one wave

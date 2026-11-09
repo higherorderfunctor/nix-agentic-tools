@@ -190,7 +190,7 @@ git-branchless, git-absorb, and git-revise.
 <!-- prettier-ignore -->
 | Skill | Description |
 |-------|-------------|
-| `/delegate-routing` | Plan substantive work and validate sized delegate launches |
+| `/delegate-routing` | Classify capability independently and validate delegate launches |
 | `/kimchi-docs` | Search the pinned Kimchi docs snapshot and independently pinned workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable |
 | `/peer-communication` | Write replies a person reads: answer first, plain words, easy to scan |
 | `/stack-fix` | Absorb fixes into correct stack commits |
@@ -351,7 +351,7 @@ nix build .#dns-root-hints
 | Package | Description |
 |---------|-------------|
 | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-| `delegate-routing-content` | Small runtime entrypoints, full planner companions, saved plans and deterministic launch validation |
+| `delegate-routing-content` | Independent capability classification, reusable receipts and validated delegate plans |
 | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
 Content packages are derivations with `passthru.fragments` for composable
@@ -1157,38 +1157,52 @@ Family `trial` is a boolean: the eight direct families default to false, the 21
 Go presets and custom families to true. Consumers may override it. The helper
 excludes trial families from second-check and judge; finder and first-check
 still require tier, maker, fit and launch eligibility. Raw manifests require the
-normalized boolean. Caller qualification contains fit/useFor/avoidFor evidence,
-with no trial essay.
+normalized boolean. Independent classifier receipts replace caller
+fit/useFor/avoidFor/trial essays.
 
 The skill renders an absolute non-launching `delegate-routing-plan` command, its
 runtime and session pool; the always-on router stays runtime-neutral for shared
-AGENTS.md targets. Pass `--role writer --launch-context <json-path>` with
-caller-observed techniques, concrete model/effort support and qualified family
-evidence. The helper collects all registered Readers once, ranks worst-window
-pace and enforces the strong/frontier review floor. Each review role names its
-writer family with `writer`; a judge assessing cuts also names `cutProposer`.
-Declared makers must differ after trimming surrounding whitespace and
-lowercasing; unknown makers produce exclusions. Provider, runtime and budget
+AGENTS.md targets. Prepare one unit-role with
+`--role classifier --classify-role writer --launch-context <json-path>`, bind
+the returned classifier launch and frozen brief, save its result beside the
+preparation, then accept with
+`--role writer --classification <exchange.json> --launch-context <json-path>`.
+Acceptance emits a receipt and freshly ranked candidates; reuse with
+`--receipt <receipt.json>` reads Readers without new classification. The context
+carries actual brief/rubric paths, task/unit identity, requirements, requested
+effort, optional relayed user pins and observed concrete model/technique/effort
+support. Caller fit essays are refused. Missing evidence returns
+`classification-required` (exit 3), preparation instructions and no target
+launch. Approved classifier defaults are Luna/medium and Sonnet/medium. Frozen
+requests include all configured capabilities and effective efforts, excluding
+budget, cost, maker, tier, trial and availability; those gates run afresh.
+Semantic changes require new receipts; the saved relay cannot authenticate
+inference or billing, and fixture JSON does not measure quality, spend or
+complete availability. The helper collects all registered Readers once, ranks
+worst-window pace and enforces the strong/frontier review floor. Each review
+role names its writer family with `writer`; a judge assessing cuts also names
+`cutProposer`. Declared makers must differ after trimming surrounding whitespace
+and lowercasing; unknown makers produce exclusions. Provider, runtime and budget
 identities never certify maker independence. Package-owned direct families and
 Go presets declare makers; Iceman remains undisclosed. Configure
 `runtimes.<runtime>.sessionPool` with the actual registered pool key (for
 example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
 warns that the session buffer cannot be certified. With no pools it reports
 fit-only budget uncertainty. Collection precedes request and saved-plan
-validation. Success and failure emit JSON with `status` (`ok` or `error`), pools
-and diagnostics; unreadable inventory explicitly reports
-`inventory-unavailable`. Stderr lists every registered pool alphabetically as
-`pool=<name> status=<status>` plus canonical routing specifications. Each failed
-Reader command emits one WARNING naming all registrations sharing it, with a
-bounded reason and an instruction to report the failure to the user; report it
-even when another pool permits routing. Missing Readers get explicit unmeasured
-warnings; scoped errors warn only for their families. Numerical measurements
-stay in JSON. The command never launches delegates. Pool drain and Review use
-this helper as the canonical decision, enforcing family trial policy alongside
-caller role-fit checks and named fallback launchers. Unknown
-interactive/headless status never blocks Reader collection or tier/pace policy;
-external launches remain unresolved until the caller supplies mode evidence. See
-the
+validation. Success and failure emit JSON with `status` (`ok`,
+`classification-required` or `error`), pools and diagnostics; unreadable
+inventory explicitly reports `inventory-unavailable`. Stderr lists every
+registered pool alphabetically as `pool=<name> status=<status>` plus canonical
+routing specifications. Each failed Reader command emits one WARNING naming all
+registrations sharing it, with a bounded reason and an instruction to report the
+failure to the user; report it even when another pool permits routing. Missing
+Readers get explicit unmeasured warnings; scoped errors warn only for their
+families. Numerical measurements stay in JSON. The command never launches
+delegates. Pool drain and Review use this helper as the canonical decision,
+enforcing family trial policy alongside independent capability receipts and
+named fallback launchers. Unknown interactive/headless status never blocks
+Reader collection or tier/pace policy; external launches remain unresolved until
+the caller supplies mode evidence. See the
 [helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper)
 for the launch-context schema, conservative unknown handling and per-runtime
 mode-discovery evidence.
@@ -1199,31 +1213,33 @@ router requires validating delegate results before they are passed on, following
 Validate the result in the skill, and carries handoff and substantive
 source-steering rules: propose delegation-policy changes to package fragments or
 consumer routing/workflow entries, never rendered files, memory or house rules;
-the small skill supplies planner bootstrap, rubric preflight, the helper
-invocation/schema, launch/result checks, review orchestration and ready-report
-requirements. Before planning, the planner must read its explicit absolute store
-reference. Its companion includes planner/worker routing, the full workflow,
-custom entries and tables. Shared paragraphs have one authoritative source;
-disabled entries and runtime replacements remain effective. The companion is
-built first to avoid a self-reference cycle and copied into the skill tree, so
-no implicit sibling loading or Skill args are needed. Prepared briefs carry the
-full rubric verbatim and relevant worker policy; the orchestrator receives its
-execution duties directly and validates each wave without rereading the heavy
-reference per delegate. Direct `mkSkill` emits the same companions; `render` and
-`.text` return the small entrypoint.
+the small skill supplies classifier-first planner bootstrap, rubric preflight,
+the helper invocation/schema, launch/result checks, review orchestration and
+ready-report requirements. Before planning, the planner must read its explicit
+absolute store reference. Its companion includes planner/worker routing, the
+full workflow, custom entries and tables. Shared paragraphs have one
+authoritative source; disabled entries and runtime replacements remain
+effective. The companion is built first to avoid a self-reference cycle and
+copied into the skill tree, so no implicit sibling loading or Skill args are
+needed. Prepared briefs carry the full rubric verbatim and relevant worker
+policy; the orchestrator receives its execution duties directly and validates
+each wave without rereading the heavy reference per delegate. Direct `mkSkill`
+emits the same companions; `render` and `.text` return the small entrypoint.
 
 Work and review runs Rubric → Subtractive → Plan → Work → Describe → Review →
 Loop. Rubric preparation is task-goal preflight; substantive task-source
-investigation starts with a reachable strong/frontier planner from the helper,
-except for an approved bounded worker assignment. The planner saves units,
-dependencies, disjoint waves and prepared worker/reviewer briefs containing the
-full rubric verbatim. Before launch, pass `--check-plan <plan.json>` with
-current launch context and all planned roles to the rendered helper; it checks
-role/runtime/candidate/pinned line, wave/dependency shape and rubric bytes
-against a fresh Reader decision, and that each unit's reviewers differ in
-declared maker from that unit's own worker. Use `--max-concurrency <n>` for a
-host/user cap below ten. The orchestrator enforces review/commit barriers;
-offline validation makes no live compliance claim. See the
+investigation starts with an independently classified strong/frontier planner
+from the helper, except for an approved bounded worker assignment. The planner
+saves units, dependencies, disjoint waves and prepared worker/reviewer briefs
+containing the full rubric verbatim. Before launch, pass
+`--check-plan <plan.json>` with current launch context and all planned roles to
+the rendered helper; it reconstructs each unit-role request from that unit's
+actual brief/rubric, effort and requirements, validates its own saved receipt,
+then checks role/runtime/candidate/pinned line and wave/dependency shape against
+a fresh Reader decision, and that each unit's reviewers differ in declared maker
+from that unit's own worker. Use `--max-concurrency <n>` for a host/user cap
+below ten. The orchestrator enforces review/commit barriers; offline validation
+makes no live compliance claim. See the
 [saved-plan contract and policy ledger](packages/delegate-routing/docs/development.md#saved-plans-and-prepared-briefs).
 
 #### Per-turn reminder
