@@ -1,6 +1,8 @@
 """Offline, literal routing expectations: no catalogs, live readers or launches."""
+from contextlib import redirect_stderr, redirect_stdout
 from copy import deepcopy
 import importlib.util
+import io
 import json
 from pathlib import Path
 import shutil
@@ -58,8 +60,63 @@ class Routing(unittest.TestCase):
                 return value
             return subprocess.CompletedProcess(argv, 0, value)
         with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")):
-            result = helper.plan(config or manifest(), launch_context or context(roles), roles, NOW, SHELL, reader)
+            config = config or manifest()
+            pools = helper.collect(config["readers"], NOW, SHELL, reader)
+            result = helper.plan(config, launch_context or context(roles), roles, NOW, pools)
         return result, calls
+
+    def test_cli_collects_before_recoverable_failures(self):
+        # Wrong: invalid input exits without JSON or skips registered Readers.
+        config = manifest()
+        config["readers"].append({"command": "reader-outside", "name": "alias"})
+        base = ["helper", "--manifest", "manifest.json", "--reader-shell", SHELL, "--launch-context", "context.json", "--role", "writer", "--now", "2026-11-15T00:00:00Z"]
+        cases = [
+            ("argument", ["--max-concurrency", "0"], json.dumps(context()), config, 3),
+            ("context-json", [], "{", config, 3),
+            ("context-shape", [], "[]", config, 3),
+            ("invalid-shell", ["--reader-shell", "/no/such/shell"], json.dumps(context()), config, 0),
+            ("inventory", [], json.dumps(context()), {"readers": "bad"}, 0),
+            ("manifest-json", [], json.dumps(context()), None, 0),
+            ("missing-manifest", ["--manifest"], json.dumps(context()), config, 0),
+            ("missing-shell", ["--reader-shell"], json.dumps(context()), config, 0),
+            ("missing-value", ["--max-concurrency"], json.dumps(context()), config, 3),
+            ("plan-json", ["--check-plan", "plan.json"], json.dumps(context()), config, 3),
+            ("plan-rejection", ["--check-plan", "bad-plan.json"], json.dumps(context()), config, 3),
+            ("role", ["--role", "unknown"], json.dumps(context()), config, 3),
+            ("time", ["--now", "bad"], json.dumps(context()), config, 3),
+            ("unknown-argument", ["--unknown"], json.dumps(context()), config, 3),
+        ]
+        for name, extra, ctx, inventory, count in cases:
+            with self.subTest(case=name):
+                files = {"manifest.json": json.dumps(inventory) if inventory is not None else "{", "context.json": ctx, "plan.json": "{", "bad-plan.json": "{}"}
+                out, err = io.StringIO(), io.StringIO()
+                def read(path, *args, **kwargs):
+                    return files[path.name]
+                with patch.object(sys, "argv", base + extra), patch.object(Path, "read_text", read), patch.object(helper, "run_reader", return_value=subprocess.CompletedProcess([], 0, stream())) as reader, redirect_stdout(out), redirect_stderr(err):
+                    try:
+                        code = helper.main()
+                    except SystemExit as error:
+                        code = error.code
+                self.assertEqual(code, 2)
+                self.assertTrue(out.getvalue(), "failure must emit JSON")
+                result = json.loads(out.getvalue())
+                self.assertEqual(result["status"], "error")
+                self.assertTrue(result["errors"])
+                self.assertEqual(reader.call_count, count)
+                if name in ("inventory", "manifest-json", "missing-manifest"):
+                    self.assertEqual(result["pools"], {})
+                    self.assertEqual(result["inventory"], "inventory-unavailable")
+                else:
+                    self.assertEqual(sorted(result["pools"]), ["alias", "hidden", "outside", "session"])
+                    self.assertEqual(result["inventory"], "available")
+                    if name != "time":
+                        self.assertEqual(result["snapshot"], "2026-11-15T00:00:00+00:00")
+                    for pool in result["pools"].values():
+                        self.assertEqual(pool["status"], "unmeasured" if count == 0 else "measured")
+                        if count == 0:
+                            self.assertEqual(pool["reason"], "Reader shell must name an executable file")
+                    if count:
+                        self.assertEqual([call.args[0][4].split("\n", 1)[1] for call in reader.call_args_list], ["reader-outside", "reader-session", "reader-hidden-runtime"])
 
     def test_maker_policy_aliases_and_runtime_pool_independence(self):
         # Wrong: provider/runtime/pool identity substitutes for explicit maker.
@@ -668,14 +725,16 @@ class Routing(unittest.TestCase):
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--check-plan", str(root / "plan.json"), "--now", "2026-11-15T00:00:00Z"]
             for role in roles:
                 command.extend(["--role", role])
-            # Wrong: refusing invalid caps only after reading inputs and Readers.
+            # Wrong: invalid caps skip collection and discard the failure envelope.
             for cap in (0, 11):
                 with self.subTest(cap=cap):
                     proc = subprocess.run(command + ["--max-concurrency", str(cap)], capture_output=True, text=True)
                     self.assertEqual(proc.returncode, 2)
                     self.assertIn("argument --max-concurrency: invalid choice", proc.stderr)
-                    self.assertEqual(proc.stdout, "")
-                    self.assertFalse(log.exists())
+                    self.assertEqual(json.loads(proc.stdout)["status"], "error")
+                    self.assertEqual(sorted(json.loads(proc.stdout)["pools"]), ["outside"])
+                    self.assertEqual(log.read_text(), "outside\n")
+                    log.unlink()
             command.extend(["--max-concurrency", "2"])
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -685,7 +744,8 @@ class Routing(unittest.TestCase):
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 2)
             self.assertIn("full rubric verbatim", proc.stderr)
-            self.assertEqual(proc.stdout, "")
+            self.assertEqual(json.loads(proc.stdout)["status"], "error")
+            self.assertEqual(sorted(json.loads(proc.stdout)["pools"]), ["outside"])
             self.assertEqual(log.read_text(), "outside\noutside\n")
 
     def test_real_cli_only_fake_reader_and_nonzero_loop(self):
@@ -705,11 +765,15 @@ class Routing(unittest.TestCase):
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(log.read_text(), "outside\nsession\nhidden\n")
+            self.assertEqual(json.loads(proc.stdout)["status"], "ok")
+            self.assertEqual(json.loads(proc.stdout)["errors"], [])
             self.assertEqual(json.loads(proc.stdout)["pools"]["outside"]["pace"], 0.9375)
             self.assertIn("technique=spawn_agent", proc.stderr)
             (root / "context.json").write_text(json.dumps(context(names=())))
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 1)
+            self.assertEqual(json.loads(proc.stdout)["status"], "error")
+            self.assertEqual(json.loads(proc.stdout)["errors"], ["writer: never step down a tier; report a loop failure."])
             self.assertIn("never step down a tier; report a loop failure.", proc.stderr)
 
 

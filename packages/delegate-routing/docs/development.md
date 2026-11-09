@@ -420,16 +420,17 @@ Planner and the four review roles require strong/frontier tiers before ranking;
 an empty qualified set exits nonzero with “never step down a tier; report a loop
 failure.” The helper certifies tier, pace and declared maker independence, not
 semantic fit or trial eligibility. Each review role request supplies `writer`,
-the writer family name; a missing or blank `writer` is a launch-context error
-before Readers run. A judge assessing cuts also supplies `cutProposer`, the
-proposer family name. Names resolve against automatic and manual manifest
-routes. The helper excludes a candidate with the same maker as either required
-participant, or with an unknown candidate/participant maker, and returns the
-specific reason. Omit `cutProposer` only when no cuts are being judged. Run a
-fresh decision for each worker/proposer choice. The saved-plan checker compares
-each unit’s review candidates against its own worker family, and its judge
-against the cut proposer, using current manifest makers; a shared context writer
-cannot certify all units.
+the writer family name; a missing or blank `writer` is a launch-context error,
+reported after the pools are collected and before any ranking. A judge assessing
+cuts also supplies `cutProposer`, the proposer family name. Names resolve
+against automatic and manual manifest routes. The helper excludes a candidate
+with the same maker as either required participant, or with an unknown
+candidate/participant maker, and returns the specific reason. Omit `cutProposer`
+only when no cuts are being judged. Run a fresh decision for each
+worker/proposer choice. The saved-plan checker compares each unit’s review
+candidates against its own worker family, and its judge against the cut
+proposer, using current manifest makers; a shared context writer cannot certify
+all units.
 
 Family `maker` is a nullable nonempty string, defaulting to null. The helper
 compares maker names after trimming surrounding whitespace and lowercasing,
