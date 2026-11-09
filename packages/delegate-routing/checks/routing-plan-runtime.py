@@ -33,8 +33,8 @@ def technique(name="spawn_agent", kind="subagent", model="gpt-6.1-sol", pattern=
     return {"agent": agent, "model": {"isPattern": pattern, "value": model}, "name": name, "node": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "kind": kind, "modelArg": "slug", "notes": "caller binds task/output paths"}}
 
 
-def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, maker="openai"):
-    return {"family": {"avoidFor": "sole judge", "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
+def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, maker="openai", cost=3):
+    return {"family": {"avoidFor": "sole judge", "cost": cost, "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
 def manifest(routes=None, session=None):
@@ -64,6 +64,43 @@ class Routing(unittest.TestCase):
             pools = helper.collect(config["readers"], NOW, SHELL, reader)
             result = helper.plan(config, launch_context or context(roles), roles, NOW, pools)
         return result, calls
+
+    def test_cost_ranking_after_pace_and_session(self):
+        # Wrong: price overrides pace/session, or names override equal-pace cost.
+        cases = [
+            ("equal-pace-cheaper", [("astra", 4, "outside"), ("luna", 1, "outside")], None, {}, ["luna", "astra"]),
+            ("faster-expensive", [("astra", 4, "outside"), ("luna", 1, "hidden")], None, {"reader-outside": stream({"monthly": window(80)})}, ["astra", "luna"]),
+            ("session-cheaper", [("luna", 1, "session"), ("astra", 4, "outside")], "session", {}, ["astra", "luna"]),
+            ("name-tie", [("sol", 2, "outside"), ("sonnet", 2, "outside")], None, {}, ["sol", "sonnet"]),
+            ("scoped-pace", [("astra", 4, "outside"), ("luna", 1, "outside")], None, {"reader-outside": stream({"monthly": window(80), "monthly:luna": window(30)})}, ["astra", "luna"]),
+        ]
+        for label, rows, session, outputs, expected in cases:
+            with self.subTest(case=label):
+                routes = [route(name, pool=pool, cost=cost) for name, cost, pool in rows]
+                result, _ = self.run_plan(manifest(routes, session), context(names=expected), outputs=outputs)
+                self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], expected)
+
+    def test_cost_order_without_measurements(self):
+        # Wrong: unknown pace loses cost/session ordering or hides uncertainty.
+        routes = [route("session-cheap", pool="session", cost=0), route("astra", cost=4), route("luna", cost=1)]
+        result, _ = self.run_plan(manifest(routes, "session"), context(names=("session-cheap", "astra", "luna")), outputs={command: "invalid" for command in ("reader-outside", "reader-session", "reader-hidden-runtime")})
+        candidates = result["roles"]["writer"]["candidates"]
+        self.assertEqual([item["launch"]["family"] for item in candidates], ["luna", "astra", "session-cheap"])
+        self.assertTrue(all(item["budget"] == "fit-only; budget and session buffer unknown" for item in candidates))
+        self.assertIn("session budget unmeasured; buffer rule cannot be certified", result["warnings"])
+
+    def test_raw_cost_metadata_required_before_selection(self):
+        # Wrong: missing, boolean, non-integer or out-of-range costs reach sorting.
+        for collection in ("manualRoutes", "routes"):
+            for cost in (None, True, False, -1, 6, 1.5, "1"):
+                with self.subTest(collection=collection, cost=cost):
+                    config = manifest()
+                    if cost is None:
+                        del config[collection][0]["family"]["cost"]
+                    else:
+                        config[collection][0]["family"]["cost"] = cost
+                    with self.assertRaisesRegex(ValueError, "family .* cost must be an integer from 0 to 5"):
+                        self.run_plan(config, context(names=()))
 
     def test_cli_collects_before_recoverable_failures(self):
         # Wrong: invalid input exits without JSON or skips registered Readers.
@@ -282,7 +319,7 @@ class Routing(unittest.TestCase):
 
     def test_comparative_session_and_strict_limiting_buffer(self):
         config = manifest([route("own", pool="session"), route("other")], "session")
-        for own, other, expected in [(60, 45, "own"), (60, 60, "own"), (45, 60, "other"), (20, 10, "other"), (20.01, 10, "own")]:
+        for own, other, expected in [(60, 45, "own"), (60, 60, "other"), (45, 60, "other"), (20, 10, "other"), (20.01, 10, "own")]:
             with self.subTest(own=own, other=other):
                 result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-outside": stream({"5h": window(other, 18000, "2026-11-15T02:30:00Z")}), "reader-session": stream({"5h": window(own, 18000, "2026-11-15T02:30:00Z")})})
                 self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)

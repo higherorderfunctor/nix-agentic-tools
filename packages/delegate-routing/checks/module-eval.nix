@@ -530,6 +530,7 @@
               match = "kimi-k3";
               tier = "strong";
             };
+            opencode-go.go-kimi-k3.cost = 0;
           };
           runtimes = lib.genAttrs runtimes (_: {
             extraRuntimes = lib.mkForce [];
@@ -547,7 +548,7 @@
         families =
           portable.families
           // {
-            custom.unattributed = builtins.removeAttrs portable.families.custom.unattributed ["maker"];
+            custom.unattributed = builtins.removeAttrs portable.families.custom.unattributed ["cost" "maker"];
           };
         models = lib.genAttrs runtimes (_: makerModels "direct");
       };
@@ -997,8 +998,8 @@
         ])
       runtimes
     );
-    # Fails if common delivery drops makers, infers them from providers, loses
-    # nulls, or the direct builder requires the module's nullable default.
+    # Fails if common delivery drops makers/costs, infers makers from providers,
+    # loses nulls/overrides, or the direct builder omits metadata defaults.
     "module-delegate-routing-${name}-maker-delivery" =
       pkgs.runCommand "delegate-routing-${name}-maker-delivery" {
         skills = builtins.toJSON (builtins.listToAttrs (lib.concatMap (source:
@@ -1032,11 +1033,15 @@
             actual = {route["family"]["name"]: route["family"]["maker"] for route in manifest["routes"]}
             expected = shared | ({"direct-kimi": "moonshot"} if runtime.endswith("-direct") else {"go-kimi-k3": "moonshot"})
             assert actual == expected, (runtime, actual)
+            costs = {route["family"]["name"]: route["family"]["cost"] for route in manifest["routes"]}
+            expected_costs = {"go-gemini-4-argon": 3, "go-iceman-contributor-free": 0, "unattributed": 3}
+            expected_costs.update({"direct-kimi": 3} if runtime.endswith("-direct") else {"go-kimi-k3": 0})
+            assert costs == expected_costs, (runtime, costs)
             # Fails if delivery loses the helper's unknown/same-maker warning.
             for filename in ("SKILL.md", "PLANNER.md"):
                 text = " ".join((Path(directory) / filename).read_text().split())
                 assert "excludes unknown or same-maker choices" in text, (runtime, filename)
-            print(f"PASS: ${name}/{runtime} delivered maker metadata and review warning")
+            print(f"PASS: ${name}/{runtime} delivered maker/cost metadata and review warning")
         PYTHON
         ${pkgs.coreutils}/bin/touch "$out"
       '';
@@ -1581,6 +1586,81 @@
         };
       in
         lib.hasInfix "haiku (anthropic)" union && lib.hasInfix "sol (openai)" union && !(lib.hasInfix "opus (anthropic)" union))
+    );
+    # Refuse wrong shipped classes, lost custom defaults/overrides, and invalid
+    # module or direct-builder costs before routing, not at Python selection.
+    "module-delegate-routing-${name}-family-cost" = mkTest "delegate-routing-${name}-family-cost" (
+      let
+        expected = {
+          anthropic = {
+            fable = 5;
+            haiku = 1;
+            opus = 4;
+            sonnet = 2;
+          };
+          openai = {
+            astra = 4;
+            luna = 1;
+            sol = 2;
+            terra = 3;
+          };
+          opencode-go = {
+            go-beam-free = 0;
+            go-deepseek-v4-pro = 5;
+            "go-deepseek-v4.1-flash" = 1;
+            go-gemini-4-argon = 3;
+            "go-grok-4.7" = 5;
+            go-hy3 = 2;
+            go-hy4-preview = 3;
+            go-iceman-contributor-free = 0;
+            "go-kimi-k2.7-code" = 2;
+            go-kimi-k3 = 5;
+            "go-kimi-k3.1-pro" = 5;
+            "go-longcat-2.0" = 2;
+            "go-mimo-v2.6-flash" = 2;
+            "go-mimo-v2.6-pro" = 5;
+            go-minimax-m3 = 2;
+            "go-minimax-m3.1-flash" = 4;
+            go-muse-spark-contributor = 2;
+            "go-qwen3.7-plus" = 2;
+            "go-qwen3.8-flash" = 3;
+            "go-qwen3.8-max" = 5;
+            go-step-5-preview = 5;
+          };
+        };
+        actual = lib.mapAttrs (_: lib.mapAttrs (_: family: family.cost)) result.config.ai.programs.delegate-routing.families;
+        custom = {
+          match = "cost-custom-*";
+          tier = "mid";
+        };
+        directArgs = cost: {
+          families.custom.example = custom // cost;
+          models = lib.genAttrs runtimes (_: [{vendors = ["custom"];}]);
+          runtime = "codex";
+        };
+        builder = result.config.ai.internal.roots.delegate-routing-content;
+        directView = import ../lib/routing-view.nix (routingArgs
+          // directArgs {}
+          // {
+            extraRuntimes = [];
+            manualExternalDelegates = [];
+          });
+        invalid = [(-1) 6 true 1.5 "1" null];
+        moduleRejects = cost:
+          !(builtins.tryEval (builtins.deepSeq
+            (change {
+              ai.programs.delegate-routing.families.openai.sol.cost = cost;
+            }).config.ai.programs.delegate-routing.families
+            true)).success;
+        directRejects = cost: !(builtins.tryEval (builtins.deepSeq (builder.render (directArgs {inherit cost;})) true)).success;
+      in
+        lib.all (vendor: actual.${vendor} == expected.${vendor}) (builtins.attrNames expected)
+        && actual.served.flash == 3
+        && (change {ai.programs.delegate-routing.families.openai.sol.cost = 0;}).config.ai.programs.delegate-routing.families.openai.sol.cost == 0
+        && (builtins.head directView.routes).family.cost == 3
+        && (builtins.head directView.routes).family == builtins.head directView.candidates
+        && lib.all moduleRejects invalid
+        && lib.all directRejects invalid
     );
     "module-delegate-routing-${name}-families" = mkTest "delegate-routing-${name}-families" (
       lib.hasInfix "CUSTOM OPUS TASK" familyOverride

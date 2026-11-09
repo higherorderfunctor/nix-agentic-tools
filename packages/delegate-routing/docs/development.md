@@ -231,6 +231,21 @@ launch route without a generated agent file instructs the reader to take the
 highest id matching the pattern. Consumers selecting Kimchi models declare the
 corresponding vendor families in their delegate-routing configuration.
 
+`families.<vendor>.<family>.cost` is an integer ordinal preference: 0 free, 1
+lowest, 2 low, 3 middle, 4 high, 5 highest. Custom families default to 3 in both
+modules and direct `mkSkill` calls; consumers may override any cost. Raw JSON
+manifests must include normalized integer costs from 0 through 5; booleans are
+invalid. These are qualitative classes, not per-task prices, capability
+measurements or workload-measured ranking quality. Direct defaults preserve
+Haiku < Opus < Fable and Luna/Sol < Terra; Astra is a conservative preference
+rather than a measured bill. Go defaults freeze the documented `go` plan
+allowance proxy: unlimited→0, 100→1, 60→2, 30→3, 20→4, 15→5. They do not change
+with plan selection, pool state or actual free capacity. Beam's live
+free-capacity availability remains unknown; observed techniques supply launch
+evidence without claiming complete availability discovery. Reusable use/avoid
+guidance retains capability, latency, privacy and tool limitations; economic
+preferences live in cost metadata instead.
+
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
 catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
 (`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
@@ -543,14 +558,16 @@ active/inactive) is not used: its limit applies regardless of status because
 inactive has unknown meaning and applying the limit protects that model's
 allowance.
 
-Higher pace sorts first, with deterministic family/runtime ties; an eligible
-session pool wins an equal-pace tie only above the strict 20% unscoped buffer. A
-measured session candidate may be selected only if every other fitting measured
-pool's candidate is behind or level in effective pace. Exhaustion stays measured
-and never becomes a fit-only fallback. Unmeasured candidates are excluded while
-fitted measured candidates exist; with none, output explicitly states fit-only
-budget/session uncertainty. JSON is printed to stdout and concise launch
-specifications to stderr. `--now` fixes the clock for offline tests.
+Higher effective pace sorts first, then non-session before session pools, then
+lower cost, then family name and runtime. Cost never overrides pace or session
+priority, even with all pools unmeasured. The session buffer must remain
+strictly above 20% of each unscoped window. A measured session candidate may be
+selected only if every other fitting measured pool's candidate is behind or
+level in effective pace. Exhaustion stays measured and never becomes a fit-only
+fallback. Unmeasured candidates are excluded while fitted measured candidates
+exist; with none, output explicitly states fit-only budget/session uncertainty.
+JSON is printed to stdout and concise launch specifications to stderr. `--now`
+fixes the clock for offline tests.
 
 `checks/routing-plan-runtime.py scripts/delegate-routing-plan.py` exercises fake
 Readers and hand-written expectations, including a subprocess spy that rejects

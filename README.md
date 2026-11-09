@@ -1143,6 +1143,16 @@ from the live runtime list, using its own spelling. Usage commands come from the
 existing technique catalog. Both Home Manager and devenv expose the same
 options.
 
+Family `cost` is an integer qualitative preference: 0 free, 1 lowest, 2 low, 3
+middle, 4 high, 5 highest; custom families default to 3 and consumers may
+override it. The helper ranks descending effective pace, non-session before
+session, ascending cost, then family name/runtime, including fit-only routes.
+Cost never overrides pace or session priority. Go defaults freeze the `go`
+allowance proxy (unlimited→0, 100→1, 60→2, 30→3, 20→4, 15→5), independently of
+plan selection and pool state. These are neither per-task prices nor measured
+capability, free capacity or workload ranking quality. Capability use/avoid
+strings retain latency, privacy and tool limitations separately.
+
 The skill renders an absolute non-launching `delegate-routing-plan` command, its
 runtime and session pool; the always-on router stays runtime-neutral for shared
 AGENTS.md targets. Pass `--role writer --launch-context <json-path>` with
