@@ -71,7 +71,7 @@
     techniques = normalizeTechniques args.techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
-      inherit (args) runtime families models;
+      inherit (args) classifiers runtime families models;
       resolvedAgentFiles = args.resolvedAgentFiles or null;
       extraRuntimes = args.extraRuntimes or [];
       manualExternalDelegates = args.manualExternalDelegates or [];
@@ -140,7 +140,7 @@ in
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
       inherit mkSkill render skills usageScripts;
-      inherit (defaults) families models techniques routing skill workflows;
+      inherit (defaults) classifiers families models techniques routing skill workflows;
     };
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).

@@ -231,6 +231,21 @@ launch route without a generated agent file instructs the reader to take the
 highest id matching the pattern. Consumers selecting Kimchi models declare the
 corresponding vendor families in their delegate-routing configuration.
 
+`classifiers` is an ordered list of approved `{ family; effort; }` pairs. The
+package default is Luna/medium followed by Sonnet/medium, shared by Home
+Manager, devenv and direct `mkSkill` calls. An explicit list replaces the
+default. Both strings are required and non-empty; empty lists, unknown families
+and duplicate pairs fail evaluation. A family may have multiple approved
+efforts: its first supported effort is used before ordinary routing ranks
+families. User pins narrow approval; they do not approve a new pair. Approval
+does not create launch routes or guarantee live capacity or classifier accuracy.
+
+The helper manifest delivers `classifiers` and a name-sorted `familyCatalog`
+containing every configured family's normalized capability metadata, including
+families excluded by routing selectors. Automatic and manual routes retain their
+existing selector boundaries. Classifier inference and receipt handling consume
+this policy through the helper exchange.
+
 `families.<vendor>.<family>.cost` is an integer ordinal preference: 0 free, 1
 lowest, 2 low, 3 middle, 4 high, 5 highest. Custom families default to 3 in both
 modules and direct `mkSkill` calls; consumers may override any cost. Raw JSON
