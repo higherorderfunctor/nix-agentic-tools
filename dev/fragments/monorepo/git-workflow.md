@@ -1,10 +1,11 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-11-07 — automatic PR CI runs only for PRs targeting
+> **Last verified:** 2026-11-08 — automatic PR CI runs only for PRs targeting
 > `main`; stacked PRs dispatch CI by hand after a substantive change; PR waits
 > use the review-loop skill's pr-watch.sh; repository-wide gates run before
 > folding stack work; stack fix lanes are serial; rebases and absorbs do not run
-> commit hooks; fixes stay in their PR and fold into the introducing commit.
+> commit hooks; fixes stay in their PR and fold into the introducing commit;
+> dependent PRs move to their base PR's own base before it merges.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -341,6 +342,11 @@ silently resolves one level too deep, into
 
 6. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).
+
+   Before the operator merges a PR used as the base of other open PRs, retarget
+   those PRs to the merging PR's base with permission, or ask the operator to do
+   so before merging; follow stack-submit's **Before merging** for the procedure
+   and why automatic retargeting can leave dependent PRs closed.
 
 7. **Always tear the worktree, local branch and backup refs down once the PR is
    merged.** This cleanup belongs to the agent that implemented the change; do

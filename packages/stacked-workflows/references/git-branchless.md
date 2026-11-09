@@ -1192,11 +1192,13 @@ move those branches yourself. For operations where branchless has equivalents
 3. Create PRs via `gh pr create --base <prev-branch> --head <branch>`.
 4. Before each later amend/restack, capture fresh leases; push updates using
    that operation's saved snapshot.
-5. After a squash merge, capture leases for the remaining branches before moving
+5. Before merging any PR, follow stack-submit's **Before merging**: retarget
+   every open dependent PR to the merging PR's current base (`main` for the
+   bottom PR) and confirm each remains open and targets that base.
+6. After a squash merge, capture leases for the remaining branches before moving
    them, then follow stack-submit's squash-merge recipe and pinned push.
 
-Set PR base to the previous branch in the stack; GitHub auto-updates dependent
-PRs on merge (arxanas/git-branchless#716).
+Set PR base to the previous branch in the stack.
 
 ### Hooks Requirement
 
