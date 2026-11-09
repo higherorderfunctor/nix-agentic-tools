@@ -4491,7 +4491,7 @@
         },
         "name": "Kimi K3.1 Pro",
         "object": "model",
-        "open_weights": false,
+        "open_weights": true,
         "owned_by": "opencode",
         "release_date": "2026-10-23",
         "type": "chat"
