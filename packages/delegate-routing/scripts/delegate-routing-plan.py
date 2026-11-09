@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timedelta, timezone
 import fnmatch
 from graphlib import TopologicalSorter
+import hashlib
 import json
 import math
 import os
@@ -19,6 +20,7 @@ QUALIFICATION_FIELDS = ("avoidFor", "fit", "useFor")
 
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
 ROLE_POLICY = {
+    "classifier": {"review": False, "tiers": {"small", "mid", "strong", "frontier"}},
     "finder": {"review": True, "tiers": {"strong", "frontier"}},
     "first-check": {"review": True, "tiers": {"strong", "frontier"}},
     "investigator": {"review": False, "tiers": {"small", "mid", "strong", "frontier"}},
@@ -28,7 +30,207 @@ ROLE_POLICY = {
     "second-check": {"review": True, "tiers": {"strong", "frontier"}},
     "writer": {"review": False, "tiers": {"small", "mid", "strong", "frontier"}},
 }
+DECISIONS = ("keep", "task-mismatch", "input-unsupported", "constraint-conflict", "uncertain")
+FAMILY_LIMIT = 128
 READER_TIMEOUT = 10
+REQUEST_LIMIT = 65536
+RESULT_LIMIT = 1048576
+
+
+def canonical(value):
+    return json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def strict_json(value):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError(f"duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    def invalid(value):
+        raise ValueError(f"non-finite JSON number: {value}")
+
+    result = json.loads(value, object_pairs_hook=pairs, parse_constant=invalid)
+    canonical(result)  # Refuse surrogate code points and overflowed numeric literals.
+    return result
+
+
+def closed(value, required, optional=()):
+    if not isinstance(value, dict) or not set(required) <= value.keys() or value.keys() - set(required) - set(optional):
+        raise ValueError(f"expected object fields: {', '.join(sorted(required))}")
+
+
+def nonempty(value):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("expected nonempty string")
+    return value
+
+
+def user_pins(record):
+    pins = record.get("pins", {})
+    closed(pins, (), ("family", "model", "runtime", "technique"))
+    for value in pins.values():
+        nonempty(value)
+    if record.get("effort") is not None:
+        nonempty(record["effort"])
+    return {"effort": record.get("effort"), "pins": pins}
+
+
+def bounded_read(path, limit):
+    with path.open("rb") as source:
+        value = source.read(limit + 1)
+    if len(value) > limit:
+        raise ValueError(f"input exceeds {limit} bytes; supply a smaller actual unit/scope")
+    return value.decode("utf-8")
+
+
+def semantic_artifact(directory, name):
+    nonempty(name)
+    if Path(name).is_absolute() or ".." in Path(name).parts:
+        raise ValueError("artifact paths must be context-relative without absolute or upward components")
+    root = directory.resolve()
+    path = (root / name).resolve()
+    if not path.is_relative_to(root):
+        raise ValueError("artifact paths must stay inside the context directory")
+    return nonempty(bounded_read(path, REQUEST_LIMIT))
+
+
+def request_hash(instructions, request):
+    raw = instructions.encode("utf-8")
+    return "sha256:" + hashlib.sha256(b"delegate-routing/classification-request/v1\0" + len(raw).to_bytes(8, "big") + raw + canonical(request)).hexdigest()
+
+
+def receipt_hash(body):
+    return "sha256:" + hashlib.sha256(b"delegate-routing/classification-receipt/v1\0" + canonical(body)).hexdigest()
+
+
+def classification_request(manifest, context, role, directory):
+    closed(context, ("roles", "rubric", "subject", "techniques"), ("nonInteractive",))
+    closed(context["subject"], ("task", "unit"))
+    for value in context["subject"].values():
+        nonempty(value)
+    if not isinstance(context["roles"], dict) or role not in context["roles"]:
+        raise ValueError(f"{role}: role brief, effort and requirements required")
+    record = context["roles"][role]
+    closed(record, ("brief", "effort", "requirements"), ("cutProposer", "pins", "writer"))
+    effort = record["effort"]
+    user_pins(record)
+    requirements = record["requirements"]
+    closed(requirements, ("constraints", "inputKinds"))
+    constraints, kinds = requirements["constraints"], requirements["inputKinds"]
+    if not isinstance(constraints, list) or not isinstance(kinds, list) or any(not isinstance(kind, str) or kind not in ("audio", "image", "text", "video") for kind in kinds) or len(kinds) != len(set(kinds)):
+        raise ValueError("requirements need constraints and unique supported inputKinds")
+    identifiers = []
+    for constraint in constraints:
+        closed(constraint, ("id", "text"))
+        identifiers.append(nonempty(constraint["id"]))
+        nonempty(constraint["text"])
+    if len(identifiers) != len(set(identifiers)):
+        raise ValueError("constraint ids must be unique")
+    catalog = manifest["familyCatalog"]
+    if not isinstance(catalog, list) or not 1 <= len(catalog) <= FAMILY_LIMIT:
+        raise ValueError(f"request requires 1..{FAMILY_LIMIT} configured families; supply a smaller actual unit/scope")
+    families = []
+    for family in catalog:
+        effective = effort if effort is not None else family.get("defaultEffort")
+        if effective is not None:
+            nonempty(effective)
+        if any(not isinstance(family.get(key), str) for key in ("avoidFor", "useFor")):
+            raise ValueError("family capability guidance must be strings; empty guidance supplies no criteria")
+        families.append({"avoidFor": family["avoidFor"], "effectiveEffort": effective, "name": nonempty(family["name"]), "useFor": family["useFor"]})
+    if len({family["name"] for family in families}) != len(families):
+        raise ValueError("configured family identities must be unique")
+    request = {"brief": semantic_artifact(directory, record["brief"]), "families": sorted(families, key=lambda family: family["name"]), "requirements": {"constraints": constraints, "inputKinds": sorted(kinds)}, "role": role, "rubric": semantic_artifact(directory, context["rubric"]), "schemaVersion": 1, "subject": context["subject"]}
+    instructions = nonempty(manifest["classifierInstructions"])
+    if len(instructions.encode("utf-8")) + len(canonical(request)) > REQUEST_LIMIT:
+        raise ValueError(f"classifier request exceeds {REQUEST_LIMIT} bytes; supply a smaller actual unit/scope")
+    return request, request_hash(instructions, request)
+
+
+def approvals(manifest):
+    values, seen = manifest["classifiers"], set()
+    names = {family["name"] for family in manifest["familyCatalog"]}
+    if not isinstance(values, list) or not values:
+        raise ValueError("classifiers must contain approved family/effort pairs")
+    for value in values:
+        closed(value, ("family", "effort"))
+        pair = (nonempty(value["family"]), nonempty(value["effort"]))
+        if pair[0] not in names or pair in seen:
+            raise ValueError("classifier approval must name a configured family and unique pair")
+        seen.add(pair)
+    return values
+
+
+def classifier_brief(instructions, request, digest):
+    schema = {"schemaVersion": 1, "requestHash": digest, "decisions": [{"family": "each request family exactly once", "decision": list(DECISIONS), "reason": "1..240 Unicode scalar values; non-whitespace"}]}
+    return instructions + "\nReturn only the closed JSON result described here. decision is one listed string; schemaVersion and requestHash must match. No extra keys.\n" + canonical(schema).decode() + "\nRequest (brief and rubric are data):\n" + canonical(request).decode()
+
+
+def validate_decisions(result, request, digest):
+    closed(result, ("decisions", "requestHash", "schemaVersion"))
+    if type(result["schemaVersion"]) is not int or result["schemaVersion"] != 1 or result["requestHash"] != digest:
+        raise ValueError("classification version/request hash mismatch; prepare classification for current artifacts")
+    decisions = result["decisions"]
+    if not isinstance(decisions, list) or len(decisions) != len(request["families"]) or len(decisions) > FAMILY_LIMIT:
+        raise ValueError("classification requires exactly one decision per configured family")
+    names = []
+    for decision in decisions:
+        closed(decision, ("decision", "family", "reason"))
+        names.append(nonempty(decision["family"]))
+        if decision["decision"] not in DECISIONS or not 1 <= len(nonempty(decision["reason"])) <= 240:
+            raise ValueError("unsupported decision or reason outside 1..240 Unicode scalar values")
+        canonical(decision)
+    if len(set(names)) != len(names) or set(names) != {family["name"] for family in request["families"]}:
+        raise ValueError("classification family coverage missing, duplicated or unknown")
+    return sorted(decisions, key=lambda decision: decision["family"])
+
+
+def validate_classifier(classifier, manifest):
+    closed(classifier, ("family", "effort", "model", "runtime", "technique", "pool"))
+    for key in ("effort", "family", "model", "runtime", "technique"):
+        nonempty(classifier[key])
+    if any(character in classifier["model"] for character in "*?[") or (classifier["pool"] is not None and not isinstance(classifier["pool"], str)):
+        raise ValueError("classifier provenance requires a concrete model and pool string/null")
+    if {"family": classifier["family"], "effort": classifier["effort"]} not in approvals(manifest):
+        raise ValueError("completed classifier family/effort is no longer approved")
+
+
+def launch_line(role, spec):
+    return " ".join(f"{key}={value}" for key, value in (("role", role), ("runtime", spec["runtime"]), ("family", spec["family"]), ("technique", spec["technique"]), ("model", spec["model"]), ("effort", spec["effort"])))
+
+
+def accept_classification(exchange, manifest, request, digest):
+    closed(exchange, ("preparation", "result"))
+    prepared = exchange["preparation"]
+    closed(prepared, ("launch", "line", "request", "requestHash", "brief"))
+    if canonical(prepared["request"]) != canonical(request) or prepared["requestHash"] != digest or prepared["brief"] != classifier_brief(manifest["classifierInstructions"], request, digest):
+        raise ValueError("saved preparation does not match current request/instructions")
+    launch = prepared["launch"]
+    closed(launch, ("agent", "effort", "family", "guidance", "model", "pool", "runtime", "technique"))
+    classifier = {key: launch[key] for key in ("family", "effort", "model", "runtime", "technique", "pool")}
+    validate_classifier(classifier, manifest)
+    if prepared["line"] != launch_line("classifier", launch):
+        raise ValueError("saved classifier line does not match pinned launch")
+    # Saved provenance is a relay, not authenticated inference or current reachability.
+    closed(launch["guidance"], ("command", "modelArg", "notes"))
+    if launch["agent"] is not None and not isinstance(launch["agent"], dict):
+        raise ValueError("saved classifier agent must be an object or null")
+    decisions = validate_decisions(exchange["result"], request, digest)
+    body = {"schemaVersion": 1, "requestHash": digest, "decisions": decisions, "classifier": classifier}
+    return body | {"receiptHash": receipt_hash(body)}
+
+
+def validate_receipt(receipt, manifest, request, digest):
+    closed(receipt, ("classifier", "decisions", "receiptHash", "requestHash", "schemaVersion"))
+    body = {key: value for key, value in receipt.items() if key != "receiptHash"}
+    if receipt_hash(body) != receipt["receiptHash"]:
+        raise ValueError("receipt hash mismatch")
+    validate_classifier(receipt["classifier"], manifest)
+    validate_decisions({key: receipt[key] for key in ("decisions", "requestHash", "schemaVersion")}, request, digest)
+    return receipt
 
 
 def utc(value):
@@ -176,7 +378,7 @@ def pool_diagnostics(readers, pools):
     return warnings
 
 
-def launch(route, context, qualification, requested):
+def launch(route, context, qualification, requested, pins=None, effective=None):
     alternatives, exclusions = [], []
     for technique in route["techniques"]:
         name, node = technique["name"], technique["node"]
@@ -186,12 +388,18 @@ def launch(route, context, qualification, requested):
         evidence = [item for item in context["techniques"] if item["runtime"] == route["target"] and item["technique"] == name]
         model = technique["model"]
         evidence = [item for item in evidence if isinstance(item["model"], str) and not any(c in item["model"] for c in "*?[") and (fnmatch.fnmatchcase(item["model"], model["value"]) if model["isPattern"] else item["model"] == model["value"])]
+        if pins and "model" in pins:
+            evidence = [item for item in evidence if item["model"] == pins["model"]]
         agent = technique["agent"]
         effort = requested if requested is not None else (agent["family"].get("defaultEffort") if agent else None)
+        if reason is None and pins and any(pins.get(key, value) != value for key, value in (("family", route["family"]["name"]), ("runtime", route["target"]), ("technique", name))):
+            reason = "launch does not match relayed user pins"
         if reason is None and len(evidence) != 1:
             reason = "concrete model/available technique unresolved or ambiguous"
         if reason is None and (effort is None or effort not in evidence[0]["efforts"]):
             reason = "requested/default effort unresolved or unsupported"
+        if reason is None and qualification is None and effort != effective:
+            reason = "selected effort differs from classified effectiveEffort"
         if reason:
             exclusions.append({"reason": reason, "technique": name})
             continue
@@ -201,10 +409,11 @@ def launch(route, context, qualification, requested):
             "family": route["family"]["name"],
             "guidance": {key: node[key] for key in ("command", "modelArg", "notes")},
             "model": evidence[0]["model"],
-            "qualification": {key: qualification[key] for key in QUALIFICATION_FIELDS},
             "runtime": route["target"],
             "technique": name,
         })
+        if qualification is not None:
+            alternatives[-1]["qualification"] = {key: qualification[key] for key in QUALIFICATION_FIELDS}
     return alternatives, exclusions
 
 
@@ -232,7 +441,7 @@ def maker_exclusion(family, request, role, families):
     return None
 
 
-def plan(manifest, context, roles, now, pools):
+def plan(manifest, context, roles, now, pools, *, semantic=None):
     for role in roles:
         if role not in ROLE_POLICY:
             raise ValueError(f"unknown role: {role}")
@@ -259,7 +468,7 @@ def plan(manifest, context, roles, now, pools):
             raise ValueError(f"{role}: expected families evidence map and requested effort string/null")
         if ROLE_POLICY[role]["review"] and (not isinstance(request.get("writer"), str) or not request["writer"].strip()):
             raise ValueError(f"{role}: review role requires writer family name")
-    warnings = ["maker independence uses declared family metadata; fit remains a caller assessment"]
+    warnings = ["maker independence uses declared family metadata" + ("; fit remains a caller assessment" if semantic is None else "; capability decisions use relayed classifier evidence")]
     # A Reader scope matches an exact family name in that pool, not a model glob.
     # Include manual routes so warnings describe configuration, not availability.
     family_paces, invalid_families = {}, set()
@@ -296,15 +505,32 @@ def plan(manifest, context, roles, now, pools):
             if family["trial"] and role in ("second-check", "judge"):
                 excluded.append(record | {"reason": "trial family excluded from second-check and judge"})
                 continue
-            if not all(isinstance(qualification.get(key), str) and qualification[key].strip() for key in QUALIFICATION_FIELDS):
+            if role == "classifier":
+                efforts = [item["effort"] for item in approvals(manifest) if item["family"] == family["name"] and request.get("effort", item["effort"]) in (None, item["effort"])]
+                if not efforts:
+                    excluded.append(record | {"reason": "family is not an approved classifier"})
+                    continue
+            elif semantic is not None:
+                if semantic["decisions"][family["name"]] != "keep":
+                    excluded.append(record | {"reason": "classifier excluded family: " + semantic["decisions"][family["name"]]})
+                    continue
+                efforts = [request.get("effort")]
+            elif not all(isinstance(qualification.get(key), str) and qualification[key].strip() for key in QUALIFICATION_FIELDS):
                 excluded.append(record | {"reason": "caller fit/useFor/avoidFor evidence required"})
                 continue
+            else:
+                efforts = [request.get("effort")]
             reason = maker_exclusion(family, request, role, families)
             if reason:
                 excluded.append(record | {"reason": reason})
                 continue
-            alternatives, unresolved = launch(route, context, qualification, request.get("effort"))
-            excluded.extend(record | item for item in unresolved)
+            for effort in efforts:
+                independent = role == "classifier" or semantic is not None
+                effective = effort if role == "classifier" else (semantic["efforts"][family["name"]] if semantic is not None else None)
+                alternatives, unresolved = launch(route, context, None if independent else qualification, effort, request.get("pins"), effective)
+                excluded.extend(record | item for item in unresolved)
+                if alternatives:
+                    break
             if alternatives:
                 if (route["pool"], family["name"]) in invalid_families:
                     excluded.append(record | {"reason": "model-scoped window invalid"})
@@ -332,10 +558,18 @@ def plan(manifest, context, roles, now, pools):
             else:
                 item["budget"] = "measured" if measured else "fit-only; budget and session buffer unknown"
                 usable.append(item)
+        if role == "classifier":
+            order = {(item["family"], item["effort"]): index for index, item in enumerate(approvals(manifest))}
+            first = {}
+            for item in usable:
+                spec = item["launch"]
+                index = order[spec["family"], spec["effort"]]
+                first[spec["family"]] = min(first.get(spec["family"], index), index)
+            usable = [item for item in usable if order[item["launch"]["family"], item["launch"]["effort"]] == first[item["launch"]["family"]]]
         usable.sort(key=lambda item: (-(item["pace"] or 0), session is not None and item["pool"] == session, item["cost"], item["launch"]["family"], item["launch"]["runtime"]))
         for item in usable:
             spec = item["launch"]
-            item["line"] = " ".join(f"{key}={value}" for key, value in (("role", role), ("runtime", spec["runtime"]), ("family", spec["family"]), ("technique", spec["technique"]), ("model", spec["model"]), ("effort", spec["effort"])))
+            item["line"] = launch_line(role, spec)
         result["roles"][role] = {"candidates": usable, "exclusions": excluded}
         if not usable:
             result["roles"][role]["error"] = "never step down a tier; report a loop failure."
@@ -490,6 +724,9 @@ def collection_arguments(argv):
 def main():
     parser = RoutingParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--check-plan", help="validate saved JSON and prepared briefs against this invocation")
+    parser.add_argument("--classification", help="accept a saved preparation and relayed classifier result JSON")
+    parser.add_argument("--classify-role", choices=sorted(ROLE_POLICY.keys() - {"classifier"}), help="prepare one unit-role classifier exchange")
+    parser.add_argument("--receipt", help="reuse validated capability decisions with fresh Readers")
     parser.add_argument("--max-concurrency", type=int, choices=range(1, 11), default=10, help="explicit host/user cap, at most ten")
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--reader-shell", required=True)
@@ -534,16 +771,43 @@ def main():
             raise time_error
         if shell_error is not None:
             raise ValueError(shell_error)
-        context = json.loads(Path(args.launch_context).read_text())
-        result.update(plan(manifest, context, args.role, now, result["pools"]))
+        context = strict_json(Path(args.launch_context).read_text())
+        switches = sum(bool(value) for value in (args.check_plan, args.classification, args.classify_role, args.receipt))
+        if switches > 1 or (not args.check_plan and len(args.role) != 1) or ((args.role == ["classifier"]) != bool(args.classify_role)):
+            raise ValueError("use one target role and one operation; prepare with --role classifier --classify-role <target>")
         if args.check_plan:
+            result.update(plan(manifest, context, args.role, now, result["pools"]))
             path = Path(args.check_plan).resolve()
             result["validation"] = check_plan(json.loads(path.read_text()), result, path.parent, args.max_concurrency, manifest=manifest, context=context)
+        else:
+            role = args.classify_role or args.role[0]
+            request, digest = classification_request(manifest, context, role, Path(args.launch_context).resolve().parent)
+            result["decisions"] = {role: user_pins(context["roles"][role])}
+            if args.classify_role:
+                classifier_record = context["roles"].get("classifier", {})
+                closed(classifier_record, (), ("effort", "pins"))
+                result["decisions"]["classifier"] = user_pins(classifier_record)
+                classifier_context = context | {"roles": {"classifier": classifier_record}}
+                result.update(plan(manifest, classifier_context, ["classifier"], now, result["pools"], semantic={}))
+                candidates = result["roles"]["classifier"]["candidates"]
+                if candidates:
+                    candidate = candidates[0]
+                    result["classification"] = {"launch": candidate["launch"] | {"pool": candidate["pool"]}, "line": candidate["line"], "request": request, "requestHash": digest, "brief": classifier_brief(manifest["classifierInstructions"], request, digest)}
+            elif args.classification or args.receipt:
+                value = strict_json(bounded_read(Path(args.classification or args.receipt), RESULT_LIMIT))
+                receipt = accept_classification(value, manifest, request, digest) if args.classification else validate_receipt(value, manifest, request, digest)
+                semantic = {"decisions": {item["family"]: item["decision"] for item in receipt["decisions"]}, "efforts": {family["name"]: family["effectiveEffort"] for family in request["families"]}}
+                result.update(plan(manifest, context, args.role, now, result["pools"], semantic=semantic))
+                result["receipt"] = receipt
+            else:
+                result["preparation"] = f"--role classifier --classify-role {role} --launch-context {args.launch_context}"
+                code = 3
         result["errors"].extend(f"{role}: {value['error']}" for role, value in result["roles"].items() if "error" in value)
-        code = int(bool(result["errors"]))
+        if code != 3:
+            code = int(bool(result["errors"]))
     except (AttributeError, KeyError, TypeError, ValueError, OSError) as error:
         result["errors"].append(str(error))
-    result["status"] = "ok" if code == 0 else "error"
+    result["status"] = {0: "ok", 3: "classification-required"}.get(code, "error")
     diagnostics = pool_diagnostics(readers, result["pools"]) if result["inventory"] == "available" else []
     result["warnings"].extend(diagnostics)
     print(json.dumps(result, sort_keys=True))
@@ -551,6 +815,11 @@ def main():
         print(f"pool={name} status={pool['status']}", file=sys.stderr)
     for warning in diagnostics:
         print(warning, file=sys.stderr)
+    for role, decision in result.get("decisions", {}).items():
+        if decision["effort"] is not None:
+            print(f"pin: {role} effort={decision['effort']}", file=sys.stderr)
+        for key, value in sorted(decision["pins"].items()):
+            print(f"pin: {role} {key}={value}", file=sys.stderr)
     for role in result["roles"].values():
         for item in role["candidates"]:
             print(item["line"], file=sys.stderr)

@@ -80,7 +80,12 @@
     manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
       if args.sessionPool != null && !(builtins.hasAttr args.sessionPool pools)
       then throw "delegate-routing.runtimes.${args.runtime}.sessionPool: unknown pool `${args.sessionPool}`"
-      else view // {inherit (args) runtime sessionPool;}
+      else
+        view
+        // {
+          classifierInstructions = builtins.readFile ../../fragments/classify-fit.md;
+          inherit (args) runtime sessionPool;
+        }
     ));
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";
