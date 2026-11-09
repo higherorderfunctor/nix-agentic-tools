@@ -18,7 +18,9 @@
 > session observations; no harness compliance is inferred from dry-run.
 > Classifier exchange and unit-local receipt regressions run offline; the new
 > classifier delivery/module assertions await CI evaluation, and fixture relays
-> do not establish empirical classifier quality or spend.
+> do not establish empirical classifier quality or spend. Saved-plan dispatch
+> adds offline checks for fresh selection and actual participant records; its
+> runtime projection assertions await CI evaluation.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -469,7 +471,8 @@ supplies `cutProposer`. Names resolve declared makers against automatic and
 manual routes. Unknown or matching makers exclude candidates. Omit cutProposer
 only when no cuts are being judged. Saved plans use symbolic worker/proposer
 role references instead; check-plan asks whether current independent assignments
-exist before any worker has run.
+exist before any worker has run. Planned `--dispatch` derives those families
+from actual execution records, refusing conflicting context identities.
 
 Family `maker` is a nullable nonempty string, defaulting to null. The helper
 compares maker names after trimming surrounding whitespace and lowercasing,
@@ -904,6 +907,44 @@ the actual launching runtime's helper/sessionPool. Downstream work in another
 runtime needs its own runtime-qualified plan and check. Candidate target runtime
 can differ from launching runtime through a configured reach.
 
+Before each actual unit-role launch, invoke
+`--dispatch <plan.json> --role <role> --launch-context <facts.json>`. The facts
+require `subject = {task, unit}` matching the plan and current `techniques`;
+`nonInteractive`, `roles`, `rubric` and `executions` are optional. The saved
+role supplies brief/rubric paths, effort, requirements, pins and receipt.
+Duplicate semantic fields must agree with the plan, including overlapping pins;
+additional context pins may narrow eligible routes. Duplicate artifact paths use
+the same plan-relative spelling. Dispatch uses the same structural checks and
+confined request/receipt reader as check-plan. Worker dispatch validates all
+unit receipts and selects the highest-ranked worker with a feasible independent
+review assignment; it reserves no reviewer. Review dispatch validates only the
+selected role's receipt, so unchanged roles remain reusable after another brief
+is enriched. Each invocation collects and reports all pools again, rechecking
+current availability, policy gates and ranking even after successful check-plan.
+
+On success, `dispatch = {launch, line, execution}` contains the first current
+eligible launch only. Bind that launch and the prepared brief to the native tool
+or named launcher. Save `dispatch.execution` in the context's `executions` only
+after recording the actual binding. Each closed execution record contains
+`unit`, `role`, `family`, concrete `model`, target `runtime`, `technique`,
+`effort` and `receiptHash` from that returned launch. Records must name planned
+unit roles and known families, have unique unit/role keys, and agree with their
+saved receipt hash and classified effective effort. Completed participants need
+not remain currently reachable or funded. These relayed facts detect malformed
+provenance; they cannot authenticate a model, tool execution or billing.
+
+Review dispatch derives `writer` from the unit's recorded worker and, when
+judging cuts, `cutProposer` from the referenced role's execution. Missing or
+unknown participants fail; same or unknown makers cannot certify independence. A
+conflicting context `writer` or `cutProposer` fails rather than overriding the
+recorded participant. Check-plan uses known executions when checking a
+consistent assignment; a future proposer remains symbolic until dispatched. An
+unplanned cut proposer requires updated role intent and validation. A worker
+already recorded requires reconciled execution facts before another worker
+dispatch. If later pool movement leaves no reviewer, report failure without
+silently changing the recorded writer. No old successful check authorizes a
+later dispatch or claims a reservation of future capacity.
+
 Independent units may share a wave on separate branches/parts with disjoint
 owned files. The helper checks the declared shape, not code dependencies or
 completion receipts. The orchestrator enforces writer → independent review →
@@ -947,7 +988,7 @@ Fragment paths below are relative to `packages/delegate-routing/fragments/`.
 | Disabled-Orchestrator-session quick fact/review/in-session fallback and no topic-only fan-out                                                      | Orchestrator                                  | Plan and launch in `entries.nix` → small skill, independent of router enablement.                                                   |
 | Rule steering to source; no rendered edits or memory/house rules                                                                                   | Orchestrator                                  | `load-delegate-routing.md` → always-on router; `tune-these-rules.md` keeps override mechanics.                                      |
 | Portable/runtime source customization, disables, overrides and workflow-step settings                                                              | Orchestrator; planner; worker editing rules   | `tune-these-rules.md` → shared Routing and relevant briefs.                                                                         |
-| Planner bootstrap/non-recursion; check-plan/current snapshot; exclusions; manual authorization; review/commit barriers                             | Orchestrator                                  | Plan and launch in `entries.nix` → small skill; planner artifact/schema remains in `plan-work.md`.                                  |
+| Planner bootstrap/non-recursion; check-plan feasibility; fresh dispatch using actual executions; exclusions; review/commit barriers                | Orchestrator                                  | Plan and launch in `entries.nix` → small skill; planner artifact/schema remains in `plan-work.md`.                                  |
 | Writer/fixer hard rules; one surface/unit per writer; serialize shared-worktree writers and commit at boundaries                                   | Orchestrator; planner; worker                 | `review-work.md` → shared Work step and prepared briefs.                                                                            |
 | Review brief ownership and claimed-review artifact verification; unit and branch-level review cadence; fix-sized checks                            | Orchestrator; planner prepares briefs         | `review-work.md` → shared Work step, moved from `work-and-review.md`.                                                               |
 | Root-cause diagnosis validated before a different fixer acts                                                                                       | Orchestrator; planner; worker                 | `review-work.md` → shared Work step.                                                                                                |

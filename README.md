@@ -1179,12 +1179,13 @@ budget, cost, maker, tier, trial and availability; those gates run afresh.
 Semantic changes require new receipts; the saved relay cannot authenticate
 inference or billing, and fixture JSON does not measure quality, spend or
 complete availability. The helper collects all registered Readers once, ranks
-worst-window pace and enforces the strong/frontier review floor. Each review
-role names its writer family with `writer`; a judge assessing cuts also names
-`cutProposer`. Declared makers must differ after trimming surrounding whitespace
-and lowercasing; unknown makers produce exclusions. Provider, runtime and budget
-identities never certify maker independence. Package-owned direct families and
-Go presets declare makers; Iceman remains undisclosed. Configure
+worst-window pace and enforces the strong/frontier review floor. Direct review
+exchanges name actual writer/proposer families. Saved-plan dispatch derives them
+from observed `executions` outside role intent and rejects missing or
+conflicting identities. Declared makers must differ after trimming surrounding
+whitespace and lowercasing; unknown makers produce exclusions. Provider, runtime
+and budget identities never certify maker independence. Package-owned direct
+families and Go presets declare makers; Iceman remains undisclosed. Configure
 `runtimes.<runtime>.sessionPool` with the actual registered pool key (for
 example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
 warns that the session buffer cannot be certified. With no pools it reports
@@ -1230,16 +1231,23 @@ Work and review runs Rubric → Subtractive → Plan → Work → Describe → R
 Loop. Rubric preparation is task-goal preflight; substantive task-source
 investigation starts with an independently classified strong/frontier planner
 from the helper, except for an approved bounded worker assignment. The planner
-saves units, dependencies, disjoint waves and prepared worker/reviewer briefs
-containing the full rubric verbatim. Before launch, pass
-`--check-plan <plan.json>` with current launch context and all planned roles to
-the rendered helper; it reconstructs each unit-role request from that unit's
-actual brief/rubric, effort and requirements, validates its own saved receipt,
-then checks role/runtime/candidate/pinned line and wave/dependency shape against
-a fresh Reader decision, and that each unit's reviewers differ in declared maker
-from that unit's own worker. Use `--max-concurrency <n>` for a host/user cap
-below ten. The orchestrator enforces review/commit barriers; offline validation
-makes no live compliance claim. See the
+saves schemaVersion=2 role/receipt intent, dependencies, disjoint waves and
+prepared worker/reviewer briefs containing the full rubric verbatim;
+unversioned/pinned plans require replanning. Pass `--check-plan <plan.json>`
+with current launch context and all planned roles to validate structure, exact
+receipt coverage and one consistent independent review assignment under fresh
+pools. Use `--max-concurrency <n>` for a host/user cap below ten. Before each
+launch, run `--dispatch <plan.json> --role <role> --launch-context <facts.json>`
+with task/unit identity and current observations. Worker dispatch selects the
+highest-ranked worker with feasible reviews. Save actual tool bindings as
+execution records outside plan intent; choose each reviewer after its writer
+finishes, deriving writer/cut-proposer identities from those records. Missing,
+unknown or conflicting participant facts and conflicting duplicate
+semantics/pins fail. Dispatch validates the selected receipt, reads all pools
+again and emits the first current eligible launch; a successful earlier check
+never reserves capacity. Enriched review briefs need new receipts for that role
+only. The orchestrator enforces review/fix/check/commit barriers; relayed
+records and offline validation do not prove harness execution. See the
 [saved-plan contract and policy ledger](packages/delegate-routing/docs/development.md#saved-plans-and-prepared-briefs).
 
 #### Per-turn reminder

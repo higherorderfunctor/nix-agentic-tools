@@ -74,7 +74,7 @@ class HelperFixtures(unittest.TestCase):
             record = json.loads((logs / "setup-helper.json").read_text())
             receipts = suite.helper_receipts(logs / "setup-reader-receipts.jsonl")
             self.assertEqual(record["exitCode"], 0)
-            self.assertEqual(len(receipts), 45)
+            self.assertEqual(len(receipts), 57)
             exchanges = sorted(logs.glob("setup-*-exchange.json"))
             self.assertEqual(len(exchanges), 7)
             for exchange_path in exchanges:
@@ -95,6 +95,14 @@ class HelperFixtures(unittest.TestCase):
                     self.assertNotIn("line", role_record)
             validation = json.loads((logs / "setup-plan-validation.json").read_text())
             self.assertEqual(validation["output"]["validation"]["waves"], 1)
+            for unit in ("words", "square"):
+                dispatched = [json.loads((logs / f"setup-{unit}-{role}-dispatch.json").read_text()) for role in ("writer", "first-check")]
+                self.assertEqual([record["output"]["dispatch"]["launch"]["family"] for record in dispatched], ["outside", "session"])
+                for role, dispatch_record in zip(("writer", "first-check"), dispatched):
+                    self.assertIn("--dispatch", dispatch_record["argv"])
+                    output = dispatch_record["output"]
+                    self.assertEqual(len(output["roles"][role]["candidates"]), 1)
+                    self.assertEqual(output["dispatch"]["execution"]["receiptHash"], output["receipt"]["receiptHash"])
             self.assertFalse((logs / "session-reader-receipts.jsonl").exists())
             # These mutations reproduce inventory filtering, session-first ranking
             # and a tier filter silently omitted from the helper implementation.
