@@ -503,6 +503,54 @@
       techniques = selection.effectiveTechniques routingFixture.config;
     };
     routingView = import ../lib/routing-view.nix routingArgs;
+    makerModels = source: [
+      {
+        families = lib.sort builtins.lessThan (["go-gemini-4-argon" "go-iceman-contributor-free" "unattributed"]
+          ++ [
+            (
+              if source == "go"
+              then "go-kimi-k3"
+              else "direct-kimi"
+            )
+          ]);
+      }
+    ];
+    # Select Go and direct Kimi separately: same-model overlap on one runtime
+    # is refused by the existing module assertion. No catalog snapshot here.
+    makerDeliveries = lib.genAttrs ["direct" "go"] (source:
+      change {
+        ai.programs.delegate-routing = {
+          families = {
+            custom.unattributed = {
+              match = "custom-unattributed";
+              tier = "strong";
+            };
+            moonshot.direct-kimi = {
+              maker = "moonshot";
+              match = "kimi-k3";
+              tier = "strong";
+            };
+          };
+          runtimes = lib.genAttrs runtimes (_: {
+            extraRuntimes = lib.mkForce [];
+            manualExternalDelegates = lib.mkForce [];
+            models = lib.mkForce (makerModels source);
+          });
+        };
+      });
+    # The public builder also supports families that omit the module default.
+    directMakerSkill = let
+      portable = makerDeliveries.direct.config.ai.programs.delegate-routing;
+    in
+      result.config.ai.internal.roots.delegate-routing-content.passthru.mkSkill {
+        runtime = "codex";
+        families =
+          portable.families
+          // {
+            custom.unattributed = builtins.removeAttrs portable.families.custom.unattributed ["maker"];
+          };
+        models = lib.genAttrs runtimes (_: makerModels "direct");
+      };
     sessionPools = {
       claude = "claude";
       codex = "codex";
@@ -949,6 +997,49 @@
         ])
       runtimes
     );
+    # Fails if common delivery drops makers, infers them from providers, loses
+    # nulls, or the direct builder requires the module's nullable default.
+    "module-delegate-routing-${name}-maker-delivery" =
+      pkgs.runCommand "delegate-routing-${name}-maker-delivery" {
+        skills = builtins.toJSON (builtins.listToAttrs (lib.concatMap (source:
+          map (runtime: {
+            name = "${runtime}-${source}";
+            value = assert passes makerDeliveries.${source}; toString makerDeliveries.${source}.config.ai.${runtime}.skills.delegate-routing;
+          })
+          runtimes) ["direct" "go"])
+        // {builder-direct = toString directMakerSkill;});
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${pkgs.python3}/bin/python3 - <<'PYTHON'
+        import json
+        import os
+        from pathlib import Path
+        import re
+
+        shared = {
+            "go-gemini-4-argon": "google",
+            "go-iceman-contributor-free": None,
+            "unattributed": None,
+        }
+        for runtime, directory in json.loads(os.environ["skills"]).items():
+            skill = (Path(directory) / "SKILL.md").read_text()
+            command = re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role <role> --launch-context <json-path>`", skill)
+            assert command, runtime
+            wrapper = Path(command[1]).read_text()
+            manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", wrapper)[1]
+            manifest = json.loads(Path(manifest_path).read_text())
+            actual = {route["family"]["name"]: route["family"]["maker"] for route in manifest["routes"]}
+            expected = shared | ({"direct-kimi": "moonshot"} if runtime.endswith("-direct") else {"go-kimi-k3": "moonshot"})
+            assert actual == expected, (runtime, actual)
+            # Fails if delivery loses the helper's unknown/same-maker warning.
+            for filename in ("SKILL.md", "PLANNER.md"):
+                text = " ".join((Path(directory) / filename).read_text().split())
+                assert "excludes unknown or same-maker choices" in text, (runtime, filename)
+            print(f"PASS: ${name}/{runtime} delivered maker metadata and review warning")
+        PYTHON
+        ${pkgs.coreutils}/bin/touch "$out"
+      '';
     # Fails if automatic routes admit a disabled technique, unresolved agent,
     # manual-only target or another harness's native tool; reader inventory
     # must still include a registered runtime outside all launch targets.
