@@ -85,6 +85,15 @@ class HelperFixtures(unittest.TestCase):
                     exchange_record = json.loads((logs / f"setup-{unit}-{role}.json").read_text())
                     self.assertNotIn("classification", exchange_record["reuse"]["output"])
                     self.assertNotIn("qualification", exchange_record["acceptance"]["output"]["roles"][role]["candidates"][0]["launch"])
+            plan = json.loads((logs / "setup-plan.json").read_text())
+            self.assertEqual(plan["schemaVersion"], 2)
+            for unit in plan["units"]:
+                self.assertNotIn("launches", unit)
+                self.assertEqual([record["role"] for record in unit["roles"]], ["writer", "first-check"])
+                self.assertEqual(unit["roles"][1]["writer"], "writer")
+                for role_record in unit["roles"]:
+                    self.assertNotIn("candidate", role_record)
+                    self.assertNotIn("line", role_record)
             validation = json.loads((logs / "setup-plan-validation.json").read_text())
             self.assertEqual(validation["output"]["validation"]["waves"], 1)
             self.assertFalse((logs / "session-reader-receipts.jsonl").exists())

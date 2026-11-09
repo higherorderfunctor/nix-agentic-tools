@@ -467,9 +467,9 @@ Each review request supplies actual `writer`, the writer family name; a missing
 or blank writer fails after pool collection. A judge assessing cuts also
 supplies `cutProposer`. Names resolve declared makers against automatic and
 manual routes. Unknown or matching makers exclude candidates. Omit cutProposer
-only when no cuts are being judged. The saved-plan checker compares each unit's
-reviewers against its own worker and its judge against its recorded cut
-proposer.
+only when no cuts are being judged. Saved plans use symbolic worker/proposer
+role references instead; check-plan asks whether current independent assignments
+exist before any worker has run.
 
 Family `maker` is a nullable nonempty string, defaulting to null. The helper
 compares maker names after trimming surrounding whitespace and lowercasing,
@@ -871,50 +871,60 @@ No eligible approved classifier or strong/frontier planner is a loop failure. An
 assigned worker executing an approved bounded unit does not recursively invoke a
 planner for it. New scope requires replanning the affected portion.
 
-The planner saves `task`, originating launch `runtime`, the complete captured
-helper JSON as `snapshot`, `rubric`, `units` and `waves` in the
-orchestrator-provided working-data directory. Each unit names goal, owned files,
-dependencies, one audience, one verification with its wrong implementation,
-associated docs/checks, per-kind size and worker/reviewer launches. A launch
-record contains its role, launching runtime, exact selected helper `launch`
-object as `candidate`, that candidate's pinned `line`, and its prepared `brief`
-path, plus `effort`, `requirements`, optional user `pins`, optional judge
-`cutProposer` and a saved `receipt` path. Rubric, brief and receipt paths
-resolve relative to the plan. Every worker and every reviewer brief contains the
-complete saved rubric bytes verbatim; a summary or a path alone fails. The
-orchestrator may pass the prepared brief artifact without reading all of it into
-the interactive context. The planner prepares a base brief for every reviewer
-launch, including second-check and judge, before returning the plan. The
-orchestrator adds earlier-check inputs after those checks return, using the
-neutral, role-specific input rules in the shared Work step. Check-plan therefore
-validates existing base briefs, not future artifacts.
+The planner saves `schemaVersion = 2`, `task`, originating launch `runtime`,
+`rubric`, `units` and `waves` in the orchestrator-provided working-data
+directory. An optional historical `snapshot` records provenance only.
+Unversioned plans and pinned launch records fail with an actionable replan
+error. Each unit names goal, owned files, dependencies, one audience, one
+verification with its wrong implementation, associated docs/checks and per-kind
+size. Its `roles` list has exactly one investigator/mechanical/writer, unique
+reviewers and a first-check barrier; planner and classifier remain bootstrap
+operations outside unit intent. Each role record contains `role`, launching
+`runtime`, prepared `brief`, `effort`, `requirements`, optional user `pins` and
+a saved `receipt` path. It has no `candidate` or pinned `line`. Every reviewer
+references the unit's worker role in `writer`; a judge assessing cuts references
+another planned unit role in `cutProposer`. These references describe
+participants, not hypothetical families.
+
+Rubric, brief and receipt paths resolve relative to the plan, without absolute
+or upward components or symlink escapes. Every worker and reviewer brief
+contains the complete saved rubric bytes verbatim; a summary or path alone
+fails. The orchestrator may pass prepared artifacts without reading all their
+bytes into the interactive context. The planner prepares base briefs for every
+review role, including second-check and judge. Adding earlier-check evidence
+changes that role's request and requires classification again; other unchanged
+role receipts remain reusable.
 
 Invoke the same rendered executable with
 `--check-plan <plan.json> --launch-context <current-context.json>` and repeat
 `--role` for every planned role. `--max-concurrency <n>` applies a lower
-host/user cap; the ceiling is ten. This operation collects fresh Readers and
-reconstructs every unit-role request from its own brief, rubric, effort and
-requirements, validates its receipt, then ranks that unit-role against the fresh
-pools before the pinned candidate/line comparison. Two units with the same role
-require distinct receipts; swapping them fails. There is no shared role-global
-semantic authorization. `unitRoles` exposes each fresh unit/role candidate and
-exclusion list. It checks launching runtime, candidate and pinned line together,
-dependency existence/cycles/order, disjoint exact normalized writer paths, wave
-bounds and rubric bytes. A successful exit includes
-`validation.status = "valid"` in the returned JSON. Unknown/unresolved launches,
-automatic use of a manual-only route and invalid artifacts fail without an
-approval result. An explicit request for a manual-only route remains governed
-separately by user authorization, not this automatic validator.
+host/user cap; the ceiling is ten. The operation collects fresh Readers once,
+reconstructs each unit-role request from its own task/unit, brief, rubric,
+effort and requirements, and validates exact receipt coverage. Cross-unit or
+cross-role receipt swaps and stale brief bytes fail. Classifier receipts exclude
+families; current user pins, tier, trial, maker, observed tools and budget gates
+still apply. Historical candidates and lines never authorize a launch.
 
-The saved snapshot is provenance, never a freshness certificate. Changed context
-or a new usage read requires checking against current output again; the
-validation result supplies the current snapshot. There is no date expiry or
-fingerprint over unrelated configuration. With all fitting pools unmeasured, a
-current fit-only result may validate with budget/session uncertainty; this does
-not certify an unresolved launch. A planner analyzing in another harness must
-use the actual launching runtime's helper/sessionPool. Downstream launches in
-another runtime need their own runtime-qualified plan and check. Candidate
-target runtime can differ from launching runtime through a configured reach.
+Check-plan searches ranked current workers for one that supports all required
+independent reviews. Nonempty role lists alone do not suffice when their makers
+cannot form an independent assignment. A future cut proposer and judge must form
+one consistent combination, with the judge independent of both worker and
+proposer. `unitRoles` reports ranked feasible worker candidates and one
+witness's review lists; those lists are feasibility evidence, not reserved
+launches. Without an eligible assignment, validation fails. A successful exit
+includes `validation.status = "valid"`. Runtime qualification, dependency
+existence and cycles, wave order and bounds, normalized writer ownership and
+full rubric inclusion remain structural checks. Manual-only routes remain
+outside automatic approval under their separate user authorization.
+
+Changed pool state can replace a formerly preferred family without invalidating
+role intent; no remaining eligible alternative fails. With all fitting pools
+unmeasured, fit-only validation remains possible with explicit budget/session
+uncertainty. There is no age expiry, unrelated-configuration fingerprint or
+reservation of future capacity. A planner analyzing in another harness must use
+the actual launching runtime's helper/sessionPool. Downstream work in another
+runtime needs its own runtime-qualified plan and check. Candidate target runtime
+can differ from launching runtime through a configured reach.
 
 Independent units may share a wave on separate branches/parts with disjoint
 owned files. The helper checks the declared shape, not code dependencies or

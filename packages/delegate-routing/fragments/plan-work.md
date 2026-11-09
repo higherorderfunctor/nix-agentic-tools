@@ -3,19 +3,16 @@ then saves the full numbered rubric, and prepares each actual unit-role brief
 before routing it. Use the actual launching runtime's helper for a separate
 classifier preparation → saved JSON relay → acceptance exchange per unit and
 role, as specified in Routing helper. Never supply caller fit essays. Save each
-receipt and the complete accepted helper output as snapshot provenance; combine
-its role candidates into the plan's captured snapshot when requests are
-separate. Unchanged requests reuse receipts with fresh Readers, without new
-inference.
+receipt; an optional captured helper snapshot records provenance only. Unchanged
+requests reuse receipts with fresh Readers, without new inference.
 
-Select the worker first, then supply its family name as `writer` in every review
-role's launch-context request. For a judge assessing proposed cuts, also supply
-the cut proposer's family as `cutProposer`. These names resolve declared makers
-from the manifest, including manual routes; provider, runtime and budget names
-never certify maker independence. Refresh the context when the worker or cut
-proposer changes. The saved-plan checker also compares every unit’s reviewers
-against that unit’s worker family and its judge against the cut proposer.
-Unknown maker identity excludes review launches.
+Plan worker and review roles before choosing a worker family. Review records
+reference the unit's worker role as `writer`; a judge assessing cuts also names
+the planned proposer role as `cutProposer`. Check-plan searches current eligible
+workers for one consistent independent review assignment using the unit's
+receipts. Unknown maker identity cannot certify independence. The assignment
+proves current feasibility, never a budget reservation or a stored launch
+choice.
 
 The planner returns a saved JSON plan and prepared human-readable launch briefs
 in the working-data directory the orchestrator provided. Never invent a scratch
@@ -27,27 +24,29 @@ loading every brief into the interactive context.
 Use this JSON contract (paths to rubric, briefs and receipts are relative to the
 saved plan; writer file ownership is repository-relative):
 
-- `task`: nonempty assignment identity; `runtime`: the actual launching runtime,
-  not the planner's analysis harness; `snapshot`: the full captured helper JSON
-  (including its snapshot timestamp); `rubric`: saved rubric path.
+- `schemaVersion`: `2`; unversioned plans and pinned launch records require
+  replanning. `task`: nonempty assignment identity; `runtime`: the actual
+  launching runtime, not the planner's analysis harness; `rubric`: saved rubric
+  path. Optional `snapshot` is historical provenance without launch authority.
 - `units`: records with unique `id`, `goal`, `audience` (one reader), `files`
   (all writer-owned paths, including associated docs/tests), `dependencies`
   (unit ids), `docs` and `checks` path lists, `size` (per-kind `added`/`removed`
   nonnegative line counts), and `verification` with one `command` and the
   `wrongImplementation` it rejects.
-- Each unit's `launches` contains one worker role (`writer`, `investigator` or
-  `mechanical`) and its proposed reviewer roles, including `first-check`. Each
-  record contains `role`, launching `runtime`, `candidate` (the selected helper
-  candidate's complete `launch` object), `line` (that same candidate's exact
-  pinned routing line), and `brief` (prepared artifact path). Also include
-  `effort`, `requirements`, optional user `pins`, optional judge `cutProposer`,
-  and `receipt` (the saved receipt path). The helper reconstructs each request
-  from the plan task, unit id, actual brief and rubric before comparing pinned
-  candidates; a receipt cannot be shared between different units. Include every
-  finder, first-check, second-check and judge that will run; the helper's floor
-  enforces family trial restrictions and requires known maker independence from
-  the writer and, for cut judgment, the proposer. Capability decisions come only
-  from the validated classifier receipt.
+- Each unit's `roles` contains exactly one worker (`writer`, `investigator` or
+  `mechanical`) and unique reviewer roles, including `first-check`. Planner and
+  classifier are bootstrap operations, never unit roles. Each record contains
+  `role`, launching `runtime`, prepared `brief`, `effort`, `requirements`,
+  optional user `pins` and a saved `receipt` path. Every review record's
+  `writer` is the unit's worker role; optional judge `cutProposer` references
+  another planned role in that unit. There is no authoritative `candidate` or
+  `line`. The helper reconstructs requests from the plan task, unit id, actual
+  brief and rubric. Receipts exclude families rather than preselect launches;
+  receipts cannot be shared across units or roles. Include every finder,
+  first-check, second-check and judge that will run. Current tier, trial, maker,
+  availability, user pin and pool gates still apply to classifier-kept families.
+  Cut judgment requires one proposer and judge combination independent of the
+  worker, with the judge also independent of that same proposer.
 - `waves`: ordered lists of unit ids. Put at most ten simultaneous delegates in
   a wave, honoring lower host/user caps. Each unit contributes one concurrent
   delegate because its worker and reviewers run in sequence. Writers in one wave
@@ -57,13 +56,16 @@ saved plan; writer file ownership is repository-relative):
   next writer. Review wave membership is not permission to launch an entire
   unrevised branch.
 
-The saved helper snapshot records provenance. Execution uses the current
-snapshot returned by the orchestrator's check-plan operation. Do not add age
-limits or fingerprints of unrelated configuration. A downstream delegate that
-launches work in another runtime needs a separate plan/check using that
-runtime's rendered helper and session pool, even if a planner in another harness
-prepares it. The helper validates specifications and reads registered Readers;
-it never executes a delegate or probe.
+Check-plan validates receipts and current feasibility against one fresh pool
+snapshot. A later enriched review brief requires classification for that role
+again; receipts for unchanged roles remain reusable. Pool movement can remove
+all feasible assignments after a successful check, so validation never reserves
+a future launch. Do not add age limits or fingerprints of unrelated
+configuration. A downstream delegate that launches work in another runtime needs
+a separate plan/check using that runtime's rendered helper and session pool,
+even if a planner in another harness prepares it. The helper validates
+specifications and reads registered Readers; it never executes a delegate or
+probe.
 
 Prepare briefs using the relevant resolved Choose execution, Work, Review and
 Validate the result policy, including external-launch declarations, the
