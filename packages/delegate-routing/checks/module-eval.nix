@@ -950,6 +950,23 @@
         && hasProse "Family tables are reference material" companion)
       runtimes
     );
+    # Reject projections that still authorize saved launches or omit dispatch facts.
+    "module-delegate-routing-${name}-dispatch-contract" = mkTest "delegate-routing-${name}-dispatch-contract" (
+      lib.all (runtime: let
+        entry = readSkill result runtime;
+        companion = readPlanner result runtime;
+      in
+        lib.all (text:
+          lib.all (needle: hasProse needle text) [
+            "--dispatch <plan.json> --role <role> --launch-context <facts.json>"
+            "save `dispatch.execution`"
+            "A disagreeing context `writer` cannot replace the recorded worker"
+            "Choose reviewers after their writer finishes"
+          ]
+          && !(hasProse "bind each exact role/runtime/candidate/pinned line" text)
+          && !(hasProse "Treat pinned lines as specifications" text)) [entry companion])
+      runtimes
+    );
     # Reject hard-coded default-only projection: disabled entries stay absent,
     # custom always-on entries and runtime replacements also reach the planner.
     "module-delegate-routing-${name}-planner-custom-context" = mkTest "delegate-routing-${name}-planner-custom-context" (let

@@ -153,6 +153,15 @@ organic planner compliance, concurrent execution, review independence,
 authentication or live budget freshness; inspect actual helper and launch calls
 before making those claims. No live helper-backed sessions have been measured.
 
+The independent-wave setup also dispatches each unit's writer and then its first
+check through `--dispatch`, saving `setup-<unit>-<role>-dispatch.json`. It
+relays the returned writer execution record as observed provenance before review
+selection. The records simulate tool binding; setup launches no delegate and
+establishes no harness compliance. Runtime regressions separately exercise
+budget movement, newly observed routes, actual participant changes, stale review
+briefs and missing/conflicting provenance. Plan fixtures contain role intent and
+receipts, without candidate or launch-line authority.
+
 The standalone default `--dry-run` may realize generated Nix inputs, including
 the packaged helper and fake Readers. In environments prohibiting builds, use an
 already realized `--fixtures` export or report that limitation; Python

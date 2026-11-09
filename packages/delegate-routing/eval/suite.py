@@ -711,6 +711,13 @@ def exercise_helper(case, repo, logs):
         if checked["output"]["validation"] != {"status": "valid", "task": "independent pure functions", "units": 2, "waves": 1}:
             raise ValueError("helper did not validate the independent two-unit wave")
         write_json(logs / "setup-plan-validation.json", checked)
+        for unit in units:
+            # These observed records simulate tool binding; no fixture delegate runs.
+            context = {"executions": [], "nonInteractive": True, "subject": {"task": "independent pure functions", "unit": unit["id"]}, "techniques": context["techniques"]}
+            for role in ("writer", "first-check"):
+                dispatched = invoke(["--dispatch", str(plan_path), "--role", role])
+                write_json(logs / f"setup-{unit['id']}-{role}-dispatch.json", dispatched)
+                context["executions"].append(dispatched["output"]["dispatch"]["execution"])
 
 
 def validate(cases):

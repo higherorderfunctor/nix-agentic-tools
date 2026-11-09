@@ -1118,6 +1118,17 @@ class Routing(unittest.TestCase):
                 save_plan_receipt(root, self.prepared_manifest(), artifact, unit, unit["roles"][1])
             self.assertEqual(helper.check_plan(artifact, current, root, manifest=self.prepared_manifest(), context=self.prepared_context())["status"], "valid")
 
+    def test_plan_conflicting_pins_are_refused(self):
+        # Wrong: launch-context pins silently replace the saved user's intent.
+        config, facts = self.prepared_manifest(), self.prepared_context()
+        current, _ = self.run_plan(config, facts)
+        with tempfile.TemporaryDirectory(prefix="routing-artifact-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            artifact["units"][0]["roles"][0]["pins"] = {"family": "sol"}
+            with self.assertRaisesRegex(ValueError, "conflicting.*pin.*family"):
+                helper.check_plan(artifact, current, root, manifest=config, context=facts)
+
     def test_plan_dependencies_waves_and_ownership(self):
         # Wrong: cycle acceptance, ordering ignored, runtime cap, forced serialization.
         current, _ = self.run_prepared_plan(roles=("writer", "first-check", "second-check", "judge"))
@@ -1140,7 +1151,7 @@ class Routing(unittest.TestCase):
             cases.append((changed, "overlapping same-wave writer files"))
             changed = deepcopy(artifact)
             changed["units"][0]["id"] = "1"
-            cases.append((changed, "request hash mismatch"))
+            cases.append((changed, "unit ids must be nonempty and unique"))
             changed = deepcopy(artifact)
             changed["units"][0]["files"].append("../outside.py")
             cases.append((changed, "repository-relative"))
@@ -1292,6 +1303,259 @@ class Routing(unittest.TestCase):
             self.assertEqual(json.loads(proc.stdout)["status"], "error")
             self.assertEqual(json.loads(proc.stdout)["errors"], ["writer: never step down a tier; report a loop failure."])
             self.assertIn("never step down a tier; report a loop failure.", proc.stderr)
+
+
+class Dispatch(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory(prefix="dispatch-")
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        fixtures = Routing()
+        self.config = fixtures.prepared_manifest()
+        self.config["routes"][1]["family"]["cost"] = 4
+        self.artifact = fixtures.prepared_plan(self.root, count=1)
+        self.unit = self.artifact["units"][0]
+        self.facts = {"executions": [], "nonInteractive": True, "subject": {"task": self.artifact["task"], "unit": "0"}, "techniques": context()["techniques"]}
+        self.outputs = {}
+
+    def invoke(self, role="writer", extra=(), check=False):
+        for name, value in (("manifest", self.config), ("context", self.facts), ("plan", self.artifact)):
+            (self.root / f"{name}.json").write_text(json.dumps(value))
+        args = ["helper", "--manifest", str(self.root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(self.root / "context.json"), "--now", "2026-11-15T00:00:00Z"]
+        args += ["--check-plan" if check else "--dispatch", str(self.root / "plan.json")]
+        for name in (tuple(record["role"] for record in self.unit["roles"]) if check else (role,)):
+            args += ["--role", name]
+        out, err = io.StringIO(), io.StringIO()
+        def reader(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 0, self.outputs.get(argv[4].split("\n", 1)[1], stream()))
+        with patch.object(sys, "argv", args + list(extra)), patch.object(helper, "run_reader", side_effect=reader) as run, patch.object(helper.subprocess, "Popen", side_effect=AssertionError("non-Reader subprocess")), redirect_stdout(out), redirect_stderr(err):
+            code = helper.main()
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual([line for line in err.getvalue().splitlines() if line.startswith("pool=")], [f"pool={name} status=measured" for name in ("hidden", "outside", "session")])
+        return code, json.loads(out.getvalue()), err.getvalue()
+
+    def launch(self, role="writer"):
+        code, output, _ = self.invoke(role)
+        self.assertEqual(code, 0, output)
+        self.assertEqual(len(output["roles"][role]["candidates"]), 1)
+        self.facts["executions"].append(output["dispatch"]["execution"])
+        return output
+
+    def receipts(self, keep=None):
+        for record in self.unit["roles"]:
+            save_plan_receipt(self.root, self.config, self.artifact, self.unit, record, (keep or {}).get(record["role"]))
+
+    def test_worker_dispatch_uses_highest_ranked_feasible_assignment(self):
+        # Wrong: preflight finds an author, dispatch still picks the infeasible sol.
+        self.config["routes"][1]["techniques"].append(technique("Workflow", "workflow"))
+        self.facts["techniques"].append({"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "Workflow"})
+        self.receipts({"first-check": "sol", "second-check": "sol", "judge": "sol"})
+        output = self.launch()
+        self.assertEqual(output["dispatch"]["launch"]["family"], "author")
+        self.assertEqual(output["roles"]["writer"]["candidates"][0]["alternatives"], [])
+        self.assertEqual(output["dispatch"]["execution"], {"unit": "0", "role": "writer", "family": "author", "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent", "effort": "high", "receiptHash": output["receipt"]["receiptHash"]})
+        self.assertIn("no independent review assignment", str(output["roles"]["writer"]["exclusions"]))
+        code, repeated, _ = self.invoke()
+        self.assertEqual(code, 2)
+        self.assertIn("worker execution already recorded", str(repeated["errors"]))
+        self.unit["roles"][-1]["cutProposer"] = "first-check"
+        self.config["routes"].append(route("third", maker="third-maker"))
+        self.config["familyCatalog"].append(self.config["routes"][-1]["family"])
+        self.facts["executions"] = []
+        self.receipts({"writer": "author", "second-check": "sol", "judge": "sol"})
+        self.assertEqual(self.launch()["dispatch"]["launch"]["family"], "author")
+
+    def test_review_dispatch_uses_fresh_pools_and_actual_writer(self):
+        # Wrong: successful check-plan freezes reviewers or invents the old writer.
+        self.config["routes"].append(route("replacement", pool="session", techniques=[technique(model="new-model")], maker="third-maker", cost=4))
+        self.config["familyCatalog"].append(self.config["routes"][-1]["family"])
+        self.receipts()
+        self.facts["roles"] = context(("writer", "first-check", "second-check", "judge"))["roles"]
+        self.assertEqual(self.invoke(check=True)[0], 0)
+        self.facts.pop("roles")
+        self.launch()
+        self.assertEqual(self.launch("first-check")["dispatch"]["launch"]["family"], "author")
+        self.facts["executions"].pop()
+        self.facts["techniques"].append({"efforts": ["high"], "model": "new-model", "runtime": "codex", "technique": "spawn_agent"})
+        self.outputs["reader-session"] = stream({"monthly": window(95)})
+        self.assertEqual(self.launch("first-check")["dispatch"]["launch"]["family"], "replacement")
+        self.facts["executions"].pop()
+        self.facts["executions"][0]["family"] = "author"
+        self.outputs = {}
+        self.assertEqual(self.launch("first-check")["dispatch"]["launch"]["family"], "sol")
+
+    def test_completed_reviews_revalidate_recorded_writer_before_every_operation(self):
+        # Wrong: a completed review survives a change to a same-maker writer.
+        self.receipts({"writer": "author"})
+        self.assertEqual(self.launch()["dispatch"]["launch"]["family"], "author")
+        writer = deepcopy(self.facts["executions"])
+        for completed in ("first-check", "second-check", "judge"):
+            self.facts["executions"] = deepcopy(writer)
+            self.assertEqual(self.launch(completed)["dispatch"]["launch"]["family"], "sol")
+            self.facts["executions"][0]["family"] = "sol"
+            expected = {
+                "first-check": "0/first-check: completed review conflicts with recorded participants: same maker as writer: openai",
+                "second-check": "0/second-check: completed review conflicts with recorded participants: same maker as writer: openai",
+                "judge": "0/judge: completed review conflicts with recorded participants: same maker as writer: openai",
+            }[completed]
+            for role in ("writer", "first-check", "second-check", "judge"):
+                with self.subTest(completed=completed, dispatch=role):
+                    code, output, _ = self.invoke(role)
+                    self.assertEqual(code, 2)
+                    self.assertEqual(output["errors"], [expected])
+                    self.assertNotIn("dispatch", output)
+            self.facts["roles"] = context(("writer", "first-check", "second-check", "judge"))["roles"]
+            with self.subTest(completed=completed, check=True):
+                code, output, _ = self.invoke(check=True)
+                self.assertEqual(code, 2)
+                self.assertEqual(output["errors"], [expected])
+            self.facts.pop("roles")
+
+    def test_completed_judge_revalidates_recorded_cut_proposer(self):
+        # Wrong: a completed judge survives a change to a same-maker proposer.
+        self.config["routes"].append(route("third", maker="third-maker"))
+        self.config["familyCatalog"].append(self.config["routes"][-1]["family"])
+        self.unit["roles"][-1]["cutProposer"] = "first-check"
+        self.receipts({"writer": "author", "first-check": "third", "judge": "sol"})
+        self.launch()
+        self.launch("first-check")
+        self.launch("judge")
+        self.facts["executions"][1]["family"] = "sol"
+        expected = ["0/judge: completed review conflicts with recorded participants: same maker as cut proposer: openai"]
+        for role in ("writer", "first-check", "second-check", "judge"):
+            with self.subTest(dispatch=role):
+                code, output, _ = self.invoke(role)
+                self.assertEqual(code, 2)
+                self.assertEqual(output["errors"], expected)
+                self.assertNotIn("dispatch", output)
+        self.facts["roles"] = context(("writer", "first-check", "second-check", "judge"))["roles"]
+        code, output, _ = self.invoke(check=True)
+        self.assertEqual(code, 2)
+        self.assertEqual(output["errors"], expected)
+
+    def test_review_dispatch_refuses_missing_unknown_and_conflicting_records(self):
+        # Wrong: missing provenance falls back to a hypothetical planned writer.
+        code, output, _ = self.invoke("first-check")
+        self.assertEqual(code, 2)
+        self.assertIn("missing execution for 0/writer", str(output["errors"]))
+        self.launch()
+        original = deepcopy(self.facts)
+        mutations = [
+            (lambda f: f["executions"].append(deepcopy(f["executions"][0])), "duplicate execution"),
+            (lambda f: f["executions"][0].update(family="unknown"), "unknown execution family"),
+            (lambda f: f["executions"][0].update(role="planner"), "unplanned execution"),
+            (lambda f: f["executions"][0].update(unit="another"), "unplanned execution"),
+            (lambda f: f["executions"][0].update(model="gpt-*"), "concrete model"),
+            (lambda f: f["executions"][0].update(receiptHash="sha256:" + "0" * 64), "execution receipt hash"),
+            (lambda f: f["executions"][0].update(effort="ultra"), "execution effort"),
+            (lambda f: f.update(roles={"first-check": {"writer": "author"}}), "conflicting.*writer"),
+        ]
+        for mutate, reason in mutations:
+            self.facts = deepcopy(original)
+            mutate(self.facts)
+            with self.subTest(reason=reason):
+                code, output, _ = self.invoke("first-check")
+                self.assertEqual(code, 2, output)
+                self.assertRegex(str(output["errors"]), reason)
+                self.assertNotIn("dispatch", output)
+        self.facts = original
+        self.config["routes"][0]["family"]["maker"] = None
+        code, output, _ = self.invoke("first-check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("writer maker unknown", str(output["roles"]["first-check"]["exclusions"]))
+
+    def test_judge_dispatch_uses_recorded_cut_proposer(self):
+        # Wrong: judge tests independence against a future or different proposer.
+        self.config["routes"].append(route("third", maker="third-maker"))
+        self.config["familyCatalog"].append(self.config["routes"][-1]["family"])
+        self.unit["roles"][-1]["cutProposer"] = "first-check"
+        self.receipts({"writer": "author", "judge": "sol"})
+        self.launch()
+        code, output, _ = self.invoke("judge")
+        self.assertEqual(code, 2)
+        self.assertIn("missing execution for 0/first-check", str(output["errors"]))
+        self.launch("first-check")
+        self.assertEqual(self.invoke("judge")[0], 1)
+        self.facts["roles"] = context(("writer", "first-check", "second-check", "judge"))["roles"]
+        code, output, _ = self.invoke(check=True)
+        self.assertEqual(code, 2)
+        self.assertIn("no feasible worker/review assignment", str(output["errors"]))
+        self.facts.pop("roles")
+        self.facts["executions"][-1]["family"] = "third"
+        self.assertEqual(self.launch("judge")["dispatch"]["launch"]["family"], "sol")
+        self.facts["executions"].pop()
+        self.facts["roles"] = {"judge": {"cutProposer": "sol"}}
+        code, output, _ = self.invoke("judge")
+        self.assertEqual(code, 2)
+        self.assertIn("conflicting cutProposer", str(output["errors"]))
+
+    def test_enriched_review_requires_only_its_new_receipt(self):
+        # Wrong: stale review bytes dispatch, or refreshing them invalidates writer.
+        worker_receipt = (self.root / "0-writer.json").read_bytes()
+        self.launch()
+        with (self.root / "first-check.md").open("a") as brief:
+            brief.write("Earlier check evidence.\n")
+        code, output, _ = self.invoke("first-check")
+        self.assertEqual(code, 2)
+        self.assertIn("request hash mismatch", str(output["errors"]))
+        save_plan_receipt(self.root, self.config, self.artifact, self.unit, self.unit["roles"][1])
+        with (self.root / "judge.md").open("a") as brief:
+            brief.write("A different role's new evidence.\n")
+        self.assertEqual(self.launch("first-check")["dispatch"]["launch"]["family"], "author")
+        self.assertEqual((self.root / "0-writer.json").read_bytes(), worker_receipt)
+
+    def test_dispatch_refuses_conflicting_semantics_and_merges_only_new_pins(self):
+        # Wrong: context overwrites authoritative intent, including saved pins.
+        self.unit["roles"][0]["pins"] = {"family": "author"}
+        for key, value in (("brief", "different.md"), ("effort", "medium"), ("requirements", {"constraints": [], "inputKinds": ["image"]}), ("pins", {"family": "sol"})):
+            self.facts["roles"] = {"writer": {key: value}}
+            with self.subTest(field=key):
+                code, output, _ = self.invoke()
+                self.assertEqual(code, 2)
+                self.assertIn("conflicting", str(output["errors"]))
+        self.facts["roles"] = {"writer": {"effort": "high", "pins": {"family": "author", "model": "gpt-6.1-sol"}}}
+        code, output, stderr = self.invoke()
+        self.assertEqual(code, 0, output)
+        self.assertEqual(output["decisions"]["0/writer"]["pins"], {"family": "author", "model": "gpt-6.1-sol"})
+        self.assertIn("pin: 0/writer model=gpt-6.1-sol", stderr)
+        self.facts["rubric"] = "another.md"
+        code, output, _ = self.invoke()
+        self.assertEqual(code, 2)
+        self.assertIn("conflicting rubric", str(output["errors"]))
+
+    def test_dispatch_rechecks_exhaustion_after_check_plan(self):
+        # Wrong: earlier validation authorizes a launch after reviewers disappear.
+        self.facts["roles"] = context(("writer", "first-check", "second-check", "judge"))["roles"]
+        self.assertEqual(self.invoke(check=True)[0], 0)
+        self.facts.pop("roles")
+        self.launch()
+        self.outputs["reader-outside"] = stream({"monthly": window(0)})
+        code, output, _ = self.invoke("first-check")
+        self.assertEqual(code, 1, output)
+        self.assertNotIn("dispatch", output)
+        self.assertEqual(output["roles"]["first-check"]["candidates"], [])
+
+    def test_dispatch_refuses_wrong_subject_operation_and_unsafe_artifacts(self):
+        # Wrong: dispatch bypasses unit identity, confinement or saved-plan shape.
+        for subject in ({"task": "another", "unit": "0"}, {"task": self.artifact["task"], "unit": "missing"}):
+            self.facts["subject"] = subject
+            code, output, _ = self.invoke()
+            self.assertEqual(code, 2)
+            self.assertIn("dispatch subject", str(output["errors"]))
+        self.facts["subject"] = {"task": self.artifact["task"], "unit": "0"}
+        code, output, _ = self.invoke(extra=["--receipt", "unused.json"])
+        self.assertEqual(code, 2)
+        self.assertIn("one operation", str(output["errors"]))
+        for path in ("../receipt.json", str(self.root / "0-writer.json")):
+            self.unit["roles"][0]["receipt"] = path
+            code, output, _ = self.invoke()
+            self.assertEqual(code, 2)
+            self.assertIn("plan-relative", str(output["errors"]))
+        self.unit["roles"][0]["receipt"] = "0-writer.json"
+        self.artifact["waves"] = [["missing"]]
+        code, output, _ = self.invoke()
+        self.assertEqual(code, 2)
+        self.assertIn("known unit", str(output["errors"]))
 
 
 if __name__ == "__main__":

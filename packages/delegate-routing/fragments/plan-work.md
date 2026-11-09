@@ -60,12 +60,21 @@ Check-plan validates receipts and current feasibility against one fresh pool
 snapshot. A later enriched review brief requires classification for that role
 again; receipts for unchanged roles remain reusable. Pool movement can remove
 all feasible assignments after a successful check, so validation never reserves
-a future launch. Do not add age limits or fingerprints of unrelated
-configuration. A downstream delegate that launches work in another runtime needs
-a separate plan/check using that runtime's rendered helper and session pool,
-even if a planner in another harness prepares it. The helper validates
-specifications and reads registered Readers; it never executes a delegate or
-probe.
+a future launch. After validation, use
+`--dispatch <plan.json> --role <role> --launch-context <facts.json>` before each
+actual launch, following Routing helper. The plan supplies the selected request
+and receipt; context duplicates must agree, including overlapping user pins.
+Record actual tool bindings in `executions` outside plan intent. Worker dispatch
+ranks only workers with a currently feasible review assignment; review dispatch
+uses the recorded worker and, for cut judgment, the recorded proposer. A known
+proposer constrains feasibility to that actual identity; an unplanned proposer
+requires updated role intent and validation. Never replace missing execution
+facts with a hypothetical writer. Do not add age limits or fingerprints of
+unrelated configuration. A downstream delegate that launches work in another
+runtime needs a separate plan/check using that runtime's rendered helper and
+session pool, even if a planner in another harness prepares it. The helper
+validates specifications and reads registered Readers; it never executes a
+delegate or probe.
 
 Prepare briefs using the relevant resolved Choose execution, Work, Review and
 Validate the result policy, including external-launch declarations, the

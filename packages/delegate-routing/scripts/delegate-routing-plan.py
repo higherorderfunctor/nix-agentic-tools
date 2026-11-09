@@ -118,7 +118,7 @@ def semantic_evidence(receipt, request):
 
 
 def classification_request(manifest, context, role, directory):
-    closed(context, ("roles", "rubric", "subject", "techniques"), ("nonInteractive",))
+    closed(context, ("roles", "rubric", "subject", "techniques"), ("nonInteractive", "executions"))
     closed(context["subject"], ("task", "unit"))
     for value in context["subject"].values():
         nonempty(value)
@@ -495,7 +495,7 @@ def plan(manifest, context, roles, now, pools, *, semantic):
             elif pace is not None:
                 key = (name, scope)
                 family_paces[key] = min(family_paces.get(key, pool["pace"]), pace)
-    families = [route["family"] for route in manifest["routes"] + manifest["manualRoutes"]]
+    families = manifest.get("familyCatalog", [route["family"] for route in manifest["routes"] + manifest["manualRoutes"]])
     if session is None:
         warnings.append("session pool unknown; buffer rule cannot be certified")
     elif pools[session]["status"] != "measured":
@@ -578,9 +578,14 @@ def plan(manifest, context, roles, now, pools, *, semantic):
     return result
 
 
-def feasible_unit(manifest, context, records, semantic, worker, current):
+def feasible_unit(manifest, context, records, semantic, worker, current, executions):
     """Keep ranked workers that admit one consistent independent review assignment."""
     def eligible(role, participants):
+        if role in executions:
+            execution = executions[role]
+            family = next(item for item in manifest["familyCatalog"] if item["name"] == execution["family"])
+            reason = maker_exclusion(family, participants, role, manifest["familyCatalog"])
+            return {"candidates": [] if reason else [{"launch": execution}], "exclusions": [{"reason": reason}] if reason else []}
         record = records[role]
         request = {key: record[key] for key in ("brief", "effort", "requirements", "pins") if key in record}
         request.update(participants)
@@ -619,8 +624,8 @@ def feasible_unit(manifest, context, records, semantic, worker, current):
     return {worker: workers} | witness
 
 
-def check_plan(artifact, current, directory, max_concurrency=10, *, manifest, context):
-    """Validate role intent, receipts and current whole-unit feasibility."""
+def plan_units(artifact, current, directory, max_concurrency):
+    """Validate role intent, artifact confinement, ownership and launch waves."""
     if not isinstance(artifact, dict) or type(artifact.get("schemaVersion")) is not int or artifact["schemaVersion"] != 2:
         raise ValueError("replan with schemaVersion=2 role intent; unversioned/pinned plans are no longer supported")
     closed(artifact, ("schemaVersion", "task", "runtime", "rubric", "units", "waves"), ("snapshot",))
@@ -675,14 +680,10 @@ def check_plan(artifact, current, directory, max_concurrency=10, *, manifest, co
         if len(set(roles)) != len(roles) or sum(role in ("investigator", "mechanical", "writer") for role in roles) != 1 or "first-check" not in roles:
             raise ValueError(f"{identity}: one worker and a first-check review barrier required")
         worker = next(role for role in roles if not ROLE_POLICY[role]["review"])
-        requests, semantic = {}, {}
         for record in records:
             role = record["role"]
             if record["runtime"] != current["runtime"]:
                 raise ValueError(f"{identity}: launch runtime requires its own helper validation")
-            if role not in context["roles"]:
-                raise ValueError(f"{identity}: {role} missing from --role coverage/context")
-            validate_role_record(context["roles"][role])
             if ROLE_POLICY[role]["review"]:
                 if record.get("writer") != worker:
                     raise ValueError(f"{identity}: {role} requires the unit worker role reference")
@@ -692,20 +693,6 @@ def check_plan(artifact, current, directory, max_concurrency=10, *, manifest, co
                 raise ValueError(f"{identity}: judge requires a distinct planned proposer role reference")
             if rubric not in confined_read(directory, record["brief"], RESULT_LIMIT, "plan").decode("utf-8"):
                 raise ValueError(f"{identity}: {role} brief must contain the full rubric verbatim")
-            request_record = {key: record[key] for key in ("brief", "effort", "requirements")}
-            request_record["pins"] = record.get("pins", {}) | context["roles"][role].get("pins", {})
-            current.setdefault("decisions", {})[f"{identity}/{role}"] = user_pins(request_record)
-            unit_context = context | {"roles": {role: request_record}, "rubric": artifact["rubric"], "subject": {"task": artifact["task"], "unit": identity}}
-            request, digest = classification_request(manifest, unit_context, role, directory)
-            receipt = strict_json(confined_read(directory, record["receipt"], RESULT_LIMIT, "plan").decode("utf-8"))
-            validate_receipt(receipt, manifest, request, digest)
-            requests[role] = record | request_record
-            semantic[role] = semantic_evidence(receipt, request)
-        try:
-            decisions = feasible_unit(manifest, context, requests, semantic, worker, current)
-        except ValueError as error:
-            raise ValueError(f"{identity}: {error}") from error
-        current.setdefault("unitRoles", {}).update({f"{identity}/{role}": decision for role, decision in decisions.items()})
     for identity, unit in indexed.items():
         if any(dependency not in indexed for dependency in unit["dependencies"]):
             raise ValueError(f"{identity}: unknown dependency")
@@ -733,7 +720,154 @@ def check_plan(artifact, current, directory, max_concurrency=10, *, manifest, co
         seen.update(wave)
     if seen != set(indexed):
         raise ValueError("each known unit must appear in exactly one wave")
-    return {"status": "valid", "task": artifact["task"], "units": len(units), "waves": len(waves)}
+    return indexed
+
+
+def plan_role(artifact, unit, record, context, directory, manifest, current, *, dispatch=False):
+    """Read one role's semantic request and receipt without launch authority."""
+    role = record["role"]
+    observed = context.get("roles", {}).get(role, {})
+    if dispatch:
+        closed(observed, (), ("brief", "cutProposer", "effort", "pins", "requirements", "writer"))
+        for key in ("brief", "effort", "requirements"):
+            if key in observed and observed[key] != record[key]:
+                raise ValueError(f"{unit['id']}/{role}: conflicting {key} in launch context")
+        if "rubric" in context and context["rubric"] != artifact["rubric"]:
+            raise ValueError("conflicting rubric in launch context")
+    else:
+        if role not in context["roles"]:
+            raise ValueError(f"{unit['id']}: {role} missing from --role coverage/context")
+        validate_role_record(observed)
+    pins = record.get("pins", {})
+    user_pins(record)
+    user_pins(observed)
+    for key in pins.keys() & observed.get("pins", {}).keys():
+        if pins[key] != observed["pins"][key]:
+            raise ValueError(f"{unit['id']}/{role}: conflicting pin {key} in launch context")
+    request_record = {key: record[key] for key in ("brief", "effort", "requirements")}
+    request_record["pins"] = pins | observed.get("pins", {})
+    current.setdefault("decisions", {})[f"{unit['id']}/{role}"] = user_pins(request_record)
+    facts = {key: context[key] for key in ("nonInteractive", "techniques") if key in context}
+    facts.update({"roles": {role: request_record}, "rubric": artifact["rubric"], "subject": {"task": artifact["task"], "unit": unit["id"]}})
+    request, digest = classification_request(manifest, facts, role, directory)
+    receipt = strict_json(confined_read(directory, record["receipt"], RESULT_LIMIT, "plan").decode("utf-8"))
+    validate_receipt(receipt, manifest, request, digest)
+    return record | request_record, semantic_evidence(receipt, request), receipt
+
+
+def execution_records(context, units, manifest, directory):
+    """Validate relayed launch provenance, without reapplying completed-launch budgets."""
+    values = context.get("executions", [])
+    if not isinstance(values, list):
+        raise ValueError("executions must be a list of actual participant records")
+    records, families = {}, {family["name"]: family for family in manifest["familyCatalog"]}
+    for value in values:
+        closed(value, ("unit", "role", "family", "model", "runtime", "technique", "effort", "receiptHash"))
+        for field in value.values():
+            nonempty(field)
+        key = value["unit"], value["role"]
+        unit = units.get(value["unit"], {})
+        record = next((record for record in unit.get("roles", []) if record["role"] == value["role"]), None)
+        if record is None:
+            raise ValueError(f"unplanned execution: {key[0]}/{key[1]}; update role intent and validate it")
+        if key in records:
+            raise ValueError(f"duplicate execution: {key[0]}/{key[1]}")
+        if value["family"] not in families:
+            raise ValueError(f"unknown execution family: {value['family']}")
+        if any(character in value["model"] for character in "*?["):
+            raise ValueError("execution requires a concrete model")
+        receipt = strict_json(confined_read(directory, record["receipt"], RESULT_LIMIT, "plan").decode("utf-8"))
+        body = {key: item for key, item in receipt.items() if key != "receiptHash"}
+        if value["receiptHash"] != receipt["receiptHash"] or receipt_hash(body) != value["receiptHash"]:
+            raise ValueError(f"execution receipt hash disagrees with {key[0]}/{key[1]}")
+        effective = record["effort"] if record["effort"] is not None else families[value["family"]].get("defaultEffort")
+        if value["effort"] != effective:
+            raise ValueError(f"execution effort disagrees with {key[0]}/{key[1]}")
+        records[key] = value
+    # Completed reviews must remain independent of the current actual participants.
+    for (identity, role), execution in records.items():
+        if not ROLE_POLICY[role]["review"]:
+            continue
+        intent = next(record for record in units[identity]["roles"] if record["role"] == role)
+        participants = {}
+        for field in ("writer", "cutProposer"):
+            if field in intent:
+                reference = identity, intent[field]
+                if reference not in records:
+                    raise ValueError(f"missing execution for {identity}/{intent[field]}")
+                participants[field] = records[reference]["family"]
+        reason = maker_exclusion(families[execution["family"]], participants, role, manifest["familyCatalog"])
+        if reason:
+            raise ValueError(f"{identity}/{role}: completed review conflicts with recorded participants: {reason}")
+    return records
+
+
+def check_plan(artifact, current, directory, max_concurrency=10, *, manifest, context):
+    """Validate exact receipt coverage and current whole-unit feasibility."""
+    units = plan_units(artifact, current, directory, max_concurrency)
+    executions = execution_records(context, units, manifest, directory)
+    for identity, unit in units.items():
+        requests, semantic = {}, {}
+        for record in unit["roles"]:
+            request, evidence, _ = plan_role(artifact, unit, record, context, directory, manifest, current)
+            requests[record["role"]], semantic[record["role"]] = request, evidence
+        worker = next(role for role in requests if not ROLE_POLICY[role]["review"])
+        actual = {role: value for (unit_id, role), value in executions.items() if unit_id == identity}
+        try:
+            decisions = feasible_unit(manifest, context, requests, semantic, worker, current, actual)
+        except ValueError as error:
+            raise ValueError(f"{identity}: {error}") from error
+        current.setdefault("unitRoles", {}).update({f"{identity}/{role}": decision for role, decision in decisions.items()})
+    return {"status": "valid", "task": artifact["task"], "units": len(units), "waves": len(artifact["waves"])}
+
+
+def dispatch_plan(artifact, current, directory, role, max_concurrency, *, manifest, context):
+    """Choose one current launch using role receipts and actual participant identities."""
+    closed(context, ("subject", "techniques"), ("executions", "nonInteractive", "roles", "rubric"))
+    closed(context["subject"], ("task", "unit"))
+    units = plan_units(artifact, current, directory, max_concurrency)
+    subject = context["subject"]
+    if subject["task"] != artifact["task"] or subject["unit"] not in units:
+        raise ValueError("dispatch subject must identify the saved task and a planned unit")
+    unit = units[subject["unit"]]
+    records = {record["role"]: record for record in unit["roles"]}
+    if role not in records:
+        raise ValueError(f"dispatch role {role} is not planned for {unit['id']}")
+    executions = execution_records(context, units, manifest, directory)
+    actual = {name: value for (unit_id, name), value in executions.items() if unit_id == unit["id"]}
+    record, semantic, receipt = plan_role(artifact, unit, records[role], context, directory, manifest, current, dispatch=True)
+    if ROLE_POLICY[role]["review"]:
+        observed = context.get("roles", {}).get(role, {})
+        participants = {}
+        for field in ("writer", "cutProposer"):
+            if field in record:
+                reference = record[field]
+                if reference not in actual:
+                    raise ValueError(f"missing execution for {unit['id']}/{reference}")
+                participants[field] = actual[reference]["family"]
+            if field in observed and observed[field] != participants.get(field):
+                raise ValueError(f"conflicting {field} with recorded participant")
+        request = {key: record[key] for key in ("brief", "effort", "requirements", "pins")}
+        decision = plan(manifest, context | {"roles": {role: request | participants}}, [role], utc(current["snapshot"]), current["pools"], semantic=semantic)
+        current["warnings"] = list(dict.fromkeys(current["warnings"] + decision["warnings"]))
+        chosen = decision["roles"][role]
+    else:
+        if role in actual:
+            raise ValueError("worker execution already recorded; reconcile actual participants before another dispatch")
+        requests, evidence = {role: record}, {role: semantic}
+        for name, intent in records.items():
+            if name != role:
+                requests[name], evidence[name], _ = plan_role(artifact, unit, intent, context, directory, manifest, current, dispatch=True)
+        chosen = feasible_unit(manifest, context, requests, evidence, role, current, actual)[role]
+    chosen["candidates"] = chosen["candidates"][:1]
+    current["roles"] = {role: chosen}
+    current["receipt"] = receipt
+    if chosen["candidates"]:
+        candidate = chosen["candidates"][0]
+        candidate["alternatives"] = []
+        launch = candidate["launch"]
+        execution = {key: launch[key] for key in ("family", "model", "runtime", "technique", "effort")}
+        current["dispatch"] = {"launch": launch | {"pool": candidate["pool"]}, "line": candidate["line"], "execution": execution | {"unit": unit["id"], "role": role, "receiptHash": receipt["receiptHash"]}}
 
 
 class RoutingParser(argparse.ArgumentParser):
@@ -760,6 +894,7 @@ def main():
     parser.add_argument("--check-plan", help="validate saved JSON and prepared briefs against this invocation")
     parser.add_argument("--classification", help="accept a saved preparation and relayed classifier result JSON")
     parser.add_argument("--classify-role", choices=sorted(ROLE_POLICY.keys() - {"classifier"}), help="prepare one unit-role classifier exchange")
+    parser.add_argument("--dispatch", help="choose one planned unit-role using current pools and actual executions")
     parser.add_argument("--receipt", help="reuse validated capability decisions with fresh Readers")
     parser.add_argument("--max-concurrency", type=int, choices=range(1, 11), default=10, help="explicit host/user cap, at most ten")
     parser.add_argument("--manifest", required=True)
@@ -806,10 +941,13 @@ def main():
         if shell_error is not None:
             raise ValueError(shell_error)
         context = strict_json(Path(args.launch_context).read_text())
-        switches = sum(bool(value) for value in (args.check_plan, args.classification, args.classify_role, args.receipt))
+        switches = sum(bool(value) for value in (args.check_plan, args.classification, args.classify_role, args.dispatch, args.receipt))
         if switches > 1 or (not args.check_plan and len(args.role) != 1) or ((args.role == ["classifier"]) != bool(args.classify_role)):
             raise ValueError("use one target role and one operation; prepare with --role classifier --classify-role <target>")
-        if args.check_plan:
+        if args.dispatch:
+            path = Path(args.dispatch).resolve()
+            dispatch_plan(strict_json(bounded_read(path, RESULT_LIMIT).decode("utf-8")), result, path.parent, args.role[0], args.max_concurrency, manifest=manifest, context=context)
+        elif args.check_plan:
             context = context | {"roles": {role: context["roles"][role] for role in args.role if role in context["roles"]}}
             path = Path(args.check_plan).resolve()
             result["validation"] = check_plan(json.loads(path.read_text()), result, path.parent, args.max_concurrency, manifest=manifest, context=context)
