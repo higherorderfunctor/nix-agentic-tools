@@ -76,6 +76,18 @@ class HelperFixtures(unittest.TestCase):
             broken["roles"]["writer"]["candidates"][0]["pool"] = "session"
             with self.assertRaisesRegex(ValueError, "outside pool"):
                 suite.check_helper_evidence(broken, receipts)
+            # Wrong: a different-maker session reviewer disappears (for example,
+            # treating the session pool as ineligible for every review).
+            broken = deepcopy(record["output"])
+            broken["roles"]["first-check"]["candidates"] = []
+            with self.assertRaisesRegex(ValueError, "different-maker session reviewer"):
+                suite.check_helper_evidence(broken, receipts)
+            # Wrong: same-maker filtering stops recording the writer's outside
+            # family exclusion, even though a different-maker candidate remains.
+            broken = deepcopy(record["output"])
+            broken["roles"]["first-check"]["exclusions"] = [row for row in broken["roles"]["first-check"]["exclusions"] if row["family"] != "outside"]
+            with self.assertRaisesRegex(ValueError, "same-maker outside reviewer"):
+                suite.check_helper_evidence(broken, receipts)
             broken = deepcopy(record["output"])
             broken["roles"]["first-check"]["exclusions"] = [row for row in broken["roles"]["first-check"]["exclusions"] if row["family"] != "under-tier"]
             with self.assertRaisesRegex(ValueError, "mid-tier reviewer"):
