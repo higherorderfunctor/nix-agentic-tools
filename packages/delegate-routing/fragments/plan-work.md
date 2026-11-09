@@ -4,6 +4,13 @@ repeating `--role` for every planned worker and reviewer role, before selecting
 launches or writing briefs; save its complete JSON output as the plan's
 snapshot.
 
+Select the worker first, then supply its family name as `writer` in every review
+role's launch-context request. For a judge assessing proposed cuts, also supply
+the cut proposer's family as `cutProposer`. These names resolve declared makers
+from the manifest, including manual routes; provider, runtime and budget names
+never certify maker independence. Refresh the context when the worker or cut
+proposer changes. Unknown maker identity excludes review launches.
+
 The planner reads the resolved routing/workflow policy and task source once,
 then returns a saved JSON plan and prepared human-readable launch briefs in the
 working-data directory the orchestrator provided. Never invent a scratch
@@ -29,8 +36,9 @@ plan; writer file ownership is repository-relative):
   candidate's complete `launch` object), `line` (that same candidate's exact
   pinned routing line), and `brief` (prepared artifact path). Include every
   finder, first-check, second-check and judge that will run; the helper's floor
-  never proves fit, trial eligibility or independence. Honor explicit avoidFor
-  guidance and the Review step's trial restrictions.
+  never proves fit or trial eligibility; review candidates also require known
+  maker independence from the writer and, for cut judgment, the proposer. Honor
+  explicit avoidFor guidance and the Review step's trial restrictions.
 - `waves`: ordered lists of unit ids. Put at most ten simultaneous delegates in
   a wave, honoring lower host/user caps. Each unit contributes one concurrent
   delegate because its worker and reviewers run in sequence. Writers in one wave

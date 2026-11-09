@@ -14,15 +14,15 @@ import subprocess
 import sys
 
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
-ROLE_TIERS = {
-    "finder": {"strong", "frontier"},
-    "first-check": {"strong", "frontier"},
-    "investigator": {"small", "mid", "strong", "frontier"},
-    "judge": {"strong", "frontier"},
-    "mechanical": {"small", "mid", "strong", "frontier"},
-    "planner": {"strong", "frontier"},
-    "second-check": {"strong", "frontier"},
-    "writer": {"small", "mid", "strong", "frontier"},
+ROLE_POLICY = {
+    "finder": {"review": True, "tiers": {"strong", "frontier"}},
+    "first-check": {"review": True, "tiers": {"strong", "frontier"}},
+    "investigator": {"review": False, "tiers": {"small", "mid", "strong", "frontier"}},
+    "judge": {"review": True, "tiers": {"strong", "frontier"}},
+    "mechanical": {"review": False, "tiers": {"small", "mid", "strong", "frontier"}},
+    "planner": {"review": False, "tiers": {"strong", "frontier"}},
+    "second-check": {"review": True, "tiers": {"strong", "frontier"}},
+    "writer": {"review": False, "tiers": {"small", "mid", "strong", "frontier"}},
 }
 READER_TIMEOUT = 10
 
@@ -157,9 +157,33 @@ def launch(route, context, qualification, requested):
     return alternatives, exclusions
 
 
+def maker_key(value):
+    # Direct JSON manifests also reach the helper without Nix option validation.
+    return value.strip().lower() if isinstance(value, str) else None
+
+
+def maker_exclusion(family, request, role, families):
+    """Only declared makers can certify review independence, never providers."""
+    if not ROLE_POLICY[role]["review"]:
+        return None
+    maker = maker_key(family.get("maker"))
+    if not maker:
+        return "candidate maker unknown; review independence unresolved"
+    against = {"writer": request.get("writer")}
+    if role == "judge" and "cutProposer" in request:
+        against["cut proposer"] = request["cutProposer"]
+    for label, name in against.items():
+        other = maker_key(next((item.get("maker") for item in families if item["name"] == name), None))
+        if not other:
+            return f"{label} maker unknown; review independence unresolved"
+        if maker == other:
+            return f"same maker as {label}: {maker}"
+    return None
+
+
 def plan(manifest, context, roles, now, shell, run=run_reader):
     for role in roles:
-        if role not in ROLE_TIERS:
+        if role not in ROLE_POLICY:
             raise ValueError(f"unknown role: {role}")
     pool_names = {reader["name"] for reader in manifest["readers"]}
     session = manifest["sessionPool"]
@@ -178,7 +202,8 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
         if not isinstance(request, dict) or not isinstance(request.get("families", {}), dict) or not all(isinstance(value, dict) for value in request.get("families", {}).values()) or (request.get("effort") is not None and not isinstance(request["effort"], str)):
             raise ValueError(f"{role}: expected families evidence map and requested effort string/null")
     pools = collect(manifest["readers"], now, shell, run)
-    warnings = ["provider-vendor identity is provisional; fit/trial/maker independence are caller assessments"]
+    warnings = ["maker independence uses declared family metadata; fit/trial remain caller assessments"]
+    families = [route["family"] for route in manifest["routes"] + manifest["manualRoutes"]]
     if session is None:
         warnings.append("session pool unknown; buffer rule cannot be certified")
     elif pools[session]["status"] != "measured":
@@ -192,11 +217,15 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             family = route["family"]
             record = {"family": family["name"], "runtime": route["target"]}
             qualification = qualified.get(family["name"], {})
-            if family["tier"] not in ROLE_TIERS[role]:
+            if family["tier"] not in ROLE_POLICY[role]["tiers"]:
                 excluded.append(record | {"reason": "below role tier floor"})
                 continue
             if not all(isinstance(qualification.get(key), str) and qualification[key].strip() for key in ("fit", "useFor", "avoidFor", "trial")):
                 excluded.append(record | {"reason": "caller fit/useFor/avoidFor/trial evidence required"})
+                continue
+            reason = maker_exclusion(family, request, role, families)
+            if reason:
+                excluded.append(record | {"reason": reason})
                 continue
             alternatives, unresolved = launch(route, context, qualification, request.get("effort"))
             excluded.extend(record | item for item in unresolved)
@@ -293,7 +322,7 @@ def check_plan(artifact, current, directory, max_concurrency=10):
         if not isinstance(launches, list) or not launches:
             raise ValueError(f"{identity}: prepared worker/reviewer launches required")
         roles = [record["role"] for record in launches]
-        if "planner" in roles or not set(roles) <= ROLE_TIERS.keys():
+        if "planner" in roles or not set(roles) <= ROLE_POLICY.keys():
             raise ValueError(f"{identity}: only worker and reviewer roles are allowed in approved units")
         if len(set(roles)) != len(roles) or sum(role in ("investigator", "mechanical", "writer") for role in roles) != 1 or "first-check" not in roles:
             raise ValueError(f"{identity}: one worker and a first-check review barrier required")
@@ -357,7 +386,7 @@ def main():
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--reader-shell", required=True)
     parser.add_argument("--launch-context", required=True)
-    parser.add_argument("--role", action="append", required=True, choices=sorted(ROLE_TIERS))
+    parser.add_argument("--role", action="append", required=True, choices=sorted(ROLE_POLICY))
     parser.add_argument("--now", help="fixed UTC evaluation time for offline fixtures")
     args = parser.parse_args()
     try:

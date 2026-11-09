@@ -31,16 +31,16 @@ def technique(name="spawn_agent", kind="subagent", model="gpt-6.1-sol", pattern=
     return {"agent": agent, "model": {"isPattern": pattern, "value": model}, "name": name, "node": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "kind": kind, "modelArg": "slug", "notes": "caller binds task/output paths"}}
 
 
-def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None):
-    return {"family": {"avoidFor": "sole judge", "effort": "prose is not an effort enum", "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
+def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, maker="openai"):
+    return {"family": {"avoidFor": "sole judge", "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
 def manifest(routes=None, session=None):
-    return {"manualRoutes": [route("manual", pool=None)], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
+    return {"manualRoutes": [route("manual", pool=None, maker="anthropic")], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
 def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
-    return {"nonInteractive": non_interactive, "roles": {role: {"effort": effort, "families": {name: QUALIFIED for name in names}} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+    return {"nonInteractive": non_interactive, "roles": {role: {"effort": effort, "families": {name: QUALIFIED for name in names}, **({"writer": "manual"} if role in ("finder", "first-check", "second-check", "judge") else {})} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
 
 
 class Routing(unittest.TestCase):
@@ -60,6 +60,87 @@ class Routing(unittest.TestCase):
         with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")):
             result = helper.plan(config or manifest(), launch_context or context(roles), roles, NOW, SHELL, reader)
         return result, calls
+
+    def test_maker_policy_aliases_and_runtime_pool_independence(self):
+        # Wrong: provider/runtime/pool identity substitutes for explicit maker.
+        # Go refuses GLM in production; this configured strong family isolates identity.
+        roles = ("finder", "first-check", "second-check", "judge")
+        cases = [
+            ("go-glm", "glm-5.3", "zhipu", "zhipu", False, "same maker as writer: zhipu"),
+            ("go-kimi-k3", "kimi-k3", "moonshot", "moonshot", False, "same maker as writer: moonshot"),
+            ("go-kimi-k3.1-pro", "kimi-k3.1-pro", "moonshot", "moonshot", False, "same maker as writer: moonshot"),
+            ("go-gemini-4-argon", "gemini-4-argon", "google", "zhipu", True, None),
+            ("go-kimi-k3", "kimi-k3", "moonshot", "openai", True, None),
+            # Wrong: surrounding whitespace or letter case certifies a different maker.
+            ("sol", "gpt-6.1-sol", " OpenAI ", "openai", False, "same maker as writer: openai"),
+            ("sol", "gpt-6.1-sol", "openai", " OPENAI ", False, "same maker as writer: openai"),
+        ]
+        for name, model, maker, writer_maker, allowed, reason in cases:
+            with self.subTest(family=name, writer=writer_maker):
+                candidate = route(name, pool="session", target="claude", techniques=[technique(model=model)], maker=maker)
+                candidate["family"]["vendor"] = "opencode-go"
+                config = manifest([candidate])
+                config["manualRoutes"] = [route("author", pool="outside", maker=writer_maker)]
+                ctx = context(roles, (name,), techniques=[{"efforts": ["high"], "model": model, "runtime": "claude", "technique": "spawn_agent"}])
+                for request in ctx["roles"].values():
+                    request["writer"] = "author"
+                result, _ = self.run_plan(config, ctx, roles)
+                for role in roles:
+                    self.assertEqual(bool(result["roles"][role]["candidates"]), allowed)
+                    if not allowed:
+                        self.assertEqual(result["roles"][role]["exclusions"][0]["reason"], reason)
+                        self.assertEqual(result["roles"][role]["error"], "never step down a tier; report a loop failure.")
+
+    def test_maker_policy_unknowns_and_writer_use(self):
+        # Wrong: null/absent/blank maker or a caller maker claim proves independence.
+        for candidate_maker, writer_maker, writer, reason in [
+            (None, "anthropic", "manual", "candidate maker unknown; review independence unresolved"),
+            ("", "anthropic", "manual", "candidate maker unknown; review independence unresolved"),
+            ("openai", None, "manual", "writer maker unknown; review independence unresolved"),
+            ("openai", "anthropic", "missing", "writer maker unknown; review independence unresolved"),
+            ("openai", "anthropic", None, "writer maker unknown; review independence unresolved"),
+        ]:
+            with self.subTest(candidate=candidate_maker, writer=writer_maker, family=writer):
+                name = "go-iceman-contributor-free" if candidate_maker is None else "sol"
+                config = manifest([route(name, maker=candidate_maker)])
+                config["manualRoutes"][0]["family"]["maker"] = writer_maker
+                ctx = context(("writer", "first-check"), (name,))
+                ctx["roles"]["first-check"].update(writer=writer, maker="different-provider")
+                result, _ = self.run_plan(config, ctx, ("writer", "first-check"))
+                self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
+                self.assertEqual(result["roles"]["first-check"]["candidates"], [])
+                self.assertEqual(result["roles"]["first-check"]["exclusions"][0]["reason"], reason)
+        ctx = context(("first-check",))
+        del ctx["roles"]["first-check"]["writer"]
+        result, _ = self.run_plan(launch_context=ctx, roles=("first-check",))
+        self.assertEqual(result["roles"]["first-check"]["candidates"], [])
+        self.assertEqual(result["roles"]["first-check"]["exclusions"][0]["reason"], "writer maker unknown; review independence unresolved")
+        config = manifest()
+        del config["routes"][0]["family"]["maker"]
+        result, _ = self.run_plan(config, context(("first-check",)), ("first-check",))
+        self.assertEqual(result["roles"]["first-check"]["candidates"], [])
+        self.assertEqual(result["roles"]["first-check"]["exclusions"][0]["reason"], "candidate maker unknown; review independence unresolved")
+
+    def test_maker_policy_judge_cut_proposer_and_tier_floor(self):
+        # Wrong: judge checks only writer, or maker independence relaxes role floor.
+        roles = ("finder", "first-check", "second-check", "judge")
+        for maker, expected in [("openai", "same maker as cut proposer: openai"), (None, "cut proposer maker unknown; review independence unresolved"), ("google", None)]:
+            config = manifest()
+            config["manualRoutes"].append(route("critic", maker=maker))
+            ctx = context(roles)
+            ctx["roles"]["judge"]["cutProposer"] = "critic"
+            result, _ = self.run_plan(config, ctx, roles)
+            self.assertEqual(len(result["roles"]["first-check"]["candidates"]), 1)
+            if expected:
+                self.assertEqual(result["roles"]["judge"]["candidates"], [])
+                self.assertEqual(result["roles"]["judge"]["exclusions"][0]["reason"], expected)
+            else:
+                self.assertEqual(len(result["roles"]["judge"]["candidates"]), 1)
+        config = manifest([route(tier="mid")])
+        result, _ = self.run_plan(config, context(roles), roles)
+        for role in roles:
+            self.assertEqual(result["roles"][role]["exclusions"][0]["reason"], "below role tier floor")
+            self.assertEqual(result["roles"][role]["error"], "never step down a tier; report a loop failure.")
 
     def test_inventory_one_snapshot_and_only_registered_commands(self):
         # Wrong: per-role reads, current-runtime filtering, trusting reader .pool.
