@@ -2,7 +2,8 @@ Pick the model family whose "use for" fits the task and whose "avoid for"
 doesn't. Use the pinned effort in the helper's candidate launch. When a mid-tier
 model isn't enough, step up the model before the effort. Big models gain little
 past their first effort step. A cheaper model owes the same evidence as an
-expensive one.
+expensive one. Capability guidance describes fit; the helper uses qualitative
+cost classes only after pace and session-pool ordering.
 
 Set model and effort explicitly whenever the tool allows it. A technique that
 does not pin a value inherits it from the session. An interactive session cannot

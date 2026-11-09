@@ -239,6 +239,9 @@ def plan(manifest, context, roles, now, pools):
     if session is not None and session not in pool_names:
         raise ValueError(f"unknown session pool: {session}")
     for route in manifest["routes"] + manifest["manualRoutes"]:
+        family = route["family"]
+        if type(family.get("cost")) is not int or not 0 <= family["cost"] <= 5:
+            raise ValueError(f"family {family['name']} cost must be an integer from 0 to 5")
         if route["pool"] is not None and route["pool"] not in pool_names:
             raise ValueError(f"unknown route pool: {route['pool']}")
     if not isinstance(context.get("techniques"), list) or not isinstance(context.get("roles"), dict):
@@ -300,7 +303,7 @@ def plan(manifest, context, roles, now, pools):
                     excluded.append(record | {"reason": "model-scoped window invalid"})
                     continue
                 pace = family_paces.get((route["pool"], family["name"]), pools.get(route["pool"], {}).get("pace"))
-                candidates.append({"alternatives": alternatives[1:], "launch": alternatives[0], "pace": pace, "pool": route["pool"], "tier": family["tier"]})
+                candidates.append({"alternatives": alternatives[1:], "cost": family["cost"], "launch": alternatives[0], "pace": pace, "pool": route["pool"], "tier": family["tier"]})
         measured = [item for item in candidates if pools.get(item["pool"], {}).get("status") == "measured"]
         usable = []
         for item in candidates:
@@ -322,7 +325,7 @@ def plan(manifest, context, roles, now, pools):
             else:
                 item["budget"] = "measured" if measured else "fit-only; budget and session buffer unknown"
                 usable.append(item)
-        usable.sort(key=lambda item: (-(item["pace"] or 0), item["pool"] != session, item["launch"]["family"], item["launch"]["runtime"]))
+        usable.sort(key=lambda item: (-(item["pace"] or 0), session is not None and item["pool"] == session, item["cost"], item["launch"]["family"], item["launch"]["runtime"]))
         for item in usable:
             spec = item["launch"]
             item["line"] = " ".join(f"{key}={value}" for key, value in (("role", role), ("runtime", spec["runtime"]), ("family", spec["family"]), ("technique", spec["technique"]), ("model", spec["model"]), ("effort", spec["effort"])))

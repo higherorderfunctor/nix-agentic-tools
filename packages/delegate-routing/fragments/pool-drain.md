@@ -17,16 +17,19 @@ families. Keep numerical measurements in JSON, not status lines.
 
 The helper ranks fitting measured candidates by worst-window pace, using each
 window's reported length; a monthly pool is paced against its month, not the
-week. Pool pace and buffer use unscoped windows only; at least one is required.
-A scoped window `<window>:<model>` matches an exact configured family name in
-that pool and limits only that family's candidates: their effective pace is the
-worse of the pool pace and scoped paces, and 0% excludes only that family. A
-consistent unstarted scoped window (0% used, 100% remaining, null reset) adds no
-limit; malformed scoped windows warn and refuse only their named family without
-failing the pool. Unknown scopes warn with the window name without failing the
-pool. Failed or incomplete Readers and ambiguous accounts are unmeasured with
-reasons: exclude them while fitting measured pools exist and report that once
-per snapshot. With no measurable fitting pool, use fit alone and report
+week. Equal effective pace puts non-session pools before the session pool, then
+lower qualitative family cost, then family name and runtime. Cost never inverts
+pace or session priority, including when all pools are unmeasured. Pool pace and
+buffer use unscoped windows only; at least one is required. A scoped window
+`<window>:<model>` matches an exact configured family name in that pool and
+limits only that family's candidates: their effective pace is the worse of the
+pool pace and scoped paces, and 0% excludes only that family. A consistent
+unstarted scoped window (0% used, 100% remaining, null reset) adds no limit;
+malformed scoped windows warn and refuse only their named family without failing
+the pool. Unknown scopes warn with the window name without failing the pool.
+Failed or incomplete Readers and ambiguous accounts are unmeasured with reasons:
+exclude them while fitting measured pools exist and report that once per
+snapshot. With no measurable fitting pool, use fit alone and report
 budget/session uncertainty. Never treat exhaustion as unmeasured.
 
 The configured session pool drains last: select a candidate only when every
