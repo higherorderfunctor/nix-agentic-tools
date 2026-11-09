@@ -696,7 +696,7 @@
             assert candidates[0]["line"] == expected, output
             assert candidates[0]["pool"] == expected_pool, output
             assert candidates[0]["budget"] == "measured", output
-            assert result.stderr.strip() == expected, result.stderr
+            assert result.stderr.strip() == f"pool={expected_pool} status=measured\n{expected}", result.stderr
 
         check(wrapper)
         # Reproduce the broken generated-manifest change with the same packaged

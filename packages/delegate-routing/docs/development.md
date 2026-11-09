@@ -493,9 +493,29 @@ occurs.
 
 The helper runs every registered Reader once on one UTC snapshot, including
 Readers owned by runtimes outside automatic targets; identical commands share
-one read. Only that inventory can reach subprocess execution. Trusted configured
-shell commands run under full strict Bash mode with a ten-second timeout that
-kills the reader process group. Failed, partial or multi-account Readers are
+one read. Collection precedes semantic request and saved-plan validation. Both
+success and failure print a JSON envelope with `status` (`ok` or `error`),
+`pools`, `roles`, `warnings`, `errors` and `snapshot`. An unreadable inventory
+sets `inventory` to `inventory-unavailable` with empty pools; a missing or
+invalid Reader shell retains known registrations as unmeasured. Recoverable
+argument errors, malformed context JSON and rejected saved plans retain the
+collected snapshot before exiting nonzero.
+
+Stderr lists every registered pool alphabetically as
+`pool=<name> status=<status>`, including unmeasured pools outside launch
+targets. Each failed Reader command emits one
+`WARNING: Reader for <pools> failed: <safe reason>. Report this failure to the user.`
+naming all registrations sharing that command. Missing Readers each get an
+explicit unmeasured warning. Reasons are bounded summaries, including nonzero
+Reader exit status, without Reader stderr or command text. Report failures to
+the user even when another pool permits routing. Scoped errors emit family
+warnings while the pool stays measured. Numerical measurements remain in JSON.
+Exit 0 means success, 1 means no eligible candidate, and 2 means invalid or
+unreadable input; Reader failure alone does not add a stop policy.
+
+Only that inventory can reach subprocess execution. Trusted configured shell
+commands run under full strict Bash mode with a ten-second timeout that kills
+the reader process group. Failed, partial or multi-account Readers are
 unmeasured; malformed, expired, missing-duration or unstarted-null-reset
 unscoped windows also make streams unmeasured with reasons. No account routing
 or missing resets are invented. The shared schema is required before pace
@@ -534,12 +554,15 @@ specifications to stderr. `--now` fixes the clock for offline tests.
 
 `checks/routing-plan-runtime.py scripts/delegate-routing-plan.py` exercises fake
 Readers and hand-written expectations, including a subprocess spy that rejects
-any candidate/probe launch. CI exposes it as `delegate-routing-plan-runtime`.
-Eight backend/runtime delivery fixtures check the rendered helper command,
-runtime/session-pool identity in the small skill, and planner policy prose for
-Reader completeness, the session buffer and named review fallbacks. Reader
-collection, ranking and buffer behavior are tested against the source Python
-helper with synthetic manifests. The
+any candidate/probe launch. CLI fixtures assert JSON and alphabetical pool
+status lines on success and invalid requests, grouped warnings for shared failed
+Readers, bounded timeout/execution/malformed-output diagnostics, missing
+Readers, family-scoped errors and measured exhaustion. CI exposes it as
+`delegate-routing-plan-runtime`. Eight backend/runtime delivery fixtures check
+the rendered helper command, runtime/session-pool identity in the small skill,
+and planner policy prose for Reader completeness, the session buffer and named
+review fallbacks. Reader collection, ranking and buffer behavior are tested
+against the source Python helper with synthetic manifests. The
 `module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
 checks read each backend’s delivered `SKILL.md` for that runtime, follow its
 rendered command to the packaged wrapper and manifest, and run that wrapper with
