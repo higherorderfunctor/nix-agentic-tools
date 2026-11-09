@@ -180,20 +180,7 @@
     ${techniqueBlock target true}
     ${phrase "Manual delegate note" {}}
   '';
-  bootstrapFamilies = builtins.filter (family: builtins.elem family.tier ["strong" "frontier"]) candidates;
-  bootstrap =
-    if bootstrapFamilies == []
-    then phrase "Planner unavailable" {}
-    else
-      lib.concatMapStringsSep "\n" (family:
-        phrase "Planner candidate" {
-          inherit (family) avoidFor effort useFor;
-          family = familyLabel family;
-          routes = lib.concatMapStringsSep "; " reach (builtins.filter (route: route.family == family) view.routes);
-        })
-      bootstrapFamilies;
   blocks = {
-    inherit bootstrap;
     families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n\n" + phrase "OpenCode Go note" {});
     helper = helperInstruction;
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));

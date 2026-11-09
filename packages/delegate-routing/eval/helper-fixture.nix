@@ -27,6 +27,12 @@
     '';
 in {
   ai.programs.delegate-routing = {
+    classifiers = [
+      {
+        effort = "medium";
+        family = "outside";
+      }
+    ];
     # Only Reader executables are fake; native delegate techniques stay intact.
     families = {
       openai = lib.genAttrs ["outside" "session" "under-tier"] (name: {

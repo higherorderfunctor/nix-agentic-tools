@@ -624,6 +624,12 @@
       change {
         ai.kiro.cli.workflows.enable = true;
         ai.programs.delegate-routing = {
+          classifiers = [
+            {
+              effort = "high";
+              family = "packaged";
+            }
+          ];
           families.fixture.packaged = {
             example.${runtime} = "fixture-model";
             match = "fixture-model";
@@ -701,16 +707,36 @@
         context = Path("launch-context.json")
         context.write_text(json.dumps({
             "nonInteractive": True,
-            "roles": {"writer": {"effort": "high", "families": {"packaged": {
-                "avoidFor": "fixture has no exclusions", "fit": "fixture writer",
-                "useFor": "fixture task",
-            }}}},
+            "roles": {"writer": {"brief": "brief.md", "effort": "high", "requirements": {"constraints": [], "inputKinds": ["text"]}}},
+            "rubric": "rubric.md",
+            "subject": {"task": "delivered helper fixture", "unit": "one"},
             "techniques": [{"efforts": ["high"], "model": "fixture-model", "runtime": runtime, "technique": technique}],
         }))
 
+        Path("brief.md").write_text("Actual packaged writer brief.\n")
+        Path("rubric.md").write_text("The packaged helper preserves session binding.\n")
+
         def check(executable):
-            result = subprocess.run([str(executable), "--role", "writer", "--launch-context", str(context), "--now", "2026-11-15T00:00:00Z"], capture_output=True, text=True, check=True)
-            output = json.loads(result.stdout)
+            def invoke(arguments, code=0):
+                result = subprocess.run([str(executable), "--launch-context", str(context), "--now", "2026-11-15T00:00:00Z"] + arguments, capture_output=True, text=True)
+                assert result.returncode == code, result.stderr
+                return json.loads(result.stdout)
+
+            missing = invoke(["--role", "writer"], 3)
+            assert missing["status"] == "classification-required" and missing["roles"] == {}, missing
+            preparation = invoke(["--role", "classifier", "--classify-role", "writer"])["classification"]
+            assert "qualification" not in preparation["launch"], preparation
+            exchange = Path("exchange.json")
+            exchange.write_text(json.dumps({"preparation": preparation, "result": {
+                "schemaVersion": 1, "requestHash": preparation["requestHash"],
+                "decisions": [{"family": row["name"], "decision": "keep", "reason": "Synthetic delivery fixture decision."} for row in preparation["request"]["families"]],
+            }}))
+            accepted = invoke(["--role", "writer", "--classification", str(exchange)])
+            receipt = Path("receipt.json")
+            receipt.write_text(json.dumps(accepted["receipt"]))
+            output = invoke(["--role", "writer", "--receipt", str(receipt)])
+            assert "classification" not in output, output
+            assert "qualification" not in output["roles"]["writer"]["candidates"][0]["launch"], output
             assert output["sessionPool"] == expected_pool, f"sessionPool must be {expected_pool}"
             assert output["runtime"] == runtime, output
             assert output["automaticRuntimes"] == [runtime], output
@@ -722,7 +748,7 @@
             assert candidates[0]["line"] == expected, output
             assert candidates[0]["pool"] == expected_pool, output
             assert candidates[0]["budget"] == "measured", output
-            assert result.stderr.strip() == f"pool={expected_pool} status=measured\n{expected}", result.stderr
+            assert output["receipt"] == accepted["receipt"], output
 
         check(wrapper)
         # Reproduce the broken generated-manifest change with the same packaged
@@ -771,7 +797,7 @@
         && hasProse "must read that reference before planning" entry
         && hasProse "without reloading the planner reference for each delegate" entry
         && hasProse "does not recursively plan it" entry
-        && lib.hasInfix "--role planner --launch-context <json-path>" entry
+        && lib.hasInfix "--role planner --classification <exchange.json> --launch-context <json-path>" entry
         && lib.hasInfix "--check-plan <plan-path>" entry
         && lib.hasInfix "validation.status = \"valid\"" entry
         # Fails if a result-only turn has no always-on duty to validate delegate claims.
@@ -909,38 +935,28 @@
         && hasProse "Hand off before investigating task source" (readSkill (change {ai.programs.delegate-routing.routing."Orchestrator session".always = false;}) runtime))
       runtimes
     );
-    # Reject a missing no-planner warning, or bootstrap lists that include
-    # small/mid families or omit a selected strong/frontier family.
-    "module-delegate-routing-${name}-planner-bootstrap" = mkTest "delegate-routing-${name}-planner-bootstrap" (let
-      bootstrapText = tiers: let
-        rendered = readSkill (change {
-          ai.programs.delegate-routing = {
-            runtimes.claude = {
-              extraRuntimes = [];
-              manualExternalDelegates = [];
-              models = [
-                {
-                  vendors = ["anthropic"];
-                  inherit tiers;
-                }
-              ];
-            };
-            skill = {
-              entries."Plan and launch".text = "BEGIN BOOTSTRAP\n\n{bootstrap}\n\nEND BOOTSTRAP";
-              phrases."Planner candidate".text = "- {family}";
-            };
-          };
-        }) "claude";
+    # Reject self-qualified planner bootstrap or a missing receipt exchange in
+    # either audience; family tables remain reference material in the companion.
+    "module-delegate-routing-${name}-classifier-bootstrap" = mkTest "delegate-routing-${name}-classifier-bootstrap" (
+      lib.all (runtime: let
+        entry = readSkill result runtime;
+        companion = readPlanner result runtime;
       in
-        lib.trim (builtins.head (lib.splitString "END BOOTSTRAP" (builtins.elemAt (lib.splitString "BEGIN BOOTSTRAP" rendered) 1)));
-    in
-      bootstrapText ["mid" "small"]
-      == "No configured strong/frontier planner reach; report a loop failure."
-      && lib.splitString "\n" (bootstrapText ["frontier" "mid" "small" "strong"])
-      == [
-        "- fable (anthropic) `claude-fable-*`"
-        "- opus (anthropic) `claude-opus-*`"
-      ]);
+        lib.all (text:
+          lib.all (needle: hasProse needle text) [
+            "--role classifier --classify-role <target>"
+            "--classification <exchange.json>"
+            "--receipt <receipt.json>"
+            "classification-required"
+            "Caller families/fit/useFor/avoidFor/trial essays are refused"
+          ]
+          && !(hasProse "Qualify a reachable" text)
+          && !(hasProse "family qualification supplies" text)) [entry companion]
+        && lib.hasInfix "--role classifier --classify-role planner" entry
+        && hasProse "a receipt cannot be shared between different units" companion
+        && hasProse "Family tables are reference material" companion)
+      runtimes
+    );
     # Reject hard-coded default-only projection: disabled entries stay absent,
     # custom always-on entries and runtime replacements also reach the planner.
     "module-delegate-routing-${name}-planner-custom-context" = mkTest "delegate-routing-${name}-planner-custom-context" (let
