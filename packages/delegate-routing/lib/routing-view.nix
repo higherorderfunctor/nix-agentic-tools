@@ -3,6 +3,12 @@
   lib,
   runtime,
   families,
+  classifiers ?
+    (import ./defaults.nix {
+      inherit lib;
+      claudeUsageScript = "";
+      codexUsageScript = "";
+    }).classifiers,
   models,
   techniques,
   pools ? {},
@@ -25,6 +31,11 @@
         else throw "ai.programs.delegate-routing.families.${vendor}.${name}.trial: expected a boolean"
       else throw "ai.programs.delegate-routing.families.${vendor}.${name}.cost: expected an integer from 0 to 5"))
   families;
+  familyCatalog = lib.sort (a: b: a.name < b.name) (selection.flatten normalizedFamilies);
+  approvals = (import ./classifier-policy.nix {inherit lib;}) {
+    inherit classifiers;
+    families = familyCatalog;
+  };
   selected = target: selection.select normalizedFamilies models.${target};
   candidates = selection.candidates normalizedFamilies models runtimes;
   agentFiles = import ./agent-files.nix {inherit lib;};
@@ -92,31 +103,32 @@
         }"
       else map technique names;
   };
-in {
-  inherit candidates runtimes;
-  routes = lib.concatMap (family:
-    map (reach family) (builtins.filter (target: builtins.elem family (selected target)) runtimes))
-  candidates;
-  manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);
-  readers =
-    lib.mapAttrsToList (name: declared: let
-      # Direct render/mkSkill callers may omit the module's optional defaults.
-      pool =
-        {
-          description = "";
-          usage = null;
-          window = null;
-        }
-        // declared;
-    in {
-      inherit name pool;
-      # The module's assertions own invalid-reader diagnostics, even when
-      # rendering is forced before assertion collection. Inventory every pool,
-      # including readers on runtimes outside automatic and manual targets.
-      command =
-        if pool.usage == null
-        then null
-        else techniques.${pool.usage.runtime}.${pool.usage.technique}.command or null;
-    })
-    pools;
-}
+in
+  assert lib.all (check: check.assertion || throw check.message) approvals; {
+    inherit candidates classifiers familyCatalog runtimes;
+    routes = lib.concatMap (family:
+      map (reach family) (builtins.filter (target: builtins.elem family (selected target)) runtimes))
+    candidates;
+    manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);
+    readers =
+      lib.mapAttrsToList (name: declared: let
+        # Direct render/mkSkill callers may omit the module's optional defaults.
+        pool =
+          {
+            description = "";
+            usage = null;
+            window = null;
+          }
+          // declared;
+      in {
+        inherit name pool;
+        # The module's assertions own invalid-reader diagnostics, even when
+        # rendering is forced before assertion collection. Inventory every pool,
+        # including readers on runtimes outside automatic and manual targets.
+        command =
+          if pool.usage == null
+          then null
+          else techniques.${pool.usage.runtime}.${pool.usage.technique}.command or null;
+      })
+      pools;
+  }

@@ -520,6 +520,22 @@
     makerDeliveries = lib.genAttrs ["direct" "go"] (source:
       change {
         ai.programs.delegate-routing = {
+          classifiers =
+            lib.optionals (source == "go") [
+              {
+                effort = "high";
+                family = "sonnet";
+              }
+              {
+                effort = "medium";
+                family = "luna";
+              }
+              {
+                effort = "medium";
+                family = "sonnet";
+              }
+            ]
+            ++ lib.optionals (source == "direct") result.config.ai.internal.roots.delegate-routing-content.classifiers;
           families = {
             custom.unattributed = {
               match = "custom-unattributed";
@@ -548,6 +564,12 @@
     in
       result.config.ai.internal.roots.delegate-routing-content.passthru.mkSkill {
         runtime = "codex";
+        classifiers = [
+          {
+            effort = "medium";
+            family = "unattributed";
+          }
+        ];
         families =
           portable.families
           // {
@@ -1001,6 +1023,80 @@
         ])
       runtimes
     );
+    # Refuses missing, blank, unknown and repeated approvals at the shared boundary;
+    # different efforts for one family remain independently approved.
+    "module-delegate-routing-${name}-classifier-policy" = mkTest "delegate-routing-${name}-classifier-policy" (
+      let
+        defaults = [
+          {
+            effort = "medium";
+            family = "luna";
+          }
+          {
+            effort = "medium";
+            family = "sonnet";
+          }
+        ];
+        invalid = [
+          []
+          [
+            {
+              effort = "medium";
+              family = "missing";
+            }
+          ]
+          [
+            {
+              effort = "";
+              family = "luna";
+            }
+          ]
+          [
+            {
+              effort = "medium";
+              family = " ";
+            }
+          ]
+          [
+            {
+              effort = "medium";
+              family = "luna";
+            }
+            {
+              effort = "medium";
+              family = "luna";
+            }
+          ]
+        ];
+        content = result.config.ai.internal.roots.delegate-routing-content;
+        directFails = args: !(builtins.tryEval (builtins.deepSeq (builtins.readFile "${content.passthru.mkSkill ({runtime = "claude";} // args)}/SKILL.md") true)).success;
+      in
+        result.config.ai.programs.delegate-routing.classifiers
+        == defaults
+        && content.classifiers == defaults
+        && lib.all (classifiers:
+          failsWith (change {ai.programs.delegate-routing = {inherit classifiers;};}) "classifiers:"
+          && directFails {inherit classifiers;})
+        invalid
+        && lib.all (classifiers: directFails {inherit classifiers;}) [
+          [{family = "luna";}]
+          [
+            {
+              effort = null;
+              family = "luna";
+            }
+          ]
+          [
+            {
+              effort = "medium";
+              family = "luna";
+              runner = "unsupported";
+            }
+          ]
+        ]
+        && directFails {families = content.families // {other.luna = content.families.openai.luna;};}
+        && passes makerDeliveries.go
+    );
     # Fails if common delivery drops family policy, infers makers from providers,
     # loses nulls/overrides, or the direct builder omits metadata defaults.
     "module-delegate-routing-${name}-maker-delivery" =
@@ -1033,6 +1129,26 @@
             wrapper = Path(command[1]).read_text()
             manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", wrapper)[1]
             manifest = json.loads(Path(manifest_path).read_text())
+            default_classifiers = [
+                {"effort": "medium", "family": "luna"},
+                {"effort": "medium", "family": "sonnet"},
+            ]
+            expected_classifiers = (
+                [{"effort": "medium", "family": "unattributed"}] if runtime == "builder-direct"
+                else [{"effort": "high", "family": "sonnet"}, *default_classifiers] if runtime.endswith("-go")
+                else default_classifiers
+            )
+            assert manifest["classifiers"] == expected_classifiers, (runtime, manifest["classifiers"])
+            catalog = manifest["familyCatalog"]
+            names = [family["name"] for family in catalog]
+            assert names == sorted(set(names)), (runtime, names)
+            # Luna is configured but excluded from every fixture's route selectors.
+            luna = next(family for family in catalog if family["name"] == "luna")
+            assert luna["useFor"] == "classification, extraction, routing, high-volume mechanical work; code writer", (runtime, luna)
+            assert luna["avoidFor"] == "long context (vendor-only cliff); spec writing; judging", (runtime, luna)
+            assert "luna" not in {route["family"]["name"] for route in manifest["routes"]}, runtime
+            custom = next(family for family in catalog if family["name"] == "unattributed")
+            assert (custom["cost"], custom["maker"], custom["trial"]) == (3, None, True), (runtime, custom)
             actual = {route["family"]["name"]: route["family"]["maker"] for route in manifest["routes"]}
             expected = shared | ({"direct-kimi": "moonshot"} if runtime.endswith("-direct") else {"go-kimi-k3": "moonshot"})
             assert actual == expected, (runtime, actual)
@@ -1641,6 +1757,12 @@
           tier = "mid";
         };
         directArgs = policy: {
+          classifiers = [
+            {
+              effort = "medium";
+              family = "example";
+            }
+          ];
           families.custom.example = custom // policy;
           models = lib.genAttrs runtimes (_: [{vendors = ["custom"];}]);
           runtime = "codex";
