@@ -45,6 +45,294 @@ def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=
     return {"nonInteractive": non_interactive, "roles": {role: {"effort": effort, "families": {name: QUALIFIED for name in names}, **({"writer": "manual"} if role in ("finder", "first-check", "second-check", "judge") else {})} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
 
 
+class Classification(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(prefix="classification-")
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.config = manifest([route(), route("luna", tier="small", techniques=[technique(model="luna-model")])])
+        self.config.update({"classifierInstructions": "Classify only.\n", "classifiers": [{"family": "luna", "effort": "medium"}], "familyCatalog": [route("unselected")["family"], route("luna")["family"], route()["family"]], "manualRoutes": []})
+        self.facts = {"nonInteractive": True, "roles": {"writer": {"brief": "brief.md", "effort": "high", "requirements": {"constraints": [{"id": "bounded", "text": "Use supplied criteria."}], "inputKinds": ["text"]}}}, "rubric": "rubric.md", "subject": {"task": "task", "unit": "one"}, "techniques": [{"efforts": ["medium"], "model": "luna-model", "runtime": "codex", "technique": "spawn_agent"}, {"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+        (self.root / "brief.md").write_bytes("Actual brief\nCafé\n".encode())
+        (self.root / "rubric.md").write_bytes(b"Actual rubric\n")
+
+    def invoke(self, extra=(), outputs=None):
+        for name, value in (("manifest", self.config), ("context", self.facts)):
+            (self.root / f"{name}.json").write_text(json.dumps(value))
+        argv = ["helper", "--manifest", str(self.root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(self.root / "context.json"), "--now", "2026-11-15T00:00:00Z"] + list(extra)
+        out, err = io.StringIO(), io.StringIO()
+        def reader(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 0, (outputs or {}).get(argv[4].split("\n", 1)[1], stream()))
+        with patch.object(sys, "argv", argv), patch.object(helper, "run_reader", side_effect=reader) as run, patch.object(helper.subprocess, "Popen", side_effect=AssertionError("non-Reader subprocess")), redirect_stdout(out), redirect_stderr(err):
+            code = helper.main()
+        self.assertEqual(run.call_count, 3)
+        return code, json.loads(out.getvalue()), err.getvalue()
+
+    def prepare(self):
+        code, output, _ = self.invoke(["--role", "classifier", "--classify-role", "writer"])
+        self.assertEqual(code, 0, output)
+        return output["classification"]
+
+    def exchange(self):
+        preparation = self.prepare()
+        return {"preparation": preparation, "result": {"schemaVersion": 1, "requestHash": preparation["requestHash"], "decisions": [{"family": name, "decision": "keep" if name == "sol" else "task-mismatch", "reason": "Supplied criteria assessed."} for name in ("luna", "sol", "unselected")]}}
+
+    def accept(self, exchange=None, outputs=None):
+        (self.root / "exchange.json").write_text(json.dumps(exchange or self.exchange()))
+        return self.invoke(["--role", "writer", "--classification", str(self.root / "exchange.json")], outputs)
+
+    def test_prepare_accept_and_reuse(self):
+        # Wrong: self-fit, incomplete catalog, model economics, or a second inference.
+        exchange = self.exchange()
+        prepared = exchange["preparation"]
+        self.assertEqual(set(prepared["request"]), {"brief", "families", "requirements", "role", "rubric", "schemaVersion", "subject"})
+        self.assertEqual(prepared["request"]["brief"], "Actual brief\nCafé\n")
+        self.assertEqual(prepared["request"]["rubric"], "Actual rubric\n")
+        self.assertEqual(prepared["request"]["families"], [{"avoidFor": "sole judge", "effectiveEffort": "high", "name": name, "useFor": "writer-judge loop"} for name in ("luna", "sol", "unselected")])
+        self.assertEqual(prepared["launch"]["family"], "luna")
+        self.assertEqual(prepared["launch"]["effort"], "medium")
+        self.assertNotIn("qualification", prepared["launch"])
+        code, accepted, _ = self.accept(exchange)
+        self.assertEqual(code, 0, accepted)
+        self.assertEqual([item["launch"]["family"] for item in accepted["roles"]["writer"]["candidates"]], ["sol"])
+        self.assertNotIn("qualification", accepted["roles"]["writer"]["candidates"][0]["launch"])
+        (self.root / "receipt.json").write_text(json.dumps(accepted["receipt"]))
+        code, reused, _ = self.invoke(["--role", "writer", "--receipt", str(self.root / "receipt.json")])
+        self.assertEqual(code, 0, reused)
+        self.assertNotIn("classification", reused)
+        self.assertEqual(reused["receipt"], accepted["receipt"])
+
+    def test_missing_evidence_and_relayed_pins(self):
+        # Wrong: no receipt launches work, or a user pin is hidden or bypassed.
+        self.facts["roles"]["writer"]["pins"] = {"family": "sol", "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}
+        code, output, stderr = self.invoke(["--role", "writer"])
+        self.assertEqual((code, output["status"], output["roles"]), (3, "classification-required", {}))
+        self.assertIn("--role classifier --classify-role writer", output["preparation"])
+        self.assertEqual(output["decisions"]["writer"]["pins"], self.facts["roles"]["writer"]["pins"])
+        self.assertIn("pin: writer family=sol", stderr)
+        self.config["routes"][0]["techniques"][0]["model"] = {"isPattern": True, "value": "gpt-*"}
+        self.facts["techniques"].append({"efforts": ["high"], "model": "gpt-6.1-sol-alt", "runtime": "codex", "technique": "spawn_agent"})
+        code, accepted, _ = self.accept()
+        self.assertEqual(code, 0, accepted)
+        self.facts["roles"]["writer"]["pins"]["model"] = "unavailable"
+        (self.root / "receipt.json").write_text(json.dumps(accepted["receipt"]))
+        code, output, _ = self.invoke(["--role", "writer", "--receipt", str(self.root / "receipt.json")])
+        self.assertEqual(code, 1, output)
+        self.assertEqual(output["roles"]["writer"]["candidates"], [])
+
+    def test_closed_result_schema_and_exact_coverage(self):
+        # Wrong: partial, duplicated or model-selected effort survives validation.
+        exchange = self.exchange()
+        mutations = [
+            lambda r: r.update(extra=True), lambda r: r.update(schemaVersion=True),
+            lambda r: r.update(requestHash="sha256:" + "0" * 64),
+            lambda r: r["decisions"].pop(), lambda r: r["decisions"].append(r["decisions"][0]),
+            lambda r: r["decisions"][0].update(family="unknown"),
+            lambda r: r["decisions"][0].update(decision="prefer"),
+            lambda r: r["decisions"][0].update(effort="ultra"),
+            lambda r: r["decisions"][0].update(reason=" "),
+            lambda r: r["decisions"][0].update(reason="x" * 241),
+            lambda r: r["decisions"][0].update(reason="\ud800"),
+        ]
+        for mutate in mutations:
+            changed = deepcopy(exchange)
+            mutate(changed["result"])
+            with self.subTest(result=changed["result"]):
+                code, output, _ = self.accept(changed)
+                self.assertEqual(code, 2, output)
+                self.assertNotIn("receipt", output)
+        for label in ("keep", "task-mismatch", "input-unsupported", "constraint-conflict", "uncertain"):
+            changed = deepcopy(exchange)
+            changed["result"]["decisions"][0]["decision"] = label
+            self.assertEqual(self.accept(changed)[0], 0)
+
+    def test_request_scope_and_live_gates(self):
+        # Wrong: transient metadata reclassifies, or semantic edits reuse a receipt.
+        exchange = self.exchange()
+        code, accepted, _ = self.accept(exchange)
+        self.assertEqual(code, 0, accepted)
+        receipt = accepted["receipt"]
+        (self.root / "receipt.json").write_text(json.dumps(receipt))
+        args = ["--role", "writer", "--receipt", str(self.root / "receipt.json")]
+        self.config["routes"][0]["family"].update(cost=5, maker="changed", trial=True)
+        self.config["familyCatalog"][2].update(cost=5, maker="changed", trial=True, example={"codex": "changed"})
+        self.assertEqual(self.invoke(args)[0], 0)
+        self.facts["techniques"] = self.facts["techniques"][:1]
+        self.assertEqual(self.invoke(args)[0], 1)
+        self.facts["techniques"].append({"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"})
+        self.assertEqual(self.invoke(args, {"reader-outside": stream({"monthly": window(0)})})[0], 1)
+        original_facts, original_config = deepcopy(self.facts), deepcopy(self.config)
+        changes = [lambda: self.facts["roles"]["writer"].update(effort="ultra"), lambda: self.facts["subject"].update(unit="two"), lambda: self.facts["roles"]["writer"]["requirements"]["inputKinds"].append("image"), lambda: self.config["familyCatalog"][0].update(useFor="changed"), lambda: self.config.update(classifierInstructions="Changed instructions")]
+        for change in changes:
+            self.facts, self.config = deepcopy(original_facts), deepcopy(original_config)
+            change()
+            self.assertEqual(self.invoke(args)[0], 2)
+        self.facts, self.config = original_facts, original_config
+        for filename in ("brief.md", "rubric.md"):
+            path = self.root / filename
+            original = path.read_bytes()
+            path.write_bytes(original + b"\n")
+            self.assertEqual(self.invoke(args)[0], 2)
+            path.write_bytes(original)
+
+    def test_approval_and_saved_preparation(self):
+        # Wrong: acceptance requires today's winner, or trusts modified preparation.
+        exchange = self.exchange()
+        code, output, _ = self.accept(exchange, {"reader-outside": stream({"monthly": window(0)})})
+        self.assertEqual(code, 1, output)
+        self.assertIn("receipt", output)
+        self.config["routes"][1]["pool"] = "hidden"
+        self.config["routes"][1]["techniques"][0]["model"]["value"] = "changed-example"
+        self.assertEqual(self.accept(exchange)[0], 0)
+        for key, value in (("requestHash", "sha256:" + "0" * 64), ("brief", "different"), ("line", "different")):
+            changed = deepcopy(exchange)
+            changed["preparation"][key] = value
+            self.assertEqual(self.accept(changed)[0], 2)
+        for key, value in (("family", "sol"), ("effort", "ultra"), ("model", "*"), ("runtime", "unknown"), ("technique", "unknown")):
+            changed = deepcopy(exchange)
+            changed["preparation"]["launch"][key] = value
+            self.assertEqual(self.accept(changed)[0], 2)
+        code, output, _ = self.accept(exchange)
+        (self.root / "receipt.json").write_text(json.dumps(output["receipt"]))
+        self.config["classifiers"] = [{"family": "sol", "effort": "high"}]
+        self.assertEqual(self.accept(exchange)[0], 2)
+        self.assertEqual(self.invoke(["--role", "writer", "--receipt", str(self.root / "receipt.json")])[0], 2)
+
+    def test_bounds_paths_and_context_refusals(self):
+        # Wrong: oversized or escaped artifacts spend on a classifier; essays persist.
+        self.prepare()
+        original = deepcopy(self.facts)
+        changes = [lambda r: r.update(families={}), lambda r: r.update(fit="essay"), lambda r: r.update(trial="essay"), lambda r: r.update(pins={"extra": "x"}), lambda r: r.update(brief="../escape.md"), lambda r: r["requirements"]["constraints"].append({"id": "bounded", "text": "duplicate"}), lambda r: r["requirements"].update(inputKinds=["text", "text"])]
+        for change in changes:
+            self.facts = deepcopy(original)
+            change(self.facts["roles"]["writer"])
+            self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"])[0], 2)
+        self.facts = original
+        for count in (65536, 65537):
+            (self.root / "brief.md").write_bytes(b"x" * count)
+            code, output, _ = self.invoke(["--role", "classifier", "--classify-role", "writer"])
+            self.assertEqual(code, 2)
+            self.assertNotIn("classification", output)
+        (self.root / "brief.md").write_bytes(b"brief")
+        self.config["familyCatalog"] = [route(f"family-{index}")["family"] for index in range(129)]
+        self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"])[0], 2)
+
+    def test_strict_json_and_receipt_integrity(self):
+        # Wrong: duplicate keys/non-finite values or a forged receipt body is accepted.
+        for payload in ('{"key":1,"key":2}', '{"key":NaN}', '{"key":Infinity}'):
+            with self.assertRaises(ValueError):
+                helper.strict_json(payload)
+        _, accepted, _ = self.accept()
+        receipt = accepted["receipt"]
+        for key, value in (("extra", True), ("receiptHash", "sha256:" + "0" * 64), ("decisions", [])):
+            changed = receipt | {key: value}
+            (self.root / "receipt.json").write_text(json.dumps(changed))
+            self.assertEqual(self.invoke(["--role", "writer", "--receipt", str(self.root / "receipt.json")])[0], 2)
+        for content in (b"x" * 1048577, b'{"result":NaN}', b'{"result":1,"result":2}'):
+            (self.root / "exchange.json").write_bytes(content)
+            self.assertEqual(self.invoke(["--role", "writer", "--classification", str(self.root / "exchange.json")])[0], 2)
+
+    def test_hash_literal_vectors(self):
+        # Wrong: missing domains, UTF-8 byte length, compact JSON or exact newlines.
+        self.assertEqual(helper.request_hash("é\n", {"z": "é\n", "a": 1}), "sha256:a9d926dbed4c2894f042593019521fdbed1799d499e216b87022a50221dd8f6a")
+        self.assertEqual(helper.receipt_hash({"z": "é\n", "a": 1}), "sha256:453f2851e0f11501a2985ea3859f814170be8237ae9f1bfaa9fc963b50f80e07")
+
+    def test_classifier_approval_effort_and_budget(self):
+        # Wrong: caller essays qualify classifiers, or approval order beats ranking.
+        self.config["classifiers"] = [{"family": "luna", "effort": "ultra"}, {"family": "luna", "effort": "medium"}]
+        self.assertEqual(self.prepare()["launch"]["effort"], "medium")
+        code, output, _ = self.invoke(["--role", "classifier", "--classify-role", "writer"], {"reader-outside": stream({"monthly": window(0)})})
+        self.assertEqual(code, 1, output)
+        self.assertNotIn("classification", output)
+        self.config["sessionPool"] = "outside"
+        self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"], {"reader-outside": stream({"monthly": window(20)})})[0], 1)
+        self.config["sessionPool"] = None
+        self.facts["nonInteractive"] = False
+        self.config["classifiers"] = [{"family": "luna", "effort": "high"}, {"family": "luna", "effort": "medium"}]
+        self.config["routes"].append(route("luna", tier="small", pool="hidden", target="claude", techniques=[technique(name="external", kind="external", model="luna-external")]))
+        self.facts["techniques"].append({"efforts": ["high"], "model": "luna-external", "runtime": "claude", "technique": "external"})
+        prepared = self.prepare()
+        self.assertEqual((prepared["launch"]["effort"], prepared["launch"]["runtime"]), ("high", "claude"))
+        for extra in (["--role", "writer", "--role", "mechanical"], ["--role", "classifier"], ["--role", "writer", "--classify-role", "writer"], ["--role", "writer", "--receipt", "x", "--classification", "y"]):
+            self.assertEqual(self.invoke(extra)[0], 2)
+
+    def test_generated_default_effort_binding(self):
+        # Wrong: a generated default authorizes native launch or a different effort.
+        self.facts["roles"]["writer"]["effort"] = None
+        self.config["familyCatalog"][2]["defaultEffort"] = "medium"
+        self.facts["techniques"][1]["efforts"] = ["medium", "high"]
+        exchange = self.exchange()
+        self.assertEqual(exchange["preparation"]["request"]["families"][1]["effectiveEffort"], "medium")
+        self.assertEqual(self.accept(exchange)[0], 1)
+        self.config["routes"][0]["techniques"][0]["agent"] = {"family": {"defaultEffort": "high"}}
+        self.assertEqual(self.accept(exchange)[0], 1)
+        self.config["routes"][0]["techniques"][0]["agent"]["family"]["defaultEffort"] = "medium"
+        code, accepted, _ = self.accept(exchange)
+        self.assertEqual(code, 0, accepted)
+        self.assertEqual(accepted["roles"]["writer"]["candidates"][0]["launch"]["effort"], "medium")
+        self.config["familyCatalog"][2]["defaultEffort"] = "high"
+        self.assertEqual(self.accept(exchange)[0], 2)
+
+    def test_exact_request_and_result_limits(self):
+        # Wrong: truncation, character counts or an off-by-one bound buys inference.
+        prepared = self.prepare()
+        payload = json.dumps(prepared["request"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        self.config["classifierInstructions"] = "x" * (65536 - len(payload))
+        self.prepare()
+        self.config["classifierInstructions"] += "x"
+        self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"])[0], 2)
+        self.config["classifierInstructions"] = "Classify only.\n"
+        exchange = self.exchange()
+        raw = json.dumps(exchange).encode()
+        (self.root / "exchange.json").write_bytes(raw + b" " * (1048576 - len(raw)))
+        self.assertEqual(self.invoke(["--role", "writer", "--classification", str(self.root / "exchange.json")])[0], 0)
+        self.config["familyCatalog"] = [route(f"family-{index:03}")["family"] for index in range(127)] + [route("luna")["family"]]
+        self.assertEqual(len(self.prepare()["request"]["families"]), 128)
+
+    def test_context_and_manifest_malformed_shapes(self):
+        # Wrong: wrong typed requirements, catalog identities or approvals reach spend.
+        self.prepare()
+        original = deepcopy(self.facts)
+        role_mutations = [lambda r: r.update(useFor="essay"), lambda r: r.update(avoidFor="essay"), lambda r: r.update(effort=True), lambda r: r.update(brief=str(SOURCE)), lambda r: r.update(pins={"family": " "}), lambda r: r.update(requirements={"constraints": {}, "inputKinds": []}), lambda r: r["requirements"].update(inputKinds=["other"]), lambda r: r["requirements"]["constraints"][0].update(extra=True)]
+        for change in role_mutations:
+            self.facts = deepcopy(original)
+            change(self.facts["roles"]["writer"])
+            self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"])[0], 2)
+        self.facts = original
+        (self.root / "escape.md").symlink_to(SOURCE)
+        self.facts["roles"]["writer"]["brief"] = "escape.md"
+        self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"])[0], 2)
+        self.facts["roles"]["writer"]["brief"] = "brief.md"
+        original_config = deepcopy(self.config)
+        mutations = [lambda: self.config["familyCatalog"].append(self.config["familyCatalog"][0]), lambda: self.config.update(classifiers=[]), lambda: self.config["classifiers"].append(self.config["classifiers"][0]), lambda: self.config.update(classifiers=[{"family": "unknown", "effort": "medium"}])]
+        for change in mutations:
+            self.config = deepcopy(original_config)
+            change()
+            self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"])[0], 2)
+        self.config = original_config
+        self.config["familyCatalog"][0].update(avoidFor="", useFor="")
+        self.assertEqual(self.prepare()["request"]["families"][2]["useFor"], "")
+
+    def test_classifier_pins_and_approval_order_reuse(self):
+        # Wrong: pins bypass approvals, or list order invalidates a completed pair.
+        self.prepare()
+        self.facts["roles"]["classifier"] = {"pins": {"family": "sol"}}
+        code, output, _ = self.invoke(["--role", "classifier", "--classify-role", "writer"])
+        self.assertEqual(code, 1, output)
+        self.config["classifiers"].append({"family": "sol", "effort": "high"})
+        prepared = self.prepare()
+        self.assertEqual(prepared["launch"]["family"], "sol")
+        self.facts["roles"]["classifier"] = {"effort": "ultra"}
+        self.assertEqual(self.invoke(["--role", "classifier", "--classify-role", "writer"])[0], 1)
+        del self.facts["roles"]["classifier"]
+        _, accepted, _ = self.accept()
+        (self.root / "receipt.json").write_text(json.dumps(accepted["receipt"]))
+        self.config["classifiers"].reverse()
+        self.config["routes"][0]["pool"] = "hidden"
+        self.config["routes"][1]["pool"] = "hidden"
+        self.assertEqual(self.invoke(["--role", "writer", "--receipt", str(self.root / "receipt.json")])[0], 0)
+
+
 class Routing(unittest.TestCase):
     def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None):
         calls = []
@@ -233,11 +521,12 @@ class Routing(unittest.TestCase):
                 argv = ["helper", "--manifest", "manifest.json", "--reader-shell", SHELL, "--launch-context", "context.json", "--role", "writer", "--now", "2026-11-15T00:00:00Z"]
                 if name == "invalid-plan":
                     argv += ["--check-plan", "plan.json"]
-                with patch.object(sys, "argv", argv), patch.object(Path, "read_text", lambda path: files[path.name]), patch.object(helper, "run_reader", side_effect=reader) as run, redirect_stdout(out), redirect_stderr(err):
+                # Pool reporting also succeeds when the task awaits classification.
+                with patch.object(sys, "argv", argv), patch.object(Path, "read_text", lambda path: files[path.name]), patch.object(helper, "classification_request", return_value=({}, "unused")), patch.object(helper, "run_reader", side_effect=reader) as run, redirect_stdout(out), redirect_stderr(err):
                     code = helper.main()
                 result = json.loads(out.getvalue())
-                self.assertEqual(code, 2 if name in ("invalid-context", "invalid-plan") else 0)
-                self.assertEqual(result["status"], "error" if code else "ok")
+                self.assertEqual(code, 2 if name in ("invalid-context", "invalid-plan") else 3)
+                self.assertEqual(result["status"], "error" if code == 2 else "classification-required")
                 self.assertEqual(run.call_count, 2 if name == "missing" else 3)
                 self.assertEqual(result["pools"]["hidden"]["status"], status)
                 self.assertEqual(result["pools"]["outside"]["pace"], 0.9375)
@@ -893,6 +1182,7 @@ class Routing(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
             root = Path(directory)
             config = manifest()
+            config.update({"classifierInstructions": "Classify only.\n", "classifiers": [{"family": "sol", "effort": "high"}], "familyCatalog": [route()["family"]], "manualRoutes": []})
             log = root / "reads"
             config["readers"] = [
                 {"name": name, "command": f"printf '{name}\\n' >> '{log}'; printf '%s' '{stream()}'"}
@@ -900,17 +1190,35 @@ class Routing(unittest.TestCase):
             ]
             config["readers"].append({"name": "alias", "command": config["readers"][0]["command"]})
             (root / "manifest.json").write_text(json.dumps(config))
-            (root / "context.json").write_text(json.dumps(context()))
+            facts = {"roles": {"writer": {"brief": "brief.md", "effort": "high", "requirements": {"constraints": [], "inputKinds": ["text"]}}}, "rubric": "rubric.md", "subject": {"task": "task", "unit": "one"}, "techniques": context()["techniques"]}
+            (root / "brief.md").write_text("Actual brief\n")
+            (root / "rubric.md").write_text("Actual rubric\n")
+            (root / "context.json").write_text(json.dumps(facts))
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--now", "2026-11-15T00:00:00Z", "--role", "writer"]
             proc = subprocess.run(command, capture_output=True, text=True)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 3, proc.stderr)
             self.assertEqual(log.read_text(), "outside\nsession\nhidden\n")
-            self.assertEqual(json.loads(proc.stdout)["status"], "ok")
+            self.assertEqual(json.loads(proc.stdout)["status"], "classification-required")
             self.assertEqual(json.loads(proc.stdout)["errors"], [])
             self.assertEqual(json.loads(proc.stdout)["pools"]["outside"]["pace"], 0.9375)
-            self.assertIn("technique=spawn_agent", proc.stderr)
-            (root / "context.json").write_text(json.dumps(context(names=())))
-            proc = subprocess.run(command, capture_output=True, text=True)
+            preparation_command = command[:-2] + ["--role", "classifier", "--classify-role", "writer"]
+            proc = subprocess.run(preparation_command, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            prepared = json.loads(proc.stdout)["classification"]
+            exchange = {"preparation": prepared, "result": {"schemaVersion": 1, "requestHash": prepared["requestHash"], "decisions": [{"family": "sol", "decision": "keep", "reason": "Matches supplied criteria."}]}}
+            (root / "exchange.json").write_text(json.dumps(exchange))
+            proc = subprocess.run(command + ["--classification", str(root / "exchange.json")], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            receipt = json.loads(proc.stdout)["receipt"]
+            (root / "receipt.json").write_text(json.dumps(receipt))
+            reuse = command + ["--receipt", str(root / "receipt.json")]
+            proc = subprocess.run(reuse, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertNotIn("classification", json.loads(proc.stdout))
+            self.assertEqual(log.read_text(), "outside\nsession\nhidden\n" * 4)
+            facts["techniques"] = []
+            (root / "context.json").write_text(json.dumps(facts))
+            proc = subprocess.run(reuse, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 1)
             self.assertEqual(json.loads(proc.stdout)["status"], "error")
             self.assertEqual(json.loads(proc.stdout)["errors"], ["writer: never step down a tier; report a loop failure."])
