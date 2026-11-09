@@ -1,7 +1,7 @@
 {
-  "version": "1.26.4",
+  "version": "1.26.5",
   "src": {
-    "url": "https://github.com/mtkennerly/dunamai/archive/v1.26.4.tar.gz",
-    "hash": "sha256-rWR/bEl1SU8t25GgmzjXIufRFh7cVX1qihLbvkA1gFg="
+    "url": "https://github.com/mtkennerly/dunamai/archive/v1.26.5.tar.gz",
+    "hash": "sha256-c3PN856Rh0akYWFZ1eowUWpOja5Q2PekNqrgfz3W7Iw="
   }
 }
