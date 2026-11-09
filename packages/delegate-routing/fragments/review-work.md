@@ -47,6 +47,15 @@ Enrichment changes the actual brief bytes: prepare and accept a new classifier
 exchange for that review role before launch; other unchanged roles reuse their
 receipts.
 
+Choose each reviewer after its writer finishes. Run `--dispatch` for the planned
+review role with current observed techniques and the unit's actual `executions`,
+even after successful check-plan. Record the worker and cut proposer from the
+launches actually bound to tools, outside role intent; a conflicting context
+`writer` is an error. Missing or unknown participant identities cannot authorize
+review. A pool change can make a formerly feasible review impossible; report
+that failure without substituting a new writer. Dispatch does not prove tool
+execution or enforce the review/fix/commit barriers above.
+
 Use neutral briefs: never say that an issue already survived a check. Pass only
 the outcomes and evidence permitted for that role, never earlier reasoning or
 arguments, proposed severity, round number, previous verdict, recurrence count

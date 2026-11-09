@@ -17,6 +17,11 @@ another pool permits routing. Missing Readers receive explicit unmeasured
 warnings; scoped errors warn only for their families. Keep numerical
 measurements in JSON, not status lines.
 
+A successful check-plan does not reserve capacity. Before every planned
+unit-role launch, use `--dispatch` with its saved receipt and current facts as
+specified in Routing helper. Every dispatch collects all pools again; choose
+reviewers using recorded actual participants after the writer finishes.
+
 The helper ranks fitting measured candidates by worst-window pace, using each
 window's reported length; a monthly pool is paced against its month, not the
 week. Equal effective pace puts non-session pools before the session pool, then
