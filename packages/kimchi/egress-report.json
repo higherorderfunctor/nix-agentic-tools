@@ -281,8 +281,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-IxUmRjUNks6i2rHt/0Km2fEenaoZh5vOKhBaGbz0BTQ=",
-      "kimchiVersion": "1.29.0",
+      "kimchiSourceHash": "sha256-0nfXhawPVNfeq1IlNRgfTTPxfBHg5Hu9nXxblEQ5/Xw=",
+      "kimchiVersion": "1.30.0",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -300,8 +300,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-IxUmRjUNks6i2rHt/0Km2fEenaoZh5vOKhBaGbz0BTQ=",
-      "kimchiVersion": "1.29.0",
+      "kimchiSourceHash": "sha256-0nfXhawPVNfeq1IlNRgfTTPxfBHg5Hu9nXxblEQ5/Xw=",
+      "kimchiVersion": "1.30.0",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -407,7 +407,8 @@
     },
     {
       "callSites": [
-        "src/cli-auth/oauth.ts:315",
+        "src/cli-auth/oauth.ts:320",
+        "src/cli-auth/oauth.ts:355",
         "src/extensions/pr-cost-reporting/worker.ts:259",
         "src/extensions/pr-cost-reporting/worker.ts:480",
         "src/extensions/work-attribution/cost-sync.ts:331",
@@ -444,7 +445,8 @@
     },
     {
       "callSites": [
-        "src/cli-auth/oauth.ts:315",
+        "src/cli-auth/oauth.ts:320",
+        "src/cli-auth/oauth.ts:355",
         "src/extensions/pr-cost-reporting/worker.ts:259",
         "src/extensions/pr-cost-reporting/worker.ts:480",
         "src/extensions/work-attribution/cost-sync.ts:331",
@@ -3411,7 +3413,28 @@
       "bundledModule": null,
       "file": "src/cli-auth/oauth.ts",
       "library": "fetch",
-      "line": 315,
+      "line": 320,
+      "readBy": "kimchi",
+      "targets": [
+        {
+          "host": "api.cast.ai",
+          "kind": "url",
+          "origin": "src/regions.ts:29",
+          "value": "https://api.cast.ai"
+        },
+        {
+          "host": "api.eu.cast.ai",
+          "kind": "url",
+          "origin": "src/regions.ts:36",
+          "value": "https://api.eu.cast.ai"
+        }
+      ]
+    },
+    {
+      "bundledModule": null,
+      "file": "src/cli-auth/oauth.ts",
+      "library": "fetch",
+      "line": 355,
       "readBy": "kimchi",
       "targets": [
         {
@@ -5368,7 +5391,16 @@
       "file": "src/cli-auth/oauth.ts",
       "guards": [],
       "library": "fetch",
-      "line": 315,
+      "line": 320,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/cli-auth/oauth.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 355,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5689,11 +5721,11 @@
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.pii-redaction",
-      "line": 216,
+      "line": 215,
       "restartRequired": true
     },
     {
-      "defaultEnabled": false,
+      "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.side-chat",
       "line": 206,
