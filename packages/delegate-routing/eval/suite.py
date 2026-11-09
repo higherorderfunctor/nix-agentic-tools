@@ -694,20 +694,19 @@ def exercise_helper(case, repo, logs):
     if case.get("id", "").endswith("independent-wave"):
         units = []
         for name, command in (("words", "unique_words('pear apple pear') == ['apple', 'pear']"), ("square", "square(3) == 9")):
-            launches = []
+            roles = []
             for role in ("writer", "first-check"):
-                record, accepted = classify(name, role)
-                candidate = accepted["output"]["roles"][role]["candidates"][0]
-                launches.append({key: value for key, value in record.items() if key != "writer"} |
-                                {"candidate": candidate["launch"], "line": candidate["line"], "role": role, "runtime": "codex"})
+                record, _ = classify(name, role)
+                roles.append({key: value for key, value in record.items() if key != "writer"} |
+                             {"role": role, "runtime": "codex"} | ({"writer": "writer"} if role == "first-check" else {}))
             units.append({"audience": "Python function caller", "checks": [], "dependencies": [], "docs": [],
-                          "files": [name + ".py"], "goal": command, "id": name, "launches": launches,
+                          "files": [name + ".py"], "goal": command, "id": name, "roles": roles,
                           "size": {"code": {"added": 3, "removed": 0}},
                           "verification": {"command": command, "wrongImplementation": "constant or unsorted result"}})
         plan_path = logs / "setup-plan.json"
-        write_json(plan_path, {"rubric": "setup-rubric.md", "runtime": "codex", "snapshot": snapshot,
+        write_json(plan_path, {"rubric": "setup-rubric.md", "runtime": "codex", "schemaVersion": 2, "snapshot": snapshot,
                                "task": "independent pure functions", "units": units, "waves": [["words", "square"]]})
-        context["roles"]["writer"] = {key: units[0]["launches"][0][key] for key in ("brief", "effort", "requirements")}
+        context["roles"]["writer"] = {key: units[0]["roles"][0][key] for key in ("brief", "effort", "requirements")}
         checked = invoke(["--role", "writer", "--role", "first-check", "--check-plan", str(plan_path)])
         if checked["output"]["validation"] != {"status": "valid", "task": "independent pure functions", "units": 2, "waves": 1}:
             raise ValueError("helper did not validate the independent two-unit wave")
