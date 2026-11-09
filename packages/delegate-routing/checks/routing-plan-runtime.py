@@ -79,7 +79,7 @@ class Routing(unittest.TestCase):
 
     def test_comparative_session_and_strict_limiting_buffer(self):
         config = manifest([route("own", pool="session"), route("other")], "session")
-        for own, other, expected in [(60, 45, "own"), (60, 60, "own"), (45, 60, "other"), (20, 10, "other"), (20.01, 10, "own")]:
+        for own, other, expected in [(60, 45, "own"), (60, 60, "other"), (45, 60, "other"), (20, 10, "other"), (20.01, 10, "own")]:
             with self.subTest(own=own, other=other):
                 result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-outside": stream({"5h": window(other, 18000, "2026-11-15T02:30:00Z")}), "reader-session": stream({"5h": window(own, 18000, "2026-11-15T02:30:00Z")})})
                 self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)
@@ -87,6 +87,16 @@ class Routing(unittest.TestCase):
         for remaining, expected in [(20, "other"), (20.01, "own")]:
             result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-session": stream({"monthly": window(60), "5h": window(remaining, 18000, "2026-11-15T00:30:00Z")})})
             self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)
+
+    def test_session_pool_last_on_measured_tie(self):
+        config = manifest([route("alpha", pool="session"), route("zulu")], "session")
+        result, _ = self.run_plan(config, context(names=("alpha", "zulu")))
+        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("zulu", 0.9375), ("alpha", 0.9375)])
+
+    def test_session_pool_last_when_fit_only(self):
+        config = manifest([route("alpha", pool="session"), route("zulu")], "session")
+        result, _ = self.run_plan(config, context(names=("alpha", "zulu")), outputs={reader["command"]: "invalid" for reader in config["readers"]})
+        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("zulu", None), ("alpha", None)])
 
     def test_live_claude_scopes_preserve_pool_measurement(self):
         # Wrong: any colon makes the pool unmeasured, or scopes set pool pace/buffer.
