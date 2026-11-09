@@ -4,7 +4,16 @@ rendered in this runtime's skill with the requested roles and caller-observed
 discovery or pace arithmetic manually. The helper must run the Reader of every
 registered pool listed in its output, including pools outside this runtime's
 launch targets; Reader commands belong to registered pool keys, not separate
-registrations per target runtime.
+registrations per target runtime. Collection precedes request and saved-plan
+validation. On success and failure, stdout contains JSON with `status` (`ok` or
+`error`), pools and diagnostics; an unreadable inventory explicitly reports
+`inventory-unavailable` rather than claiming all pools were observed. Stderr
+lists every registered pool alphabetically as `pool=<name> status=<status>`.
+Each failed Reader command emits one WARNING naming all registrations sharing
+it, with a bounded reason and the instruction to report the failure to the user.
+Report that failure to the user even when another pool permits routing. Missing
+Readers receive explicit unmeasured warnings; scoped errors warn only for their
+families. Keep numerical measurements in JSON, not status lines.
 
 The helper ranks fitting measured candidates by worst-window pace, using each
 window's reported length; a monthly pool is paced against its month, not the
