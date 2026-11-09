@@ -115,8 +115,70 @@ class Routing(unittest.TestCase):
                         self.assertEqual(pool["status"], "unmeasured" if count == 0 else "measured")
                         if count == 0:
                             self.assertEqual(pool["reason"], "Reader shell must name an executable file")
+                    self.assertEqual([line for line in err.getvalue().splitlines() if line.startswith("pool=")], [f"pool={pool} status={'unmeasured' if count == 0 else 'measured'}" for pool in ("alias", "hidden", "outside", "session")])
+                    if count == 0:
+                        for names in ("alias, outside", "hidden", "session"):
+                            self.assertIn(f"WARNING: Reader for {names} failed: Reader shell must name an executable file. Report this failure to the user.", err.getvalue())
                     if count:
                         self.assertEqual([call.args[0][4].split("\n", 1)[1] for call in reader.call_args_list], ["reader-outside", "reader-session", "reader-hidden-runtime"])
+
+    def test_cli_pool_diagnostics(self):
+        # Wrong: non-session Reader failures stay silent while another pool works.
+        cases = [
+            ("success", stream(), "measured", None),
+            ("exit", subprocess.CompletedProcess([], 7, "", "SECRET stderr"), "unmeasured", "Reader exited 7"),
+            ("timeout", subprocess.TimeoutExpired("SECRET command", 10, stderr="SECRET stderr"), "unmeasured", "Reader timed out"),
+            ("invalid-context", subprocess.CompletedProcess([], 7, "", "SECRET stderr"), "unmeasured", "Reader exited 7"),
+            ("invalid-plan", subprocess.CompletedProcess([], 7, "", "SECRET stderr"), "unmeasured", "Reader exited 7"),
+            ("malformed", "SECRET invalid JSON", "unmeasured", "invalid Reader output"),
+            ("bad-reset", stream({"monthly": window(reset="SECRET reset")}), "unmeasured", "invalid Reader output"),
+            ("execution", OSError("SECRET execution detail"), "unmeasured", "Reader could not execute"),
+            ("scoped", stream({"monthly": window(), "7d:sol": window(reset=None)}), "measured", None),
+            ("exhausted", stream({"monthly": window(0)}), "measured", None),
+            ("missing", None, "unmeasured", "no registered Reader"),
+        ]
+        for name, output, status, reason in cases:
+            with self.subTest(case=name):
+                config = manifest()
+                config["readers"].append({"command": "reader-hidden-runtime", "name": "alias"})
+                if name == "missing":
+                    config["readers"][2]["command"] = None
+                    config["readers"][-1]["command"] = None
+                files = {"manifest.json": json.dumps(config), "context.json": "{" if name == "invalid-context" else json.dumps(context()), "plan.json": "{}"}
+                def reader(argv, **kwargs):
+                    if argv[4].endswith("reader-hidden-runtime"):
+                        if isinstance(output, Exception):
+                            raise output
+                        return output if isinstance(output, subprocess.CompletedProcess) else subprocess.CompletedProcess([], 0, output)
+                    return subprocess.CompletedProcess([], 0, stream())
+                out, err = io.StringIO(), io.StringIO()
+                argv = ["helper", "--manifest", "manifest.json", "--reader-shell", SHELL, "--launch-context", "context.json", "--role", "writer", "--now", "2026-11-15T00:00:00Z"]
+                if name == "invalid-plan":
+                    argv += ["--check-plan", "plan.json"]
+                with patch.object(sys, "argv", argv), patch.object(Path, "read_text", lambda path: files[path.name]), patch.object(helper, "run_reader", side_effect=reader) as run, redirect_stdout(out), redirect_stderr(err):
+                    code = helper.main()
+                result = json.loads(out.getvalue())
+                self.assertEqual(code, 2 if name in ("invalid-context", "invalid-plan") else 0)
+                self.assertEqual(result["status"], "error" if code else "ok")
+                self.assertEqual(run.call_count, 2 if name == "missing" else 3)
+                self.assertEqual(result["pools"]["hidden"]["status"], status)
+                self.assertEqual(result["pools"]["outside"]["pace"], 0.9375)
+                warnings = [line for line in err.getvalue().splitlines() if line.startswith("WARNING:")]
+                if reason:
+                    expected = ([f"WARNING: Reader for {pool} failed: {reason}. Report this failure to the user." for pool in ("alias", "hidden")] if name == "missing" else [f"WARNING: Reader for alias, hidden failed: {reason}. Report this failure to the user."])
+                    self.assertEqual(warnings, expected)
+                    for warning in expected:
+                        self.assertIn(warning, result["warnings"])
+                elif name == "scoped":
+                    self.assertEqual(warnings, ["WARNING: pool=alias scoped window 7d:sol invalid; refusing its family.", "WARNING: pool=hidden scoped window 7d:sol invalid; refusing its family."])
+                    self.assertEqual(result["pools"]["hidden"]["scopedErrors"], {"7d:sol": "unstarted null reset unresolved"})
+                else:
+                    self.assertEqual(warnings, [])
+                if name == "exhausted":
+                    self.assertEqual(result["pools"]["hidden"]["pace"], 0)
+                    self.assertEqual(result["pools"]["hidden"]["buffer"], 0)
+                self.assertEqual([line for line in err.getvalue().splitlines() if line.startswith("pool=")], [f"pool=alias status={status}", f"pool=hidden status={status}", "pool=outside status=measured", "pool=session status=measured"])
+                self.assertNotIn("SECRET", err.getvalue())
 
     def test_maker_policy_aliases_and_runtime_pool_independence(self):
         # Wrong: provider/runtime/pool identity substitutes for explicit maker.

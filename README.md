@@ -1157,8 +1157,16 @@ Go presets declare makers; Iceman remains undisclosed. Configure
 `runtimes.<runtime>.sessionPool` with the actual registered pool key (for
 example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
 warns that the session buffer cannot be certified. With no pools it reports
-fit-only budget uncertainty. Output is JSON plus canonical routing
-specifications; the command never launches delegates. Pool drain and Review use
+fit-only budget uncertainty. Collection precedes request and saved-plan
+validation. Success and failure emit JSON with `status` (`ok` or `error`), pools
+and diagnostics; unreadable inventory explicitly reports
+`inventory-unavailable`. Stderr lists every registered pool alphabetically as
+`pool=<name> status=<status>` plus canonical routing specifications. Each failed
+Reader command emits one WARNING naming all registrations sharing it, with a
+bounded reason and an instruction to report the failure to the user; report it
+even when another pool permits routing. Missing Readers get explicit unmeasured
+warnings; scoped errors warn only for their families. Numerical measurements
+stay in JSON. The command never launches delegates. Pool drain and Review use
 this helper as the canonical decision, retaining role fit/trial checks and named
 fallback launchers. Unknown interactive/headless status never blocks Reader
 collection or tier/pace policy; external launches remain unresolved until the
