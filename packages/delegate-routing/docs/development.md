@@ -11,10 +11,11 @@
 > launch. Runtime-neutral routers retain the exact Orchestrator first paragraph;
 > reminder/grant and existing hook exclusions are unchanged. Plan/check-plan and
 > the deterministic helper retain their runtime/session-pool, Reader, tier/pace
-> and verbatim-rubric contracts. Offline checks establish artifact delivery and
-> validation, not live agent compliance. Opt-in helper-backed acceptance cases
-> preserve fake-Reader receipts separately from session observations; no harness
-> compliance is inferred from dry-run.
+> and verbatim-rubric contracts. Declared makers now determine review
+> independence; unknown identities produce exclusions. Offline checks establish
+> artifact delivery and validation, not live agent compliance. Opt-in
+> helper-backed acceptance cases preserve fake-Reader receipts separately from
+> session observations; no harness compliance is inferred from dry-run.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -410,9 +411,28 @@ Invoke the rendered command with `--role writer --launch-context <json-path>`
 first-check, investigator, judge, mechanical, planner, second-check and writer.
 Planner and the four review roles require strong/frontier tiers before ranking;
 an empty qualified set exits nonzero with “never step down a tier; report a loop
-failure.” The helper certifies tier and pace, not semantic fit, trial
-eligibility or maker independence. Provider-vendor identity remains provisional
-for aggregator independence until explicit maker data exists.
+failure.” The helper certifies tier, pace and declared maker independence, not
+semantic fit or trial eligibility. Each review role request supplies `writer`,
+the writer family name; a judge assessing cuts also supplies `cutProposer`, the
+proposer family name. Names resolve against automatic and manual manifest
+routes. The helper excludes a candidate with the same maker as either required
+participant, or with an unknown candidate/participant maker, and returns the
+specific reason. Omit `cutProposer` only when no cuts are being judged. Run a
+fresh decision for each worker/proposer choice; missing names do not authorize
+independent review.
+
+Family `maker` is a nullable nonempty string, defaulting to null. It identifies
+model ownership independently of provider `vendor`, launch runtime and budget
+`pools`. The package-owned Anthropic/OpenAI groups declare their maker once in
+`lib/defaults.nix`; custom direct or aggregator families must declare it
+explicitly. The routing view preserves it in helper manifests, including direct
+builders that omit the option default. Static Go assignments follow
+`opencodeGo.models.*.canonical_id` in
+`packages/cliproxyapi/extracted/extracted.json`, normalizing `moonshotai` to
+`moonshot` and `zhipuai` to `zhipu`. Beam is Reflection; Iceman remains null
+because its maker is undisclosed. This metadata does not change selectors, pool
+bindings, provisional tiers or the existing catalog drift gate. Unknown makers
+remain usable for worker roles that claim no review independence.
 
 The caller supplies observed availability, one concrete model id per technique
 evidence record and supported effort values, plus requested effort and qualified
@@ -744,9 +764,10 @@ completion receipts. The orchestrator enforces writer → independent review →
 fix/check → commit barriers before dependent waves or the next writer on a
 shared branch. Reviewers retain isolated worktrees or read-only tools, and the
 orchestrator checks the working tree after every shell-capable delegate. Model
-fit, avoidFor guidance, trial restrictions and independence remain caller
-assessments; a strong/frontier floor proves none of them. Offline validation
-proves deterministic artifact checks, not live planner/harness compliance.
+fit, avoidFor guidance and trial restrictions remain caller assessments; the
+helper enforces declared maker independence separately from the strong/frontier
+floor. Offline validation proves deterministic artifact checks, not live
+planner/harness compliance.
 
 ### Policy placement ledger
 
