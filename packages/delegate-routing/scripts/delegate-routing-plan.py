@@ -266,7 +266,7 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             else:
                 item["budget"] = "measured" if measured else "fit-only; budget and session buffer unknown"
                 usable.append(item)
-        usable.sort(key=lambda item: (-(item["pace"] or 0), item["pool"] != session, item["launch"]["family"], item["launch"]["runtime"]))
+        usable.sort(key=lambda item: (-(item["pace"] or 0), item["pool"] == session, item["launch"]["family"], item["launch"]["runtime"]))
         for item in usable:
             spec = item["launch"]
             item["line"] = " ".join(f"{key}={value}" for key, value in (("role", role), ("runtime", spec["runtime"]), ("family", spec["family"]), ("technique", spec["technique"]), ("model", spec["model"]), ("effort", spec["effort"])))

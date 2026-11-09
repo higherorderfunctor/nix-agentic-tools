@@ -456,14 +456,16 @@ active/inactive) is not used: its limit applies regardless of status because
 inactive has unknown meaning and applying the limit protects that model's
 allowance.
 
-Higher pace sorts first, with deterministic family/runtime ties; an eligible
-session pool wins an equal-pace tie only above the strict 20% unscoped buffer. A
-measured session candidate may be selected only if every other fitting measured
-pool's candidate is behind or level in effective pace. Exhaustion stays measured
-and never becomes a fit-only fallback. Unmeasured candidates are excluded while
-fitted measured candidates exist; with none, output explicitly states fit-only
-budget/session uncertainty. JSON is printed to stdout and concise launch
-specifications to stderr. `--now` fixes the clock for offline tests.
+Higher pace sorts first, then non-session pools before the session pool on ties,
+then deterministic family/runtime order. Fit-only candidates use the same
+session-last tie order. An eligible session pool must remain above the strict
+20% unscoped buffer. A measured session candidate may be selected only if every
+other fitting measured pool's candidate is behind or level in effective pace.
+Exhaustion stays measured and never becomes a fit-only fallback. Unmeasured
+candidates are excluded while fitted measured candidates exist; with none,
+output explicitly states fit-only budget/session uncertainty. JSON is printed to
+stdout and concise launch specifications to stderr. `--now` fixes the clock for
+offline tests.
 
 `checks/routing-plan-runtime.py scripts/delegate-routing-plan.py` exercises fake
 Readers and hand-written expectations, including a subprocess spy that rejects
