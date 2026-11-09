@@ -924,18 +924,27 @@ The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch
 plan with no harness and no login. Its `cases` passthru is the runner's fixture
 export. It also runs the offline source-attribution and event-schema regressions
-in `eval/test_suite.py`. The `codex-helper-routing-controls` and
-`codex-helper-independent-wave` cases conditionally import
-`eval/helper-fixture.nix`; both execute the delivered helper with registered
-fake Readers during dry-run, assert cross-runtime Reader execution,
-outside-before-session selection and under-tier reviewer exclusion, and archive
-setup receipts separately from live session receipts. Legacy cases retain their
-synthetic-usage prompt and narrower evidence. The independent-unit case checks a
-shared disjoint wave in the saved plan; this is not proof of concurrent launches
-or organic planner compliance. Live helper-backed cases require
-`--helper-backed`; generated inputs may need realization before dry-run. No
-check starts a session. See `eval/README.md` for reminder comparisons, the
-isolation recipe, the caps and the operator steps.
+in `eval/test_suite.py`. The `codex-helper-independent-wave`,
+`codex-helper-maker-independence` and `codex-helper-routing-controls` cases
+conditionally import `eval/helper-fixture.nix`; all execute the delivered helper
+with registered fake Readers during dry-run, assert cross-runtime Reader
+execution, outside-before-session selection, different-maker session review,
+same-maker outside exclusion and under-tier reviewer exclusion, and archive
+setup receipts separately from live session receipts. The maker case requests
+review evidence for the helper-selected writer; its synthetic maker declarations
+test the rule without claiming ownership of the real launch model. Broken-output
+mutations in `eval/test_suite.py` separately prove that removing either maker
+guard fails. `checks/module-eval.nix` follows delivered skills to their helper
+manifests on Home Manager and devenv for all four runtimes and the public
+builder; literal representative expectations cover Go Kimi and direct Moonshot
+agreement, Go Gemini's Google maker, undisclosed Iceman and an undeclared custom
+maker. This checks delivery without mirroring the catalog or replacing its drift
+check. Legacy cases retain their synthetic-usage prompt and narrower evidence.
+The independent-unit case checks a shared disjoint wave in the saved plan; this
+is not proof of concurrent launches or organic planner compliance. Live
+helper-backed cases require `--helper-backed`; generated inputs may need
+realization before dry-run. No check starts a session. See `eval/README.md` for
+reminder comparisons, the isolation recipe, the caps and the operator steps.
 
 ## Delegate map
 
