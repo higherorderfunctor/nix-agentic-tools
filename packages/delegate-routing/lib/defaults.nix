@@ -3,7 +3,11 @@
   claudeUsageScript,
   codexUsageScript,
 }: {
-  families = import ./families.nix // {opencode-go = (import ./opencode-go.nix {inherit lib;}).families;};
+  # Only these package-owned groups are keyed by their model maker. Custom
+  # families remain unknown unless their consumer declares maker explicitly.
+  families =
+    lib.mapAttrs (maker: lib.mapAttrs (_: family: family // {inherit maker;})) (import ./families.nix)
+    // {opencode-go = (import ./opencode-go.nix {inherit lib;}).families;};
   models = {
     claude = [
       {

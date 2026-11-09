@@ -26,8 +26,10 @@ hardlinks
 interprocedural
 intraprocedural
 libxcb
+meituan
 Menlo
 mktime
+moonshotai
 nonliteral
 NOSYSTEM
 NPROCESSORS
@@ -40,6 +42,7 @@ Patchelf
 pluginhost
 pnpmfile
 qll
+stepfun
 SYSTEMONE
 TERMUX
 TYPESAFE
@@ -593,5 +596,6 @@ zdiff
 zebrafish
 zereight
 zhipu
+zhipuai
 zstd
 gnupatch
