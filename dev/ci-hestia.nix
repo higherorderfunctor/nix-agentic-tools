@@ -48,6 +48,12 @@ in
         (map (package: "${package.name}-${package.version}") gitPackages)
         (_: "sha256-SKjUIxSvmEFYW+sMkFkyNVo4U5cOGwqZ48DTl0h8gDk=");
     };
+    # cargoSetupHook's cargoUseSystemLibs forces system libs for vendored
+    # -sys crates: zstd-sys probes pkg-config, and libsqlite3-sys links the
+    # system sqlite even under rusqlite's bundled feature (harmonia-store-db).
+    # aws-lc-sys 0.41.0 predates AWS_LC_SYS_USE_SYSTEM and still vendors.
+    nativeBuildInputs = [pkgs.pkg-config];
+    buildInputs = [pkgs.sqlite pkgs.zstd];
     doCheck = true;
     # Nounset must not leak into stdenv's strip.sh during fixupPhase.
     checkPhase = ''

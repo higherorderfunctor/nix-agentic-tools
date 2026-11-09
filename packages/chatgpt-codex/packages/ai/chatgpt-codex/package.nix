@@ -68,6 +68,19 @@ in
     cargoHash = sources.cargoHash or lib.fakeHash;
     src = prev.src.override {hash = sources.srcHash or lib.fakeHash;};
 
+    # cargoSetupHook's cargoUseSystemLibs forces system libs for vendored
+    # -sys crates. codex-rs links aws-lc-sys, onig_sys, libsqlite3-sys and
+    # zstd-sys, whose libraries nixpkgs' codex recipe does not carry at this
+    # pin (libclang and openssl only); nixpkgs' own fix adds these four.
+    buildInputs =
+      (prev.buildInputs or [])
+      ++ [
+        pkgs.aws-lc
+        pkgs.oniguruma
+        pkgs.sqlite
+        pkgs.zstd
+      ];
+
     # Keep nixpkgs' layout and voice patches. Modules declare daemon auto-start
     # explicitly, while the binary retains upstream's feature default. Until
     # nixpkgs reaches this version, its layout patch's substitutions apply to

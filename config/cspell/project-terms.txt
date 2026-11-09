@@ -235,8 +235,9 @@ goproxy
 gpgsign
 gradeability
 gradeable
-groq
 grokbuild
+groq
+harmonia
 headlessly
 heredocs
 herestring
@@ -294,6 +295,7 @@ libpthread
 librt
 librusty
 libsecret
+libsqlite
 libstdc
 libx
 libzstd
@@ -378,6 +380,7 @@ objectish
 ollama
 onepassword
 oneshot
+onig
 openat
 openclaw
 opencode
@@ -457,6 +460,7 @@ rsyncs
 rtrimstr
 rumdl
 runuser
+rusqlite
 rvben
 sandboxed
 sandboxing
