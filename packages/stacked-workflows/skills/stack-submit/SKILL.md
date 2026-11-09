@@ -379,8 +379,47 @@ PRs/MRs auto-update when their branches are force-pushed. No need to recreate
 them. Only branches downstream of the changed commit need updating, but pushing
 all is safe — unchanged branches are skipped automatically.
 
+### Before merging
+
+Before the user or agent merges any PR/MR, find every open PR whose base is the
+merging PR's head branch:
+
+```bash
+gh pr list --base <branch> --state open --limit 1000 --json number
+```
+
+Here `<branch>` is the merging PR's head branch. Retarget each dependent PR to
+the merging PR's current base BEFORE merging:
+
+```bash
+gh pr edit <dependent-PR-number> --base <current-base-branch>
+```
+
+For the bottom PR, the current base is `main`: use
+`gh pr edit <dependent-PR-number> --base main`. For an out-of-order merge of PR
+N+1 into branch N, use branch N instead. Confirm every affected PR is still open
+and targets that current base:
+
+```bash
+gh pr view <dependent-PR-number> --json state,baseRefName
+```
+
+If any retarget or confirmation fails, stop before merging. Repeat this before
+every PR/MR merge. On GitLab or another forge, use its target-branch controls to
+move every open dependent MR/PR to the merging MR/PR's current base and confirm
+each remains open and targets that base before merging.
+
+On GitHub, an observed merge that deleted the base branch recorded a
+`BaseRefDeletedEvent`, followed by an `AutomaticBaseChangeSucceededEvent` (base
+moved to `main`) and a `ClosedEvent` on the dependent PR. The retarget and close
+happened in the same second, right after the deletion. That PR ended CLOSED with
+state reason COMPLETED even though its base had moved to `main`. Do not rely on
+automatic retargeting to keep dependent PRs open.
+
+### After each squash merge
+
 After each squash-merged PR/MR, you MUST move the remaining stack onto the new
-upstream, update the next PR/MR's base, and force-push the remaining branches.
+upstream, confirm the next PR/MR's base, and force-push the remaining branches.
 Without this, downstream PRs/MRs show the full diff of all prior commits (the
 squash merge creates a new commit hash that downstream branches don't share). Do
 it after EVERY squash merge, not just the first: each merge changes main.
@@ -445,12 +484,10 @@ other worktrees' stacks and stale branches repo-wide (see **Rewriting** in
    step 2 captured (Pinned force-push). Do not fetch to refresh the lease: a
    fetch is what makes the bare form pass.
 
-7. **Confirm the next PR/MR targets main.** On GitHub, deleting the merged base
-   branch retargets it automatically; otherwise set it yourself:
-
-   ```bash
-   gh pr edit <next-PR-number> --base main
-   ```
+7. **Confirm the next PR/MR is open and targets main.** Retargeting had to
+   happen before the merge (see **Before merging**); a base of `main` alone does
+   not prove the PR/MR stayed open. If a dependent PR/MR closed unexpectedly,
+   stop and report it before continuing.
 
 Because `-s` starts at the first remaining commit, the move never has to skip an
 already-merged patch, so a multi-commit squash needs no special handling. If a
@@ -464,6 +501,10 @@ edits do not overlap, each applying as an empty commit; when they overlap, it
 conflicts.
 
 ### Out-of-order merge recovery
+
+Before merging PR N+1 into branch N, apply **Before merging**: retarget every
+open dependent PR/MR (including N+2) from branch N+1 to branch N and confirm
+each remains open and targets branch N.
 
 If a PR is merged out of order (e.g., PR N+1 merged before PR N), the squash
 goes into the base branch — not main. Merge the base PR (N) next — it now

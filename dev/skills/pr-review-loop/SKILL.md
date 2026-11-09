@@ -185,7 +185,9 @@ the watcher reports `dirty`, never `CLEAN`.
 Some harness permission classifiers block `gh pr edit`, closing a PR and
 retargeting it, while allowing `gh pr create --draft`, `gh pr ready` and
 `gh workflow run`. Treat PR body and base changes as operator actions unless
-permission is given.
+permission is given; before a base PR merges, retarget its open dependent PRs
+with permission or ask the operator to do so before merging, following
+stack-submit's **Before merging**.
 
 ## Deciding whether a review is yours to read
 
