@@ -106,28 +106,36 @@ This command starts real sessions and spends model turns; it requires operator
 authorization. `--dry-run` includes these cases automatically and starts no
 harness.
 
-The two `codex-helper-*` cases are `independent-wave` and `routing-controls`.
-Both assert cross-runtime Reader execution, outside-before-session selection and
-under-tier reviewer exclusion; `independent-wave` additionally checks
-independent units. Their separate `eval/helper-fixture.nix` module registers
-three fake Readers: outside and session on Codex, and cross-runtime on Kiro
-outside the automatic launch set. Reader output deliberately names a different
-`.pool`; registry keys remain authoritative. The session has less headroom than
-the outside pool; a mid-tier family is available to writers but excluded from
-review. Native delegate commands remain real, with no launch stubs. The
-independent task owns `words.py` and `square.py` separately and checks their
-saved plan for a shared disjoint wave.
+The three `codex-helper-*` cases are `independent-wave`, `maker-independence`
+and `routing-controls`. All assert cross-runtime Reader execution,
+outside-before-session selection and under-tier reviewer exclusion;
+`independent-wave` additionally checks independent units. `maker-independence`
+asks for the helper-selected writer's first-check candidates and exclusions: the
+same-maker outside family must be excluded while the different-maker session
+family remains eligible, despite its lower headroom. These are synthetic
+declared makers, not ownership evidence for the real launch model. Their
+separate `eval/helper-fixture.nix` module registers three fake Readers: outside
+and session on Codex, and cross-runtime on Kiro outside the automatic launch
+set. Reader output deliberately names a different `.pool`; registry keys remain
+authoritative. The session has less headroom than the outside pool; a mid-tier
+family is available to writers but excluded from review. Native delegate
+commands remain real, with no launch stubs. The independent task owns `words.py`
+and `square.py` separately and checks their saved plan for a shared disjoint
+wave.
 
 Offline preparation invokes the absolute helper command read from the delivered
 skill with explicit launch evidence. `logs/setup-helper.json` records argv, exit
 code and helper JSON; `logs/setup-reader-receipts.jsonl` records executed Reader
-identities. It checks all three Readers, outside-before-session selection and
-the under-tier exclusion. The independent case also records successful helper
-`--check-plan` validation of a hand-authored two-unit wave and rubric-bearing
-briefs in `logs/setup-plan-validation.json`. These receipts prove fixture
-wiring, not agent behavior. The Python regression invokes the helper source with
-child Reader processes and mutates each expected control to prove the assertions
-reject it.
+identities. It checks all three Readers, outside-before-session selection,
+different-maker session review, same-maker outside exclusion and the under-tier
+exclusion. The independent case also records successful helper `--check-plan`
+validation of a hand-authored two-unit wave and rubric-bearing briefs in
+`logs/setup-plan-validation.json`. These receipts prove fixture wiring, not
+agent behavior. The Python regression invokes the helper source with child
+Reader processes and mutates each expected control to prove the assertions
+reject it. Separate broken-output mutations remove the different-maker session
+candidate and the same-maker outside exclusion, so either maker guard
+disappearing from `check_helper_evidence` fails the regression.
 
 Live sessions write separate `logs/session-reader-receipts.jsonl` receipts. The
 runner archives the requested `routing-evidence.json` and `routing-plan.json` as
