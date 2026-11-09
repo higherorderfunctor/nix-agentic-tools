@@ -9,6 +9,7 @@ import math
 import os
 from pathlib import Path
 import posixpath
+import re
 import shutil
 import signal
 import subprocess
@@ -142,11 +143,35 @@ def collect(readers, now, shell, run=run_reader):
                 if proc.returncode:
                     raise ValueError(f"Reader exited {proc.returncode}")
                 result = measure(proc.stdout, now)
-            except (KeyError, TypeError, ValueError, OSError, subprocess.TimeoutExpired) as error:
+            except subprocess.TimeoutExpired:
+                result = {"reason": "Reader timed out", "status": "unmeasured"}
+            except OSError:
+                result = {"reason": "Reader could not execute", "status": "unmeasured"}
+            except (KeyError, TypeError, ValueError) as error:
                 result = {"reason": str(error), "status": "unmeasured"}
             commands[command] = result
         results[reader["name"]] = result
     return results
+
+
+def pool_diagnostics(readers, pools):
+    failures, warnings = {}, []
+    for reader in sorted(readers, key=lambda reader: reader["name"]):
+        name, command = reader["name"], reader["command"]
+        pool = pools[name]
+        if pool["status"] == "unmeasured":
+            # Missing registrations have no shared command to report together.
+            key = ("pool", name) if command is None else ("command", command)
+            failures.setdefault(key, []).append(name)
+        for window in sorted(pool.get("scopedErrors", {})):
+            warnings.append(f"WARNING: pool={name} scoped window {window} invalid; refusing its family.")
+    for names in sorted(failures.values()):
+        reason = pools[names[0]]["reason"]
+        # Reader output and OS/timeout exceptions can contain credentials or commands.
+        if reason not in {"no registered Reader", "Reader could not execute", "Reader shell must name an executable file", "Reader timed out"} and not re.fullmatch(r"Reader exited -?[0-9]{1,3}", reason):
+            reason = "invalid Reader output"
+        warnings.append(f"WARNING: Reader for {', '.join(names)} failed: {reason}. Report this failure to the user.")
+    return warnings
 
 
 def launch(route, context, qualification, requested):
@@ -509,7 +534,13 @@ def main():
     except (AttributeError, KeyError, TypeError, ValueError, OSError) as error:
         result["errors"].append(str(error))
     result["status"] = "ok" if code == 0 else "error"
+    diagnostics = pool_diagnostics(readers, result["pools"]) if result["inventory"] == "available" else []
+    result["warnings"].extend(diagnostics)
     print(json.dumps(result, sort_keys=True))
+    for name, pool in sorted(result["pools"].items()):
+        print(f"pool={name} status={pool['status']}", file=sys.stderr)
+    for warning in diagnostics:
+        print(warning, file=sys.stderr)
     for role in result["roles"].values():
         for item in role["candidates"]:
             print(item["line"], file=sys.stderr)
