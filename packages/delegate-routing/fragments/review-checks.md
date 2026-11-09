@@ -5,7 +5,9 @@ before pool ranking; never step down a tier; report a loop failure if no
 qualified route remains. Supply the writer family in each review role's `writer`
 field and, when judging cuts, the proposer family in `cutProposer`. Unknown
 makers cannot certify independence. A tier or maker pass does not establish task
-fit or trial eligibility. Honor those exclusions before launch.
+fit. Family `trial = true` excludes second-check and judge; finder and
+first-check still require tier, maker and fit eligibility. Honor those
+exclusions before launch.
 
 Review every change with all three checks below, each in a fresh context. The
 first check, the second check and the judge each use a model maker other than
@@ -44,6 +46,6 @@ lazy agreement. Returns accepted with final severity, rejected, or unresolved
 with the open question; names which point it set aside and why. A conceded issue
 the judge does not sample is accepted at the first check's proposed severity.
 
-A model on trial, with no review track record in this setup, may be an extra
-finder but never the second check or the Judge. Blend makers across review
-roles.
+Family `trial = true` marks a family without an established review track record
+in this setup; consumers may override it as that record changes. Blend makers
+across review roles.

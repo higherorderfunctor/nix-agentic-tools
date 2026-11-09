@@ -237,6 +237,11 @@ in {
               type = lib.types.enum tierNames;
               description = "Capability tier.";
             };
+            trial = lib.mkOption {
+              type = lib.types.bool;
+              default = vocabulary.familyDefaults.trial;
+              description = "Provisional family without an established review track record. Excluded from second-check and judge; finder and first-check still require tier, fit and independent maker eligibility.";
+            };
             useFor = lib.mkOption {
               type = lib.types.str;
               default = "";
