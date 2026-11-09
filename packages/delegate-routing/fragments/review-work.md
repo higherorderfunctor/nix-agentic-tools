@@ -2,12 +2,12 @@ The orchestrator briefs review as its own stage before writing starts. A writer
 never launches or briefs its own reviewer. Verify a claimed review by its
 artifact.
 
-Each unit is reviewed by one check, from a vendor other than the writer's,
-before the next unit starts. Reviews attach to units: no review of the whole
-branch mid-stream. When the units are done, the branch gets one branch-level
-review — all three checks when the PR is going ready, one check in any earlier
-state. A fix that follows any review gets a review sized to the fix: the fix's
-diff plus what it touches, one check, never the whole branch again.
+Each unit is reviewed by one check, from a maker other than the writer's, before
+the next unit starts. Reviews attach to units: no review of the whole branch
+mid-stream. When the units are done, the branch gets one branch-level review —
+all three checks when the PR is going ready, one check in any earlier state. A
+fix that follows any review gets a review sized to the fix: the fix's diff plus
+what it touches, one check, never the whole branch again.
 
 The worker does the task to the rubric. For a failing check, test or bug, a
 read-only delegate records the root cause with evidence; the orchestrator
@@ -17,7 +17,7 @@ check the written diagnosis against the change.
 One exception, on any forge (GitHub pull requests, GitLab merge requests or
 others): a change inside a stack of pull or merge requests, a unit of a branch
 still being built, the branch-level review of a branch not yet going ready, and
-a fix after any review each get one reviewer from a different vendor than the
+a fix after any review each get one reviewer from a different maker than the
 writer, following the first-check policy in the prepared reviewer brief; that
 reviewer's supported issues are accepted findings for the loop. The change gets
 all three checks when it becomes ready to merge into the default branch; a fix
@@ -30,12 +30,11 @@ or collapse with evidence: what breaks if it is deleted and the simpler form.
 The reviewer never judges its own proposed cuts, and neither does the writer.
 Whoever judges the cuts — the Judge in three-check review, a separate agent in
 stacked one-reviewer review, never the orchestrator — comes from a different
-model family than the writer and the cut's proposer. That judge gets the cuts
-and their evidence with authorship stripped (it is not told which agent wrote
-the code or proposed the cut) and in neutral order, under the neutral-brief
-rule. The writer applies only accepted cuts, and an accepted cut lands only if
-checks still pass. The user remains the final spot-check and is not consulted
-about cuts.
+maker than the writer and the cut's proposer. That judge gets the cuts and their
+evidence with authorship stripped (it is not told which agent wrote the code or
+proposed the cut) and in neutral order, under the neutral-brief rule. The writer
+applies only accepted cuts, and an accepted cut lands only if checks still pass.
+The user remains the final spot-check and is not consulted about cuts.
 
 The orchestrator validates unresolved questions returned by the judge.
 

@@ -768,7 +768,7 @@
           "goes on the report's gap list, not into a fix"
           "Never split a change to get past the round cap"
           "never the orchestrator"
-          "a different model family than the writer and the cut's proposer"
+          "a different maker than the writer and the cut's proposer"
           "The orchestrator validates unresolved questions returned by the judge"
           "The planner prepares base briefs for every reviewer launch before returning the plan, including second-check and judge"
           "After the first check returns, the orchestrator adds the earlier checks' inputs to those base briefs before each reviewer launches"
@@ -781,7 +781,7 @@
           "The orchestrator briefs review as its own stage before writing starts"
           "A writer never launches or briefs its own reviewer"
           "Verify a claimed review by its artifact"
-          "Each unit is reviewed by one check, from a vendor other than the writer's, before the next unit starts"
+          "Each unit is reviewed by one check, from a maker other than the writer's, before the next unit starts"
           "no review of the whole branch mid-stream"
           "When the units are done, the branch gets one branch-level review"
           "all three checks when the PR is going ready, one check in any earlier state"
@@ -1971,12 +1971,12 @@
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
       && lib.hasInfix "7. **Loop:**" claude
-      # Fails if units lose their definition, cadence or vendor separation,
+      # Fails if units lose their definition, cadence or maker separation,
       # fixes re-review the whole branch or retain its base, or mid-build
       # units remain subject to the opening three-check rule, or the
       # branch-level review loses its ready/earlier sizing.
       && hasProse "A unit is a bounded change with one reader and one verification" claude
-      && hasProse "Each unit is reviewed by one check, from a vendor other than the writer's, before the next unit starts." claude
+      && hasProse "Each unit is reviewed by one check, from a maker other than the writer's, before the next unit starts." claude
       && hasProse "the fix's diff plus what it touches, one check, never the whole branch again." claude
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one reviewer" claude

@@ -1098,10 +1098,10 @@ ai.programs.delegate-routing.runtimes.claude = {
 ```
 
 Portable `families.<vendor>.<family>` records describe tiers, task and effort
-guidance, and live-model patterns. Override any field or add a family. Each
-runtime's `models` is a list of selectors over `vendors`, `tiers` and
-`families`: selectors are alternatives, and every non-empty field in one
-selector must match. Selector enums come from configured families; tier
+guidance, live-model patterns and nullable `maker` identity. Override any field
+or add a family. Each runtime's `models` is a list of selectors over `vendors`,
+`tiers` and `families`: selectors are alternatives, and every non-empty field in
+one selector must match. Selector enums come from configured families; tier
 selectors accept only tiers used by those families. Claude defaults to Anthropic
 and Codex to OpenAI. Kimchi and Kiro require an explicit selection when their
 runtime and delegate-routing program are enabled. The package ships no families
@@ -1148,7 +1148,12 @@ runtime and session pool; the always-on router stays runtime-neutral for shared
 AGENTS.md targets. Pass `--role writer --launch-context <json-path>` with
 caller-observed techniques, concrete model/effort support and qualified family
 evidence. The helper collects all registered Readers once, ranks worst-window
-pace and enforces the strong/frontier review floor. Configure
+pace and enforces the strong/frontier review floor. Each review role names its
+writer family with `writer`; a judge assessing cuts also names `cutProposer`.
+Declared makers must differ after trimming surrounding whitespace and
+lowercasing; unknown makers produce exclusions. Provider, runtime and budget
+identities never certify maker independence. Package-owned direct families and
+Go presets declare makers; Iceman remains undisclosed. Configure
 `runtimes.<runtime>.sessionPool` with the actual registered pool key (for
 example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
 warns that the session buffer cannot be certified. With no pools it reports
@@ -1189,9 +1194,10 @@ dependencies, disjoint waves and prepared worker/reviewer briefs containing the
 full rubric verbatim. Before launch, pass `--check-plan <plan.json>` with
 current launch context and all planned roles to the rendered helper; it checks
 role/runtime/candidate/pinned line, wave/dependency shape and rubric bytes
-against a fresh Reader decision. Use `--max-concurrency <n>` for a host/user cap
-below ten. The orchestrator enforces review/commit barriers; offline validation
-makes no live compliance claim. See the
+against a fresh Reader decision, and that each unit's reviewers differ in
+declared maker from that unit's own worker. Use `--max-concurrency <n>` for a
+host/user cap below ten. The orchestrator enforces review/commit barriers;
+offline validation makes no live compliance claim. See the
 [saved-plan contract and policy ledger](packages/delegate-routing/docs/development.md#saved-plans-and-prepared-briefs).
 
 #### Per-turn reminder

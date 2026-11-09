@@ -34,6 +34,8 @@ in {
         defaultEffort = "medium";
         effort = "medium";
         example.codex = "gpt-6.1-sol";
+        # Synthetic makers exercise identity filtering, not live model ownership.
+        maker = "fixture-${name}";
         match = "gpt-*-sol";
         pools.codex =
           if name == "session"
