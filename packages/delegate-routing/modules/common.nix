@@ -246,7 +246,7 @@ in {
       opencodeGo.pool = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor.";
+        description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor. Setting opencodeGo.plan alone only supplies pool text; it does not bind a pool. When a plan is set, the module requires this option to name a registered pool and refuses evaluation otherwise.";
       };
       pools = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
@@ -468,6 +468,16 @@ in {
           }
         ])
         portable.pools)
+      ++ [
+        {
+          assertion = portable.opencodeGo.plan == null || portable.opencodeGo.pool != null;
+          message = "ai.programs.delegate-routing.opencodeGo.pool is null; the Go preset families would have no pool and rank on fit only. Set opencodeGo.pool to the registered pool key, e.g. \"opencode-go\".";
+        }
+        {
+          assertion = portable.opencodeGo.plan == null || portable.opencodeGo.pool == null || builtins.hasAttr portable.opencodeGo.pool portable.pools;
+          message = "ai.programs.delegate-routing.opencodeGo.pool: unknown pool `${toString portable.opencodeGo.pool}`; set it to a registered pool key, e.g. \"opencode-go\", declared under ai.programs.delegate-routing.pools.";
+        }
+      ]
       ++ lib.concatMap (family:
         lib.mapAttrsToList (target: pool: let
           path = "ai.programs.delegate-routing.families.${family.vendor}.${family.name}.pools.${target}";
