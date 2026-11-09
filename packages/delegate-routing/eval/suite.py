@@ -645,34 +645,64 @@ def check_helper_evidence(snapshot, receipts):
 
 def exercise_helper(case, repo, logs):
     """Offline setup proof; its receipts never stand in for session receipts."""
-    qualification = {"avoidFor": "bounded fixture excludes sole judging", "fit": "bounded fixture task", "useFor": "Python task"}
-    context = {"nonInteractive": True,
-               "roles": {role: {"effort": "medium", "families": {name: qualification for name in ("outside", "session", "under-tier")}}
-                         for role in ("planner", "writer", "first-check")},
+    rubric = "1. each function satisfies its literal examples.\n2. independent files have separate verifications.\n"
+    (logs / "setup-rubric.md").write_text(rubric)
+    context = {"nonInteractive": True, "roles": {}, "rubric": "setup-rubric.md",
+               "subject": {"task": "independent pure functions", "unit": "bootstrap"},
                "techniques": [{"efforts": ["medium"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
-    context["roles"]["first-check"]["writer"] = "outside"
     context_path = logs / "setup-launch-context.json"
-    write_json(context_path, context)
     argv = [helper_command(case, repo), "--launch-context", str(context_path)]
-    for role in context["roles"]:
-        argv += ["--role", role]
-    receipt_path = logs / "setup-reader-receipts.jsonl"
-    result = subprocess.run(argv, cwd=repo, env={**os.environ, "ROUTING_EVAL_RECEIPTS": str(receipt_path)},
-                            capture_output=True, text=True, check=True, timeout=60)
-    snapshot = json.loads(result.stdout)
-    write_json(logs / "setup-helper.json", {"argv": argv, "exitCode": result.returncode, "output": snapshot})
-    check_helper_evidence(snapshot, helper_receipts(receipt_path))
+    reader_path = logs / "setup-reader-receipts.jsonl"
+
+    def invoke(arguments):
+        write_json(context_path, context)
+        result = subprocess.run(argv + arguments, cwd=repo, env={**os.environ, "ROUTING_EVAL_RECEIPTS": str(reader_path)},
+                                capture_output=True, text=True, check=True, timeout=60)
+        return {"argv": argv + arguments, "exitCode": result.returncode, "output": json.loads(result.stdout)}
+
+    def classify(unit, role):
+        brief = f"setup-{unit}-{role}.md"
+        (logs / brief).write_text(f"Offline artifact fixture for {unit}/{role}; never launch these records.\n" + rubric)
+        record = {"brief": brief, "effort": "medium", "requirements": {"constraints": [], "inputKinds": ["text"]}}
+        if role == "first-check":
+            record["writer"] = "outside"
+        context["subject"]["unit"] = unit
+        context["roles"] = {role: record}
+        prepared = invoke(["--role", "classifier", "--classify-role", role])
+        preparation = prepared["output"]["classification"]
+        exchange_path = logs / f"setup-{unit}-{role}-exchange.json"
+        # This relay is fixture JSON, not a claim of model inference or quality.
+        write_json(exchange_path, {"preparation": preparation, "result": {
+            "schemaVersion": 1, "requestHash": preparation["requestHash"],
+            "decisions": [{"family": row["name"], "decision": "keep", "reason": "Synthetic fixture capability decision."}
+                          for row in preparation["request"]["families"]]}})
+        accepted = invoke(["--role", role, "--classification", str(exchange_path)])
+        receipt = f"setup-{unit}-{role}-receipt.json"
+        write_json(logs / receipt, accepted["output"]["receipt"])
+        reused = invoke(["--role", role, "--receipt", str(logs / receipt)])
+        if "classification" in reused["output"] or [row["launch"] for row in reused["output"]["roles"][role]["candidates"]] != [row["launch"] for row in accepted["output"]["roles"][role]["candidates"]]:
+            raise ValueError("unchanged receipt reuse must rank without another classifier request")
+        write_json(logs / f"setup-{unit}-{role}.json", {"preparation": prepared, "acceptance": accepted, "reuse": reused})
+        return record | {"receipt": receipt}, accepted
+
+    snapshot = None
+    for role in ("planner", "writer", "first-check"):
+        _, accepted = classify("bootstrap", role)
+        if snapshot is None:
+            snapshot = accepted["output"]
+        else:
+            snapshot["roles"].update(accepted["output"]["roles"])
+    write_json(logs / "setup-helper.json", {"exchanges": [f"setup-bootstrap-{role}.json" for role in ("planner", "writer", "first-check")], "exitCode": 0, "output": snapshot})
+    check_helper_evidence(snapshot, helper_receipts(reader_path))
     if case.get("id", "").endswith("independent-wave"):
-        rubric = "1. each function satisfies its literal examples.\n2. independent files have separate verifications.\n"
-        (logs / "setup-rubric.md").write_text(rubric)
-        (logs / "setup-brief.md").write_text("Offline artifact fixture; never launch these records.\n" + rubric)
         units = []
         for name, command in (("words", "unique_words('pear apple pear') == ['apple', 'pear']"), ("square", "square(3) == 9")):
             launches = []
             for role in ("writer", "first-check"):
-                candidate = snapshot["roles"][role]["candidates"][0]
-                launches.append({"brief": "setup-brief.md", "candidate": candidate["launch"],
-                                 "line": candidate["line"], "role": role, "runtime": "codex"})
+                record, accepted = classify(name, role)
+                candidate = accepted["output"]["roles"][role]["candidates"][0]
+                launches.append({key: value for key, value in record.items() if key != "writer"} |
+                                {"candidate": candidate["launch"], "line": candidate["line"], "role": role, "runtime": "codex"})
             units.append({"audience": "Python function caller", "checks": [], "dependencies": [], "docs": [],
                           "files": [name + ".py"], "goal": command, "id": name, "launches": launches,
                           "size": {"code": {"added": 3, "removed": 0}},
@@ -680,13 +710,11 @@ def exercise_helper(case, repo, logs):
         plan_path = logs / "setup-plan.json"
         write_json(plan_path, {"rubric": "setup-rubric.md", "runtime": "codex", "snapshot": snapshot,
                                "task": "independent pure functions", "units": units, "waves": [["words", "square"]]})
-        checked_argv = argv + ["--check-plan", str(plan_path)]
-        checked = subprocess.run(checked_argv, cwd=repo, env={**os.environ, "ROUTING_EVAL_RECEIPTS": str(receipt_path)},
-                                 capture_output=True, text=True, check=True, timeout=60)
-        output = json.loads(checked.stdout)
-        if output["validation"] != {"status": "valid", "task": "independent pure functions", "units": 2, "waves": 1}:
+        context["roles"]["writer"] = {key: units[0]["launches"][0][key] for key in ("brief", "effort", "requirements")}
+        checked = invoke(["--role", "writer", "--role", "first-check", "--check-plan", str(plan_path)])
+        if checked["output"]["validation"] != {"status": "valid", "task": "independent pure functions", "units": 2, "waves": 1}:
             raise ValueError("helper did not validate the independent two-unit wave")
-        write_json(logs / "setup-plan-validation.json", {"argv": checked_argv, "exitCode": checked.returncode, "output": output})
+        write_json(logs / "setup-plan-validation.json", checked)
 
 
 def validate(cases):
