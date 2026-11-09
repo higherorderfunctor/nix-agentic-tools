@@ -57,6 +57,13 @@
       tier = "mid";
       useFor = "bounded rule reasoning; checkable implementation attempts while free capacity lasts";
     };
+    go-crouton-alpha-free = {
+      avoidFor = "planning or sole judging; confidential inputs (30-day retention); relying on the limited-time free listing";
+      effort = "always reasons; minimal to max, no recommended level published";
+      match = "crouton-alpha-free";
+      tier = "mid";
+      useFor = "provisional: bounded agent subtasks, tool use and document analysis with checks; maker undisclosed";
+    };
     go-deepseek-v4-pro = {
       avoidFor = "image input; sole final judge; trusting April preview scores for the served checkpoint";
       effort = "high default, max for named hard reasoning; best setting untested on Go";
@@ -91,6 +98,13 @@
       match = "hy3";
       tier = "mid";
       useFor = "provisional: bounded code writing and text agent tasks with verification";
+    };
+    go-hy4 = {
+      avoidFor = "sole judging; latency-sensitive work; hardest unattended runs";
+      effort = "none or high; high is the vendor default";
+      match = "hy4";
+      tier = "mid";
+      useFor = "provisional: bounded coding and long-horizon agent steps with review; chart and image analysis with checks";
     };
     go-hy4-preview = {
       avoidFor = "hardest autonomous terminal work; latency-sensitive tasks; sole judging";
