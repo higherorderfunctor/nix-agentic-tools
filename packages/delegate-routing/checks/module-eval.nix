@@ -443,6 +443,11 @@
         codex.models = [{families = ["opus"];}];
       };
     };
+    goPoolWindow = {
+      limit = 100;
+      resetDay = 1;
+      unit = "credits";
+    };
     poolResult = change {ai.programs.delegate-routing = poolConfig;};
     poolSkill = readSkill poolResult "claude";
     poolChange = settings: change {ai.programs.delegate-routing = lib.recursiveUpdate poolConfig settings;};
@@ -1266,11 +1271,7 @@
           plan = "go-plus";
           pool = "go-budget";
         };
-        pools.go-budget.window = {
-          limit = 100;
-          resetDay = 1;
-          unit = "credits";
-        };
+        pools.go-budget.window = goPoolWindow;
         runtimes = {
           claude.models = [{vendors = ["opencode-go"];}];
           codex.models = [{families = ["go-kimi-k3"];}];
@@ -1283,6 +1284,33 @@
         };
       };
       bound = change {ai.programs.delegate-routing = settings;};
+      # Literal diagnostics reject a configuration that evaluates silently and
+      # an assertion that checks only null, not an unregistered pool key.
+      missingPoolMessage = "ai.programs.delegate-routing.opencodeGo.pool is null; the Go preset families would have no pool and rank on fit only. Set opencodeGo.pool to the registered pool key, e.g. \"opencode-go\".";
+      unknownPoolMessage = "ai.programs.delegate-routing.opencodeGo.pool: unknown pool `missing-go-budget`; set it to a registered pool key, e.g. \"opencode-go\", declared under ai.programs.delegate-routing.pools.";
+      unboundSettings = settings // {opencodeGo = {plan = "go-plus";};};
+      unbound = change {ai.programs.delegate-routing = unboundSettings;};
+      handBound = change {
+        ai.programs.delegate-routing =
+          unboundSettings
+          // {
+            families.opencode-go = lib.mapAttrs (_: _: {pools = expectedBindings;}) bound.config.ai.programs.delegate-routing.families.opencode-go;
+          };
+      };
+      unknownPool = change {
+        ai.programs.delegate-routing =
+          settings
+          // {
+            opencodeGo = {
+              plan = "go-plus";
+              pool = "missing-go-budget";
+            };
+          };
+      };
+      # No selected Go runtime can mask an invalid module-level pool binding.
+      unselected = change {ai.programs.delegate-routing.opencodeGo.plan = "go-plus";};
+      hasFailure = evaluation: message:
+        lib.any (item: !item.assertion && item.message == message) evaluation.config.assertions;
       text = readSkill bound "claude";
       lines = lib.splitString "\n" text;
       overridden = change {
@@ -1294,6 +1322,12 @@
       };
     in
       passes bound
+      && hasFailure unbound missingPoolMessage
+      && hasFailure handBound missingPoolMessage
+      && hasFailure unselected missingPoolMessage
+      && hasFailure unknownPool unknownPoolMessage
+      # A null plan keeps fit-only Go presets supported without a pool binding.
+      && passes (change {ai.programs.delegate-routing = settings // {opencodeGo.plan = null;};})
       && lib.all (family: family.pools == expectedBindings)
       (builtins.attrValues bound.config.ai.programs.delegate-routing.families.opencode-go)
       && lib.hasInfix "## Pools" text
@@ -1323,7 +1357,14 @@
       goSelected = plan:
         change {
           ai.programs.delegate-routing = {
-            opencodeGo = {inherit plan;};
+            opencodeGo = {
+              inherit plan;
+              pool =
+                if plan == null
+                then null
+                else "go-budget";
+            };
+            pools = lib.optionalAttrs (plan != null) {go-budget.window = goPoolWindow;};
             runtimes.claude = {
               extraRuntimes = [];
               manualExternalDelegates = [];
@@ -1374,7 +1415,11 @@
       # own list item; the formatter wraps list items onto indented lines.
       && lib.any (line: lib.hasPrefix "- go-kimi-k3 (opencode-go) `kimi-k3`: " line && lib.hasSuffix "; go-plus: $60 of list-price use empties the monthly pool" line) (lib.splitString "\n" (lib.replaceStrings ["\n  "] [" "] (skill {
         ai.programs.delegate-routing = {
-          opencodeGo.plan = "go-plus";
+          opencodeGo = {
+            plan = "go-plus";
+            pool = "go-budget";
+          };
+          pools.go-budget.window = goPoolWindow;
           runtimes.kimchi.models = [{vendors = ["opencode-go"];}];
         };
       })))

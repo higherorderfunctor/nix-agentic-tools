@@ -199,14 +199,21 @@ fact: the list-price dollars that empty the account's monthly pool, so a lower
 limit weighs more. The skill always shows a Pool column, empty when a family has
 no pool text, alongside each reach’s registered pool label. Set
 `opencodeGo.pool = "<pool>"` to bind every generated preset to that registered
-pool on each runtime that selects the `opencode-go` vendor. If one runtime
-selects a preset and another family of any vendor, a custom `opencode-go` one
-included, that match the same servable Go catalog id, such as a hand-written
-`deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`, evaluation fails and names
-the id and the families. Selecting them on different runtimes is allowed, and
-families that overlap with no preset selected are not checked. The
-`delegate-routing-opencode-go-presets` check fails when a servable catalog id
-matches no preset or several, or a preset matches no catalog id.
+pool on each runtime that selects the `opencode-go` vendor. Setting
+`opencodeGo.plan` alone does not bind a pool. When a plan is set without
+`opencodeGo.pool`, the module refuses evaluation: the Go preset families would
+have no pool and rank on fit only. Set it to a registered pool key, for example
+`"opencode-go"`; an unregistered key also fails evaluation. Hand-written family
+`pools` bindings do not replace this requirement. There is no option to
+deliberately leave Go presets without a pool while setting a plan. With
+`opencodeGo.plan = null`, fit-only routing without a pool binding remains
+supported. If one runtime selects a preset and another family of any vendor, a
+custom `opencode-go` one included, that match the same servable Go catalog id,
+such as a hand-written `deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`,
+evaluation fails and names the id and the families. Selecting them on different
+runtimes is allowed, and families that overlap with no preset selected are not
+checked. The `delegate-routing-opencode-go-presets` check fails when a servable
+catalog id matches no preset or several, or a preset matches no catalog id.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
