@@ -121,7 +121,7 @@
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
       inherit runtime models techniques resolvedAgentFiles;
-      inherit (portable) families pools;
+      inherit (portable) classifiers families pools;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates sessionPool;
     };
@@ -181,6 +181,22 @@ in {
   options.ai.programs.delegate-routing =
     entryOptions
     // {
+      classifiers = lib.mkOption {
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            effort = lib.mkOption {
+              type = lib.types.str;
+              description = "Approved resolved classifier effort; no implicit default.";
+            };
+            family = lib.mkOption {
+              type = lib.types.str;
+              description = "Configured family approved to classify capability fit.";
+            };
+          };
+        });
+        default = defaults.classifiers;
+        description = "Ordered approved classifier family/effort pairs. An explicit list replaces the package default. For a family, the first supported effort wins; ordinary pool ranking chooses between families.";
+      };
       families = lib.mkOption {
         type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule {
           options = {
@@ -456,11 +472,11 @@ in {
           assertion = !lib.any reminderHookEnabled reminderRuntimes || portable.reminder._sourceWins || portable.reminder.text != "";
           message = "ai.programs.delegate-routing.reminder.text must be non-empty when a runtime reminder hook is enabled, unless a source supplies the content.";
         }
-        {
-          assertion = lib.allUnique (map (family: family.name) flattenedFamilies);
-          message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";
-        }
       ]
+      ++ (import ../lib/classifier-policy.nix {inherit lib;}) {
+        inherit (portable) classifiers;
+        families = flattenedFamilies;
+      }
       ++ lib.concatLists (lib.mapAttrsToList (name: pool: let
           path = "ai.programs.delegate-routing.pools.${lib.strings.escapeNixIdentifier name}";
           reader = pool.usage;
