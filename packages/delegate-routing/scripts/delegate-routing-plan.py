@@ -31,7 +31,10 @@ ROLE_TIERS = {
 }
 READER_RETRY_DELAY = 2
 READER_TIMEOUT = 10
-PICKER_PROMPT_LIMIT = 65536
+TASK_SUMMARY_LIMIT = 65536
+# JSON escapes can expand each summary byte sixfold; reserve the same bound
+# again for instructions, role requests and family guidance.
+PICKER_PROMPT_LIMIT = 7 * TASK_SUMMARY_LIMIT
 PICKER_OUTPUT_LIMIT = 65536
 PICKER_TIMEOUT = 90
 PICKER_RETRY_DELAY = 2
@@ -482,6 +485,32 @@ def request_errors(manifest, context, roles):
         if value not in names:
             refuse(path, f"unknown {noun}; allowed: {allowed(names)}")
 
+    def shape(path, node, schema):
+        # Refuse missing or malformed fields consumed by launch and the picker
+        # before budget Readers run; generated manifest metadata stays allowed.
+        if isinstance(schema, dict):
+            if not isinstance(node, dict):
+                refuse(path, f"{CONFIGURATION_FAULT}must be an object")
+                return
+            for key, child in schema.items():
+                if key not in node:
+                    refuse(f"{path}.{key}", f"{CONFIGURATION_FAULT}required key is missing")
+                else:
+                    shape(f"{path}.{key}", node[key], child)
+        elif isinstance(schema, list):
+            if not isinstance(node, list):
+                refuse(path, f"{CONFIGURATION_FAULT}must be a list")
+                return
+            for index, child in enumerate(node):
+                shape(f"{path}[{index}]", child, schema[0])
+        elif type(node) not in schema:
+            refuse(path, f"{CONFIGURATION_FAULT}must have type {' or '.join(kind.__name__ for kind in schema)}")
+
+    family_shape = {"avoidFor": (str,), "defaultEffort": (str, type(None)), "name": (str,), "tier": (str,), "useFor": (str,)}
+    technique_shape = {"agent": (dict, type(None)), "model": {"isPattern": (bool,), "value": (str,)}, "name": (str,), "node": {"command": (str, type(None)), "kind": (str,), "modelArg": (str,), "notes": (str,)}}
+    route_shape = {"family": family_shape, "target": (str,), "techniques": [technique_shape]}
+    picker_shape = {"command": (str,), "effort": (str,), "family": (str,), "model": (str,), "pool": (str, type(None)), "runtime": (str,), "technique": (str,), "toolFree": (bool,)}
+
     role_names = sorted(ROLE_TIERS)
     for index, role in enumerate(roles):
         named(f"argv.role[{index}]", role, role_names, "role")
@@ -528,10 +557,20 @@ def request_errors(manifest, context, roles):
                 path = f"manifest.{kind}[{index}]"
                 if not isinstance(route, dict):
                     refuse(path, f"{CONFIGURATION_FAULT}must be an object")
-                elif "pool" not in route:
+                    continue
+                if "pool" not in route:
                     refuse(f"{path}.pool", f"{CONFIGURATION_FAULT}required key is missing; null marks an unbound route")
                 elif route["pool"] is not None and route["pool"] not in pool_names:
                     refuse(f"{path}.pool", pool_fault % route["pool"])
+                shape(path, route, route_shape)
+        shape("manifest.pickerEntries", manifest["pickerEntries"], [picker_shape])
+        for index, entry in enumerate(manifest["pickerEntries"] if isinstance(manifest["pickerEntries"], list) else []):
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("pool") is not None and entry["pool"] not in pool_names:
+                refuse(f"manifest.pickerEntries[{index}].pool", pool_fault % entry["pool"])
+            if isinstance(entry.get("command"), str) and not entry["command"].strip():
+                refuse(f"manifest.pickerEntries[{index}].command", f"{CONFIGURATION_FAULT}must be a non-empty string")
     if context is None:
         return errors
     if not isinstance(context, dict):
@@ -542,11 +581,11 @@ def request_errors(manifest, context, roles):
     closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
     summary = context.get("taskSummary")
     try:
-        summary_valid = isinstance(summary, str) and summary.strip() and len(summary.encode("utf-8")) <= PICKER_PROMPT_LIMIT
+        summary_valid = isinstance(summary, str) and summary.strip() and len(summary.encode("utf-8")) <= TASK_SUMMARY_LIMIT
     except UnicodeEncodeError:
         summary_valid = False
     if not summary_valid:
-        refuse("launchContext.taskSummary", f"must be a non-empty UTF-8 string of at most {PICKER_PROMPT_LIMIT} bytes")
+        refuse("launchContext.taskSummary", f"must be a non-empty UTF-8 string of at most {TASK_SUMMARY_LIMIT} bytes")
     if "nonInteractive" not in context or type(context["nonInteractive"]) not in (bool, type(None)):
         refuse("launchContext.nonInteractive", "required; true, false or null")
     proposer = context.get("proposerFamily")

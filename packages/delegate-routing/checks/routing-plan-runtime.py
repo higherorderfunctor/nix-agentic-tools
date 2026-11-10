@@ -357,7 +357,7 @@ class Routing(unittest.TestCase):
             root = Path(directory)
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "nobody"]
             for kind in ("routes", "manualRoutes"):
-                for value, path in (([1], f"manifest.{kind}[0]"), ([{}], f"manifest.{kind}[0].pool"), (1, f"manifest.{kind}")):
+                for value, path in (([1], f"manifest.{kind}[0]"), ([{key: value for key, value in route().items() if key != "pool"}], f"manifest.{kind}[0].pool"), (1, f"manifest.{kind}")):
                     config = manifest()
                     config[kind] = value
                     (root / "manifest.json").write_text(json.dumps(config))
@@ -374,6 +374,73 @@ class Routing(unittest.TestCase):
             proc = subprocess.run(command + ["--now", "garbage"], capture_output=True, text=True)
             self.assertEqual(proc.returncode, 2, proc.stderr)
             self.assertEqual([e["path"] for e in json.loads(proc.stdout)["errors"]], ["argv.role[0]", "launchContext.taskSummary", "argv.--now"])
+
+    def test_manifest_nested_shapes_are_refused_before_readers(self):
+        # Wrong: route and picker shapes reach Readers, then crash without JSON.
+        cases = [
+            (("routes", 0, "family"), None, "manifest.routes[0].family"),
+            (("routes", 0, "family", "name"), [], "manifest.routes[0].family.name"),
+            (("routes", 0, "family", "tier"), None, "manifest.routes[0].family.tier"),
+            (("routes", 0, "target"), None, "manifest.routes[0].target"),
+            (("routes", 0, "techniques"), {}, "manifest.routes[0].techniques"),
+            (("routes", 0, "techniques", 0, "model"), None, "manifest.routes[0].techniques[0].model"),
+            (("routes", 0, "techniques", 0, "node", "kind"), [], "manifest.routes[0].techniques[0].node.kind"),
+            (("manualRoutes", 0, "family"), None, "manifest.manualRoutes[0].family"),
+            (("pickerEntries",), {}, "manifest.pickerEntries"),
+            (("pickerEntries", 0), None, "manifest.pickerEntries[0]"),
+            (("pickerEntries", 0, "command"), [], "manifest.pickerEntries[0].command"),
+            (("pickerEntries", 0, "toolFree"), 1, "manifest.pickerEntries[0].toolFree"),
+        ]
+        for keys, value, expected in cases:
+            with self.subTest(path=expected):
+                config, ctx = self.picker_fixture()
+                node = config
+                for key in keys[:-1]:
+                    node = node[key]
+                node[keys[-1]] = value
+                self.assertEqual([error["path"] for error in self.request_errors(config, ctx)], [expected])
+        config, ctx = self.picker_fixture()
+        del config["routes"][0]["family"]
+        del config["routes"][0]["target"]
+        del config["routes"][0]["techniques"]
+        del config["pickerEntries"][0]["model"]
+        self.assertEqual([error["path"] for error in self.request_errors(config, ctx)], [
+            "manifest.routes[0].family", "manifest.routes[0].target",
+            "manifest.routes[0].techniques", "manifest.pickerEntries[0].model",
+        ])
+
+    def test_cli_nested_manifest_faults_are_json_before_readers(self):
+        # Wrong: valid pools hide missing route keys or malformed picker entries.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            config, ctx = self.picker_fixture()
+            log = root / "reads"
+            for reader in config["readers"]:
+                reader["command"] = f"printf x >> '{log}'"
+            config["routes"][0] = {"pool": "outside"}
+            config["pickerEntries"] = {}
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text(json.dumps(ctx))
+            proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            document = json.loads(proc.stdout)
+            self.assertEqual(document["status"], "invalid-request")
+            self.assertEqual([error["path"] for error in document["errors"]], ["manifest.routes[0].family", "manifest.routes[0].target", "manifest.routes[0].techniques", "manifest.pickerEntries"])
+            self.assertFalse(log.exists())
+
+    def test_maximal_task_summary_reaches_the_picker(self):
+        # Wrong: an accepted 65536-byte summary exceeds the framed prompt cap.
+        config, ctx = self.picker_fixture()
+        raw = self.decisions(("writer", "sol", "keep"))
+        entry = config["pickerEntries"][0]
+        entry["command"] = "printf '%s' " + shlex.quote(raw.decode()) + " > <output-file>"
+        for summary in ("x" * 65536, "\x01" * 65536, "é" * 32768):
+            with self.subTest(character=repr(summary[0])):
+                ctx["taskSummary"] = summary
+                with patch.object(helper, "collect", return_value={name: {"status": "unmeasured"} for name in ("hidden", "outside", "session")}):
+                    result = helper.plan(config, ctx, ("writer",), NOW, SHELL)
+                self.assertEqual(result["picker"]["decisions"], [{"decision": "keep", "family": "sol", "reason": "bounded role fit", "role": "writer"}])
+                self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
 
     def test_cli_invalid_request_is_json_on_stdout_and_exit_two(self):
         # Wrong: schema errors surface as a traceback or bare stderr text, run a
