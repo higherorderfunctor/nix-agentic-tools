@@ -9,8 +9,8 @@
 # `ai.internal.packages`. From 12.3.1 nixpkgs ships the patch itself, so once
 # this flake's pin reaches it, evaluation throws until the override is removed.
 # The Update sweep's verification builds only `ciPackages`, which never
-# reaches this leaf, so the nixpkgs bump still opens its update PR; that PR's
-# `nix flake check` evaluates the kiro-cli checks, throws, and stays red.
+# reaches this leaf, so the nixpkgs bump still opens its update PR; the PR's
+# `checks-matrix` gate evaluates the kiro-cli checks, throws, and stays red.
 {
   inputs,
   lib,
