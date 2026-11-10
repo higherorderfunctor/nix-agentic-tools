@@ -533,7 +533,6 @@
     routingArgs = let
       portable = routingFixture.config.ai.programs.delegate-routing;
       selection = import ../lib/select-families.nix {inherit lib;};
-      agentFiles = import ../lib/agent-files.nix {inherit lib;};
     in {
       inherit lib;
       inherit (portable) families pools;
@@ -541,13 +540,15 @@
       models = lib.mapAttrs (_: settings: settings.models) portable.runtimes;
       runtime = "claude";
       techniques = selection.effectiveTechniques routingFixture.config;
-      # Mirror the module's id pool rather than the library's live-only
-      # fallback: the extracted catalog plus the fixture catalog the instance
-      # publishes as picker rows, so fixture families resolve in the view.
-      resolvedAgentFiles =
-        agentFiles.resolve
-        (agentFiles.facts.models ++ fixedCatalogModels)
-        (selection.select portable.families portable.runtimes.claude.models);
+      # The view takes resolution as data in the module's input shape
+      # (agent-files resolve output) rather than re-derived catalog logic;
+      # module integration stays covered by the agent-files pins.
+      resolvedAgentFiles = {
+        opus = {
+          family.defaultEffort = "high";
+          id = "test-opus-5-10";
+        };
+      };
     };
     routingView = import ../lib/routing-view.nix routingArgs;
     sessionPools = {
@@ -780,8 +781,7 @@
           routingView.routes;
         resolved = import ../lib/routing-view.nix (routingArgs
           // {
-            # A module-supplied picker resolution must beat the
-            # catalog-derived one.
+            # A caller's explicit resolution must beat the supplied record.
             resolvedAgentFiles.opus = {
               family.defaultEffort = "high";
               id = "proxy-opus-123";
@@ -1927,19 +1927,31 @@ in {
       # The public builder is overridable from the shipped inputs. Fails if
       # mkSkill returns no `.override`, if `prev` lacks the shipped `skill`, or
       # if the override does not reach the render; the second half fails if
-      # overriding leaks into the un-overridden skill.
+      # overriding leaks into the un-overridden skill. The fallback half
+      # exercises the null-resolution path the shipped skills take: without
+      # resolvedAgentFiles the library resolves the live catalog itself, so the
+      # shipped pin is asserted by family prefix only, while the example id
+      # keeps the explicit pin hand-written.
       module-delegate-routing-builder-override = let
         content = (evalHm scenario).config.ai.internal.roots.delegate-routing-content;
         base = content.passthru.mkSkill {runtime = "claude";};
         overridden = base.override (prev: {
           skill = lib.recursiveUpdate prev.skill {phrases."Launch fallback".text = ", or ";};
         });
+        fallback = content.passthru.mkSkill {
+          runtime = "claude";
+          families = lib.recursiveUpdate content.passthru.families {
+            anthropic.opus.example.claude = "proxy-opus-123";
+          };
+        };
       in
         mkTest "delegate-routing-builder-override" (
           lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, or `claude -p`" overridden.text
           && !(lib.hasInfix ", else `claude -p`" overridden.text)
           && lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p`" base.text
           && base.text == content.passthru.skills.claude.text
+          && lib.hasInfix "generated agent file pinning `claude-opus-" base.text
+          && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `proxy-opus-123`, else `Workflow` with full model id `proxy-opus-123`, else `claude -p` with full model id `proxy-opus-123`" fallback.text
         );
       # tryEval cannot expose the diagnostic; evaluate the resolver in a subprocess.
       module-delegate-routing-cycle-message = let
