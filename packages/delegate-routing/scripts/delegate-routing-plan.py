@@ -462,7 +462,7 @@ MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries",
 
 def request_errors(manifest, context, roles):
     """Collect every refusal in argv roles, manifest and launch context; a context needs its manifest."""
-    errors = []
+    errors, name_lists = [], {}
 
     def refuse(path, message):
         errors.append({"path": path, "message": message})
@@ -513,6 +513,13 @@ def request_errors(manifest, context, roles):
         pool_fault = f"{CONFIGURATION_FAULT}unregistered pool %s; registered: {allowed(pool_names)}"
         if session is not None and session not in pool_names:
             refuse("manifest.sessionPool", pool_fault % session)
+        # Scalar lists and non-string entries cannot drive sorting or name checks.
+        for key in ("effortLevels", "familyNames"):
+            values = manifest[key]
+            if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+                refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}must be a list of strings")
+            else:
+                name_lists[key] = values
         for kind in ("routes", "manualRoutes"):
             if not isinstance(manifest[kind], list):
                 refuse(f"manifest.{kind}", f"{CONFIGURATION_FAULT}must be a list")
@@ -530,7 +537,8 @@ def request_errors(manifest, context, roles):
     if not isinstance(context, dict):
         refuse("launchContext", "must be an object")
         return errors
-    families, efforts = sorted(manifest["familyNames"]), manifest["effortLevels"]
+    families = sorted(name_lists["familyNames"]) if "familyNames" in name_lists else None
+    efforts = name_lists.get("effortLevels")
     closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
     summary = context.get("taskSummary")
     try:
@@ -542,7 +550,7 @@ def request_errors(manifest, context, roles):
     if "nonInteractive" not in context or type(context["nonInteractive"]) not in (bool, type(None)):
         refuse("launchContext.nonInteractive", "required; true, false or null")
     proposer = context.get("proposerFamily")
-    if proposer is not None and (not isinstance(proposer, str) or proposer not in families):
+    if families is not None and proposer is not None and (not isinstance(proposer, str) or proposer not in families):
         refuse("launchContext.proposerFamily", f"unknown family name; allowed: {allowed(families)}")
     observed = context.get("techniques")
     if not isinstance(observed, list):
@@ -573,8 +581,9 @@ def request_errors(manifest, context, roles):
                 if not isinstance(request[field], list):
                     refuse(f"{path}.{field}", "must be a list of family names")
                 for position, name in enumerate(request[field] if isinstance(request[field], list) else []):
-                    named(f"{path}.{field}[{position}]", name, families, "family name")
-            if request.get("effort") is not None:
+                    if families is not None:
+                        named(f"{path}.{field}[{position}]", name, families, "family name")
+            if efforts is not None and request.get("effort") is not None:
                 named(f"{path}.effort", request["effort"], efforts, "effort")
             closed(path, request, {"avoid", "effort", "exclude"})
     return errors

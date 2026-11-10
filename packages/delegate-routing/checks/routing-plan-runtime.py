@@ -324,6 +324,32 @@ class Routing(unittest.TestCase):
             (root / "context.json").write_text(json.dumps({"taskSummary": "ok"}))
             self.assertEqual(refused(manifest(), ["--now", "garbage"]), ["launchContext.nonInteractive", "launchContext.techniques", "launchContext.roles", "argv.--now"])
 
+    def test_cli_manifest_name_lists_are_configuration_faults(self):
+        # Wrong: scalar or mixed-type name lists crash sorting/membership checks
+        # or hide independent context and argv errors instead of refusing the manifest.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            ctx = context() | {"proposerFamily": "sol", "taskSummary": ""}
+            ctx["roles"]["writer"].update({"avoid": ["sol"], "exclude": ["manual"]})
+            (root / "context.json").write_text(json.dumps(ctx))
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "writer", "--now", "garbage"]
+            for field in ("effortLevels", "familyNames"):
+                for value in (5, "high", ["high", 5], None, {"high": True}):
+                    with self.subTest(field=field, value=value):
+                        config = manifest()
+                        config[field] = value
+                        (root / "manifest.json").write_text(json.dumps(config))
+                        proc = subprocess.run(command, capture_output=True, text=True)
+                        self.assertNotIn("Traceback", proc.stderr)
+                        self.assertEqual(proc.returncode, 2, proc.stderr)
+                        document = json.loads(proc.stdout)
+                        self.assertEqual(document["status"], "invalid-request")
+                        self.assertEqual(document["errors"], [
+                            {"path": f"manifest.{field}", "message": "configuration fault, not caller-fixable: must be a list of strings"},
+                            {"path": "launchContext.taskSummary", "message": "must be a non-empty UTF-8 string of at most 65536 bytes"},
+                            {"path": "argv.--now", "message": "garbage: Invalid isoformat string: 'garbage'"},
+                        ])
+
     def test_cli_malformed_routes_keep_other_request_errors(self):
         # Wrong: malformed route entries crash normally and hide argv/context faults
         # beside a bad --now; context encoding failures are blamed on the manifest.

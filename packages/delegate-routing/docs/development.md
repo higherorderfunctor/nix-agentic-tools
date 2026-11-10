@@ -459,16 +459,16 @@ its picker command also names a per-call model catalog, `<catalog-file>`. The
 helper writes it in the call's temporary directory (deleted after) from the
 picked model's live entry in `${CODEX_HOME:-$HOME/.codex}/models_cache.json`,
 with `tool_mode` direct, `shell_type` disabled, no `apply_patch`, no
-experimental tools, no multi-agent and no search tool, and runs Codex from that
-directory. Offline codex-cli 0.167.0 captures against a fake Responses provider
-sent no `tools` key and no tool item. A missing or unreadable cache, or a cache
-without the model, makes that entry unavailable and the helper's warning names
-the reason; the helper never runs Codex on a guessed catalog. One live
-ChatGPT-authenticated run, capturing its request, is still owed: image
-generation, connectors and plugin suggestions depend on real auth and are only
-disabled, not observed. The fake-provider test needs the real `codex` binary and
-the shipped command in `CODEX_PICKER_COMMAND`, so it skips in the Nix sandbox;
-the catalog and warning tests always run.
+experimental tools, no multi-agent, no node REPL and no search tool, and runs
+Codex from that directory. Offline codex-cli 0.167.0 captures against a fake
+Responses provider sent no `tools` key and no tool item. A missing or unreadable
+cache, or a cache without the model, makes that entry unavailable and the
+helper's warning names the reason; the helper never runs Codex on a guessed
+catalog. One live ChatGPT-authenticated run, capturing its request, is still
+owed: image generation, connectors and plugin suggestions depend on real auth
+and are only disabled, not observed. The fake-provider test needs the real
+`codex` binary and the shipped command in `CODEX_PICKER_COMMAND`, so it skips in
+the Nix sandbox; the catalog and warning tests always run.
 
 Readers and hard eligibility run before judgment. A picker runs when its family
 is not the proposer, its pool and scopes allow it, and the first word of its
