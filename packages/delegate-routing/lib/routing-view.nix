@@ -6,6 +6,7 @@
   models,
   techniques,
   pools ? {},
+  picker ? null,
   resolvedAgentFiles ? null,
   extraRuntimes ? [],
   manualExternalDelegates ? [],
@@ -80,12 +81,72 @@
         }"
       else map technique names;
   };
-in {
-  inherit candidates effortLevels runtimes;
-  familyNames = map (family: family.name) (selection.flatten families);
   routes = lib.concatMap (family:
     map (reach family) (builtins.filter (target: builtins.elem family (selected target)) runtimes))
   candidates;
+  resolvePickerEntry = entry: let
+    matches = builtins.filter (route:
+      builtins.hasAttr entry.technique techniques.${route.target}
+      && ((route.family.example.${route.target} or "") == entry.model || builtins.match (agentFiles.pattern route.family.match) entry.model != null))
+    routes;
+    route = lib.head matches;
+    node = techniques.${route.target}.${entry.technique};
+    # A picker is a one-shot external command that pins model and effort; reach
+    # already refused an empty modelArg for every such technique on a route.
+    usable =
+      node.enable
+      && node.launchRoute
+      && node.kind == "external"
+      && node.pinsModel == true
+      && node.pinsEffort == true
+      && node.pickerCommand != null;
+    # One concrete model: a glob would let the pattern match stand in for it.
+    concrete = lib.trim entry.model != "" && !lib.any (char: lib.hasInfix char entry.model) ["*" "?" "["];
+  in
+    if builtins.length matches != 1 || !usable || !concrete || !(builtins.elem entry.effort effortLevels)
+    then null
+    else {
+      inherit (entry) effort model technique;
+      runtime = route.target;
+      inherit (node.pickerCommand) command toolFree;
+      family = route.family.name;
+      inherit (route) pool;
+    };
+in {
+  inherit candidates effortLevels runtimes;
+  pickerEntries = let
+    # A family-named default takes the family's resolved id and is dropped when
+    # none resolves; a model-named default passes through.
+    inheritFamilyModel = entry:
+      if entry ? family
+      then lib.optional (agentSet ? ${entry.family}) (removeAttrs entry ["family"] // {model = agentSet.${entry.family}.id;})
+      else [entry];
+  in
+    if picker == null
+    then
+      # Inherited defaults may be outside the selected model/reach or have a
+      # disabled technique. Explicit entries use this same resolver but refuse.
+      builtins.filter (entry: entry != null) (map resolvePickerEntry
+        (lib.concatMap inheritFamilyModel
+          (import ./defaults.nix {
+            inherit lib;
+            claudeUsageScript = null;
+            codexUsageScript = null;
+          }).picker.${
+            runtime
+          }.entries))
+    else if !lib.allUnique picker.entries
+    then throw "ai.programs.delegate-routing.runtimes.${runtime}.picker.entries: duplicate technique/model/effort tuple"
+    else
+      map (entry: let
+        resolved = resolvePickerEntry entry;
+      in
+        if resolved == null
+        then throw "ai.programs.delegate-routing.runtimes.${runtime}.picker.entries: require one configured concrete model family, enabled external one-shot technique, model/effort pins and non-empty picker command"
+        else resolved)
+      picker.entries;
+  familyNames = map (family: family.name) (selection.flatten families);
+  inherit routes;
   manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);
   readers =
     lib.mapAttrsToList (name: declared: let

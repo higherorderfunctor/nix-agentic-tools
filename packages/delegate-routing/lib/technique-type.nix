@@ -35,6 +35,23 @@ lib.types.submodule {
       default = "";
       description = "Runtime-specific controls and constraints.";
     };
+    pickerCommand = lib.mkOption {
+      type = lib.types.nullOr (lib.types.submodule {
+        options = {
+          command = lib.mkOption {
+            type = lib.types.nonEmptyStr;
+            description = "One-shot template using <model>, <effort>, <prompt-file>, <output-file> and, for Codex, <catalog-file> (a one-model tool-free catalog the helper writes), each substituted as a shell literal. The first word must be a bare executable name found on PATH; the helper skips a picker whose executable is not.";
+          };
+          toolFree = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Whether source or offline provider capture proves this command exposes no tools, including MCP and delegation. Unproven templates are unavailable.";
+          };
+        };
+      });
+      default = null;
+      description = "Technique-owned bounded picker command and verified tool removal; null cannot serve as a picker.";
+    };
     pinsEffort = lib.mkOption {
       type = lib.types.nullOr lib.types.bool;
       default = null;

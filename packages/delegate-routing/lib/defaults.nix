@@ -2,7 +2,28 @@
   lib,
   claudeUsageScript,
   codexUsageScript,
-}: {
+}: let
+  picker = {
+    claude.entries = [
+      {
+        effort = "medium";
+        # Names the family; routing-view takes the model from its resolved id.
+        family = "sonnet";
+        technique = "claude -p";
+      }
+    ];
+    codex.entries = [
+      {
+        effort = "medium";
+        model = "gpt-6.1-sol";
+        technique = "codex exec";
+      }
+    ];
+    kimchi.entries = [];
+    kiro.entries = [];
+  };
+in {
+  inherit picker;
   families = import ./families.nix // {opencode-go = (import ./opencode-go.nix {inherit lib;}).families;};
   models = {
     claude = [

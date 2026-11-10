@@ -1,24 +1,31 @@
 """Offline, literal routing expectations: no catalogs, live readers or launches."""
+# cspell:ignore hihg pidfile rescanned sool
 from copy import deepcopy
+import gzip
+import http.server
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shlex
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import call, patch
 
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
+CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
 spec = importlib.util.spec_from_file_location("routing_plan", SOURCE)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 NOW = helper.utc("2026-11-15T00:00:00Z")
 SHELL = shutil.which("bash")
-QUALIFIED = {"avoidFor": "checked: task avoids exclusions", "fit": "approved for this task", "trial": "not a trial", "useFor": "task matches guidance"}
 
 
 def window(remaining=50, seconds=2592000, reset="2026-12-01T00:00:00Z"):
@@ -38,11 +45,20 @@ def route(name="sol", tier="strong", pool="outside", target="codex", techniques=
 
 
 def manifest(routes=None, session=None):
-    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
+    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
 def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
-    return {"nonInteractive": non_interactive, "roles": {role: {"effort": effort, "families": {name: QUALIFIED for name in names}} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+    return {"taskSummary": "bounded source change", "nonInteractive": non_interactive, "roles": {role: {"effort": effort} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+
+
+def picker_child_exited(child):
+    try:
+        os.kill(child, 0)
+        # A killed child that nobody has reaped yet still answers signal 0.
+        return Path("/proc").is_dir() and Path(f"/proc/{child}/stat").read_text().rpartition(")")[2].split()[0] == "Z"
+    except (FileNotFoundError, ProcessLookupError):
+        return True
 
 
 class Routing(unittest.TestCase):
@@ -62,6 +78,570 @@ class Routing(unittest.TestCase):
         with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")), patch("time.sleep"):
             result = helper.plan(config or manifest(), launch_context or context(roles), roles, now, SHELL, reader)
         return result, calls
+
+    def request_errors(self, config=None, launch_context=None, roles=("writer",)):
+        # Every refusal happens before a Reader or picker could run.
+        with patch.object(helper, "collect", side_effect=AssertionError("Readers invoked")), patch.object(helper, "run_picker", side_effect=AssertionError("picker invoked")):
+            with self.assertRaises(helper.InvalidRequest) as caught:
+                helper.plan(config or manifest(), launch_context or context(roles), roles, NOW, SHELL)
+        return caught.exception.errors
+
+    def picker_fixture(self, routes=None, roles=("writer",)):
+        config, ctx = manifest(routes), context(roles)
+        ctx["proposerFamily"] = "dormant"
+        config["pickerEntries"] = [{"runtime": "codex", "technique": "one-shot", "family": "sol", "model": "gpt-6.1-sol", "effort": "medium", "pool": "outside", "command": "printf fake", "toolFree": True}]
+        return config, ctx
+
+    def decisions(self, *items):
+        return json.dumps({"decisions": [{"decision": decision, "family": family, "reason": "bounded role fit", "role": role} for role, family, decision in items], "schemaVersion": 1}).encode()
+
+    def test_picker_judges_role_before_measured_preference(self):
+        # Wrong: pool preference removes unmeasured choices before semantic judgment,
+        # or one family-global verdict forces writer and judge to share a decision.
+        config, ctx = self.picker_fixture([route(), route("other", pool=None), route("small", tier="small")], ("writer", "judge"))
+        raw = self.decisions(("writer", "sol", "keep"), ("writer", "other", "keep"), ("writer", "small", "exclude"), ("judge", "sol", "exclude"), ("judge", "other", "keep"))
+        with patch.object(helper, "run_picker", return_value=raw) as picker:
+            result, _ = self.run_plan(config, ctx, ("writer", "judge"))
+        picker.assert_called_once()
+        payload = picker.call_args.args[1]
+        self.assertEqual([(x["role"], x["name"]) for x in payload["families"]], [("writer", "sol"), ("writer", "other"), ("writer", "small"), ("judge", "sol"), ("judge", "other")])
+        self.assertNotIn("pools", payload)
+        self.assertNotIn("command", json.dumps(payload))
+        self.assertEqual([x["launch"]["family"] for x in result["roles"]["writer"]["candidates"]], ["sol"])
+        self.assertEqual([x["launch"]["family"] for x in result["roles"]["judge"]["candidates"]], ["other"])
+        self.assertEqual(result["picker"]["provenance"], {"runtime": "codex", "technique": "one-shot", "family": "sol", "model": "gpt-6.1-sol", "effort": "medium"})
+        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+
+    def test_picker_hard_gates_and_avoid_partition_are_prompt_data(self):
+        # Wrong: excluded, unreachable, exhausted or scoped-refused families reach
+        # judgment; or avoided fallback requires a second unbounded inference.
+        config, ctx = self.picker_fixture([route(), route("excluded"), route("dead", pool="hidden"), route("spent", pool="session"), route("scoped")])
+        ctx["roles"]["writer"].update(avoid=["sol"], exclude=["excluded"])
+        outputs = {"reader-hidden-runtime": subprocess.CompletedProcess([], 1, "secret", "private"), "reader-session": stream({"monthly": window(0)}), "reader-outside": stream({"monthly": window(), "weekly:scoped": window(0)})}
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
+            result, _ = self.run_plan(config, ctx, outputs=outputs)
+        self.assertEqual(picker.call_args.args[1]["families"], [{"name": "sol", "tier": "strong", "useFor": "writer-judge loop", "avoidFor": "sole judge", "defaultEffort": None, "role": "writer", "avoided": True, "effectiveEffort": "high"}])
+        self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], "sol")
+
+    def test_picker_order_skip_identity_and_loud_fallback(self):
+        # Wrong: unknown identity is invented, self-picker runs, a command that is
+        # not on PATH runs, or an unproven no-tools promise is treated as removal.
+        config, ctx = self.picker_fixture()
+        original = config["pickerEntries"][0]
+        config["pickerEntries"] = [dict(original, toolFree=False), dict(original, command="no-such-delegate-binary --flag"), dict(original, family="dormant"), original]
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_args.args[0], original)
+        self.assertEqual(picker.call_count, 1)
+        self.assertIn("picker", result)
+        for identity in (None, "sol"):
+            ctx["proposerFamily"] = identity
+            config["pickerEntries"] = [original]
+            with self.subTest(identity=identity), patch.object(helper, "run_picker", side_effect=AssertionError("unavailable picker ran")):
+                result, _ = self.run_plan(config, ctx)
+                self.assertIn(helper.PICKER_WARNING, result["warnings"])
+                self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
+
+    def test_unknown_non_null_proposer_is_rejected_before_readers(self):
+        # Wrong: a misspelled known proposer silently disables judgment after
+        # spending a Reader snapshot instead of refusing malformed caller input.
+        config, ctx = self.picker_fixture()
+        ctx["proposerFamily"] = "not-configured"
+        self.assertEqual(self.request_errors(config, ctx), [{"path": "launchContext.proposerFamily", "message": "unknown family name; allowed: dormant, manual, sol"}])
+
+    def test_picker_reach_and_pool_gates_allow_headless_internal_call(self):
+        # Wrong: worker headless policy forbids the authorized internal picker;
+        # Reader/scoped/session exclusions or ordered external-runtime reaches
+        # are ignored when choosing the picker itself.
+        config, ctx = self.picker_fixture([route(), route("other", pool=None)])
+        original = config["pickerEntries"][0]
+        ctx["nonInteractive"] = True
+        other = original | {"runtime": "claude", "technique": "claude -p", "model": "claude-sonnet-4-5", "family": "other", "pool": None}
+        config["pickerEntries"] = [original, other]
+        for status in ("unreachable", "exhausted", "scoped", "buffer"):
+            config["sessionPool"] = "outside" if status == "buffer" else None
+            outputs = {"reader-outside": subprocess.CompletedProcess([], 1, "", "private") if status == "unreachable" else stream({"monthly": window(0 if status == "exhausted" else 20 if status == "buffer" else 50), **({"weekly:sol": window(0)} if status == "scoped" else {})})}
+            with self.subTest(status=status), patch.object(helper, "run_picker", return_value=self.decisions(("writer", "other", "keep"))) as picker:
+                result, _ = self.run_plan(config, ctx, outputs=outputs)
+                self.assertEqual(picker.call_args.args[0], other)
+                self.assertEqual(picker.call_count, 1)
+                self.assertEqual(result["picker"]["provenance"]["runtime"], "claude")
+
+    def test_picker_one_transient_retry_and_no_malformed_retry(self):
+        # Wrong: malformed results retry; transient failures never retry or retry
+        # indefinitely; subprocess diagnostics leak into warning/provenance output.
+        config, ctx = self.picker_fixture()
+        valid = self.decisions(("writer", "sol", "keep"))
+        for failure in (OSError("private"), subprocess.TimeoutExpired("secret", 90), subprocess.CalledProcessError(1, "secret", stderr="private")):
+            with self.subTest(failure=type(failure)), patch.object(helper, "run_picker", side_effect=[failure, valid]) as picker:
+                result, _ = self.run_plan(config, ctx)
+                self.assertEqual(picker.call_count, 2)
+                self.assertIn("picker", result)
+                self.assertNotIn("private", json.dumps(result))
+        config["pickerEntries"] *= 2
+        with patch.object(helper, "run_picker", side_effect=[b"malformed private", valid]) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_count, 2)
+        self.assertIn("picker", result)
+        with patch.object(helper, "run_picker", side_effect=OSError("private")) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_count, 4)
+        self.assertEqual(result["warnings"].count(helper.PICKER_WARNING), 1)
+        self.assertNotIn("private", json.dumps(result))
+
+    def test_picker_strict_pair_coverage_and_all_excluded(self):
+        # Wrong: duplicate keys/pairs, non-finite values, bad Unicode, unknown roles,
+        # extra fields/documents or partial role/family coverage are accepted.
+        valid = self.decisions(("writer", "sol", "keep"))
+        mutations = [valid + b"{}", valid.replace(b'"schemaVersion": 1', b'"schemaVersion": 1, "schemaVersion": 1'), valid.replace(b'"schemaVersion": 1', b'"schemaVersion": NaN'), valid.replace(b'"bounded role fit"', b'"\\ud800"'), valid.replace(b'"writer"', b'"judge"'), self.decisions(("writer", "sol", "keep"), ("writer", "sol", "exclude")), b'{"decisions":[],"schemaVersion":1}', valid.replace(b'"reason":', b'"extra":true,"reason":')]
+        for raw in mutations:
+            with self.subTest(raw=raw), self.assertRaises((ValueError, UnicodeError)):
+                helper.picker_decisions(raw, {("writer", "sol")})
+        config, ctx = self.picker_fixture()
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "exclude"))):
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertIn("error", result["roles"]["writer"])
+        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+
+    def test_closed_context_refuses_essays_before_readers(self):
+        # Wrong: old family qualification essays survive the schema boundary.
+        for key in ("families", "fit", "useFor", "avoidFor", "trial"):
+            ctx = context()
+            ctx["roles"]["writer"][key] = {}
+            with self.subTest(key=key):
+                self.assertEqual(self.request_errors(launch_context=ctx), [{"path": f"launchContext.roles.writer.{key}", "message": "unknown key; allowed: avoid, effort, exclude"}])
+        ctx = context()
+        ctx["essay"] = "unused"
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.essay", "message": "unknown key; allowed: nonInteractive, proposerFamily, roles, taskSummary, techniques"}])
+
+    def test_request_errors_list_every_problem_with_paths(self):
+        # Wrong: the first fault hides the rest, a misspelled effort becomes a silent
+        # loop failure after Readers, or an absent nonInteractive crashes late.
+        ctx = {"taskSummary": " ", "proposerFamily": "sool", "roles": {"writer": {"effort": "hihg", "avoid": ["sol", "nope"], "exclude": "sol", "fit": 1}, "wizard": {}}, "techniques": [{"runtime": "codex", "technique": "x", "model": "", "efforts": ["high", "hihg"]}, "bare"], "extra": 1}
+        config = manifest(session="undeclared")
+        config["routes"][0]["pool"] = "ghost"
+        names = "dormant, manual, sol"
+        efforts = "minimal, low, medium, high, xhigh, max"
+        configuration = "configuration fault, not caller-fixable: "
+        self.assertEqual(self.request_errors(config, ctx, ("writer", "oracle")), [
+            {"path": "argv.role[1]", "message": "unknown role; allowed: finder, first-check, investigator, judge, mechanical, planner, second-check, writer"},
+            {"path": "manifest.sessionPool", "message": configuration + "unregistered pool undeclared; registered: hidden, outside, session"},
+            {"path": "manifest.routes[0].pool", "message": configuration + "unregistered pool ghost; registered: hidden, outside, session"},
+            {"path": "launchContext.extra", "message": "unknown key; allowed: nonInteractive, proposerFamily, roles, taskSummary, techniques"},
+            {"path": "launchContext.taskSummary", "message": "must be a non-empty UTF-8 string of at most 65536 bytes"},
+            {"path": "launchContext.nonInteractive", "message": "required; true, false or null"},
+            {"path": "launchContext.proposerFamily", "message": f"unknown family name; allowed: {names}"},
+            {"path": "launchContext.techniques[0].model", "message": "must be a non-empty string"},
+            {"path": "launchContext.techniques[1]", "message": "must be an object"},
+            {"path": "launchContext.roles.writer.avoid[1]", "message": f"unknown family name; allowed: {names}"},
+            {"path": "launchContext.roles.writer.exclude", "message": "must be a list of family names"},
+            {"path": "launchContext.roles.writer.effort", "message": f"unknown effort; allowed: {efforts}"},
+            {"path": "launchContext.roles.writer.fit", "message": "unknown key; allowed: avoid, effort, exclude"},
+            {"path": "launchContext.roles.wizard", "message": "unknown role; allowed: finder, first-check, investigator, judge, mechanical, planner, second-check, writer"},
+        ])
+        ctx = context()
+        del ctx["nonInteractive"]
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.nonInteractive", "message": "required; true, false or null"}])
+        for key, value in (("taskSummary", "x" * 65537), ("roles", []), ("techniques", {})):
+            ctx = context() | {key: value}
+            self.assertEqual(len(self.request_errors(launch_context=ctx)), 1)
+
+    def test_off_scale_observed_efforts_are_accepted_but_role_requests_are_not(self):
+        # Wrong: Codex introspection that lists `ultra` (or Kimchi `off`) refuses a
+        # valid caller; or a role request for `ultra` slips through to a silent loop failure.
+        ctx = context()
+        ctx["techniques"][0]["efforts"] = ["high", "ultra", "off"]
+        result, _ = self.run_plan(manifest(), ctx)
+        self.assertEqual([item["launch"]["effort"] for item in result["roles"]["writer"]["candidates"]], ["high"])
+        ctx = context(effort="ultra")
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.roles.writer.effort", "message": "unknown effort; allowed: minimal, low, medium, high, xhigh, max"}])
+
+    def test_claude_text_output_with_trailing_newline_is_a_valid_answer(self):
+        # Wrong: the shipped claude template redirects the model's plain-text reply
+        # (reply plus a final newline) to the output file; a parser that needs the
+        # bare JSON bytes refuses every real answer.
+        config, ctx = self.picker_fixture()
+        reply = self.decisions(("writer", "sol", "keep")).decode()
+        entry = config["pickerEntries"][0] | {"command": f"printf '%s\\n' {shlex.quote(reply)} > <output-file>"}
+        raw = helper.run_picker(entry, {}, SHELL)
+        self.assertEqual(raw, (reply + "\n").encode())
+        self.assertEqual(helper.picker_decisions(raw, {("writer", "sol")})[0]["decision"], "keep")
+
+    def test_cli_argument_and_file_faults_are_json_with_paths(self):
+        # Wrong: a bad --now, unreadable --check-plan, missing manifest key, or a
+        # manifest pool fault beside an unparseable context exits 2 with bare stderr.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            config = manifest()
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text(json.dumps(context()))
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "writer"]
+
+            def refused(extra):
+                proc = subprocess.run(command + extra, capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 2)
+                return json.loads(proc.stdout)
+            document = refused(["--now", "garbage"])
+            self.assertEqual([(e["path"]) for e in document["errors"]], ["argv.--now"])
+            self.assertEqual(document["status"], "invalid-request")
+            document = refused(["--check-plan", str(root / "absent.json")])
+            self.assertEqual([e["path"] for e in document["errors"]], ["argv.--check-plan"])
+            self.assertIn("absent.json", document["errors"][0]["message"])
+            del config["effortLevels"], config["routes"]
+            (root / "manifest.json").write_text(json.dumps(config))
+            document = refused([])
+            self.assertEqual([e["path"] for e in document["errors"]], ["manifest.effortLevels", "manifest.routes"])
+            config = manifest(session="undeclared")
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text("{oops")
+            document = refused([])
+            self.assertEqual([e["path"] for e in document["errors"]], ["manifest.sessionPool", "launchContext"])
+
+    def test_cli_malformed_manifest_and_bad_flags_report_every_schema_fault(self):
+        # Wrong: a non-object manifest is matched as a string, a reader entry without
+        # its keys is a traceback, or a bad --now hides the context's own faults.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            (root / "context.json").write_text(json.dumps(context()))
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "writer"]
+
+            def refused(config, extra=()):
+                (root / "manifest.json").write_text(json.dumps(config))
+                proc = subprocess.run(command + list(extra), capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertNotIn("Traceback", proc.stderr)
+                return [e["path"] for e in json.loads(proc.stdout)["errors"]]
+            self.assertEqual(refused("routes, readers"), ["manifest"])
+            self.assertEqual(refused([]), ["manifest"])
+            config = manifest()
+            config["readers"] = [{}]
+            self.assertEqual(refused(config), ["manifest.readers[0].command", "manifest.readers[0].name"])
+            config["readers"] = [{"command": "x"}, "outside"]
+            self.assertEqual(refused(config), ["manifest.readers[0].name", "manifest.readers[1]"])
+            config["readers"] = {"name": "outside"}
+            self.assertEqual(refused(config), ["manifest.readers"])
+            (root / "context.json").write_text(json.dumps({"taskSummary": "ok"}))
+            self.assertEqual(refused(manifest(), ["--now", "garbage"]), ["launchContext.nonInteractive", "launchContext.techniques", "launchContext.roles", "argv.--now"])
+
+    def test_cli_manifest_name_lists_are_configuration_faults(self):
+        # Wrong: scalar or mixed-type name lists crash sorting/membership checks
+        # or hide independent context and argv errors instead of refusing the manifest.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            ctx = context() | {"proposerFamily": "sol", "taskSummary": ""}
+            ctx["roles"]["writer"].update({"avoid": ["sol"], "exclude": ["manual"]})
+            (root / "context.json").write_text(json.dumps(ctx))
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "writer", "--now", "garbage"]
+            for field in ("effortLevels", "familyNames"):
+                for value in (5, "high", ["high", 5], None, {"high": True}):
+                    with self.subTest(field=field, value=value):
+                        config = manifest()
+                        config[field] = value
+                        (root / "manifest.json").write_text(json.dumps(config))
+                        proc = subprocess.run(command, capture_output=True, text=True)
+                        self.assertNotIn("Traceback", proc.stderr)
+                        self.assertEqual(proc.returncode, 2, proc.stderr)
+                        document = json.loads(proc.stdout)
+                        self.assertEqual(document["status"], "invalid-request")
+                        self.assertEqual(document["errors"], [
+                            {"path": f"manifest.{field}", "message": "configuration fault, not caller-fixable: must be a list of strings"},
+                            {"path": "launchContext.taskSummary", "message": "must be a non-empty UTF-8 string of at most 65536 bytes"},
+                            {"path": "argv.--now", "message": "garbage: Invalid isoformat string: 'garbage'"},
+                        ])
+
+    def test_cli_malformed_routes_keep_other_request_errors(self):
+        # Wrong: malformed route entries crash normally and hide argv/context faults
+        # beside a bad --now; context encoding failures are blamed on the manifest.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "nobody"]
+            for kind in ("routes", "manualRoutes"):
+                for value, path in (([1], f"manifest.{kind}[0]"), ([{key: value for key, value in route().items() if key != "pool"}], f"manifest.{kind}[0].pool"), (1, f"manifest.{kind}")):
+                    config = manifest()
+                    config[kind] = value
+                    (root / "manifest.json").write_text(json.dumps(config))
+                    (root / "context.json").write_text(json.dumps(context() | {"taskSummary": ""}))
+                    for extra in ([], ["--now", "garbage"]):
+                        with self.subTest(kind=kind, value=value, extra=extra):
+                            proc = subprocess.run(command + extra, capture_output=True, text=True)
+                            self.assertEqual(proc.returncode, 2, proc.stderr)
+                            document = json.loads(proc.stdout)
+                            self.assertEqual(document["status"], "invalid-request")
+                            self.assertEqual([e["path"] for e in document["errors"]], ["argv.role[0]", path, "launchContext.taskSummary"] + (["argv.--now"] if extra else []))
+            (root / "manifest.json").write_text(json.dumps(manifest()))
+            (root / "context.json").write_text(json.dumps(context() | {"taskSummary": "\ud800"}))
+            proc = subprocess.run(command + ["--now", "garbage"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2, proc.stderr)
+            self.assertEqual([e["path"] for e in json.loads(proc.stdout)["errors"]], ["argv.role[0]", "launchContext.taskSummary", "argv.--now"])
+
+    def test_manifest_nested_shapes_are_refused_before_readers(self):
+        # Wrong: route and picker shapes reach Readers, then crash without JSON.
+        cases = [
+            (("routes", 0, "family"), None, "manifest.routes[0].family"),
+            (("routes", 0, "family", "name"), [], "manifest.routes[0].family.name"),
+            (("routes", 0, "family", "tier"), None, "manifest.routes[0].family.tier"),
+            (("routes", 0, "target"), None, "manifest.routes[0].target"),
+            (("routes", 0, "techniques"), {}, "manifest.routes[0].techniques"),
+            (("routes", 0, "techniques", 0, "model"), None, "manifest.routes[0].techniques[0].model"),
+            (("routes", 0, "techniques", 0, "node", "kind"), [], "manifest.routes[0].techniques[0].node.kind"),
+            (("manualRoutes", 0, "family"), None, "manifest.manualRoutes[0].family"),
+            (("pickerEntries",), {}, "manifest.pickerEntries"),
+            (("pickerEntries", 0), None, "manifest.pickerEntries[0]"),
+            (("pickerEntries", 0, "command"), [], "manifest.pickerEntries[0].command"),
+            (("pickerEntries", 0, "toolFree"), 1, "manifest.pickerEntries[0].toolFree"),
+        ]
+        for keys, value, expected in cases:
+            with self.subTest(path=expected):
+                config, ctx = self.picker_fixture()
+                node = config
+                for key in keys[:-1]:
+                    node = node[key]
+                node[keys[-1]] = value
+                self.assertEqual([error["path"] for error in self.request_errors(config, ctx)], [expected])
+        config, ctx = self.picker_fixture()
+        del config["routes"][0]["family"]
+        del config["routes"][0]["target"]
+        del config["routes"][0]["techniques"]
+        del config["pickerEntries"][0]["model"]
+        self.assertEqual([error["path"] for error in self.request_errors(config, ctx)], [
+            "manifest.routes[0].family", "manifest.routes[0].target",
+            "manifest.routes[0].techniques", "manifest.pickerEntries[0].model",
+        ])
+
+    def test_cli_nested_manifest_faults_are_json_before_readers(self):
+        # Wrong: valid pools hide missing route keys or malformed picker entries.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            config, ctx = self.picker_fixture()
+            log = root / "reads"
+            for reader in config["readers"]:
+                reader["command"] = f"printf x >> '{log}'"
+            config["routes"][0] = {"pool": "outside"}
+            config["pickerEntries"] = {}
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text(json.dumps(ctx))
+            proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            document = json.loads(proc.stdout)
+            self.assertEqual(document["status"], "invalid-request")
+            self.assertEqual([error["path"] for error in document["errors"]], ["manifest.routes[0].family", "manifest.routes[0].target", "manifest.routes[0].techniques", "manifest.pickerEntries"])
+            self.assertFalse(log.exists())
+
+    def test_maximal_task_summary_reaches_the_picker(self):
+        # Wrong: an accepted 65536-byte summary exceeds the framed prompt cap.
+        config, ctx = self.picker_fixture()
+        raw = self.decisions(("writer", "sol", "keep"))
+        entry = config["pickerEntries"][0]
+        entry["command"] = "printf '%s' " + shlex.quote(raw.decode()) + " > <output-file>"
+        for summary in ("x" * 65536, "\x01" * 65536, "é" * 32768):
+            with self.subTest(character=repr(summary[0])):
+                ctx["taskSummary"] = summary
+                with patch.object(helper, "collect", return_value={name: {"status": "unmeasured"} for name in ("hidden", "outside", "session")}):
+                    result = helper.plan(config, ctx, ("writer",), NOW, SHELL)
+                self.assertEqual(result["picker"]["decisions"], [{"decision": "keep", "family": "sol", "reason": "bounded role fit", "role": "writer"}])
+                self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+
+    def test_cli_invalid_request_is_json_on_stdout_and_exit_two(self):
+        # Wrong: schema errors surface as a traceback or bare stderr text, run a
+        # Reader, or leave stdout unparseable for the orchestrator.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            log = root / "reads"
+            config = manifest()
+            config["readers"] = [{"name": "outside", "command": f"printf x >> '{log}'"}]
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text('{"taskSummary": "ok",\n "roles": {}, oops}')
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json")]
+            proc = subprocess.run(command + ["--role", "writer", "--role", "nobody"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            self.assertEqual(json.loads(proc.stdout), {"status": "invalid-request", "errors": [{"path": "argv.role[1]", "message": "unknown role; allowed: finder, first-check, investigator, judge, mechanical, planner, second-check, writer"}, {"path": "launchContext", "message": f"{root / 'context.json'}: line 2 col 15: Expecting property name enclosed in double quotes"}]})
+            self.assertEqual(proc.stderr.splitlines()[0], "delegate-routing-plan: argv.role[1]: unknown role; allowed: finder, first-check, investigator, judge, mechanical, planner, second-check, writer")
+            self.assertEqual(len(proc.stderr.splitlines()), 2)
+            self.assertFalse(log.exists())
+            proc = subprocess.run(command + ["--bogus"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            self.assertEqual(json.loads(proc.stdout)["errors"][0]["path"], "argv")
+            self.assertFalse(log.exists())
+
+    def test_picker_real_shell_literal_binding_and_bounds(self):
+        # Wrong: template substitution executes a model as shell code; output and
+        # prompt limits are decorative, or timeout leaves the one-shot process alive.
+        config, _ = self.picker_fixture()
+        entry = config["pickerEntries"][0] | {"model": "$(exit 7)", "command": "printf '%s' <model> > <output-file>"}
+        self.assertEqual(helper.run_picker(entry, {}, SHELL), b"$(exit 7)")
+        with patch.object(helper, "PICKER_OUTPUT_LIMIT", 2), self.assertRaisesRegex(ValueError, "output limit"):
+            helper.run_picker(entry, {}, SHELL)
+        with patch.object(helper, "PICKER_PROMPT_LIMIT", 2), self.assertRaisesRegex(ValueError, "prompt limit"):
+            helper.run_picker(entry, {}, SHELL)
+        with patch.object(helper, "PICKER_TIMEOUT", 0.02), self.assertRaises(subprocess.TimeoutExpired):
+            helper.run_picker(entry | {"command": "while :; do :; done"}, {}, SHELL)
+
+    def test_child_without_proc_is_alive_until_signal_zero_fails(self):
+        # Wrong: an absent /proc stat file proves a surviving child exited.
+        with patch.object(Path, "is_dir", return_value=False), patch.object(Path, "read_text", side_effect=FileNotFoundError), patch.object(os, "kill") as kill:
+            self.assertFalse(picker_child_exited(123))
+            kill.assert_called_once_with(123, 0)
+        with patch.object(os, "kill", side_effect=ProcessLookupError):
+            self.assertTrue(picker_child_exited(123))
+
+    def test_picker_without_catalog_keeps_the_project_directory(self):
+        # Wrong: Claude loses project settings when every picker runs in scratch.
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "pwd > <output-file>"}
+        self.assertEqual(helper.run_picker(entry, {}, SHELL).decode().strip(), str(Path.cwd()))
+
+    def test_codex_picker_resolves_relative_home_before_changing_directory(self):
+        # Wrong: the child resolves a relative CODEX_HOME inside picker scratch.
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": 'test -f <catalog-file>; test -f "$CODEX_HOME/models_cache.json"; case "$CODEX_HOME" in /*) printf absolute ;; *) printf relative ;; esac > <output-file>'}
+        with self.codex_home():
+            absolute = Path(os.environ["CODEX_HOME"])
+            os.environ["CODEX_HOME"] = os.path.relpath(absolute)
+            self.assertEqual(helper.run_picker(entry, {}, SHELL), b"absolute")
+
+    def test_picker_output_overrun_kills_the_whole_process_group(self):
+        # Wrong: a picker that writes past the limit and keeps running outlives the
+        # call, or its children survive the kill.
+        config, _ = self.picker_fixture()
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            pidfile = Path(directory) / "child.pid"
+            command = f"sleep 60 & echo $! > '{pidfile}'; head -c 100 /dev/zero > <output-file>; wait"
+            with patch.object(helper, "PICKER_OUTPUT_LIMIT", 10), patch.object(helper, "PICKER_TIMEOUT", 30), self.assertRaisesRegex(ValueError, "output limit"):
+                helper.run_picker(config["pickerEntries"][0] | {"command": command}, {}, SHELL)
+            child = int(pidfile.read_text())
+            for _ in range(200):
+                if picker_child_exited(child):
+                    break
+                time.sleep(0.01)
+            else:
+                os.kill(child, signal.SIGKILL)
+                self.fail("picker child survived the output-limit kill")
+
+    def test_picker_missing_output_is_malformed_not_transient(self):
+        # Wrong: a picker that exits 0 without writing raises FileNotFoundError, an
+        # OSError that the picker loop retries as a transient failure.
+        config, _ = self.picker_fixture()
+        config["pickerEntries"][0]["command"] = "true"
+        with self.assertRaisesRegex(ValueError, "no output"):
+            helper.run_picker(config["pickerEntries"][0], {}, SHELL)
+
+    def test_picker_values_are_not_rescanned_for_tokens(self):
+        # Wrong: a value containing a later token is rewritten by sequential replace.
+        config, _ = self.picker_fixture()
+        entry = config["pickerEntries"][0] | {"model": "x<output-file>y", "command": "printf '%s' <model> > <output-file>"}
+        self.assertEqual(helper.run_picker(entry, {}, SHELL), b"x<output-file>y")
+
+    def test_picker_needs_a_path_command_not_caller_evidence(self):
+        # Wrong: the picker is skipped because the caller did not list its own
+        # technique, or runs although its executable is absent.
+        config, ctx = self.picker_fixture()
+        self.assertEqual([item["technique"] for item in ctx["techniques"]], ["spawn_agent"])
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_count, 1)
+        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        config["pickerEntries"][0]["command"] = "no-such-delegate-binary --flag"
+        with patch.object(helper, "run_picker", side_effect=AssertionError("absent executable ran")):
+            result, _ = self.run_plan(config, ctx)
+        self.assertIn(helper.PICKER_WARNING, result["warnings"])
+
+    def codex_home(self, models=None):
+        """A scratch CODEX_HOME seeded from the fixture cache, with OPENAI* and CODEX* variables scrubbed."""
+        directory = tempfile.TemporaryDirectory(prefix="routing-codex-home-")
+        self.addCleanup(directory.cleanup)
+        cache = json.loads(CODEX_CACHE.read_text())
+        cache["models"] = cache["models"] if models is None else models
+        (Path(directory.name) / "models_cache.json").write_text(json.dumps(cache))
+        scrubbed = {key: value for key, value in os.environ.items() if not key.startswith(("CODEX", "OPENAI"))}
+        return patch.dict(os.environ, scrubbed | {"CODEX_HOME": directory.name}, clear=True)
+
+    def test_codex_picker_catalog_is_the_picked_model_with_every_tool_removed(self):
+        # Wrong: the catalog keeps another model, keeps the live tool mode, shell,
+        # apply_patch, clock, multi-agent or search settings, or drops other fields.
+        live = json.loads(CODEX_CACHE.read_text())["models"][0]
+        other = dict(live, slug="gpt-6-luna")
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "cp <catalog-file> <output-file>"}
+        with self.codex_home([other, live]):
+            raw = helper.run_picker(entry, {}, SHELL)
+        self.assertEqual(live["tool_mode"], "code_mode_only")
+        expected = dict(live, tool_mode="direct", shell_type="disabled", apply_patch_tool_type=None, experimental_supported_tools=[], multi_agent_version=None, node_repl_disabled=True, supports_search_tool=False)
+        self.assertEqual(json.loads(raw), {"models": [expected]})
+
+    def test_codex_picker_without_a_catalog_entry_names_why_and_falls_back(self):
+        # Wrong: a missing cache or model entry runs Codex on its default model
+        # info (tools included), or fails with the bare warning and no reason.
+        config, ctx = self.picker_fixture()
+        config["pickerEntries"][0] |= {"command": "cp <catalog-file> <output-file>", "model": "gpt-6-luna"}
+        with self.codex_home():
+            cache = Path(os.environ["CODEX_HOME"]) / "models_cache.json"
+            result, _ = self.run_plan(config, ctx)
+            cache.unlink()
+            missing, _ = self.run_plan(config, ctx)
+        self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6-luna: no entry in Codex models cache {cache}.", result["warnings"])
+        self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6-luna: Codex models cache {cache} unreadable (FileNotFoundError).", missing["warnings"])
+        self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
+
+    @unittest.skipUnless(os.environ.get("CODEX_PICKER_COMMAND") and shutil.which("codex"), "needs the real codex binary and the shipped command in CODEX_PICKER_COMMAND")
+    def test_codex_picker_request_has_no_tools_against_a_fake_provider(self):
+        # Wrong: the shipped command sends a `tools` key or any tool item to the
+        # Responses endpoint (flags alone leave code-mode exec and wait).
+        requests = []
+        reply = self.decisions(("writer", "sol", "keep")).decode()
+
+        class Fake(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"models":[]}')
+
+            def do_POST(self):
+                raw = self.rfile.read(int(self.headers["Content-Length"]))
+                encoding = self.headers.get("Content-Encoding")
+                if encoding == "gzip":
+                    raw = gzip.decompress(raw)
+                elif encoding == "zstd":
+                    raw = subprocess.run(["zstd", "-d", "-q"], input=raw, capture_output=True, check=True).stdout
+                requests.append(json.loads(raw))
+                events = [{"type": "response.created", "response": {"id": "r"}}, {"type": "response.output_item.done", "item": {"type": "message", "role": "assistant", "id": "m", "content": [{"type": "output_text", "text": reply}]}}, {"type": "response.completed", "response": {"id": "r", "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}}]
+                body = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        provider = ['model_provider="probe"', 'model_providers.probe.name="Probe"', f'model_providers.probe.base_url="http://127.0.0.1:{server.server_port}/v1"', 'model_providers.probe.wire_api="responses"', "model_providers.probe.requires_openai_auth=false", "model_providers.probe.supports_websockets=false"]
+        command = os.environ["CODEX_PICKER_COMMAND"].replace("codex exec", "codex exec " + " ".join(f"-c {shlex.quote(item)}" for item in provider), 1)
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": command}
+        with self.codex_home():
+            raw = helper.run_picker(entry, {}, SHELL)
+        self.assertEqual(raw.decode(), reply)
+        self.assertEqual(len(requests), 1)
+        self.assertNotIn("tools", requests[0])
+        self.assertEqual([item for item in requests[0]["input"] if item.get("type") == "additional_tools" or "tool" in item.get("type", "")], [])
+
+    def test_picker_is_not_called_without_an_eligible_family(self):
+        # Wrong: a model call is spent when no role has a family to judge.
+        config, ctx = self.picker_fixture([route("small", tier="small")], ("judge",))
+        with patch.object(helper, "run_picker", side_effect=AssertionError("empty catalog judged")):
+            result, _ = self.run_plan(config, ctx, ("judge",))
+        self.assertEqual(result["roles"]["judge"]["candidates"], [])
+        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+
+    def test_highest_version_among_observed_models_for_one_family(self):
+        # Wrong: several observed models matching one pattern exclude the family,
+        # or compare as strings (6.9 over 6.10) instead of version numbers.
+        config = manifest([route(techniques=[technique(model="gpt-*-sol", pattern=True)])])
+        observed = lambda model: {"efforts": ["high"], "model": model, "runtime": "codex", "technique": "spawn_agent"}
+        ctx = context(techniques=[observed("gpt-6.9-sol"), observed("gpt-6.10-sol"), observed("gpt-6.1-sol"), observed("gpt-7-luna")])
+        result, _ = self.run_plan(config, ctx)
+        self.assertEqual([c["launch"]["model"] for c in result["roles"]["writer"]["candidates"]], ["gpt-6.10-sol"])
+        self.assertEqual(result["roles"]["writer"]["exclusions"], [])
 
     def test_frozen_reader_corpus(self):
         # Wrong: idle null/skewed resets add window errors; envelopes lose registration identity, monthly duration or scoped pace.
@@ -163,8 +743,8 @@ class Routing(unittest.TestCase):
                         ctx = context((role,), ("sol", "other"))
                         ctx["roles"][role][field] = value
                         with patch.object(helper, "collect", side_effect=AssertionError("invalid lists reached Readers")):
-                            with self.assertRaisesRegex(ValueError, field):
-                                self.run_plan(config, ctx, (role,))
+                            errors = self.request_errors(config, ctx, (role,))
+                            self.assertEqual([error["path"] for error in errors], [f"launchContext.roles.{role}.{field}" + ("[0]" if isinstance(value, list) else "")])
             for lists in ({}, {"avoid": [], "exclude": []}, {"avoid": ["manual", "dormant"], "exclude": ["dormant"]}):
                 ctx = context((role,), ("sol", "other"))
                 ctx["roles"][role].update(lists)
@@ -231,7 +811,7 @@ class Routing(unittest.TestCase):
                             self.assertNotIn("effort=", candidate["line"])
                         if avoided:
                             self.assertEqual(candidate["launch"]["fallback"], {"kind": "avoided-family", "resolvedEffort": override or default, "launchEffort": expected})
-        for default, override, supported in [(None, None, ["high"]), ("medium", None, ["high"]), ("high", "low", ["high", "max"]), ("ultra", None, ["ultra"]), ("high", "ultra", ["ultra"])]:
+        for default, override, supported in [(None, None, ["high"]), ("medium", None, ["high"]), ("high", "low", ["high", "max"]), ("ultra", None, ["high"])]:
             with self.subTest(unsupported=(default, override, supported)):
                 ctx = context(roles, effort=override)
                 ctx["techniques"][0]["efforts"] = supported
@@ -243,7 +823,7 @@ class Routing(unittest.TestCase):
     def test_no_effort_support_omits_every_role_pin(self):
         # Empty support overrides defaults and requests on every launch kind.
         roles = tuple(helper.ROLE_TIERS)
-        for default, override in [("high", None), (None, "max"), ("high", "ultra")]:
+        for default, override in [("high", None), (None, "max"), ("high", "low")]:
             for avoided in (False, True):
                 for kind in ("subagent", "workflow", "external"):
                     config = manifest([route(default=default, techniques=[technique(kind=kind)])])
@@ -286,17 +866,15 @@ class Routing(unittest.TestCase):
                 helper.check_plan(artifact, result, root)
 
     def test_avoided_routes_keep_intrinsic_gates(self):
-        # Wrong: fallback bypasses floors, fit, headless, failed/scoped/buffer gates.
+        # Wrong: fallback bypasses floors, headless, failed/scoped/buffer gates.
         for role in helper.ROLE_TIERS:
-            for gate in ("floor", "fit", "headless", "unreachable", "exhausted", "scoped", "buffer"):
+            for gate in ("floor", "headless", "unreachable", "exhausted", "scoped", "buffer"):
                 config = manifest([route()], "outside" if gate == "buffer" else None)
                 ctx = context((role,))
                 ctx["roles"][role]["avoid"] = ["sol"]
                 outputs = {}
                 if gate == "floor":
                     config["routes"][0]["family"]["tier"] = "invalid"
-                elif gate == "fit":
-                    ctx["roles"][role]["families"] = {}
                 elif gate == "headless":
                     config["routes"][0]["techniques"][0]["node"]["kind"] = "external"
                     ctx["nonInteractive"] = True
@@ -426,12 +1004,12 @@ class Routing(unittest.TestCase):
     def test_dropped_window_warning_reports_failure_to_user(self):
         # Wrong: a dropped window warning omits the user-report instruction.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": window(50, 0, None)})})
-        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:")], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
+        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
 
     def test_window_warning_cannot_forge_stderr_lines(self):
         # Wrong: Reader-controlled window names inject extra stderr lines.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h\nFORGED\x1b": window(50, 0, None)})})
-        warnings = [w for w in result["warnings"] if w.startswith("WARNING:")]
+        warnings = [w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING]
         self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
         self.assertEqual(len(warnings[0].splitlines()), 1)
 
@@ -503,8 +1081,8 @@ class Routing(unittest.TestCase):
             proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer", "--now", NOW.isoformat()], capture_output=True, text=True)
             result = json.loads(proc.stdout)
             self.assertEqual(proc.returncode, 0, proc.stderr)
-            self.assertIn("provider-vendor identity is provisional; fit/trial/maker independence are caller assessments", result["warnings"])
-            self.assertEqual(proc.stderr.splitlines(), [item["line"] for item in result["roles"]["writer"]["candidates"]])
+            self.assertIn("provider-vendor identity is provisional; trial/maker independence remain caller assessments", result["warnings"])
+            self.assertEqual(proc.stderr.splitlines(), [helper.PICKER_WARNING] + [item["line"] for item in result["roles"]["writer"]["candidates"]])
 
     def test_cli_degradation_uses_json_warnings(self):
         # Wrong: advisory notes precede failures, failures are silent, or all-failed returns success.
@@ -789,10 +1367,9 @@ class Routing(unittest.TestCase):
                 self.assertEqual(bool(result["roles"][role]["candidates"]), tier in ("strong", "frontier"))
                 if tier in ("small", "mid"):
                     self.assertEqual(result["roles"][role]["error"], "never step down a tier; report a loop failure.")
-        with self.assertRaisesRegex(ValueError, "unknown role"):
-            self.run_plan(roles=("unknown",))
+        self.assertEqual([error["path"] for error in self.request_errors(launch_context=context(), roles=("unknown",))], ["argv.role[0]"])
         result, _ = self.run_plan(launch_context=context(names=()))
-        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
 
     def test_generated_agent_workflow_external_and_unresolved(self):
         agent = {"family": {"defaultEffort": "high", "name": "sol"}, "id": "gpt-6.1-sol"}
@@ -821,16 +1398,11 @@ class Routing(unittest.TestCase):
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["model"], "gpt-6.1-sol")
 
     def test_validation_before_readers_and_real_timeout(self):
-        config = manifest(session="undeclared")
-        with self.assertRaisesRegex(ValueError, "unknown session pool"):
-            self.run_plan(config)
-        config = manifest([route(pool="undeclared")])
-        with self.assertRaisesRegex(ValueError, "unknown route pool"):
-            self.run_plan(config)
+        self.assertEqual([error["path"] for error in self.request_errors(manifest(session="undeclared"))], ["manifest.sessionPool"])
+        self.assertEqual([error["path"] for error in self.request_errors(manifest([route(pool="undeclared")]))], ["manifest.routes[0].pool"])
         ctx = context()
         ctx["techniques"][0]["efforts"] = "high"
-        with self.assertRaisesRegex(ValueError, "efforts list"):
-            self.run_plan(launch_context=ctx)
+        self.assertEqual([error["path"] for error in self.request_errors(launch_context=ctx)], ["launchContext.techniques[0].efforts"])
         with patch.object(helper, "READER_TIMEOUT", 0.02), patch("time.sleep"):
             measured = helper.collect([{"command": "while :; do :; done", "name": "stuck"}], NOW, SHELL)
         self.assertEqual(measured["stuck"]["status"], "unreachable")
@@ -845,7 +1417,7 @@ class Routing(unittest.TestCase):
         for role in roles:
             brief = f"{role}.md"
             (root / brief).write_bytes(b"Hard rules and task.\n" + rubric + b"Report evidence.\n")
-            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "qualification": QUALIFIED, "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
+            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
         units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace not validated launch choices", "id": str(index), "launches": deepcopy(launches), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
         return {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
 
@@ -1086,8 +1658,8 @@ class Routing(unittest.TestCase):
                 with self.subTest(cap=cap):
                     proc = subprocess.run(command + ["--max-concurrency", str(cap)], capture_output=True, text=True)
                     self.assertEqual(proc.returncode, 2)
-                    self.assertIn("argument --max-concurrency: invalid choice", proc.stderr)
-                    self.assertEqual(proc.stdout, "")
+                    self.assertIn("delegate-routing-plan: argv: argument --max-concurrency: invalid choice", proc.stderr)
+                    self.assertEqual(json.loads(proc.stdout)["errors"][0]["path"], "argv")
                     self.assertFalse(log.exists())
             command.extend(["--max-concurrency", "2"])
             proc = subprocess.run(command, capture_output=True, text=True)
@@ -1120,7 +1692,9 @@ class Routing(unittest.TestCase):
             self.assertEqual(log.read_text(), "outside\nsession\nhidden\n")
             self.assertEqual(json.loads(proc.stdout)["pools"]["outside"]["pace"], 0.9375)
             self.assertIn("technique=spawn_agent", proc.stderr)
-            (root / "context.json").write_text(json.dumps(context(names=())))
+            ctx = context()
+            ctx["roles"]["writer"]["exclude"] = ["sol"]
+            (root / "context.json").write_text(json.dumps(ctx))
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 1)
             self.assertIn("never step down a tier; report a loop failure.", proc.stderr)

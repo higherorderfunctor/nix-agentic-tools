@@ -457,6 +457,7 @@
           instance = "test";
           clientKey = "reader";
         };
+        programs.delegate-routing.runtimes = lib.genAttrs runtimes (_: {picker.entries = lib.mkForce [];});
         programs.delegate-routing.families = {
           anthropic.fable.match = "test-fable-*";
           anthropic.opus.match = "test-opus-*";
@@ -615,6 +616,24 @@
             extraRuntimes = lib.mkForce [];
             manualExternalDelegates = lib.mkForce [];
             models = lib.mkForce [{vendors = ["fixture"];}];
+            picker.entries = lib.mkForce [
+              {
+                effort = "medium";
+                model = "fixture-model";
+                technique = "fixture-picker";
+              }
+            ];
+            techniques.fixture-picker = {
+              command = "fixture-one-shot";
+              kind = "external";
+              modelArg = "model id";
+              pinsEffort = true;
+              pinsModel = true;
+              pickerCommand = {
+                command = ''printf '%s' '{"decisions":[{"decision":"keep","family":"packaged","reason":"fixture role fit","role":"writer"}],"schemaVersion":1}' > <output-file>'';
+                toolFree = true;
+              };
+            };
             sessionPool = sessionPools.${runtime};
             techniques.fixture-reader = {
               command = "${pkgs.coreutils}/bin/cat ${readerOutput}";
@@ -656,7 +675,10 @@
           families = lib.recursiveUpdate prev.families {openai.sol.defaultEffort = "xhigh";};
           models = prev.models // {codex = [{families = ["sol"];}];};
         }))}/SKILL.md";
-        passAsFile = ["directSkill" "skill"];
+        opusOnlyDirectSkill = builtins.readFile "${((result.config.ai.internal.roots.delegate-routing-content.passthru.mkSkill {runtime = "claude";}).override (prev: {
+          models = prev.models // {claude = [{families = ["opus"];}];};
+        }))}/SKILL.md";
+        passAsFile = ["directSkill" "skill" "opusOnlyDirectSkill"];
         inherit runtime;
         skill = readSkill (packagedHelperDelivery runtime) runtime;
       } ''
@@ -680,6 +702,7 @@
         manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
         manifest = json.loads(Path(manifest_path).read_text())
         assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
+        assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"], p["toolFree"]) for p in manifest["pickerEntries"]] == [("fixture-picker", "fixture-model", "packaged", "medium", runtime, True)], "module picker entries did not reach packaged helper"
         assert "packaged" in manifest["familyNames"]
         assert "sol" in manifest["familyNames"]
         assert all(route["family"]["defaultEffort"] == "high" for route in manifest["routes"])
@@ -687,14 +710,21 @@
         direct_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", direct_skill)[1])
         direct_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", direct_wrapper.read_text())[1]).read_text())
         assert direct_manifest["effortLevels"] == manifest["effortLevels"]
+        assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "medium", "codex")]
+        assert direct_manifest["pickerEntries"][0]["toolFree"] is True
+        # Wrong: direct-builder selector overrides retain an unreachable inherited picker.
+        opus_skill = Path(os.environ["opusOnlyDirectSkillPath"]).read_text()
+        opus_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", opus_skill)[1])
+        opus_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", opus_wrapper.read_text())[1]).read_text())
+        assert opus_manifest["pickerEntries"] == []
+        assert any(t["name"] == "Workflow" for route in opus_manifest["routes"] for t in route["techniques"])
         assert [route["family"]["defaultEffort"] for route in direct_manifest["routes"]] == ["xhigh"]
         context = Path("launch-context.json")
         context.write_text(json.dumps({
+            "taskSummary": "packaged helper fixture",
+            "proposerFamily": "sol",
             "nonInteractive": True,
-            "roles": {"writer": {"effort": None, "families": {"packaged": {
-                "avoidFor": "fixture has no exclusions", "fit": "fixture writer",
-                "trial": "not a trial", "useFor": "fixture task",
-            }}}},
+            "roles": {"writer": {"effort": None}},
             "techniques": [{"efforts": ["high"], "model": "fixture-model", "runtime": runtime, "technique": technique}],
         }))
 
@@ -712,6 +742,7 @@
             assert candidates[0]["line"] == expected, output
             assert candidates[0]["pool"] == expected_pool, output
             assert candidates[0]["budget"] == "measured", output
+            assert output["picker"]["decisions"] == [{"decision": "keep", "family": "packaged", "reason": "fixture role fit", "role": "writer"}]
             assert result.stderr.strip() == expected, result.stderr
 
         check(wrapper)
@@ -808,6 +839,116 @@
     # must still include a registered runtime outside all launch targets.
     # Hiding launch prose must not bypass missing model-spelling rejection.
     # Rejects a runtime-only effort scale and dropped family or agent effort pins.
+    # Rejects reordered defaults, family fields in public tuples, unchecked
+    # duplicate tuples, a model outside configured reaches and instruction-only
+    # tool removal. Cross-runtime one-shot reach is independent of worker mode.
+    "module-delegate-routing-${name}-picker-entries" = mkTest "delegate-routing-${name}-picker-entries" (
+      let
+        settings = result.config.ai.programs.delegate-routing.runtimes;
+        disabledPicker = change {ai.programs.delegate-routing.runtimes.claude.techniques."claude -p".enable = false;};
+        content = result.config.ai.internal.roots.delegate-routing-content;
+        inherited = changes:
+          (import ../lib/routing-view.nix ({
+              inherit lib;
+              runtime = "claude";
+              inherit (content) families models techniques;
+            }
+            // changes)).pickerEntries;
+        entry = {
+          effort = "medium";
+          model = "test-opus-5-10";
+          technique = "claude -p";
+        };
+        view = entries: import ../lib/routing-view.nix (routingArgs // {picker = {inherit entries;};});
+        resolve = entries: (view entries).pickerEntries;
+        refused = entries: !(builtins.tryEval (builtins.deepSeq (resolve entries) true)).success;
+        cross = resolve [
+          entry
+          {
+            effort = "high";
+            model = "test-opus-5-10";
+            technique = "codex exec";
+          }
+        ];
+        # The live catalog decides the id, so the default is asserted by family
+        # prefix and by equality with the model the generated sonnet agent file
+        # pins; the exact-id cases below use the fixed test catalog.
+        sonnetEntry = builtins.head settings.claude.picker.entries;
+      in
+        builtins.length settings.claude.picker.entries
+        == 1
+        && lib.hasPrefix "claude-sonnet-" sonnetEntry.model
+        && lib.hasInfix "model: \"${sonnetEntry.model}\"" result.config.ai.claude.agents.sonnet
+        && sonnetEntry.effort == "medium"
+        && sonnetEntry.technique == "claude -p"
+        # Wrong: pinning a literal id instead of the family's highest resolved
+        # one, or keeping an entry when the family resolves to nothing.
+        && map (e: e.model) (inherited {
+          resolvedAgentFiles = (import ../lib/agent-files.nix {inherit lib;}).resolve ["claude-sonnet-4-5" "claude-sonnet-9-1" "claude-sonnet-5-5"] ((import ../lib/select-families.nix {inherit lib;}).flatten content.families);
+        })
+        == ["claude-sonnet-9-1"]
+        && inherited {resolvedAgentFiles = {};} == []
+        && settings.codex.picker.entries
+        == [
+          {
+            effort = "medium";
+            model = "gpt-6.1-sol";
+            technique = "codex exec";
+          }
+        ]
+        # Wrong: disabling the inherited picker also breaks supported Workflow
+        # routing, while an explicit invalid picker silently disappears.
+        && disabledPicker.config.ai.programs.delegate-routing.runtimes.claude.picker.entries == []
+        && hasProse "`Workflow` with full model id" (readSkill disabledPicker "claude")
+        && inherited {techniques = lib.recursiveUpdate content.techniques {claude."claude -p".launchRoute = false;};} == []
+        && inherited {techniques = lib.recursiveUpdate content.techniques {claude."claude -p".pickerCommand = null;};} == []
+        && skillFails {
+          ai.programs.delegate-routing.runtimes.claude = {
+            picker.entries = settings.claude.picker.entries;
+            techniques."claude -p".enable = false;
+          };
+        }
+        # Wrong: a selector or family override keeps an inherited model that
+        # the same explicit-entry resolver would reject as unreachable.
+        && inherited {models = content.models // {claude = [{families = ["opus"];}];};} == []
+        && inherited {families = lib.recursiveUpdate content.families {anthropic.sonnet.match = "custom-sonnet-*";};} == []
+        && skillFails {
+          ai.programs.delegate-routing.runtimes.claude = {
+            models = [{families = ["opus"];}];
+            picker.entries = settings.claude.picker.entries;
+          };
+        }
+        && settings.kimchi.picker.entries == []
+        && settings.kiro.picker.entries == []
+        && map (p: {inherit (p) family model runtime technique;}) cross
+        == [
+          {
+            family = "opus";
+            model = "test-opus-5-10";
+            runtime = "claude";
+            technique = "claude -p";
+          }
+          {
+            family = "opus";
+            model = "test-opus-5-10";
+            runtime = "codex";
+            technique = "codex exec";
+          }
+        ]
+        && (lib.head cross).toolFree
+        && (lib.last cross).toolFree
+        # Exact literals reject broken pins or suppressing auth/provider settings
+        # instead of overlaying native hook disable with tool controls intact.
+        && (lib.head cross).command == ''claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>''
+        && (lib.last cross).command == ''codex exec --model <model> --config 'model_reasoning_effort="<effort>"' -c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only -c 'approval_policy="never"' --json --output-last-message <output-file> - < <prompt-file>''
+        && refused [entry entry]
+        && refused [(entry // {model = "unknown";})]
+        && refused [(entry // {technique = "Workflow";})]
+        && refused [(entry // {effort = "invented";})]
+        # Wrong: a glob passes as a model because the family pattern matches its text.
+        && lib.all (model: refused [(entry // {inherit model;})]) ["test-opus-*" "test-opus-?" "test-opus-["]
+        && evaluationFails (change {ai.programs.delegate-routing.runtimes.claude.picker.entries = [(entry // {family = "opus";})];})
+    );
     "module-delegate-routing-${name}-routing-view" = mkTest "delegate-routing-${name}-routing-view" (
       let
         text = readSkill routingFixture "claude";
@@ -936,6 +1077,8 @@
         };
       in
         lib.all (family: agents ? ${family}) ["fable" "haiku" "opus" "sonnet"]
+        && missing.config.ai.programs.delegate-routing.runtimes.claude.picker.entries == []
+        && picker.config.ai.programs.delegate-routing.runtimes.claude.picker.entries == []
         && techniqueCells claude "Agent with generated agent file" == ["`Agent with generated agent file`" "subagent" "true" "true" "interactive+headless"]
         && ownSubagents claude "Agent with generated agent file" == "supported (headless)"
         && lib.hasInfix "delegate-routing is the skill that authorizes setting effort" claude
