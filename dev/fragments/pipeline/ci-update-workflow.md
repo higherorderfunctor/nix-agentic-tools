@@ -421,9 +421,11 @@ or its failed jobs are re-run.
 
 Each worker uploads its report and preparation logs, plus a separate receipt
 only after successful publication. The workflow runs the upstream Copilot SEA,
-new pnpm major, and patched aihubmix-mcp detectors once per sweep. They remain
-informational warnings and do not open PRs. Derive compared versions from the
-repository; stable pnpm detection must use `latest-<N>`, not prerelease
+new pnpm major, patched aihubmix-mcp and temporary nixpkgs workaround detectors
+once per sweep. The workaround detector lists each repo workaround with the
+nixos-unstable condition that makes it removable, and warns once that holds.
+They remain informational warnings and do not open PRs. Derive compared versions
+from the repository; stable pnpm detection must use `latest-<N>`, not prerelease
 `next-<N>` tags. A local patch against published build output requires human
 re-authoring and must not quietly become a swept hash-only update.
 
