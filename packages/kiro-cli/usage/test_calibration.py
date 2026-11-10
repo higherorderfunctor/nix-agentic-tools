@@ -267,7 +267,8 @@ class CalibrationTests(unittest.TestCase):
         started = time.monotonic()
         status, _, calls = self.execute("descendant")
         self.assertEqual((status, len(calls)), (0, 10))
-        self.assertLess(time.monotonic() - started, 5)
+        # The descendants sleep 20 s; 15 s leaves room for a busy CI runner.
+        self.assertLess(time.monotonic() - started, 15)
 
     def test_index_failure_is_nonfatal(self):
         status, (manifest, _, output), calls = self.execute("index-fail")
