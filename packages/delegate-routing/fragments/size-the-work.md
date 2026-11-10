@@ -1,7 +1,7 @@
-Pick a model family whose "use for" fits the task and whose "avoid for" does not
-rule it out. Role fit and trial eligibility are separate from budget and effort.
-Quality versus spend is consumer policy; there is no universal cheapest model or
-model-before-effort ordering.
+The helper's picker judges which family fits the task and role; never choose a
+family by hand from prose. Role fit and trial eligibility are separate from
+budget and effort. Quality versus spend is consumer policy; there is no
+universal cheapest model or model-before-effort ordering.
 
 Resolve each candidate's base effort from a non-null role override, otherwise
 its machine `defaultEffort`, for every technique. Consumers can override the

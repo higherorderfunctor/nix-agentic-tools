@@ -44,14 +44,15 @@
       }
       else throw "acceptance case ${id}: cannot capture delivered file ${path}")
     (harness.deliveredFiles config);
-    # The delegate techniques the delivered skill offers, by runtime. The
+    # Enabled delegate techniques for event classification, by runtime. The
     # runner classifies logged tool calls and shell commands by these names.
     effectiveTechniques = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques config;
     techniques = lib.mapAttrs (_: nodes:
       lib.mapAttrs (_: technique: technique.kind)
       (lib.filterAttrs (_: technique: technique.enable && builtins.elem technique.kind delegateKinds) nodes))
     effectiveTechniques;
-    # Exact enabled reader commands, also rendered in the delivered skill.
+    # Exact enabled reader commands; the helper runs them, so a session that
+    # runs one directly is classified as guidance, not as a delegate.
     usageCommands = lib.concatLists (lib.mapAttrsToList (_: nodes:
       map (node: node.command) (lib.attrValues (lib.filterAttrs (_: node:
         node.enable && node.kind == "usage" && node.command != null)

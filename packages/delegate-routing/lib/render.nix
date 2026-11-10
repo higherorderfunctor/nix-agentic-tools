@@ -107,7 +107,7 @@
         }
         members}
     '';
-  techniqueBlock = target: externalOnly: let
+  techniqueBlock = target: externalOnly: asList: let
     nodes = lib.filterAttrs (_: node:
       node.enable
       && (!externalOnly || builtins.elem node.kind ["external" "introspect" "usage"]))
@@ -116,11 +116,27 @@
     info = lib.filterAttrs (_: node: builtins.elem node.kind ["introspect" "usage"]) nodes;
     hasCommand = lib.any (node: node.command != null) (builtins.attrValues delegates);
     command = node: lib.optionalString (node.command != null) "`${node.command}`";
+    flag = condition: text: lib.optionalString (condition == true) "; ${text}";
+    facts = node:
+      lib.concatStrings [
+        node.kind
+        (lib.optionalString (node.modes != []) "; ${lib.concatStringsSep "+" node.modes}")
+        (flag node.pinsModel "pins model")
+        (flag node.pinsEffort "pins effort")
+        (lib.optionalString (builtins.elem node.kind delegateKinds) "; runs own subagents: ${node.runsOwnSubagents}")
+      ];
+    # One compact line per technique: kind, modes, pins, subagent support,
+    # then its command and notes.
+    describe = group: lib.concatStringsSep "\n" (lib.mapAttrsToList (name: node: "- `${name}` (${facts node}): ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}") group);
   in
     lib.optionalString (nodes != {}) ''
-      ${phrase "Technique table heading" {harness = target;}}
+      ${phrase (
+        if asList
+        then "Technique notes heading"
+        else "Technique table heading"
+      ) {harness = target;}}
 
-      ${lib.optionalString (delegates != {}) (table "techniques" (lib.removeAttrs skill.columns.techniques (lib.optional (!hasCommand) "Command")) {
+      ${lib.optionalString (delegates != {} && !asList) (table "techniques" (lib.removeAttrs skill.columns.techniques (lib.optional (!hasCommand) "Command")) {
           Command = item: command item.node;
           Kind = item: item.node.kind;
           Modes = item: lib.concatStringsSep "+" item.node.modes;
@@ -132,23 +148,38 @@
         }
         (lib.mapAttrsToList (name: node: {inherit name node;}) delegates))}
 
-      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}") info)}
+      ${
+        if asList
+        then describe nodes
+        else lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}") info)
+      }
     '';
   manual = target: ''
     ${phrase "Manual delegate heading" {harness = target;}}
 
     ${lib.concatMapStringsSep "\n" (route: "- ${familyLabel route.family}: ${launch route}${poolSuffix route}${lib.optionalString (route.family.pool or "" != "") (phrase "Manual pool hint" {inherit (route.family) pool;})}") (builtins.filter (route: route.target == target) view.manualRoutes)}
 
-    ${techniqueBlock target true}
+    ${techniqueBlock target true true}
+
     ${phrase "Manual delegate note" {}}
   '';
+  # Consumer {techniques} entries retain the table format; the shipped skill
+  # uses compact notes. Both consume the same effective technique inventory.
+  techniqueBlocks = asList:
+    lib.concatStringsSep (
+      if asList
+      then "\n\n"
+      else "\n"
+    )
+    ([(techniqueBlock runtime false asList)] ++ map (target: techniqueBlock target true asList) (lib.tail view.runtimes));
   blocks = {
     helper = helperInstruction;
     families = lib.concatMapStringsSep "\n" tier tiers + lib.optionalString goRendered ("\n\n" + phrase "OpenCode Go note" {});
     manual = lib.optionalString (manualExternalDelegates != []) (lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates));
     pools = poolsText;
     routing = routingText;
-    techniques = lib.concatStringsSep "\n" ([(techniqueBlock runtime false)] ++ map (target: techniqueBlock target true) (lib.tail view.runtimes));
+    techniqueNotes = techniqueBlocks true;
+    techniques = techniqueBlocks false;
     workflows = workflowText;
   };
   # An entry naming a block that renders nothing is omitted whole.

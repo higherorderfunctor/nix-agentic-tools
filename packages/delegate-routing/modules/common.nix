@@ -223,7 +223,7 @@ in {
             effort = lib.mkOption {
               type = lib.types.str;
               default = "";
-              description = "Delegate effort guidance.";
+              description = "Delegate effort guidance for consumer {families} table entries; defaultEffort supplies launch defaults.";
             };
             example = lib.mkOption {
               type = lib.types.attrsOf lib.types.str;
@@ -237,7 +237,7 @@ in {
             orchestration = lib.mkOption {
               type = lib.types.str;
               default = "";
-              description = "Orchestration suitability shown in the family table, such as \"default orchestrator\" or \"reserved for hard work\"; empty shows nothing.";
+              description = "Orchestration suitability shown in consumer {families} table entries, such as \"default orchestrator\" or \"reserved for hard work\"; empty shows nothing.";
             };
             pool = lib.mkOption {
               type = lib.types.str;
@@ -280,7 +280,7 @@ in {
             description = lib.mkOption {
               type = lib.types.str;
               default = "";
-              description = "Budget description shown in the Pools table.";
+              description = "Budget description shown in consumer {pools} table entries.";
             };
             usage = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {

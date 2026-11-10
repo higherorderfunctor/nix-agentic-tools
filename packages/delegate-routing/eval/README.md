@@ -78,7 +78,9 @@ named after a `subagent` or `workflow` technique of the case's runtime, or a
 shell command that starts an `external` technique of any runtime (`claude -p`,
 `codex exec`, `kimchi -p`, `kiro-cli chat`). The technique names come from the
 evaluated `ai.programs.delegate-routing.runtimes.<runtime>.techniques`, the same
-table the skill renders. Claude excludes calls made inside a delegate using
+techniques used to render skill notes; classification also includes enabled
+techniques that do not pin model and effort and therefore cannot be automatic
+helper candidates. Claude excludes calls made inside a delegate using
 `parent_tool_use_id`. Codex reads only the root rollout (its `session_meta.id`
 equals `thread.started`); a child's rollout is a separate file whose source is
 `subagent.thread_spawn`, so it is never scanned, and `exec --json` emits no

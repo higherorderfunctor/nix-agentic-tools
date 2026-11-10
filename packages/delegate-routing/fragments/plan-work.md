@@ -48,7 +48,10 @@ plan; writer file ownership is repository-relative):
   leaving earlier-check inputs for the orchestrator to add after those checks
   return. Include every finder, first-check, second-check and judge that will
   run; the helper's floor never proves fit, trial eligibility or independence.
-  Honor explicit avoidFor guidance and the Review step's trial restrictions.
+  Each record fixes one launch's technique, model and effort; a dynamic
+  workflow's planner may replace them after a fresh helper run. The helper's
+  picker applies avoidFor guidance itself; honor the Review step's trial
+  restrictions.
 - `waves`: ordered lists of unit ids. Put at most ten simultaneous delegates in
   a wave, honoring lower host/user caps. Each unit contributes one concurrent
   delegate because its worker and reviewers run in sequence. Writers in one wave
@@ -76,13 +79,14 @@ binding. Manual-only routes stay outside automatic approval; handle an explicit
 user request separately under its authorization.
 
 The saved helper snapshot records provenance and is never an allowlist or proof
-of current pace. Changed launch context or a new usage read requires validation
-against the current helper output; use that returned snapshot for execution. Do
-not add age limits or fingerprints of unrelated configuration. A downstream
-delegate that launches work in another runtime needs a separate plan/check using
-that runtime's rendered helper and session pool, even if a planner in another
-harness prepares it. The helper validates specifications and reads registered
-Readers; it never executes a delegate or probe.
+of current pace. A saved plan is not permission to skip the helper: rerun it as
+Choose execution requires. Changed launch context or a new usage read requires
+validation against the current helper output; use that returned snapshot for
+execution. Do not add age limits or fingerprints of unrelated configuration. A
+downstream delegate that launches work in another runtime needs a separate
+plan/check using that runtime's rendered helper and session pool, even if a
+planner in another harness prepares it. The helper validates specifications and
+reads registered Readers; it never executes a delegate or probe.
 
 Execution constraints remain compulsory: Choose execution owns launch selection,
 supervision, retries, isolation and named fallbacks; Work owns hard-rules
