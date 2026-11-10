@@ -73,7 +73,8 @@ in {
       # Offline codex-cli 0.167.0 capture: no `tools` key and no tool item reach the
       # Responses request. Flags alone leave code-mode exec and wait; the helper's
       # one-model <catalog-file> (tool_mode direct, shell disabled, no apply_patch)
-      # removes them. One live ChatGPT-authenticated check is still owed.
+      # removes them. A live ChatGPT-authenticated run (WebSocket transport) sent
+      # the same: no `tools` key and no tool item.
       pickerCommand = {
         command =
           builtins.replaceStrings

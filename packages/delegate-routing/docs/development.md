@@ -490,11 +490,13 @@ Codex from that directory. Offline codex-cli 0.167.0 captures against a fake
 Responses provider sent no `tools` key and no tool item. A missing or unreadable
 cache, or a cache without the model, makes that entry unavailable and the
 helper's warning names the reason; the helper never runs Codex on a guessed
-catalog. One live ChatGPT-authenticated run, capturing its request, is still
-owed: image generation, connectors and plugin suggestions depend on real auth
-and are only disabled, not observed. The fake-provider test needs the real
-`codex` binary and the shipped command in `CODEX_PICKER_COMMAND`, so it skips in
-the Nix sandbox; the catalog and warning tests always run.
+catalog. A live run with a real ChatGPT login, captured through a local
+pass-through on codex-cli 0.167.0, sent the same tool-free request over the
+WebSocket transport, so image generation, connectors and plugin suggestions add
+no tools under real auth either. The HTTP and WebSocket transports build the
+request from one shared builder. The fake-provider test needs the real `codex`
+binary and the shipped command in `CODEX_PICKER_COMMAND`, so it skips in the Nix
+sandbox; the catalog and warning tests always run.
 
 Readers and hard eligibility run before judgment. A picker runs when its family
 is not the proposer, its pool and scopes allow it, and the first word of its
