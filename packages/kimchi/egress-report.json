@@ -6,6 +6,7 @@
       "codex",
       "config",
       "cursor",
+      "env",
       "gsd2",
       "login",
       "mcp",
@@ -281,8 +282,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-p6q7XZ15HQjo0IbL83ZAR8jsT+FQuErgICvSf/Yn6N0=",
-      "kimchiVersion": "1.32.0",
+      "kimchiSourceHash": "sha256-mgHlVySRAUlv0eEKPU218uUQ45oKgi+6kXg8m4AJHTc=",
+      "kimchiVersion": "1.33.1",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -300,8 +301,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-p6q7XZ15HQjo0IbL83ZAR8jsT+FQuErgICvSf/Yn6N0=",
-      "kimchiVersion": "1.32.0",
+      "kimchiSourceHash": "sha256-mgHlVySRAUlv0eEKPU218uUQ45oKgi+6kXg8m4AJHTc=",
+      "kimchiVersion": "1.33.1",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }

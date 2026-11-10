@@ -475,6 +475,10 @@
       "reason": "the bearer-token environment name comes from user MCP server configuration",
       "sites": 2
     },
+    "kimchi/src/commands/env.ts#displayValue[DotExpr]": {
+      "reason": "evaluator limitation: kimchi env --values reads def.name only from the fixed ENV_VARS registry in src/env-vars.ts, and other sites already record every registry name as an environment fact; IGNORED_ENV_VARS and TEST_SUITE_ENV_VARS never reach displayValue. It reports only set or not set, never the value",
+      "sites": 1
+    },
     "kimchi/src/extensions/permissions/mode-controller.ts#getPermissionMode[VarRef]": {
       "reason": "the permission-mode key includes the runtime session identifier",
       "sites": 1
