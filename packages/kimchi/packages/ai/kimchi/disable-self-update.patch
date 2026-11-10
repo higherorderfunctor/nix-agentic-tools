@@ -1,22 +1,21 @@
 Compile out Kimchi's self-update: Nix owns the binary, and the store copy is
-read-only. Every update gate is hardwired off: the launch path returns before
-probing, the shared workflow finds no update for `kimchi update`, `/update`
-stops before its menu (so no toggle and no "enable auto-update" tip), the tip
-rotation drops the auto-update tip, and the startup check shows neither its
-one-time "auto-update is now on by default" notice nor an "Update available"
-hint. Each gate is a one-line condition, so
-the patch touches no import block or help text; `/update` keeps upstream's
-notice wording. The `opts.signal!` assertion keeps TypeScript's narrowing in
-the now-unreachable launch path.
+read-only. The shared update gate is hardwired off, so background updates never
+schedule ticks and the workflow finds no update for `kimchi update`, including
+canary and explicit-version requests. `/update` stops before its menu (so no
+toggle and no "enable auto-update" tip), the tip rotation drops the auto-update
+tip, and the startup hook returns before bridge refresh, the one-time
+auto-update notice or an "Update available" hint. Each gate is a one-line
+condition, so the patch touches no import block or help text; `/update` keeps
+upstream's notice wording.
 
 diff --git i/src/extensions/auto-update-settings.ts w/src/extensions/auto-update-settings.ts
-index 8e7c888..b0966a4 100644
+index 092e546..26dc608 100644
 --- i/src/extensions/auto-update-settings.ts
 +++ w/src/extensions/auto-update-settings.ts
-@@ -136,7 +136,7 @@ export default function autoUpdateSettingsExtension(pi: ExtensionAPI) {
+@@ -163,7 +163,7 @@ export default function autoUpdateSettingsExtension(pi: ExtensionAPI) {
  			// `kimchi update` as their escape hatch.
  			if (ctx.mode !== "tui") return
- 
+
 -			if (process.env.KIMCHI_NO_UPDATE_CHECK) {
 +			if (true) {
  				ctx.ui.notify("Updates are disabled by the KIMCHI_NO_UPDATE_CHECK environment variable.", "info")
@@ -36,49 +35,29 @@ index 1410bba..0c07be0 100644
  			if (loadAutoUpdateSetting()) return []
  			return [AUTO_UPDATE_TIP]
 diff --git i/src/extensions/startup-update.ts w/src/extensions/startup-update.ts
-index 428a820..d342a7a 100644
+index 34fe9ed..d469090 100644
 --- i/src/extensions/startup-update.ts
 +++ w/src/extensions/startup-update.ts
-@@ -42,7 +42,7 @@ export default function startupUpdateExtension(pi: ExtensionAPI) {
+@@ -48,7 +48,7 @@ export default function startupUpdateExtension(pi: ExtensionAPI) {
  	)
- 
+
  	pi.on("session_start", async (_event, ctx: ExtensionContext) => {
 -		if (!ctx.hasUI) return
 +		if (true) return
- 
+
  		const current = getVersion()
  		// Canary users opted into the canary track; don't nag them about
-diff --git i/src/update/auto-update.ts w/src/update/auto-update.ts
-index 9f81ccd..94f64f5 100644
---- i/src/update/auto-update.ts
-+++ w/src/update/auto-update.ts
-@@ -279,7 +279,7 @@ export interface MaybeAutoUpdateOnLaunchOptions {
-  */
- export async function maybeAutoUpdateOnLaunch(opts: MaybeAutoUpdateOnLaunchOptions = {}): Promise<void> {
- 	try {
--		if (process.env.KIMCHI_NO_UPDATE_CHECK) return
-+		if (true) return
- 		if (argvHasSkipTrigger(process.argv)) return
- 		if (isNonInteractiveLaunch(process.argv)) return
- 		if (isHomebrewInstall()) {
-@@ -327,7 +327,7 @@ export async function maybeAutoUpdateOnLaunch(opts: MaybeAutoUpdateOnLaunchOptio
- 			// the slow-network users this exists for) instead of merely
- 			// abandoning the promise while the download loiters in the
- 			// background.
--			const signal = opts.signal ? AbortSignal.any([opts.signal, sigint.signal]) : sigint.signal
-+			const signal = opts.signal ? AbortSignal.any([opts.signal!, sigint.signal]) : sigint.signal
- 
- 			warn("checking for updates — press Ctrl+C to skip and launch the current version")
- 
 diff --git i/src/update/state.ts w/src/update/state.ts
-index 1003207..2636dca 100644
+index c8061e7..0e95fb6 100644
 --- i/src/update/state.ts
 +++ w/src/update/state.ts
-@@ -89,6 +89,5 @@ export function saveRepoState(owner: string, name: string, rs: RepoState): void
- 
+@@ -117,8 +117,7 @@ export function saveRepoState(owner: string, name: string, rs: RepoState): void
+
  /** Honors $KIMCHI_NO_UPDATE_CHECK=<anything-truthy>. */
  export function isUpdateCheckDisabled(): boolean {
 -	const v = process.env.KIMCHI_NO_UPDATE_CHECK
 -	return v !== undefined && v !== ""
 +	return true
  }
+
+ // Diagnostics live in their own single-record files (update-result.json,

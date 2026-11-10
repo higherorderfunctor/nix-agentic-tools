@@ -123,10 +123,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:c131639a03eed7c36564e8ebac8d4cbcde2bebd1f909d07b479dcf81e14af24d",
+      "evidenceHash": "sha256:ba9857d0b38fa3aa58e99c05c3019282e42eeaa7b9b09687eb4aaca40c11daa6",
       "id": "request-cli-auth-oauth-list-user-organizations-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: default SSO invocation, effective organizations URL and overrides, complete abort/disable precedence, and SSO manager trigger prerequisites.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the added stored ACP SSO dependency at src/modes/acp/server.ts:252. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -163,7 +163,8 @@
           "sha256:bf4ff9c4910dd1c53db1c492cb720418987c5d1422f1e0a393084da16fccab0f",
           "sha256:cd88b8f8ddabe3eae1faea0622dfe6fccbdafcdeec326f0bce7afd8c1f63a072",
           "sha256:ceacf3790762ac5b7fa0fb6dec3138f5ab31b9cf2699cefb1dda7804855e3f3f",
-          "sha256:dfacf692682c4f534a4dc7a9251f89c3c398a5ac61376c6a658043229a78caf0"
+          "sha256:dfacf692682c4f534a4dc7a9251f89c3c398a5ac61376c6a658043229a78caf0",
+          "sha256:e9653ccdc2e02fc52a06316c67d8e664f1156b1bf0b073e7bcff013e3625a082"
         ],
         "statement": "sha256:7fe567776de595cc0f8777a7277cee48a7a5577542c0bbcea4ca197cd0880adc"
       }
@@ -175,10 +176,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:817d583cb137f92c88cf1b5649acc9af249f5de85970302af9348a291d365fd7",
+      "evidenceHash": "sha256:844656c47d42ff7c957153880bd895de1b3309ab2dcdb36e59f9635d21a117e5",
       "id": "request-cli-auth-oauth-post-token-request-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: default login/refresh selection, effective token URL and credential-derived overrides, full authentication/cancellation precedence, and login/ACP/refresh prerequisites beyond stored and depth boundaries.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the exchangeAuthorizationCode seam at src/cli-auth/oauth.ts:538 and ACP storage at src/modes/acp/server.ts:251, which shift caller distances and depth boundaries. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -204,21 +205,21 @@
         "call": "sha256:a5e47b94fcd2a511488b519a151de3a77d20a0be6bce7b67c7fae2a35b7c9bf7",
         "root": "sha256:df8f17d6e56d7dc6680bc556645d914884af40db57d65f6a3b9d011bb68a1d09",
         "rows": [
-          "sha256:20bd665ae7355d0e7b8ef85d750cf48fba182831660a648d56b8b648a921b3c9",
-          "sha256:2bdc7b340cdea0f929b45f2e03c8fce5d978f392d2931bada2d6dc5e16b253e3",
+          "sha256:2fbc1a6472f2cf0797970c514fca7ca1493490ada7119c45c7363b7e385a9398",
           "sha256:3dbd1e067c6e3a776ce549a48c5eb06104d44c17f563262294d506b07248ad82",
-          "sha256:4df8c710318cf67cfcc35e47eef2d914a1eca60cd18bb53d7c534094da349d7b",
-          "sha256:5039840ba689beb5954990d947a39806da682b3cc7c3b43c79dc87fff8fb8b1d",
+          "sha256:3df9fe1449f4fc6a3acf976f58128db2fe175b739d104c6e269db0891345525c",
+          "sha256:557b4275b7db1f34d18e210865a1bf3b198cfdc1c1ddecc77148a7aa542b411d",
           "sha256:6123034521cc3e89a861d7e48c8cf1eb3f14a91d24d3afcc721388236354afc2",
-          "sha256:89af6fe32b1b5785315b0e23ed03961142037641ba15b556e4cd250067cc9dea",
+          "sha256:64d4e793df6bfabb973fd726e48f3c00cbda526855f028d3c3893a675cc24f54",
+          "sha256:72058b436cf81cc822ae803de67243c9f6db83beeb4da3665322452853f4aea2",
           "sha256:8ef86d0785b24ca05c485f0c04f2e785b6e0e09e6ac5e87f027a932907ea634c",
+          "sha256:9cdf55243a53d908b636ccdf63496609b9eca57fa13eda8e10eb79d99813d9b4",
+          "sha256:9d982057bf4c0483aedb1268f623a6cae5bffa8040caa4361a6dabdb38c6d73c",
           "sha256:a582d952f8bdd5832e7d813574f29206a82d814d6f75e0c1e000c30711baf8d2",
-          "sha256:abc5e160c7c990d414b6165abe2b83bf123b53a4eeb6141f1413ddb405ca047d",
-          "sha256:abecdb5d15303a3b9ba34ccb1944b6055743342dc0f524315e9d30e42c8a4fda",
-          "sha256:b1af1c603600025a582e610a3eab9f4893185e7d505ec9336cedd0549ec3e1c4",
-          "sha256:bf4ff9c4910dd1c53db1c492cb720418987c5d1422f1e0a393084da16fccab0f",
-          "sha256:ceacf3790762ac5b7fa0fb6dec3138f5ab31b9cf2699cefb1dda7804855e3f3f",
-          "sha256:dfacf692682c4f534a4dc7a9251f89c3c398a5ac61376c6a658043229a78caf0"
+          "sha256:a8104526b8f4f3e7a386f000ca69bfd59a13726fcfb01f41588539b87a7dd5fa",
+          "sha256:ac683a7721fa53a37bf719cb4e520253074e325eab8a37f1aa2e16edab1fd123",
+          "sha256:ed5e0c892737a78139c81d57b8b196d3c3e526839a307e16a6264456b2720517",
+          "sha256:f1f3c1f8882c0c4caf3a8e9114fbbfcb82ede5c9e9ca48f51f48c98d5fa8b979"
         ],
         "statement": "sha256:5b889ed7681e596947911ba331b66209d249e4e9029adbc66df8f45eed28fa70"
       }
@@ -683,10 +684,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:d959fb0d5a41c8de78068f8cba3e1ee1a1fff34c4c69994a03fc5b2c5f208176",
+      "evidenceHash": "sha256:7311556c2edae816387430e94e3f1ebcb99556a312f7f07bb449f7d7505516c1",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: reporting/tracking defaults, effective platform API URL and credential overrides, full consent/telemetry/lease precedence, and queued-event/supervisor prerequisites beyond the depth boundary.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the own-write callback at src/extensions/pr-cost-reporting/worker.ts:913 and shifted reporting depth boundary for the unchanged event upload now at worker.ts:657. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -713,11 +714,11 @@
         "root": "sha256:ecad9d791f23bda3a0bb0fc81b8621b88e6b58519ac7c1bc28c834e69c7b765d",
         "rows": [
           "sha256:2dc40e3a74fc5a8f4833fde0a592a0806237b35b4382d464a46262568565e9a4",
-          "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
           "sha256:422c2cb3ee01d6c385ac80b8fc8ecf7e269be81c5be4f1c65fdc5e7a354ea31f",
-          "sha256:4a4d14dd1aef2bed36b62eaa69779c3b956ecfeb52d7e62c761fb5dced54b252",
           "sha256:6a7662c379708d6689678bf54e291f6430d9935fc29584309782702b2acd4bb7",
-          "sha256:714950cd250e3370c0aef4a629e31c9012df22e9fffe908f742de4429decc6a0"
+          "sha256:714950cd250e3370c0aef4a629e31c9012df22e9fffe908f742de4429decc6a0",
+          "sha256:714a7c701f396995f8ad468a7ea182c4a088f33b064b3e57123b5f10370cf22e",
+          "sha256:86d74909d299e2d9f68e7828ef82208c7b378011ddd3985a66f34712b4b25fe3"
         ],
         "statement": "sha256:54ef82b7f3e6f944c4591a3896501a9a18759fa7d225d76e3925445f813ca7f6"
       }
@@ -729,10 +730,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:52bbcf2257c456bfeef656524e58998ee69195b6e697df6c8c64f015dbf64a35",
+      "evidenceHash": "sha256:3a20efaddcea3d0646142c470cceb47ad348da10a7527d61ac2fe6e60c27a0ee",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-fetch-bounded-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: reporting/tracking defaults, effective verification API URL and overrides, complete opt-out/ownership precedence, and verification/delivery/supervisor prerequisites beyond the depth boundary.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the own-write callback at src/extensions/pr-cost-reporting/worker.ts:913 and shifted reporting depth boundary for the unchanged event verification wrapper now at worker.ts:593. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -762,10 +763,10 @@
         "root": "sha256:e7efd4b4a814b283c820336e01d21c9ce2c70ad5885c3bf551e25f350d772286",
         "rows": [
           "sha256:0ac7347e1f5e67eee4bafe044e614290c39300c4d6aea78f148001802f9ed255",
-          "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
           "sha256:422c2cb3ee01d6c385ac80b8fc8ecf7e269be81c5be4f1c65fdc5e7a354ea31f",
-          "sha256:4a4d14dd1aef2bed36b62eaa69779c3b956ecfeb52d7e62c761fb5dced54b252",
           "sha256:6a7662c379708d6689678bf54e291f6430d9935fc29584309782702b2acd4bb7",
+          "sha256:714a7c701f396995f8ad468a7ea182c4a088f33b064b3e57123b5f10370cf22e",
+          "sha256:86d74909d299e2d9f68e7828ef82208c7b378011ddd3985a66f34712b4b25fe3",
           "sha256:b2cf7b4ca3bc76219c1d7c9f44cbb7e10ab0e2e9a916cc622dbadbb20ecc212b",
           "sha256:fe2a13c6aca64b19d0defbea10de867232941fdd768792350622094c0bcc1ff1"
         ],
@@ -779,10 +780,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:8386dc9d774f838a8b5c8f12235922d98141a54d2d22880bbf88e3e6eba057e4",
+      "evidenceHash": "sha256:ad2333ce7ce3745b256e762c1927392e26635655d4568d12ba3fb2d6af155bae",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-snapshots-fetch-bounded-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: reporting/tracking defaults, effective snapshot destinations and overrides, full consent/held/backoff/telemetry precedence, and snapshot-selection/supervisor prerequisites beyond the depth boundary.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the own-write callback at src/extensions/pr-cost-reporting/worker.ts:913 and shifted reporting depth boundary for the unchanged snapshot wrapper now at worker.ts:350. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -811,13 +812,13 @@
         "call": "sha256:b577f64cde8bdb941d723d1bdb49e63c24f40990c7b3ba32d96b51b1339b74f8",
         "root": "sha256:113f374642e3e6cf35f55fe8e983dc359ec25ec3e88e6b93ab9535085630613e",
         "rows": [
-          "sha256:381a8a2de218cda266e9971d230c988c11579f7cbaf10a328a15d51a268dc32d",
           "sha256:425f2a0a7635356bef66dbaf133f77ce83f5da5aff2c3b9fae6bd37c6abcf312",
-          "sha256:4a4d14dd1aef2bed36b62eaa69779c3b956ecfeb52d7e62c761fb5dced54b252",
           "sha256:4fd080aadf842d8ba25c60ec297b200fad9cbd2a252c1500cbe14cc4a4412c1f",
           "sha256:59300abc856765372fb69e628495f49e8fdfe6955a34298587669841ff376149",
+          "sha256:714a7c701f396995f8ad468a7ea182c4a088f33b064b3e57123b5f10370cf22e",
           "sha256:7ba5a4a139109d58e90d160e47191d59e7cfeb40fa2cb2ce780ef3d16e8ed033",
           "sha256:81d399e4c5b4e45016512b2d109c20b0a201ab54e54a7156cf1130bcb22e5f8d",
+          "sha256:86d74909d299e2d9f68e7828ef82208c7b378011ddd3985a66f34712b4b25fe3",
           "sha256:96ee26f941a76b738f674302224f093e84c0fbd0e5415b7746f7f66bbfa40b2e"
         ],
         "statement": "sha256:2c3fe323119dd58a355a2da711b6936b972ca0694e927198c9e3add90f959765"
@@ -1064,10 +1065,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:0c62e5ee55badb2448991448fab0f6db5c2d301322f6571e6befb36a86565ff0",
+      "evidenceHash": "sha256:c40a203b165b346b592c0e05023182a252ee7ee1aed4b6e42f6d010402acf5d2",
       "id": "request-extensions-work-attribution-cost-sync-reconcile-work-costs-fetch-bounded-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: subscriber/startup-delay defaults, effective billing destinations and credential overrides, complete subscription/channel/billing disable precedence, and billing-due/scheduling prerequisites beyond the depth boundary.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the added immediate-first-tick depth boundary at src/extensions/work-attribution/reconcile-supervisor.ts:281 alongside delayed scheduling. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -1106,6 +1107,7 @@
           "sha256:c24fb5dcce5250bf5020dfa53ff588ec45706e56d3b334688332a320c925cddf",
           "sha256:db1207d482f0800b657176c7f3b3bd82ae504883afbe534f398716e7885ae198",
           "sha256:db2b48c68249d2833776fbd1f5478d5e0f6319f31361fe5de6689516b3ebdd4b",
+          "sha256:f1d78cbca73b9543f1b24ff6021497c01190f11aa6c9e8a4e550f724deb23841",
           "sha256:fd1b66de8582603538bcb0a09e53442eef9cf74bf13a1e8a21ac707d5775cc9b"
         ],
         "statement": "sha256:10babacaf1ee0f962821eda71eb28ce8b955dccb36219c4e2e0fd4ba9571d322"
@@ -1162,10 +1164,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:c17ca8783d6aa8feb4100b0bbab0826cd001d54bebf0e548d40bf01bf8530ccb",
+      "evidenceHash": "sha256:f22d90e76377c4041370fbbf436fed195ac748bd7c7cbb7ea669051be810028f",
       "id": "request-models-fetch-available-models-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: authentication/model-refresh defaults, effective modelsMetadataApi destinations and endpoint overrides, full authentication/cache/network-policy disable precedence, and SSO settlement/credential/refresh prerequisites beyond stored and depth boundaries.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the added ACP SSO settlement caller chain through src/modes/acp/server.ts:848 and its stored/depth boundaries. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -1195,20 +1197,25 @@
           "sha256:067ef2f5af24e0b928e8ec7d7855a6cc72dcd7107ebb11d740694efdbaff20a8",
           "sha256:07f02eed5a0cc3962f7157d5653496055a455bb395615d3e620e5b0b09f64311",
           "sha256:0b434693da3963b25abb424989625b63951d51bda8b2a58fe61060282a647943",
+          "sha256:0ece80ce820c8819c3e17ab4b467fe882b141e2a46fd2765c274e43c2d736a44",
           "sha256:0f7851ee7b6cae9d8ba62d78ef17034e24f7ecda76f3d38343f5d115c1c4b5da",
           "sha256:133621b04202b9b32b0ba0b78b28bbf2a57d8a062fc9056563753932fdff704d",
           "sha256:13573ed4046f76c9c9b1c0afb17379fdca04faacf5cf02d3a112cef7c4441a9d",
+          "sha256:154ee765b4c83b2188055c1beaea4eba34206ade0183042e00352fdcb1751887",
+          "sha256:17b5ad32aec1e3ae8aa32f0c65ad997e6a0d5feb5afaa8d83b09c31a7888c3c0",
           "sha256:18dbdbeb860f6a0df20f95753f7a36833c72fb4f87e65c45c6a25738d03a2bc2",
           "sha256:1f0d1051a2bc46b3fed5c4fd2a6c63b92866f90c3568fb6b5b75ebcfbba9ffd2",
           "sha256:220aca67ba6a1b1688909ee025ebc2ff688aa1973d83600215d6a75e31e208d4",
           "sha256:22730eda2a7d87abd95b9b34c15b765a5c767204ad903968d9bb401b2120dfe4",
           "sha256:344e8134d39dd2b0c588886a45f402bb70f21b728d9911f740e32fd8d734d473",
           "sha256:3817bbbfd5a557bd81df163171ade0e49130ce6ab8cdf4e60c563e153a1a1220",
+          "sha256:3bea1e88527b53af03be8fc2150ca083aca306a76a8410a89c25b751c4346e43",
           "sha256:417a93fad2b761ff723daca6f3dccdf436418baf86c95a3547364b5f50a30144",
           "sha256:44045ee94e49fb4b4c2f8ae7271e007f6acfb704baf5a5f959019d59b2b5901b",
           "sha256:46b5301082b069e94114175a98c268270b9e600aba43ead1c665bb424255a292",
           "sha256:4ab71eddf6d8849785187468e374b6e634de6d3c532e159c284335e3a0ee605b",
           "sha256:597239758486dcdc3f10febe9acc816e8e5fb28ffe662aa42f19b4f07c72906e",
+          "sha256:5d2362203d3232eaf1e8a93a131bd37e13cbbdecea216de9a978e860e8fe3390",
           "sha256:68dacda37b392c9c5a2c764a8d176c9227b3a0c7caec1d2d98beb331fea63e8d",
           "sha256:6d1d72404704c589b1cade7a54122a923c4a51518346a11705438ddadbebdfcc",
           "sha256:70824aa82fab2f614e4283ffb259eceeb558970ebcd21529d68322fe36105767",
@@ -1230,8 +1237,10 @@
           "sha256:c0d987302947eea4b84f96530ad420217a7957cc3beaccc1b9b3a3d31274b65f",
           "sha256:d5dd6d2b09ad6a37016198487728278d06c35a242a3eac4961e1f51f35cce570",
           "sha256:d61efed0ab9ea9bbb768d1dd3e31f5824d1278b27d5b529e5330976134460dc3",
+          "sha256:d662ca82ad7837e87841998a5f2ece793293f4fe22cb30a74a04f78de4d778b4",
           "sha256:d934e40f5b88438b58ff29bf3c5fe59eed35147fe358311ccb9442aa4cceac7f",
           "sha256:dfbaa893cc9e9b8b28e7969b046ec5ebaf707cc2e48ca7d29d62fce94c4b1c1e",
+          "sha256:dfeb7a5339791cd64d7f9d11321c024825c467ee087376d05499248354c171a0",
           "sha256:e5e157bfcbb5f8042878de580957eb3e0a1e6e4a0327afdee41515847d4ac3cf",
           "sha256:e86ec7d08870aaada4fa12ae2f1f17cc013cb74d72334210742cbc05f109cd57",
           "sha256:eef1705993adde3acff81e620f1425770459d8dceab6d3bcfdb2b776bbd067a8"
@@ -1716,10 +1725,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:21d473aecfb19d68bb73bfb7ffd8f4a05c4afc78c68aaf6fee4a8a590ad096dd",
+      "evidenceHash": "sha256:3ada7349039aa19742471d38808a7ccb9cc6458c2eb6eb17e44f68331c4154ed",
       "id": "request-utils-http-fetch-with-retry-0",
-      "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
-      "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
+      "missingEvidence": "Still unreviewed: all utility caller defaults, effective caller URLs and overrides, complete caller disable/abort/retry precedence, and runtime caller prerequisites beyond reporting and stored boundaries.",
+      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the reporting own-write wrapper at src/extensions/pr-cost-reporting/worker.ts:913 moving the depth boundary inward from index.ts:78. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -1815,6 +1824,7 @@
           "sha256:70df0ecedf16faf117933fd20e68619ecc95167a1f4890b90d4ee1fba11e7161",
           "sha256:7141f4e5b32660d3748893327c35355a6ec23c16f3563fea6cf2d6067af182d8",
           "sha256:733f24d2d2576c130cbda0f6ce1316eba572ca9da80ac17556dd89c44d8c690b",
+          "sha256:73b411ebd684355754f8e04ce3ee0234150bf9b397b22e8288b2e3e4ff349f4f",
           "sha256:7458a4395bb18faa356403c1a6ee0d2b8b6805c3fb3e5c674f5c718ad4690536",
           "sha256:75ae9bb5ee3b6c71bc51b65e3041166e9db294d6c5a4f848e614cae9fb140930",
           "sha256:76c815c621448ba5bfd874f746676b8f82d7e4a0fab2f962aa60d1b0eff876f3",
@@ -1827,7 +1837,6 @@
           "sha256:8171e98e55afac4fe24c76b6a1e681d7d1d22607583fd468ec9d8f7b3b38c069",
           "sha256:8305078b0808ab70d2cee3bd80d92381f649f45a9a8a8bd697a466625d6f5316",
           "sha256:84d94f5ccdea1157f0b8942cbcf855e49ec35c4b01855843d72b04f727dc8c8f",
-          "sha256:86d74909d299e2d9f68e7828ef82208c7b378011ddd3985a66f34712b4b25fe3",
           "sha256:87daf8127b7e9024ff1c13ef28c8a5b3d69f5505eed1bac4d4a257bd5d96509c",
           "sha256:887ef460455b92a247640627d56f322f229543c4619d81de886df26c364e0f1e",
           "sha256:90267fbdbafff19b8d51ca85d4f55231d418f1eefd0d8263f5fee811632d6cfe",
