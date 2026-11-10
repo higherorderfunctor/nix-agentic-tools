@@ -194,6 +194,7 @@ fastmcp
 fblog
 fcli
 fetchgit
+fetchpatch
 fetchurl
 fetchzip
 fhsenv
