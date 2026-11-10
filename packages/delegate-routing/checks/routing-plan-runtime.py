@@ -52,6 +52,15 @@ def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=
     return {"taskSummary": "bounded source change", "nonInteractive": non_interactive, "roles": {role: {"effort": effort} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
 
 
+def picker_child_exited(child):
+    try:
+        os.kill(child, 0)
+        # A killed child that nobody has reaped yet still answers signal 0.
+        return Path("/proc").is_dir() and Path(f"/proc/{child}/stat").read_text().rpartition(")")[2].split()[0] == "Z"
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+
+
 class Routing(unittest.TestCase):
     def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None, now=NOW):
         calls = []
@@ -220,7 +229,7 @@ class Routing(unittest.TestCase):
             {"path": "manifest.sessionPool", "message": configuration + "unregistered pool undeclared; registered: hidden, outside, session"},
             {"path": "manifest.routes[0].pool", "message": configuration + "unregistered pool ghost; registered: hidden, outside, session"},
             {"path": "launchContext.extra", "message": "unknown key; allowed: nonInteractive, proposerFamily, roles, taskSummary, techniques"},
-            {"path": "launchContext.taskSummary", "message": "must be a non-empty string of at most 65536 bytes"},
+            {"path": "launchContext.taskSummary", "message": "must be a non-empty UTF-8 string of at most 65536 bytes"},
             {"path": "launchContext.nonInteractive", "message": "required; true, false or null"},
             {"path": "launchContext.proposerFamily", "message": f"unknown family name; allowed: {names}"},
             {"path": "launchContext.techniques[0].model", "message": "must be a non-empty string"},
@@ -315,6 +324,31 @@ class Routing(unittest.TestCase):
             (root / "context.json").write_text(json.dumps({"taskSummary": "ok"}))
             self.assertEqual(refused(manifest(), ["--now", "garbage"]), ["launchContext.nonInteractive", "launchContext.techniques", "launchContext.roles", "argv.--now"])
 
+    def test_cli_malformed_routes_keep_other_request_errors(self):
+        # Wrong: malformed route entries crash normally and hide argv/context faults
+        # beside a bad --now; context encoding failures are blamed on the manifest.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "nobody"]
+            for kind in ("routes", "manualRoutes"):
+                for value, path in (([1], f"manifest.{kind}[0]"), ([{}], f"manifest.{kind}[0].pool"), (1, f"manifest.{kind}")):
+                    config = manifest()
+                    config[kind] = value
+                    (root / "manifest.json").write_text(json.dumps(config))
+                    (root / "context.json").write_text(json.dumps(context() | {"taskSummary": ""}))
+                    for extra in ([], ["--now", "garbage"]):
+                        with self.subTest(kind=kind, value=value, extra=extra):
+                            proc = subprocess.run(command + extra, capture_output=True, text=True)
+                            self.assertEqual(proc.returncode, 2, proc.stderr)
+                            document = json.loads(proc.stdout)
+                            self.assertEqual(document["status"], "invalid-request")
+                            self.assertEqual([e["path"] for e in document["errors"]], ["argv.role[0]", path, "launchContext.taskSummary"] + (["argv.--now"] if extra else []))
+            (root / "manifest.json").write_text(json.dumps(manifest()))
+            (root / "context.json").write_text(json.dumps(context() | {"taskSummary": "\ud800"}))
+            proc = subprocess.run(command + ["--now", "garbage"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2, proc.stderr)
+            self.assertEqual([e["path"] for e in json.loads(proc.stdout)["errors"]], ["argv.role[0]", "launchContext.taskSummary", "argv.--now"])
+
     def test_cli_invalid_request_is_json_on_stdout_and_exit_two(self):
         # Wrong: schema errors surface as a traceback or bare stderr text, run a
         # Reader, or leave stdout unparseable for the orchestrator.
@@ -350,6 +384,27 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "PICKER_TIMEOUT", 0.02), self.assertRaises(subprocess.TimeoutExpired):
             helper.run_picker(entry | {"command": "while :; do :; done"}, {}, SHELL)
 
+    def test_child_without_proc_is_alive_until_signal_zero_fails(self):
+        # Wrong: an absent /proc stat file proves a surviving child exited.
+        with patch.object(Path, "is_dir", return_value=False), patch.object(Path, "read_text", side_effect=FileNotFoundError), patch.object(os, "kill") as kill:
+            self.assertFalse(picker_child_exited(123))
+            kill.assert_called_once_with(123, 0)
+        with patch.object(os, "kill", side_effect=ProcessLookupError):
+            self.assertTrue(picker_child_exited(123))
+
+    def test_picker_without_catalog_keeps_the_project_directory(self):
+        # Wrong: Claude loses project settings when every picker runs in scratch.
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "pwd > <output-file>"}
+        self.assertEqual(helper.run_picker(entry, {}, SHELL).decode().strip(), str(Path.cwd()))
+
+    def test_codex_picker_resolves_relative_home_before_changing_directory(self):
+        # Wrong: the child resolves a relative CODEX_HOME inside picker scratch.
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": 'test -f <catalog-file>; test -f "$CODEX_HOME/models_cache.json"; case "$CODEX_HOME" in /*) printf absolute ;; *) printf relative ;; esac > <output-file>'}
+        with self.codex_home():
+            absolute = Path(os.environ["CODEX_HOME"])
+            os.environ["CODEX_HOME"] = os.path.relpath(absolute)
+            self.assertEqual(helper.run_picker(entry, {}, SHELL), b"absolute")
+
     def test_picker_output_overrun_kills_the_whole_process_group(self):
         # Wrong: a picker that writes past the limit and keeps running outlives the
         # call, or its children survive the kill.
@@ -361,12 +416,7 @@ class Routing(unittest.TestCase):
                 helper.run_picker(config["pickerEntries"][0] | {"command": command}, {}, SHELL)
             child = int(pidfile.read_text())
             for _ in range(200):
-                try:
-                    os.kill(child, 0)
-                    # A killed child that nobody has reaped yet still answers signal 0.
-                    if Path(f"/proc/{child}/stat").read_text().rpartition(")")[2].split()[0] == "Z":
-                        break
-                except (FileNotFoundError, ProcessLookupError):
+                if picker_child_exited(child):
                     break
                 time.sleep(0.01)
             else:
@@ -420,7 +470,7 @@ class Routing(unittest.TestCase):
         with self.codex_home([other, live]):
             raw = helper.run_picker(entry, {}, SHELL)
         self.assertEqual(live["tool_mode"], "code_mode_only")
-        expected = dict(live, tool_mode="direct", shell_type="disabled", apply_patch_tool_type=None, experimental_supported_tools=[], multi_agent_version=None, supports_search_tool=False)
+        expected = dict(live, tool_mode="direct", shell_type="disabled", apply_patch_tool_type=None, experimental_supported_tools=[], multi_agent_version=None, node_repl_disabled=True, supports_search_tool=False)
         self.assertEqual(json.loads(raw), {"models": [expected]})
 
     def test_codex_picker_without_a_catalog_entry_names_why_and_falls_back(self):

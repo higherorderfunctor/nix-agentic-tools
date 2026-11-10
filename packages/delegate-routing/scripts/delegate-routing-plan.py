@@ -38,7 +38,7 @@ PICKER_RETRY_DELAY = 2
 CONFIGURATION_FAULT = "configuration fault, not caller-fixable: "
 # A picker whose `<catalog-file>` token is set gets a one-model Codex catalog; these
 # overrides remove every tool the model entry would otherwise expose.
-CODEX_CATALOG_OVERRIDES = {"apply_patch_tool_type": None, "experimental_supported_tools": [], "multi_agent_version": None, "shell_type": "disabled", "supports_search_tool": False, "tool_mode": "direct"}
+CODEX_CATALOG_OVERRIDES = {"apply_patch_tool_type": None, "experimental_supported_tools": [], "multi_agent_version": None, "node_repl_disabled": True, "shell_type": "disabled", "supports_search_tool": False, "tool_mode": "direct"}
 PICKER_WARNING = "WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user."
 
 
@@ -110,8 +110,8 @@ class PickerUnavailable(Exception):
     """The picker entry cannot be built from local state; the message names why."""
 
 
-def write_picker_catalog(path, model):
-    cache = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
+def write_picker_catalog(path, model, codex_home):
+    cache = codex_home / "models_cache.json"
     try:
         live = next((item for item in json.loads(cache.read_text())["models"] if item.get("slug") == model), None)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
@@ -128,15 +128,18 @@ def run_picker(entry, payload, shell):
     with tempfile.TemporaryDirectory(prefix="delegate-routing-picker-") as directory:
         prompt_path, output_path = Path(directory) / "prompt.json", Path(directory) / "result.json"
         prompt_path.write_bytes(prompt)
+        cwd, env = None, None
         if "<catalog-file>" in entry["command"]:
-            write_picker_catalog(Path(directory) / "catalog.json", entry["model"])
+            codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").resolve()
+            write_picker_catalog(Path(directory) / "catalog.json", entry["model"], codex_home)
+            cwd, env = directory, os.environ | {"CODEX_HOME": str(codex_home)}
         values = {"<catalog-file>": str(Path(directory) / "catalog.json"), "<effort>": entry["effort"], "<model>": entry["model"], "<output-file>": str(output_path), "<prompt-file>": str(prompt_path)}
         # One pass: a substituted value is never scanned for a later token.
         command = re.sub("|".join(map(re.escape, values)), lambda token: shlex.quote(values[token.group()]), entry["command"])
         argv = [shell, "-euETo", "pipefail", "-c", "shopt -s inherit_errexit 2>/dev/null || :\n" + command]
-        # Run from the scratch directory so no project-level Codex config applies;
-        # discard event streams and diagnostics, as only the bounded result file is data.
-        with subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, cwd=directory) as process:
+        # Only Codex runs in scratch to exclude project config; Claude keeps its cwd.
+        # Discard event streams and diagnostics, as only the bounded result file is data.
+        with subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, cwd=cwd, env=env) as process:
             deadline = time.monotonic() + PICKER_TIMEOUT
             while process.poll() is None:
                 if output_path.exists() and output_path.stat().st_size > PICKER_OUTPUT_LIMIT:
@@ -511,9 +514,17 @@ def request_errors(manifest, context, roles):
         if session is not None and session not in pool_names:
             refuse("manifest.sessionPool", pool_fault % session)
         for kind in ("routes", "manualRoutes"):
+            if not isinstance(manifest[kind], list):
+                refuse(f"manifest.{kind}", f"{CONFIGURATION_FAULT}must be a list")
+                continue
             for index, route in enumerate(manifest[kind]):
-                if route["pool"] is not None and route["pool"] not in pool_names:
-                    refuse(f"manifest.{kind}[{index}].pool", pool_fault % route["pool"])
+                path = f"manifest.{kind}[{index}]"
+                if not isinstance(route, dict):
+                    refuse(path, f"{CONFIGURATION_FAULT}must be an object")
+                elif "pool" not in route:
+                    refuse(f"{path}.pool", f"{CONFIGURATION_FAULT}required key is missing; null marks an unbound route")
+                elif route["pool"] is not None and route["pool"] not in pool_names:
+                    refuse(f"{path}.pool", pool_fault % route["pool"])
     if context is None:
         return errors
     if not isinstance(context, dict):
@@ -522,8 +533,12 @@ def request_errors(manifest, context, roles):
     families, efforts = sorted(manifest["familyNames"]), manifest["effortLevels"]
     closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
     summary = context.get("taskSummary")
-    if not isinstance(summary, str) or not summary.strip() or len(summary.encode("utf-8")) > PICKER_PROMPT_LIMIT:
-        refuse("launchContext.taskSummary", f"must be a non-empty string of at most {PICKER_PROMPT_LIMIT} bytes")
+    try:
+        summary_valid = isinstance(summary, str) and summary.strip() and len(summary.encode("utf-8")) <= PICKER_PROMPT_LIMIT
+    except UnicodeEncodeError:
+        summary_valid = False
+    if not summary_valid:
+        refuse("launchContext.taskSummary", f"must be a non-empty UTF-8 string of at most {PICKER_PROMPT_LIMIT} bytes")
     if "nonInteractive" not in context or type(context["nonInteractive"]) not in (bool, type(None)):
         refuse("launchContext.nonInteractive", "required; true, false or null")
     proposer = context.get("proposerFamily")
@@ -837,10 +852,7 @@ def main():
             now_errors = [{"path": "argv.--now", "message": f"{args.now}: {error}"}]
     if manifest_errors or context_errors or saved_errors or now_errors:
         loaded = not manifest_errors
-        try:
-            found = request_errors(manifest if loaded else None, context if loaded and not context_errors else None, args.role)
-        except (AttributeError, KeyError, TypeError, ValueError) as error:
-            found = [{"path": "manifest", "message": f"{CONFIGURATION_FAULT}{error!r}"}]
+        found = request_errors(manifest if loaded else None, context if loaded and not context_errors else None, args.role)
         return invalid_request(found + now_errors + saved_errors + manifest_errors + context_errors)
     try:
         result = plan(manifest, context, args.role, now, args.reader_shell)
