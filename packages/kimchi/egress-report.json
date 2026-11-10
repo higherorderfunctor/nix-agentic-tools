@@ -192,7 +192,7 @@
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
         "src/extensions/memory/backend.ts:119",
-        "src/models.ts:207",
+        "src/models.ts:211",
         "src/utils/http.ts:90"
       ],
       "consumerOverridable": true,
@@ -282,8 +282,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-mgHlVySRAUlv0eEKPU218uUQ45oKgi+6kXg8m4AJHTc=",
-      "kimchiVersion": "1.33.1",
+      "kimchiSourceHash": "sha256-aFPR/Fff8nYhF0xRRzp/Egn1j02XOJcejVYZNh29dUA=",
+      "kimchiVersion": "1.33.2",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -301,8 +301,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-mgHlVySRAUlv0eEKPU218uUQ45oKgi+6kXg8m4AJHTc=",
-      "kimchiVersion": "1.33.1",
+      "kimchiSourceHash": "sha256-aFPR/Fff8nYhF0xRRzp/Egn1j02XOJcejVYZNh29dUA=",
+      "kimchiVersion": "1.33.2",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -888,7 +888,7 @@
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
         "src/extensions/memory/backend.ts:119",
-        "src/models.ts:207",
+        "src/models.ts:211",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -899,7 +899,7 @@
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
         "src/extensions/memory/backend.ts:119",
-        "src/models.ts:207",
+        "src/models.ts:211",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -3813,7 +3813,7 @@
       "bundledModule": null,
       "file": "src/models.ts",
       "library": "fetch",
-      "line": 207,
+      "line": 211,
       "readBy": "kimchi",
       "targets": [
         {
@@ -5563,7 +5563,7 @@
       "file": "src/models.ts",
       "guards": [],
       "library": "fetch",
-      "line": 207,
+      "line": 211,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
