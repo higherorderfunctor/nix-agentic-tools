@@ -2,7 +2,16 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  # mitmproxy 12.3.0's test_emudhra fails on Python 3.14.10, whose ssl module
+  # rejects the compromised eMudhra intermediates the test connects through.
+  # nixpkgs fixes the test in 12.3.1; until nixos-unstable ships it, skip that
+  # one test. The Update workflow's annotations job warns once it has shipped.
+  mitmproxy =
+    if lib.versionOlder pkgs.mitmproxy.version "12.3.1"
+    then pkgs.mitmproxy.overridePythonAttrs (old: {disabledTests = (old.disabledTests or []) ++ ["test_emudhra"];})
+    else pkgs.mitmproxy;
+in {
   checks.kiro-usage-capture = pkgs.runCommandLocal "kiro-usage-capture-check" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -17,7 +26,7 @@
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     ${pkgs.python3}/bin/python3 ${./usage-mitm-transport.py} \
-      --mitmdump ${pkgs.mitmproxy}/bin/mitmdump \
+      --mitmdump ${mitmproxy}/bin/mitmdump \
       --addon ${../usage}/mitm_addon.py
     touch "$out"
   '';

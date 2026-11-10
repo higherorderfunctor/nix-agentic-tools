@@ -321,6 +321,30 @@ jobs:
               echo "::warning::copilot-cli: upstream nixos-unstable HEAD sourceRoot is unexpected value \"${sr}\". Upstream may have changed packaging mechanism — re-evaluate packages/copilot-cli/packages/ai/copilot-cli/package.nix."
               ;;
           esac
+      - name: Detect upstream fixes for temporary nixpkgs workarounds
+        if: always()
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          # Each entry names a repo workaround and the nixos-unstable HEAD
+          # condition under which it can be removed. Warn only once upstream
+          # delivers the fix; a condition that fails to evaluate warns as well, since a
+          # silent detector reads as "still needed".
+          ready=$(nix eval --json --impure --expr '
+            let
+              p = (builtins.getFlake "github:NixOS/nixpkgs/nixos-unstable").legacyPackages.x86_64-linux;
+              inherit (p) lib;
+            in {
+              "packages/kiro-cli/checks/usage-capture.nix: mitmproxy test_emudhra skip" =
+                !(lib.versionOlder p.mitmproxy.version "12.3.1");
+              "config/repo-validation.nix: convco dontCargoUseSystemLibs" =
+                (p.convco.dontCargoUseSystemLibs or false)
+                || lib.any (d: lib.hasPrefix "libgit2" (d.pname or "")) (p.convco.buildInputs or []);
+            }
+          ' 2>/dev/null || echo '{"<evaluation failed>": true}')
+          jq -r 'to_entries[] | select(.value) | .key' <<<"$ready" | while IFS= read -r workaround; do
+            echo "::warning::nixos-unstable now carries the upstream fix for ${workaround}. Remove the workaround on the next nixpkgs bump."
+          done
       - name: Detect a new pnpm major upstream
         if: always()
         run: |
