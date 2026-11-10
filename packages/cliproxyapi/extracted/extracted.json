@@ -3889,10 +3889,10 @@
         "cost": {
           "text": {
             "input": {
-              "cache": { "read": 0.02, "write": 0.25 },
+              "cache": { "read": 0.02, "write": { "12h": 0.5, "30m": 0.25 } },
               "overrides": [
                 {
-                  "cache": { "read": 0.04, "write": 0.5 },
+                  "cache": { "read": 0.04, "write": { "12h": 1, "30m": 0.5 } },
                   "price": 0.4,
                   "when": { "context": { "gt": 272000 } }
                 }
@@ -3967,10 +3967,13 @@
         "cost": {
           "text": {
             "input": {
-              "cache": { "read": 0.01, "write": 0.125 },
+              "cache": { "read": 0.01, "write": { "12h": 0.25, "30m": 0.125 } },
               "overrides": [
                 {
-                  "cache": { "read": 0.02, "write": 0.25 },
+                  "cache": {
+                    "read": 0.02,
+                    "write": { "12h": 0.5, "30m": 0.25 }
+                  },
                   "price": 0.2,
                   "when": { "context": { "gt": 272000 } }
                 }
