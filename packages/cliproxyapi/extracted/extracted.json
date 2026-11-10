@@ -476,7 +476,7 @@
       "type": "bool"
     },
     "api-keys.codex[].keys[].models[].is-compat": {
-      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.\nWhen enabled, compaction_trigger items also use local summary compaction.",
       "type": "bool"
     },
     "api-keys.codex[].keys[].models[].max-context-length": {
@@ -589,7 +589,7 @@
       "type": "bool"
     },
     "api-keys.codex[].models[].is-compat": {
-      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.\nWhen enabled, compaction_trigger items also use local summary compaction.",
       "type": "bool"
     },
     "api-keys.codex[].models[].max-context-length": {
@@ -1342,7 +1342,7 @@
       "type": "bool"
     },
     "api-keys.meta[].keys[].models[].is-compat": {
-      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.\nWhen enabled, compaction_trigger items also use local summary compaction.",
       "type": "bool"
     },
     "api-keys.meta[].keys[].models[].max-context-length": {
@@ -1455,7 +1455,7 @@
       "type": "bool"
     },
     "api-keys.meta[].models[].is-compat": {
-      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.\nWhen enabled, compaction_trigger items also use local summary compaction.",
       "type": "bool"
     },
     "api-keys.meta[].models[].max-context-length": {
@@ -2080,7 +2080,7 @@
       "type": "bool"
     },
     "api-keys.xai[].keys[].models[].is-compat": {
-      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.\nWhen enabled, compaction_trigger items also use local summary compaction.",
       "type": "bool"
     },
     "api-keys.xai[].keys[].models[].max-context-length": {
@@ -2193,7 +2193,7 @@
       "type": "bool"
     },
     "api-keys.xai[].models[].is-compat": {
-      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.\nWhen enabled, compaction_trigger items also use local summary compaction.",
       "type": "bool"
     },
     "api-keys.xai[].models[].max-context-length": {
@@ -3081,8 +3081,8 @@
       "type": "int"
     },
     "routing.session-affinity": {
-      "description": "SessionAffinity enables universal session-sticky routing for all clients.\nExplicit Claude Code, Codex, OpenCode, and pi session headers are preferred,\nfollowed by prompt_cache_key, Responses conversation IDs, legacy body IDs,\nexecution or derived session identity, and the existing message-content hash fallback.\nAutomatic failover is always enabled when bound auth becomes unavailable.",
-      "template": "weighted-round-robin uses each credential's integer weight (default 1, maximum 1,000,000).\nNon-positive weights exclude the credential while this strategy is active.\nSticky requests (including inherited and LCP bindings) also consume weighted credits\nwithout moving existing bindings. Compensation is scoped to each eligible credential set;\npriority tiers, transport preferences, and retry/cooldown subsets do not share credits.\nPinned requests use the eligible pool before pinning, within the pinned credential\npriority tier and transport class, even when session-affinity is disabled.\nReturning to a pool resumes its retained credits.\nSettled credits are capped at +/-32 times the eligible pool total; ratios are approximate.\nIn-flight offsets are preserved until the pool settles, regardless of commit order.\nSticky requests keep their bindings but stop adding compensation when the full\ncredit delta cannot fit the cap; new sessions keep earning credit to avoid starvation.\nCredits are process-local and reset on restart or selector replacement.\nIn Home mode, compatible Home versions charge retained WS turns from usage after completion;\nCPA preserves the retained credential and concurrency slot instead of redispatching each turn.\nFor OAuth/file credentials, add a top-level numeric \"weight\" field to the auth JSON.\nEnable universal session-sticky routing for all clients.\nExplicit Claude Code, Codex, OpenCode, and pi session headers are preferred,\nfollowed by prompt_cache_key, Responses conversation IDs, legacy body IDs,\nexecution or derived session identity, and the existing first-message hash fallback.\nAutomatic failover is always enabled when bound auth becomes unavailable.\nAn established binding outranks credential priority: once a session is bound, that\ncredential is kept even if a higher-priority credential recovers. Credential priority\nstill decides cold bindings, requests without a session, and post-failover rebinding.",
+      "description": "SessionAffinity enables universal session-sticky routing for all clients.\nExplicit Claude Code, Codex, OpenCode, pi, and generic (X-Session-ID) session headers\nare preferred, followed by prompt_cache_key, Responses conversation IDs, legacy body IDs,\nexecution session identity, Merkle LCP prefix/compaction matching, derived session\nidentity, and the existing message-content hash fallback.\nLCP compaction matching requires at least 2 shared trailing turns; clients whose\ncompaction replaces all earlier turns with a summary should send X-Session-ID (or\nanother explicit session ID), or affinity starts a new binding at every compaction.\nAutomatic failover is always enabled when bound auth becomes unavailable.",
+      "template": "weighted-round-robin uses each credential's integer weight (default 1, maximum 1,000,000).\nNon-positive weights exclude the credential while this strategy is active.\nSticky requests (including inherited and LCP bindings) also consume weighted credits\nwithout moving existing bindings. Compensation is scoped to each eligible credential set;\npriority tiers, transport preferences, and retry/cooldown subsets do not share credits.\nPinned requests use the eligible pool before pinning, within the pinned credential\npriority tier and transport class, even when session-affinity is disabled.\nReturning to a pool resumes its retained credits.\nSettled credits are capped at +/-32 times the eligible pool total; ratios are approximate.\nIn-flight offsets are preserved until the pool settles, regardless of commit order.\nSticky requests keep their bindings but stop adding compensation when the full\ncredit delta cannot fit the cap; new sessions keep earning credit to avoid starvation.\nCredits are process-local and reset on restart or selector replacement.\nIn Home mode, compatible Home versions charge retained WS turns from usage after completion;\nCPA preserves the retained credential and concurrency slot instead of redispatching each turn.\nFor OAuth/file credentials, add a top-level numeric \"weight\" field to the auth JSON.\nEnable universal session-sticky routing for all clients.\nExplicit Claude Code, Codex, OpenCode, pi, and generic (X-Session-ID) session headers\nare preferred, followed by prompt_cache_key, Responses conversation IDs, legacy body IDs,\nexecution session identity, Merkle LCP prefix/compaction matching, derived session\nidentity, and the existing first-message hash fallback.\nLCP compaction matching requires at least 2 shared trailing turns; clients whose\ncompaction replaces all earlier turns with a summary should send X-Session-ID (or\nanother explicit session ID), or affinity starts a new binding at every compaction.\nAutomatic failover is always enabled when bound auth becomes unavailable.\nAn established binding outranks credential priority: once a session is bound, that\ncredential is kept even if a higher-priority credential recovers. Credential priority\nstill decides cold bindings, requests without a session, and post-failover rebinding.",
       "type": "bool"
     },
     "routing.session-affinity-rebind-on": {
