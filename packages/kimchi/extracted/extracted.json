@@ -320,6 +320,7 @@
         "codex",
         "config",
         "cursor",
+        "env",
         "gsd2",
         "login",
         "mcp",
@@ -509,8 +510,8 @@
     ],
     "header": {
       "scan": {
-        "kimchiSourceHash": "sha256-p6q7XZ15HQjo0IbL83ZAR8jsT+FQuErgICvSf/Yn6N0=",
-        "kimchiVersion": "1.32.0",
+        "kimchiSourceHash": "sha256-mgHlVySRAUlv0eEKPU218uUQ45oKgi+6kXg8m4AJHTc=",
+        "kimchiVersion": "1.33.1",
         "piVersion": "1.3.0",
         "scannerVersion": "2.0.0"
       }
@@ -3466,7 +3467,7 @@
       },
       "NO_COLOR": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "NO_PROXY": {
@@ -10816,7 +10817,7 @@
       "site": {
         "column": 8,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 30
+        "line": 31
       }
     },
     {
@@ -11000,12 +11001,12 @@
       "functionSite": {
         "column": 31,
         "file": "kimchi/src/cli.ts",
-        "line": 849
+        "line": 854
       },
       "kind": "boundary",
       "property": "onModelCompletionSettled",
       "reason": "depth",
-      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 845 }
+      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 850 }
     },
     {
       "callSite": {
@@ -11049,7 +11050,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 850 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 855 }
     },
     {
       "callSite": {
@@ -11544,12 +11545,12 @@
       "functionSite": {
         "column": 31,
         "file": "kimchi/src/cli.ts",
-        "line": 849
+        "line": 854
       },
       "kind": "boundary",
       "property": "onModelCompletionSettled",
       "reason": "depth",
-      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 845 }
+      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 850 }
     },
     {
       "callSite": {
@@ -11593,7 +11594,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 850 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 855 }
     },
     {
       "callSite": {
@@ -15244,12 +15245,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 609
+        "line": 614
       },
       "kind": "boundary",
       "property": null,
       "reason": "stored",
-      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 609 }
+      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 614 }
     },
     {
       "callSite": {
@@ -15264,12 +15265,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 609
+        "line": 614
       },
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 617 }
+      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 622 }
     },
     {
       "callSite": {
@@ -15292,7 +15293,7 @@
       "site": {
         "column": 77,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 32
+        "line": 33
       }
     },
     {
@@ -15313,7 +15314,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 610 }
+      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 615 }
     },
     {
       "callSite": {
@@ -15333,7 +15334,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 619 }
+      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 624 }
     },
     {
       "callSite": {
@@ -15353,7 +15354,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 657 }
+      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 662 }
     },
     {
       "callSite": {
@@ -15557,11 +15558,11 @@
         "line": 207
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 276 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 281 },
       "kind": "boundary",
       "property": null,
       "reason": "unreferenced",
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1099 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1104 }
     },
     {
       "callSite": {
@@ -15573,11 +15574,11 @@
         "line": 207
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 276 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 281 },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1099 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1104 }
     },
     {
       "callSite": {
@@ -15592,12 +15593,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 609
+        "line": 614
       },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 614 }
+      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 619 }
     },
     {
       "callSite": {
@@ -15760,7 +15761,7 @@
       "site": {
         "column": 89,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 33
+        "line": 34
       }
     },
     {
@@ -15784,7 +15785,7 @@
       "site": {
         "column": 82,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 38
+        "line": 39
       }
     },
     {
@@ -15808,7 +15809,7 @@
       "site": {
         "column": 68,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 35
+        "line": 36
       }
     },
     {
@@ -15832,7 +15833,7 @@
       "site": {
         "column": 72,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 37
+        "line": 38
       }
     },
     {
@@ -15856,7 +15857,7 @@
       "site": {
         "column": 72,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 36
+        "line": 37
       }
     },
     {
@@ -15880,7 +15881,7 @@
       "site": {
         "column": 88,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 34
+        "line": 35
       }
     },
     {
@@ -16213,7 +16214,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "depth",
-      "site": { "column": 33, "file": "kimchi/src/cli.ts", "line": 649 }
+      "site": { "column": 33, "file": "kimchi/src/cli.ts", "line": 654 }
     },
     {
       "callSite": {
@@ -16420,12 +16421,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 609
+        "line": 614
       },
       "kind": "boundary",
       "property": null,
       "reason": "stored",
-      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 609 }
+      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 614 }
     },
     {
       "callSite": {
@@ -16440,12 +16441,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 609
+        "line": 614
       },
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 617 }
+      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 622 }
     },
     {
       "callSite": {
@@ -16465,7 +16466,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 610 }
+      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 615 }
     },
     {
       "callSite": {
@@ -16485,7 +16486,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 629 }
+      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 634 }
     },
     {
       "callSite": {
@@ -16505,7 +16506,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 664 }
+      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 669 }
     },
     {
       "callSite": {
@@ -16517,11 +16518,11 @@
         "line": 247
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 276 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 281 },
       "kind": "boundary",
       "property": null,
       "reason": "unreferenced",
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1099 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1104 }
     },
     {
       "callSite": {
@@ -16533,11 +16534,11 @@
         "line": 247
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 276 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 281 },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1099 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1104 }
     },
     {
       "callSite": {
@@ -16552,12 +16553,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 609
+        "line": 614
       },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 614 }
+      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 619 }
     },
     {
       "callSite": {
@@ -17393,7 +17394,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1008 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1013 }
     },
     {
       "callSite": {
@@ -19357,7 +19358,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1008 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1013 }
     },
     {
       "callSite": {
@@ -20652,7 +20653,7 @@
       "site": {
         "column": 8,
         "file": "kimchi/src/commands/registry.ts",
-        "line": 30
+        "line": 31
       }
     },
     {
@@ -23253,7 +23254,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 8, "file": "kimchi/src/cli.ts", "line": 338 }
+      "site": { "column": 8, "file": "kimchi/src/cli.ts", "line": 343 }
     },
     {
       "callSite": {
@@ -23337,11 +23338,11 @@
         "line": 90
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 276 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 281 },
       "kind": "boundary",
       "property": null,
       "reason": "unreferenced",
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1099 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1104 }
     },
     {
       "callSite": {
@@ -23353,11 +23354,11 @@
         "line": 90
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 276 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 281 },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1099 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1104 }
     },
     {
       "callSite": {
@@ -23737,7 +23738,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 901 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 906 }
     },
     {
       "callSite": {
@@ -23872,7 +23873,7 @@
       "functionSite": {
         "column": 9,
         "file": "kimchi/src/extensions/telemetry/index.ts",
-        "line": 838
+        "line": 865
       },
       "kind": "boundary",
       "property": null,
@@ -23880,7 +23881,7 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/telemetry/index.ts",
-        "line": 838
+        "line": 865
       }
     },
     {
@@ -23901,7 +23902,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "depth",
-      "site": { "column": 3, "file": "kimchi/src/cli.ts", "line": 361 }
+      "site": { "column": 3, "file": "kimchi/src/cli.ts", "line": 366 }
     },
     {
       "callSite": {
@@ -23921,7 +23922,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "depth",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 551 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 556 }
     },
     {
       "callSite": {
@@ -24136,7 +24137,7 @@
       "site": {
         "column": 24,
         "file": "kimchi/src/extensions/telemetry/index.ts",
-        "line": 841
+        "line": 868
       }
     },
     {
