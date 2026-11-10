@@ -334,7 +334,7 @@ jobs:
             let
               p = (builtins.getFlake "github:NixOS/nixpkgs/nixos-unstable").legacyPackages.x86_64-linux;
               inherit (p) lib;
-              # convco's git2 unstable-sha256 feature needs libgit2 built with
+              # The git2 unstable-sha256 feature of convco needs libgit2 built with
               # experimental SHA-256; an ordinary libgit2 does not fix it.
               sha256Libgit2 = d:
                 (d.pname or "") == "libgit2"
