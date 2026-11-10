@@ -89,7 +89,7 @@ their order within that workflow. The always-on stub tells the agent to load the
 skill in each turn that delegates and names the source for steering these rules:
 the package's fragments, or for a consumer its `ai.programs.delegate-routing`
 routing and workflows entries. When the always-on render is empty, no router
-rule is emitted. Keep model tables and harness details in the skill.
+rule is emitted. Keep launch binding details and technique notes in the skill.
 
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
@@ -131,12 +131,35 @@ Every heading and sentence is an entry, a column or a phrase under `skill`, at
 `ai.programs.delegate-routing.skill` and at `runtimes.<runtime>.skill`. A
 runtime key replaces the portable key atomically.
 
-`skill.entries` is the ordered body: Routing, Common workflows, Delegate sizing,
-Routing helper, Pools, Family tables, Technique availability, Technique tables
-and Manual-only external delegates. Entry text may use `{routing}`,
-`{workflows}`, `{pools}`, `{families}`, `{techniques}` and `{manual}`, each
-filled with its generated block. An entry whose placeholder block renders
-nothing, such as Pools with no pools declared, is omitted.
+`skill.entries` is the ordered body: Routing, Common workflows, Routing helper,
+Technique notes and Manual-only external delegates. Entry text may use
+`{routing}`, `{workflows}`, `{helper}`, `{pools}`, `{families}`, `{techniques}`,
+`{techniqueNotes}` and `{manual}`, each filled with its generated block. An
+entry whose placeholder block renders nothing, such as `{pools}` with no pools
+declared, is omitted.
+
+The shipped skill is built around caller capability and carries no full family,
+pool or technique table and no sizing essay. Its Technique notes entry lists
+each technique on one line (kind, modes, pins, runs-own-subagents, command and
+notes), including the introspection commands and manual-only delegates. Family
+selection has one mechanism: the helper's output, which the caller reruns before
+every launch. The Routing section's Choose execution step gives three paths,
+each valid for every runtime because observed tools and configuration decide
+availability:
+
+- native subagents only: the orchestrator invokes the helper, then binds the
+  returned fixed technique, model and effort;
+- a static workflow: a planner delegate returns the plan and the launching
+  caller builds the workflow from it with fixed values; a new workflow reruns
+  the helper while a running one is never mutated;
+- a dynamic workflow: a planner inside it reruns the helper between steps and
+  fixes every dispatch's values.
+
+A consumer that wants a table back adds its own entry, for example
+`entries."Family tables".text = "{families}";` with an `after` edge; the blocks,
+columns and phrases below stay available for exactly that. The module check
+`capability-skill` renders the shipped default and fails on a table row, a
+family-table heading or sizing essay, or a missing capability path.
 
 `skill.columns.<families|pools|techniques>` set header text, order and presence
 keyed by column. A disabled column drops its header and cells; an enabled key
@@ -150,22 +173,23 @@ its cells are empty when a family has no pool guidance.
 (`{technique}`, `{modelArg}`, `{model}`), `"Model pattern"` (`{match}`),
 `"Pool binding"` and `"Manual pool hint"` (`{pool}`), `"Pool window"`
 (`{limit}`, `{unit}`, `{resetDay}`), `"Family table heading"` (`{tier}`),
-`"Technique table heading"` and `"Manual delegate heading"` (`{harness}`).
-`"Launch fallback"`, `"Manual delegate note"`, `"OpenCode Go note"`,
-`"Pool measured"`, `"Pool unmeasured"` and `"Pool reader missing"` take none. A
-disabled phrase renders nothing; a phrase the renderer reads but cannot find
-fails naming it. The families block emits "OpenCode Go note" after the family
-tables only when a Go family renders. Disabling the Family tables entry also
-drops that note.
+`"Technique notes heading"`, `"Technique table heading"` and
+`"Manual delegate heading"` (`{harness}`). `"Launch fallback"`,
+`"Manual delegate note"`, `"OpenCode Go note"`, `"Pool measured"`,
+`"Pool unmeasured"` and `"Pool reader missing"` take none. A disabled phrase
+renders nothing; a phrase the renderer reads but cannot find fails naming it.
+The families block emits "OpenCode Go note" after the family tables only when a
+Go family renders, so it appears only where a consumer entry uses `{families}`.
 
-Shipped entries and columns carry `after` edges to every predecessor, so
-disabling any one keeps the rest in order. For example, this replaces one
-paragraph and drops one column:
+Shipped entries carry `after` edges to every predecessor, so disabling any one
+keeps the rest in order. Column settings apply to a consumer's table entries.
+For example, this replaces one paragraph and drops one column of a consumer
+`{families}` entry:
 
 ```nix
 ai.programs.delegate-routing.skill = {
   columns.families.Orchestration.enable = false;
-  entries."Technique availability".text = "Check your tool list first.";
+  entries."Technique notes".text = "Check your tool list first.\n\n{techniqueNotes}";
 };
 ```
 
@@ -197,11 +221,11 @@ corresponding vendor families in their delegate-routing configuration.
 catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
 (`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
 get no preset. They come from per-model research, and every tier is provisional:
-whenever an `opencode-go` family renders, one line under the tables says so.
-Each family is named `go-` plus the exact Go id, except
-`go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research found
-share a role. The `go-` prefix keeps them apart from hand-written families such
-as `kimi-k3`. Presets render only when a runtime selects them, for example
+whenever a consumer `{families}` block renders an `opencode-go` family, one line
+under the tables says so. Each family is named `go-` plus the exact Go id,
+except `go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research
+found share a role. The `go-` prefix keeps them apart from hand-written families
+such as `kimi-k3`. Presets render only when a runtime selects them, for example
 `models = [{vendors = ["opencode-go"];}]`; a tier-only selector picks them up
 like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
 field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
@@ -274,15 +298,16 @@ disable a node.
 The private `lib/routing-view.nix` owns automatic and manual reach selection,
 eligible technique ordering, concrete model ids versus unresolved patterns,
 generated agent availability and pool bindings. `lib/render.nix` consumes those
-records for Launch cells and the Pools table; it keeps skill phrases and table
-formatting. The view reuses `select-families.nix` and takes the module's
-effective techniques, including the Kiro workflow gate, and its already resolved
-Claude agent records so proxy picker ids and family default effort remain
-available. Direct builders retain catalog resolution when no resolved agent set
-is supplied. Its reader inventory resolves every registered pool independently
-of launch targets, including readers whose runtime is absent from both automatic
-and manual reaches. Manual reaches stay separate from automatic candidates; this
-view is private implementation data, not a public manifest or option.
+records for the optional pool, family and technique blocks; it keeps skill
+phrases and table formatting. The view reuses `select-families.nix` and takes
+the module's effective techniques, including the Kiro workflow gate, and its
+already resolved Claude agent records so proxy picker ids and family default
+effort remain available. Direct builders retain catalog resolution when no
+resolved agent set is supplied. Its reader inventory resolves every registered
+pool independently of launch targets, including readers whose runtime is absent
+from both automatic and manual reaches. Manual reaches stay separate from
+automatic candidates; this view is private implementation data, not a public
+manifest or option.
 
 ### Generated Claude agent files
 
@@ -314,12 +339,12 @@ There is no separate file enable option. Set
 withhold both files and the route. The effective technique is also disabled when
 the Claude runtime or its delegate-routing program is off.
 
-`runsOwnSubagents` fills the technique table's "Runs own subagents" column,
-which "Choose execution" points readers at. It is a hand-declared string,
-`"unknown"` by default; a shipped value names the mode it was seen in, such as
-`"supported (headless)"`, and a one-line comment in `lib/techniques.nix` cites
-the map row and case id that executed it. Change a value only with a map row
-behind it.
+`runsOwnSubagents` fills the technique notes' "runs own subagents" fact and a
+consumer technique table's "Runs own subagents" column. It is a hand-declared
+string, `"unknown"` by default; a shipped value names the mode it was seen in,
+such as `"supported (headless)"`, and a one-line comment in `lib/techniques.nix`
+cites the map row and case id that executed it. Change a value only with a map
+row behind it.
 
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
@@ -332,8 +357,9 @@ turn. Shared table rendering escapes cells once.
 ### Pools
 
 A pool is a budget shared by model reaches. It is not a runtime.
-`pools.<name>.description` describes it in the skill's Pools table, before the
-family tiers. The drain rule reads this table to find the budgets and readers.
+`pools.<name>.description` describes it in the `{pools}` block of a consumer
+entry; the shipped skill has no Pools table. The helper reads the budgets and
+readers from its manifest.
 
 Set `usage.runtime` and `usage.technique` to read a measured pool through an
 existing technique. The runtime must be enabled. The technique must be enabled,
@@ -355,9 +381,9 @@ fail evaluation. Two accounts for one family on one harness are out of scope;
 route and instance reaches are not represented.
 
 The pool registry and family bindings default to `{}`. A consumer with one
-vendor and one harness writes nothing extra. Without pools, the family tables
-still render an empty Pool column. The package does not infer budgets from
-vendors or add account names to its defaults.
+vendor and one harness writes nothing extra. Without pools, a consumer's
+`{families}` table still renders an empty Pool column. The package does not
+infer budgets from vendors or add account names to its defaults.
 
 ### Deterministic routing helper
 
@@ -913,17 +939,19 @@ with `not exposed` for missing fields. Harness differences live in its
 `HARNESSES` table; assertions in its `ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
-skill read one table. Same-runtime nested children ARE logged in and can run and
-spend inside the 600 s process-group cap; no PATH shim blocks them. Results are
-`PASS`, `FAIL` or `ERROR`; only `ERROR` (no answer, a leak, or the routing skill
-missing from the startup record) fails the run.
+skill read the same technique configuration. Same-runtime nested children ARE
+logged in and can run and spend inside the 600 s process-group cap; no PATH shim
+blocks them. Results are `PASS`, `FAIL` or `ERROR`; only `ERROR` (no answer, a
+leak, or the routing skill missing from the startup record) fails the run.
 
 The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch
 plan with no harness and no login. Its `cases` passthru is the runner's fixture
 export. It also runs the offline source-attribution and event-schema regressions
-in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for
-reminder comparisons, the isolation recipe, the caps and the operator steps.
+in `eval/test_suite.py`. The separate module check `capability-skill` rejects
+full tables and missing capability paths in the shipped skill. Neither check
+starts a session. See `eval/README.md` for reminder comparisons, the isolation
+recipe, the caps and the operator steps.
 
 ## Delegate map
 

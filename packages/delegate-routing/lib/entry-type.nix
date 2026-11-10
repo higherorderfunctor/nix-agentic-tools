@@ -73,7 +73,7 @@ in {
           entries = lib.mkOption {
             type = lib.types.attrsOf stepType;
             default = {};
-            description = "Ordered body of the skill; text may use the {routing}, {workflows}, {pools}, {families}, {techniques} and {manual} placeholders, and an entry whose placeholder renders nothing is omitted.";
+            description = "Ordered body of the skill; text may use the {routing}, {workflows}, {helper}, {pools}, {families}, {techniques}, {techniqueNotes} and {manual} placeholders, and an entry whose placeholder renders nothing is omitted.";
           };
           phrases = lib.mkOption {
             type = lib.types.attrsOf phraseType;

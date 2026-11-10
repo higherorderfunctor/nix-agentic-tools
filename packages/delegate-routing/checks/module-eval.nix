@@ -8,7 +8,7 @@
 }: let
   inherit (harness) evalDevenv evalHm mkTest setEnable;
   runtimes = ["claude" "codex" "kimchi" "kiro"];
-  scenario.ai = {
+  shipped.ai = {
     claude.enable = true;
     codex.enable = true;
     kimchi = {
@@ -37,6 +37,30 @@
             tiers = ["strong" "small"];
           }
         ];
+      };
+    };
+  };
+  # The shipped skill carries no full tables. Consumers can still compose them,
+  # so the scenario every renderer check reads adds the table entries as
+  # custom ones; `shipped` stays the unmodified default.
+  scenario = lib.recursiveUpdate shipped {
+    ai.programs.delegate-routing.skill.entries = {
+      "Family tables" = {
+        after = ["Pools"];
+        text = "{families}";
+      };
+      "Manual-only external delegates".after = ["Technique tables"];
+      Pools = {
+        after = ["Routing helper"];
+        text = "## Pools\n\n{pools}";
+      };
+      "Technique availability" = {
+        after = ["Family tables"];
+        text = "FIXTURE TECHNIQUE AVAILABILITY";
+      };
+      "Technique tables" = {
+        after = ["Technique availability"];
+        text = "{techniques}";
       };
     };
   };
@@ -782,7 +806,7 @@
       lib.all (text: hasProse text stub || throw "missing router policy: ${text}") [
         "invoke the absolute `delegate-routing-plan` command rendered in this runtime's skill"
         "Use its decision as canonical"
-        "run the Reader of every pool in the Pools table"
+        "run the Reader of every registered pool"
         "worst-window pace"
         "a monthly pool is paced against its month, not the week"
         "minimum remaining share across applicable windows is strictly more than a fifth"
@@ -814,23 +838,22 @@
         && hasProse "Try the shared avoided-family fallback before reporting a loop failure" text
         && lib.all (needle: hasProse needle text) [
           "never step down a tier"
-          "non-null role effort overrides"
+          "Resolve each candidate's base effort from a non-null role override"
           "defaultEffort"
           "minimal < low < medium < high < xhigh < max"
-          "`[]` explicitly attests effort omission support"
+          "Observed `efforts: []` explicitly certifies omission support"
           "resolvedEffort"
           "launchEffort"
-          "A role whose first pick is a fallback prints one notice:"
+          "A role whose first pick is a fallback prints"
           "WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user."
-          "Failed Readers and dropped windows print failure warnings ending with \"Report this failure to the user.\""
+          "Failed Readers and dropped windows print warnings ending \"Report this failure to the user.\""
           "fresh separate agents with neutral briefs"
           "After a failed launch, rerun"
         ]
         && lib.all (launch: hasProse launch text || throw "missing ${runtime} review fallback: ${launch}") [
-          "Agent calls that name a generated agent"
-          "Workflow tool's agent"
-          "`claude -p`"
-          "`codex exec`"
+          "runs its own subagents"
+          "tools that pin model and effort"
+          "a subagent call, a workflow agent call or an external launcher"
         ])
       runtimes
     );
@@ -1769,12 +1792,9 @@
       && techniqueCells claude "Agent" == ["`Agent`" "subagent" "true" "true" "interactive+headless"]
       && lib.hasInfix "**models (introspect):** `kimchi --list-models`" kimchi
       && !(lib.hasInfix "(usage)" kimchi)
-      && lib.hasInfix "### kimchi techniques" claude
+      && lib.hasInfix "### kimchi technique notes" claude
       && lib.hasInfix "kimchi -p --mode json --no-session --model <id> --thinking <level>" claude
       && !(lib.hasInfix "`/workflow`" claude)
-      && hasProse "comparing version numbers segment by segment (6.1 > 6 > 5.6)" claude
-      && hasProse "Use a technique only if it appears in your tool list" claude
-      && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
       && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
       && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
       && lib.hasInfix "| Runs own subagents" claude
@@ -1786,7 +1806,7 @@
       && failsWith manualMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
       && passes manualManaged
       && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readSkill manualManaged "claude")
-      && lib.hasInfix "### kiro techniques" (readSkill manualManaged "claude")
+      && lib.hasInfix "### kiro technique notes" (readSkill manualManaged "claude")
       && passes manualOverlap
       && readSkill manualOverlap "claude" == readSkill manualManaged "claude"
       && failsWith extraProgramDisabledKiroMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
@@ -2045,29 +2065,91 @@
         && lib.hasInfix "PORTABLE FIRST STEP" codexRule
         && !(lib.hasInfix "CLAUDE MIDDLE STEP" codexRule)
     );
+    # Rejects a shipped skill that still carries a full family, pool or
+    # technique table, sizing and availability essays, or a
+    # capability path (subagents, static workflow, dynamic workflow) that is
+    # missing or tied to one runtime. `shipped` is the unmodified default.
+    "module-delegate-routing-${name}-capability-skill" = mkTest "delegate-routing-${name}-capability-skill" (
+      let
+        defaults = evaluate shipped;
+        isTableRule = line: lib.hasPrefix "| " line && lib.hasInfix " | " line;
+        stale = [
+          "## Pools"
+          "## delegate sizing"
+          "Each row is a family"
+          "Use a technique only if it appears in your tool list"
+          "### frontier"
+          "### claude techniques"
+        ];
+        capability = [
+          "**Native subagents only:** you invoke the helper, then bind the returned fixed technique, model and effort in each subagent call."
+          "a planner delegate returns the plan and the caller that launches the workflow builds it from that plan with fixed values."
+          "the planner reruns the helper between steps and fixes every dispatch's values from that fresh result."
+          "use a technique only when it is in your tool list or its command is on PATH"
+          "rerun the helper before every launch (each subagent call or new workflow)"
+          "A static workflow's picks stay fixed for that run and the next launch reruns the helper."
+          "A saved plan is not permission to skip the helper"
+          "An unknown non-null proposer is refused; missing or null proposer identity skips the picker."
+          "An unknown or headless context cannot certify an external launch."
+          "Get exact configured family names from the helper's invalid-request errors, which list the allowed names"
+          "returned candidates' `launch.family`; on Claude, generated agent file names are the family names."
+          "Pass every model the introspection lists and its supported efforts as observed techniques"
+          "required `nonInteractive` (true, false or null)"
+          "Off-scale observed efforts such as ultra or off are ignored."
+          "Unavailable: <reason>."
+          "listing every problem and allowed values"
+          "Each candidate in the helper's JSON stdout carries `launch` with `guidance` (command, modelArg, notes) and `agent`."
+        ];
+        # Native binding notes and facts the orchestrator needs, as list lines
+        # (no table): each runtime's own notes, introspection and pins.
+        techniqueFacts = {
+          claude = ["### claude technique notes" "- `Agent with generated agent file` (subagent; interactive+headless; pins model; pins effort; runs own subagents:" "subagent_type" "read the Agent tool's `model` enum"];
+          codex = ["### codex technique notes" "fork_turns" "read efforts from `.supported_reasoning_levels`" "pins model; pins effort"];
+          kimchi = ["### kimchi technique notes" "--list-models" "always pass `thinking` explicitly"];
+          kiro = ["### kiro technique notes" "--list-models"];
+        };
+        sound = runtime: let
+          text = readSkill defaults runtime;
+        in
+          !(lib.any isTableRule (lib.splitString "\n" text))
+          && !(lib.any (needle: hasProse needle text) stale)
+          && lib.all (needle: hasProse needle text || throw "missing ${runtime} capability text: ${needle}") capability
+          && lib.all (needle: hasProse needle text || throw "missing ${runtime} technique note: ${needle}") techniqueFacts.${runtime};
+        # The same text for every runtime: a runtime-named branch would differ.
+        capabilitySection = runtime: builtins.head (lib.splitString "A non-interactive or external delegate" (builtins.elemAt (lib.splitString "Choose the launch path by what this session shows" (readSkill defaults runtime)) 1));
+      in
+        passes defaults
+        && lib.all sound runtimes
+        && lib.all (runtime: capabilitySection runtime == capabilitySection "claude") runtimes
+        # Wrong: the fixture's added table entries must still render, so a
+        # renderer that dropped the blocks outright is caught here.
+        && lib.any isTableRule (lib.splitString "\n" claude)
+    );
     "module-delegate-routing-${name}-skill-entry-override" = mkTest "delegate-routing-${name}-skill-entry-override" (
       let
         overridden = change {
           ai.programs.delegate-routing = {
             runtimes.claude.skill.phrases."Model pattern".text = "newest `{match}`";
-            skill.entries."Technique availability".text = "CUSTOM TECHNIQUE AVAILABILITY";
           };
         };
-        text = readSkill overridden "claude";
-        beforeCustom = builtins.head (lib.splitString "CUSTOM TECHNIQUE AVAILABILITY" text);
-        afterCustom = builtins.elemAt (lib.splitString "CUSTOM TECHNIQUE AVAILABILITY" text) 1;
+        text = readSkill (changeOn shipped {
+          ai.programs.delegate-routing.skill.entries."Technique notes".text = "CUSTOM TECHNIQUE NOTES\n\n{techniqueNotes}";
+        }) "claude";
+        beforeCustom = builtins.head (lib.splitString "CUSTOM TECHNIQUE NOTES" text);
+        afterCustom = builtins.elemAt (lib.splitString "CUSTOM TECHNIQUE NOTES" text) 1;
       in
         # Fails if the renderer keeps the literal and ignores the entry (old
         # text stays, custom text absent), if an override drops the shipped
-        # `after` edges (custom text leaves its position between the family
-        # tables and the technique tables), or if a runtime phrase leaks to
+        # `after` edges (custom text leaves its position between the helper
+        # and the manual delegates), or if a runtime phrase leaks to
         # other runtimes (codex loses "the highest id matching").
-        lib.hasInfix "CUSTOM TECHNIQUE AVAILABILITY" text
-        && !(lib.hasInfix "Use a technique only if it appears" text)
-        && lib.hasInfix "### small" beforeCustom
-        && lib.hasInfix "### claude techniques" afterCustom
-        && !(lib.hasInfix "### small" afterCustom)
-        && lib.hasInfix "newest `claude-opus-*`" text
+        lib.hasInfix "CUSTOM TECHNIQUE NOTES" text
+        && !(lib.hasInfix "## Technique notes" text)
+        && lib.hasInfix "## Routing helper" beforeCustom
+        && lib.hasInfix "## manual-only external delegates" afterCustom
+        && !(lib.hasInfix "## Routing helper" afterCustom)
+        && lib.hasInfix "### claude technique notes" afterCustom
+        && lib.hasInfix "newest `claude-opus-*`" (readSkill overridden "claude")
         && lib.hasInfix "the highest id matching" (readSkill overridden "codex")
         && !(lib.hasInfix "newest `" (readSkill overridden "codex"))
     );
@@ -2076,7 +2158,7 @@
         disabledEntries = change {
           ai.programs.delegate-routing.skill = {
             columns.families.Orchestration.enable = false;
-            entries."Delegate sizing".enable = false;
+            entries."Routing helper".enable = false;
           };
         };
         text = readSkill disabledEntries "claude";
@@ -2084,12 +2166,12 @@
         headerCells = lib.filter (cell: cell != "") (map lib.trim (lib.splitString "|" header));
         positionOf = needle: builtins.stringLength (builtins.head (lib.splitString needle text));
       in
-        # Fails if enable is ignored (sizing paragraph or column stays), if
+        # Fails if enable is ignored (helper section or column stays), if
         # disabling an entry loses the order of later entries (workflows, tiers and
         # technique tables change order), or if a disabled column keeps its
         # cells (the opus row still says "default orchestrator").
-        !(lib.hasInfix "## delegate sizing" text)
-        && !(lib.hasInfix "Each row is a family" text)
+        !(lib.hasInfix "## Routing helper" text)
+        && !(lib.hasInfix "Write a closed `--launch-context` JSON file" text)
         && positionOf "## Common workflows" < positionOf "### frontier"
         && positionOf "### frontier" < positionOf "### claude techniques"
         && headerCells == ["Family" "Use for" "Avoid for" "Effort (delegate)" "Pool" "Launch"]
@@ -2152,15 +2234,24 @@ in {
       # exercises the null-resolution path the shipped skills take: without
       # resolvedAgentFiles the library resolves the live catalog itself, so the
       # shipped pin is asserted by family prefix only, while the example id
-      # keeps the explicit pin hand-written.
+      # keeps the explicit pin hand-written. The assertions read the Launch
+      # column, which only a family-table entry renders, so every skill here
+      # adds one; `plain` is the unmodified shipped skill.
       module-delegate-routing-builder-override = let
         content = (evalHm scenario).config.ai.internal.roots.delegate-routing-content;
-        base = content.passthru.mkSkill {runtime = "claude";};
+        withFamilies = skill:
+          lib.recursiveUpdate skill {entries."Family tables" = skill.entries."Routing helper" // {text = "{families}";};};
+        plain = content.passthru.mkSkill {runtime = "claude";};
+        base = content.passthru.mkSkill {
+          runtime = "claude";
+          skill = withFamilies content.passthru.skill;
+        };
         overridden = base.override (prev: {
           skill = lib.recursiveUpdate prev.skill {phrases."Launch fallback".text = ", or ";};
         });
         fallback = content.passthru.mkSkill {
           runtime = "claude";
+          skill = withFamilies content.passthru.skill;
           families = lib.recursiveUpdate content.passthru.families {
             anthropic.opus.example.claude = "proxy-opus-123";
           };
@@ -2170,7 +2261,8 @@ in {
           lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, or `claude -p`" overridden.text
           && !(lib.hasInfix ", else `claude -p`" overridden.text)
           && lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p`" base.text
-          && base.text == content.passthru.skills.claude.text
+          && plain.text == content.passthru.skills.claude.text
+          && !(lib.hasInfix "| Family" plain.text)
           && lib.hasInfix "generated agent file pinning `claude-opus-" base.text
           && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `proxy-opus-123`, else `Workflow` with full model id `proxy-opus-123`, else `claude -p` with full model id `proxy-opus-123`" fallback.text
         );

@@ -1,24 +1,25 @@
 For finder, first-check, second-check and judge, use the rendered
-`delegate-routing-plan` command with caller-qualified family and observed launch
-evidence. It enforces the strong/frontier floor before pool ranking; never step
-down a tier. Try the shared avoided-family fallback before reporting a loop
-failure if no qualified route remains. A tier pass does not establish task fit,
-trial eligibility or cross-maker independence; provider-vendor identity is
-provisional for aggregator routes. Honor those exclusions before launch.
+`delegate-routing-plan` command with observed techniques in its launch context.
+It enforces the strong/frontier floor before pool ranking; never step down a
+tier. Try the shared avoided-family fallback before reporting a loop failure if
+no qualified route remains. A tier pass does not establish task fit, trial
+eligibility or cross-maker independence; provider-vendor identity is provisional
+for aggregator routes. Honor those exclusions before launch.
 
 Review every change with all three checks below, each in a fresh context. The
 first check, the second check and the judge each put the writer family in their
 role's `avoid` list. Use different models for the two checks where possible.
 Report disagreements only. Hand the whole review as one job to a delegate on a
-runtime that runs its own subagents (the technique table's "Runs own subagents"
-column), such as `codex exec` for work Claude wrote. It runs all three checks
-itself, mixing models, and returns each issue's outcome with evidence. When no
-such runtime is reachable, split the roles from this session through tools that
-pin model and effort: Agent calls that name a generated agent file, the Workflow
-tool's agent call, or an external launcher (`claude -p`, `codex exec`). An
-avoided-family fallback still uses a fresh separate evaluator, never
-self-evaluation; disclose its fallback metadata and launch effort. If no
-qualified route survives shared fallback, report a loop failure.
+runtime that runs its own subagents (the rendered technique notes' "runs own
+subagents" fact), ideally one whose models are not the writer's family. If that
+fact is unknown, probe it in the intended launcher before relying on it. It runs
+all three checks itself, mixing models, and returns each issue's outcome with
+evidence. When no such runtime is reachable, split the roles from this session
+through any tools that pin model and effort, whether a subagent call, a workflow
+agent call or an external launcher. An avoided-family fallback still uses a
+fresh separate evaluator, never self-evaluation; disclose its fallback metadata
+and launch effort. If no qualified route survives shared fallback, report a loop
+failure.
 
 One exception, on any forge (GitHub pull requests, GitLab merge requests or
 others): a change inside a stack of pull or merge requests, a unit of a branch
