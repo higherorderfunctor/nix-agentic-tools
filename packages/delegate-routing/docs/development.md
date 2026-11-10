@@ -398,12 +398,14 @@ The helper validates the whole request before any Reader or picker runs and
 reports every problem at once, schema-style:
 `{"path": "launchContext.roles.writer.effort", "message": "unknown effort; allowed: minimal, low, ..."}`.
 Paths cover `argv` (arguments, including unknown `--role` values),
-`launchContext` (allowed keys, role names, efforts from the manifest's
-`effortLevels`, configured family names for `proposerFamily`, `avoid` and
-`exclude`, the `taskSummary` byte limit, a required `nonInteractive`, technique
-evidence by index) and `manifest`. A `manifest.` error is marked as a
-configuration fault, not caller-fixable. Malformed JSON reports `launchContext`
-or `manifest` with the file, line and column. On any error the helper prints
+`launchContext` (allowed keys, role names, `roles.<role>.effort` checked against
+the manifest's `effortLevels` (observed technique efforts are unrestricted;
+off-scale values such as `ultra` or `off` are ignored), configured family names
+for `proposerFamily`, `avoid` and `exclude`, the `taskSummary` byte limit, a
+required `nonInteractive`, technique evidence by index) and `manifest`. A
+`manifest.` error is marked as a configuration fault, not caller-fixable.
+Malformed JSON reports `launchContext` or `manifest` with the file, line and
+column. On any error the helper prints
 `{"status": "invalid-request", "errors": [...]}` on stdout, one
 `delegate-routing-plan: <path>: <message>` line per error on stderr, and
 exits 2.

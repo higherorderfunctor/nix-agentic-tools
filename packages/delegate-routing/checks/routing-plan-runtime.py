@@ -289,6 +289,32 @@ class Routing(unittest.TestCase):
             document = refused([])
             self.assertEqual([e["path"] for e in document["errors"]], ["manifest.sessionPool", "launchContext"])
 
+    def test_cli_malformed_manifest_and_bad_flags_report_every_schema_fault(self):
+        # Wrong: a non-object manifest is matched as a string, a reader entry without
+        # its keys is a traceback, or a bad --now hides the context's own faults.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            (root / "context.json").write_text(json.dumps(context()))
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "writer"]
+
+            def refused(config, extra=()):
+                (root / "manifest.json").write_text(json.dumps(config))
+                proc = subprocess.run(command + list(extra), capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertNotIn("Traceback", proc.stderr)
+                return [e["path"] for e in json.loads(proc.stdout)["errors"]]
+            self.assertEqual(refused("routes, readers"), ["manifest"])
+            self.assertEqual(refused([]), ["manifest"])
+            config = manifest()
+            config["readers"] = [{}]
+            self.assertEqual(refused(config), ["manifest.readers[0].command", "manifest.readers[0].name"])
+            config["readers"] = [{"command": "x"}, "outside"]
+            self.assertEqual(refused(config), ["manifest.readers[0].name", "manifest.readers[1]"])
+            config["readers"] = {"name": "outside"}
+            self.assertEqual(refused(config), ["manifest.readers"])
+            (root / "context.json").write_text(json.dumps({"taskSummary": "ok"}))
+            self.assertEqual(refused(manifest(), ["--now", "garbage"]), ["launchContext.nonInteractive", "launchContext.techniques", "launchContext.roles", "argv.--now"])
+
     def test_cli_invalid_request_is_json_on_stdout_and_exit_two(self):
         # Wrong: schema errors surface as a traceback or bare stderr text, run a
         # Reader, or leave stdout unparseable for the orchestrator.
@@ -337,7 +363,10 @@ class Routing(unittest.TestCase):
             for _ in range(200):
                 try:
                     os.kill(child, 0)
-                except ProcessLookupError:
+                    # A killed child that nobody has reaped yet still answers signal 0.
+                    if Path(f"/proc/{child}/stat").read_text().rpartition(")")[2].split()[0] == "Z":
+                        break
+                except (FileNotFoundError, ProcessLookupError):
                     break
                 time.sleep(0.01)
             else:

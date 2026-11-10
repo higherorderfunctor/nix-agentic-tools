@@ -483,10 +483,27 @@ def request_errors(manifest, context, roles):
     for index, role in enumerate(roles):
         named(f"argv.role[{index}]", role, role_names, "role")
     if manifest is not None:
+        if not isinstance(manifest, dict):
+            refuse("manifest", f"{CONFIGURATION_FAULT}must be an object")
+            return errors
         missing = [key for key in MANIFEST_KEYS if key not in manifest]
         for key in missing:
             refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}required key is missing")
         if missing:
+            return errors
+        readers = manifest["readers"]
+        if not isinstance(readers, list):
+            refuse("manifest.readers", f"{CONFIGURATION_FAULT}must be a list")
+            return errors
+        for index, reader in enumerate(readers):
+            if not isinstance(reader, dict):
+                refuse(f"manifest.readers[{index}]", f"{CONFIGURATION_FAULT}must be an object")
+                continue
+            if "command" not in reader:
+                refuse(f"manifest.readers[{index}].command", f"{CONFIGURATION_FAULT}required key is missing; null marks a pool with no reader")
+            if not isinstance(reader.get("name"), str) or not reader["name"].strip():
+                refuse(f"manifest.readers[{index}].name", f"{CONFIGURATION_FAULT}must be a non-empty string")
+        if errors and any(error["path"].startswith("manifest.readers") for error in errors):
             return errors
         pool_names = sorted(reader["name"] for reader in manifest["readers"])
         session = manifest["sessionPool"]
@@ -819,7 +836,12 @@ def main():
         except ValueError as error:
             now_errors = [{"path": "argv.--now", "message": f"{args.now}: {error}"}]
     if manifest_errors or context_errors or saved_errors or now_errors:
-        return invalid_request(request_errors(None if manifest_errors else manifest, None, args.role) + now_errors + saved_errors + manifest_errors + context_errors)
+        loaded = not manifest_errors
+        try:
+            found = request_errors(manifest if loaded else None, context if loaded and not context_errors else None, args.role)
+        except (AttributeError, KeyError, TypeError, ValueError) as error:
+            found = [{"path": "manifest", "message": f"{CONFIGURATION_FAULT}{error!r}"}]
+        return invalid_request(found + now_errors + saved_errors + manifest_errors + context_errors)
     try:
         result = plan(manifest, context, args.role, now, args.reader_shell)
         if args.check_plan:
