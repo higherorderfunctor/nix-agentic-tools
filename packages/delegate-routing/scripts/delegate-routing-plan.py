@@ -636,10 +636,10 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     pools = collect(manifest["readers"], now, shell, run)
     warnings = ["provider-vendor identity is provisional; trial/maker independence remain caller assessments"] + pool_diagnostics(manifest["readers"], pools)
     # A Reader scope matches an exact family name in that pool, not a model glob.
-    # Include manual routes so warnings describe configuration, not availability.
+    # Known names span all runtimes; limits stay keyed by pool and family.
+    families = set(manifest["familyNames"])
     family_paces, invalid_families = {}, set()
     for name, pool in pools.items():
-        families = {route["family"]["name"] for route in manifest["routes"] + manifest["manualRoutes"] if route["pool"] == name}
         for window, pace in pool.get("scopedPaces", {}).items():
             scope = window.split(":", 1)[1]
             error = pool.get("scopedErrors", {}).get(window)

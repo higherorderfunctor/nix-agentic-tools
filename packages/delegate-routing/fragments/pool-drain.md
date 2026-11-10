@@ -15,32 +15,33 @@ minimum valid share of zero proves exhaustion even with bad pace or another
 unreadable share: buffer and pace are zero and the pool remains measured.
 Otherwise at least one usable unscoped window is required; readable shares
 survive even when the pool remains unmeasured. A scoped window
-`<window>:<model>` matches an exact configured family name in that pool and
-limits only that family's candidates: their effective pace is the worse of the
-pool pace and scoped paces, and 0% excludes only that family. A consistent idle
-window (0% used, 100% remaining), scoped or unscoped, adds no limit regardless
-of its reset value; other unscoped windows determine pool pace and buffer. An
-all-idle pool has full buffer and pace 1.0 as a finite full-window baseline;
-malformed scoped windows warn and refuse only their named family without failing
-the pool. Unknown scopes warn with the window name without failing the pool.
-Retry non-zero Reader exits and timeouts once after two seconds, sharing that
-retry across identical commands; do not retry zero-exit invalid JSON or
-envelopes. Execution failures, repeated timeouts or non-zero exits, invalid
-JSON, invalid envelopes and ambiguous accounts make their registered pools
-unreachable for this invocation; they never supply fit-only routes. A Reader
-failure does not establish inference endpoint availability. Report each failed
-shared command's registration group once per snapshot with a safe reason, never
-Reader stderr, command text or exception payloads. JSON includes all warnings;
-stderr includes failure warnings and the fallback notice; advisory notes stay
-JSON-only. Every failed-Reader or dropped-window WARNING ends in "Report this
-failure to the user." Missing registered commands, unbound routes and valid
-envelopes without usable unscoped windows remain budget-unmeasured; an empty
-valid window map is unmeasured. Apply exhaustion, scoped refusals and session
-buffer exclusions before measured preference and session pace comparison. Apply
-measured preference within each avoid partition. With no selectable measured
-candidate, use fit alone and report budget/session uncertainty. If no reachable
-choice survives, retain exclusions and report a loop failure with empty
-candidates and a non-zero exit. Never treat exhaustion as unmeasured.
+`<window>:<model>` matches an exact family name configured for any runtime and
+limits only that family's candidates in that pool: their effective pace is the
+worse of the pool pace and scoped paces, and 0% excludes only that family. A
+consistent idle window (0% used, 100% remaining), scoped or unscoped, adds no
+limit regardless of its reset value; other unscoped windows determine pool pace
+and buffer. An all-idle pool has full buffer and pace 1.0 as a finite
+full-window baseline; malformed scoped windows warn and refuse only their named
+family without failing the pool. Unknown scopes warn with the window name
+without failing the pool. Retry non-zero Reader exits and timeouts once after
+two seconds, sharing that retry across identical commands; do not retry
+zero-exit invalid JSON or envelopes. Execution failures, repeated timeouts or
+non-zero exits, invalid JSON, invalid envelopes and ambiguous accounts make
+their registered pools unreachable for this invocation; they never supply
+fit-only routes. A Reader failure does not establish inference endpoint
+availability. Report each failed shared command's registration group once per
+snapshot with a safe reason, never Reader stderr, command text or exception
+payloads. JSON includes all warnings; stderr includes failure warnings and the
+fallback notice; advisory notes stay JSON-only. Every failed-Reader or
+dropped-window WARNING ends in "Report this failure to the user." Missing
+registered commands, unbound routes and valid envelopes without usable unscoped
+windows remain budget-unmeasured; an empty valid window map is unmeasured. Apply
+exhaustion, scoped refusals and session buffer exclusions before measured
+preference and session pace comparison. Apply measured preference within each
+avoid partition. With no selectable measured candidate, use fit alone and report
+budget/session uncertainty. If no reachable choice survives, retain exclusions
+and report a loop failure with empty candidates and a non-zero exit. Never treat
+exhaustion as unmeasured.
 
 The configured session pool drains last: select a candidate only when every
 other fitting measured pool is behind or level in pace (comparing effective

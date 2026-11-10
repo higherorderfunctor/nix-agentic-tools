@@ -1074,14 +1074,17 @@ class Routing(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config = manifest()
+            config["familyNames"].append("fable")
             for reader in config["readers"]:
-                reader["command"] = shlex.join(["printf", "%s", stream()])
+                reader["command"] = shlex.join(["printf", "%s", stream({"7d:fable": window(0, 604800, "2026-11-18T12:00:00Z"), "monthly": window()})])
             (root / "manifest.json").write_text(json.dumps(config))
             (root / "context.json").write_text(json.dumps(context()))
             proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer", "--now", NOW.isoformat()], capture_output=True, text=True)
             result = json.loads(proc.stdout)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertIn("provider-vendor identity is provisional; trial/maker independence remain caller assessments", result["warnings"])
+            self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.9375)])
+            self.assertNotIn("matches no configured family", proc.stderr)
             self.assertEqual(proc.stderr.splitlines(), [helper.PICKER_WARNING] + [item["line"] for item in result["roles"]["writer"]["candidates"]])
 
     def test_cli_degradation_uses_json_warnings(self):
@@ -1243,6 +1246,21 @@ class Routing(unittest.TestCase):
         config["sessionPool"] = None
         result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
+
+    def test_scope_configured_only_for_another_runtime(self):
+        # Wrong: runtime-local routes define known names, or an unrelated scope
+        # exhausts this runtime's candidates instead of matching pool and family.
+        config = manifest()
+        config["familyNames"].append("fable")
+        for scope, expected in [
+            ("fable", []),
+            ("unknown-model", ["WARNING: outside: scoped window 7d:unknown-model matches no configured family. Report this failure to the user."]),
+        ]:
+            with self.subTest(scope=scope):
+                result, _ = self.run_plan(config, outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), f"7d:{scope}": window(0, 604800, "2026-11-18T12:00:00Z")})})
+                self.assertEqual(result["pools"]["outside"]["status"], "measured")
+                self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.34)])
+                self.assertEqual([item for item in result["warnings"] if "matches no configured family" in item], expected)
 
     def test_unknown_scope_warns_without_failing_pool(self):
         # Wrong: silently ignoring a scope, or failing its otherwise valid pool.
