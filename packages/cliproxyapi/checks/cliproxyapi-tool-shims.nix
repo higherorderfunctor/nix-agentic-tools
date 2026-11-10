@@ -16,8 +16,8 @@
       src = pkgs.applyPatches {
         name = "cliproxyapi-tool-shims-source";
         inherit (shipped) src;
-        patches = [./ci-timing.patch];
         patchFlags = ["-p1" "--fuzz=0"];
+        patches = [./ci-timing.patch];
       };
     };
 in {
