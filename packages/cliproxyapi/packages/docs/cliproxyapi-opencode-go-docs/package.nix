@@ -5,8 +5,8 @@
   ...
 }: let
   snapshotDate = "2026-11-10";
-  contentHash = "sha256-KY5OWpPWSbeWosjzj+K8UExIFteV06cCl9wAQQt/2Ys=";
-  hash = "sha256-CxniqlBxt+2lLRWE5zNgdG1Shzu3LXd2NQHK17QG9iQ=";
+  contentHash = "sha256-63Q8zIq7gHzwPoHY3f7LxZWPRY2zWH+XYpG6l/J1klc=";
+  hash = "sha256-PUnE6GfwX8Iwwqtu1EfwAOyw7Ji7JqaL1cjOs7DbZoA=";
   python = pkgs.python3.withPackages (packages: [packages.markdown-it-py]);
 in
   (webDocsLib {inherit pkgs;}).mkSnapshot {
