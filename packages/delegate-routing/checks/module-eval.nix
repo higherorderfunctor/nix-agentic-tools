@@ -55,7 +55,8 @@
     kimchi = readSkill result "kimchi";
     kiro = readSkill result "kiro";
     stub = result.config.ai.claude.rules.delegate-routing-router.text;
-    change = config: evaluate (lib.recursiveUpdate scenario config);
+    changeOn = base: config: evaluate (lib.recursiveUpdate base config);
+    change = changeOn scenario;
     skill = config: readSkill (change config) "claude";
     passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
     failsWith = evaluation: option: lib.any (item: !item.assertion && lib.hasInfix option item.message) evaluation.config.assertions;
@@ -66,7 +67,7 @@
     # Rendering indents continuation lines and the formatter re-wraps them, so
     # prose is matched with every whitespace run collapsed to one space.
     hasProse = needle: text: lib.hasInfix needle (lib.concatStringsSep " " (builtins.filter (part: builtins.isString part && part != "") (builtins.split "[[:space:]]+" text)));
-    native = change {ai.programs.delegate-routing.runtimes.claude.extraRuntimes = [];};
+    native = fixedChange {ai.programs.delegate-routing.runtimes.claude.extraRuntimes = [];};
     nativeClaude = readSkill native "claude";
     disabled = evaluate {
       ai.programs.delegate-routing.enable = true;
@@ -415,6 +416,56 @@
         else evaluation.config.ai.${runtime}.environmentVariables
       );
     usageEmpty = extra: lib.all (runtime: usageVars (usage extra) runtime == {}) ["claude" "codex"];
+    # The fixed model catalog behind every catalog-sensitive assertion: one
+    # CLIProxyAPI test instance whose credential models reach the agent-file
+    # resolver as picker rows beside the live extracted list.
+    catalogInstance = models: {
+      backend = "cliproxyapi";
+      url = "http://127.0.0.1:8317";
+      clients.reader = {
+        key = redact.file "/run/secrets/client";
+        credentials = [
+          {
+            name = "test";
+            inherit models;
+          }
+        ];
+      };
+    };
+    # Hand-written catalog: four versions each for fable and opus, plus a
+    # stray id no family matches.
+    fixedCatalogModels = [
+      "test-fable-5-1"
+      "test-fable-5-10"
+      "test-fable-5-2"
+      "test-fable-5-9"
+      "test-opus-5-1"
+      "test-opus-5-10"
+      "test-opus-5-2"
+      "test-opus-5-9"
+      "test-stray-9-9"
+    ];
+    # Both match patterns are disjoint from the live extracted list, so this
+    # catalog alone decides the pinned ids and a newer released model cannot
+    # change what the checks expect. The expected pins ending 5-10 catch a
+    # descending pick (5-1), a lexical pick (5-9), and a pattern-blind pick
+    # (the stray id sorts above every family id under either compare).
+    fixedScenario = lib.recursiveUpdate scenario {
+      ai = {
+        internal.inferenceInstances.test = catalogInstance fixedCatalogModels;
+        claude.settings.inference = {
+          instance = "test";
+          clientKey = "reader";
+        };
+        programs.delegate-routing.families = {
+          anthropic.fable.match = "test-fable-*";
+          anthropic.opus.match = "test-opus-*";
+        };
+      };
+    };
+    fixedResult = evaluate fixedScenario;
+    fixedChange = changeOn fixedScenario;
+    fixedSkill = config: readSkill (fixedChange config) "claude";
     poolConfig = {
       families.anthropic.opus.pools = {
         claude = "measured";
@@ -448,9 +499,10 @@
       resetDay = 1;
       unit = "credits";
     };
-    poolResult = change {ai.programs.delegate-routing = poolConfig;};
+    poolResult = fixedChange {ai.programs.delegate-routing = poolConfig;};
     poolSkill = readSkill poolResult "claude";
     poolChange = settings: change {ai.programs.delegate-routing = lib.recursiveUpdate poolConfig settings;};
+    fixedPoolChange = settings: fixedChange {ai.programs.delegate-routing = lib.recursiveUpdate poolConfig settings;};
     # Print the actual diagnostic as evidence that rejection names the bad key.
     poolFailsWith = evaluation: expected: let
       failures = lib.filter (item: !item.assertion && lib.hasInfix expected item.message) evaluation.config.assertions;
@@ -460,7 +512,7 @@
       poolFailsWith (poolChange settings) "pools.measured.usage.technique: reference an enabled usage technique with a non-empty command.";
     poolWindowFails = window:
       !(builtins.tryEval (builtins.deepSeq (poolChange {pools.configured.window = window;}).config.ai.programs.delegate-routing.pools true)).success;
-    routingFixture = poolChange {
+    routingFixture = fixedPoolChange {
       pools.outside.usage = {
         runtime = "kimchi";
         technique = "outside-reader";
@@ -481,6 +533,7 @@
     routingArgs = let
       portable = routingFixture.config.ai.programs.delegate-routing;
       selection = import ../lib/select-families.nix {inherit lib;};
+      agentFiles = import ../lib/agent-files.nix {inherit lib;};
     in {
       inherit lib;
       inherit (portable) families pools;
@@ -488,6 +541,13 @@
       models = lib.mapAttrs (_: settings: settings.models) portable.runtimes;
       runtime = "claude";
       techniques = selection.effectiveTechniques routingFixture.config;
+      # Mirror the module's id pool rather than the library's live-only
+      # fallback: the extracted catalog plus the fixture catalog the instance
+      # publishes as picker rows, so fixture families resolve in the view.
+      resolvedAgentFiles =
+        agentFiles.resolve
+        (agentFiles.facts.models ++ fixedCatalogModels)
+        (selection.select portable.families portable.runtimes.claude.models);
     };
     routingView = import ../lib/routing-view.nix routingArgs;
     sessionPools = {
@@ -720,7 +780,8 @@
           routingView.routes;
         resolved = import ../lib/routing-view.nix (routingArgs
           // {
-            # A module-supplied picker resolution must beat catalog fallback.
+            # A module-supplied picker resolution must beat the
+            # catalog-derived one.
             resolvedAgentFiles.opus = {
               family.defaultEffort = "high";
               id = "proxy-opus-123";
@@ -780,7 +841,7 @@
           value = "test-flash-*";
         }
         && lib.hasInfix "claude: `claude -p` with full model id the highest id matching `test-flash-*`" text
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `claude -p`" text
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p`" text
         && !(lib.hasInfix "`Workflow`" text)
         && !(lib.hasInfix "via kiro:" text)
         && hasProse "| outside | `read-outside --current` | measured |" text
@@ -792,7 +853,8 @@
           };
         }
     );
-    # Fails on lexical ordering, catalog-only resolution, missing pins, or a
+    # Fails on wrong version ordering, resolution that ignores the configured
+    # model catalog or the family pattern, a missing default-effort pin, or a
     # route advertised when its family has no delivered agent file.
     "module-delegate-routing-${name}-agent-files" = mkTest "delegate-routing-${name}-agent-files" (
       let
@@ -815,19 +877,7 @@
         runtimeOff = change {ai.claude.enable = lib.mkForce false;};
         picker = change {
           ai = {
-            internal.inferenceInstances.test = {
-              backend = "cliproxyapi";
-              url = "http://127.0.0.1:8317";
-              clients.reader = {
-                key = redact.file "/run/secrets/client";
-                credentials = [
-                  {
-                    name = "test";
-                    models = ["glm-5.3"];
-                  }
-                ];
-              };
-            };
+            internal.inferenceInstances.test = catalogInstance ["glm-5.3"];
             claude.settings.inference = {
               instance = "test";
               clientKey = "reader";
@@ -847,15 +897,17 @@
         && ownSubagents claude "Agent with generated agent file" == "supported (headless)"
         && lib.hasInfix "delegate-routing is the skill that authorizes setting effort" claude
         && lib.hasInfix "existing lower-precedence fallback, not a launch route" claude
-        && lib.hasInfix "model: \"claude-opus-5-5\"" agents.opus
+        # Live ids prove each shipped family still resolves (the existence
+        # assertion above); only pins the catalog cannot change stay on them.
         && lib.hasInfix "effort: \"medium\"" agents.opus
         && lib.hasInfix "name: \"opus\"" agents.opus
-        && lib.hasInfix "model: \"claude-fable-5-1\"" agents.fable
-        && lib.hasInfix "effort: \"medium\"" agents.fable
-        && lib.hasInfix "model: \"claude-sonnet-5-5\"" agents.sonnet
         && lib.hasInfix "effort: \"medium\"" agents.sonnet
-        && lib.hasInfix "model: \"claude-haiku-5-5\"" agents.haiku
         && !(lib.hasInfix "effort:" agents.haiku)
+        # The fixed catalog owns every id fable and opus can match, so their
+        # pinned ids and the family's default effort are asserted exactly.
+        && lib.hasInfix "model: \"test-fable-5-10\"" fixedResult.config.ai.claude.agents.fable
+        && lib.hasInfix "effort: \"medium\"" fixedResult.config.ai.claude.agents.fable
+        && lib.hasInfix "model: \"test-opus-5-10\"" fixedResult.config.ai.claude.agents.opus
         && lib.hasInfix "model: \"claude-opus-4.6\"" example.config.ai.claude.agents.opus
         # Numeric segment order: 10 > 9, 5-1 > 5, 6.1 > 6 > 5.6, and zero-padded
         # dated segments compare as numbers instead of aborting.
@@ -959,7 +1011,7 @@
     "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
       poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown pool `missing`"
       && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown: `unknown` is not a runtime"
-      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`; via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill (poolChange {families.anthropic.opus.pools.claude = null;}) "claude")
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`; via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" (readSkill (fixedPoolChange {families.anthropic.opus.pools.claude = null;}) "claude")
     );
     "module-delegate-routing-${name}-pools-empty" = mkTest "delegate-routing-${name}-pools-empty" (
       result.config.ai.programs.delegate-routing.pools
@@ -1018,11 +1070,11 @@
         && lib.hasInfix "| configured | none | configured: 12.500000 units per month, resets day 28; current use unknown | |" text
         && lib.hasInfix "| measured | `read-pool --current` | measured | SHARED \\| BUDGET DESCRIPTION |" text
         && lib.hasInfix "**pool-reader (usage):** `read-pool --current`" text
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" text
-        && lib.hasInfix "- opus (anthropic) `claude-opus-*`: `kiro-cli chat` with model_id the highest id matching `claude-opus-*` (pool measured)" text
-        && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `claude-opus-*`, else `codex exec` with slug the highest id matching `claude-opus-*` (pool configured)" (readSkill poolResult "codex")
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" text
+        && lib.hasInfix "- opus (anthropic) `test-opus-*`: `kiro-cli chat` with model_id the highest id matching `test-opus-*` (pool measured)" text
+        && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `test-opus-*`, else `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" (readSkill poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
-        && withoutHelperPath (readSkill (poolChange {pools.measured.window = window;}) "claude") == withoutHelperPath poolSkill
+        && withoutHelperPath (readSkill (fixedPoolChange {pools.measured.window = window;}) "claude") == withoutHelperPath poolSkill
         && ruleText poolResult == stub
         && poolResult.config.ai.programs.delegate-routing.pools.configured.description == ""
         && poolResult.config.ai.programs.delegate-routing.pools.configured.usage == null
@@ -1056,7 +1108,7 @@
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
       passes result
       && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]
-      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`" nativeClaude
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`" nativeClaude
       && !(lib.hasInfix "(openai)" nativeClaude)
       && lib.all (family: lib.hasInfix "${family} (openai)" claude) ["astra" "luna" "sol" "terra"]
       && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-sol`" claude
@@ -1076,8 +1128,8 @@
     # technique pinning model and effort is refused too.
     "module-delegate-routing-${name}-launch-routes" = mkTest "delegate-routing-${name}-launch-routes" (
       let
-        noWorkflow = skill {ai.programs.delegate-routing.runtimes.claude.techniques.Workflow.enable = false;};
-        withExample = skill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
+        noWorkflow = fixedSkill {ai.programs.delegate-routing.runtimes.claude.techniques.Workflow.enable = false;};
+        withExample = fixedSkill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
         glm = skill {
           ai.programs.delegate-routing = {
             families.zhipu.glm = {
@@ -1096,16 +1148,16 @@
           };
         };
       in
-        lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p` with full model id the highest id matching `claude-opus-*`" nativeClaude
+        lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`" nativeClaude
         && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `gpt-*-astra`, else `codex exec` with slug the highest id matching `gpt-*-astra`" codex
         && !(lib.hasInfix "claude: `Agent`" nativeClaude)
         && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-astra`" claude
         && !(lib.hasInfix "via codex: `spawn_agent`" claude)
         && lib.hasInfix "kiro: `kiro-cli chat` with model_id the highest id matching `claude-opus-*`" kiro
         && lib.hasInfix "kimchi: `Agent` with `--list-models` id the highest id matching `test-flash-*`" kimchi
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `claude -p` with full model id the highest id matching `claude-opus-*`" noWorkflow
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p` with full model id the highest id matching `test-opus-*`" noWorkflow
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-4.6`, else `Workflow` with full model id `claude-opus-4.6`" withExample
-        && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-5-5`, else `Workflow` with full model id the highest id matching `claude-opus-*`" withExample)
+        && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`" withExample)
         && lib.hasInfix "glm (zhipu) `glm-*`" glm
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`, else `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
         && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
