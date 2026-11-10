@@ -82,11 +82,22 @@
     },
     "client_cert": {
       "default": "",
-      "description": "Path to a client certificate (PEM) used for mutual TLS authentication.",
+      "description": "Path to a client certificate used for mutual TLS authentication. Use a PEM or DER\ncertificate with client_key, or a PKCS#12 bundle (.p12, .pfx) and leave client_key unset.",
       "envVars": ["GLAB_CLIENT_CERT", "CLIENT_CERT"],
       "fallback": false,
       "keyring": false,
       "name": "client_cert",
+      "scope": "per-host",
+      "type": "string",
+      "userSettable": true
+    },
+    "client_cert_password": {
+      "default": "",
+      "description": "Password that decrypts a PKCS#12 client_cert. Stored in the operating system's\nkeyring when use_keyring is true.",
+      "envVars": ["GLAB_CLIENT_CERT_PASSWORD"],
+      "fallback": false,
+      "keyring": true,
+      "name": "client_cert_password",
       "scope": "per-host",
       "type": "string",
       "userSettable": true
@@ -104,7 +115,7 @@
     },
     "client_key": {
       "default": "",
-      "description": "Path to the private key (PEM) that matches client_cert.",
+      "description": "Path to the private key (PEM or DER, in PKCS#8, PKCS#1, or EC format) that matches client_cert.\nLeave unset when client_cert is a PKCS#12 bundle.",
       "envVars": ["GLAB_CLIENT_KEY", "CLIENT_KEY"],
       "fallback": false,
       "keyring": false,
@@ -471,7 +482,7 @@
     "proxy": {
       "default": "",
       "description": "Custom proxy for this host. Overrides environment proxy settings when set.",
-      "envVars": ["GLAB_PROXY", "PROXY"],
+      "envVars": ["GLAB_PROXY"],
       "fallback": false,
       "keyring": false,
       "name": "proxy",
