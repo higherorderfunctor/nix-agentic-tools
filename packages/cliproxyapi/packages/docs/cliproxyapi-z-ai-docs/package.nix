@@ -4,9 +4,9 @@
   webDocsLib,
   ...
 }: let
-  snapshotDate = "2026-10-30";
-  contentHash = "sha256-XPS5LFRYqqy9htDxhfiuqObZbjwFvoIaXkpBWlhAXSU=";
-  hash = "sha256-lCaKJQ/wSbQG3ghXOECXXQwLPZZkxbkjP0D7MebIK6o=";
+  snapshotDate = "2026-11-10";
+  contentHash = "sha256-thRFWjbZ4LdT55WBPZz0evT2pWOChvP4vlg6DeSdzpA=";
+  hash = "sha256-/py51yZcTAgYuCMHXeiRg+htJtu2aaDapBf6010zT/E=";
   python = pkgs.python3.withPackages (packages: [packages.markdown-it-py]);
 in
   (webDocsLib {inherit pkgs;}).mkSnapshot {
