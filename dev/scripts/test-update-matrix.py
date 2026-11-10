@@ -999,7 +999,8 @@ with open(os.environ['NIX_CALLS'], 'a') as f: f.write(json.dumps(args) + '\\n')
 mode = os.environ.get('NIX_MODE', '')
 if args[:1] == ['eval']:
     joined = ' '.join(args)
-    if 'builtins.currentSystem' in joined: print('x86_64-linux')
+    if 'builtins.concatMap (s: s.sidecars)' in joined: pass
+    elif args[-2:] == ['--expr', 'builtins.currentSystem']: print('x86_64-linux')
     elif 'builtins.attrNames' in joined:
         print(json.dumps(['alpha', 'beta'] if mode == 'input-partial' else ['oxlint'] if mode.startswith('input-') else ['demo']))
     elif 'updateTargets.demo.file' in joined: print('packages/demo/package.nix')
@@ -1054,6 +1055,7 @@ if args[:1] == ['run']:
     ]}))
     raise SystemExit(0)
 if args[:1] == ['fmt']: raise SystemExit(0)
+if args[:1] == ['build'] and '--expr' in args: raise SystemExit(0)
 if args[:1] == ['build']: raise SystemExit(23 if mode == 'package-red' else 0)
 raise SystemExit(f'unhandled nix fixture arguments: {args}')
 """,
