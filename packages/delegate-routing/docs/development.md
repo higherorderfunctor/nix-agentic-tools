@@ -434,15 +434,15 @@ lists.
 `{technique, model, effort}` tuples. Claude defaults to `claude -p` / the sonnet
 family's model (the resolved id of the generated sonnet agent file, which
 honours an `example.claude` override) / medium, Codex to `codex exec` /
-`gpt-6.1-sol` / medium; Kimchi and Kiro default to empty lists. An inherited
-entry is omitted when its model has no selected family/reach or resolved id, or
-its known launch technique is disabled or unavailable; explicit entries keep
-their literal model and retain strict validation. Module and direct-builder
-defaults use the same routing-view resolver, including builder overrides. The
-view resolves exact models against configured family patterns and refuses
-duplicate tuples, unresolved models, invalid efforts or techniques without
-enabled external reach, model/effort pinning and a nonempty picker command.
-Direct `mkSkill` callers receive the same manifest field.
+`gpt-6.1-sol` / medium (Sol, never Luna); Kimchi and Kiro default to empty
+lists. An inherited entry is omitted when its model has no selected family/reach
+or resolved id, or its known launch technique is disabled or unavailable;
+explicit entries keep their literal model and retain strict validation. Module
+and direct-builder defaults use the same routing-view resolver, including
+builder overrides. The view resolves exact models against configured family
+patterns and refuses duplicate tuples, unresolved models, invalid efforts or
+techniques without enabled external reach, model/effort pinning and a nonempty
+picker command. Direct `mkSkill` callers receive the same manifest field.
 
 Technique-owned `pickerCommand` templates carry enforceable tool removal;
 `toolFree` defaults false and is true only with source or offline provider
@@ -452,9 +452,21 @@ disabled slash commands emitted `tools: []` while retaining normal auth/provider
 settings. The native `--settings '{"disableAllHooks":true}'` overlay disabled
 the ordinary settings hook canary; the positive control ran it. Picker commands
 retain normal credential/provider settings instead of clearing setting sources.
-Codex's proposed feature switches do not establish complete tool removal, so its
-shipped entry stays configured but unavailable. Consumers must prove equivalent
-controls before enabling a template.
+Codex's feature switches alone leave code-mode `exec` and `wait` registered, so
+its picker command also names a per-call model catalog, `<catalog-file>`. The
+helper writes it in the call's temporary directory (deleted after) from the
+picked model's live entry in `${CODEX_HOME:-$HOME/.codex}/models_cache.json`,
+with `tool_mode` direct, `shell_type` disabled, no `apply_patch`, no
+experimental tools, no multi-agent and no search tool, and runs Codex from that
+directory. Offline codex-cli 0.167.0 captures against a fake Responses provider
+sent no `tools` key and no tool item. A missing or unreadable cache, or a cache
+without the model, makes that entry unavailable and the helper's warning names
+the reason; the helper never runs Codex on a guessed catalog. One live
+ChatGPT-authenticated run, capturing its request, is still owed: image
+generation, connectors and plugin suggestions depend on real auth and are only
+disabled, not observed. The fake-provider test needs the real `codex` binary and
+the shipped command in `CODEX_PICKER_COMMAND`, so it skips in the Nix sandbox;
+the catalog and warning tests always run.
 
 Readers and hard eligibility run before judgment. A picker runs when its family
 is not the proposer, its pool and scopes allow it, and the first word of its
@@ -475,8 +487,9 @@ subprocess may run with `nonInteractive: true`.
 When identity is absent/null, no entry is runnable, or all entries fail, report
 exactly
 `WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user.`
-and use hard-eligible tier/pool routes. Picker failure alone does not erase
-routes.
+(followed by ` Unavailable: <reason>.` for each entry the helper could not build
+from local state, such as a Codex model missing from its models cache) and use
+hard-eligible tier/pool routes. Picker failure alone does not erase routes.
 
 Observed `efforts: []` always means launch without effort, regardless of role
 request, family default or avoidance. JSON keeps effort null; canonical lines
@@ -526,7 +539,7 @@ From this package directory, run the offline runtime suite with its explicit
 fixture input:
 
 ```bash
-python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json
+python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json
 ```
 
 It exercises fake Readers and hand-written expectations, including a subprocess

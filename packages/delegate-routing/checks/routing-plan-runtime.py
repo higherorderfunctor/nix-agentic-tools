@@ -1,6 +1,8 @@
 """Offline, literal routing expectations: no catalogs, live readers or launches."""
 # cspell:ignore hihg pidfile rescanned sool
 from copy import deepcopy
+import gzip
+import http.server
 import importlib.util
 import json
 import os
@@ -11,12 +13,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import call, patch
 
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
+CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
 spec = importlib.util.spec_from_file_location("routing_plan", SOURCE)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
@@ -367,6 +371,87 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "run_picker", side_effect=AssertionError("absent executable ran")):
             result, _ = self.run_plan(config, ctx)
         self.assertIn(helper.PICKER_WARNING, result["warnings"])
+
+    def codex_home(self, models=None):
+        """A scratch CODEX_HOME seeded from the fixture cache, with OPENAI* and CODEX* variables scrubbed."""
+        directory = tempfile.TemporaryDirectory(prefix="routing-codex-home-")
+        self.addCleanup(directory.cleanup)
+        cache = json.loads(CODEX_CACHE.read_text())
+        cache["models"] = cache["models"] if models is None else models
+        (Path(directory.name) / "models_cache.json").write_text(json.dumps(cache))
+        scrubbed = {key: value for key, value in os.environ.items() if not key.startswith(("CODEX", "OPENAI"))}
+        return patch.dict(os.environ, scrubbed | {"CODEX_HOME": directory.name}, clear=True)
+
+    def test_codex_picker_catalog_is_the_picked_model_with_every_tool_removed(self):
+        # Wrong: the catalog keeps another model, keeps the live tool mode, shell,
+        # apply_patch, clock, multi-agent or search settings, or drops other fields.
+        live = json.loads(CODEX_CACHE.read_text())["models"][0]
+        other = dict(live, slug="gpt-6-luna")
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "cp <catalog-file> <output-file>"}
+        with self.codex_home([other, live]):
+            raw = helper.run_picker(entry, {}, SHELL)
+        self.assertEqual(live["tool_mode"], "code_mode_only")
+        expected = dict(live, tool_mode="direct", shell_type="disabled", apply_patch_tool_type=None, experimental_supported_tools=[], multi_agent_version=None, supports_search_tool=False)
+        self.assertEqual(json.loads(raw), {"models": [expected]})
+
+    def test_codex_picker_without_a_catalog_entry_names_why_and_falls_back(self):
+        # Wrong: a missing cache or model entry runs Codex on its default model
+        # info (tools included), or fails with the bare warning and no reason.
+        config, ctx = self.picker_fixture()
+        config["pickerEntries"][0] |= {"command": "cp <catalog-file> <output-file>", "model": "gpt-6-luna"}
+        with self.codex_home():
+            cache = Path(os.environ["CODEX_HOME"]) / "models_cache.json"
+            result, _ = self.run_plan(config, ctx)
+            cache.unlink()
+            missing, _ = self.run_plan(config, ctx)
+        self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6-luna: no entry in Codex models cache {cache}.", result["warnings"])
+        self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6-luna: Codex models cache {cache} unreadable (FileNotFoundError).", missing["warnings"])
+        self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
+
+    @unittest.skipUnless(os.environ.get("CODEX_PICKER_COMMAND") and shutil.which("codex"), "needs the real codex binary and the shipped command in CODEX_PICKER_COMMAND")
+    def test_codex_picker_request_has_no_tools_against_a_fake_provider(self):
+        # Wrong: the shipped command sends a `tools` key or any tool item to the
+        # Responses endpoint (flags alone leave code-mode exec and wait).
+        requests = []
+        reply = self.decisions(("writer", "sol", "keep")).decode()
+
+        class Fake(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"models":[]}')
+
+            def do_POST(self):
+                raw = self.rfile.read(int(self.headers["Content-Length"]))
+                encoding = self.headers.get("Content-Encoding")
+                if encoding == "gzip":
+                    raw = gzip.decompress(raw)
+                elif encoding == "zstd":
+                    raw = subprocess.run(["zstd", "-d", "-q"], input=raw, capture_output=True, check=True).stdout
+                requests.append(json.loads(raw))
+                events = [{"type": "response.created", "response": {"id": "r"}}, {"type": "response.output_item.done", "item": {"type": "message", "role": "assistant", "id": "m", "content": [{"type": "output_text", "text": reply}]}}, {"type": "response.completed", "response": {"id": "r", "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}}]
+                body = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        provider = ['model_provider="probe"', 'model_providers.probe.name="Probe"', f'model_providers.probe.base_url="http://127.0.0.1:{server.server_port}/v1"', 'model_providers.probe.wire_api="responses"', "model_providers.probe.requires_openai_auth=false", "model_providers.probe.supports_websockets=false"]
+        command = os.environ["CODEX_PICKER_COMMAND"].replace("codex exec", "codex exec " + " ".join(f"-c {shlex.quote(item)}" for item in provider), 1)
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": command}
+        with self.codex_home():
+            raw = helper.run_picker(entry, {}, SHELL)
+        self.assertEqual(raw.decode(), reply)
+        self.assertEqual(len(requests), 1)
+        self.assertNotIn("tools", requests[0])
+        self.assertEqual([item for item in requests[0]["input"] if item.get("type") == "additional_tools" or "tool" in item.get("type", "")], [])
 
     def test_picker_is_not_called_without_an_eligible_family(self):
         # Wrong: a model call is spent when no role has a family to judge.

@@ -38,7 +38,7 @@ in {
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        python3 ${./checks/routing-plan-runtime.py} ${./scripts/delegate-routing-plan.py} ${./checks/fixtures/routing-readers.json}
+        python3 ${./checks/routing-plan-runtime.py} ${./scripts/delegate-routing-plan.py} ${./checks/fixtures/routing-readers.json} ${./checks/fixtures/codex-models-cache.json}
         touch "$out"
       '';
     delegate-routing-usage-runtime =

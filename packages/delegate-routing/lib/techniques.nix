@@ -70,15 +70,17 @@ in {
   codex = {
     "codex exec" = {
       command = codexCommand;
-      # Disabling unified_exec alone permits legacy execution. Until the complete
-      # emitted tool set is proven empty, this configured entry must be skipped.
+      # Offline codex-cli 0.167.0 capture: no `tools` key and no tool item reach the
+      # Responses request. Flags alone leave code-mode exec and wait; the helper's
+      # one-model <catalog-file> (tool_mode direct, shell disabled, no apply_patch)
+      # removes them. One live ChatGPT-authenticated check is still owed.
       pickerCommand = {
         command =
           builtins.replaceStrings
           ["<slug>" "<level>" "<out>.md" "--json"]
-          ["<model>" "<effort>" "<output-file>" "--disable unified_exec --disable web_search --disable view_image --disable multi_agent --ignore-user-config --ignore-rules --json"]
+          ["<model>" "<effort>" "<output-file>" ''-c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only -c 'approval_policy="never"' --json'']
           codexCommand;
-        toolFree = false;
+        toolFree = true;
       };
       kind = "external";
       modelArg = "slug";
