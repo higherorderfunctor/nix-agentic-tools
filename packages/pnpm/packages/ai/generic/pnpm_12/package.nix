@@ -94,6 +94,12 @@
           hash = sources.pnpmDepsHash or lib.fakeHash;
           pname = "pnpm-${lib.optionalString bootstrap "bootstrap-"}${finalAttrs.version}";
         };
+        # cargoSetupHook's cargoUseSystemLibs makes the vendored zstd-sys (in
+        # the locks since 12.15) link system zstd; nixpkgs' generic-rust
+        # supplies pkg-config, aws-lc and sqlite but no zstd.
+        buildInputs =
+          (prev.buildInputs or [])
+          ++ [pkgs.zstd];
         nativeBuildInputs =
           (prev.nativeBuildInputs or [])
           ++ [
