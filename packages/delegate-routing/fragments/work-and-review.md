@@ -18,12 +18,13 @@ check, test run or reading settles whether it works. Name the units in the brief
 before the first write; a writer run covers at most one unit and ends at its
 boundary, so the unit's review comes before the next run.
 
-Each unit is reviewed by one check, from a vendor other than the writer's,
-before the next unit starts. Reviews attach to units: no review of the whole
-branch mid-stream. When the units are done, the branch gets one branch-level
-review — all three checks when the PR is going ready, one check in any earlier
-state. A fix that follows any review gets a review sized to the fix: the fix's
-diff plus what it touches, one check, never the whole branch again.
+Each unit is reviewed by one fresh separate check whose role avoids the writer
+family, using the shared fallback when needed, before the next unit starts.
+Reviews attach to units: no review of the whole branch mid-stream. When the
+units are done, the branch gets one branch-level review — all three checks when
+the PR is going ready, one check in any earlier state. A fix that follows any
+review gets a review sized to the fix: the fix's diff plus what it touches, one
+check, never the whole branch again.
 
 Two candidate units merge when neither reads alone: if stating what one does
 needs the other open, they are one unit. Split a candidate that has two readers

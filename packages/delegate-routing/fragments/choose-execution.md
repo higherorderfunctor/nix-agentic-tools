@@ -39,14 +39,16 @@ whose files overlap; use separate worktrees when they need different bases.
 One delegate on a model this runtime can reach goes through the first technique
 in the family table's Launch column for this runtime that is in your tool list;
 Claude's Agent tool with a generated agent file pins the family's full model id
-and default effort, including cross-vendor models published in its picker. Name
-the family with `subagent_type`; a plain Agent call without a file stays
-alias-locked and is not listed. A family without a generated file uses the next
-listed technique, such as the Workflow tool or an external launcher
-(`claude -p`, `codex exec`). Launch delegate CLIs from the current directory.
-That directory decides their permissions and configuration. Say in every
-external launch brief that the delegate is non-interactive and reports to an
-orchestrator, not a person.
+and the family default effort when its agent-file format accepts it, including
+cross-vendor models published in its picker. Bind the canonical launch effort
+explicitly when the file omits it or fallback changes it; intentional null omits
+the actual effort pin. Name the family with `subagent_type`; a plain Agent call
+without a file stays alias-locked and is not listed. A family without a
+generated file uses the next listed technique, such as the Workflow tool or an
+external launcher (`claude -p`, `codex exec`). Launch delegate CLIs from the
+current directory. That directory decides their permissions and configuration.
+Say in every external launch brief that the delegate is non-interactive and
+reports to an orchestrator, not a person.
 
 A non-interactive or external delegate does not launch external delegates. It
 may use its own runtime's native subagent and workflow tools. This limit governs

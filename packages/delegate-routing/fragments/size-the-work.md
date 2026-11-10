@@ -1,15 +1,29 @@
-Pick the model family whose "use for" fits the task and whose "avoid for"
-doesn't. Use the effort its row suggests. When a mid-tier model isn't enough,
-step up the model before the effort. Big models gain little past their first
-effort step. A cheaper model owes the same evidence as an expensive one.
+Pick a model family whose "use for" fits the task and whose "avoid for" does not
+rule it out. Role fit and trial eligibility are separate from budget and effort.
+Quality versus spend is consumer policy; there is no universal cheapest model or
+model-before-effort ordering.
 
-Set model and effort explicitly whenever the tool allows it. A technique that
-does not pin a value inherits it from the session. An interactive session cannot
-reliably know its own model or effort, because `/model` and `/effort` change
-them. So treat an inheriting technique as unsized there. A headless delegate
-inherits the values it was launched with. So state the model and effort in every
-external launch brief. A delegate told its launch values may use an inheriting
-technique when those values match its choice.
+Resolve each candidate's base effort from a non-null role override, otherwise
+its machine `defaultEffort`, for every technique. Consumers can override the
+existing `families.<vendor>.<family>.defaultEffort` option. Sol defaults to
+medium and Go Kimi K3.1 Pro to max; a configured glm can set high (no glm preset
+is shipped). Prose guidance is not a runtime default lookup.
+
+The fixed package scale is `minimal < low < medium < high < xhigh < max`.
+Observed `efforts` is an unordered support set. An avoided-family fallback
+advances the resolved base to the next supported setting, including when the
+base came from an explicit override; at the highest supported setting it stays
+unchanged. Unsupported overrides are refused, never silently lowered. State the
+resolved and launch efforts and disclose fallback metadata.
+
+Observed `efforts: []` explicitly certifies omission support: every candidate
+launches without effort, regardless of its role request, family default or
+avoidance. It does not mean unknown support. Keep JSON effort null and omit the
+actual tool argument, CLI flag and frontmatter pin. Never pass the strings
+`None` or `null`. A technique requiring an effort value is unavailable for that
+candidate. Otherwise set model and resolved launch effort explicitly whenever
+the tool allows it. Unpinned inheritance is unsized unless the delegate's known
+launch values match the canonical selection.
 
 When "Orchestrator session" is enabled, follow its handoff order even for a
 quick look or review. When that entry is disabled, these rules apply instead:

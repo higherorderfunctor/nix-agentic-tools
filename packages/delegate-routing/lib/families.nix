@@ -12,6 +12,7 @@
     };
     haiku = {
       avoidFor = "anything needing judgment; long transcriptions (empty or truncated)";
+      defaultEffort = null;
       effort = "no knob, no thinking";
       match = "claude-haiku-*";
       tier = "small";
@@ -38,6 +39,7 @@
   openai = {
     astra = {
       avoidFor = "ultra (spawns subagents, cost unknown)";
+      defaultEffort = "medium";
       effort = "medium sweet spot, high = operator's config default, xhigh only for named-hard; flat above medium";
       match = "gpt-*-astra";
       orchestration = "reserved for hard work";
@@ -46,6 +48,7 @@
     };
     luna = {
       avoidFor = "long context (vendor-only cliff); spec writing; judging";
+      defaultEffort = "high";
       effort = "medium→high is the best marginal buy in the set (+7 for 2×); no ultra";
       match = "gpt-*-luna";
       tier = "small";
@@ -53,6 +56,7 @@
     };
     sol = {
       avoidFor = "sole grader or judge; ultra";
+      defaultEffort = "medium";
       effort = "medium default, high when the task needs more reasoning";
       match = "gpt-*-sol";
       orchestration = "default orchestrator";
@@ -61,6 +65,7 @@
     };
     terra = {
       avoidFor = "being the default when Sol or Luna is reachable: they beat it on cost at the same quality";
+      defaultEffort = "medium";
       effort = "medium; more effort rarely pays";
       match = "gpt-*-terra";
       tier = "mid";

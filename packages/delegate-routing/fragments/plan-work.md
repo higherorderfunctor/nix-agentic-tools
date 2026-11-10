@@ -3,13 +3,13 @@ a quick fact from named documents, as substantive. Prepare the rubric from the
 task goal as preflight; this does not authorize task-source investigation.
 Before that investigation, use this runtime's rendered helper with
 `--role planner --launch-context <json-path>` to select a reachable, fitted
-strong/frontier planner. Pin its model and effort from a canonical candidate,
-pass the task, source paths, saved rubric and the resolved routing/workflow
-context. Use a native subagent or workflow when non-interactive; if no qualified
-pinned planner is reachable, report a loop failure rather than doing the design
-in the orchestrator. A worker assigned an approved bounded unit does not
-recursively plan that assignment. Replan only the affected portion when scope
-changes.
+strong/frontier planner, trying shared avoided-family fallback before declaring
+no qualified route. Pin its model and effort from a canonical candidate, pass
+the task, source paths, saved rubric and the resolved routing/workflow context.
+Use a native subagent or workflow when non-interactive; if no qualified pinned
+planner is reachable, report a loop failure rather than doing the design in the
+orchestrator. A worker assigned an approved bounded unit does not recursively
+plan that assignment. Replan only the affected portion when scope changes.
 
 The planner runs the actual launching runtime's rendered helper with
 `--launch-context <json-path> --role <worker-role> --role <reviewer-role>`,
@@ -66,9 +66,12 @@ with `validation.status = "valid"` approves only those current specifications;
 the orchestrator must still enforce review/commit barriers and verify receipts.
 Read the returned exclusions and warnings. An all-pools-unmeasured fit-only
 decision remains possible with explicit budget/session uncertainty; an
-unresolved model, effort or technique never becomes an approved launch.
-Manual-only routes stay outside automatic approval; handle an explicit user
-request separately under its authorization.
+unresolved model, unsupported effort or technique never becomes an approved
+launch. Intentional null effort is resolved: preserve JSON null and omit the
+actual effort argument, flag or pin. Preserve canonical fallback metadata with
+each selected launch; current candidate equality validates it without worker
+binding. Manual-only routes stay outside automatic approval; handle an explicit
+user request separately under its authorization.
 
 The saved helper snapshot records provenance and is never an allowlist or proof
 of current pace. Changed launch context or a new usage read requires validation

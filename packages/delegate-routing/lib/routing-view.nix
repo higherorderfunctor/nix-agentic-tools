@@ -11,7 +11,7 @@
   manualExternalDelegates ? [],
 }: let
   selection = import ./select-families.nix {inherit lib;};
-  inherit (import ./vocabulary.nix) delegateKinds;
+  inherit (import ./vocabulary.nix) delegateKinds effortLevels;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
   selected = target: selection.select families models.${target};
   candidates = selection.candidates families models runtimes;
@@ -67,7 +67,8 @@
         };
       };
   in {
-    inherit family target;
+    inherit target;
+    family = {defaultEffort = null;} // family;
     pool = selection.poolFor family target;
     techniques =
       if names == []
@@ -80,7 +81,8 @@
       else map technique names;
   };
 in {
-  inherit candidates runtimes;
+  inherit candidates effortLevels runtimes;
+  familyNames = map (family: family.name) (selection.flatten families);
   routes = lib.concatMap (family:
     map (reach family) (builtins.filter (target: builtins.elem family (selected target)) runtimes))
   candidates;

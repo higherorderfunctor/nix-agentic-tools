@@ -1,0 +1,155 @@
+{
+  "capturedAt": "2026-11-10T00:08:41Z",
+  "normalization": "Only account.auth_index and account.name replaced with stable synthetic strings; all other fields preserved.",
+  "readers": {
+    "anthropic-api": {
+      "account": {
+        "auth_index": "fixture-anthropic-api-auth_index",
+        "name": "fixture-anthropic-api-name",
+        "plan": null
+      },
+      "balances": [],
+      "bonuses": [],
+      "pool": "anthropic-api",
+      "windows": {
+        "monthly": {
+          "remainingPercent": 67.11261335249999,
+          "resetsAt": "2026-12-01T00:00:00Z",
+          "status": "estimated",
+          "usedPercent": 32.88738664750001,
+          "windowSeconds": 2592000
+        }
+      }
+    },
+    "claude": {
+      "account": {
+        "auth_index": "fixture-claude-auth_index",
+        "name": "fixture-claude-name",
+        "plan": null
+      },
+      "balances": [
+        {
+          "expiresAt": null,
+          "kind": "extra_usage",
+          "remaining": 100,
+          "unit": "USD"
+        }
+      ],
+      "bonuses": [],
+      "pool": "claude",
+      "windows": {
+        "7d": {
+          "remainingPercent": 9,
+          "resetsAt": "2026-11-10T13:00:00Z",
+          "status": "critical",
+          "usedPercent": 91.0,
+          "windowSeconds": 604800
+        },
+        "7d:fable": {
+          "remainingPercent": 52,
+          "resetsAt": "2026-11-10T13:00:00Z",
+          "status": "inactive",
+          "usedPercent": 48,
+          "windowSeconds": 604800
+        }
+      }
+    },
+    "codex": {
+      "account": {
+        "auth_index": "fixture-codex-auth_index",
+        "name": "fixture-codex-name",
+        "plan": "pro"
+      },
+      "balances": [
+        {
+          "expiresAt": null,
+          "kind": "credits",
+          "remaining": 62500.0,
+          "unit": "credits"
+        }
+      ],
+      "bonuses": [
+        {
+          "count": 1,
+          "expiresAt": "2026-11-30T20:20:39Z",
+          "kind": "rate_limit_reset"
+        },
+        {
+          "count": 1,
+          "expiresAt": "2026-12-01T22:50:26Z",
+          "kind": "rate_limit_reset"
+        }
+      ],
+      "pool": "codex",
+      "windows": {
+        "7d": {
+          "remainingPercent": 67,
+          "resetsAt": "2026-11-12T13:50:25Z",
+          "status": null,
+          "usedPercent": 33,
+          "windowSeconds": 604800
+        }
+      }
+    },
+    "opencode-go": {
+      "account": {
+        "auth_index": "fixture-opencode-go-auth_index",
+        "name": "fixture-opencode-go-name",
+        "plan": null
+      },
+      "balances": [],
+      "bonuses": [],
+      "pool": "opencode",
+      "windows": {
+        "5h": {
+          "remainingPercent": 100,
+          "resetsAt": "2026-11-10T05:08:43Z",
+          "status": "ok",
+          "usedPercent": 0,
+          "windowSeconds": 18000
+        },
+        "7d": {
+          "remainingPercent": 66,
+          "resetsAt": "2026-11-16T00:00:00Z",
+          "status": "ok",
+          "usedPercent": 34,
+          "windowSeconds": 604800
+        },
+        "monthly": {
+          "remainingPercent": 23,
+          "resetsAt": "2026-11-30T15:25:16Z",
+          "status": "ok",
+          "usedPercent": 77,
+          "windowSeconds": 2678400
+        }
+      }
+    },
+    "z-ai": {
+      "account": {
+        "auth_index": "fixture-z-ai-auth_index",
+        "name": "fixture-z-ai-name",
+        "plan": "max"
+      },
+      "balances": [],
+      "bonuses": [],
+      "pool": "zai",
+      "windows": {
+        "5h": {
+          "remainingPercent": 100,
+          "resetsAt": null,
+          "status": null,
+          "usedPercent": 0,
+          "windowSeconds": 18000
+        },
+        "7d": {
+          "remainingPercent": 60,
+          "resetsAt": "2026-11-14T00:17:30Z",
+          "status": null,
+          "usedPercent": 40,
+          "windowSeconds": 604800
+        }
+      }
+    }
+  },
+  "source": "five successful Reader envelopes captured live on 2026-11-10"
+}
