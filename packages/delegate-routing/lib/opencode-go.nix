@@ -57,13 +57,6 @@
       tier = "mid";
       useFor = "bounded rule reasoning; checkable implementation attempts while free capacity lasts";
     };
-    go-crouton-alpha-free = {
-      avoidFor = "planning or sole judging; confidential inputs (30-day retention); relying on the limited-time free listing";
-      effort = "always reasons; minimal to max, no recommended level published";
-      match = "crouton-alpha-free";
-      tier = "mid";
-      useFor = "provisional: bounded agent subtasks, tool use and document analysis with checks; maker undisclosed";
-    };
     go-deepseek-v4-pro = {
       avoidFor = "image input; sole final judge; trusting April preview scores for the served checkpoint";
       effort = "high default, max for named hard reasoning; best setting untested on Go";
@@ -147,6 +140,13 @@
       match = "longcat-2.0";
       tier = "mid";
       useFor = "provisional: bounded coding help with tests and review";
+    };
+    "go-longcat-2.5-free" = {
+      avoidFor = "provisional: sole judging; unattended long-horizon work; relying on the limited-time free listing; inputs that cannot be hosted in China (Global regions required)";
+      effort = "thinking on or off only; no effort levels advertised by Go";
+      match = "longcat-2.5-free";
+      tier = "mid";
+      useFor = "provisional: bounded coding and tool tasks; visual code investigation with tests and review";
     };
     "go-mimo-v2.6-flash" = {
       avoidFor = "sole final judge; latency-critical work; long unattended tool runs (repetition untested)";
