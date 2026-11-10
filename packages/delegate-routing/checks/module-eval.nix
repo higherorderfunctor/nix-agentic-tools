@@ -725,7 +725,7 @@
             "proposerFamily": "sol",
             "nonInteractive": True,
             "roles": {"writer": {"effort": None}},
-            "techniques": [{"efforts": ["high"], "model": "fixture-model", "runtime": runtime, "technique": technique}, {"efforts": ["medium"], "model": "fixture-model", "runtime": runtime, "technique": "fixture-picker"}],
+            "techniques": [{"efforts": ["high"], "model": "fixture-model", "runtime": runtime, "technique": technique}],
         }))
 
         def check(executable):
@@ -941,12 +941,12 @@
         # instead of overlaying native hook disable with tool controls intact.
         && (lib.head cross).command == ''claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>''
         && (lib.last cross).command == ''codex exec --model <model> --config 'model_reasoning_effort="<effort>"' --disable unified_exec --disable web_search --disable view_image --disable multi_agent --ignore-user-config --ignore-rules --json --output-last-message <output-file> - < <prompt-file>''
-        && lib.hasInfix "--tools \"\" --strict-mcp-config" (lib.head cross).command
-        && lib.hasInfix "--ignore-user-config --ignore-rules" (lib.last cross).command
         && refused [entry entry]
         && refused [(entry // {model = "unknown";})]
         && refused [(entry // {technique = "Workflow";})]
         && refused [(entry // {effort = "invented";})]
+        # Wrong: a glob passes as a model because the family pattern matches its text.
+        && lib.all (model: refused [(entry // {inherit model;})]) ["test-opus-*" "test-opus-?" "test-opus-["]
         && evaluationFails (change {ai.programs.delegate-routing.runtimes.claude.picker.entries = [(entry // {family = "opus";})];})
     );
     "module-delegate-routing-${name}-routing-view" = mkTest "delegate-routing-${name}-routing-view" (

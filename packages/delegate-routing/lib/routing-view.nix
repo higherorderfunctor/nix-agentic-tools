@@ -89,32 +89,28 @@
       builtins.hasAttr entry.technique techniques.${route.target}
       && ((route.family.example.${route.target} or "") == entry.model || builtins.match (agentFiles.pattern route.family.match) entry.model != null))
     routes;
-    target =
-      if builtins.length matches == 1
-      then (lib.head matches).target
-      else runtime;
-    node = techniques.${target}.${entry.technique} or null;
-    valid =
-      node
-      != null
-      && node.enable
+    route = lib.head matches;
+    node = techniques.${route.target}.${entry.technique};
+    # A picker is a one-shot external command that pins model and effort; reach
+    # already refused an empty modelArg for every such technique on a route.
+    usable =
+      node.enable
       && node.launchRoute
       && node.kind == "external"
       && node.pinsModel == true
       && node.pinsEffort == true
-      && lib.trim node.modelArg != ""
-      && node.pickerCommand != null
-      && lib.trim node.pickerCommand.command != "";
+      && node.pickerCommand != null;
+    # One concrete model: a glob would let the pattern match stand in for it.
+    concrete = lib.trim entry.model != "" && !lib.any (char: lib.hasInfix char entry.model) ["*" "?" "["];
   in
-    if !valid || !(builtins.elem entry.effort effortLevels) || lib.trim entry.model == "" || lib.hasInfix "*" entry.model || lib.hasInfix "?" entry.model || lib.hasInfix "[" entry.model || builtins.length matches != 1
+    if builtins.length matches != 1 || !usable || !concrete || !(builtins.elem entry.effort effortLevels)
     then null
     else {
       inherit (entry) effort model technique;
-      runtime = target;
-      inherit (node) modelArg;
+      runtime = route.target;
       inherit (node.pickerCommand) command toolFree;
-      family = (lib.head matches).family.name;
-      inherit (lib.head matches) pool;
+      family = route.family.name;
+      inherit (route) pool;
     };
 in {
   inherit candidates effortLevels runtimes;

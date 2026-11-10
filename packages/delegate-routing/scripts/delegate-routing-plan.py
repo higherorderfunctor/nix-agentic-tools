@@ -9,7 +9,9 @@ import math
 import os
 from pathlib import Path
 import posixpath
+import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -33,6 +35,7 @@ PICKER_PROMPT_LIMIT = 65536
 PICKER_OUTPUT_LIMIT = 65536
 PICKER_TIMEOUT = 90
 PICKER_RETRY_DELAY = 2
+CONFIGURATION_FAULT = "configuration fault, not caller-fixable: "
 PICKER_WARNING = "WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user."
 
 
@@ -47,7 +50,6 @@ def strict_json(raw):
     def invalid(value):
         raise ValueError("non-finite JSON number")
     text = raw.decode("utf-8", errors="strict")
-    text.encode("utf-8", errors="strict")
     def finite_float(value):
         number = float(value)
         if not math.isfinite(number):
@@ -59,15 +61,28 @@ def strict_json(raw):
     return result
 
 
+def picker_decision(item, pairs, found):
+    """Return the item's role/family pair, or raise unless it is one new, well-formed decision."""
+    if not isinstance(item, dict) or set(item) != {"decision", "family", "reason", "role"}:
+        raise ValueError("invalid picker decision")
+    pair, reason = (item["role"], item["family"]), item["reason"]
+    texts = all(isinstance(item[key], str) for key in ("family", "reason", "role"))
+    if not texts or pair not in pairs - found or item["decision"] not in ("keep", "exclude"):
+        raise ValueError("invalid picker decision")
+    if not reason.strip() or len(reason) > 240 or not reason.isprintable():
+        raise ValueError("invalid picker decision")
+    return pair
+
+
 def picker_decisions(raw, pairs):
     value = strict_json(raw)
-    if not isinstance(value, dict) or set(value) != {"decisions", "schemaVersion"} or type(value["schemaVersion"]) is not int or value["schemaVersion"] != 1 or not isinstance(value["decisions"], list):
+    if not isinstance(value, dict) or set(value) != {"decisions", "schemaVersion"}:
+        raise ValueError("invalid picker schema")
+    if type(value["schemaVersion"]) is not int or value["schemaVersion"] != 1 or not isinstance(value["decisions"], list):
         raise ValueError("invalid picker schema")
     found = set()
     for item in value["decisions"]:
-        if not isinstance(item, dict) or set(item) != {"decision", "family", "reason", "role"} or not isinstance(item["family"], str) or not isinstance(item["role"], str) or (item["role"], item["family"]) not in pairs or (item["role"], item["family"]) in found or item["decision"] not in ("keep", "exclude") or not isinstance(item["reason"], str) or not item["reason"].strip() or not 1 <= len(item["reason"]) <= 240 or not item["reason"].isprintable():
-            raise ValueError("invalid picker decision")
-        found.add((item["role"], item["family"]))
+        found.add(picker_decision(item, pairs, found))
     if found != pairs:
         raise ValueError("incomplete picker coverage")
     return value["decisions"]
@@ -96,9 +111,8 @@ def run_picker(entry, payload, shell):
         prompt_path, output_path = Path(directory) / "prompt.json", Path(directory) / "result.json"
         prompt_path.write_bytes(prompt)
         values = {"<effort>": entry["effort"], "<model>": entry["model"], "<output-file>": str(output_path), "<prompt-file>": str(prompt_path)}
-        command = entry["command"]
-        for token, value in values.items():
-            command = command.replace(token, shlex.quote(value))
+        # One pass: a substituted value is never scanned for a later token.
+        command = re.sub("|".join(map(re.escape, values)), lambda token: shlex.quote(values[token.group()]), entry["command"])
         argv = [shell, "-euETo", "pipefail", "-c", "shopt -s inherit_errexit 2>/dev/null || :\n" + command]
         # Discard event streams and diagnostics; only the bounded result file is data.
         with subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True) as process:
@@ -115,6 +129,8 @@ def run_picker(entry, payload, shell):
                 time.sleep(0.01)
             if process.returncode:
                 raise subprocess.CalledProcessError(process.returncode, argv)
+        if not output_path.is_file():
+            raise ValueError("picker wrote no output")
         with output_path.open("rb") as handle:
             raw = handle.read(PICKER_OUTPUT_LIMIT + 1)
         if len(raw) > PICKER_OUTPUT_LIMIT:
@@ -122,9 +138,8 @@ def run_picker(entry, payload, shell):
         return raw
 
 
-def pick(manifest, context, eligible_by_role, pools, family_paces, invalid_families, shell):
-    if context.get("proposerFamily") is None:
-        return None
+def picker_catalog(manifest, eligible_by_role):
+    """One row per role and eligible family: the only guidance the picker sees."""
     catalog = []
     for role, eligible in eligible_by_role.items():
         seen = set()
@@ -134,12 +149,32 @@ def pick(manifest, context, eligible_by_role, pools, family_paces, invalid_famil
                 continue
             seen.add(family["name"])
             catalog.append({key: family[key] for key in ("name", "tier", "useFor", "avoidFor", "defaultEffort")} | {"role": role, "avoided": "fallback" in item["launch"], "effectiveEffort": item["launch"]["effort"]})
+    return catalog
+
+
+def picker_runnable(entry, manifest, context, pools, family_paces, invalid_families):
+    """The picker's own family must be untried, tool-free, in budget and its executable on PATH."""
+    key = (entry["pool"], entry["family"])
+    pool = pools.get(entry["pool"], {})
+    is_session = entry["pool"] is not None and entry["pool"] == manifest["sessionPool"]
+    # Picker commands begin with their executable's bare name; the helper runs the
+    # command itself, so a missing binary is knowable here without caller evidence.
+    executable = entry["command"].split(maxsplit=1)[0]
+    return (
+        entry["toolFree"]
+        and entry["family"] != context["proposerFamily"]
+        and key not in invalid_families
+        and shutil.which(executable) is not None
+        and pool_refusal(pool, family_paces.get(key, pool.get("pace")), is_session) is None
+    )
+
+
+def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, invalid_families, shell):
+    if context.get("proposerFamily") is None:
+        return None
     payload = {"taskSummary": context["taskSummary"], "nonInteractive": context["nonInteractive"], "roles": {role: context["roles"].get(role, {}) for role in eligible_by_role}, "families": catalog}
-    for entry in manifest.get("pickerEntries", []):
-        key = (entry["pool"], entry["family"])
-        pool = pools.get(entry["pool"], {})
-        observed = [item for item in context["techniques"] if item["runtime"] == entry["runtime"] and item["technique"] == entry["technique"] and item["model"] == entry["model"] and entry["effort"] in item["efforts"]]
-        if not entry.get("toolFree", False) or not entry.get("command") or entry["family"] == context["proposerFamily"] or key in invalid_families or not observed or pool_refusal(pool, family_paces.get(key, pool.get("pace")), entry["pool"] is not None and entry["pool"] == manifest["sessionPool"]):
+    for entry in manifest["pickerEntries"]:
+        if not picker_runnable(entry, manifest, context, pools, family_paces, invalid_families):
             continue
         for attempt in range(2):
             try:
@@ -337,6 +372,11 @@ def pool_diagnostics(readers, pools):
     return warnings
 
 
+def model_version(model):
+    """Numeric segments, so 6.10 outranks 6.9; the rule lib/agent-files.nix applies to ids."""
+    return tuple(int(part) for part in re.findall(r"[0-9]+", model))
+
+
 def launch(route, context, requested, avoided, scale):
     alternatives, exclusions = [], []
     for technique in route["techniques"]:
@@ -347,16 +387,20 @@ def launch(route, context, requested, avoided, scale):
         evidence = [item for item in context["techniques"] if item["runtime"] == route["target"] and item["technique"] == name]
         model = technique["model"]
         evidence = [item for item in evidence if isinstance(item["model"], str) and not any(c in item["model"] for c in "*?[") and (fnmatch.fnmatchcase(item["model"], model["value"]) if model["isPattern"] else item["model"] == model["value"])]
+        # Several observed models may match one family; the highest version wins and
+        # equal versions keep the last listed, as lib/agent-files.nix resolveId does.
+        newest = max(reversed(evidence), key=lambda item: model_version(item["model"]), default=None)
+        evidence = [] if newest is None else [newest]
         agent = technique["agent"]
         resolved = requested if requested is not None else route["family"]["defaultEffort"]
         effort = resolved
-        if reason is None and len(evidence) != 1:
-            reason = "concrete model/available technique unresolved or ambiguous"
+        if reason is None and not evidence:
+            reason = "concrete model/available technique unresolved"
         if reason is None and evidence[0]["efforts"] == []:
             effort = None
         if reason is None and (
             (effort is None and evidence[0]["efforts"] != [])
-            or (effort is not None and (effort not in scale or effort not in evidence[0]["efforts"]))
+            or (effort is not None and effort not in evidence[0]["efforts"])
         ):
             reason = "requested/default effort unresolved or unsupported"
         if reason:
@@ -379,36 +423,107 @@ def launch(route, context, requested, avoided, scale):
     return alternatives, exclusions
 
 
+class InvalidRequest(ValueError):
+    """Every problem found in the request, as schema-style path/message records."""
+
+    def __init__(self, errors):
+        super().__init__("; ".join(f"{error['path']}: {error['message']}" for error in errors))
+        self.errors = errors
+
+
+def request_errors(manifest, context, roles):
+    """Collect every refusal in argv roles, manifest and launch context; a context needs its manifest."""
+    errors = []
+
+    def refuse(path, message):
+        errors.append({"path": path, "message": message})
+
+    def allowed(values):
+        return ", ".join(values)
+
+    def closed(path, node, keys):
+        for key in sorted(set(node) - set(keys)):
+            refuse(f"{path}.{key}", f"unknown key; allowed: {allowed(sorted(keys))}")
+
+    def text(path, value):
+        if not isinstance(value, str) or not value.strip():
+            refuse(path, "must be a non-empty string")
+
+    def named(path, value, names, noun):
+        if value not in names:
+            refuse(path, f"unknown {noun}; allowed: {allowed(names)}")
+
+    role_names = sorted(ROLE_TIERS)
+    for index, role in enumerate(roles):
+        named(f"argv.role[{index}]", role, role_names, "role")
+    if manifest is not None:
+        pool_names = sorted(reader["name"] for reader in manifest["readers"])
+        session = manifest["sessionPool"]
+        pool_fault = f"{CONFIGURATION_FAULT}unregistered pool %s; registered: {allowed(pool_names)}"
+        if session is not None and session not in pool_names:
+            refuse("manifest.sessionPool", pool_fault % session)
+        for kind in ("routes", "manualRoutes"):
+            for index, route in enumerate(manifest[kind]):
+                if route["pool"] is not None and route["pool"] not in pool_names:
+                    refuse(f"manifest.{kind}[{index}].pool", pool_fault % route["pool"])
+    if context is None:
+        return errors
+    if not isinstance(context, dict):
+        refuse("launchContext", "must be an object")
+        return errors
+    families, efforts = sorted(manifest["familyNames"]), manifest["effortLevels"]
+    closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
+    summary = context.get("taskSummary")
+    if not isinstance(summary, str) or not summary.strip() or len(summary.encode("utf-8")) > PICKER_PROMPT_LIMIT:
+        refuse("launchContext.taskSummary", f"must be a non-empty string of at most {PICKER_PROMPT_LIMIT} bytes")
+    if "nonInteractive" not in context or type(context["nonInteractive"]) not in (bool, type(None)):
+        refuse("launchContext.nonInteractive", "required; true, false or null")
+    proposer = context.get("proposerFamily")
+    if proposer is not None and (not isinstance(proposer, str) or proposer not in families):
+        refuse("launchContext.proposerFamily", f"unknown family name; allowed: {allowed(families)}")
+    observed = context.get("techniques")
+    if not isinstance(observed, list):
+        refuse("launchContext.techniques", "required; a list of observed techniques")
+    for index, evidence in enumerate(observed if isinstance(observed, list) else []):
+        path = f"launchContext.techniques[{index}]"
+        if not isinstance(evidence, dict):
+            refuse(path, "must be an object")
+            continue
+        closed(path, evidence, {"efforts", "model", "runtime", "technique"})
+        for key in ("model", "runtime", "technique"):
+            text(f"{path}.{key}", evidence.get(key))
+        if not isinstance(evidence.get("efforts"), list):
+            refuse(f"{path}.efforts", "required; a list of efforts, [] when effort is omitted")
+        for position, effort in enumerate(evidence["efforts"] if isinstance(evidence.get("efforts"), list) else []):
+            named(f"{path}.efforts[{position}]", effort, efforts, "effort")
+    requests = context.get("roles")
+    if not isinstance(requests, dict):
+        refuse("launchContext.roles", "required; an object keyed by role")
+    for role, request in (requests if isinstance(requests, dict) else {}).items():
+        path = f"launchContext.roles.{role}"
+        if role not in ROLE_TIERS:
+            refuse(path, f"unknown role; allowed: {allowed(role_names)}")
+        elif not isinstance(request, dict):
+            refuse(path, "must be an object")
+        else:
+            for field in ("avoid", "exclude"):
+                if field not in request:
+                    continue
+                if not isinstance(request[field], list):
+                    refuse(f"{path}.{field}", "must be a list of family names")
+                for position, name in enumerate(request[field] if isinstance(request[field], list) else []):
+                    named(f"{path}.{field}[{position}]", name, families, "family name")
+            if request.get("effort") is not None:
+                named(f"{path}.effort", request["effort"], efforts, "effort")
+            closed(path, request, {"avoid", "effort", "exclude"})
+    return errors
+
+
 def plan(manifest, context, roles, now, shell, run=run_reader):
-    for role in roles:
-        if role not in ROLE_TIERS:
-            raise ValueError(f"unknown role: {role}")
-    pool_names = {reader["name"] for reader in manifest["readers"]}
+    errors = request_errors(manifest, context, roles)
+    if errors:
+        raise InvalidRequest(errors)
     session = manifest["sessionPool"]
-    if session is not None and session not in pool_names:
-        raise ValueError(f"unknown session pool: {session}")
-    for route in manifest["routes"] + manifest["manualRoutes"]:
-        if route["pool"] is not None and route["pool"] not in pool_names:
-            raise ValueError(f"unknown route pool: {route['pool']}")
-    if not isinstance(context, dict) or set(context) - {"taskSummary", "proposerFamily", "nonInteractive", "roles", "techniques"} or not isinstance(context.get("taskSummary"), str) or not context["taskSummary"].strip() or len(context["taskSummary"].encode("utf-8")) > PICKER_PROMPT_LIMIT or type(context.get("nonInteractive")) not in (bool, type(None)):
-        raise ValueError("closed launch context requires bounded taskSummary and nonInteractive")
-    if context.get("proposerFamily") is not None and (not isinstance(context["proposerFamily"], str) or context["proposerFamily"] not in manifest["familyNames"]):
-        raise ValueError("proposerFamily requires an exact configured family name or null")
-    if not isinstance(context.get("techniques"), list) or not isinstance(context.get("roles"), dict):
-        raise ValueError("launch context requires techniques and roles")
-    for evidence in context["techniques"]:
-        if not isinstance(evidence, dict) or not all(isinstance(evidence.get(key), str) and evidence[key].strip() for key in ("runtime", "technique", "model")) or not isinstance(evidence.get("efforts"), list) or not all(isinstance(effort, str) for effort in evidence["efforts"]):
-            raise ValueError("technique evidence requires runtime, technique, concrete model and efforts list")
-    family_names = set(manifest["familyNames"])
-    for role, request in context["roles"].items():
-        if role not in ROLE_TIERS:
-            raise ValueError(f"unknown role: {role}")
-        if not isinstance(request, dict) or set(request) - {"effort", "avoid", "exclude"} or (request.get("effort") is not None and not isinstance(request["effort"], str)):
-            raise ValueError(f"{role}: only effort, avoid and exclude are allowed")
-        for field in ("avoid", "exclude"):
-            values = request.get(field, [])
-            if not isinstance(values, list) or not all(isinstance(value, str) and value in family_names for value in values):
-                raise ValueError(f"{role}: {field} requires a list of exact configured family names")
     pools = collect(manifest["readers"], now, shell, run)
     warnings = ["provider-vendor identity is provisional; trial/maker independence remain caller assessments"] + pool_diagnostics(manifest["readers"], pools)
     # A Reader scope matches an exact family name in that pool, not a model glob.
@@ -463,11 +578,13 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             else:
                 eligible.append(item)
         eligible_by_role[role], excluded_by_role[role] = eligible, excluded
-    judgment = pick(manifest, context, eligible_by_role, pools, family_paces, invalid_families, shell)
-    if judgment is None:
-        warnings.append(PICKER_WARNING)
-    else:
+    # With nothing eligible there is nothing to judge, and no model call to spend.
+    catalog = picker_catalog(manifest, eligible_by_role)
+    judgment = pick(manifest, context, catalog, eligible_by_role, pools, family_paces, invalid_families, shell) if catalog else None
+    if judgment is not None:
         result["picker"] = judgment
+    elif catalog:
+        warnings.append(PICKER_WARNING)
     for role in roles:
         eligible, excluded = eligible_by_role[role], excluded_by_role[role]
         if judgment is not None:
@@ -627,21 +744,52 @@ def check_plan(artifact, current, directory, max_concurrency=10):
     return {"status": "valid", "task": artifact["task"], "units": len(units), "waves": len(waves)}
 
 
+class RoutingParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise ValueError(message)
+
+
+def load_json(path, name, fault=""):
+    """Return (document, errors); a file that cannot be read or parsed is one error at its name."""
+    try:
+        return json.loads(Path(path).read_text()), []
+    except json.JSONDecodeError as error:
+        return None, [{"path": name, "message": f"{fault}{path}: line {error.lineno} col {error.colno}: {error.msg}"}]
+    except (OSError, ValueError) as error:
+        return None, [{"path": name, "message": f"{fault}{path}: {getattr(error, 'strerror', None) or error}"}]
+
+
+def invalid_request(errors):
+    print(json.dumps({"errors": errors, "status": "invalid-request"}))
+    for error in errors:
+        print(f"delegate-routing-plan: {error['path']}: {error['message']}", file=sys.stderr)
+    return 2
+
+
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = RoutingParser(description=__doc__)
     parser.add_argument("--check-plan", help="validate saved JSON and prepared briefs against this invocation")
     parser.add_argument("--max-concurrency", type=int, choices=range(1, 11), default=10, help="explicit host/user cap, at most ten")
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--reader-shell", required=True)
     parser.add_argument("--launch-context", required=True)
-    parser.add_argument("--role", action="append", required=True, choices=sorted(ROLE_TIERS))
+    parser.add_argument("--role", action="append", required=True)
     parser.add_argument("--now", help="fixed UTC evaluation time for offline fixtures")
-    args = parser.parse_args()
     try:
-        result = plan(json.loads(Path(args.manifest).read_text()), json.loads(Path(args.launch_context).read_text()), args.role, utc(args.now) if args.now else datetime.now(timezone.utc), args.reader_shell)
+        args = parser.parse_args()
+    except ValueError as error:
+        return invalid_request([{"path": "argv", "message": str(error)}])
+    manifest, manifest_errors = load_json(args.manifest, "manifest", CONFIGURATION_FAULT)
+    context, context_errors = load_json(args.launch_context, "launchContext")
+    if manifest_errors or context_errors:
+        return invalid_request(request_errors(None, None, args.role) + manifest_errors + context_errors)
+    try:
+        result = plan(manifest, context, args.role, utc(args.now) if args.now else datetime.now(timezone.utc), args.reader_shell)
         if args.check_plan:
             path = Path(args.check_plan).resolve()
             result["validation"] = check_plan(json.loads(path.read_text()), result, path.parent, args.max_concurrency)
+    except InvalidRequest as error:
+        return invalid_request(error.errors)
     except (AttributeError, KeyError, TypeError, ValueError, OSError) as error:
         parser.exit(2, f"delegate-routing-plan: {error}\n")
     print(json.dumps(result, sort_keys=True))

@@ -388,11 +388,30 @@ mechanical, planner, second-check and writer. The routing policy lives in
 [Size the work](../fragments/size-the-work.md).
 
 The closed launch context supplies a bounded nonempty `taskSummary`, optional
-nullable `proposerFamily`, `nonInteractive`, compact `roles` and observed
-`techniques`. Each role accepts only optional `effort`, `avoid` and `exclude`;
-family qualification essays are refused. A known proposer is an exact configured
-family; an unknown non-null name is refused before Readers. Absent or null
-identity skips the picker and warns while preserving tier/pool fallback.
+nullable `proposerFamily`, required `nonInteractive`, compact `roles` and
+observed `techniques`. Each role accepts only optional `effort`, `avoid` and
+`exclude`; family qualification essays are refused. A known proposer is an exact
+configured family; an unknown non-null name is refused before Readers. Absent or
+null identity skips the picker and warns while preserving tier/pool fallback.
+
+The helper validates the whole request before any Reader or picker runs and
+reports every problem at once, schema-style:
+`{"path": "launchContext.roles.writer.effort", "message": "unknown effort; allowed: minimal, low, ..."}`.
+Paths cover `argv` (arguments, including unknown `--role` values),
+`launchContext` (allowed keys, role names, efforts from the manifest's
+`effortLevels`, configured family names for `proposerFamily`, `avoid` and
+`exclude`, the `taskSummary` byte limit, a required `nonInteractive`, technique
+evidence by index) and `manifest`. A `manifest.` error is marked as a
+configuration fault, not caller-fixable. Malformed JSON reports `launchContext`
+or `manifest` with the file, line and column. On any error the helper prints
+`{"status": "invalid-request", "errors": [...]}` on stdout, one
+`delegate-routing-plan: <path>: <message>` line per error on stderr, and
+exits 2.
+
+When several observed models match one family's pattern, the helper launches the
+highest version by the numeric rule generated agent files use (6.10 over 6.9;
+the last listed wins a tie), so callers can pass every model their introspection
+lists.
 
 ```json
 {
@@ -437,16 +456,21 @@ Codex's proposed feature switches do not establish complete tool removal, so its
 shipped entry stays configured but unavailable. Consumers must prove equivalent
 controls before enabling a template.
 
-Readers and hard eligibility run before judgment. The bounded one-shot picker
-sees only eligible role/family guidance and task context. It returns strict
-keep/exclude decisions with exact coverage and safe provenance; only kept
-families enter pool ranking. Commands are technique data, never duplicated in
-Python. Prompt/output limits are 65536 bytes, timeout 90 seconds; transient
-execution failures retry once after two seconds, malformed results advance
-without retry. Duplicate JSON keys, non-finite values, invalid Unicode, extra
-fields/documents and incomplete coverage are refused. Event streams and stderr
-are discarded. The helper's authorized picker subprocess may run with
-`nonInteractive: true`.
+Readers and hard eligibility run before judgment. A picker runs when its family
+is not the proposer, its pool and scopes allow it, and the first word of its
+command is on PATH; the caller does not list it among observed techniques, since
+the helper launches it itself. With no eligible family in any role there is
+nothing to judge and no model call. The bounded one-shot picker sees only
+eligible role/family guidance and task context. It returns strict keep/exclude
+decisions with exact coverage and safe provenance; only kept families enter pool
+ranking. Commands are technique data, never duplicated in Python. Prompt/output
+limits are 65536 bytes, timeout 90 seconds; transient execution failures retry
+once after two seconds, malformed results advance without retry. Duplicate JSON
+keys, non-finite values, invalid Unicode, extra fields/documents and incomplete
+coverage are refused, as is a run that exits without writing its output file.
+Template values are substituted in one pass, so a value never rewrites a later
+token. Event streams and stderr are discarded. The helper's authorized picker
+subprocess may run with `nonInteractive: true`.
 
 When identity is absent/null, no entry is runnable, or all entries fail, report
 exactly

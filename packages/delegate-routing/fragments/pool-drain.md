@@ -54,15 +54,19 @@ reset near empty. Do not report pool numbers unless asked.
 Tier and pace do not establish role fit, trial eligibility, live availability or
 cross-maker independence. Supply taskSummary, nullable proposerFamily, compact
 role requests and observed techniques in the launch context; honor exclusions.
-The helper judges hard-eligible families with its tool-free one-shot picker
-before pool ranking. Missing/null proposer identity or no usable picker emits
-the exact model-picker-unavailable warning; report it to the user and use the
-returned tier/pool fallback. For finder, first-check, second-check and judge,
-never step down a tier. Try the shared avoided-family fallback before reporting
-a loop failure when no qualified strong/frontier route remains. Each role
-accepts unordered `avoid` and `exclude` lists of exact configured family names,
-empty by default. Exclude removes routes with reason "excluded by caller" and
-wins overlap; avoid never removes a route by itself. Eligible non-avoided
+Several observed models for one family are fine: the helper launches the highest
+version. A refused request exits 2 with every problem as `{"path", "message"}`
+records in a stdout `invalid-request` document and runs no Reader or picker; fix
+the named paths, and report a `manifest.` path to the user as a configuration
+fault. The helper judges hard-eligible families with its tool-free one-shot
+picker before pool ranking. Missing/null proposer identity or no usable picker
+emits the exact model-picker-unavailable warning; report it to the user and use
+the returned tier/pool fallback. For finder, first-check, second-check and
+judge, never step down a tier. Try the shared avoided-family fallback before
+reporting a loop failure when no qualified strong/frontier route remains. Each
+role accepts unordered `avoid` and `exclude` lists of exact configured family
+names, empty by default. Exclude removes routes with reason "excluded by caller"
+and wins overlap; avoid never removes a route by itself. Eligible non-avoided
 candidates precede eligible avoided candidates; measured preference applies
 within each partition. Session pace still compares all otherwise fitting
 measured candidates, including avoided ones. Retained avoided alternatives carry

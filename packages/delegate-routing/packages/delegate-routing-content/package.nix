@@ -78,10 +78,7 @@
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
       inherit (args) runtime families models;
-      picker =
-        if args.picker == null
-        then null
-        else args.picker.${args.runtime} or args.picker;
+      inherit (args) picker;
       resolvedAgentFiles = args.resolvedAgentFiles or null;
       extraRuntimes = args.extraRuntimes or [];
       manualExternalDelegates = args.manualExternalDelegates or [];
