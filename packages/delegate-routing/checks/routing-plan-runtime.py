@@ -18,7 +18,6 @@ helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 NOW = helper.utc("2026-11-15T00:00:00Z")
 SHELL = shutil.which("bash")
-QUALIFIED = {"avoidFor": "checked: task avoids exclusions", "fit": "approved for this task", "trial": "not a trial", "useFor": "task matches guidance"}
 
 
 def window(remaining=50, seconds=2592000, reset="2026-12-01T00:00:00Z"):
@@ -42,7 +41,7 @@ def manifest(routes=None, session=None):
 
 
 def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
-    return {"nonInteractive": non_interactive, "roles": {role: {"effort": effort, "families": {name: QUALIFIED for name in names}} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+    return {"taskSummary": "bounded source change", "nonInteractive": non_interactive, "roles": {role: {"effort": effort} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
 
 
 class Routing(unittest.TestCase):
@@ -62,6 +61,152 @@ class Routing(unittest.TestCase):
         with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")), patch("time.sleep"):
             result = helper.plan(config or manifest(), launch_context or context(roles), roles, now, SHELL, reader)
         return result, calls
+
+    def picker_fixture(self, routes=None, roles=("writer",)):
+        config, ctx = manifest(routes), context(roles)
+        ctx["proposerFamily"] = "dormant"
+        ctx["techniques"].append({"runtime": "codex", "technique": "one-shot", "model": "gpt-6.1-sol", "efforts": ["medium"]})
+        config["pickerEntries"] = [{"runtime": "codex", "technique": "one-shot", "family": "sol", "model": "gpt-6.1-sol", "effort": "medium", "pool": "outside", "command": "fake", "toolFree": True}]
+        return config, ctx
+
+    def decisions(self, *items):
+        return json.dumps({"decisions": [{"decision": decision, "family": family, "reason": "bounded role fit", "role": role} for role, family, decision in items], "schemaVersion": 1}).encode()
+
+    def test_picker_judges_role_before_measured_preference(self):
+        # Wrong: pool preference removes unmeasured choices before semantic judgment,
+        # or one family-global verdict forces writer and judge to share a decision.
+        config, ctx = self.picker_fixture([route(), route("other", pool=None), route("small", tier="small")], ("writer", "judge"))
+        raw = self.decisions(("writer", "sol", "keep"), ("writer", "other", "keep"), ("writer", "small", "exclude"), ("judge", "sol", "exclude"), ("judge", "other", "keep"))
+        with patch.object(helper, "run_picker", return_value=raw) as picker:
+            result, _ = self.run_plan(config, ctx, ("writer", "judge"))
+        picker.assert_called_once()
+        payload = picker.call_args.args[1]
+        self.assertEqual([(x["role"], x["name"]) for x in payload["families"]], [("writer", "sol"), ("writer", "other"), ("writer", "small"), ("judge", "sol"), ("judge", "other")])
+        self.assertNotIn("pools", payload)
+        self.assertNotIn("command", json.dumps(payload))
+        self.assertEqual([x["launch"]["family"] for x in result["roles"]["writer"]["candidates"]], ["sol"])
+        self.assertEqual([x["launch"]["family"] for x in result["roles"]["judge"]["candidates"]], ["other"])
+        self.assertEqual(result["picker"]["provenance"], {"runtime": "codex", "technique": "one-shot", "family": "sol", "model": "gpt-6.1-sol", "effort": "medium"})
+        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+
+    def test_picker_hard_gates_and_avoid_partition_are_prompt_data(self):
+        # Wrong: excluded, unreachable, exhausted or scoped-refused families reach
+        # judgment; or avoided fallback requires a second unbounded inference.
+        config, ctx = self.picker_fixture([route(), route("excluded"), route("dead", pool="hidden"), route("spent", pool="session"), route("scoped")])
+        ctx["roles"]["writer"].update(avoid=["sol"], exclude=["excluded"])
+        outputs = {"reader-hidden-runtime": subprocess.CompletedProcess([], 1, "secret", "private"), "reader-session": stream({"monthly": window(0)}), "reader-outside": stream({"monthly": window(), "weekly:scoped": window(0)})}
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
+            result, _ = self.run_plan(config, ctx, outputs=outputs)
+        self.assertEqual(picker.call_args.args[1]["families"], [{"name": "sol", "tier": "strong", "useFor": "writer-judge loop", "avoidFor": "sole judge", "defaultEffort": None, "role": "writer", "avoided": True, "effectiveEffort": "high"}])
+        self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], "sol")
+
+    def test_picker_order_skip_identity_and_loud_fallback(self):
+        # Wrong: unknown identity is invented, self-picker runs, missing observations
+        # run, or an unproven no-tools promise is treated as enforceable removal.
+        config, ctx = self.picker_fixture()
+        original = config["pickerEntries"][0]
+        config["pickerEntries"] = [dict(original, toolFree=False), dict(original, model="unobserved"), dict(original, family="dormant"), original]
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_args.args[0], original)
+        self.assertEqual(picker.call_count, 1)
+        self.assertIn("picker", result)
+        for identity in (None, "sol"):
+            ctx["proposerFamily"] = identity
+            config["pickerEntries"] = [original]
+            with self.subTest(identity=identity), patch.object(helper, "run_picker", side_effect=AssertionError("unavailable picker ran")):
+                result, _ = self.run_plan(config, ctx)
+                self.assertIn(helper.PICKER_WARNING, result["warnings"])
+                self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
+
+    def test_unknown_non_null_proposer_is_rejected_before_readers(self):
+        # Wrong: a misspelled known proposer silently disables judgment after
+        # spending a Reader snapshot instead of refusing malformed caller input.
+        config, ctx = self.picker_fixture()
+        ctx["proposerFamily"] = "not-configured"
+        with patch.object(helper, "collect", side_effect=AssertionError("Readers invoked")), self.assertRaisesRegex(ValueError, "exact configured family"):
+            helper.plan(config, ctx, ("writer",), NOW, SHELL)
+
+    def test_picker_reach_and_pool_gates_allow_headless_internal_call(self):
+        # Wrong: worker headless policy forbids the authorized internal picker;
+        # Reader/scoped/session exclusions or ordered external-runtime reaches
+        # are ignored when choosing the picker itself.
+        config, ctx = self.picker_fixture([route(), route("other", pool=None)])
+        original = config["pickerEntries"][0]
+        ctx["nonInteractive"] = True
+        other = original | {"runtime": "claude", "technique": "claude -p", "model": "claude-sonnet-4-5", "family": "other", "pool": None}
+        ctx["techniques"].append({"runtime": "claude", "technique": "claude -p", "model": "claude-sonnet-4-5", "efforts": ["medium"]})
+        config["pickerEntries"] = [original, other]
+        for status in ("unreachable", "exhausted", "scoped", "buffer"):
+            config["sessionPool"] = "outside" if status == "buffer" else None
+            outputs = {"reader-outside": subprocess.CompletedProcess([], 1, "", "private") if status == "unreachable" else stream({"monthly": window(0 if status == "exhausted" else 20 if status == "buffer" else 50), **({"weekly:sol": window(0)} if status == "scoped" else {})})}
+            with self.subTest(status=status), patch.object(helper, "run_picker", return_value=self.decisions(("writer", "other", "keep"))) as picker:
+                result, _ = self.run_plan(config, ctx, outputs=outputs)
+                self.assertEqual(picker.call_args.args[0], other)
+                self.assertEqual(picker.call_count, 1)
+                self.assertEqual(result["picker"]["provenance"]["runtime"], "claude")
+
+    def test_picker_one_transient_retry_and_no_malformed_retry(self):
+        # Wrong: malformed results retry; transient failures never retry or retry
+        # indefinitely; subprocess diagnostics leak into warning/provenance output.
+        config, ctx = self.picker_fixture()
+        valid = self.decisions(("writer", "sol", "keep"))
+        for failure in (OSError("private"), subprocess.TimeoutExpired("secret", 90), subprocess.CalledProcessError(1, "secret", stderr="private")):
+            with self.subTest(failure=type(failure)), patch.object(helper, "run_picker", side_effect=[failure, valid]) as picker:
+                result, _ = self.run_plan(config, ctx)
+                self.assertEqual(picker.call_count, 2)
+                self.assertIn("picker", result)
+                self.assertNotIn("private", json.dumps(result))
+        config["pickerEntries"] *= 2
+        with patch.object(helper, "run_picker", side_effect=[b"malformed private", valid]) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_count, 2)
+        self.assertIn("picker", result)
+        with patch.object(helper, "run_picker", side_effect=OSError("private")) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_count, 4)
+        self.assertEqual(result["warnings"].count(helper.PICKER_WARNING), 1)
+        self.assertNotIn("private", json.dumps(result))
+
+    def test_picker_strict_pair_coverage_and_all_excluded(self):
+        # Wrong: duplicate keys/pairs, non-finite values, bad Unicode, unknown roles,
+        # extra fields/documents or partial role/family coverage are accepted.
+        valid = self.decisions(("writer", "sol", "keep"))
+        mutations = [valid + b"{}", valid.replace(b'"schemaVersion": 1', b'"schemaVersion": 1, "schemaVersion": 1'), valid.replace(b'"schemaVersion": 1', b'"schemaVersion": NaN'), valid.replace(b'"bounded role fit"', b'"\\ud800"'), valid.replace(b'"writer"', b'"judge"'), self.decisions(("writer", "sol", "keep"), ("writer", "sol", "exclude")), b'{"decisions":[],"schemaVersion":1}', valid.replace(b'"reason":', b'"extra":true,"reason":')]
+        for raw in mutations:
+            with self.subTest(raw=raw), self.assertRaises((ValueError, UnicodeError)):
+                helper.picker_decisions(raw, {("writer", "sol")})
+        config, ctx = self.picker_fixture()
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "exclude"))):
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertIn("error", result["roles"]["writer"])
+        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+
+    def test_closed_context_refuses_essays_before_readers(self):
+        # Wrong: old family qualification essays survive the schema boundary.
+        for key in ("families", "fit", "useFor", "avoidFor", "trial"):
+            ctx = context()
+            ctx["roles"]["writer"][key] = {}
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "only effort"):
+                self.run_plan(launch_context=ctx)
+        ctx = context()
+        ctx["essay"] = "unused"
+        with self.assertRaisesRegex(ValueError, "closed launch context"):
+            self.run_plan(launch_context=ctx)
+
+    def test_picker_real_shell_literal_binding_and_bounds(self):
+        # Wrong: template substitution executes a model as shell code; output and
+        # prompt limits are decorative, or timeout leaves the one-shot process alive.
+        config, _ = self.picker_fixture()
+        entry = config["pickerEntries"][0] | {"model": "$(exit 7)", "command": "printf '%s' <model> > <output-file>"}
+        self.assertEqual(helper.run_picker(entry, {}, SHELL), b"$(exit 7)")
+        with patch.object(helper, "PICKER_OUTPUT_LIMIT", 2), self.assertRaisesRegex(ValueError, "output limit"):
+            helper.run_picker(entry, {}, SHELL)
+        with patch.object(helper, "PICKER_PROMPT_LIMIT", 2), self.assertRaisesRegex(ValueError, "prompt limit"):
+            helper.run_picker(entry, {}, SHELL)
+        with patch.object(helper, "PICKER_TIMEOUT", 0.02), self.assertRaises(subprocess.TimeoutExpired):
+            helper.run_picker(entry | {"command": "while :; do :; done"}, {}, SHELL)
 
     def test_frozen_reader_corpus(self):
         # Wrong: idle null/skewed resets add window errors; envelopes lose registration identity, monthly duration or scoped pace.
@@ -286,17 +431,15 @@ class Routing(unittest.TestCase):
                 helper.check_plan(artifact, result, root)
 
     def test_avoided_routes_keep_intrinsic_gates(self):
-        # Wrong: fallback bypasses floors, fit, headless, failed/scoped/buffer gates.
+        # Wrong: fallback bypasses floors, headless, failed/scoped/buffer gates.
         for role in helper.ROLE_TIERS:
-            for gate in ("floor", "fit", "headless", "unreachable", "exhausted", "scoped", "buffer"):
+            for gate in ("floor", "headless", "unreachable", "exhausted", "scoped", "buffer"):
                 config = manifest([route()], "outside" if gate == "buffer" else None)
                 ctx = context((role,))
                 ctx["roles"][role]["avoid"] = ["sol"]
                 outputs = {}
                 if gate == "floor":
                     config["routes"][0]["family"]["tier"] = "invalid"
-                elif gate == "fit":
-                    ctx["roles"][role]["families"] = {}
                 elif gate == "headless":
                     config["routes"][0]["techniques"][0]["node"]["kind"] = "external"
                     ctx["nonInteractive"] = True
@@ -426,12 +569,12 @@ class Routing(unittest.TestCase):
     def test_dropped_window_warning_reports_failure_to_user(self):
         # Wrong: a dropped window warning omits the user-report instruction.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": window(50, 0, None)})})
-        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:")], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
+        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
 
     def test_window_warning_cannot_forge_stderr_lines(self):
         # Wrong: Reader-controlled window names inject extra stderr lines.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h\nFORGED\x1b": window(50, 0, None)})})
-        warnings = [w for w in result["warnings"] if w.startswith("WARNING:")]
+        warnings = [w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING]
         self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
         self.assertEqual(len(warnings[0].splitlines()), 1)
 
@@ -503,8 +646,8 @@ class Routing(unittest.TestCase):
             proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer", "--now", NOW.isoformat()], capture_output=True, text=True)
             result = json.loads(proc.stdout)
             self.assertEqual(proc.returncode, 0, proc.stderr)
-            self.assertIn("provider-vendor identity is provisional; fit/trial/maker independence are caller assessments", result["warnings"])
-            self.assertEqual(proc.stderr.splitlines(), [item["line"] for item in result["roles"]["writer"]["candidates"]])
+            self.assertIn("provider-vendor identity is provisional; trial/maker independence remain caller assessments", result["warnings"])
+            self.assertEqual(proc.stderr.splitlines(), [helper.PICKER_WARNING] + [item["line"] for item in result["roles"]["writer"]["candidates"]])
 
     def test_cli_degradation_uses_json_warnings(self):
         # Wrong: advisory notes precede failures, failures are silent, or all-failed returns success.
@@ -792,7 +935,7 @@ class Routing(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown role"):
             self.run_plan(roles=("unknown",))
         result, _ = self.run_plan(launch_context=context(names=()))
-        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
 
     def test_generated_agent_workflow_external_and_unresolved(self):
         agent = {"family": {"defaultEffort": "high", "name": "sol"}, "id": "gpt-6.1-sol"}
@@ -845,7 +988,7 @@ class Routing(unittest.TestCase):
         for role in roles:
             brief = f"{role}.md"
             (root / brief).write_bytes(b"Hard rules and task.\n" + rubric + b"Report evidence.\n")
-            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "qualification": QUALIFIED, "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
+            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
         units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace not validated launch choices", "id": str(index), "launches": deepcopy(launches), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
         return {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
 
@@ -1120,7 +1263,9 @@ class Routing(unittest.TestCase):
             self.assertEqual(log.read_text(), "outside\nsession\nhidden\n")
             self.assertEqual(json.loads(proc.stdout)["pools"]["outside"]["pace"], 0.9375)
             self.assertIn("technique=spawn_agent", proc.stderr)
-            (root / "context.json").write_text(json.dumps(context(names=())))
+            ctx = context()
+            ctx["roles"]["writer"]["exclude"] = ["sol"]
+            (root / "context.json").write_text(json.dumps(ctx))
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 1)
             self.assertIn("never step down a tier; report a loop failure.", proc.stderr)

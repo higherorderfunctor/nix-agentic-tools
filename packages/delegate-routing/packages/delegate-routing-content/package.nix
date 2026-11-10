@@ -66,12 +66,22 @@
   # pkgs carries no overlay, so the overlay's linters are not in it.
   # Defaults merge before the overridable builder, so a direct caller's
   # `.override (prev: ...)` reads the shipped inputs, `prev.skill` included.
-  mkSkill = args: lib.makeOverridable buildSkill (defaults // {sessionPool = null;} // args);
+  mkSkill = args:
+    lib.makeOverridable buildSkill (defaults
+      // {
+        picker = null;
+        sessionPool = null;
+      }
+      // args);
   buildSkill = args: let
     techniques = normalizeTechniques args.techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
       inherit (args) runtime families models;
+      picker =
+        if args.picker == null
+        then null
+        else args.picker.${args.runtime} or args.picker;
       resolvedAgentFiles = args.resolvedAgentFiles or null;
       extraRuntimes = args.extraRuntimes or [];
       manualExternalDelegates = args.manualExternalDelegates or [];
@@ -105,7 +115,7 @@
           # as a dependency of the delivered file, including its manifest.
           body =
             builtins.appendContext
-            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["sessionPool"] // {inherit helperInstruction techniques;}))
+            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["picker" "sessionPool"] // {inherit helperInstruction techniques;}))
             (builtins.getContext helperInstruction);
         };
       };

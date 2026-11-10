@@ -387,30 +387,19 @@ mechanical, planner, second-check and writer. The routing policy lives in
 [Pool drain](../fragments/pool-drain.md) and
 [Size the work](../fragments/size-the-work.md).
 
-The launch context records observed techniques, concrete model ids and unordered
-supported efforts. Each role supplies an optional effort override and exact
-configured family names in `avoid`, `exclude` and its `families` evidence map.
-Every family evidence record requires nonempty `avoidFor`, `fit`, `trial` and
-`useFor` strings. This example assumes the named routes are configured and the
-technique was observed; it does not establish availability:
+The closed launch context supplies a bounded nonempty `taskSummary`, optional
+nullable `proposerFamily`, `nonInteractive`, compact `roles` and observed
+`techniques`. Each role accepts only optional `effort`, `avoid` and `exclude`;
+family qualification essays are refused. A known proposer is an exact configured
+family; an unknown non-null name is refused before Readers. Absent or null
+identity skips the picker and warns while preserving tier/pool fallback.
 
 ```json
 {
+  "taskSummary": "review a bounded source change",
+  "proposerFamily": "opus",
   "nonInteractive": false,
-  "roles": {
-    "first-check": {
-      "avoid": ["sol"],
-      "exclude": ["opus"],
-      "families": {
-        "sol": {
-          "avoidFor": "no sole final judgment",
-          "fit": "bounded source review with executable checks",
-          "trial": "not a trial",
-          "useFor": "code review"
-        }
-      }
-    }
-  },
+  "roles": { "first-check": { "avoid": ["sol"], "exclude": ["opus"] } },
   "techniques": [
     {
       "efforts": ["high", "medium"],
@@ -421,6 +410,49 @@ technique was observed; it does not establish availability:
   ]
 }
 ```
+
+`runtimes.<runtime>.picker.entries` is an ordered list of explicit
+`{technique, model, effort}` tuples. Claude defaults to `claude -p` / the sonnet
+family's model (the resolved id of the generated sonnet agent file, which
+honours an `example.claude` override) / medium, Codex to `codex exec` /
+`gpt-6.1-sol` / medium; Kimchi and Kiro default to empty lists. An inherited
+entry is omitted when its model has no selected family/reach or resolved id, or
+its known launch technique is disabled or unavailable; explicit entries keep
+their literal model and retain strict validation. Module and direct-builder
+defaults use the same routing-view resolver, including builder overrides. The
+view resolves exact models against configured family patterns and refuses
+duplicate tuples, unresolved models, invalid efforts or techniques without
+enabled external reach, model/effort pinning and a nonempty picker command.
+Direct `mkSkill` callers receive the same manifest field.
+
+Technique-owned `pickerCommand` templates carry enforceable tool removal;
+`toolFree` defaults false and is true only with source or offline provider
+evidence of an empty emitted tool set including MCP and delegation. Claude
+2.1.319 offline capture with `--tools ""`, strict empty MCP configuration and
+disabled slash commands emitted `tools: []` while retaining normal auth/provider
+settings. The native `--settings '{"disableAllHooks":true}'` overlay disabled
+the ordinary settings hook canary; the positive control ran it. Picker commands
+retain normal credential/provider settings instead of clearing setting sources.
+Codex's proposed feature switches do not establish complete tool removal, so its
+shipped entry stays configured but unavailable. Consumers must prove equivalent
+controls before enabling a template.
+
+Readers and hard eligibility run before judgment. The bounded one-shot picker
+sees only eligible role/family guidance and task context. It returns strict
+keep/exclude decisions with exact coverage and safe provenance; only kept
+families enter pool ranking. Commands are technique data, never duplicated in
+Python. Prompt/output limits are 65536 bytes, timeout 90 seconds; transient
+execution failures retry once after two seconds, malformed results advance
+without retry. Duplicate JSON keys, non-finite values, invalid Unicode, extra
+fields/documents and incomplete coverage are refused. Event streams and stderr
+are discarded. The helper's authorized picker subprocess may run with
+`nonInteractive: true`.
+
+When identity is absent/null, no entry is runnable, or all entries fail, report
+exactly
+`WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user.`
+and use hard-eligible tier/pool routes. Picker failure alone does not erase
+routes.
 
 Observed `efforts: []` always means launch without effort, regardless of role
 request, family default or avoidance. JSON keeps effort null; canonical lines
@@ -441,14 +473,14 @@ alternatives, invocation guidance and generated-agent records; manual-only
 routes are separately labelled. `nonInteractive: true` excludes external
 techniques; absent mode evidence leaves them unresolved.
 
-Only configured Reader commands reach subprocess execution. Identical commands
-share one read and retry; full strict Bash mode and a ten-second process-group
-timeout bound execution. Registration keys determine budget identity rather than
-Reader `.pool` output. The required envelope has `account` fields `auth_index`,
-`name` and `plan` (including null values), a nonempty string `pool`, arrays
-`balances` and `bonuses`, and a `windows` map. An empty map is valid and
-unmeasured. Failure reasons use safe validation text, never Reader stderr,
-command text or exception payloads.
+Only configured Reader commands and verified tool-free picker commands reach
+subprocess execution. Identical commands share one read and retry; full strict
+Bash mode and a ten-second process-group timeout bound execution. Registration
+keys determine budget identity rather than Reader `.pool` output. The required
+envelope has `account` fields `auth_index`, `name` and `plan` (including null
+values), a nonempty string `pool`, arrays `balances` and `bonuses`, and a
+`windows` map. An empty map is valid and unmeasured. Failure reasons use safe
+validation text, never Reader stderr, command text or exception payloads.
 
 The pace formula is
 `(remainingPercent / 100) / ((resetsAt - now) / windowSeconds)`. The pool uses
@@ -738,10 +770,11 @@ owned files. The helper checks the declared shape, not code dependencies or
 completion receipts. The orchestrator enforces writer → independent review →
 fix/check → commit barriers before dependent waves or the next writer on a
 shared branch. Reviewers retain isolated worktrees or read-only tools, and the
-orchestrator checks the working tree after every shell-capable delegate. Model
-fit, avoidFor guidance, trial restrictions and independence remain caller
-assessments; a strong/frontier floor proves none of them. Offline validation
-proves deterministic artifact checks, not live planner/harness compliance.
+orchestrator checks the working tree after every shell-capable delegate. Trial
+restrictions and independence remain caller assessments; helper-owned judgment
+applies task/role fit and avoidFor guidance; a strong/frontier floor proves none
+of them. Offline validation proves deterministic artifact checks, not live
+planner/harness compliance.
 
 ### Policy placement ledger
 

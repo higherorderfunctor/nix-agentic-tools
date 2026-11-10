@@ -2,14 +2,16 @@ Treat an assigned repository change, or investigation/design/bulk reading beyond
 a quick fact from named documents, as substantive. Prepare the rubric from the
 task goal as preflight; this does not authorize task-source investigation.
 Before that investigation, use this runtime's rendered helper with
-`--role planner --launch-context <json-path>` to select a reachable, fitted
-strong/frontier planner, trying shared avoided-family fallback before declaring
-no qualified route. Pin its model and effort from a canonical candidate, pass
-the task, source paths, saved rubric and the resolved routing/workflow context.
-Use a native subagent or workflow when non-interactive; if no qualified pinned
-planner is reachable, report a loop failure rather than doing the design in the
-orchestrator. A worker assigned an approved bounded unit does not recursively
-plan that assignment. Replan only the affected portion when scope changes.
+`--role planner --launch-context <json-path>` with taskSummary, nullable
+proposerFamily, compact role requests and observed techniques to select a
+reachable, fitted strong/frontier planner, trying shared avoided-family fallback
+before declaring no qualified route. Pin its model and effort from a canonical
+candidate, pass the task, source paths, saved rubric and the resolved
+routing/workflow context. Use a native subagent or workflow when
+non-interactive; if no qualified pinned planner is reachable, report a loop
+failure rather than doing the design in the orchestrator. A worker assigned an
+approved bounded unit does not recursively plan that assignment. Replan only the
+affected portion when scope changes.
 
 The planner runs the actual launching runtime's rendered helper with
 `--launch-context <json-path> --role <worker-role> --role <reviewer-role>`,

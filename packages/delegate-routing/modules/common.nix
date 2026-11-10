@@ -123,7 +123,7 @@
       inherit runtime models techniques resolvedAgentFiles;
       inherit (portable) families pools;
       inherit (resolved runtime) routing skill workflows;
-      inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates sessionPool;
+      inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
     };
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
@@ -142,6 +142,32 @@
         type = lib.types.listOf (lib.types.enum (lib.remove runtime supportedRuntimes));
         default = [];
         description = "Describe external delegates for explicit user requests only; never auto-select them. Each named runtime must be enabled through ai.<runtime>.enable. Manual-only takes precedence over extraRuntimes.";
+      };
+      picker.entries = lib.mkOption {
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            effort = lib.mkOption {
+              type = lib.types.enum vocabulary.effortLevels;
+              description = "Pinned picker effort.";
+            };
+            model = lib.mkOption {
+              type = lib.types.nonEmptyStr;
+              description = "Explicit concrete model id resolved to one configured family.";
+            };
+            technique = lib.mkOption {
+              type = lib.types.nonEmptyStr;
+              description = "Enabled external one-shot technique with a picker command.";
+            };
+          };
+        });
+        default =
+          map (lib.getAttrs ["effort" "model" "technique"])
+          (import ../lib/routing-view.nix {
+            inherit lib runtime models techniques resolvedAgentFiles;
+            inherit (portable) families pools;
+            inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
+          }).pickerEntries;
+        description = "Ordered one-shot model pickers. Empty or unproven tool removal warns and uses tier/pool fallback. Exact tuples must be unique.";
       };
       sessionPool = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum (builtins.attrNames portable.pools));

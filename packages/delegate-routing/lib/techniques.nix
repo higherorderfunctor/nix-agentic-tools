@@ -2,6 +2,8 @@
   claudeUsageScript,
   codexUsageScript,
 }: let
+  claudeCommand = ''claude -p --model <id> --effort <effort> "<prompt>"'';
+  codexCommand = ''codex exec --model <slug> --config 'model_reasoning_effort="<level>"' --json --output-last-message <out>.md - < <prompt-file>'';
   usageNotes = "prints the usage schema: windows{usedPercent,remainingPercent,resetsAt,status,windowSeconds}, balances, bonuses";
 in {
   claude = {
@@ -36,7 +38,16 @@ in {
       runsOwnSubagents = "unsupported (headless)";
     };
     "claude -p" = {
-      command = ''claude -p --model <id> --effort <effort> "<prompt>"'';
+      command = claudeCommand;
+      # Offline Claude 2.1.319 capture: tools=[], normal auth retained, hooks disabled.
+      pickerCommand = {
+        command =
+          builtins.replaceStrings
+          ["<id>" ''"<prompt>"'']
+          ["<model>" ''--tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>'']
+          claudeCommand;
+        toolFree = true;
+      };
       kind = "external";
       modelArg = "full model id";
       modes = ["headless"];
@@ -58,7 +69,17 @@ in {
   };
   codex = {
     "codex exec" = {
-      command = ''codex exec --model <slug> --config 'model_reasoning_effort="<level>"' --json --output-last-message <out>.md - < <prompt-file>'';
+      command = codexCommand;
+      # Disabling unified_exec alone permits legacy execution. Until the complete
+      # emitted tool set is proven empty, this configured entry must be skipped.
+      pickerCommand = {
+        command =
+          builtins.replaceStrings
+          ["<slug>" "<level>" "<out>.md" "--json"]
+          ["<model>" "<effort>" "<output-file>" "--disable unified_exec --disable web_search --disable view_image --disable multi_agent --ignore-user-config --ignore-rules --json"]
+          codexCommand;
+        toolFree = false;
+      };
       kind = "external";
       modelArg = "slug";
       modes = ["headless"];
