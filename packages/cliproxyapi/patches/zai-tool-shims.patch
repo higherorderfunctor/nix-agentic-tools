@@ -539,7 +539,7 @@ diff --git a/internal/runtime/executor/claude_executor_tokens.go b/internal/runt
 index 5fd9fd6b..b7c12c94 100644
 --- a/internal/runtime/executor/claude_executor_tokens.go
 +++ b/internal/runtime/executor/claude_executor_tokens.go
-@@ -64,6 +64,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
+@@ -70,6 +70,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
  	if rebuildMidSystemMessageEnabled(e.cfg, auth) {
  		rebuildMidSystemMessagesToTopLevelDoc(doc)
  	}
@@ -549,9 +549,9 @@ index 5fd9fd6b..b7c12c94 100644
 +			return cliproxyexecutor.Response{}, err
 +		}
 +	}
+ 	helps.NormalizeClaudeToolPropertyNamesDoc(doc)
  	sanitizeClaudeMessagesForClaudeUpstreamWithDebugDoc(ctx, doc, baseModel, helps.APIKeyModelIsCompat(req))
  	applyClaudePreservedThinkingBindingDoc(doc)
- 	finalize := helps.NewPayloadFinalizer(e.cfg, e.Identifier(), baseModel, to.String(), "", originalTranslatedForPayload, req, opts)
 @@ -222,7 +228,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
  	extraBetas, _ := extractAndRemoveBetasDoc(doc)
  	// Claude Code 2.1.220's beta.messages.countTokens() always appends this beta.
