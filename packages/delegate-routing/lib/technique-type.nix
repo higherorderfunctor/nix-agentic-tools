@@ -40,7 +40,7 @@ lib.types.submodule {
         options = {
           command = lib.mkOption {
             type = lib.types.nonEmptyStr;
-            description = "One-shot template using <model>, <effort>, <prompt-file> and <output-file>, each substituted as a shell literal.";
+            description = "One-shot template using <model>, <effort>, <prompt-file> and <output-file>, each substituted as a shell literal. The first word must be a bare executable name found on PATH; the helper skips a picker whose executable is not.";
           };
           toolFree = lib.mkOption {
             type = lib.types.bool;

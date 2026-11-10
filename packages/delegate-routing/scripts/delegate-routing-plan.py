@@ -386,7 +386,7 @@ def launch(route, context, requested, avoided, scale):
             reason = "external delegate forbidden in headless context" if context.get("nonInteractive") is True else "non-interactive status unresolved for external delegate"
         evidence = [item for item in context["techniques"] if item["runtime"] == route["target"] and item["technique"] == name]
         model = technique["model"]
-        evidence = [item for item in evidence if isinstance(item["model"], str) and not any(c in item["model"] for c in "*?[") and (fnmatch.fnmatchcase(item["model"], model["value"]) if model["isPattern"] else item["model"] == model["value"])]
+        evidence = [item for item in evidence if not any(c in item["model"] for c in "*?[") and (fnmatch.fnmatchcase(item["model"], model["value"]) if model["isPattern"] else item["model"] == model["value"])]
         # Several observed models may match one family; the highest version wins and
         # equal versions keep the last listed, as lib/agent-files.nix resolveId does.
         newest = max(reversed(evidence), key=lambda item: model_version(item["model"]), default=None)
@@ -431,6 +431,9 @@ class InvalidRequest(ValueError):
         self.errors = errors
 
 
+MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
+
+
 def request_errors(manifest, context, roles):
     """Collect every refusal in argv roles, manifest and launch context; a context needs its manifest."""
     errors = []
@@ -457,6 +460,11 @@ def request_errors(manifest, context, roles):
     for index, role in enumerate(roles):
         named(f"argv.role[{index}]", role, role_names, "role")
     if manifest is not None:
+        missing = [key for key in MANIFEST_KEYS if key not in manifest]
+        for key in missing:
+            refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}required key is missing")
+        if missing:
+            return errors
         pool_names = sorted(reader["name"] for reader in manifest["readers"])
         session = manifest["sessionPool"]
         pool_fault = f"{CONFIGURATION_FAULT}unregistered pool %s; registered: {allowed(pool_names)}"
@@ -494,8 +502,6 @@ def request_errors(manifest, context, roles):
             text(f"{path}.{key}", evidence.get(key))
         if not isinstance(evidence.get("efforts"), list):
             refuse(f"{path}.efforts", "required; a list of efforts, [] when effort is omitted")
-        for position, effort in enumerate(evidence["efforts"] if isinstance(evidence.get("efforts"), list) else []):
-            named(f"{path}.efforts[{position}]", effort, efforts, "effort")
     requests = context.get("roles")
     if not isinstance(requests, dict):
         refuse("launchContext.roles", "required; an object keyed by role")
@@ -781,13 +787,20 @@ def main():
         return invalid_request([{"path": "argv", "message": str(error)}])
     manifest, manifest_errors = load_json(args.manifest, "manifest", CONFIGURATION_FAULT)
     context, context_errors = load_json(args.launch_context, "launchContext")
-    if manifest_errors or context_errors:
-        return invalid_request(request_errors(None, None, args.role) + manifest_errors + context_errors)
+    saved, saved_errors = load_json(args.check_plan, "argv.--check-plan") if args.check_plan else (None, [])
+    now, now_errors = datetime.now(timezone.utc), []
+    if args.now:
+        try:
+            now = utc(args.now)
+        except ValueError as error:
+            now_errors = [{"path": "argv.--now", "message": f"{args.now}: {error}"}]
+    if manifest_errors or context_errors or saved_errors or now_errors:
+        return invalid_request(request_errors(None if manifest_errors else manifest, None, args.role) + now_errors + saved_errors + manifest_errors + context_errors)
     try:
-        result = plan(manifest, context, args.role, utc(args.now) if args.now else datetime.now(timezone.utc), args.reader_shell)
+        result = plan(manifest, context, args.role, now, args.reader_shell)
         if args.check_plan:
             path = Path(args.check_plan).resolve()
-            result["validation"] = check_plan(json.loads(path.read_text()), result, path.parent, args.max_concurrency)
+            result["validation"] = check_plan(saved, result, path.parent, args.max_concurrency)
     except InvalidRequest as error:
         return invalid_request(error.errors)
     except (AttributeError, KeyError, TypeError, ValueError, OSError) as error:

@@ -220,7 +220,6 @@ class Routing(unittest.TestCase):
             {"path": "launchContext.nonInteractive", "message": "required; true, false or null"},
             {"path": "launchContext.proposerFamily", "message": f"unknown family name; allowed: {names}"},
             {"path": "launchContext.techniques[0].model", "message": "must be a non-empty string"},
-            {"path": "launchContext.techniques[0].efforts[1]", "message": f"unknown effort; allowed: {efforts}"},
             {"path": "launchContext.techniques[1]", "message": "must be an object"},
             {"path": "launchContext.roles.writer.avoid[1]", "message": f"unknown family name; allowed: {names}"},
             {"path": "launchContext.roles.writer.exclude", "message": "must be a list of family names"},
@@ -234,6 +233,57 @@ class Routing(unittest.TestCase):
         for key, value in (("taskSummary", "x" * 65537), ("roles", []), ("techniques", {})):
             ctx = context() | {key: value}
             self.assertEqual(len(self.request_errors(launch_context=ctx)), 1)
+
+    def test_off_scale_observed_efforts_are_accepted_but_role_requests_are_not(self):
+        # Wrong: Codex introspection that lists `ultra` (or Kimchi `off`) refuses a
+        # valid caller; or a role request for `ultra` slips through to a silent loop failure.
+        ctx = context()
+        ctx["techniques"][0]["efforts"] = ["high", "ultra", "off"]
+        result, _ = self.run_plan(manifest(), ctx)
+        self.assertEqual([item["launch"]["effort"] for item in result["roles"]["writer"]["candidates"]], ["high"])
+        ctx = context(effort="ultra")
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.roles.writer.effort", "message": "unknown effort; allowed: minimal, low, medium, high, xhigh, max"}])
+
+    def test_claude_text_output_with_trailing_newline_is_a_valid_answer(self):
+        # Wrong: the shipped claude template redirects the model's plain-text reply
+        # (reply plus a final newline) to the output file; a parser that needs the
+        # bare JSON bytes refuses every real answer.
+        config, ctx = self.picker_fixture()
+        reply = self.decisions(("writer", "sol", "keep")).decode()
+        entry = config["pickerEntries"][0] | {"command": f"printf '%s\\n' {shlex.quote(reply)} > <output-file>"}
+        raw = helper.run_picker(entry, {}, SHELL)
+        self.assertEqual(raw, (reply + "\n").encode())
+        self.assertEqual(helper.picker_decisions(raw, {("writer", "sol")})[0]["decision"], "keep")
+
+    def test_cli_argument_and_file_faults_are_json_with_paths(self):
+        # Wrong: a bad --now, unreadable --check-plan, missing manifest key, or a
+        # manifest pool fault beside an unparseable context exits 2 with bare stderr.
+        with tempfile.TemporaryDirectory(prefix="routing-plan-check-") as directory:
+            root = Path(directory)
+            config = manifest()
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text(json.dumps(context()))
+            command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--role", "writer"]
+
+            def refused(extra):
+                proc = subprocess.run(command + extra, capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 2)
+                return json.loads(proc.stdout)
+            document = refused(["--now", "garbage"])
+            self.assertEqual([(e["path"]) for e in document["errors"]], ["argv.--now"])
+            self.assertEqual(document["status"], "invalid-request")
+            document = refused(["--check-plan", str(root / "absent.json")])
+            self.assertEqual([e["path"] for e in document["errors"]], ["argv.--check-plan"])
+            self.assertIn("absent.json", document["errors"][0]["message"])
+            del config["effortLevels"], config["routes"]
+            (root / "manifest.json").write_text(json.dumps(config))
+            document = refused([])
+            self.assertEqual([e["path"] for e in document["errors"]], ["manifest.effortLevels", "manifest.routes"])
+            config = manifest(session="undeclared")
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text("{oops")
+            document = refused([])
+            self.assertEqual([e["path"] for e in document["errors"]], ["manifest.sessionPool", "launchContext"])
 
     def test_cli_invalid_request_is_json_on_stdout_and_exit_two(self):
         # Wrong: schema errors surface as a traceback or bare stderr text, run a
@@ -281,8 +331,9 @@ class Routing(unittest.TestCase):
                 helper.run_picker(config["pickerEntries"][0] | {"command": command}, {}, SHELL)
             child = int(pidfile.read_text())
             for _ in range(200):
-                state = Path(f"/proc/{child}/stat")
-                if not state.exists() or state.read_text().rsplit(")", 1)[1].split()[0] == "Z":
+                try:
+                    os.kill(child, 0)
+                except ProcessLookupError:
                     break
                 time.sleep(0.01)
             else:
