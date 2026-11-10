@@ -28,12 +28,12 @@
     recipeFile = repoPath ./package.nix;
   };
 
-  rev = "f8e761ba84cdaaa428e9cc2fbf6812787feb347f";
+  rev = "1cc8111518e2a3d5e82c32b01f7f9077c81403f4";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-6gB8g75zeQkkFqmJFlREL0jpbH/JxsqSqecSHh5tzYg=";
+    hash = "sha256-OEC+nkhZEu4SWTA6y6rtRVAayHgGboDg3gwYm+0a0xI=";
   };
 in
   rustPlatform.buildRustPackage {
@@ -44,7 +44,7 @@ in
       inherit rev;
     };
     inherit src;
-    cargoHash = "sha256-8DmnthSQ3Kf/V1zj/NfBn66bgqZrhgANKxJGKoC2GsE=";
+    cargoHash = "sha256-tgH4CvkyGokBXhcS51+mPYxjZQWRMlSPnm64QdIvXWY=";
 
     nativeBuildInputs = [pkgs.pkg-config];
     buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
