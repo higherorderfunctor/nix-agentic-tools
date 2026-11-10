@@ -3474,49 +3474,6 @@
         "release_date": "2026-10-07",
         "type": "chat"
       },
-      "crouton-alpha-free": {
-        "api": {
-          "responses": {
-            "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
-            "sdk": {
-              "aisdk": "@ai-sdk/openai",
-              "opencodeai": "@opencode/ai/providers/openai/responses"
-            }
-          }
-        },
-        "capabilities": {
-          "effort_updates": false,
-          "reasoning": {
-            "effort": ["minimal", "low", "medium", "high", "xhigh", "max"],
-            "supported": true
-          },
-          "structured_output": true,
-          "system_updates": false,
-          "temperature": true,
-          "tools": { "supported": true }
-        },
-        "cost": {
-          "text": {
-            "input": { "cache": { "read": 0 }, "price": 0 },
-            "output": { "price": 0 }
-          }
-        },
-        "description": "Stealth reasoning model with text, image, video and PDF input and tool use",
-        "id": "crouton-alpha-free",
-        "last_updated": "2026-11-03",
-        "limit": { "context": 1048576, "output": 270000 },
-        "modalities": {
-          "input": ["text", "image", "video", "application/pdf"],
-          "output": ["text"]
-        },
-        "name": "Crouton Alpha Free",
-        "object": "model",
-        "open_weights": false,
-        "owned_by": "opencode",
-        "release_date": "2026-11-03",
-        "type": "chat"
-      },
       "deepseek-v4-pro": {
         "api": {
           "chat-completions": {
@@ -4462,7 +4419,7 @@
             "output": { "price": 10 }
           }
         },
-        "description": "Multimodal Kimi model with 1M context and always-on reasoning for coding, 3D creation, financial research, and agentic work",
+        "description": "Multimodal Kimi model with a 1M-token context window and always-on reasoning, for coding, 3D creation and financial research",
         "family": "kimi-k3",
         "id": "kimi-k3.1-pro",
         "last_updated": "2026-10-23",
@@ -4535,6 +4492,47 @@
         "open_weights": true,
         "owned_by": "opencode",
         "release_date": "2026-06-30",
+        "type": "chat"
+      },
+      "longcat-2.5-free": {
+        "api": {
+          "chat-completions": {
+            "base_url": "https://opencode.ai/inference/go/openai/v1",
+            "capabilities": { "tools": { "updates": false } },
+            "compatibility": { "reasoning_field": "reasoning_content" },
+            "sdk": {
+              "aisdk": "@ai-sdk/openai-compatible",
+              "opencodeai": "@opencode/ai/providers/openai-compatible"
+            }
+          }
+        },
+        "canonical_id": "meituan/longcat-2.5",
+        "capabilities": {
+          "effort_updates": false,
+          "reasoning": { "supported": true, "toggle": true },
+          "system_updates": false,
+          "temperature": false,
+          "tools": { "supported": true },
+          "top_k": true,
+          "top_p": true
+        },
+        "cost": {
+          "text": {
+            "input": { "cache": { "read": 0 }, "price": 0 },
+            "output": { "price": 0 }
+          }
+        },
+        "description": "Meituan's multimodal reasoning model for long-horizon coding and agent tasks, with visual understanding and a 1M-token context window",
+        "family": "longcat",
+        "id": "longcat-2.5-free",
+        "last_updated": "2026-11-02",
+        "limit": { "context": 1000000, "output": 262144 },
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "name": "LongCat 2.5 Free",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "release_date": "2026-11-02",
         "type": "chat"
       },
       "mimo-v2.6-flash": {
@@ -5178,7 +5176,6 @@
       "go": {
         "beam-free": "unlimited",
         "claude-haiku-5-5": 15,
-        "crouton-alpha-free": "unlimited",
         "deepseek-v4-pro": 15,
         "deepseek-v4.1-flash": 100,
         "gemini-4-argon": 30,
@@ -5196,6 +5193,7 @@
         "kimi-k3": 15,
         "kimi-k3.1-pro": 15,
         "longcat-2.0": 60,
+        "longcat-2.5-free": "unlimited",
         "mimo-v2.6-flash": 60,
         "mimo-v2.6-pro": 15,
         "minimax-m3": 60,
@@ -5210,7 +5208,6 @@
       "go-plus": {
         "beam-free": "unlimited",
         "claude-haiku-5-5": 60,
-        "crouton-alpha-free": "unlimited",
         "deepseek-v4-pro": 60,
         "deepseek-v4.1-flash": 200,
         "gemini-4-argon": 120,
@@ -5228,6 +5225,7 @@
         "kimi-k3": 60,
         "kimi-k3.1-pro": 60,
         "longcat-2.0": 240,
+        "longcat-2.5-free": "unlimited",
         "mimo-v2.6-flash": 120,
         "mimo-v2.6-pro": 60,
         "minimax-m3": 180,
@@ -5242,7 +5240,6 @@
       "go-teams": {
         "beam-free": "unlimited",
         "claude-haiku-5-5": 20,
-        "crouton-alpha-free": "unlimited",
         "deepseek-v4-pro": 20,
         "deepseek-v4.1-flash": 105,
         "gemini-4-argon": 35,
@@ -5260,6 +5257,7 @@
         "kimi-k3": 20,
         "kimi-k3.1-pro": 20,
         "longcat-2.0": 65,
+        "longcat-2.5-free": "unlimited",
         "mimo-v2.6-flash": 65,
         "mimo-v2.6-pro": 20,
         "minimax-m3": 65,
