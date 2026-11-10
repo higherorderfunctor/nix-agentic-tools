@@ -1,25 +1,28 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-08 — the renderer consumes the private shared
-> routing view for launch reaches and registered readers; Plan saves bounded
-> units, role-qualified launches and verbatim-rubric briefs, and check-plan
-> validates them against fresh helper output; planner has a strong/frontier
-> floor; the packaged non-launching helper consumes the same view and runtime
-> sessionPool binding, rejects incomplete Reader envelopes, and keeps
-> runtime-specific commands in skills so shared router rules remain
-> byte-identical; Pool drain and Review use the helper as the canonical decision
-> and retain named launch fallbacks; per-runtime mode evidence below leaves
-> automatic detection unknown; routing ships an always-on "Pool drain" entry and
-> a "Tune these rules" entry, the Review step holds the one review rule, the
-> Work and review workflow builds a branch as units each reviewed by one check
-> before the next starts (all three checks at the branch-level review when the
-> PR goes ready), the usage helpers share one schema with UTC reset times,
-> portable pools resolve usage readers and label family reaches on both
-> backends, proxy-accounted-usage reads a Manager+ accounted monthly budget, and
-> the always-on stub names the source for steering its rules; OpenCode Go joins
-> z.ai as an API-key pool found by base URL, with opt-in Go preset families.
-> Packaged-helper checks execute every runtime’s delivered helper on both
-> backends and reject null sessionPool manifests.
+> **Last verified:** 2026-11-09 — shared avoid/exclude fallback and
+> all-technique machine defaults preserve floors, session gates and intentional
+> null omission; failure warnings and the fallback notice reach stderr; advisory
+> notes stay JSON-only; the renderer consumes the private shared routing view
+> for launch reaches and registered readers; Plan saves bounded units,
+> role-qualified launches and verbatim-rubric briefs, and check-plan validates
+> them against fresh helper output; planner has a strong/frontier floor; the
+> packaged non-launching helper consumes the same view and runtime sessionPool
+> binding, rejects incomplete Reader envelopes, and keeps runtime-specific
+> commands in skills so shared router rules remain byte-identical; Pool drain
+> and Review use the helper as the canonical decision and retain named launch
+> fallbacks; per-runtime mode evidence below leaves automatic detection unknown;
+> routing ships an always-on "Pool drain" entry and a "Tune these rules" entry,
+> the Review step holds the one review rule, the Work and review workflow builds
+> a branch as units each reviewed by one check before the next starts (all three
+> checks at the branch-level review when the PR goes ready), the usage helpers
+> share one schema with UTC reset times, portable pools resolve usage readers
+> and label family reaches on both backends, proxy-accounted-usage reads a
+> Manager+ accounted monthly budget, and the always-on stub names the source for
+> steering its rules; OpenCode Go joins z.ai as an API-key pool found by base
+> URL, with opt-in Go preset families. Packaged-helper checks execute every
+> runtime’s delivered helper on both backends and reject null sessionPool
+> manifests.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -294,11 +297,17 @@ configured inference lowering's published picker rows. Version segments compare
 numerically. An unresolved family gets no file and skips the generated agent
 technique in its Launch route. Files and routes share the resolved set.
 
-`families.<vendor>.<family>.defaultEffort` is nullable, typed against Claude's
-extracted effort enum, and defaults to null (no `effort:` line). Package
-`mkDefault`s set medium for fable, opus and sonnet; haiku keeps null. A launch
-call's effort overrides the file's default. The shared frontmatter renderer
-writes the pins and a fixed delegate body.
+`families.<vendor>.<family>.defaultEffort` uses the package scale
+`minimal < low < medium < high < xhigh < max`, shared with the helper manifest.
+It supplies every technique's default and remains consumer-overridable; Sol uses
+medium, Go Kimi K3.1 Pro max, and families without levels null. Go Crouton Alpha
+Free uses a provisional medium package choice, not a published recommendation;
+consumers can override it. Configure custom
+`families.zhipu.glm.defaultEffort = "high"`; no glm preset is shipped. Null
+omits the generated file's `effort:` line. Agent files pin only efforts Claude's
+agent-file format accepts; otherwise they leave effort to the launch call. A
+non-null role effort overrides the family default. The shared frontmatter
+renderer writes the pins and a fixed delegate body.
 
 There is no separate file enable option. Set
 `runtimes.claude.techniques."Agent with generated agent file".enable = false` to
@@ -371,38 +380,40 @@ not session identity data. The default is null: the module warns and the helper
 cannot certify the buffer. Unknown keys fail option/manifest validation. No
 pools preserves fit-only operation with explicit budget/session uncertainty.
 
-Invoke the rendered command with `--role writer --launch-context <json-path>`
-(repeat `--role` to share one snapshot). Supported roles are finder,
-first-check, investigator, judge, mechanical, planner, second-check and writer.
-Planner and the four review roles require strong/frontier tiers before ranking;
-an empty qualified set exits nonzero with “never step down a tier; report a loop
-failure.” The helper certifies tier and pace, not semantic fit, trial
-eligibility or maker independence. Provider-vendor identity remains provisional
-for aggregator independence until explicit maker data exists.
+Invoke the rendered command with
+`--role first-check --launch-context <json-path>` (repeat `--role` to share one
+snapshot). Supported roles are finder, first-check, investigator, judge,
+mechanical, planner, second-check and writer. The routing policy lives in
+[Pool drain](../fragments/pool-drain.md) and
+[Size the work](../fragments/size-the-work.md).
 
-The caller supplies observed availability, one concrete model id per technique
-evidence record and supported effort values, plus requested effort and qualified
-family evidence per role. For example, for a configured `sol` route:
+The launch context records observed techniques, concrete model ids and unordered
+supported efforts. Each role supplies an optional effort override and exact
+configured family names in `avoid`, `exclude` and its `families` evidence map.
+Every family evidence record requires nonempty `avoidFor`, `fit`, `trial` and
+`useFor` strings. This example assumes the named routes are configured and the
+technique was observed; it does not establish availability:
 
 ```json
 {
   "nonInteractive": false,
   "roles": {
-    "writer": {
-      "effort": "high",
+    "first-check": {
+      "avoid": ["sol"],
+      "exclude": ["opus"],
       "families": {
         "sol": {
-          "avoidFor": "task avoids sole grading",
-          "fit": "bounded implementation against this spec",
+          "avoidFor": "no sole final judgment",
+          "fit": "bounded source review with executable checks",
           "trial": "not a trial",
-          "useFor": "coding with executable acceptance checks"
+          "useFor": "code review"
         }
       }
     }
   },
   "techniques": [
     {
-      "efforts": ["high"],
+      "efforts": ["high", "medium"],
       "model": "gpt-6.1-sol",
       "runtime": "codex",
       "technique": "spawn_agent"
@@ -411,70 +422,70 @@ family evidence per role. For example, for a configured `sol` route:
 }
 ```
 
-A generated Claude agent supplies its resolved id and structured default effort
-when no effort is requested. Unresolved model patterns, ambiguous concrete
-evidence and unsupported efforts cannot produce certified lines. The first
-eligible caller-observed technique wins; the JSON retains eligible named
-alternatives and invocation/argument guidance, including generated agent
-records. Manual-only routes remain separately labelled. Canonical lines such as
-`role=writer runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high`
-are specifications, not shell commands. The launching orchestrator binds
-task/prompt/output paths and calls native tools natively. Explicit headless
-status excludes external delegates; unknown status reports that condition
-unresolved. No TTY inference, catalog command, live probe or delegate launch
-occurs.
+Observed `efforts: []` always means launch without effort, regardless of role
+request, family default or avoidance. JSON keeps effort null; canonical lines
+omit its token and launchers omit the argument, flag or pin.
 
-The helper runs every registered Reader once on one UTC snapshot, including
-Readers owned by runtimes outside automatic targets; identical commands share
-one read. Only that inventory can reach subprocess execution. Trusted configured
-shell commands run under full strict Bash mode with a ten-second timeout that
-kills the reader process group. Failed, partial or multi-account Readers are
-unmeasured; malformed, expired, missing-duration or unstarted-null-reset
-unscoped windows also make streams unmeasured with reasons. No account routing
-or missing resets are invented. The shared schema is required before pace
-arithmetic: `account` contains `auth_index`, `name` and `plan` (including null
-values), `pool` is a nonempty string, `balances` and `bonuses` are arrays, each
-window's `status` is a string or null, and each `resetsAt` is a UTC timestamp or
-null. Missing fields or wrong shapes make the whole stream unmeasured, except
-malformed scoped windows, which warn and refuse only their named family.
-Registration keys determine budget identity, never reader `.pool` output.
+With Sol's medium default, the example produces this fallback specification:
 
-Each measured pool uses the minimum unscoped window pace
-`(remainingPercent / 100) / ((resetsAt - now) / windowSeconds)` and the minimum
-unscoped remaining share as its buffer; at least one unscoped window is
-required. Reported calendar-month durations remain intact. A scoped window
-`<window>:<model>` matches `<model>` by exact configured family name within that
-pool, not by a model pattern. Each matching candidate uses the worse (minimum)
-of its pool pace and all its scoped paces for both ranking and session
-comparison. A scoped window at 0% excludes only that family and never consumes
-the session pool's buffer. Unknown scopes produce a visible warning naming the
-pool and window without making the pool unmeasured. A consistent unstarted
-scoped window (0% used, 100% remaining, null reset) adds no family limit;
-malformed scoped windows warn and refuse only their named family, preserving
-pool measurement. A scoped window's `status` (the Reader maps `is_active` to
-active/inactive) is not used: its limit applies regardless of status because
-inactive has unknown meaning and applying the limit protects that model's
-allowance.
+```text
+role=first-check runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high
+```
 
-Higher pace sorts first, then non-session pools before the session pool on ties,
-then deterministic family/runtime order. Fit-only candidates use the same
-session-last tie order. An eligible session pool must remain above the strict
-20% unscoped buffer. A measured session candidate may be selected only if every
-other fitting measured pool's candidate is behind or level in effective pace.
-Exhaustion stays measured and never becomes a fit-only fallback. Unmeasured
-candidates are excluded while fitted measured candidates exist; with none,
-output explicitly states fit-only budget/session uncertainty. JSON is printed to
-stdout and concise launch specifications to stderr. `--now` fixes the clock for
-offline tests.
+The candidate's `launch.fallback` is
+`{"kind": "avoided-family", "launchEffort": "high", "resolvedEffort": "medium"}`;
+only a fallback first pick produces a notice, once per role, naming its family
+and launch effort and asking the caller to report it to the user. These lines
+are specifications for native tools, not shell commands. JSON also retains named
+alternatives, invocation guidance and generated-agent records; manual-only
+routes are separately labelled. `nonInteractive: true` excludes external
+techniques; absent mode evidence leaves them unresolved.
 
-`checks/routing-plan-runtime.py scripts/delegate-routing-plan.py` exercises fake
-Readers and hand-written expectations, including a subprocess spy that rejects
-any candidate/probe launch. CI exposes it as `delegate-routing-plan-runtime`.
-Eight backend/runtime delivery fixtures check the rendered helper command,
-runtime/session-pool identity in the skill, and policy prose for Reader
-completeness, the session buffer and named review fallbacks. Reader collection,
-ranking and buffer behavior are tested against the source Python helper with
-synthetic manifests. The
+Only configured Reader commands reach subprocess execution. Identical commands
+share one read and retry; full strict Bash mode and a ten-second process-group
+timeout bound execution. Registration keys determine budget identity rather than
+Reader `.pool` output. The required envelope has `account` fields `auth_index`,
+`name` and `plan` (including null values), a nonempty string `pool`, arrays
+`balances` and `bonuses`, and a `windows` map. An empty map is valid and
+unmeasured. Failure reasons use safe validation text, never Reader stderr,
+command text or exception payloads.
+
+The pace formula is
+`(remainingPercent / 100) / ((resetsAt - now) / windowSeconds)`. The pool uses
+the minimum unscoped pace and remaining share; a candidate uses the minimum of
+pool and matching scoped paces. Remaining shares must be finite numbers in
+[0,100], excluding booleans. Used windows require a UTC reset and retain the
+strict reset-duration bound; reported calendar-month durations remain intact.
+Idle windows bypass reset validation; all-idle pools use pace 1.0 and full
+buffer. Scoped `status` is ignored because inactive has unknown meaning. Ties
+sort non-session pools first, then family/runtime deterministically.
+
+JSON goes to stdout and canonical lines to stderr. JSON includes all warnings;
+stderr includes failure warnings and the fallback notice; advisory notes stay
+JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
+the UTC snapshot for offline tests. No TTY inference, catalog command, live
+probe or delegate launch occurs.
+
+From this package directory, run the offline runtime suite with its explicit
+fixture input:
+
+```bash
+python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json
+```
+
+It exercises fake Readers and hand-written expectations, including a subprocess
+spy that rejects any candidate/probe launch. The fixture preserves five full
+successful Reader envelopes captured live from the five registered pools,
+evaluated at `2026-11-10T00:08:41Z`. Only `account.auth_index` and
+`account.name` are replaced with stable synthetic strings; nulls, field types,
+windows, balances and bonuses are preserved. These captures verify arithmetic
+and ranking; synthetic cases verify Reader failures. CI passes the fixture store
+path explicitly in `delegate-routing-plan-runtime`. Eight backend/runtime
+delivery fixtures check the rendered helper command, runtime/session-pool
+identity in the skill, and policy prose for Reader completeness, the session
+buffer and shared avoided-family fallback. Reader collection, ranking and buffer
+behavior are tested against the source Python helper with synthetic manifests.
+The
 `module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
 checks read each backend’s delivered `SKILL.md` for that runtime, follow its
 rendered command to the packaged wrapper and manifest, and run that wrapper with
@@ -675,10 +686,10 @@ The resolved Work and review workflow's Plan step (`fragments/plan-work.md`)
 defines the saved JSON fields and the prepared brief contract. Before
 task-source investigation, an orchestrator runs its own runtime's helper for
 `planner`, selects a fitted pinned candidate and passes the task, paths, saved
-rubric and resolved routing/workflow context. No reachable qualified planner is
-a loop failure. An assigned worker executing an approved bounded unit does not
-recursively invoke a planner for it. New scope requires replanning the affected
-portion.
+rubric and resolved routing/workflow context. No reachable qualified planner
+after shared avoided-family fallback is a loop failure. An assigned worker
+executing an approved bounded unit does not recursively invoke a planner for it.
+New scope requires replanning the affected portion.
 
 The planner saves `task`, originating launch `runtime`, the complete captured
 helper JSON as `snapshot`, `rubric`, `units` and `waves` in the
@@ -703,11 +714,13 @@ Invoke the same rendered executable with
 host/user cap; the ceiling is ten. This operation collects fresh Readers and
 validates the saved choices against that current role-qualified helper output,
 not an allowlist embedded in the plan. It checks launching runtime, candidate
-and pinned line together, dependency existence/cycles/order, disjoint exact
-normalized writer paths, wave bounds and rubric bytes. A successful exit
-includes `validation.status = "valid"` in the returned JSON. Unknown/unresolved
-launches, automatic use of a manual-only route and invalid artifacts fail
-without an approval result. An explicit request for a manual-only route remains
+and pinned line together, including current fallback metadata and intentional
+null effort, dependency existence/cycles/order, disjoint exact normalized writer
+paths, wave bounds and rubric bytes. A successful exit includes
+`validation.status = "valid"` in the returned JSON. Unknown/unresolved launches,
+automatic use of a manual-only route and invalid artifacts fail without an
+approval result. Candidate equality does not bind actual worker identity or add
+a worker-effort contract. An explicit request for a manual-only route remains
 governed separately by user authorization, not this automatic validator.
 
 The saved snapshot is provenance, never a freshness certificate. Changed context

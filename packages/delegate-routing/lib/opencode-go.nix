@@ -52,6 +52,7 @@
   families = {
     go-beam-free = {
       avoidFor = "sole judging; reasoning across huge documents; time-critical work that depends on free capacity";
+      defaultEffort = "high";
       effort = "high for bounded reasoning; max is vendor advice, gains above high unknown";
       match = "beam-free";
       tier = "mid";
@@ -59,6 +60,7 @@
     };
     go-deepseek-v4-pro = {
       avoidFor = "image input; sole final judge; trusting April preview scores for the served checkpoint";
+      defaultEffort = "high";
       effort = "high default, max for named hard reasoning; best setting untested on Go";
       match = "deepseek-v4-pro";
       tier = "strong";
@@ -66,6 +68,7 @@
     };
     "go-deepseek-v4.1-flash" = {
       avoidFor = "sole correctness judge; hardest autonomous tasks without review";
+      defaultEffort = "high";
       effort = "high; low for mechanical tasks; max only after a task-specific check";
       match = "deepseek-v4.1-flash";
       tier = "strong";
@@ -73,6 +76,7 @@
     };
     go-gemini-4-argon = {
       avoidFor = "routine cheap work; trusting full 1M recall; output over 65K tokens through Go";
+      defaultEffort = "medium";
       effort = "medium default, high for hard multi-file work, low for extraction";
       match = "gemini-4-argon";
       tier = "strong";
@@ -80,6 +84,7 @@
     };
     "go-grok-4.7" = {
       avoidFor = "cheap mechanical work; xhigh by default; relying on full-window recall";
+      defaultEffort = "high";
       effort = "high (vendor default); xhigh only for named hard tasks, at high token use";
       match = "grok-4.7";
       tier = "strong";
@@ -87,6 +92,7 @@
     };
     go-hy3 = {
       avoidFor = "image input; sole judging; hardest architecture or long unattended runs";
+      defaultEffort = "high";
       effort = "none, low or high; vendor recommends high for coding";
       match = "hy3";
       tier = "mid";
@@ -94,6 +100,7 @@
     };
     go-hy4 = {
       avoidFor = "sole judging; latency-sensitive work; hardest unattended runs";
+      defaultEffort = "high";
       effort = "none or high; high is the vendor default";
       match = "hy4";
       tier = "mid";
@@ -101,6 +108,7 @@
     };
     go-hy4-preview = {
       avoidFor = "hardest autonomous terminal work; latency-sensitive tasks; sole judging";
+      defaultEffort = "high";
       effort = "none or high; high for coding";
       match = "hy4-preview";
       tier = "mid";
@@ -108,6 +116,7 @@
     };
     go-iceman-contributor-free = {
       avoidFor = "long autonomous tool loops; sole judging; inputs that must not be used for training";
+      defaultEffort = null;
       effort = "leave unset; no effort levels advertised";
       match = "iceman-contributor-free";
       tier = "small";
@@ -115,6 +124,7 @@
     };
     "go-kimi-k2.7-code" = {
       avoidFor = "sole judging; forced tool choice; general writing or analysis without a task check";
+      defaultEffort = null;
       effort = "always thinks; no effort levels";
       match = "kimi-k2.7-code";
       tier = "mid";
@@ -122,6 +132,7 @@
     };
     go-kimi-k3 = {
       avoidFor = "routine extraction; latency-sensitive work; final presentation polish; sole judge";
+      defaultEffort = "max";
       effort = "always thinks; max only on Go";
       match = "kimi-k3";
       tier = "strong";
@@ -129,6 +140,7 @@
     };
     "go-kimi-k3.1-pro" = {
       avoidFor = "latency-sensitive routine work at max; sole finance or legal auditor; trusting full-window accuracy";
+      defaultEffort = "max";
       effort = "max default and the tested hard-task setting; low for bounded latency-sensitive work";
       match = "kimi-k3.1-pro";
       tier = "strong";
@@ -136,6 +148,7 @@
     };
     "go-longcat-2.0" = {
       avoidFor = "image input; sole judging; unattended long-horizon work";
+      defaultEffort = null;
       effort = "thinking on or off only; no effort levels";
       match = "longcat-2.0";
       tier = "mid";
@@ -143,6 +156,7 @@
     };
     "go-longcat-2.5-free" = {
       avoidFor = "provisional: sole judging; unattended long-horizon work; relying on the limited-time free listing; inputs that cannot be hosted in China (Global regions required)";
+      defaultEffort = null;
       effort = "thinking on or off only; no effort levels advertised by Go";
       match = "longcat-2.5-free";
       tier = "mid";
@@ -150,6 +164,7 @@
     };
     "go-mimo-v2.6-flash" = {
       avoidFor = "sole final judge; latency-critical work; long unattended tool runs (repetition untested)";
+      defaultEffort = null;
       effort = "thinks by default; on/off switch, no effort levels";
       match = "mimo-v2.6-flash";
       tier = "strong";
@@ -157,6 +172,7 @@
     };
     "go-mimo-v2.6-pro" = {
       avoidFor = "latency-sensitive routine work; sole final judgment; trusting the full 1M context";
+      defaultEffort = null;
       effort = "thinks by default; on/off switch, no effort levels";
       match = "mimo-v2.6-pro";
       tier = "strong";
@@ -164,6 +180,7 @@
     };
     go-minimax-m3 = {
       avoidFor = "sole factual judge; hardest autonomous runs; trusting full 1M recall";
+      defaultEffort = null;
       effort = "thinking on or off only; on for reasoning, off for simple turns";
       match = "minimax-m3";
       tier = "mid";
@@ -171,6 +188,7 @@
     };
     "go-minimax-m3.1-flash" = {
       avoidFor = "latency-sensitive interaction; unchecked numeric claims; hardest unattended runs; sole judging";
+      defaultEffort = "max";
       effort = "always adaptive; max is the vendor default and evaluated setting";
       match = "minimax-m3.1-flash";
       tier = "mid";
@@ -179,6 +197,7 @@
     # The research groups 1.2 and 1.3: same role, effort ladder and training terms.
     go-muse-spark-contributor = {
       avoidFor = "content that must stay out of training; sole judging; trusting full-window recall";
+      defaultEffort = "xhigh";
       effort = "minimal to xhigh, no max; xhigh has independent task evidence";
       match = "muse-spark-1.[23]-contributor";
       tier = "strong";
@@ -186,6 +205,7 @@
     };
     "go-qwen3.7-plus" = {
       avoidFor = "sole diagnostic judgment; latency-sensitive work; million-token reasoning";
+      defaultEffort = null;
       effort = "thinking on for analysis, off for mechanical work; no effort levels";
       match = "qwen3.7-plus";
       tier = "mid";
@@ -193,6 +213,7 @@
     };
     "go-qwen3.8-flash" = {
       avoidFor = "sole judging; hard synthesis; final prose polish; long autonomous runs";
+      defaultEffort = "medium";
       effort = "medium; low or off for mechanical work; xhigh for named hard tasks";
       match = "qwen3.8-flash";
       tier = "mid";
@@ -200,6 +221,7 @@
     };
     "go-qwen3.8-max" = {
       avoidFor = "sole judge; unverified autonomous delivery; latency-sensitive tasks";
+      defaultEffort = "medium";
       effort = "low, medium or xhigh plus a thinking switch; medium for bounded tasks (untested)";
       match = "qwen3.8-max";
       tier = "mid";
@@ -207,6 +229,7 @@
     };
     go-step-5-preview = {
       avoidFor = "hardest proof work; sole judging; long autonomous runs without tests";
+      defaultEffort = "medium";
       effort = "medium (vendor advice); high for complex code analysis, low for extraction";
       match = "step-5-preview";
       tier = "strong";

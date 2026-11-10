@@ -3,14 +3,16 @@ from copy import deepcopy
 import importlib.util
 import json
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 SOURCE = Path(sys.argv.pop(1)).resolve()
+FIXTURE = Path(sys.argv.pop(1)).resolve()
 spec = importlib.util.spec_from_file_location("routing_plan", SOURCE)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
@@ -31,12 +33,12 @@ def technique(name="spawn_agent", kind="subagent", model="gpt-6.1-sol", pattern=
     return {"agent": agent, "model": {"isPattern": pattern, "value": model}, "name": name, "node": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "kind": kind, "modelArg": "slug", "notes": "caller binds task/output paths"}}
 
 
-def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None):
-    return {"family": {"avoidFor": "sole judge", "effort": "prose is not an effort enum", "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
+def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, default=None):
+    return {"family": {"avoidFor": "sole judge", "defaultEffort": default, "effort": "prose is not an effort enum", "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
 def manifest(routes=None, session=None):
-    return {"manualRoutes": [route("manual", pool=None)], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
+    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
 def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
@@ -44,7 +46,7 @@ def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=
 
 
 class Routing(unittest.TestCase):
-    def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None):
+    def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None, now=NOW):
         calls = []
         def reader(argv, **kwargs):
             self.assertEqual(argv[:4], [SHELL, "-euETo", "pipefail", "-c"])
@@ -57,9 +59,471 @@ class Routing(unittest.TestCase):
             if isinstance(value, subprocess.CompletedProcess):
                 return value
             return subprocess.CompletedProcess(argv, 0, value)
-        with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")):
-            result = helper.plan(config or manifest(), launch_context or context(roles), roles, NOW, SHELL, reader)
+        with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")), patch("time.sleep"):
+            result = helper.plan(config or manifest(), launch_context or context(roles), roles, now, SHELL, reader)
         return result, calls
+
+    def test_frozen_reader_corpus(self):
+        # Wrong: idle null/skewed resets add window errors; envelopes lose registration identity, monthly duration or scoped pace.
+        corpus = json.loads(FIXTURE.read_text())
+        self.assertEqual(corpus["capturedAt"], "2026-11-10T00:08:41Z")
+        # Literal expectations from capture fields and hand arithmetic, not measure().
+        expected = {
+            "anthropic-api": (0.671126133525, 0.959027001303174),
+            "claude": (0.09, 1.1761706173426392),
+            "codex": (0.67, 1.8244426034650434),
+            "opencode-go": (0.23, 0.34550405357278063),
+            "z-ai": (0.6, 1.0483952514813841),
+        }
+        self.assertEqual(set(corpus["readers"]), set(expected))
+        self.assertEqual(corpus["readers"]["anthropic-api"]["windows"]["monthly"]["windowSeconds"], 2592000)
+        self.assertEqual(corpus["readers"]["opencode-go"]["windows"]["monthly"]["windowSeconds"], 2678400)
+        config = manifest([route("fable" if name == "claude" else name, pool=name) for name in expected])
+        config["readers"] = [{"command": f"reader-{name}", "name": name} for name in expected]
+        ctx = context(names=tuple(r["family"]["name"] for r in config["routes"]))
+        ctx["roles"]["writer"].update({"avoid": [], "exclude": []})
+        outputs = {f"reader-{name}": json.dumps(document) for name, document in corpus["readers"].items()}
+        for session, order in [
+            (None, ["codex", "claude", "z-ai", "anthropic-api", "opencode-go"]),
+            ("claude", ["codex", "z-ai", "anthropic-api", "opencode-go"]),
+        ]:
+            with self.subTest(session=session):
+                config["sessionPool"] = session
+                result, calls = self.run_plan(config, ctx, outputs=outputs, now=helper.utc(corpus["capturedAt"]))
+                self.assertEqual(calls, [r["command"] for r in config["readers"]])
+                self.assertEqual(set(result["pools"]), set(expected))
+                for name, (buffer, pace) in expected.items():
+                    with self.subTest(pool=name):
+                        pool = result["pools"][name]
+                        self.assertEqual(pool["status"], "measured")
+                        self.assertNotIn("windowErrors", pool)
+                        self.assertAlmostEqual(pool["buffer"], buffer)
+                        self.assertAlmostEqual(pool["pace"], pace)
+                self.assertAlmostEqual(result["pools"]["claude"]["scopedPaces"]["7d:fable"], 6.795652455757471)
+                candidates = result["roles"]["writer"]["candidates"]
+                self.assertEqual([c["pool"] for c in candidates], order)
+                for candidate in candidates:
+                    self.assertAlmostEqual(candidate["pace"], expected[candidate["pool"]][1])
+                self.assertEqual(result["roles"]["writer"]["exclusions"], [] if session is None else [{"family": "fable", "reason": "session buffer must be strictly greater than 20%", "runtime": "codex"}])
+
+    def test_shared_avoid_ranking_all_roles(self):
+        # Wrong: avoid is ignored, hard exclusion, or a review-only policy.
+        roles = tuple(helper.ROLE_TIERS)
+        config = manifest([route("fast", pool="outside"), route("normal", pool="session"), route("other", pool="hidden")])
+        ctx = context(roles, ("fast", "normal", "other"))
+        outputs = {"reader-outside": stream({"monthly": window(80)}), "reader-session": stream({"monthly": window(40)}), "reader-hidden-runtime": stream({"monthly": window(60)})}
+        for role in roles:
+            ctx["roles"][role]["avoid"] = ["other", "fast", "fast"]
+        result, _ = self.run_plan(config, ctx, roles, outputs)
+        for role in roles:
+            with self.subTest(role=role):
+                candidates = result["roles"][role]["candidates"]
+                self.assertEqual([c["launch"]["family"] for c in candidates], ["normal", "fast", "other"])
+                self.assertNotIn("fallback", candidates[0]["launch"])
+                self.assertEqual(candidates[1]["launch"]["fallback"], {"kind": "avoided-family", "resolvedEffort": "high", "launchEffort": "high"})
+                self.assertFalse(any(w.startswith(f"WARNING: {role}:") for w in result["warnings"]))
+        for request in ctx["roles"].values():
+            request["avoid"] = ["normal", "other", "fast"]
+        result, _ = self.run_plan(config, ctx, roles, outputs)
+        for role in roles:
+            with self.subTest(role=role, all_avoided=True):
+                self.assertEqual([c["launch"]["family"] for c in result["roles"][role]["candidates"]], ["fast", "other", "normal"])
+
+    def test_non_avoided_first_pick_has_no_fallback_warning(self):
+        # Wrong: retained avoided alternatives warn when the selected family is not avoided.
+        ctx = context(("first-check",), ("glm", "sol"))
+        ctx["roles"]["first-check"]["avoid"] = ["sol"]
+        result, _ = self.run_plan(manifest([route("sol"), route("glm")]), ctx, ("first-check",))
+        candidates = result["roles"]["first-check"]["candidates"]
+        self.assertEqual([candidate["launch"]["family"] for candidate in candidates], ["glm", "sol"])
+        self.assertEqual(candidates[1]["launch"]["fallback"], {"kind": "avoided-family", "resolvedEffort": "high", "launchEffort": "high"})
+        self.assertEqual([warning for warning in result["warnings"] if warning.startswith("WARNING: first-check:")], [])
+
+    def test_only_avoided_candidates_warn_once_per_role(self):
+        # Wrong: every retained fallback warns or selection is reported as a failure.
+        roles = ("first-check", "second-check", "judge")
+        ctx = context(roles, ("glm", "sol"))
+        for request in ctx["roles"].values():
+            request["avoid"] = ["glm", "sol"]
+        result, _ = self.run_plan(manifest([route("sol"), route("glm")]), ctx, roles)
+        self.assertEqual([warning for warning in result["warnings"] if warning.startswith(tuple(f"WARNING: {role}:" for role in roles))], [
+            "WARNING: first-check: no non-avoided candidate; using fallback glm at effort high. Report this to the user.",
+            "WARNING: second-check: no non-avoided candidate; using fallback glm at effort high. Report this to the user.",
+            "WARNING: judge: no non-avoided candidate; using fallback glm at effort high. Report this to the user.",
+        ])
+
+    def test_role_lists_validation_and_exclusion(self):
+        # Wrong: malformed/unknown lists survive until Readers, or overlap avoids.
+        roles = tuple(helper.ROLE_TIERS)
+        config = manifest([route(), route(target="claude"), route("other")])
+        for role in roles:
+            for field in ("avoid", "exclude"):
+                for value in (None, "sol", {}, [1], [True], [""], ["unknown"], ["provider"], ["s*"]):
+                    with self.subTest(role=role, field=field, value=value):
+                        ctx = context((role,), ("sol", "other"))
+                        ctx["roles"][role][field] = value
+                        with patch.object(helper, "collect", side_effect=AssertionError("invalid lists reached Readers")):
+                            with self.assertRaisesRegex(ValueError, field):
+                                self.run_plan(config, ctx, (role,))
+            for lists in ({}, {"avoid": [], "exclude": []}, {"avoid": ["manual", "dormant"], "exclude": ["dormant"]}):
+                ctx = context((role,), ("sol", "other"))
+                ctx["roles"][role].update(lists)
+                result, _ = self.run_plan(config, ctx, (role,))
+                self.assertEqual([c["launch"]["family"] for c in result["roles"][role]["candidates"]], ["other", "sol"])
+            ctx["roles"][role].update({"avoid": ["sol"], "exclude": ["sol", "sol"]})
+            excluded_config = deepcopy(config)
+            excluded_config["routes"][0]["family"]["tier"] = "invalid"
+            result, _ = self.run_plan(excluded_config, ctx, (role,))
+            self.assertEqual([c["launch"]["family"] for c in result["roles"][role]["candidates"]], ["other"])
+            self.assertEqual([e["reason"] for e in result["roles"][role]["exclusions"] if e["family"] == "sol"], ["excluded by caller", "excluded by caller"])
+            ctx["roles"][role]["exclude"] = ["other", "sol", "sol"]
+            result, _ = self.run_plan(config, ctx, (role,))
+            self.assertEqual(result["roles"][role]["candidates"], [])
+            self.assertEqual([e["reason"] for e in result["roles"][role]["exclusions"]], ["excluded by caller"] * 3)
+
+    def test_avoid_partitions_and_global_session_pace(self):
+        # Wrong: avoided measurement erases fit-only, or avoid bypasses session pace.
+        roles = tuple(helper.ROLE_TIERS)
+        for session in (None, "session"):
+            config = manifest([route("normal", pool=None if session is None else "session"), route("fast")] + ([route("unbound", pool=None)] if session else []), session)
+            ctx = context(roles, ("normal", "fast", "unbound"))
+            for request in ctx["roles"].values():
+                request["avoid"] = ["fast"]
+            outputs = {"reader-outside": stream({"monthly": window(80)}), "reader-session": stream({"monthly": window(40)})}
+            result, _ = self.run_plan(config, ctx, roles, outputs)
+            for role in roles:
+                with self.subTest(role=role, session=session):
+                    candidates = result["roles"][role]["candidates"]
+                    self.assertEqual([c["launch"]["family"] for c in candidates], ["normal", "fast"] if session is None else ["unbound", "fast"])
+                    if session is None:
+                        self.assertEqual(candidates[0]["budget"], "fit-only; budget and session buffer unknown")
+                    else:
+                        self.assertIn("another fitting pool is ahead of session pace", [e["reason"] for e in result["roles"][role]["exclusions"]])
+
+    def test_family_defaults_and_supported_fallback_effort(self):
+        # Wrong: agent-only defaults, caller-ordered/lexical bumps, or top refusal.
+        roles = tuple(helper.ROLE_TIERS)
+        for default, override, supported, avoided, expected in [
+            ("medium", None, ["high", "medium"], False, "medium"),
+            ("medium", None, ["high", "medium"], True, "high"),
+            ("high", None, ["max", "high"], True, "max"),
+            ("high", None, ["max", "xhigh", "high"], True, "xhigh"),
+            ("medium", "high", ["max", "high", "xhigh"], True, "xhigh"),
+            ("max", None, ["max", "low"], True, "max"),
+            (None, None, [], True, None),
+            ("high", None, [], True, None),
+            ("high", "max", [], True, None),
+            (None, None, [], False, None),
+        ]:
+            for kind in ("subagent", "workflow", "external"):
+                config = manifest([route(default=default, techniques=[technique(kind=kind)])])
+                ctx = context(roles, effort=override)
+                ctx["techniques"][0]["efforts"] = supported
+                for request in ctx["roles"].values():
+                    request["avoid"] = ["sol"] if avoided else []
+                result, _ = self.run_plan(config, ctx, roles)
+                for role in roles:
+                    with self.subTest(role=role, default=default, override=override, supported=supported, avoided=avoided, kind=kind):
+                        self.assertTrue(result["roles"][role]["candidates"], "family default/omission must resolve a launch")
+                        candidate = result["roles"][role]["candidates"][0]
+                        self.assertEqual(candidate["launch"]["effort"], expected)
+                        if expected is None:
+                            self.assertNotIn("effort=", candidate["line"])
+                        if avoided:
+                            self.assertEqual(candidate["launch"]["fallback"], {"kind": "avoided-family", "resolvedEffort": override or default, "launchEffort": expected})
+        for default, override, supported in [(None, None, ["high"]), ("medium", None, ["high"]), ("high", "low", ["high", "max"]), ("ultra", None, ["ultra"]), ("high", "ultra", ["ultra"])]:
+            with self.subTest(unsupported=(default, override, supported)):
+                ctx = context(roles, effort=override)
+                ctx["techniques"][0]["efforts"] = supported
+                for request in ctx["roles"].values():
+                    request["avoid"] = ["sol"]
+                result, _ = self.run_plan(manifest([route(default=default)]), ctx, roles)
+                self.assertTrue(all(not result["roles"][role]["candidates"] for role in roles))
+
+    def test_no_effort_support_omits_every_role_pin(self):
+        # Empty support overrides defaults and requests on every launch kind.
+        roles = tuple(helper.ROLE_TIERS)
+        for default, override in [("high", None), (None, "max"), ("high", "ultra")]:
+            for avoided in (False, True):
+                for kind in ("subagent", "workflow", "external"):
+                    config = manifest([route(default=default, techniques=[technique(kind=kind)])])
+                    ctx = context(roles, effort=override)
+                    ctx["techniques"][0]["efforts"] = []
+                    for request in ctx["roles"].values():
+                        request["avoid"] = ["sol"] if avoided else []
+                    result, _ = self.run_plan(config, ctx, roles)
+                    for role in roles:
+                        with self.subTest(role=role, default=default, override=override, avoided=avoided, kind=kind):
+                            self.assertEqual(result["roles"][role]["exclusions"], [])
+                            candidate = result["roles"][role]["candidates"][0]
+                            self.assertIsNone(candidate["launch"]["effort"])
+                            self.assertEqual(candidate["line"], f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol")
+                            if avoided:
+                                self.assertEqual(candidate["launch"]["fallback"], {"kind": "avoided-family", "resolvedEffort": override or default, "launchEffort": None})
+                            else:
+                                self.assertNotIn("fallback", candidate["launch"])
+
+    def test_avoid_alternatives_and_fresh_launch_equality(self):
+        # Wrong: only the primary technique discloses fallback or saved metadata is ignored.
+        nodes = [technique(), technique("Workflow", "workflow")]
+        roles = ("writer", "first-check", "second-check", "judge")
+        ctx = context(roles)
+        ctx["techniques"].append({"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "Workflow"})
+        for request in ctx["roles"].values():
+            request["avoid"] = ["sol"]
+        result, _ = self.run_plan(manifest([route(techniques=nodes)]), ctx, roles)
+        candidate = result["roles"]["writer"]["candidates"][0]
+        self.assertEqual(candidate["alternatives"][0]["fallback"], {"kind": "avoided-family", "resolvedEffort": "high", "launchEffort": "high"})
+        with tempfile.TemporaryDirectory(prefix="routing-fallback-plan-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root)
+            artifact["snapshot"] = result
+            for unit in artifact["units"]:
+                unit["launches"] = [dict(record, candidate=deepcopy(result["roles"][record["role"]]["candidates"][0]["launch"]), line=result["roles"][record["role"]]["candidates"][0]["line"]) for record in unit["launches"]]
+            self.assertEqual(helper.check_plan(artifact, result, root)["status"], "valid")
+            del artifact["units"][0]["launches"][0]["candidate"]["fallback"]
+            with self.assertRaisesRegex(ValueError, "absent from current"):
+                helper.check_plan(artifact, result, root)
+
+    def test_avoided_routes_keep_intrinsic_gates(self):
+        # Wrong: fallback bypasses floors, fit, headless, failed/scoped/buffer gates.
+        for role in helper.ROLE_TIERS:
+            for gate in ("floor", "fit", "headless", "unreachable", "exhausted", "scoped", "buffer"):
+                config = manifest([route()], "outside" if gate == "buffer" else None)
+                ctx = context((role,))
+                ctx["roles"][role]["avoid"] = ["sol"]
+                outputs = {}
+                if gate == "floor":
+                    config["routes"][0]["family"]["tier"] = "invalid"
+                elif gate == "fit":
+                    ctx["roles"][role]["families"] = {}
+                elif gate == "headless":
+                    config["routes"][0]["techniques"][0]["node"]["kind"] = "external"
+                    ctx["nonInteractive"] = True
+                elif gate == "unreachable":
+                    outputs["reader-outside"] = subprocess.CompletedProcess([], 7, "", "private")
+                elif gate == "exhausted":
+                    outputs["reader-outside"] = stream({"monthly": window(0)})
+                elif gate == "scoped":
+                    outputs["reader-outside"] = stream({"monthly": window(), "weekly:sol": window(0)})
+                else:
+                    outputs["reader-outside"] = stream({"monthly": window(20)})
+                with self.subTest(role=role, gate=gate):
+                    result, _ = self.run_plan(config, ctx, (role,), outputs)
+                    self.assertEqual(result["roles"][role]["candidates"], [])
+                    self.assertIn("error", result["roles"][role])
+
+    def test_fallback_cli_json_stderr_and_null_omission(self):
+        # Wrong: fallback is silent or None/null is bound as an effort token.
+        with tempfile.TemporaryDirectory(prefix="routing-fallback-") as directory:
+            root = Path(directory)
+            config = manifest([route(default=None)])
+            config["readers"] = [{"name": "outside", "command": "printf '%s' " + shlex.quote(stream())}]
+            ctx = context(effort=None)
+            ctx["techniques"][0]["efforts"] = []
+            ctx["roles"]["writer"]["avoid"] = ["sol"]
+            for name, value in (("manifest", config), ("context", ctx)):
+                (root / f"{name}.json").write_text(json.dumps(value))
+            proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--now", "2026-11-15T00:00:00Z", "--role", "writer"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            launch = json.loads(proc.stdout)["roles"]["writer"]["candidates"][0]["launch"]
+            self.assertEqual(launch["fallback"], {"kind": "avoided-family", "resolvedEffort": None, "launchEffort": None})
+            self.assertIn("writer: no non-avoided candidate; using fallback sol", proc.stderr)
+            self.assertIn("at effort omitted intentionally", proc.stderr)
+            self.assertIn("Report this to the user.", proc.stderr)
+            self.assertNotIn("effort=", proc.stderr)
+
+    def test_partial_window_facts(self):
+        # Wrong: a bad reset erases a readable share or the healthy weekly pace.
+        for remaining, buffer, pace, status in [(10, 0.1, 1.0, "measured"), ("unreadable", None, 1.0, "measured"), (0, 0, 0, "measured")]:
+            with self.subTest(remaining=remaining):
+                bad = window(10, 18000, "private-reset-payload")
+                bad["remainingPercent"] = remaining
+                if isinstance(remaining, int):
+                    bad["usedPercent"] = 100 - remaining
+                result, _ = self.run_plan(outputs={"reader-outside": stream({"7d": window(50, 604800, "2026-11-18T12:00:00Z"), "5h": bad})})
+                pool = result["pools"]["outside"]
+                self.assertEqual((pool["status"], pool["buffer"], pool["pace"]), (status, buffer, pace))
+                self.assertEqual(len([w for w in result["warnings"] if "outside" in w and "5h" in w]), 1)
+                self.assertNotIn("private-reset-payload", json.dumps(result))
+        # Wrong: unreadable data erases a conclusive zero, or all-bad pace is invented.
+        for windows, buffer, pace, status in [
+            ({"5h": window(0, 0, None), "7d": {}}, 0, 0, "measured"),
+            ({"5h": window(10, 0, None)}, 0.1, None, "unmeasured"),
+            ({"5h": {}}, None, None, "unmeasured"),
+        ]:
+            with self.subTest(windows=windows):
+                pool = helper.measure(stream(windows), NOW)
+                self.assertEqual((pool["status"], pool["buffer"], pool["pace"]), (status, buffer, pace))
+
+    def test_partial_session_certification(self):
+        # Wrong: certify only readable shares, or discard a low share with bad pace.
+        config = manifest([route(pool="session")], "session")
+        for remaining, expected in [(10, False), (None, False), (0, False), (20, False), (20.01, True)]:
+            with self.subTest(remaining=remaining):
+                bad = window(10, 0, None)
+                if remaining is None:
+                    del bad["remainingPercent"]
+                else:
+                    bad["remainingPercent"] = remaining
+                result, _ = self.run_plan(config, outputs={"reader-session": stream({"7d": window(50, 604800, "2026-11-18T12:00:00Z"), "5h": bad})})
+                self.assertEqual(bool(result["roles"]["writer"]["candidates"]), expected)
+                if remaining is None:
+                    self.assertEqual(result["roles"]["writer"]["exclusions"][-1]["reason"], "session buffer cannot be certified")
+        # Wrong: booleans or non-finite/out-of-range shares certify a buffer.
+        for share in (True, float("nan"), float("inf"), -1, 101):
+            with self.subTest(share=share):
+                pool = helper.measure(stream({"7d": window(), "bad": {"remainingPercent": share}}), NOW)
+                self.assertIsNone(pool["buffer"])
+
+    def counted_reader(self, mode, expected, count):
+        with tempfile.TemporaryDirectory(prefix="routing-retry-") as directory:
+            root = Path(directory)
+            counter = root / "calls"
+            script = root / "reader.py"
+            script.write_text(
+                "from pathlib import Path\nimport sys\nimport time\n"
+                f"counter = Path({str(counter)!r})\n"
+                "count = int(counter.read_text()) + 1 if counter.exists() else 1\n"
+                "counter.write_text(str(count))\n"
+                f"mode = {mode!r}\n"
+                "if mode == 'fail-twice' or mode == 'fail-once' and count == 1:\n    sys.exit(7)\n"
+                "if mode == 'timeout-once' and count == 1:\n    time.sleep(30)\n"
+                f"print('invalid-json' if mode == 'invalid-json' else '[]' if mode == 'invalid-envelope' else {stream()!r})\n"
+            )
+            command = shlex.join([sys.executable, str(script)])
+            readers = [{"command": command, "name": name} for name in ("outside", "alias")]
+            with patch.object(helper, "READER_TIMEOUT", 5), patch("time.sleep") as sleep:
+                result = helper.collect(readers, NOW, SHELL)
+            self.assertEqual(int(counter.read_text()), count)
+            self.assertEqual(result, {"alias": expected, "outside": expected})
+            # Count only the retry pause: subprocess's own timeout polling also
+            # calls time.sleep, as often as the runner's speed dictates.
+            retry_pauses = sleep.call_args_list.count(call(helper.READER_RETRY_DELAY))
+            self.assertEqual(helper.READER_RETRY_DELAY, 2)
+            self.assertEqual(retry_pauses, 1 if count == 2 else 0)
+
+    def test_reader_retries_nonzero_once_then_measures(self):
+        # Wrong: a non-zero Reader exit is final even when the retry succeeds.
+        self.counted_reader("fail-once", {"buffer": 0.5, "pace": 0.9375, "status": "measured"}, 2)
+
+    def test_reader_retries_nonzero_only_once(self):
+        # Wrong: a persistent non-zero Reader exit retries indefinitely.
+        self.counted_reader("fail-twice", {"reason": "Reader exited 7", "status": "unreachable"}, 2)
+
+    def test_reader_retries_timeout_once_then_measures(self):
+        # Wrong: a Reader timeout is final even when the retry succeeds.
+        self.counted_reader("timeout-once", {"buffer": 0.5, "pace": 0.9375, "status": "measured"}, 2)
+
+    def test_reader_does_not_retry_invalid_json(self):
+        # Wrong: invalid Reader JSON is retried as a transport failure.
+        self.counted_reader("invalid-json", {"reason": "invalid Reader output", "status": "unreachable"}, 1)
+
+    def test_reader_does_not_retry_invalid_envelope(self):
+        # Wrong: an invalid Reader envelope is retried as a transport failure.
+        self.counted_reader("invalid-envelope", {"reason": "invalid Reader output", "status": "unreachable"}, 1)
+
+    def test_dropped_window_warning_reports_failure_to_user(self):
+        # Wrong: a dropped window warning omits the user-report instruction.
+        result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": window(50, 0, None)})})
+        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:")], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
+
+    def test_window_warning_cannot_forge_stderr_lines(self):
+        # Wrong: Reader-controlled window names inject extra stderr lines.
+        result, _ = self.run_plan(outputs={"reader-outside": stream({"5h\nFORGED\x1b": window(50, 0, None)})})
+        warnings = [w for w in result["warnings"] if w.startswith("WARNING:")]
+        self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
+        self.assertEqual(len(warnings[0].splitlines()), 1)
+
+    def test_reader_failures_never_supply_fit_only_routes(self):
+        # Wrong: failed Readers become fit-only choices, including HTTP 429.
+        failures = [
+            (subprocess.CompletedProcess("secret-command", 7, "", "HTTP 429 secret-stderr"), "Reader exited 7"),
+            (subprocess.TimeoutExpired("secret-command", 10, stderr="secret-stderr"), "Reader timed out"),
+            (OSError("secret-command secret-stderr"), "Reader could not execute"),
+            ("secret-json", "invalid Reader output"),
+            ("[]", "invalid Reader output"),
+            (stream() + "\n" + stream(), "invalid Reader output"),
+        ]
+        for value, reason in failures:
+            with self.subTest(reason=reason, value=value):
+                config = manifest([route(), route("other", pool="session")])
+                config["readers"][1]["command"] = "reader-outside"
+                outputs = {"reader-outside": value}
+                result, calls = self.run_plan(config, context(names=("sol", "other")), outputs=outputs)
+                self.assertEqual(calls.count("reader-outside"), 2 if reason in {"Reader exited 7", "Reader timed out"} else 1)
+                self.assertEqual(result["pools"]["outside"], {"reason": reason, "status": "unreachable"})
+                self.assertEqual(result["roles"]["writer"]["candidates"], [])
+                self.assertEqual([w for w in result["warnings"] if "Reader for" in w], [f"WARNING: Reader for outside, session failed: {reason}. Report this failure to the user."])
+                self.assertNotIn("secret-", json.dumps(result))
+                # A healthy alternative survives, without resurrecting the failed pool.
+                config["readers"][1]["command"] = "reader-session"
+                result, _ = self.run_plan(config, context(names=("sol", "other")), outputs=outputs)
+                self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["other"])
+
+    def test_unmeasured_envelopes_and_exhausted_preference(self):
+        # Wrong: exhaustion suppresses an independently observed unbound route.
+        config = manifest([route(), route("unbound", pool=None)])
+        result, _ = self.run_plan(config, context(names=("sol", "unbound")), outputs={"reader-outside": stream({"5h": window(0)})})
+        self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["unbound"])
+        self.assertEqual(result["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
+        # Wrong: empty valid windows or missing registrations are transport failures.
+        empty = json.loads(stream())
+        empty["windows"] = {}
+        for value in (json.dumps(empty), stream({"5h": window(10, 0, None)})):
+            with self.subTest(value=value):
+                result, _ = self.run_plan(outputs={"reader-outside": value})
+                self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
+                self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
+        config = manifest()
+        config["readers"][0]["command"] = None
+        result, _ = self.run_plan(config)
+        self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
+        self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
+
+    def test_scoped_limits_without_usable_unscoped_pace(self):
+        # Wrong: reject a valid envelope or resurrect an exhausted scoped family.
+        for remaining, expected in [(50, ["sol"]), (0, [])]:
+            with self.subTest(remaining=remaining):
+                result, _ = self.run_plan(outputs={"reader-outside": stream({"7d:sol": window(remaining)})})
+                self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
+                self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], expected)
+                if remaining == 50:
+                    self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.9375)
+
+    def test_cli_clean_stderr_contains_only_launch_lines(self):
+        # Wrong: advisory JSON warnings pollute a clean run's launch lines.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = manifest()
+            for reader in config["readers"]:
+                reader["command"] = shlex.join(["printf", "%s", stream()])
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text(json.dumps(context()))
+            proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer", "--now", NOW.isoformat()], capture_output=True, text=True)
+            result = json.loads(proc.stdout)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("provider-vendor identity is provisional; fit/trial/maker independence are caller assessments", result["warnings"])
+            self.assertEqual(proc.stderr.splitlines(), [item["line"] for item in result["roles"]["writer"]["candidates"]])
+
+    def test_cli_degradation_uses_json_warnings(self):
+        # Wrong: advisory notes precede failures, failures are silent, or all-failed returns success.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = manifest()
+            for reader in config["readers"]:
+                reader["command"] = "printf '%s' 'private-reader-stderr' >&2; exit 7"
+            (root / "manifest.json").write_text(json.dumps(config))
+            (root / "context.json").write_text(json.dumps(context()))
+            proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer", "--now", NOW.isoformat()], capture_output=True, text=True)
+            result = json.loads(proc.stdout)
+            self.assertEqual(proc.returncode, 1)
+            self.assertEqual(result["roles"]["writer"]["candidates"], [])
+            for warning in result["warnings"]:
+                self.assertEqual(proc.stderr.count(warning), int(warning.startswith("WARNING:")))
+            self.assertTrue(proc.stderr.startswith("WARNING: Reader for hidden, outside, session failed: Reader exited 7."))
+            self.assertIn("WARNING: Reader for hidden, outside, session failed: Reader exited 7. Report this failure to the user.\n", proc.stderr)
+            self.assertNotIn("private-reader-stderr", proc.stdout + proc.stderr)
 
     def test_inventory_one_snapshot_and_only_registered_commands(self):
         # Wrong: per-role reads, current-runtime filtering, trusting reader .pool.
@@ -94,10 +558,42 @@ class Routing(unittest.TestCase):
         result, _ = self.run_plan(config, context(names=("alpha", "zulu")))
         self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("zulu", 0.9375), ("alpha", 0.9375)])
 
-    def test_session_pool_last_when_fit_only(self):
+    def test_unmeasured_session_buffer_excludes_fit_only_candidate(self):
+        # Preservation: an unmeasured session never permits fit-only use of its buffer.
         config = manifest([route("alpha", pool="session"), route("zulu")], "session")
-        result, _ = self.run_plan(config, context(names=("alpha", "zulu")), outputs={reader["command"]: "invalid" for reader in config["readers"]})
-        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("zulu", None), ("alpha", None)])
+        for outside in (stream({"5h": window(reset=None)}), stream()):
+            with self.subTest(outside=outside):
+                result, _ = self.run_plan(config, context(names=("alpha", "zulu")), outputs={"reader-outside": outside, "reader-session": stream({"5h": window(reset=None)})})
+                self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], ["zulu"])
+                self.assertEqual(result["roles"]["writer"]["exclusions"], [{"family": "alpha", "reason": "session buffer cannot be certified", "runtime": "codex"}])
+
+    def test_idle_unscoped_window_preserves_used_weekly_pace(self):
+        # Wrong: an idle null reset makes the pool unmeasured or limits its pace.
+        windows = {
+            "5h": {"usedPercent": 0, "remainingPercent": 100, "resetsAt": None, "status": None, "windowSeconds": 18000},
+            "7d": window(52, 604800, "2026-11-18T12:00:00Z"),
+        }
+        result, _ = self.run_plan(outputs={"reader-outside": stream(windows)})
+        self.assertEqual(result["pools"]["outside"], {"buffer": 0.52, "pace": 1.04, "status": "measured"})
+
+    def test_all_idle_unscoped_windows_have_full_buffer(self):
+        # Wrong: no active pace means missing unscoped windows or an empty minimum.
+        result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": {"usedPercent": 0, "remainingPercent": 100, "resetsAt": None, "status": None, "windowSeconds": 18000}})})
+        self.assertEqual(result["pools"]["outside"], {"buffer": 1.0, "pace": 1.0, "status": "measured"})
+
+    def test_idle_reset_adds_no_limit_and_used_reset_stays_strict(self):
+        # Wrong: a fixed clock-skew tolerance rejects a later idle reset.
+        now = helper.utc("2026-11-09T23:59:51Z")
+        idle = {"usedPercent": 0, "remainingPercent": 100, "resetsAt": "2026-11-10T05:00:02Z", "status": "ok", "windowSeconds": 18000}
+        with self.subTest(window="opencode idle reset beyond window duration"):
+            measured = helper.measure(stream({"5h": idle}), now)
+            self.assertEqual(measured, {"buffer": 1.0, "pace": 1.0, "status": "measured"})
+        # Wrong: extending the used-window duration bound.
+        for remaining, reset in [(50, "2026-11-15T05:00:01Z"), (50, "2026-11-15T10:00:00Z")]:
+            with self.subTest(remaining=remaining, reset=reset):
+                result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": window(remaining, 18000, reset)})})
+                self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
+                self.assertEqual(result["pools"]["outside"]["windowErrors"]["5h"], "expired reset or reset beyond window duration")
 
     def test_live_claude_scopes_preserve_pool_measurement(self):
         # Wrong: any colon makes the pool unmeasured, or scopes set pool pace/buffer.
@@ -131,7 +627,7 @@ class Routing(unittest.TestCase):
             ({"remainingPercent": 50}, "'windowSeconds'"),
             (window(50, 604800, None), "unstarted null reset unresolved"),
             (window(50, 604800, "2026-11-14T00:00:00Z"), "expired reset or reset beyond window duration"),
-            (window(101, 604800, None), "invalid remainingPercent/windowSeconds"),
+            (window(101, 604800, None), "invalid remainingPercent"),
         ]
         for value, reason in cases:
             with self.subTest(reason=reason):
@@ -141,7 +637,7 @@ class Routing(unittest.TestCase):
                 self.assertEqual(result["pools"]["outside"]["buffer"], 0.52)
                 self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 1.04)])
                 self.assertEqual(result["roles"]["writer"]["exclusions"][-1]["reason"], "model-scoped window invalid")
-                self.assertIn(f"outside: scoped window 7d:fable invalid; refusing its family: {reason}", result["warnings"])
+                self.assertIn(f"WARNING: outside: scoped window 7d:fable invalid; refusing its family: {reason}. Report this failure to the user.", result["warnings"])
 
     def test_invalid_scope_does_not_block_another_session_family(self):
         # Wrong: an invalid family's pool pace blocks a valid session candidate.
@@ -175,16 +671,30 @@ class Routing(unittest.TestCase):
         result, _ = self.run_plan(outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:unknown-model": window(0, 604800, "2026-11-18T12:00:00Z")})})
         self.assertEqual(result["pools"]["outside"]["status"], "measured")
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
-        self.assertIn("outside: scoped window 7d:unknown-model matches no configured family", result["warnings"])
+        self.assertIn("WARNING: outside: scoped window 7d:unknown-model matches no configured family. Report this failure to the user.", result["warnings"])
 
     def test_unmeasured_streams_and_exhaustion(self):
         # Wrong: first-document-only parse, fabricated weekly resets, or accepting malformed windows.
-        cases = [(stream() + "garbage", "Expecting value"), (stream() + "\n" + stream(), "account-to-route"), (stream({"5h": window(reset=None)}), "null reset"), (stream({"7d:fable": window()}), "missing unscoped windows"), (stream({"5h": window(reset="2026-11-14T00:00:00Z")}), "expired reset"), (stream({"5h": {"remainingPercent": 50}}), "windowSeconds"), (subprocess.TimeoutExpired("fake", 10), "timed out"), (subprocess.CompletedProcess("fake", 7, ""), "Reader exited 7"), (stream({"bad": []}), "window must be an object"), ("[]", "missing account"), (stream({"bad": window(float("nan"))}), "invalid remainingPercent"), (stream({"bad": window(reset="2027-01-01T00:00:00Z")}), "beyond window duration")]
-        for value, reason in cases:
+        cases = [
+            (stream() + "garbage", "unreachable", "invalid Reader output"),
+            (stream() + "\n" + stream(), "unreachable", "invalid Reader output"),
+            (stream({"5h": window(reset=None)}), "unmeasured", "null reset"),
+            (stream({"7d:fable": window()}), "unmeasured", "no usable unscoped windows"),
+            (stream({"5h": window(reset="2026-11-14T00:00:00Z")}), "unmeasured", "expired reset"),
+            (stream({"5h": {"remainingPercent": 50}}), "unmeasured", "windowSeconds"),
+            (subprocess.TimeoutExpired("fake", 10), "unreachable", "Reader timed out"),
+            (subprocess.CompletedProcess("fake", 7, ""), "unreachable", "Reader exited 7"),
+            (stream({"bad": []}), "unmeasured", "window must be an object"),
+            ("[]", "unreachable", "invalid Reader output"),
+            (stream({"bad": window(float("nan"))}), "unmeasured", "invalid remainingPercent"),
+            (stream({"bad": window(reset="2027-01-01T00:00:00Z")}), "unmeasured", "beyond window duration"),
+        ]
+        for value, status, reason in cases:
             with self.subTest(reason=reason):
                 result, _ = self.run_plan(outputs={"reader-outside": value})
-                self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
-                self.assertIn(reason, result["pools"]["outside"]["reason"])
+                pool = result["pools"]["outside"]
+                self.assertEqual(pool["status"], status)
+                self.assertIn(reason, pool["reason"] + " ".join(pool.get("windowErrors", {}).values()))
         result, _ = self.run_plan(outputs={"reader-outside": stream({"monthly": window(0)})})
         self.assertEqual(result["pools"]["outside"]["pace"], 0)
         self.assertEqual(result["roles"]["writer"]["candidates"], [])
@@ -215,8 +725,14 @@ class Routing(unittest.TestCase):
                 else:
                     record[field] = value
                 result, _ = self.run_plan(outputs={"reader-outside": json.dumps(document)})
-                self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
-                self.assertIn(reason, result["pools"]["outside"]["reason"])
+                pool = result["pools"]["outside"]
+                if field == "status":
+                    self.assertEqual(pool["status"], "unmeasured")
+                    self.assertIn(reason, pool["windowErrors"]["monthly"])
+                else:
+                    self.assertEqual(pool, {"reason": "invalid Reader output", "status": "unreachable"})
+                    with self.assertRaisesRegex(ValueError, reason):
+                        helper.measure(json.dumps(document), NOW)
 
     def test_production_null_status_and_nullable_metadata(self):
         # Codex usage-cpa.sh emits null status, including for started windows.
@@ -242,8 +758,14 @@ class Routing(unittest.TestCase):
                 record = document["account"] if section == "account" else document["windows"]["monthly"]
                 record[field] = value
                 result, _ = self.run_plan(outputs={"reader-outside": json.dumps(document)})
-                self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
-                self.assertIn(reason, result["pools"]["outside"]["reason"])
+                pool = result["pools"]["outside"]
+                if section == "window":
+                    self.assertEqual(pool["status"], "unmeasured")
+                    self.assertIn(reason, pool["windowErrors"]["monthly"])
+                else:
+                    self.assertEqual(pool, {"reason": "invalid Reader output", "status": "unreachable"})
+                    with self.assertRaisesRegex(ValueError, reason):
+                        helper.measure(json.dumps(document), NOW)
         self.assertEqual(helper.measure(stream({"5h": window(reset="2026-11-15T02:30:00+00:00")}), NOW)["status"], "measured")
 
     def test_fit_only_and_measured_exclusion(self):
@@ -276,7 +798,7 @@ class Routing(unittest.TestCase):
         agent = {"family": {"defaultEffort": "high", "name": "sol"}, "id": "gpt-6.1-sol"}
         techniques = [technique("Agent with generated agent file", agent=agent), technique("Workflow", "workflow"), technique("claude -p", "external")]
         evidence = [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "claude", "technique": name} for name in ("Agent with generated agent file", "Workflow", "claude -p")]
-        config = manifest([route(target="claude", techniques=techniques)])
+        config = manifest([route(target="claude", techniques=techniques, default="high")])
         result, _ = self.run_plan(config, context(techniques=evidence, effort=None))
         candidate = result["roles"]["writer"]["candidates"][0]
         self.assertEqual(candidate["line"], "role=writer runtime=claude family=sol technique=Agent with generated agent file model=gpt-6.1-sol effort=high")
@@ -309,9 +831,9 @@ class Routing(unittest.TestCase):
         ctx["techniques"][0]["efforts"] = "high"
         with self.assertRaisesRegex(ValueError, "efforts list"):
             self.run_plan(launch_context=ctx)
-        with patch.object(helper, "READER_TIMEOUT", 0.02):
+        with patch.object(helper, "READER_TIMEOUT", 0.02), patch("time.sleep"):
             measured = helper.collect([{"command": "while :; do :; done", "name": "stuck"}], NOW, SHELL)
-        self.assertEqual(measured["stuck"]["status"], "unmeasured")
+        self.assertEqual(measured["stuck"]["status"], "unreachable")
         self.assertIn("timed out", measured["stuck"]["reason"])
 
     def prepared_plan(self, root, count=2):

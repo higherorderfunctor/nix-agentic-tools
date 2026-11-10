@@ -190,9 +190,9 @@ in {
               description = "Tasks this family should avoid.";
             };
             defaultEffort = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum agentFiles.facts.effortLevels);
+              type = lib.types.nullOr (lib.types.enum vocabulary.effortLevels);
               default = null;
-              description = "Default effort pinned in the generated Claude agent file; null omits the pin.";
+              description = "Default effort for every launch technique and generated agent file; null omits the pin when the observed technique supports omission.";
             };
             effort = lib.mkOption {
               type = lib.types.str;

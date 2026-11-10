@@ -46,8 +46,8 @@
           model = id;
           inherit (family) name;
         }
-        // lib.optionalAttrs ((family.defaultEffort or null) != null) {effort = family.defaultEffort;};
-      body = "You are a delegate launched by an orchestrator through the delegate-routing skill. Your prompt carries the task; do it and report the result with its evidence. You are non-interactive: decide, act, return. This file pins the model and the family's default effort; an effort passed in the launch call overrides the file.\n";
+        // lib.optionalAttrs (builtins.elem (family.defaultEffort or null) facts.effortLevels) {effort = family.defaultEffort;};
+      body = "You are a delegate launched by an orchestrator through the delegate-routing skill. Your prompt carries the task; do it and report the result with its evidence. You are non-interactive: decide, act, return. This file pins the model, and the family's default effort when Claude's agent-file format accepts it; an effort passed in the launch call overrides the file.\n";
     };
 in {
   inherit facts render resolve;

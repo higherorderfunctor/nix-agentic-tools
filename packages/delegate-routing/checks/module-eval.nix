@@ -599,6 +599,7 @@
         ai.kiro.cli.workflows.enable = true;
         ai.programs.delegate-routing = {
           families.fixture.packaged = {
+            defaultEffort = "high";
             example.${runtime} = "fixture-model";
             match = "fixture-model";
             pools.${runtime} = sessionPools.${runtime};
@@ -641,6 +642,8 @@
     };
     # Like mkWrapperGrepTest, realize the module output and inspect what ships.
     # Rejects a manifest with sessionPool = null even when skill prose is correct.
+    # Rejects missing package effort levels or unselected family names, dropped
+    # family default efforts, and direct-skill overrides using stale manifests.
     packagedHelperCheck = runtime: let
       expected = packagedHelperCases.${runtime};
     in
@@ -649,7 +652,11 @@
         # advertised helper and manifest are inputs to this check's sandbox.
         expectedPool = expected.pool;
         expectedTechnique = expected.technique;
-        passAsFile = ["skill"];
+        directSkill = builtins.readFile "${((result.config.ai.internal.roots.delegate-routing-content.passthru.mkSkill {runtime = "codex";}).override (prev: {
+          families = lib.recursiveUpdate prev.families {openai.sol.defaultEffort = "xhigh";};
+          models = prev.models // {codex = [{families = ["sol"];}];};
+        }))}/SKILL.md";
+        passAsFile = ["directSkill" "skill"];
         inherit runtime;
         skill = readSkill (packagedHelperDelivery runtime) runtime;
       } ''
@@ -672,10 +679,19 @@
         script = wrapper.read_text()
         manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
         manifest = json.loads(Path(manifest_path).read_text())
+        assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
+        assert "packaged" in manifest["familyNames"]
+        assert "sol" in manifest["familyNames"]
+        assert all(route["family"]["defaultEffort"] == "high" for route in manifest["routes"])
+        direct_skill = Path(os.environ["directSkillPath"]).read_text()
+        direct_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", direct_skill)[1])
+        direct_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", direct_wrapper.read_text())[1]).read_text())
+        assert direct_manifest["effortLevels"] == manifest["effortLevels"]
+        assert [route["family"]["defaultEffort"] for route in direct_manifest["routes"]] == ["xhigh"]
         context = Path("launch-context.json")
         context.write_text(json.dumps({
             "nonInteractive": True,
-            "roles": {"writer": {"effort": "high", "families": {"packaged": {
+            "roles": {"writer": {"effort": None, "families": {"packaged": {
                 "avoidFor": "fixture has no exclusions", "fit": "fixture writer",
                 "trial": "not a trial", "useFor": "fixture task",
             }}}},
@@ -741,11 +757,19 @@
         "minimum remaining share across applicable windows is strictly more than a fifth"
         "every other fitting measured pool is behind or level in pace"
         "unknown session identity cannot certify it"
-        "With no measurable fitting pool, use fit alone"
+        "With no selectable measured candidate, use fit alone"
+        "unreachable for this invocation; they never supply fit-only routes"
+        "Valid remaining shares survive bad pace"
+        "JSON includes all warnings; stderr includes failure warnings and the fallback notice; advisory notes stay JSON-only."
         "Never treat exhaustion as unmeasured"
         "Aim for every pool to reach its reset near empty"
         "Do not report pool numbers unless asked"
-        "never step down a tier; report a loop failure"
+        "Try the shared avoided-family fallback before reporting a loop failure"
+        "never step down a tier"
+        "avoid never removes a route by itself"
+        "measured preference applies within each partition"
+        "Session pace still compares all otherwise fitting measured candidates"
+        "excluded by caller"
       ]
       && !(lib.hasInfix "remaining share divided by" stub)
       && !(lib.hasInfix "/bin/delegate-routing-plan" stub)
@@ -756,7 +780,21 @@
         == sessionDelivery.config.ai.claude.rules.delegate-routing-router.text
         && lib.hasInfix "/bin/delegate-routing-plan --role <role> --launch-context <json-path>" text
         && (hasProse "It enforces the strong/frontier floor before pool ranking" text || throw "missing ${runtime} review floor")
-        && hasProse "never step down a tier; report a loop failure" text
+        && hasProse "Try the shared avoided-family fallback before reporting a loop failure" text
+        && lib.all (needle: hasProse needle text) [
+          "never step down a tier"
+          "non-null role effort overrides"
+          "defaultEffort"
+          "minimal < low < medium < high < xhigh < max"
+          "`[]` explicitly attests effort omission support"
+          "resolvedEffort"
+          "launchEffort"
+          "A role whose first pick is a fallback prints one notice:"
+          "WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user."
+          "Failed Readers and dropped windows print failure warnings ending with \"Report this failure to the user.\""
+          "fresh separate agents with neutral briefs"
+          "After a failed launch, rerun"
+        ]
         && lib.all (launch: hasProse launch text || throw "missing ${runtime} review fallback: ${launch}") [
           "Agent calls that name a generated agent"
           "Workflow tool's agent"
@@ -769,6 +807,7 @@
     # manual-only target or another harness's native tool; reader inventory
     # must still include a registered runtime outside all launch targets.
     # Hiding launch prose must not bypass missing model-spelling rejection.
+    # Rejects a runtime-only effort scale and dropped family or agent effort pins.
     "module-delegate-routing-${name}-routing-view" = mkTest "delegate-routing-${name}-routing-view" (
       let
         text = readSkill routingFixture "claude";
@@ -790,6 +829,8 @@
         agent = builtins.head (builtins.head resolved.routes).techniques;
       in
         passes routingFixture
+        && routingView.effortLevels == ["minimal" "low" "medium" "high" "xhigh" "max"]
+        && lib.all (route: route.family.defaultEffort == "medium") (lib.filter (route: route.family.name == "opus") routingView.routes)
         && routingView.runtimes == ["claude" "codex"]
         && routes
         == [
@@ -856,6 +897,7 @@
     # Fails on wrong version ordering, resolution that ignores the configured
     # model catalog or the family pattern, a missing default-effort pin, or a
     # route advertised when its family has no delivered agent file.
+    # Rejects lost family defaults or consumer pins and an open effort enum.
     "module-delegate-routing-${name}-agent-files" = mkTest "delegate-routing-${name}-agent-files" (
       let
         agents = result.config.ai.claude.agents;
@@ -866,6 +908,7 @@
         glmExample = change {
           ai.programs.delegate-routing = {
             families.zhipu.glm = {
+              defaultEffort = "high";
               example.claude = "glm-5.3";
               match = "glm-*";
               tier = "strong";
@@ -908,6 +951,7 @@
         && lib.hasInfix "model: \"test-fable-5-10\"" fixedResult.config.ai.claude.agents.fable
         && lib.hasInfix "effort: \"medium\"" fixedResult.config.ai.claude.agents.fable
         && lib.hasInfix "model: \"test-opus-5-10\"" fixedResult.config.ai.claude.agents.opus
+        && lib.hasInfix "This file pins the model, and the family's default effort when Claude's agent-file format accepts it" agents.haiku
         && lib.hasInfix "model: \"claude-opus-4.6\"" example.config.ai.claude.agents.opus
         # Numeric segment order: 10 > 9, 5-1 > 5, 6.1 > 6 > 5.6, and zero-padded
         # dated segments compare as numbers instead of aborting.
@@ -954,7 +998,41 @@
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`" (readSkill picker "claude")
         && result.config.ai.programs.delegate-routing.families.anthropic.opus.defaultEffort == "medium"
         && result.config.ai.programs.delegate-routing.families.anthropic.haiku.defaultEffort == null
+        && result.config.ai.programs.delegate-routing.families.openai.sol.defaultEffort == "medium"
+        && result.config.ai.programs.delegate-routing.families.opencode-go."go-kimi-k3.1-pro".defaultEffort == "max"
+        && result.config.ai.programs.delegate-routing.families.opencode-go."go-mimo-v2.6-pro".defaultEffort == null
+        && glmExample.config.ai.programs.delegate-routing.families.zhipu.glm.defaultEffort == "high"
         && !(builtins.tryEval (builtins.deepSeq (change {ai.programs.delegate-routing.families.anthropic.opus.defaultEffort = "invalid";}).config.ai.programs.delegate-routing.families true)).success
+        # Wrong: evaluation failures or unsupported effort pins in delivered Claude
+        # files, missing supported pins, a hard-coded family allowlist, or evaluation
+        # failures with max when techniques/runtimes are disabled or models replaced.
+        && (let
+          pin = effort: {ai.programs.delegate-routing.families.anthropic.opus.defaultEffort = effort;};
+          unpinned = evaluation: passes evaluation && !(lib.hasInfix "effort:" evaluation.config.ai.claude.agents.opus);
+        in
+          lib.all (effort: unpinned (change (pin effort))) [null "minimal" "max"]
+          && lib.all (effort: let
+            evaluation = change (pin effort);
+          in
+            passes evaluation && lib.hasInfix "effort: \"${effort}\"" evaluation.config.ai.claude.agents.opus) ["low" "medium" "high" "xhigh"]
+          && (let
+            evaluation = change {
+              ai.programs.delegate-routing = {
+                families.served.flash = {
+                  defaultEffort = "max";
+                  example.claude = "test-flash-1";
+                };
+                runtimes.claude.models = [{families = ["flash"];}];
+              };
+            };
+          in
+            passes evaluation && !(lib.hasInfix "effort:" evaluation.config.ai.claude.agents.flash))
+          && lib.all (extra: passes (change (lib.recursiveUpdate (pin "max") extra))) [
+            {ai.programs.delegate-routing.runtimes.claude.techniques."Agent with generated agent file".enable = false;}
+            {ai.programs.delegate-routing.runtimes.claude.enable = false;}
+            {ai.claude.enable = lib.mkForce false;}
+            {ai.programs.delegate-routing.runtimes.claude.models = [{families = ["flash"];}];}
+          ])
     );
     # Reject missing delivery, mkDefault list replacement, and an entry mkForce cannot replace.
     "module-delegate-routing-${name}-workflow-resume-settings" = mkTest "delegate-routing-${name}-workflow-resume-settings" (let
@@ -1778,15 +1856,15 @@
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
       && lib.hasInfix "7. **Loop:**" claude
-      # Fails if units lose their definition, cadence or vendor separation,
+      # Fails if units lose their definition, cadence or separate evaluation,
       # fixes re-review the whole branch or retain its base, or mid-build
       # units remain subject to the opening three-check rule, or the
       # branch-level review loses its ready/earlier sizing.
       && hasProse "A unit is a bounded change with one reader and one verification" claude
-      && hasProse "Each unit is reviewed by one check, from a vendor other than the writer's, before the next unit starts." claude
+      && hasProse "Each unit is reviewed by one fresh separate check whose role avoids the writer family, using the shared fallback when needed, before the next unit starts." claude
       && hasProse "the fix's diff plus what it touches, one check, never the whole branch again." claude
       && hasProse "for a fix round, HEAD before the fix starts" claude
-      && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one reviewer" claude
+      && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
       && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")

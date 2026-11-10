@@ -1,30 +1,30 @@
 For finder, first-check, second-check and judge, use the rendered
 `delegate-routing-plan` command with caller-qualified family and observed launch
 evidence. It enforces the strong/frontier floor before pool ranking; never step
-down a tier; report a loop failure if no qualified route remains. A tier pass
-does not establish task fit, trial eligibility or cross-maker independence;
-provider-vendor identity is provisional for aggregator routes. Honor those
-exclusions before launch.
+down a tier. Try the shared avoided-family fallback before reporting a loop
+failure if no qualified route remains. A tier pass does not establish task fit,
+trial eligibility or cross-maker independence; provider-vendor identity is
+provisional for aggregator routes. Honor those exclusions before launch.
 
 Review every change with all three checks below, each in a fresh context. The
-first check, the second check and the judge each run on a vendor other than the
-writer's. Use different models for the two checks where possible. Report
-disagreements only. Hand the whole review as one job to a delegate on another
-vendor's runtime that runs its own subagents (the technique table's "Runs own
-subagents" column), such as `codex exec` for work Claude wrote. It runs all
-three checks itself, mixing models, and returns each issue's outcome with
-evidence. When no such runtime is reachable, split the roles from this session
-through tools that pin model and effort: Agent calls that name a generated agent
-file for cross-vendor checks from a Claude writer, the Workflow tool's agent
-call, or an external launcher (`claude -p`, `codex exec`). Skipping the vendor
-requirement because one tool's enum lacks the model is a loop failure; report it
-as one.
+first check, the second check and the judge each put the writer family in their
+role's `avoid` list. Use different models for the two checks where possible.
+Report disagreements only. Hand the whole review as one job to a delegate on a
+runtime that runs its own subagents (the technique table's "Runs own subagents"
+column), such as `codex exec` for work Claude wrote. It runs all three checks
+itself, mixing models, and returns each issue's outcome with evidence. When no
+such runtime is reachable, split the roles from this session through tools that
+pin model and effort: Agent calls that name a generated agent file, the Workflow
+tool's agent call, or an external launcher (`claude -p`, `codex exec`). An
+avoided-family fallback still uses a fresh separate evaluator, never
+self-evaluation; disclose its fallback metadata and launch effort. If no
+qualified route survives shared fallback, report a loop failure.
 
 One exception, on any forge (GitHub pull requests, GitLab merge requests or
 others): a change inside a stack of pull or merge requests, a unit of a branch
 still being built, the branch-level review of a branch not yet going ready, and
-a fix after any review each get one reviewer from a different vendor than the
-writer, following the first check below; that reviewer's supported issues are
+a fix after any review each get one fresh reviewer whose role avoids the writer
+family, following the first check below; that reviewer's supported issues are
 accepted findings for the loop. The change gets all three checks when it becomes
 ready to merge into the default branch; a fix after that review is reviewed as a
 fix. A pure rebase or restack of the stack gets no review; rework done during a
@@ -34,13 +34,14 @@ When the draft exceeds the Size row, the reviewer also names each specific cut
 or collapse with evidence: what breaks if it is deleted and the simpler form.
 The reviewer never judges its own proposed cuts, and neither does the writer.
 Whoever judges the cuts — the Judge in three-check review, a separate agent in
-stacked one-reviewer review, never the orchestrator — comes from a different
-model family than the writer and the cut's proposer. That judge gets the cuts
-and their evidence with authorship stripped (it is not told which agent wrote
-the code or proposed the cut) and in neutral order, under the neutral-brief
-rule. The writer applies only accepted cuts, and an accepted cut lands only if
-checks still pass. The user remains the final spot-check and is not consulted
-about cuts.
+stacked one-reviewer review, never the orchestrator — puts both the writer and
+the cut proposer's families in its role's `avoid` list. Shared fallback may
+select either family as a fresh separate evaluator; it never authorizes an agent
+to judge its own work. That judge gets the cuts and their evidence with
+authorship stripped (it is not told which agent wrote the code or proposed the
+cut) and in neutral order, under the neutral-brief rule. The writer applies only
+accepted cuts, and an accepted cut lands only if checks still pass. The user
+remains the final spot-check and is not consulted about cuts.
 
 **First check:** gets the draft, the description's guarantee claims (never its
 review history or the writer's notes) and the rubric file verbatim. Grades the
@@ -77,5 +78,5 @@ previous verdict or writer's account of fixes. Send the writer only accepted
 issues, with location and severity.
 
 A model on trial, with no review track record in this setup, may be an extra
-finder but never the second check or the Judge. Blend vendors across review
-roles.
+finder but never the second check or the Judge. Preserve these trial limits when
+using an avoided-family fallback.
