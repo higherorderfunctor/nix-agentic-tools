@@ -606,7 +606,9 @@
     packagedHelperCases = {
       claude = {
         pool = "claude";
-        technique = "Workflow";
+        # The fixture family has a pinned example id, so it gets a generated
+        # agent file, which ranks before Workflow.
+        technique = "Agent with generated agent file";
       };
       codex = {
         pool = "codex";
