@@ -137,16 +137,41 @@ class Routing(unittest.TestCase):
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(result["roles"]["writer"]["candidates"], [])
 
-    def test_nix_pin_model_and_efforts_beat_catalog(self):
+    def test_nix_pin_keeps_id_but_uses_catalog_efforts(self):
+        # Wrong: a production Codex pin's single default hides its catalog levels.
         config = manifest()
-        config["routes"][0]["techniques"][0]["model"]["efforts"] = ["low", "high", "max"]
+        self.assertEqual(config["routes"][0]["techniques"][0]["model"]["efforts"], ["high"])
         models = [
-            {"slug": "gpt-6.1-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "high"}]},
+            {"slug": "gpt-6.1-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "low"}, {"effort": "high"}, {"effort": "max"}]},
             {"slug": "gpt-7-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "high"}]},
         ]
         with self.codex_home(models):
             result, _ = self.run_plan(config, context(effort="+1"))
-        self.assertEqual([(item["launch"]["model"], item["launch"]["effort"]) for item in result["roles"]["writer"]["candidates"]], [("gpt-6.1-sol", "max")])
+        candidate = result["roles"]["writer"]["candidates"][0]["launch"]
+        self.assertEqual((candidate["model"], candidate["effort"]), ("gpt-6.1-sol", "max"))
+        self.assertEqual(candidate["effortSource"], "codex local model list")
+
+    def test_nix_pin_accepts_producer_catalog_max(self):
+        # Wrong: producer validation rejects max because Nix declares only high.
+        config = manifest()
+        ctx = context(("first-check",))
+        ctx["roles"]["first-check"]["producers"] = [{"family": "sol", "effort": "max"}]
+        models = [{"slug": "gpt-6.1-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "low"}, {"effort": "high"}, {"effort": "max"}]}]
+        with self.codex_home(models):
+            result, _ = self.run_plan(config, ctx, ("first-check",))
+        self.assertEqual([(c["launch"]["model"], c["launch"]["effort"]) for c in result["roles"]["first-check"]["candidates"]], [("gpt-6.1-sol", "max")])
+
+    def test_nix_pin_without_listed_catalog_id_reports_declared_effort_fallback(self):
+        # Wrong: another id or a hidden entry supplies a pin's effort levels.
+        for models in ([], [
+            {"slug": "gpt-6.1-sol", "visibility": "hide", "supported_reasoning_levels": [{"effort": "max"}]},
+            {"slug": "gpt-7-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "max"}]},
+        ]):
+            with self.subTest(models=models), self.codex_home(models):
+                result, _ = self.run_plan(manifest(), context(effort="+1"))
+            candidate = result["roles"]["writer"]["candidates"][0]["launch"]
+            self.assertEqual((candidate["model"], candidate["effort"]), ("gpt-6.1-sol", "high"))
+            self.assertEqual(candidate["effortSource"], "Nix declaration: pinned id absent from codex local model list")
 
     def test_headless_caller_never_gets_another_runtime_native_route(self):
         # Wrong: checking only kind=external lets a malformed cross-runtime native route through.
@@ -1670,7 +1695,7 @@ class Routing(unittest.TestCase):
         for role in roles:
             brief = f"{role}.md"
             (root / brief).write_bytes(b"Hard rules and task.\n" + rubric + b"Report evidence.\n")
-            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
+            launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "effortSource": "Nix declaration: pinned id absent from codex local model list", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
         units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace not validated launch choices", "id": str(index), "launches": deepcopy(launches), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
         return {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
 

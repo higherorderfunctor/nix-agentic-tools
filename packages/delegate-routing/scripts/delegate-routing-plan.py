@@ -437,18 +437,19 @@ def model_version(model):
 
 
 def resolve_model(route, technique):
-    """Nix pins win; otherwise resolve the highest visible id from the harness catalog."""
+    """Keep pinned ids; prefer catalog efforts, resolving patterns to the highest visible id."""
     model = technique["model"]
-    if not model["isPattern"]:
-        return {"model": model["value"], "efforts": model["efforts"]} if model_matches(model["value"], model) else None
     entries = []
     if route["target"] == "codex":
         cache = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
         try:
-            entries = [{"model": item["slug"], "efforts": [level["effort"] for level in item["supported_reasoning_levels"]]} for item in strict_json(cache.read_bytes())["models"] if item.get("visibility") == "list" and model_matches(item["slug"], model)]
+            entries = [{"effortSource": "codex local model list", "efforts": [level["effort"] for level in item["supported_reasoning_levels"]], "model": item["slug"]} for item in strict_json(cache.read_bytes())["models"] if item.get("visibility") == "list" and model_matches(item["slug"], model)]
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             entries = []
-    return max(reversed(entries), key=lambda item: model_version(item["model"]), default=None)
+    resolved = max(reversed(entries), key=lambda item: model_version(item["model"]), default=None)
+    if resolved is None and not model["isPattern"] and model_matches(model["value"], model):
+        return {"effortSource": f"Nix declaration: pinned id absent from {route['target']} local model list", "efforts": model["efforts"], "model": model["value"]}
+    return resolved
 
 
 def model_matches(value, model):
@@ -501,6 +502,7 @@ def launch(route, context, offset, same_line, scale, runtime):
         alternatives.append({
             "agent": technique["agent"],
             "effort": effort,
+            "effortSource": evidence["effortSource"],
             "family": route["family"]["name"],
             "guidance": {key: node[key] for key in ("command", "modelArg", "notes")},
             "model": evidence["model"],
