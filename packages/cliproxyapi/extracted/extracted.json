@@ -1771,6 +1771,22 @@
       "description": "Disabled prevents synthesis while preserving the group's configuration.",
       "type": "bool"
     },
+    "api-keys.passthrough[].error-in-200": {
+      "description": "ErrorIn200 maps a matching boolean in a successful HTTP response to a retryable status.",
+      "type": "object"
+    },
+    "api-keys.passthrough[].error-in-200.equals": {
+      "description": "Equals is required, including when false.",
+      "type": "bool"
+    },
+    "api-keys.passthrough[].error-in-200.path": {
+      "description": "Path is a dot-separated object-key path to a boolean.",
+      "type": "string"
+    },
+    "api-keys.passthrough[].error-in-200.status": {
+      "description": "Status is one of 429, 500, 502, 503 or 504.",
+      "type": "int"
+    },
     "api-keys.passthrough[].keys": {
       "description": "APIKeyEntries contains at least one nonempty upstream credential.",
       "type": "list"
@@ -1826,6 +1842,14 @@
     "api-keys.passthrough[].request-scoped-errors[].status": {
       "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
       "type": "int"
+    },
+    "api-keys.passthrough[].unwrap": {
+      "description": "Unwrap selects a nested response object and returns its original JSON span.",
+      "type": "string"
+    },
+    "api-keys.passthrough[].usage-path": {
+      "description": "UsagePath selects usage in the original envelope; omission defaults to usage.",
+      "type": "string"
     },
     "api-keys.vertex": {
       "description": "VertexCompatAPIKey defines Vertex AI-compatible API key configurations for third-party providers.\nUsed for services that use Vertex AI-style paths but with simple API key authentication.",
