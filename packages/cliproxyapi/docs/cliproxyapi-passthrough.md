@@ -135,3 +135,62 @@ and `zai-tool-shims` with zero fuzz. `cliproxyapi-passthrough` runs its config,
 synthesis/alias/allowlist, management, executor, handler, registry and conductor
 tests through the shared Go CI check. `cliproxyapi-extracted` and
 `cliproxyapi-settings` gate measured schema and rendered settings.
+
+## Named Nix credentials
+
+Both Home Manager and devenv lower `credentials.<name>.apiKey.apis.passthrough`
+through the shared API table. Declare models on this API as nonempty
+`{ name; alias?; }` objects; the credential-wide string `models` fallback
+belongs to chat, Anthropic and Responses only. `apiKey.priority` applies to the
+group.
+
+```nix
+credentials.decision-free.apiKey = {
+  apis.passthrough = {
+    base-url = "https://api.cloudflare.com";
+    models = [{ alias = "decision"; name = "clef"; }];
+    path = redact.concat [
+      "/client/v4/accounts/"
+      (redact.file "/run/secrets/cloudflare-account-id")
+      "/ai/run/@cf/cloudflare/clef"
+    ];
+    unwrap = "result";
+    usage-path = "result.usage";
+  };
+  key = redact.file "/run/secrets/upstream-key";
+  priority = 30;
+};
+clientKeys.decisions = {
+  key = redact.file "/run/secrets/decision-client-key";
+  routes = [{ credential = "decision-free"; }];
+};
+```
+
+`base-url` and `path` accept literal public values or redact references,
+including concatenations. Supply secret account identifiers through references.
+Direct typed `settings.api-keys.passthrough` supports the same URL references,
+and allowlist `base-urls` elements accept them while retaining nonempty-list and
+null refusal. The shared secrets engine resolves references at service start; no
+secret value is read during evaluation. CPA validates resolved URLs and paths
+without printing them. Literal paths reject absolute URLs and `//` references
+and permit rooted components such as `/inference/v1/decision`.
+
+Named rules use `provider = "passthrough-<lowercase-name>"`, `kind = "apikey"`
+and the selected base URL reference. Free and paid groups may share that URL;
+their distinct names keep each rule scoped to its group. Nix checks normalized
+name collisions across named credentials and raw blocks; CPA checks again after
+secrets resolve. Nix requires printable-ASCII group names on both surfaces
+because it cannot reproduce CPA's Unicode trimming and lowercase normalization.
+Existing families retain their shared-base-URL refusal.
+
+Passthrough routes retain their client key and CPA allowlist rules but
+contribute no credential to `inferenceInstances` or a harness's normalized
+credentials or model picker. A client can use the same key directly with
+`POST /v1/passthrough`. No vendor defaults, delegate-routing families or model
+lists are added.
+
+`cliproxyapi-passthrough-module` covers both module backends, literal lowering,
+secret URL render/substitution, path refusal, model shape, normalized
+duplicates, nonempty merged lists and inference fanout. It also runs the
+existing named client and vendor regression fixtures and loads a synthetic
+rendered config through CPA in CI.
