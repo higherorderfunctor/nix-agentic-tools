@@ -40,12 +40,13 @@ def technique(name="spawn_agent", kind="subagent", model="gpt-6.1-sol", pattern=
     return {"agent": agent, "model": {"isPattern": pattern, "value": model}, "name": name, "node": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "kind": kind, "modelArg": "slug", "notes": "caller binds task/output paths"}}
 
 
-def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, default=None):
-    return {"family": {"avoidFor": "sole judge", "defaultEffort": default, "effort": "prose is not an effort enum", "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
+def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, default=None, maker="openai"):
+    return {"family": {"avoidFor": "sole judge", "defaultEffort": default, "effort": "prose is not an effort enum", "maker": maker, "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
 def manifest(routes=None, session=None):
-    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
+    family_makers = {r["family"]["name"]: r["family"]["maker"] for r in (routes or [route()]) + [route("manual")]} | {"dormant": "dormant-maker"}
+    return {"effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "familyMakers": family_makers, "familyNames": sorted(family_makers), "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
 def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
@@ -317,7 +318,7 @@ class Routing(unittest.TestCase):
             {"path": "launchContext.techniques[0].model", "message": "must be a non-empty string"},
             {"path": "launchContext.techniques[1]", "message": "must be an object"},
             {"path": "launchContext.roles.writer.avoid[1]", "message": f"unknown family name; allowed: {names}"},
-            {"path": "launchContext.roles.writer.exclude", "message": "must be a list of family names"},
+            {"path": "launchContext.roles.writer.exclude", "message": "must be a list of family names or makers"},
             {"path": "launchContext.roles.writer.effort", "message": f"unknown effort; allowed: {efforts}"},
             {"path": "launchContext.roles.writer.fit", "message": "unknown key; allowed: avoid, effort, exclude"},
             {"path": "launchContext.roles.wizard", "message": "unknown role; allowed: finder, first-check, investigator, judge, mechanical, planner, second-check, writer"},
@@ -843,6 +844,83 @@ class Routing(unittest.TestCase):
             self.assertEqual(result["roles"][role]["candidates"], [])
             self.assertEqual([e["reason"] for e in result["roles"][role]["exclusions"]], ["excluded by caller"] * 3)
 
+    def test_maker_exclude_removes_all_matching_routes_and_names(self):
+        # Wrong: only one model line is removed, vendor substitutes for maker,
+        # or an entry that is both a maker and a family matches only one meaning.
+        config = manifest([route("alpha", maker="studio"), route("beta", maker="studio"), route("studio", maker="different"), route("survivor")])
+        ctx = context()
+        ctx["roles"]["writer"].update(avoid=["alpha"], exclude=["studio"])
+        result, _ = self.run_plan(config, ctx)
+        self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["survivor"])
+        self.assertEqual(result["roles"]["writer"]["exclusions"], [
+            {"family": "alpha", "reason": "excluded by caller", "runtime": "codex"},
+            {"family": "beta", "reason": "excluded by caller", "runtime": "codex"},
+            {"family": "studio", "reason": "excluded by caller", "runtime": "codex"},
+        ])
+
+    def test_maker_exclude_accepts_configured_families_without_routes(self):
+        # Wrong: the allowed makers come only from this invocation's routes.
+        ctx = context()
+        ctx["roles"]["writer"]["exclude"] = ["dormant-maker"]
+        result, _ = self.run_plan(launch_context=ctx)
+        self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["sol"])
+        self.assertEqual(result["roles"]["writer"]["exclusions"], [])
+
+    def test_unknown_maker_is_refused_before_readers(self):
+        # Wrong: an unknown maker reaches Readers or the error omits maker names.
+        ctx = context()
+        ctx["roles"]["writer"]["exclude"] = ["unknown-maker"]
+        self.assertEqual(self.request_errors(launch_context=ctx), [{
+            "path": "launchContext.roles.writer.exclude[0]",
+            "message": "unknown family name or maker; allowed: dormant, dormant-maker, manual, openai, sol",
+        }])
+
+    def test_route_maker_is_required_before_readers(self):
+        # Wrong: an old or malformed automatic/manual family reaches selection.
+        for kind in ("routes", "manualRoutes"):
+            with self.subTest(kind=kind):
+                config = manifest()
+                del config[kind][0]["family"]["maker"]
+                self.assertEqual(self.request_errors(config), [{
+                    "path": f"manifest.{kind}[0].family.maker",
+                    "message": "configuration fault, not caller-fixable: required key is missing",
+                }])
+
+    def test_family_makers_cover_configured_names_before_readers(self):
+        # Wrong: absent/malformed metadata or incomplete configured-name coverage
+        # silently changes which maker exclusions are accepted.
+        cases = [
+            (None, "manifest.familyMakers", "must be an object"),
+            ({"manual": "openai", "sol": "openai"}, "manifest.familyMakers.dormant", "required key is missing"),
+            ({"dormant": 1, "manual": "openai", "sol": "openai"}, "manifest.familyMakers.dormant", "must have type str or NoneType"),
+            ({"dormant": " ", "manual": "openai", "sol": "openai"}, "manifest.familyMakers.dormant", "must be a non-empty string"),
+            ({"dormant": "dormant-maker", "extra": "studio", "manual": "openai", "sol": "openai"}, "manifest.familyMakers.extra", "unknown family name; allowed: dormant, manual, sol"),
+        ]
+        for makers, path, message in cases:
+            with self.subTest(makers=makers):
+                config = manifest() | {"familyMakers": makers}
+                self.assertEqual(self.request_errors(config), [{"path": path, "message": "configuration fault, not caller-fixable: " + message}])
+        config = manifest()
+        del config["familyMakers"]
+        self.assertEqual(self.request_errors(config), [{"path": "manifest.familyMakers", "message": "configuration fault, not caller-fixable: required key is missing"}])
+        # An unselected custom family may leave its maker undeclared.
+        config = manifest()
+        config["familyMakers"]["dormant"] = None
+        result, _ = self.run_plan(config)
+        self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["sol"])
+
+    def test_route_maker_matches_configured_metadata_before_readers(self):
+        # Wrong: exclude validates one maker but applies another, or a blank maker
+        # passes the string type check.
+        for maker, message in [("different", "must match manifest.familyMakers.sol"), (" ", "must be a non-empty string")]:
+            with self.subTest(maker=maker):
+                config = manifest()
+                config["routes"][0]["family"]["maker"] = maker
+                self.assertEqual(self.request_errors(config), [{
+                    "path": "manifest.routes[0].family.maker",
+                    "message": "configuration fault, not caller-fixable: " + message,
+                }])
+
     def test_avoid_partitions_and_global_session_pace(self):
         # Wrong: avoided measurement erases fit-only, or avoid bypasses session pace.
         roles = tuple(helper.ROLE_TIERS)
@@ -1157,6 +1235,7 @@ class Routing(unittest.TestCase):
             root = Path(directory)
             config = manifest()
             config["familyNames"].append("fable")
+            config["familyMakers"]["fable"] = "anthropic"
             for reader in config["readers"]:
                 reader["command"] = shlex.join(["printf", "%s", stream({"7d:fable": window(0, 604800, "2026-11-18T12:00:00Z"), "monthly": window()})])
             (root / "manifest.json").write_text(json.dumps(config))
@@ -1334,6 +1413,7 @@ class Routing(unittest.TestCase):
         # exhausts this runtime's candidates instead of matching pool and family.
         config = manifest()
         config["familyNames"].append("fable")
+        config["familyMakers"]["fable"] = "anthropic"
         for scope, expected in [
             ("fable", []),
             ("unknown-model", ["WARNING: outside: scoped window 7d:unknown-model matches no configured family. Report this failure to the user."]),

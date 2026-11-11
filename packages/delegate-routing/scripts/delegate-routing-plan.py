@@ -486,12 +486,12 @@ class InvalidRequest(ValueError):
         self.errors = errors
 
 
-MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
+MANIFEST_KEYS = ("effortLevels", "familyMakers", "familyNames", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
 
 
 def request_errors(manifest, context, roles):
     """Collect every refusal in argv roles, manifest and launch context; a context needs its manifest."""
-    errors, name_lists = [], {}
+    errors, name_lists, makers = [], {}, {}
 
     def refuse(path, message):
         errors.append({"path": path, "message": message})
@@ -532,7 +532,7 @@ def request_errors(manifest, context, roles):
         elif type(node) not in schema:
             refuse(path, f"{CONFIGURATION_FAULT}must have type {' or '.join(kind.__name__ for kind in schema)}")
 
-    family_shape = {"avoidFor": (str,), "defaultEffort": (str, type(None)), "name": (str,), "tier": (str,), "useFor": (str,)}
+    family_shape = {"avoidFor": (str,), "defaultEffort": (str, type(None)), "maker": (str,), "name": (str,), "tier": (str,), "useFor": (str,)}
     technique_shape = {"agent": (dict, type(None)), "model": {"isPattern": (bool,), "value": (str,)}, "name": (str,), "node": {"command": (str, type(None)), "kind": (str,), "modelArg": (str,), "notes": (str,)}}
     route_shape = {"family": family_shape, "target": (str,), "techniques": [technique_shape]}
     picker_shape = {"command": (str,), "effort": (str,), "family": (str,), "model": (str,), "pool": (str, type(None)), "runtime": (str,), "technique": (str,), "toolFree": (bool,)}
@@ -575,6 +575,18 @@ def request_errors(manifest, context, roles):
                 refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}must be a list of strings")
             else:
                 name_lists[key] = values
+        configured = name_lists.get("familyNames")
+        shape("manifest.familyMakers", manifest["familyMakers"], {name: (str, type(None)) for name in (configured or [])})
+        if isinstance(manifest["familyMakers"], dict):
+            for name, maker in manifest["familyMakers"].items():
+                path = f"manifest.familyMakers.{name}"
+                if configured is not None and name not in configured:
+                    refuse(path, f"{CONFIGURATION_FAULT}unknown family name; allowed: {allowed(sorted(configured))}")
+                elif isinstance(maker, str):
+                    if not maker.strip():
+                        refuse(path, f"{CONFIGURATION_FAULT}must be a non-empty string")
+                    else:
+                        makers[name] = maker
         for kind in ("routes", "manualRoutes"):
             if not isinstance(manifest[kind], list):
                 refuse(f"manifest.{kind}", f"{CONFIGURATION_FAULT}must be a list")
@@ -589,6 +601,12 @@ def request_errors(manifest, context, roles):
                 elif route["pool"] is not None and route["pool"] not in pool_names:
                     refuse(f"{path}.pool", pool_fault % route["pool"])
                 shape(path, route, route_shape)
+                family = route.get("family")
+                if isinstance(family, dict) and isinstance(family.get("maker"), str):
+                    if not family["maker"].strip():
+                        refuse(f"{path}.family.maker", f"{CONFIGURATION_FAULT}must be a non-empty string")
+                    elif isinstance(family.get("name"), str) and family["name"] in makers and family["maker"] != makers[family["name"]]:
+                        refuse(f"{path}.family.maker", f"{CONFIGURATION_FAULT}must match manifest.familyMakers.{family['name']}")
         shape("manifest.pickerEntries", manifest["pickerEntries"], [picker_shape])
         for index, entry in enumerate(manifest["pickerEntries"] if isinstance(manifest["pickerEntries"], list) else []):
             if not isinstance(entry, dict):
@@ -641,13 +659,15 @@ def request_errors(manifest, context, roles):
             refuse(path, "must be an object")
         else:
             for field in ("avoid", "exclude"):
+                noun = "family name or maker" if field == "exclude" else "family name"
+                names = sorted(set(families) | set(makers.values())) if field == "exclude" and families is not None else families
                 if field not in request:
                     continue
                 if not isinstance(request[field], list):
-                    refuse(f"{path}.{field}", "must be a list of family names")
+                    refuse(f"{path}.{field}", "must be a list of family names or makers" if field == "exclude" else "must be a list of family names")
                 for position, name in enumerate(request[field] if isinstance(request[field], list) else []):
-                    if families is not None:
-                        named(f"{path}.{field}[{position}]", name, families, "family name")
+                    if names is not None:
+                        named(f"{path}.{field}[{position}]", name, names, noun)
             if efforts is not None and request.get("effort") is not None:
                 named(f"{path}.effort", request["effort"], efforts, "effort")
             closed(path, request, {"avoid", "effort", "exclude"})
@@ -689,7 +709,7 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
         for route in manifest["routes"]:
             family = route["family"]
             record = {"family": family["name"], "runtime": route["target"]}
-            if family["name"] in request.get("exclude", []):
+            if any(value in request.get("exclude", []) for value in (family["name"], family["maker"])):
                 excluded.append(record | {"reason": "excluded by caller"})
                 continue
             avoided = family["name"] in request.get("avoid", [])

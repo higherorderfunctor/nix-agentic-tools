@@ -16,6 +16,20 @@
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
   selected = target: selection.select families models.${target};
   candidates = selection.candidates families models runtimes;
+  routedFamilies = candidates ++ lib.concatMap selected (lib.unique manualExternalDelegates);
+  familyMakers = builtins.listToAttrs (map (family: {
+    inherit (family) name;
+    value =
+      if (family.maker or null) != null
+      then family.maker
+      else if builtins.elem family.vendor ["anthropic" "openai" "zhipu"]
+      then family.vendor
+      else if builtins.elem family routedFamilies
+      then throw "ai.programs.delegate-routing.families.${family.vendor}.${family.name}.maker: declare the model maker for a selected family"
+      # Keep all configured names available to exclude validation without
+      # rejecting an unused custom family that has not declared its maker.
+      else null;
+  }) (selection.flatten families));
   agentFiles = import ./agent-files.nix {inherit lib;};
   agentSet =
     if resolvedAgentFiles != null
@@ -69,7 +83,7 @@
       };
   in {
     inherit target;
-    family = {defaultEffort = null;} // family;
+    family = {defaultEffort = null;} // family // {maker = familyMakers.${family.name};};
     pool = selection.poolFor family target;
     techniques =
       if names == []
@@ -113,7 +127,7 @@
       inherit (route) pool;
     };
 in {
-  inherit candidates effortLevels runtimes;
+  inherit candidates effortLevels familyMakers runtimes;
   pickerEntries = let
     # A family-named default takes the family's resolved id and is dropped when
     # none resolves; a model-named default passes through.

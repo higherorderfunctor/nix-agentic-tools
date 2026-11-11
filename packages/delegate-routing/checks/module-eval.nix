@@ -21,6 +21,7 @@
       enable = true;
       # The package ships no Kimchi families, so the scenario declares one.
       families.served.flash = {
+        maker = "fixture";
         match = "test-flash-*";
         tier = "small";
         useFor = "TEST KIMCHI FAMILY";
@@ -215,6 +216,7 @@
     addedFamily = skill {
       ai = {
         programs.delegate-routing.families.example.x = {
+          maker = "fixture";
           match = "example-x-*";
           tier = "strong";
           useFor = "CUSTOM FAMILY TASK";
@@ -626,6 +628,7 @@
           families.fixture.packaged = {
             defaultEffort = "high";
             example.${runtime} = "fixture-model";
+            maker = "fixture";
             match = "fixture-model";
             pools.${runtime} = sessionPools.${runtime};
             tier = "strong";
@@ -1560,6 +1563,64 @@
         };
       }) "family names must be unique across vendors"
     );
+    # Wrong: provider identity replaces maker, explicit makers lose to the group,
+    # missing makers reach selected routes, or unused declarations fail rendering.
+    "module-delegate-routing-${name}-makers" = mkTest "delegate-routing-${name}-makers" (let
+      families = {
+        anthropic.override = {
+          maker = "custom-maker";
+          match = "override-*";
+          tier = "strong";
+        };
+        opencode-go.go-iceman-contributor-free = (import ../lib/opencode-go.nix {inherit lib;}).families.go-iceman-contributor-free;
+        openai.direct = {
+          match = "direct-*";
+          tier = "strong";
+        };
+        other.unused = {
+          match = "unused-*";
+          tier = "strong";
+        };
+        zhipu.custom = {
+          match = "custom-*";
+          tier = "strong";
+        };
+      };
+      selectedModels = [{families = ["custom" "direct" "go-iceman-contributor-free" "override"];}];
+      view = models:
+        import ../lib/routing-view.nix (routingArgs
+          // {
+            inherit families models;
+            extraRuntimes = [];
+            manualExternalDelegates = ["kiro"];
+            picker.entries = [];
+            resolvedAgentFiles = {};
+          });
+      models = lib.genAttrs runtimes (_: selectedModels);
+      valid = view models;
+      selectedMissing = target: view (models // {${target} = [{families = ["unused"];}];});
+      makerOptionFails = value:
+        !(builtins.tryEval (builtins.deepSeq
+          (change {ai.programs.delegate-routing.families.anthropic.opus.maker = value;}).config.ai.programs.delegate-routing.families
+          true)).success;
+    in
+      valid.familyMakers
+      == {
+        custom = "zhipu";
+        direct = "openai";
+        go-iceman-contributor-free = "iceman";
+        override = "custom-maker";
+        unused = null;
+      }
+      && lib.sort lib.lessThan valid.familyNames == builtins.attrNames valid.familyMakers
+      && lib.all (route: route.family.maker == valid.familyMakers.${route.family.name}) (valid.routes ++ valid.manualRoutes)
+      && builtins.length valid.routes == 4
+      && builtins.length valid.manualRoutes == 4
+      && !(builtins.tryEval (builtins.deepSeq (selectedMissing "claude").routes true)).success
+      && !(builtins.tryEval (builtins.deepSeq (selectedMissing "kiro").manualRoutes true)).success
+      && result.config.ai.programs.delegate-routing.families.anthropic.opus.maker == null
+      && (change {ai.programs.delegate-routing.families.anthropic.opus.maker = "custom-maker";}).config.ai.programs.delegate-routing.families.anthropic.opus.maker == "custom-maker"
+      && lib.all makerOptionFails ["" " " 1]);
     "module-delegate-routing-${name}-opencode-go-pool" = mkTest "delegate-routing-${name}-opencode-go-pool" (let
       expectedBindings = lib.genAttrs ["claude" "codex" "kiro"] (_: "go-budget");
       settings = {
@@ -1669,6 +1730,7 @@
           };
         };
       kimi = {
+        maker = "moonshot";
         match = "kimi-k3*";
         tier = "strong";
       };

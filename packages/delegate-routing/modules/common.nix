@@ -230,6 +230,11 @@ in {
               default = {};
               description = "Concrete current model id by target harness, shaped like pools; that harness's launch route names it in place of the match pattern, and a target with no entry names the pattern instead.";
             };
+            maker = lib.mkOption {
+              type = lib.types.nullOr (lib.types.addCheck lib.types.str (value: lib.trim value != ""));
+              default = null;
+              description = "Model maker for review independence. Null takes the vendor group for anthropic, openai and zhipu and fails evaluation for any other selected family. Provider, runtime and budget are separate identities.";
+            };
             match = lib.mkOption {
               type = lib.types.str;
               description = "Normalized live model id pattern, resolved using the runtime's own spelling.";

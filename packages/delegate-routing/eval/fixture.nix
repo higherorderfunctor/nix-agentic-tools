@@ -15,6 +15,7 @@
       deepseek.deepseek-flash = {
         avoidFor = "review, building code, correctness judgment; knowledge-heavy questions";
         effort = "thinks by default; low for reads, high for tracing; never cap output tokens small (returns empty)";
+        maker = "deepseek";
         match = "deepseek-v*-flash*";
         tier = "small";
         useFor = "codebase exploration, research reads, compaction, trivial re-verification";
@@ -22,6 +23,7 @@
       minimax.minimax = {
         avoidFor = "judging or review (abstains, weak abstract reasoning)";
         effort = "no documented knob; expect long reasoning traces";
+        maker = "minimax";
         match = "minimax-m*";
         tier = "mid";
         useFor = "well-scoped code to a spec; screenshot or image input";
@@ -30,6 +32,7 @@
         kimi-k2 = {
           avoidFor = "build subagents on a time budget (slow, times out); mixed-goal prompts";
           effort = "always thinks";
+          maker = "moonshot";
           match = "kimi-k2*";
           tier = "mid";
           useFor = "coding with image input";
@@ -37,6 +40,7 @@
         kimi-k3 = {
           avoidFor = "simple or latency-bound work (slow, always thinks); ambiguous briefs; mid-session model switches";
           effort = "always thinks; treat effort as fixed";
+          maker = "moonshot";
           match = "kimi-k3*";
           tier = "strong";
           useFor = "orchestration and review; frontend and browsing-heavy agentic work";
@@ -45,6 +49,7 @@
       nvidia.nemotron-ultra = {
         avoidFor = "review, building code, multi-file edits, long-horizon planning";
         effort = "keep the reasoning budget low; the value is speed";
+        maker = "nvidia";
         match = "nemotron-*-ultra*";
         tier = "small";
         useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
