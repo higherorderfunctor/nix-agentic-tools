@@ -3561,7 +3561,7 @@
             }
           }
         },
-        "canonical_id": "deepseek/deepseek-v4.1-flash",
+        "canonical_id": "deepseek/deepseek-v4.1-flash-1017",
         "capabilities": {
           "effort_updates": false,
           "reasoning": { "effort": ["low", "high", "max"], "supported": true },
@@ -3600,11 +3600,11 @@
             "output": { "price": 0.6 }
           }
         },
-        "description": "DeepSeek V4.1 Flash model for reasoning and agentic coding",
+        "description": "October 17 update of DeepSeek V4.1 Flash with improved reasoning, coding, agentic tasks, and visual understanding",
         "family": "deepseek-flash",
         "id": "deepseek-v4.1-flash",
         "knowledge": "2025-05",
-        "last_updated": "2026-09-10",
+        "last_updated": "2026-10-17",
         "limit": { "context": 1000000, "output": 384000 },
         "modalities": {
           "input": [
@@ -3616,11 +3616,11 @@
           ],
           "output": ["text"]
         },
-        "name": "DeepSeek V4.1 Flash",
+        "name": "DeepSeek V4.1 Flash 1017",
         "object": "model",
         "open_weights": true,
         "owned_by": "opencode",
-        "release_date": "2026-09-10",
+        "release_date": "2026-10-17",
         "type": "chat"
       },
       "gemini-4-argon": {
