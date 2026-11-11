@@ -5,10 +5,8 @@
 {lib}: let
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   fact = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
-  inherit ((import ../../cliproxyapi/lib/providers.nix {inherit lib;}).vendors.opencode-go) refuses;
   vendor = "opencode-go";
-  # Catalog ids a Go credential may serve; the Claude OAuth credential owns the rest.
-  catalog = lib.filter (id: !(refuses id)) (builtins.attrNames fact.models);
+  catalog = builtins.attrNames fact.models;
 
   # Shell-style glob as a full-match POSIX regex: `*`, `?` and `[...]`/`[!...]`.
   globRegex = glob:
@@ -297,13 +295,21 @@
       "${id} (${lib.concatStringsSep ", " owners})")
     catalog;
 
-  # Catalog ids no preset matches, ids several presets match, and presets
-  # matching no catalog id.
+  # Every catalog id has exactly one owner: a preset or shipped non-Go family.
+  # Non-Go families need not match the Go catalog: they use runtime live lists.
   drift = let
-    owners = id: lib.attrNames (lib.filterAttrs (_: family: matchesId family id) families);
+    ownerFamilies = lib.concatLists (lib.mapAttrsToList (vendor: families:
+      lib.mapAttrsToList (name: family: {
+        inherit name vendor;
+        inherit (family) match;
+      })
+      families) ((import ./families.nix) // {${vendor} = families;}));
+    owners = id:
+      map (family: "${family.vendor}.${family.name}")
+      (lib.filter (family: matchesId family id) ownerFamilies);
   in
-    map (id: "catalog model `${id}` matches no preset") (lib.filter (id: owners id == []) catalog)
-    ++ map (id: "catalog model `${id}` matches several presets: ${lib.concatStringsSep ", " (owners id)}") (lib.filter (id: lib.length (owners id) > 1) catalog)
+    map (id: "catalog model `${id}` matches no preset or shipped family") (lib.filter (id: owners id == []) catalog)
+    ++ map (id: "catalog model `${id}` matches several owners: ${lib.concatStringsSep ", " (owners id)}") (lib.filter (id: lib.length (owners id) > 1) catalog)
     ++ lib.mapAttrsToList (name: _: "preset `${name}` matches no catalog model") (lib.filterAttrs (_: family: matches family == []) families);
 in {
   inherit drift families overlaps poolHint vendor;

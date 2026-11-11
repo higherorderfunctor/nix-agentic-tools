@@ -1,4 +1,4 @@
-# cspell:ignore Prio sublist
+# cspell:ignore longcat Prio sublist
 # Exercise the generated files as delivered through both consumer backends.
 {
   harness,
@@ -1857,6 +1857,31 @@
             };
         }).config.ai.programs.delegate-routing.families.opencode-go));
     "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let
+      expectedPresetNames = [
+        "go-beam-free"
+        "go-deepseek-v4-pro"
+        "go-deepseek-v4.1-flash"
+        "go-gemini-4-argon"
+        "go-grok-4.7"
+        "go-hy3"
+        "go-hy4"
+        "go-hy4-preview"
+        "go-iceman-contributor-free"
+        "go-kimi-k2.7-code"
+        "go-kimi-k3"
+        "go-kimi-k3.1-pro"
+        "go-longcat-2.0"
+        "go-longcat-2.5-free"
+        "go-mimo-v2.6-flash"
+        "go-mimo-v2.6-pro"
+        "go-minimax-m3"
+        "go-minimax-m3.1-flash"
+        "go-muse-spark-contributor"
+        "go-qwen3.7-plus"
+        "go-qwen3.8-flash"
+        "go-qwen3.8-max"
+        "go-step-5-preview"
+      ];
       goSelected = plan:
         change {
           ai.programs.delegate-routing = {
@@ -1889,11 +1914,17 @@
         };
       note = "The opencode-go families come from per-model research: their tiers and effort guidance are provisional, not measured on this workload.";
       planned = readSkill (goSelected "go-plus") "claude";
+      presetNames = builtins.attrNames (import ../lib/opencode-go.nix {inherit lib;}).families;
       unplanned = readSkill (goSelected null) "claude";
     in
+      # Reject added covered-model presets and dropped or renamed presets.
+      presetNames
+      == expectedPresetNames
+      # Reject separate Go presets for models owned by shipped families.
+      && !(lib.any (preset: lib.any (prefix: lib.hasPrefix prefix preset) ["go-claude-" "go-glm-" "go-gpt-"]) presetNames)
       # Presets ship but render only when selected; the default skill has no
       # provisional note; the Pool column remains even without pool guidance.
-      !(lib.hasInfix "(opencode-go)" claude)
+      && !(lib.hasInfix "(opencode-go)" claude)
       && lib.hasInfix "| Pool " claude
       && !(hasProse note claude)
       && lib.hasInfix "go-kimi-k3 (opencode-go)" planned

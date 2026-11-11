@@ -220,14 +220,16 @@ excluded because CPA refuses them on Go. Go DeepSeek V4.1 Flash's guidance says
 never cap output tokens small because it returns empty.
 
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
-catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
-(`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
-get no preset. They come from per-model research, and every tier is provisional:
-whenever a consumer `{families}` block renders an `opencode-go` family, one line
-under the tables says so. Each family is named `go-` plus the exact Go id,
-except `go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research
-found share a role. The `go-` prefix keeps them apart from hand-written families
-such as `kimi-k3`. Presets render only when a runtime selects them, for example
+full catalog, only for ids no shipped family's `match` covers. The `glm-*`,
+`claude-*` and `gpt-*` ids served by Go route through the zhipu, anthropic and
+openai families; the pool a consumer binds for a runtime decides the route, the
+same way Anthropic families bind different pools per runtime. Presets come from
+per-model research, and every tier is provisional: whenever a consumer
+`{families}` block renders an `opencode-go` family, one line under the tables
+says so. Each family is named `go-` plus the exact Go id, except
+`go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research found
+share a role. The `go-` prefix keeps them apart from hand-written families such
+as `kimi-k3`. Presets render only when a runtime selects them, for example
 `models = [{vendors = ["opencode-go"];}]`; a tier-only selector picks them up
 like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
 field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
@@ -248,8 +250,9 @@ custom `opencode-go` one included, that match the same servable Go catalog id,
 such as a hand-written `deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`,
 evaluation fails and names the id and the families. Selecting them on different
 runtimes is allowed, and families that overlap with no preset selected are not
-checked. The `delegate-routing-opencode-go-presets` check fails when a servable
-catalog id matches no preset or several, or a preset matches no catalog id.
+checked. The `delegate-routing-opencode-go-presets` check fails when a catalog
+id matches no owner or several owners across presets and shipped non-Go
+families, or a preset matches no catalog id.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
