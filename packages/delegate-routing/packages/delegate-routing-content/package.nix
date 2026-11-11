@@ -69,7 +69,7 @@
   mkSkill = args:
     lib.makeOverridable buildSkill (defaults
       // {
-        lowWaterMark = 0.5;
+        inherit (import ../../lib/vocabulary.nix) lowWaterMark;
         picker = null;
         sessionPool = null;
       }

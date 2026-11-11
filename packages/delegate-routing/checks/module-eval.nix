@@ -922,6 +922,7 @@
         == [
           {
             effort = "low";
+            family = null;
             model = "gpt-6.1-sol";
             technique = "codex exec";
           }
@@ -980,11 +981,34 @@
         && refused [(entry // {effort = "invented";})]
         # Wrong: a glob passes as a model because the family pattern matches its text.
         && lib.all (model: refused [(entry // {inherit model;})]) ["test-opus-*" "test-opus-?" "test-opus-["]
-        && evaluationFails (change {ai.programs.delegate-routing.runtimes.claude.picker.entries = [(entry // {family = "opus";})];})
+        # Wrong: consumer families are rejected or resolve differently from models.
+        && map (picker: {inherit (picker) family model runtime technique;}) (resolve [(removeAttrs entry ["model"] // {family = "opus";})])
+        == [
+          {
+            family = "opus";
+            model = "test-opus-5-10";
+            runtime = "claude";
+            technique = "claude -p";
+          }
+        ]
+        && builtins.isString (fixedSkill {ai.programs.delegate-routing.runtimes.claude.picker.entries = [(removeAttrs entry ["model"] // {family = "opus";})];})
+        && refused [(removeAttrs entry ["model"])]
+        && refused [(entry // {family = "opus";})]
+        && skillFails {ai.programs.delegate-routing.runtimes.claude.picker.entries = [(entry // {family = "opus";})];}
+        && skillFails {ai.programs.delegate-routing.runtimes.claude.picker.entries = [(removeAttrs entry ["model"])];}
+    );
+    "module-delegate-routing-${name}-dev-codex-reach" = mkTest "delegate-routing-${name}-dev-codex-reach" (
+      # Wrong: the repository's Codex session cannot reach the Claude pool.
+      ((import ../../../dev/ai.nix {isCI = true;}) {
+        inherit lib pkgs;
+        config = {};
+      }).ai.programs.delegate-routing.runtimes.codex.extraRuntimes
+      == ["claude"]
     );
     "module-delegate-routing-${name}-pool-ranking-options" = mkTest "delegate-routing-${name}-pool-ranking-options" (
       result.config.ai.programs.delegate-routing.lowWaterMark
       == 0.5
+      && routingView.lowWaterMark == 0.5
       && poolResult.config.ai.programs.delegate-routing.pools.measured.preference == 0
       && (import ../lib/routing-view.nix (routingArgs // {lowWaterMark = 0.25;})).lowWaterMark == 0.25
       && evaluationFails (change {ai.programs.delegate-routing.lowWaterMark = -1;})
@@ -1009,6 +1033,12 @@
             };
           });
         agent = builtins.head (builtins.head resolved.routes).techniques;
+        external = import ../lib/routing-view.nix (routingArgs
+          // {
+            extraRuntimes = ["claude"];
+            runtime = "codex";
+          });
+        externalClaude = lib.findFirst (route: route.target == "claude" && route.family.name == "opus") null external.routes;
       in
         passes routingFixture
         && routingView.effortLevels == ["minimal" "low" "medium" "high" "xhigh" "max"]
@@ -1059,6 +1089,19 @@
           value = "proxy-opus-123";
         }
         && agent.agent.family.defaultEffort == "high"
+        # Wrong: external Claude reaches discard the resolved generated-agent id.
+        && map (technique: {inherit (technique) agent model name;}) externalClaude.techniques
+        == [
+          {
+            agent = null;
+            model = {
+              efforts = ["low" "medium" "high" "xhigh"];
+              isPattern = false;
+              value = "test-opus-5-10";
+            };
+            name = "claude -p";
+          }
+        ]
         && (builtins.head (lib.last routingView.routes).techniques).model
         == {
           efforts = [];
@@ -2259,7 +2302,7 @@
           "a listed pin uses catalog efforts, otherwise Nix-declared efforts remain"
           "Unavailable: <reason>."
           "listing every problem and allowed values"
-          "Each delegate candidate in the helper's JSON stdout carries `launch` with `guidance` (command, modelArg, notes) and `agent`; a last resort with `action` `continue-self` carries only action, runtime, family, model and effort."
+          "Each delegate candidate in the helper's JSON stdout carries `launch` with `guidance` (command, modelArg, notes) and `agent`; a last resort with `action` `continue-self` carries only action, runtime and family."
         ];
         # Native binding notes and facts the orchestrator needs, as list lines
         # (no table): each runtime's own notes, introspection and pins.

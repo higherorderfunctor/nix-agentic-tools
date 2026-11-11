@@ -49,7 +49,7 @@ def manifest(routes=None, session=None):
     return {"effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "familyMakers": family_makers, "familyNames": sorted(family_makers), "lowWaterMark": 0.5, "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
-def context(roles=("writer",), names=("sol",), non_interactive=False, effort=None):
+def context(roles=("writer",), non_interactive=False, effort=None):
     return {"taskSummary": "bounded source change", "nonInteractive": non_interactive, "roles": {role: {"effort": effort} for role in roles}}
 
 
@@ -190,7 +190,7 @@ class Routing(unittest.TestCase):
 
     def test_caller_techniques_refused_before_readers(self):
         ctx = context() | {"techniques": []}
-        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.techniques", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary"}])
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.techniques", "message": "unknown key; allowed: nonInteractive, proposerFamily, roles, taskSummary"}])
 
     def test_same_pool_family_keeps_both_runtime_routes(self):
         config = manifest([
@@ -312,28 +312,47 @@ class Routing(unittest.TestCase):
                 self.assertEqual(result["roles"]["first-check"]["candidates"], [])
                 self.assertIn("error", result["roles"]["first-check"])
 
-    def test_ladder_attested_self_is_native_last_resort_not_a_launch(self):
-        # Wrong: headless callers recurse externally, or invent a spawn capability.
+    def test_ladder_proposer_self_keeps_route_pool_and_hard_filters(self):
+        # Wrong: an external-only headless caller loses itself or uses sessionPool.
         config, ctx = self.ladder_fixture([("caller", "one", "strong", "a", "high", ["low", "high"])], role="writer")
         config["routes"][0]["techniques"][0]["node"]["kind"] = "external"
-        ctx["nonInteractive"] = True
-        ctx["caller"] = {"effort": "low", "family": "caller", "model": "caller"}
+        ctx.update(nonInteractive=True, proposerFamily="caller")
         result, _ = self.run_plan(config, ctx)
+        self.assertEqual([candidate["pool"] for candidate in result["roles"]["writer"]["candidates"]], ["a"])
         candidate = result["roles"]["writer"]["candidates"][0]
-        self.assertEqual(candidate["launch"], {"action": "continue-self", "effort": "low", "family": "caller", "model": "caller", "runtime": "codex"})
-        self.assertIn("action=continue-self", candidate["line"])
-        self.assertNotIn("technique=", candidate["line"])
-        ctx["roles"]["writer"]["exclude"] = ["one"]
+        self.assertEqual(candidate["launch"], {"action": "continue-self", "family": "caller", "runtime": "codex"})
+        self.assertEqual(candidate["pool"], "a")
+        self.assertEqual(candidate["line"], "role=writer action=continue-self runtime=codex family=caller")
+        for gate in ("exclude", "exhausted", "invalid-scoped", "picker", "scoped", "unreachable"):
+            with self.subTest(gate=gate):
+                launch_context = deepcopy(ctx)
+                outputs = {}
+                if gate == "exclude":
+                    launch_context["roles"]["writer"]["exclude"] = ["one"]
+                elif gate == "exhausted":
+                    outputs["reader-a"] = stream({"monthly": window(0)})
+                elif gate in ("invalid-scoped", "scoped"):
+                    outputs["reader-a"] = stream({"monthly": window(), "weekly:caller": window(50, reset=None) if gate == "invalid-scoped" else window(0)})
+                elif gate == "unreachable":
+                    outputs["reader-a"] = subprocess.CompletedProcess([], 7, "", "private")
+                judgment = {"decisions": [{"decision": "exclude", "family": "caller", "role": "writer"}]} if gate == "picker" else None
+                with patch.object(helper, "pick", return_value=judgment):
+                    result, _ = self.run_plan(config, launch_context, outputs=outputs)
+                self.assertEqual(result["roles"]["writer"]["candidates"], [])
+
+    def test_ladder_null_proposer_has_no_self_last_resort(self):
+        config = manifest([route(techniques=[technique("codex exec", "external")])])
+        ctx = context(non_interactive=True) | {"proposerFamily": None}
         result, _ = self.run_plan(config, ctx)
         self.assertEqual(result["roles"]["writer"]["candidates"], [])
-        ctx["roles"]["writer"].pop("exclude")
-        del ctx["caller"]
-        result, _ = self.run_plan(config, ctx)
-        self.assertEqual(result["roles"]["writer"]["candidates"], [])
-        self.assertIn("error", result["roles"]["writer"])
+        self.assertIn("proposer family unknown; self last resort unavailable", result["warnings"])
+
+    def test_caller_attestation_is_not_an_input(self):
+        ctx = context() | {"caller": {"family": "sol", "model": "gpt-6.1-sol", "effort": "high"}}
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.caller", "message": "unknown key; allowed: nonInteractive, proposerFamily, roles, taskSummary"}])
 
     def test_ladder_check_plan_refuses_self_as_executable_launch(self):
-        # Wrong: an attested continuation is accepted as a prepared delegate launch.
+        # Wrong: continuing the session is accepted as a prepared delegate launch.
         roles = ("writer", "first-check", "second-check", "judge")
         current, _ = self.run_plan(roles=roles)
         with tempfile.TemporaryDirectory(prefix="routing-self-plan-") as directory:
@@ -372,6 +391,15 @@ class Routing(unittest.TestCase):
         self.assertEqual([x["launch"]["family"] for x in result["roles"]["judge"]["candidates"]], ["other"])
         self.assertEqual(result["picker"]["provenance"], {"runtime": "codex", "technique": "one-shot", "family": "sol", "model": "gpt-6.1-sol", "effort": "medium"})
         self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
+
+    def test_picker_catalog_keeps_the_delegate_effort_beside_self(self):
+        # Wrong: the continue-self record, which carries no effort, shadows the
+        # delegate route of the same family in the picker's catalog.
+        config, ctx = self.picker_fixture([route()])
+        ctx["proposerFamily"] = "sol"
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
+            self.run_plan(config, ctx)
+        self.assertEqual([row["effectiveEffort"] for row in picker.call_args.args[1]["families"]], ["high"])
 
     def test_picker_hard_gates_are_prompt_data(self):
         # Wrong: excluded, unreachable, exhausted or scoped-refused families reach
@@ -453,16 +481,6 @@ class Routing(unittest.TestCase):
         self.assertEqual(raw[1:], ["Return JSON only. No tools."])
         self.assertFalse(Path(raw[0]).exists())
 
-    def test_picker_failed_subprocess_names_both_attempts(self):
-        # Wrong: both subprocess failures are swallowed, or private stderr leaks.
-        config, ctx = self.picker_fixture()
-        with patch.object(helper, "run_picker", side_effect=subprocess.CalledProcessError(7, "secret-command", stderr="private")) as picker:
-            result, _ = self.run_plan(config, ctx)
-        self.assertEqual(picker.call_count, 2)
-        self.assertIn("WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user. Unavailable: gpt-6.1-sol (one-shot): attempt 1: picker exited 7; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker exited 7; no retries left.", result["warnings"])
-        self.assertNotIn("private", json.dumps(result))
-        self.assertNotIn("secret-command", json.dumps(result))
-
     def test_picker_empty_entries_names_its_reason(self):
         # Wrong: an empty manifest picker list produces an unexplained fallback.
         config, ctx = self.picker_fixture()
@@ -482,13 +500,14 @@ class Routing(unittest.TestCase):
         ]
         for change, pools, invalid, expected in cases:
             with self.subTest(reason=expected):
-                self.assertEqual(helper.picker_runnable(entry | change, config, ctx, pools, {}, invalid), expected)
+                self.assertEqual(helper.picker_runnable(entry | change, pools, {}, invalid), expected)
 
     def test_picker_failure_categories_are_safe_and_distinct(self):
         # Wrong: a retry loses its timeout/exit category, or malformed decisions
         # and generic exceptions leak command text or private output.
         config, ctx = self.picker_fixture()
         cases = [
+            ([subprocess.CalledProcessError(7, "secret-command", stderr="private"), subprocess.CalledProcessError(7, "secret-command", stderr="private")], "attempt 1: picker exited 7; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker exited 7; no retries left"),
             ([subprocess.TimeoutExpired("private", 90), subprocess.CalledProcessError(7, "private")], "attempt 1: picker timed out; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker exited 7; no retries left"),
             ([OSError("private"), OSError("private")], "attempt 1: picker execution failed; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker execution failed; no retries left"),
             ([subprocess.SubprocessError("private"), subprocess.SubprocessError("private")], "attempt 1: picker execution failed; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker execution failed; no retries left"),
@@ -500,8 +519,9 @@ class Routing(unittest.TestCase):
             with self.subTest(reason=expected), patch.object(helper, "run_picker", side_effect=failures) as picker:
                 result, _ = self.run_plan(config, ctx)
                 self.assertEqual(picker.call_count, len(failures))
-                self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6.1-sol (one-shot): {expected}.", result["warnings"])
+                self.assertIn(f"WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user. Unavailable: gpt-6.1-sol (one-shot): {expected}.", result["warnings"])
                 self.assertNotIn("private", json.dumps(result))
+                self.assertNotIn("secret-command", json.dumps(result))
 
     def test_picker_output_failures_name_the_bound_or_missing_file(self):
         # Wrong: the runner's safe prompt/output diagnostics vanish in pick.
@@ -592,7 +612,7 @@ class Routing(unittest.TestCase):
                 self.assertEqual(self.request_errors(launch_context=ctx), [{"path": f"launchContext.roles.writer.{key}", "message": "unknown key; allowed: effort, exclude, producers"}])
         ctx = context()
         ctx["essay"] = "unused"
-        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.essay", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary"}])
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.essay", "message": "unknown key; allowed: nonInteractive, proposerFamily, roles, taskSummary"}])
 
     def test_request_errors_list_every_problem_with_paths(self):
         # Wrong: the first fault hides the rest, a misspelled effort becomes a silent
@@ -606,7 +626,7 @@ class Routing(unittest.TestCase):
             {"path": "argv.role[1]", "message": "unknown role; allowed: finder, first-check, investigator, judge, mechanical, planner, second-check, writer"},
             {"path": "manifest.sessionPool", "message": configuration + "unregistered pool undeclared; registered: hidden, outside, session"},
             {"path": "manifest.routes[0].pool", "message": configuration + "unregistered pool ghost; registered: hidden, outside, session"},
-            {"path": "launchContext.extra", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary"},
+            {"path": "launchContext.extra", "message": "unknown key; allowed: nonInteractive, proposerFamily, roles, taskSummary"},
             {"path": "launchContext.taskSummary", "message": "must be a non-empty UTF-8 string of at most 65536 bytes"},
             {"path": "launchContext.nonInteractive", "message": "required; true, false or null"},
             {"path": "launchContext.proposerFamily", "message": f"unknown family name; allowed: {names}"},
@@ -1042,7 +1062,7 @@ class Routing(unittest.TestCase):
         self.assertEqual(corpus["readers"]["opencode-go"]["windows"]["monthly"]["windowSeconds"], 2678400)
         config = manifest([route("fable" if name == "claude" else name, pool=name) for name in expected])
         config["readers"] = [{"command": f"reader-{name}", "name": name} for name in expected]
-        ctx = context(names=tuple(r["family"]["name"] for r in config["routes"]))
+        ctx = context()
         ctx["roles"]["writer"].update({"exclude": []})
         outputs = {f"reader-{name}": json.dumps(document) for name, document in corpus["readers"].items()}
         for session, order in [
@@ -1076,13 +1096,13 @@ class Routing(unittest.TestCase):
             for field in ("exclude",):
                 for value in (None, "sol", {}, [1], [True], [""], ["unknown"], ["provider"], ["s*"]):
                     with self.subTest(role=role, field=field, value=value):
-                        ctx = context((role,), ("sol", "other"))
+                        ctx = context((role,))
                         ctx["roles"][role][field] = value
                         with patch.object(helper, "collect", side_effect=AssertionError("invalid lists reached Readers")):
                             errors = self.request_errors(config, ctx, (role,))
                             self.assertEqual([error["path"] for error in errors], [f"launchContext.roles.{role}.{field}" + ("[0]" if isinstance(value, list) else "")])
             for lists in ({}, {"exclude": []}, {"exclude": ["dormant"]}):
-                ctx = context((role,), ("sol", "other"))
+                ctx = context((role,))
                 ctx["roles"][role].update(lists)
                 result, _ = self.run_plan(config, ctx, (role,))
                 self.assertEqual([c["launch"]["family"] for c in result["roles"][role]["candidates"]], ["other", "sol", "sol"])
@@ -1291,7 +1311,7 @@ class Routing(unittest.TestCase):
                 config = manifest([route(), route("other", pool="session")])
                 config["readers"][1]["command"] = "reader-outside"
                 outputs = {"reader-outside": value}
-                result, calls = self.run_plan(config, context(names=("sol", "other")), outputs=outputs)
+                result, calls = self.run_plan(config, context(), outputs=outputs)
                 self.assertEqual(calls.count("reader-outside"), 2 if reason in {"Reader exited 7", "Reader timed out"} else 1)
                 self.assertEqual(result["pools"]["outside"], {"reason": reason, "status": "unreachable"})
                 self.assertEqual(result["roles"]["writer"]["candidates"], [])
@@ -1299,13 +1319,13 @@ class Routing(unittest.TestCase):
                 self.assertNotIn("secret-", json.dumps(result))
                 # A healthy alternative survives, without resurrecting the failed pool.
                 config["readers"][1]["command"] = "reader-session"
-                result, _ = self.run_plan(config, context(names=("sol", "other")), outputs=outputs)
+                result, _ = self.run_plan(config, context(), outputs=outputs)
                 self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["other"])
 
     def test_unmeasured_envelopes_and_exhausted_preference(self):
         # Wrong: exhaustion suppresses an independently observed unbound route.
         config = manifest([route(), route("unbound", pool=None)])
-        result, _ = self.run_plan(config, context(names=("sol", "unbound")), outputs={"reader-outside": stream({"5h": window(0)})})
+        result, _ = self.run_plan(config, context(), outputs={"reader-outside": stream({"5h": window(0)})})
         self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["unbound"])
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
         # Wrong: empty valid windows or missing registrations are transport failures.
@@ -1393,13 +1413,13 @@ class Routing(unittest.TestCase):
             "reader-outside": stream({"5h": window(50, 18000, "2026-11-15T02:30:00Z")}),
             "reader-session": stream({"5h": window(65, 18000, "2026-11-15T02:30:00Z")}),
         }
-        result, _ = self.run_plan(config, context(names=("own", "other")), outputs=outputs)
+        result, _ = self.run_plan(config, context(), outputs=outputs)
         self.assertGreater(result["pools"]["session"]["pace"], result["pools"]["outside"]["pace"])
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], "other")
 
     def test_session_pool_drains_last_on_measured_tie(self):
         config = manifest([route("alpha", pool="session"), route("zulu")], "session")
-        result, _ = self.run_plan(config, context(names=("alpha", "zulu")))
+        result, _ = self.run_plan(config, context())
         self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("zulu", 0.9375), ("alpha", 0.9375)])
 
     def test_unmeasured_session_keeps_fit_only_candidate(self):
@@ -1407,7 +1427,7 @@ class Routing(unittest.TestCase):
         config = manifest([route("alpha", pool="session"), route("zulu")], "session")
         for outside in (stream({"5h": window(reset=None)}), stream()):
             with self.subTest(outside=outside):
-                result, _ = self.run_plan(config, context(names=("alpha", "zulu")), outputs={"reader-outside": outside, "reader-session": stream({"5h": window(reset=None)})})
+                result, _ = self.run_plan(config, context(), outputs={"reader-outside": outside, "reader-session": stream({"5h": window(reset=None)})})
                 self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], ["zulu", "alpha"])
                 self.assertEqual(result["roles"]["writer"]["exclusions"], [])
 
@@ -1443,7 +1463,7 @@ class Routing(unittest.TestCase):
         # Wrong: any colon makes the pool unmeasured, or scopes set pool pace/buffer.
         for remaining in (52, 10, 0):
             with self.subTest(remaining=remaining):
-                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(remaining, 604800, "2026-11-18T12:00:00Z")})})
+                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(), outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(remaining, 604800, "2026-11-18T12:00:00Z")})})
                 pool = result["pools"]["outside"]
                 self.assertEqual(pool["status"], "measured")
                 self.assertEqual(pool["pace"], 0.34)
@@ -1460,7 +1480,7 @@ class Routing(unittest.TestCase):
             "7d:fable": {"remainingPercent": 17, "resetsAt": "2026-11-18T12:00:00Z", "status": "inactive", "usedPercent": 83, "windowSeconds": 604800},
             "7d:opus": {"remainingPercent": 100, "resetsAt": None, "status": None, "usedPercent": 0, "windowSeconds": 604800},
         }
-        result, _ = self.run_plan(manifest([route("fable"), route("opus"), route("sol")]), context(names=("fable", "opus", "sol")), outputs={"reader-outside": stream(windows)})
+        result, _ = self.run_plan(manifest([route("fable"), route("opus"), route("sol")]), context(), outputs={"reader-outside": stream(windows)})
         self.assertEqual(result["pools"]["outside"], {"buffer": 0.52, "pace": 1.04, "scopedPaces": {"7d:fable": 0.34, "7d:opus": None}, "status": "measured"})
         self.assertEqual({item["launch"]["family"]: item["pace"] for item in result["roles"]["writer"]["candidates"]}, {"fable": 0.34, "opus": 1.04, "sol": 1.04})
 
@@ -1475,7 +1495,7 @@ class Routing(unittest.TestCase):
         ]
         for value, reason in cases:
             with self.subTest(reason=reason):
-                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": value})})
+                result, _ = self.run_plan(manifest([route("fable"), route("sol")]), context(), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": value})})
                 self.assertEqual(result["pools"]["outside"]["status"], "measured")
                 self.assertEqual(result["pools"]["outside"]["pace"], 1.04)
                 self.assertEqual(result["pools"]["outside"]["buffer"], 0.52)
@@ -1485,29 +1505,29 @@ class Routing(unittest.TestCase):
 
     def test_invalid_scope_does_not_block_another_session_family(self):
         # Wrong: an invalid family's pool pace blocks a valid session candidate.
-        result, _ = self.run_plan(manifest([route("fable"), route("sol", pool="session")], "session"), context(names=("fable", "sol")), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(50, 604800, None)})})
+        result, _ = self.run_plan(manifest([route("fable"), route("sol", pool="session")], "session"), context(), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(50, 604800, None)})})
         self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.9375)])
 
     def test_scopes_are_limited_to_the_bound_pool_and_worst_window(self):
         # Wrong: a scope follows the family across pools, or last scoped window wins.
         config = manifest([route("fable"), route("fable", pool="session")])
-        result, _ = self.run_plan(config, context(names=("fable",)), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "5h:fable": window(10, 18000, "2026-11-15T02:30:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})})
+        result, _ = self.run_plan(config, context(), outputs={"reader-outside": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "5h:fable": window(10, 18000, "2026-11-15T02:30:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})})
         self.assertEqual([(item["pool"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("session", 0.9375), ("outside", 0.2)])
 
     def test_scoped_pace_ranking_and_session_comparison(self):
         # Wrong: session pool order overrides normal pace groups or family scopes.
         config = manifest([route("fable", pool="session"), route("sol")], "session")
         outputs = {"reader-outside": stream({"7d": window(30, 604800, "2026-11-18T12:00:00Z")}), "reader-session": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})}
-        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        result, _ = self.run_plan(config, context(), outputs=outputs)
         self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], ["sol", "fable"])
         self.assertEqual(result["roles"]["writer"]["exclusions"], [])
         # Scoped pace still limits its family independently of session identity.
         outputs["reader-outside"] = stream({"7d": window(10, 604800, "2026-11-18T12:00:00Z")})
-        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        result, _ = self.run_plan(config, context(), outputs=outputs)
         self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.2), ("fable", 0.34)])
         # The same family pace also ranks ordinary non-session candidates.
         config["sessionPool"] = None
-        result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
+        result, _ = self.run_plan(config, context(), outputs=outputs)
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
 
     def test_scope_configured_only_for_another_runtime(self):
@@ -1630,7 +1650,7 @@ class Routing(unittest.TestCase):
 
     def test_fit_only_and_measured_order(self):
         config = manifest([route("unknown", pool=None), route()])
-        result, _ = self.run_plan(config, context(names=("sol", "unknown")))
+        result, _ = self.run_plan(config, context())
         self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["sol", "unknown"])
         config["readers"] = []
         config["routes"] = [route(pool=None)]
@@ -1644,13 +1664,13 @@ class Routing(unittest.TestCase):
             candidate = route(family, tier)
             if tier in ("strong", "frontier"):
                 candidate["family"]["useFor"] = "deep synthesis"
-            result, _ = self.run_plan(manifest([candidate]), context(roles, (family,)), roles)
+            result, _ = self.run_plan(manifest([candidate]), context(roles), roles)
             for role in roles:
                 self.assertEqual(bool(result["roles"][role]["candidates"]), tier in ("strong", "frontier"))
                 if tier in ("small", "mid"):
                     self.assertEqual(result["roles"][role]["error"], "every route is hard-filtered and the caller cannot run itself; never step down a tier.")
         self.assertEqual([error["path"] for error in self.request_errors(launch_context=context(), roles=("unknown",))], ["argv.role[0]"])
-        result, _ = self.run_plan(launch_context=context(names=()))
+        result, _ = self.run_plan(launch_context=context())
         self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
 
     def test_generated_agent_workflow_external_and_unresolved(self):
@@ -1704,12 +1724,12 @@ class Routing(unittest.TestCase):
         config = manifest([route("fast", "mid", "session"), route("design", "frontier")])
         for node in (technique(), technique("Workflow", "workflow")):
             config["routes"][1]["techniques"] = [node]
-            ctx = context(("planner",), ("design", "fast"), non_interactive=True)
+            ctx = context(("planner",), non_interactive=True)
             result, _ = self.run_plan(config, ctx, ("planner",), outputs={"reader-session": stream({"monthly": window(99)})})
             self.assertEqual(result["roles"]["planner"]["candidates"][0]["launch"]["family"], "design")
             self.assertIn({"family": "fast", "reason": "below role tier floor", "runtime": "codex"}, result["roles"]["planner"]["exclusions"])
         config["routes"] = [route("fast", "mid")]
-        result, _ = self.run_plan(config, context(("planner",), ("fast",)), ("planner",))
+        result, _ = self.run_plan(config, context(("planner",)), ("planner",))
         self.assertEqual(result["roles"]["planner"]["error"], "every route is hard-filtered and the caller cannot run itself; never step down a tier.")
 
     def test_plan_role_qualified_launch_mutations(self):

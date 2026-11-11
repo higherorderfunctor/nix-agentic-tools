@@ -60,6 +60,8 @@ in {
     inherit (gen) rules;
 
     programs = {
+      delegate-routing.runtimes.codex.extraRuntimes = ["claude"];
+
       peer-communication = {
         runtimes = {
           copilot.enable = false;

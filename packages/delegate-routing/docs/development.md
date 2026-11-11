@@ -416,28 +416,29 @@ mechanical, planner, second-check and writer. The routing policy lives in
 [Size the work](../fragments/size-the-work.md).
 
 The closed launch context supplies a bounded nonempty `taskSummary`, optional
-nullable `proposerFamily`, required `nonInteractive`, compact `roles` and
-optional `caller`. Each role accepts `producers`, `exclude` and `effort`.
-Producers name their model line as `family` and actual launch `effort` (null
-when omitted). A checking role derives its offset from producers and cannot also
-set `effort`; other roles accept a signed step offset such as `+1` or `-1`, or
-null. Exclude accepts configured model-line or maker names. Optional caller
-identity attests current `family`, concrete `model` and actual `effort` for the
-self last resort. A known proposer is an exact configured family; an unknown
+nullable `proposerFamily`, required `nonInteractive` and compact `roles`. Each
+role accepts `producers`, `exclude` and `effort`. Producers name their model
+line as `family` and actual launch `effort` (null when omitted). A checking role
+derives its offset from producers and cannot also set `effort`; other roles
+accept a signed step offset such as `+1` or `-1`, or null. Exclude accepts
+configured model-line or maker names. `proposerFamily` names the calling model
+line for the self last resort; no model or effort is attested for continuing the
+current session. A known proposer is an exact configured family; an unknown
 non-null name is refused before Readers. Absent/null identity skips the picker
-and warns while preserving tier/pool ranking. Routes come from the manifest;
-caller techniques and qualification essays are refused.
+and disables the self last resort, warning in JSON while preserving tier/pool
+ranking. Routes come from the manifest; caller techniques and qualification
+essays are refused.
 
 The helper validates the whole request before any Reader or picker runs and
 reports every problem at once, schema-style:
 `{"path": "launchContext.roles.writer.effort", "message": "must be a signed step offset such as +1 or -1, or null"}`.
 Paths cover `argv`, `launchContext` and `manifest`: allowed keys and roles,
 signed offsets, producer efforts resolved against model support, configured
-family/maker exclusions, proposer/caller identity, the summary byte limit and
-required `nonInteractive`. Off-scale catalog efforts are ignored when
-intersecting supported levels with the package scale. A `manifest.` error is a
-configuration fault. Malformed JSON names its file, line and column. On error
-stdout contains `{"status": "invalid-request", "errors": [...]}`, stderr has one
+family/maker exclusions, proposer identity, the summary byte limit and required
+`nonInteractive`. Off-scale catalog efforts are ignored when intersecting
+supported levels with the package scale. A `manifest.` error is a configuration
+fault. Malformed JSON names its file, line and column. On error stdout contains
+`{"status": "invalid-request", "errors": [...]}`, stderr has one
 `delegate-routing-plan: <path>: <message>` line per error, and the helper
 exits 2.
 
@@ -468,18 +469,20 @@ allowing the orchestrator to group roles by runtime.
 ```
 
 `runtimes.<runtime>.picker.entries` accepts explicit
-`{technique, model, effort}` records. Only the package's own Sonnet default
-names a family, which the module resolves to a concrete model before building
-the view. Claude defaults to `claude -p` / Sonnet and Codex to `codex exec` /
-Sol, both at low effort; Kimchi and Kiro default to empty lists. Consumers may
-add entries on other pools. Entries are tried by the same low-water, session,
-preference, pace and name pool order as candidates, using scoped pace too,
-rather than list position. Two entries sharing one pool fail evaluation naming
-both, including two unbound entries. Inherited defaults with unavailable
-selected reach/model/technique are omitted; explicit unresolved entries fail.
-Each resolved entry needs one concrete configured model family, an enabled
-external one-shot technique, model/effort pins and a nonempty picker command.
-Direct `mkSkill` callers receive resolved model entries through the same view.
+`{technique, effort, family}` or `{technique, effort, model}` records, with
+exactly one of `family` or `model` set. Family entries share the route's
+concrete model resolution, including resolved Claude agent IDs; explicit model
+entries name a concrete ID matching one configured family. Claude defaults to
+`claude -p` / Sonnet and Codex to `codex exec` / Sol, both at low effort; Kimchi
+and Kiro default to empty lists. Consumers may add entries on other pools.
+Entries are tried by the same low-water, session, preference, pace and name pool
+order as candidates, using scoped pace too, rather than list position. Two
+entries sharing one pool fail evaluation naming both, including two unbound
+entries. Inherited defaults with unavailable selected reach/model/technique are
+omitted; explicit unresolved entries fail. Each resolved entry needs one
+concrete configured model family, an enabled external one-shot technique,
+model/effort pins and a nonempty picker command. Direct `mkSkill` callers
+receive resolved model entries through the same view.
 
 The Codex picker passes its entry effort through `model_reasoning_effort` (low
 by default), uses the short helper-written `model_instructions_file`, and sets
@@ -505,13 +508,13 @@ Codex from that directory. Offline codex-cli 0.167.0 captures against a fake
 Responses provider sent no `tools` key and no tool item. A missing or unreadable
 cache, or a cache without the model, makes that entry unavailable and the
 helper's warning names the reason; the helper never runs Codex on a guessed
-catalog. A live run with a real ChatGPT login, captured through a local
-pass-through on codex-cli 0.167.0, sent the same tool-free request over the
-WebSocket transport, so image generation, connectors and plugin suggestions add
-no tools under real auth either. The HTTP and WebSocket transports build the
-request from one shared builder. The fake-provider test needs the real `codex`
-binary and the shipped command in `CODEX_PICKER_COMMAND`, so it skips in the Nix
-sandbox; the catalog and warning tests always run.
+catalog. Live zero-tools behavior with a real ChatGPT login and the claimed
+input-size reduction remain unverified here: the redacted outgoing request and
+comparable measurements are not available in the supplied evidence. Offline
+fake-provider results do not establish real-auth behavior. The fake-provider
+test needs the real `codex` binary and the shipped command in
+`CODEX_PICKER_COMMAND`, so it skips in the Nix sandbox; the catalog and warning
+tests always run.
 
 Readers and hard eligibility run before judgment. A picker runs when its pool
 and scopes allow it and the first word of its command is on PATH. It may use the
@@ -558,14 +561,16 @@ without excluding the route; exhaustion still excludes it.
 
 The helper returns the top three candidates, spreading across pools where
 possible, plus a retained producer-line or caller-line last resort, without
-duplicating a top-three candidate. An attested caller can supply
-`action=continue-self` when no delegate last resort remains. Every last resort
-retains hard filters: caller exclusions, role/producer tier floors, pool
-failures/exhaustion, scoped refusals and picker fit. No qualified route means
-every route is hard-filtered and the caller cannot run itself. JSON retains
-named alternatives, invocation guidance and generated-agent records; manual-only
-routes are separate. Non-interactive or unknown mode forbids external worker
-routes; native subagents and self preserve the recursion floor.
+duplicating a top-three candidate. The calling `proposerFamily` can supply
+`action=continue-self` when no delegate last resort remains, preserving the
+known calling-runtime route's pool. Absent/null `proposerFamily` disables this
+self last resort and adds a JSON warning. Every last resort retains hard
+filters: caller exclusions, role/producer tier floors, pool failures/exhaustion,
+scoped refusals and picker fit. No qualified route means every route is
+hard-filtered and the caller cannot run itself. JSON retains named alternatives,
+invocation guidance and generated-agent records; manual-only routes are
+separate. Non-interactive or unknown mode forbids external worker routes; native
+subagents and self preserve the recursion floor.
 
 Review staffing follows these pool-ranked choices across runtimes. Each external
 runtime gets one orchestrator delegate running its roles through native
