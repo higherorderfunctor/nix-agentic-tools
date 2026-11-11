@@ -6,6 +6,7 @@
   models,
   techniques,
   pools ? {},
+  lowWaterMark ? 0.5,
   picker ? null,
   resolvedAgentFiles ? null,
   extraRuntimes ? [],
@@ -127,7 +128,7 @@
       inherit (route) pool;
     };
 in {
-  inherit candidates effortLevels familyMakers runtimes;
+  inherit candidates effortLevels familyMakers lowWaterMark runtimes;
   pickerEntries = let
     # A family-named default takes the family's resolved id and is dropped when
     # none resolves; a model-named default passes through.
@@ -168,6 +169,7 @@ in {
       pool =
         {
           description = "";
+          preference = 0;
           usage = null;
           window = null;
         }

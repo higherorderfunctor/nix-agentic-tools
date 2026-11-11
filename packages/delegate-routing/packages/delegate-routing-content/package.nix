@@ -69,6 +69,7 @@
   mkSkill = args:
     lib.makeOverridable buildSkill (defaults
       // {
+        lowWaterMark = 0.5;
         picker = null;
         sessionPool = null;
       }
@@ -77,7 +78,7 @@
     techniques = normalizeTechniques args.techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
-      inherit (args) runtime families models;
+      inherit (args) runtime families lowWaterMark models;
       inherit (args) picker;
       resolvedAgentFiles = args.resolvedAgentFiles or null;
       extraRuntimes = args.extraRuntimes or [];
@@ -112,7 +113,7 @@
           # as a dependency of the delivered file, including its manifest.
           body =
             builtins.appendContext
-            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["picker" "sessionPool"] // {inherit helperInstruction techniques;}))
+            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["lowWaterMark" "picker" "sessionPool"] // {inherit helperInstruction techniques;}))
             (builtins.getContext helperInstruction);
         };
       };

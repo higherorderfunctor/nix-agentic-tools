@@ -121,7 +121,7 @@
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
       inherit runtime models techniques resolvedAgentFiles;
-      inherit (portable) families pools;
+      inherit (portable) families lowWaterMark pools;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
     };
@@ -268,6 +268,11 @@ in {
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
       };
+      lowWaterMark = lib.mkOption {
+        type = lib.types.addCheck lib.types.number (value: value >= 0);
+        default = 0.5;
+        description = "Candidate pools below this remaining-budget pace rank after other pools, before applying pool preference. Unmeasured pools rank with below-mark pools.";
+      };
       opencodeGo.plan = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum opencodeGo.plans);
         default = null;
@@ -286,6 +291,11 @@ in {
               type = lib.types.str;
               default = "";
               description = "Budget description shown in consumer {pools} table entries.";
+            };
+            preference = lib.mkOption {
+              type = lib.types.int;
+              default = 0;
+              description = "Higher values rank first among candidate pools on the same side of lowWaterMark; equal values use pace then name.";
             };
             usage = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {

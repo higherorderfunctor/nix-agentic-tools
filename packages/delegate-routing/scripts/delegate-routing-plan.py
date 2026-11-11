@@ -29,6 +29,7 @@ ROLE_TIERS = {
     "second-check": {"strong", "frontier"},
     "writer": {"small", "mid", "strong", "frontier"},
 }
+TIERS = ("small", "mid", "strong", "frontier")
 READER_RETRY_DELAY = 2
 READER_TIMEOUT = 10
 TASK_SUMMARY_LIMIT = 65536
@@ -432,50 +433,102 @@ def model_version(model):
     return tuple(int(part) for part in re.findall(r"[0-9]+", model))
 
 
-def launch(route, context, requested, avoided, scale):
+def observed(route, technique, context):
+    model = technique["model"]
+    evidence = [item for item in context["techniques"] if item["runtime"] == route["target"] and item["technique"] == technique["name"] and model_matches(item["model"], model)]
+    # Equal versions keep the last observation, as agent-files.nix resolveId does.
+    return max(reversed(evidence), key=lambda item: model_version(item["model"]), default=None)
+
+
+def model_matches(value, model):
+    return not any(c in value for c in "*?[") and (fnmatch.fnmatchcase(value, model["value"]) if model["isPattern"] else value == model["value"])
+
+
+def effort_levels(evidence, scale):
+    return [level for level in scale if level in evidence["efforts"]]
+
+
+def producer_details(manifest, context, producer):
+    for route in manifest["routes"] + manifest["manualRoutes"]:
+        if route["family"]["name"] != producer["family"]:
+            continue
+        for technique in route["techniques"]:
+            evidence = observed(route, technique, context)
+            if evidence is None:
+                continue
+            levels = effort_levels(evidence, manifest["effortLevels"])
+            default, effort = route["family"]["defaultEffort"], producer["effort"]
+            if evidence["efforts"] == [] and effort is None:
+                return route["family"], 0
+            if default in levels and effort in levels:
+                return route["family"], levels.index(effort) - levels.index(default)
+    return None
+
+
+def launch(route, context, offset, same_line, scale):
     alternatives, exclusions = [], []
     for technique in route["techniques"]:
         name, node = technique["name"], technique["node"]
         reason = None
         if node["kind"] == "external" and context.get("nonInteractive") is not False:
             reason = "external delegate forbidden in headless context" if context.get("nonInteractive") is True else "non-interactive status unresolved for external delegate"
-        evidence = [item for item in context["techniques"] if item["runtime"] == route["target"] and item["technique"] == name]
-        model = technique["model"]
-        evidence = [item for item in evidence if not any(c in item["model"] for c in "*?[") and (fnmatch.fnmatchcase(item["model"], model["value"]) if model["isPattern"] else item["model"] == model["value"])]
-        # Several observed models may match one family; the highest version wins and
-        # equal versions keep the last listed, as lib/agent-files.nix resolveId does.
-        newest = max(reversed(evidence), key=lambda item: model_version(item["model"]), default=None)
-        evidence = [] if newest is None else [newest]
-        agent = technique["agent"]
-        resolved = requested if requested is not None else route["family"]["defaultEffort"]
-        effort = resolved
-        if reason is None and not evidence:
+        evidence = observed(route, technique, context)
+        effort = route["family"]["defaultEffort"]
+        if reason is None and evidence is None:
             reason = "concrete model/available technique unresolved"
-        if reason is None and evidence[0]["efforts"] == []:
-            effort = None
-        if reason is None and (
-            (effort is None and evidence[0]["efforts"] != [])
-            or (effort is not None and effort not in evidence[0]["efforts"])
-        ):
-            reason = "requested/default effort unresolved or unsupported"
+        if reason is None:
+            levels = effort_levels(evidence, scale)
+            if evidence["efforts"] == []:
+                effort = None
+            elif effort not in levels:
+                reason = "default effort unresolved or unsupported"
+            else:
+                effort = levels[max(0, min(len(levels) - 1, levels.index(effort) + offset + same_line))]
         if reason:
             exclusions.append({"reason": reason, "technique": name})
             continue
-        if avoided and effort is not None:
-            supported = [value for value in scale if value in evidence[0]["efforts"] and scale.index(value) > scale.index(resolved)]
-            effort = next(iter(supported), resolved)
         alternatives.append({
-            "agent": agent,
+            "agent": technique["agent"],
             "effort": effort,
             "family": route["family"]["name"],
             "guidance": {key: node[key] for key in ("command", "modelArg", "notes")},
-            "model": evidence[0]["model"],
+            "model": evidence["model"],
             "runtime": route["target"],
             "technique": name,
         })
-        if avoided:
-            alternatives[-1]["fallback"] = {"kind": "avoided-family", "launchEffort": effort, "resolvedEffort": resolved}
     return alternatives, exclusions
+
+
+def pool_order(item, manifest):
+    preference = next((reader.get("pool", {}).get("preference", 0) for reader in manifest["readers"] if reader["name"] == item["pool"]), 0)
+    pace = item["pace"]
+    return (pace is None or pace < manifest["lowWaterMark"], -preference, -(pace or 0), item["launch"]["family"], item["launch"]["runtime"])
+
+
+def ladder(eligible, producers, context, manifest):
+    names = {family["name"] for family, offset in producers}
+    makers = {family["maker"] for family, offset in producers}
+    def relation(item):
+        name = item["launch"]["family"]
+        return 2 if name in names else int(manifest["familyMakers"][name] in makers)
+    ranked = sorted(eligible, key=lambda item: (relation(item), *pool_order(item, manifest)))
+    delegates = [item for item in ranked if item["launch"].get("action") != "continue-self"]
+    caller = context.get("caller", {}).get("family", context.get("proposerFamily"))
+    fallback = next((item for name_set in (names, {caller}) for item in delegates if item["launch"]["family"] in name_set), None)
+    if fallback is None:
+        fallback = next((item for item in ranked if item["launch"].get("action") == "continue-self"), None)
+    selected, seen = [], set()
+    for item in delegates:
+        if item["pool"] not in seen:
+            selected.append(item)
+            seen.add(item["pool"])
+        if len(selected) == 3:
+            break
+    selected.extend(item for item in delegates if item not in selected and len(selected) < 3)
+    # A retained producer/caller already in the top three needs no duplicate.
+    if fallback is not None and fallback not in selected:
+        selected.append(fallback)
+    return selected
 
 
 class InvalidRequest(ValueError):
@@ -486,7 +539,7 @@ class InvalidRequest(ValueError):
         self.errors = errors
 
 
-MANIFEST_KEYS = ("effortLevels", "familyMakers", "familyNames", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
+MANIFEST_KEYS = ("effortLevels", "familyMakers", "familyNames", "lowWaterMark", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
 
 
 def request_errors(manifest, context, roles):
@@ -549,6 +602,9 @@ def request_errors(manifest, context, roles):
             refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}required key is missing")
         if missing:
             return errors
+        low_water = manifest["lowWaterMark"]
+        if type(low_water) not in (int, float) or not math.isfinite(low_water) or low_water < 0:
+            refuse("manifest.lowWaterMark", f"{CONFIGURATION_FAULT}must be a finite nonnegative number")
         readers = manifest["readers"]
         if not isinstance(readers, list):
             refuse("manifest.readers", f"{CONFIGURATION_FAULT}must be a list")
@@ -561,6 +617,9 @@ def request_errors(manifest, context, roles):
                 refuse(f"manifest.readers[{index}].command", f"{CONFIGURATION_FAULT}required key is missing; null marks a pool with no reader")
             if not isinstance(reader.get("name"), str) or not reader["name"].strip():
                 refuse(f"manifest.readers[{index}].name", f"{CONFIGURATION_FAULT}must be a non-empty string")
+            preference = reader.get("pool", {}).get("preference", 0) if isinstance(reader.get("pool", {}), dict) else None
+            if type(preference) is not int:
+                refuse(f"manifest.readers[{index}].pool.preference", f"{CONFIGURATION_FAULT}must be an integer")
         if errors and any(error["path"].startswith("manifest.readers") for error in errors):
             return errors
         pool_names = sorted(reader["name"] for reader in manifest["readers"])
@@ -622,7 +681,7 @@ def request_errors(manifest, context, roles):
         return errors
     families = sorted(name_lists["familyNames"]) if "familyNames" in name_lists else None
     efforts = name_lists.get("effortLevels")
-    closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
+    closed("launchContext", context, {"caller", "nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
     summary = context.get("taskSummary")
     try:
         summary_valid = isinstance(summary, str) and summary.strip() and len(summary.encode("utf-8")) <= TASK_SUMMARY_LIMIT
@@ -658,20 +717,51 @@ def request_errors(manifest, context, roles):
         elif not isinstance(request, dict):
             refuse(path, "must be an object")
         else:
-            for field in ("avoid", "exclude"):
-                noun = "family name or maker" if field == "exclude" else "family name"
-                names = sorted(set(families) | set(makers.values())) if field == "exclude" and families is not None else families
-                if field not in request:
-                    continue
-                if not isinstance(request[field], list):
-                    refuse(f"{path}.{field}", "must be a list of family names or makers" if field == "exclude" else "must be a list of family names")
-                for position, name in enumerate(request[field] if isinstance(request[field], list) else []):
+            if "exclude" in request:
+                names = sorted(set(families) | set(makers.values())) if families is not None else None
+                if not isinstance(request["exclude"], list):
+                    refuse(f"{path}.exclude", "must be a list of family names or makers")
+                for position, name in enumerate(request["exclude"] if isinstance(request["exclude"], list) else []):
                     if names is not None:
-                        named(f"{path}.{field}[{position}]", name, names, noun)
-            if efforts is not None and request.get("effort") is not None:
-                named(f"{path}.effort", request["effort"], efforts, "effort")
-            closed(path, request, {"avoid", "effort", "exclude"})
+                        named(f"{path}.exclude[{position}]", name, names, "family name or maker")
+            if request.get("effort") is not None and (not isinstance(request["effort"], str) or re.fullmatch(r"[+-][0-9]{1,3}", request["effort"]) is None):
+                refuse(f"{path}.effort", "must be a signed step offset such as +1 or -1, or null")
+            producers = request.get("producers", [])
+            if not isinstance(producers, list):
+                refuse(f"{path}.producers", "must be a list of producer family/effort records")
+            for position, producer in enumerate(producers if isinstance(producers, list) else []):
+                at = f"{path}.producers[{position}]"
+                if not isinstance(producer, dict):
+                    refuse(at, "must be a producer family/effort record")
+                    continue
+                closed(at, producer, {"effort", "family"})
+                if families is not None:
+                    named(f"{at}.family", producer.get("family"), families, "family name")
+                if "effort" not in producer or (producer["effort"] is not None and efforts is not None and producer["effort"] not in efforts):
+                    refuse(f"{at}.effort", "must name the producer's supported launch effort, or null when omitted")
+                if not errors and producer_details(manifest, context, producer) is None:
+                    refuse(at, "producer default, tier and supported launch effort must resolve from configured routes and observed techniques")
+            if producers and request.get("effort") is not None:
+                refuse(f"{path}.effort", "checking roles take their offset from producers")
+            closed(path, request, {"effort", "exclude", "producers"})
+    caller = context.get("caller")
+    if "caller" in context:
+        if not isinstance(caller, dict):
+            refuse("launchContext.caller", "must attest current family, model and effort")
+        else:
+            closed("launchContext.caller", caller, {"effort", "family", "model"})
+            if families is not None:
+                named("launchContext.caller.family", caller.get("family"), families, "family name")
+            text("launchContext.caller.model", caller.get("model"))
+            if "effort" not in caller or (caller["effort"] is not None and efforts is not None and caller["effort"] not in efforts):
+                refuse("launchContext.caller.effort", "must attest the current effort, or null when omitted")
+            if not errors and caller_route(manifest, caller) is None:
+                refuse("launchContext.caller", "current model must match its configured family on this runtime")
     return errors
+
+
+def caller_route(manifest, caller):
+    return next((route for route in manifest["routes"] + manifest["manualRoutes"] if route["target"] == manifest["runtime"] and route["family"]["name"] == caller["family"] and any(model_matches(caller["model"], technique["model"]) for technique in route["techniques"])), None)
 
 
 def plan(manifest, context, roles, now, shell, run=run_reader):
@@ -702,9 +792,13 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     elif pools[session]["status"] != "measured" or pools[session].get("buffer") is None:
         warnings.append("session buffer unknown; buffer rule cannot be certified")
     result = {"automaticRuntimes": manifest["runtimes"], "manualOnly": manifest["manualRoutes"], "pools": pools, "roles": {}, "runtime": manifest["runtime"], "sessionPool": session, "snapshot": now.isoformat(), "warnings": warnings}
-    eligible_by_role, excluded_by_role = {}, {}
+    eligible_by_role, excluded_by_role, producers_by_role = {}, {}, {}
     for role in roles:
         request = context["roles"].get(role, {})
+        producers = [producer_details(manifest, context, producer) for producer in request.get("producers", [])]
+        producers_by_role[role] = producers
+        floor = max((TIERS.index(family["tier"]) for family, offset in producers), default=0)
+        offset = max((offset for family, offset in producers), default=int(request.get("effort") or "+0"))
         candidates, excluded = [], []
         for route in manifest["routes"]:
             family = route["family"]
@@ -712,11 +806,10 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             if any(value in request.get("exclude", []) for value in (family["name"], family["maker"])):
                 excluded.append(record | {"reason": "excluded by caller"})
                 continue
-            avoided = family["name"] in request.get("avoid", [])
-            if family["tier"] not in ROLE_TIERS[role]:
+            if family["tier"] not in ROLE_TIERS[role] or TIERS.index(family["tier"]) < floor:
                 excluded.append(record | {"reason": "below role tier floor"})
                 continue
-            alternatives, unresolved = launch(route, context, request.get("effort"), avoided, manifest["effortLevels"])
+            alternatives, unresolved = launch(route, context, offset, any(producer["name"] == family["name"] for producer, step in producers), manifest["effortLevels"])
             excluded.extend(record | item for item in unresolved)
             if alternatives:
                 if (route["pool"], family["name"]) in invalid_families:
@@ -724,10 +817,17 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
                     continue
                 pace = family_paces.get((route["pool"], family["name"]), pools.get(route["pool"], {}).get("pace"))
                 candidates.append({"alternatives": alternatives[1:], "launch": alternatives[0], "pace": pace, "pool": route["pool"], "tier": family["tier"]})
+        caller = context.get("caller")
+        if caller is not None:
+            family = caller_route(manifest, caller)["family"]
+            if family["tier"] in ROLE_TIERS[role] and TIERS.index(family["tier"]) >= floor and not any(value in request.get("exclude", []) for value in (family["name"], family["maker"])):
+                pace = family_paces.get((session, family["name"]), pools.get(session, {}).get("pace"))
+                if (session, family["name"]) not in invalid_families:
+                    candidates.append({"alternatives": [], "launch": caller | {"action": "continue-self", "runtime": manifest["runtime"]}, "pace": pace, "pool": session, "tier": family["tier"]})
         eligible = []
         for item in candidates:
             pool = pools.get(item["pool"], {})
-            reason = pool_refusal(pool, item["pace"], session is not None and item["pool"] == session)
+            reason = pool_refusal(pool, item["pace"], False)
             if reason:
                 excluded.append({"family": item["launch"]["family"], "reason": reason, "runtime": item["launch"]["runtime"]})
             else:
@@ -752,30 +852,11 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
                 else:
                     excluded.append({"family": item["launch"]["family"], "runtime": item["launch"]["runtime"], "reason": "excluded by model picker"})
             eligible = kept
-        measured = [item for item in eligible if pools.get(item["pool"], {}).get("status") == "measured"]
-        session_behind = [item for item in measured if session is not None and item["pool"] == session and any(other["pace"] > item["pace"] for other in measured if other["pool"] != session)]
-        selectable_measured = [item for item in measured if item not in session_behind]
-        usable = []
-        for item in eligible:
-            reason = None
-            partition_measured = [other for other in selectable_measured if ("fallback" in other["launch"]) == ("fallback" in item["launch"])]
-            if item in session_behind:
-                reason = "another fitting pool is ahead of session pace"
-            elif partition_measured and item not in partition_measured:
-                reason = "unmeasured pool excluded while measured candidates exist"
-            if reason:
-                excluded.append({"family": item["launch"]["family"], "reason": reason, "runtime": item["launch"]["runtime"]})
-            else:
-                item["budget"] = "measured" if item in measured else "fit-only; budget and session buffer unknown"
-                usable.append(item)
-        usable.sort(key=lambda item: ("fallback" in item["launch"], -(item["pace"] or 0), item["pool"] == session, item["launch"]["family"], item["launch"]["runtime"]))
+        usable = ladder(eligible, producers_by_role[role], context, manifest)
         for item in usable:
+            item["budget"] = "measured" if pools.get(item["pool"], {}).get("status") == "measured" else "fit-only; budget and session buffer unknown"
             spec = item["launch"]
-            item["line"] = " ".join(f"{key}={value}" for key, value in (("role", role), ("runtime", spec["runtime"]), ("family", spec["family"]), ("technique", spec["technique"]), ("model", spec["model"]), ("effort", spec["effort"])) if value is not None)
-        if usable and "fallback" in usable[0]["launch"]:
-            spec = usable[0]["launch"]
-            effort = spec["effort"] if spec["effort"] is not None else "omitted intentionally"
-            warnings.append(warning(f"{role}: no non-avoided candidate; using fallback {spec['family']} at effort {effort}", failure=False))
+            item["line"] = " ".join(f"{key}={value}" for key, value in (("role", role), *((key, spec.get(key)) for key in ("action", "runtime", "family", "technique", "model", "effort"))) if value is not None)
         result["roles"][role] = {"candidates": usable, "exclusions": excluded}
         if not usable:
             result["roles"][role]["error"] = "never step down a tier; report a loop failure."
@@ -849,6 +930,8 @@ def check_plan(artifact, current, directory, max_concurrency=10):
             raise ValueError(f"{identity}: one worker and a first-check review barrier required")
         for record in launches:
             role = record["role"]
+            if record["candidate"].get("action") == "continue-self":
+                raise ValueError(f"{identity}: continue-self is not an executable delegate launch")
             if record["runtime"] != current["runtime"]:
                 raise ValueError(f"{identity}: launch runtime requires its own helper validation")
             candidates = current["roles"].get(role, {}).get("candidates", [])

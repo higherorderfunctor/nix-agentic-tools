@@ -625,6 +625,7 @@
       change {
         ai.kiro.cli.workflows.enable = true;
         ai.programs.delegate-routing = {
+          lowWaterMark = 0.25;
           families.fixture.packaged = {
             defaultEffort = "high";
             example.${runtime} = "fixture-model";
@@ -634,6 +635,7 @@
             tier = "strong";
           };
           pools = lib.mkForce {
+            ${sessionPools.${runtime}}.preference = 7;
             ${sessionPools.${runtime}}.usage = {
               inherit runtime;
               technique = "fixture-reader";
@@ -728,6 +730,8 @@
         script = wrapper.read_text()
         manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
         manifest = json.loads(Path(manifest_path).read_text())
+        assert manifest["lowWaterMark"] == 0.25
+        assert manifest["readers"][0]["pool"]["preference"] == 7
         assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"], p["toolFree"]) for p in manifest["pickerEntries"]] == [("fixture-picker", "fixture-model", "packaged", "medium", runtime, True)], "module picker entries did not reach packaged helper"
         assert "packaged" in manifest["familyNames"]
@@ -736,6 +740,7 @@
         direct_skill = Path(os.environ["directSkillPath"]).read_text()
         direct_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", direct_skill)[1])
         direct_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", direct_wrapper.read_text())[1]).read_text())
+        assert direct_manifest["lowWaterMark"] == 0.5
         assert direct_manifest["effortLevels"] == manifest["effortLevels"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "medium", "codex")]
         assert direct_manifest["pickerEntries"][0]["toolFree"] is True
@@ -974,6 +979,14 @@
         # Wrong: a glob passes as a model because the family pattern matches its text.
         && lib.all (model: refused [(entry // {inherit model;})]) ["test-opus-*" "test-opus-?" "test-opus-["]
         && evaluationFails (change {ai.programs.delegate-routing.runtimes.claude.picker.entries = [(entry // {family = "opus";})];})
+    );
+    "module-delegate-routing-${name}-pool-ranking-options" = mkTest "delegate-routing-${name}-pool-ranking-options" (
+      result.config.ai.programs.delegate-routing.lowWaterMark
+      == 0.5
+      && poolResult.config.ai.programs.delegate-routing.pools.measured.preference == 0
+      && (import ../lib/routing-view.nix (routingArgs // {lowWaterMark = 0.25;})).lowWaterMark == 0.25
+      && evaluationFails (change {ai.programs.delegate-routing.lowWaterMark = -1;})
+      && evaluationFails (poolChange {pools.measured.preference = 1.5;})
     );
     "module-delegate-routing-${name}-routing-view" = mkTest "delegate-routing-${name}-routing-view" (
       let
