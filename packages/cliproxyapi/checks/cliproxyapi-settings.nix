@@ -17,9 +17,14 @@
     # refinements: the values they admit
     "access.key-allowlist[].credentials[].kind" = "oauth";
     config-version = 8;
-    # config/passthrough.go: an HTTP(S) base and an upstream path
+    # config/passthrough.go: HTTP(S) base, upstream path, object-key paths
+    # and one of the enumerated retryable error-in-200 statuses
     "api-keys.passthrough[].base-url" = "https://upstream.example";
+    "api-keys.passthrough[].error-in-200.path" = "success";
+    "api-keys.passthrough[].error-in-200.status" = 429;
     "api-keys.passthrough[].path" = "/inference/v1/decision";
+    "api-keys.passthrough[].unwrap" = "result";
+    "api-keys.passthrough[].usage-path" = "result.usage";
     # config/sdk_config.go: a Go duration or integer seconds
     "client.codex.web-search-result-cache.ttl" = "1s";
     # config/credential_in_flight.go: stale-after at least three snapshot

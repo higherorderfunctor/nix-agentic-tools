@@ -115,6 +115,10 @@ configuration shape is host-independent. Shared `lib/extracted` owns loading,
 platform carrying and regeneration. The reconciliation reader consumes the
 declared object directly.
 
+The passthrough envelope fields `unwrap` and `usage-path` are measured through
+the same extractor as the other group fields; the rendered all-fields sample
+gives their paths valid values.
+
 ## Hand annotations
 
 `extract/annotations.json` supplies reasons for credential-bearing config paths.

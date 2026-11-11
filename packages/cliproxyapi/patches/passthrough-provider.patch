@@ -3,18 +3,21 @@ CLIProxyAPI: add JSON passthrough through credential selection and usage.
 Keep validated grouped configuration, keyed synthesis, alias resolution and
 management indexes independent of chat compatibility. Add a raw client route,
 executor and internal-only model registration using native selection, cooldown
-and per-client usage reporting. Isolate both route and executor protocols.
+and per-client usage reporting. Select configured response objects and usage
+locations.
 Applied after key-allowlist and zai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
 diff --git a/config.example.yaml b/config.example.yaml
-index dc3e483..5fcca03 100644
+index dc3e483..a081920 100644
 --- a/config.example.yaml
 +++ b/config.example.yaml
-@@ -946,6 +946,16 @@ upstream:
+@@ -944,6 +944,20 @@ upstream:
+ #         - api-key: "..."
+ #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
  #
- #   # OpenAI compatibility providers
- #
++#   # JSON passthrough providers
++#
 +#   passthrough:
 +#     - name: decision
 +#       base-url: https://upstream.example
@@ -24,10 +27,12 @@ index dc3e483..5fcca03 100644
 +#       disable-cooling: false
 +#       models: [{name: upstream-model, alias: decision}]
 +#       keys: [{api-key: your-upstream-key}]
++#       unwrap: result # optional nested object; omit to preserve response bytes
++#       usage-path: result.usage # original envelope; omitted defaults to usage
 +#
+ #   # OpenAI compatibility providers
+ #
  #   openai-compatibility:
- #     - name: "openrouter" # The name of the provider; it will be used in the user agent and other places.
- #       disabled: false # optional: set to true to disable this provider without removing it
 diff --git a/internal/api/handlers/management/config_auth_index.go b/internal/api/handlers/management/config_auth_index.go
 index 8f393a3..bfac327 100644
 --- a/internal/api/handlers/management/config_auth_index.go
@@ -186,6 +191,172 @@ index 0000000..5e15a1b
 +	}
 +	if response.Code != http.StatusOK || result.StatusCode != http.StatusNoContent {
 +		t.Fatal("management auth_index selected the wrong credential")
++	}
++}
+diff --git a/internal/api/server_passthrough_envelope_test.go b/internal/api/server_passthrough_envelope_test.go
+new file mode 100644
+index 0000000..c399dfc
+--- /dev/null
++++ b/internal/api/server_passthrough_envelope_test.go
+@@ -0,0 +1,160 @@
++package api
++
++import (
++	"context"
++	"io"
++	"net"
++	"net/http"
++	"net/http/httptest"
++	"reflect"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/watcher/synthesizer"
++	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++	sdkconfig "github.com/router-for-me/CLIProxyAPI/v8/sdk/config"
++)
++
++type passthroughEnvelopeUsage struct{ records chan coreusage.Record }
++
++func (p passthroughEnvelopeUsage) HandleUsage(_ context.Context, record coreusage.Record) {
++	if record.APIKey == "envelope-client" {
++		p.records <- record
++	}
++}
++
++// Plain 429 -> wrapped 429 -> wrapped success must use each group's model and
++// envelope, retain client accounting and skip both failed credentials next time.
++func TestPassthroughEnvelopeConductor(t *testing.T) {
++	plain := `{"model":"plain-model","answers":[],"usage":{"input_tokens":7,"output_tokens":3}}`
++	selected := `{ "model":"wrapped-model", "answers":[], "usage":{"input_tokens":11,"output_tokens":2} }`
++	raw := " {\n \"model\" : \"decision\", \"state\":{\"model\":\"nested\"}, \"questions\":[] }\n"
++	var mu sync.Mutex
++	var calls []string
++	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		body, _ := io.ReadAll(r.Body)
++		if r.Host != "envelope.example" {
++			t.Errorf("default-port Host: %q", r.Host)
++		}
++		key := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
++		model := "wrapped-model"
++		if key == "plain" {
++			model = "plain-model"
++		}
++		if string(body) != strings.Replace(raw, `"decision"`, `"`+model+`"`, 1) {
++			t.Errorf("retry reused rewritten body: %q", body)
++		}
++		mu.Lock()
++		calls = append(calls, key)
++		attempt := len(calls)
++		mu.Unlock()
++		w.Header().Set("Retry-After", "120")
++		if key == "plain" {
++			w.WriteHeader(429)
++			_, _ = io.WriteString(w, plain)
++		} else if attempt == 2 {
++			// Either wrapped credential can be selected first. Only the first
++			// returns failure; its sibling must be tried within this request.
++			w.WriteHeader(http.StatusTooManyRequests)
++			_, _ = io.WriteString(w, `{"error":"rate limit exceeded"}`)
++		} else {
++			_, _ = io.WriteString(w, `{"result":`+selected+`,"success":true,"errors":[],"messages":[]}`)
++		}
++	}))
++	defer upstream.Close()
++	dialer := &net.Dialer{}
++	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
++		if address != "envelope.example:80" {
++			t.Errorf("destination: %q", address)
++		}
++		return dialer.DialContext(ctx, network, strings.TrimPrefix(upstream.URL, "http://"))
++	}}
++	defer transport.CloseIdleConnections()
++	zero, cooling := 0, false
++	unwrap, path := "result", "result.usage"
++	cfg := &config.Config{SDKConfig: sdkconfig.SDKConfig{APIKeys: []string{"envelope-client"}}, Passthrough: []config.Passthrough{
++		{Name: "plain-envelope", BaseURL: "http://envelope.example", Path: "/plain", Priority: 30, RequestRetry: &zero, DisableCooling: &cooling, APIKeyEntries: []config.PassthroughKey{{APIKey: "plain"}}, Models: []config.PassthroughModel{{Name: "plain-model", Alias: "decision"}}},
++		{Name: "wrapped-envelope", BaseURL: "http://envelope.example", Path: "/wrapped", Priority: 20, RequestRetry: &zero, DisableCooling: &cooling, APIKeyEntries: []config.PassthroughKey{{APIKey: "wrapped-a"}, {APIKey: "wrapped-b"}}, Models: []config.PassthroughModel{{Name: "wrapped-model", Alias: "decision"}}, Unwrap: &unwrap, UsagePath: &path},
++	}}
++	server := newTestServerWithConfig(t, cfg)
++	manager := server.handlers.AuthManager
++	manager.SetConfig(cfg)
++	manager.SetRetryConfig(0, 0, 0)
++	auths, err := synthesizer.NewConfigSynthesizer().Synthesize(&synthesizer.SynthesisContext{Config: cfg, Now: time.Now(), IDGenerator: synthesizer.NewStableIDGenerator()})
++	if err != nil {
++		t.Fatal(err)
++	}
++	reg := registry.GetGlobalRegistry()
++	for _, auth := range auths {
++		if !registry.IsPassthroughProvider(auth.Provider) {
++			continue
++		}
++		reg.RegisterClient(auth.ID, auth.Provider, []*registry.ModelInfo{{ID: "decision", Type: "passthrough"}})
++		id := auth.ID
++		t.Cleanup(func() { reg.UnregisterClient(id) })
++		manager.RegisterExecutor(executor.NewPassthroughExecutor(auth.Provider, cfg))
++		if _, err := manager.Register(context.Background(), auth); err != nil {
++			t.Fatal(err)
++		}
++	}
++	capture := passthroughEnvelopeUsage{records: make(chan coreusage.Record, 16)}
++	coreusage.RegisterNamedPlugin("passthrough-envelope-test", capture)
++	coreusage.StartDefault(context.Background())
++	for i := 0; i < 2; i++ {
++		req := httptest.NewRequest("POST", "http://proxy.example/v1/passthrough", strings.NewReader(raw))
++		req = req.WithContext(context.WithValue(req.Context(), "cliproxy.roundtripper", transport))
++		req.Header.Set("Authorization", "Bearer envelope-client")
++		req.Header.Set("Content-Type", "application/json")
++		out := httptest.NewRecorder()
++		server.engine.ServeHTTP(out, req)
++		if out.Code != 200 || out.Body.String() != selected {
++			t.Fatalf("response: %d %q", out.Code, out.Body.String())
++		}
++	}
++	mu.Lock()
++	got := append([]string(nil), calls...)
++	mu.Unlock()
++	if len(got) != 4 || got[0] != "plain" || got[1] == got[2] || got[2] != got[3] {
++		t.Fatalf("failover/cooldown calls: %v", got)
++	}
++	for _, auth := range auths {
++		if auth.Attributes["api_key"] == got[0] || auth.Attributes["api_key"] == got[1] {
++			current, ok := manager.GetByID(auth.ID)
++			if !ok || current.ModelStates["decision"] == nil || current.ModelStates["decision"].NextRetryAfter.IsZero() {
++				t.Fatalf("missing cooldown: %s", auth.ID)
++			}
++		}
++	}
++	var outcomes []bool
++	for i := 0; i < 4; i++ {
++		select {
++		case rec := <-capture.records:
++			outcomes = append(outcomes, rec.Failed)
++			if rec.Alias != "decision" || rec.APIKey != "envelope-client" {
++				t.Fatalf("lost client identity: %+v", rec)
++			}
++			if rec.Failed {
++				if rec.Detail.TotalTokens != 0 {
++					t.Fatalf("failed tokens: %+v", rec.Detail)
++				}
++			} else if rec.Provider != "passthrough-wrapped-envelope" || rec.Model != "wrapped-model" || rec.Detail.InputTokens != 11 || rec.Detail.OutputTokens != 2 || rec.Detail.TotalTokens != 13 {
++				t.Fatalf("wrapped usage: %+v", rec)
++			}
++		case <-time.After(3 * time.Second):
++			t.Fatal("missing native usage record")
++		}
++	}
++	if !reflect.DeepEqual(outcomes, []bool{true, true, false, false}) {
++		t.Fatalf("native outcomes: %v", outcomes)
++	}
++	select {
++	case rec := <-capture.records:
++		t.Fatalf("duplicate native usage: %+v", rec)
++	default:
 +	}
 +}
 diff --git a/internal/api/server_passthrough_test.go b/internal/api/server_passthrough_test.go
@@ -646,16 +817,17 @@ index 130eea0..c1e07fe 100644
  	}
 diff --git a/internal/config/passthrough.go b/internal/config/passthrough.go
 new file mode 100644
-index 0000000..aeb6732
+index 0000000..79b91d0
 --- /dev/null
 +++ b/internal/config/passthrough.go
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,185 @@
 +package config
 +
 +import (
 +	"bytes"
 +	"fmt"
 +	"net/url"
++	"regexp"
 +	"strconv"
 +	"strings"
 +
@@ -685,6 +857,10 @@ index 0000000..aeb6732
 +	RequestRetry *int `yaml:"request-retry,omitempty" json:"request-retry,omitempty"`
 +	// RequestScopedErrors uses native upstream error classification rules.
 +	RequestScopedErrors []RequestScopedErrorRule `yaml:"request-scoped-errors,omitempty" json:"request-scoped-errors,omitempty"`
++	// Unwrap selects a nested response object and returns its original JSON span.
++	Unwrap *string `yaml:"unwrap,omitempty" json:"unwrap,omitempty"`
++	// UsagePath selects usage in the original envelope; omission defaults to usage.
++	UsagePath *string `yaml:"usage-path,omitempty" json:"usage-path,omitempty"`
 +}
 +
 +// PassthroughKey supplies Bearer authentication for one group credential.
@@ -722,6 +898,9 @@ index 0000000..aeb6732
 +	return g
 +}
 +
++// Object keys exclude array selectors, wildcards, query syntax and empty segments.
++var passthroughObjectPath = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$`)
++
 +// ValidatePassthrough rejects unusable groups without including resolved secrets in errors.
 +func (cfg *Config) ValidatePassthrough() error {
 +	seen := map[string]bool{}
@@ -741,6 +920,14 @@ index 0000000..aeb6732
 +		// Absolute URLs and network-path references can replace the configured authority.
 +		if err != nil || strings.TrimSpace(g.Path) == "" || path.IsAbs() || path.Host != "" || strings.HasPrefix(g.Path, "//") || path.RawQuery != "" || path.ForceQuery || path.Fragment != "" || strings.ContainsAny(g.Path, "?#") {
 +			return bad("path")
++		}
++		for _, field := range []struct {
++			name string
++			path *string
++		}{{"unwrap", g.Unwrap}, {"usage-path", g.UsagePath}} {
++			if field.path != nil && !passthroughObjectPath.MatchString(*field.path) {
++				return bad(field.name)
++			}
 +		}
 +		if len(g.APIKeyEntries) == 0 {
 +			return bad("keys")
@@ -818,6 +1005,25 @@ index 0000000..aeb6732
 +		cfg.Passthrough = append(cfg.Passthrough, g)
 +	}
 +	return cfg.ValidatePassthrough()
++}
+diff --git a/internal/config/passthrough_envelope_test.go b/internal/config/passthrough_envelope_test.go
+new file mode 100644
+index 0000000..a4ac5ed
+--- /dev/null
++++ b/internal/config/passthrough_envelope_test.go
+@@ -0,0 +1,13 @@
++package config
++
++import (
++	"strings"
++	"testing"
++)
++
++func TestPassthroughEnvelopeConfig(t *testing.T) {
++	data := []byte(passthroughConfig + "      usage-path: result.0usage\n")
++	if _, err := ParseConfigBytes(data); err == nil || !strings.Contains(err.Error(), "usage-path") {
++		t.Fatalf("accepted path segment starting with a digit: %v", err)
++	}
 +}
 diff --git a/internal/config/passthrough_test.go b/internal/config/passthrough_test.go
 new file mode 100644
@@ -1122,12 +1328,98 @@ index 0000000..20993af
 +	r.UnregisterClient("chat-catalog")
 +	assertCatalog(false)
 +}
+diff --git a/internal/runtime/executor/passthrough_envelope_test.go b/internal/runtime/executor/passthrough_envelope_test.go
+new file mode 100644
+index 0000000..6823ddc
+--- /dev/null
++++ b/internal/runtime/executor/passthrough_envelope_test.go
+@@ -0,0 +1,80 @@
++package executor
++
++import (
++	"context"
++	"errors"
++	"io"
++	"net/http"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
++)
++
++func TestPassthroughEnvelopeResponse(t *testing.T) {
++	plain := ` {"model":"upstream","answers":[],"usage":{"input_tokens":7,"output_tokens":3}} `
++	selected := `{ "model":"upstream", "answers":[], "usage":{"input_tokens":7,"output_tokens":3} }`
++	wrapped := ` {"result":` + selected + `,"success":true,"errors":[],"messages":[]} `
++	unwrap, path := "result", "result.usage"
++	capture := &captureAIStudioUsagePlugin{records: make(chan usage.Record, 16)}
++	usage.RegisterNamedPlugin(t.Name(), capture)
++	t.Cleanup(func() { usage.RegisterNamedPlugin(t.Name(), malformedFunctionCallUsageNoop{}) })
++	usage.StartDefault(context.Background())
++	for _, tc := range []struct {
++		name, body, want string
++		unwrap, usage    *string
++		upstream, status int
++	}{
++		{name: "plain bytes", body: plain, want: plain},
++		{name: "wrapped raw object", body: wrapped, want: selected, unwrap: &unwrap, usage: &path},
++		{name: "malformed success", body: `not JSON`, status: 502},
++		{name: "non 2xx bypasses envelope", body: `not JSON`, unwrap: &unwrap, usage: &path, upstream: 429, status: 429},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", roundTripperFunc(func(r *http.Request) (*http.Response, error) {
++				if r.Host != "envelope.example" {
++					t.Errorf("default-port Host: %q", r.Host)
++				}
++				status := http.StatusOK
++				if tc.upstream != 0 {
++					status = tc.upstream
++				}
++				return &http.Response{StatusCode: status, Header: http.Header{"Retry-After": []string{"120"}}, Body: io.NopCloser(strings.NewReader(tc.body))}, nil
++			}))
++			cfg := &config.Config{Passthrough: []config.Passthrough{{Name: "envelope", BaseURL: "http://envelope.example", Path: "/decision", Unwrap: tc.unwrap, UsagePath: tc.usage}}}
++			auth := &coreauth.Auth{ID: t.Name(), Provider: "passthrough-envelope", Attributes: map[string]string{"api_key": "key", "config_index": "0"}}
++			out, err := NewPassthroughExecutor(auth.Provider, cfg).Execute(ctx, auth, coreexecutor.Request{Model: "upstream", Payload: []byte(`{"model":"alias","state":{},"questions":[]}`)}, coreexecutor.Options{SourceFormat: translator.FromString(coreexecutor.PassthroughProtocol)})
++			if tc.status != 0 {
++				var failure statusErr
++				if !errors.As(err, &failure) || failure.StatusCode() != tc.status {
++					t.Fatalf("failure = %v, want %d", err, tc.status)
++				}
++				return
++			}
++			want := tc.want
++			if err != nil || string(out.Payload) != want {
++				t.Fatalf("response = %q, %v; want %q", out.Payload, err, want)
++			}
++			timeout := time.After(3 * time.Second)
++			for {
++				select {
++				case record := <-capture.records:
++					if record.AuthID != auth.ID {
++						continue
++					}
++					if record.Failed || record.Detail.InputTokens != 7 || record.Detail.OutputTokens != 3 || record.Detail.TotalTokens != 10 {
++						t.Fatalf("usage record: %+v", record)
++					}
++					return
++				case <-timeout:
++					t.Fatal("missing usage record")
++				}
++			}
++		})
++	}
++}
 diff --git a/internal/runtime/executor/passthrough_executor.go b/internal/runtime/executor/passthrough_executor.go
 new file mode 100644
-index 0000000..4315216
+index 0000000..8c66675
 --- /dev/null
 +++ b/internal/runtime/executor/passthrough_executor.go
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,144 @@
 +package executor
 +
 +import (
@@ -1140,6 +1432,7 @@ index 0000000..4315216
 +	"strings"
 +	"time"
 +
++	"github.com/MoeForge/moego/ojson"
 +	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 +	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
 +	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -1212,32 +1505,48 @@ index 0000000..4315216
 +	if response.StatusCode < 200 || response.StatusCode >= 300 {
 +		return resp, statusErr{code: response.StatusCode, msg: string(body), retryAfter: parseRetryAfterHeader(response.Header, time.Now())}
 +	}
-+	detail, err := passthroughUsage(body)
++	root := ojson.ParseBytes(body)
++	if !ojson.ValidBytes(body) || !root.IsObject() {
++		return resp, statusErr{code: http.StatusBadGateway, msg: "invalid passthrough response object"}
++	}
++	// Usage paths refer to the original envelope, before response projection.
++	detail, err := passthroughUsage(root, group.UsagePath)
 +	if err != nil {
 +		return resp, statusErr{code: http.StatusBadGateway, msg: err.Error()}
++	}
++	if group.Unwrap != nil {
++		value := root.Get(*group.Unwrap)
++		if !value.IsObject() {
++			return resp, statusErr{code: http.StatusBadGateway, msg: "invalid passthrough unwrap object"}
++		}
++		body = []byte(value.Raw)
 +	}
 +	reporter.Publish(ctx, detail)
 +	return coreexecutor.Response{Payload: body, Headers: response.Header.Clone()}, nil
 +}
 +
-+// Missing usage records zero tokens; malformed JSON accounting fails the response.
-+func passthroughUsage(body []byte) (usage.Detail, error) {
-+	var response struct {
-+		Usage *struct {
-+			InputTokens  uint64 `json:"input_tokens"`
-+			OutputTokens uint64 `json:"output_tokens"`
-+		} `json:"usage"`
++// Usage is decoded from the original envelope; missing default usage is zero.
++func passthroughUsage(root ojson.Result, configuredPath *string) (usage.Detail, error) {
++	path := "usage"
++	if configuredPath != nil {
++		path = *configuredPath
 +	}
-+	var detail usage.Detail
-+	if err := json.Unmarshal(body, &response); err != nil {
-+		return detail, errors.New("invalid passthrough usage")
++	value := root.Get(path)
++	if !value.Exists() && configuredPath == nil {
++		return usage.Detail{}, nil
 +	}
-+	if response.Usage != nil {
-+		detail.InputTokens = int64(response.Usage.InputTokens)
-+		detail.OutputTokens = int64(response.Usage.OutputTokens)
-+		detail.TotalTokens = detail.InputTokens + detail.OutputTokens
++	var counters *struct {
++		InputTokens  uint64 `json:"input_tokens"`
++		OutputTokens uint64 `json:"output_tokens"`
 +	}
-+	return detail, nil
++	if err := json.Unmarshal([]byte(value.Raw), &counters); err != nil || counters == nil {
++		return usage.Detail{}, errors.New("invalid passthrough usage")
++	}
++	return usage.Detail{
++		InputTokens:  int64(counters.InputTokens),
++		OutputTokens: int64(counters.OutputTokens),
++		TotalTokens:  int64(counters.InputTokens + counters.OutputTokens),
++	}, nil
 +}
 +
 +func (e *PassthroughExecutor) ExecuteStream(context.Context, *coreauth.Auth, coreexecutor.Request, coreexecutor.Options) (*coreexecutor.StreamResult, error) {
@@ -1257,10 +1566,10 @@ index 0000000..4315216
 +}
 diff --git a/internal/runtime/executor/passthrough_executor_test.go b/internal/runtime/executor/passthrough_executor_test.go
 new file mode 100644
-index 0000000..dfd846a
+index 0000000..67d306d
 --- /dev/null
 +++ b/internal/runtime/executor/passthrough_executor_test.go
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,104 @@
 +package executor
 +
 +import (
@@ -1363,27 +1672,6 @@ index 0000000..dfd846a
 +	case <-canceled:
 +	case <-time.After(3 * time.Second):
 +		t.Fatal("upstream context did not cancel")
-+	}
-+}
-+
-+func TestPassthroughUsage(t *testing.T) {
-+	for _, tc := range []struct {
-+		body          string
-+		input, output int64
-+		bad           bool
-+	}{
-+		{`{"answers":[]}`, 0, 0, false},
-+		{`{"usage":{"input_tokens":7,"output_tokens":3}}`, 7, 3, false},
-+		{`{"usage":`, 0, 0, true},
-+	} {
-+		detail, err := passthroughUsage([]byte(tc.body))
-+		if (err != nil) != tc.bad || (!tc.bad && (detail.InputTokens != tc.input || detail.OutputTokens != tc.output || detail.TotalTokens != tc.input+tc.output)) {
-+			t.Errorf("usage %s: %+v %v", tc.body, detail, err)
-+		}
-+	}
-+	retry := parseRetryAfterHeader(http.Header{"Retry-After": []string{"120"}}, time.Now())
-+	if retry == nil || *retry != 120*time.Second {
-+		t.Fatal("lost Retry-After")
 +	}
 +}
 diff --git a/internal/watcher/synthesizer/config.go b/internal/watcher/synthesizer/config.go
