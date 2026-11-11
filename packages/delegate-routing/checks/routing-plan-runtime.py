@@ -171,15 +171,29 @@ class Routing(unittest.TestCase):
                 result, _ = self.run_plan(config, ctx, ("first-check",))
                 self.assertEqual([c["launch"]["family"] for c in result["roles"]["first-check"]["candidates"]], expected)
 
-    def test_ladder_session_and_unmeasured_are_not_hard_filters(self):
-        # Wrong: session buffer/pace or measured preference causes a loop failure.
-        rows = [("session", "one", "strong", "a", "high", ["high"]), ("unmeasured", "two", "strong", "b", "high", ["high"])]
+    def test_ladder_low_buffer_session_joins_low_water_group(self):
+        # Wrong: a 15% session buffer is either removed or ranked outside the low-water group.
+        rows = [("session", "one", "strong", "a", "high", ["high"]), ("below", "two", "strong", "b", "high", ["high"]), ("normal", "three", "strong", "c", "high", ["high"])]
         config, ctx = self.ladder_fixture(rows, role="writer")
         config["sessionPool"] = "a"
-        config["readers"][1]["command"] = None
-        result, _ = self.run_plan(config, ctx, outputs={"reader-a": stream({"monthly": window(10)})})
-        self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["session", "unmeasured"])
+        config["readers"][0]["pool"]["preference"] = 10
+        outputs = {
+            "reader-a": stream({"monthly": window(15, reset="2026-11-20T00:00:00Z")}),
+            "reader-b": stream({"monthly": window(5, reset="2026-11-30T00:00:00Z")}),
+            "reader-c": stream({"monthly": window(80)}),
+        }
+        result, _ = self.run_plan(config, ctx, outputs=outputs)
+        self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["normal", "session", "below"])
         self.assertEqual(result["roles"]["writer"]["exclusions"], [])
+
+    def test_ladder_exhausted_session_pool_is_removed(self):
+        # Wrong: drain-last ordering keeps an exhausted session pool selectable.
+        rows = [("session", "one", "strong", "a", "high", ["high"])]
+        config, ctx = self.ladder_fixture(rows, role="writer")
+        config["sessionPool"] = "a"
+        result, _ = self.run_plan(config, ctx, outputs={"reader-a": stream({"monthly": window(0)})})
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertEqual(result["roles"]["writer"]["exclusions"][0]["reason"], "pool exhausted")
 
     def test_ladder_last_resort_obeys_hard_filters_and_recursion_floor(self):
         # Wrong: the producer fallback resurrects excluded/exhausted/external routes.
@@ -271,7 +285,7 @@ class Routing(unittest.TestCase):
         outputs = {"reader-hidden-runtime": subprocess.CompletedProcess([], 1, "secret", "private"), "reader-session": stream({"monthly": window(0)}), "reader-outside": stream({"monthly": window(), "weekly:scoped": window(0)})}
         with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
             result, _ = self.run_plan(config, ctx, outputs=outputs)
-        self.assertEqual(picker.call_args.args[1]["families"], [{"name": "sol", "tier": "strong", "useFor": "writer-judge loop", "avoidFor": "sole judge", "defaultEffort": "high", "role": "writer", "avoided": False, "effectiveEffort": "high"}])
+        self.assertEqual(picker.call_args.args[1]["families"], [{"name": "sol", "tier": "strong", "useFor": "writer-judge loop", "avoidFor": "sole judge", "defaultEffort": "high", "role": "writer", "effectiveEffort": "high"}])
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], "sol")
 
     def test_picker_order_skip_identity_and_loud_fallback(self):
@@ -383,9 +397,8 @@ class Routing(unittest.TestCase):
                 self.assertEqual([w for w in result["warnings"] if w.startswith(helper.PICKER_WARNING)], [helper.PICKER_WARNING + f" Unavailable: {expected}."])
 
     def test_picker_reach_and_pool_gates_allow_headless_internal_call(self):
-        # Wrong: worker headless policy forbids the authorized internal picker;
-        # Reader/scoped/session exclusions or ordered external-runtime reaches
-        # are ignored when choosing the picker itself.
+        # Wrong: hard pool/scoped gates or ordered external-runtime reaches are
+        # ignored; the old buffer gate blocks a session pool at 20% remaining.
         config, ctx = self.picker_fixture([route(), route("other", pool=None)])
         original = config["pickerEntries"][0]
         ctx["nonInteractive"] = True
@@ -399,9 +412,9 @@ class Routing(unittest.TestCase):
                 decisions.append(("writer", "sol", "keep"))
             with self.subTest(status=status), patch.object(helper, "run_picker", return_value=self.decisions(*decisions)) as picker:
                 result, _ = self.run_plan(config, ctx, outputs=outputs)
-                self.assertEqual(picker.call_args.args[0], other)
+                self.assertEqual(picker.call_args.args[0], original if status == "buffer" else other)
                 self.assertEqual(picker.call_count, 1)
-                self.assertEqual(result["picker"]["provenance"]["runtime"], "claude")
+                self.assertEqual(result["picker"]["provenance"]["runtime"], "codex" if status == "buffer" else "claude")
 
     def test_picker_one_transient_retry_and_no_malformed_retry(self):
         # Wrong: malformed results retry; transient failures never retry or retry
@@ -900,7 +913,7 @@ class Routing(unittest.TestCase):
         outputs = {f"reader-{name}": json.dumps(document) for name, document in corpus["readers"].items()}
         for session, order in [
             (None, ["codex", "claude", "z-ai"]),
-            ("claude", ["codex", "claude", "z-ai"]),
+            ("claude", ["codex", "z-ai", "anthropic-api"]),
         ]:
             with self.subTest(session=session):
                 config["sessionPool"] = session
@@ -1240,21 +1253,20 @@ class Routing(unittest.TestCase):
         self.assertEqual(helper.measure(stream({"monthly": window(), "5h": window(10, 18000, "2026-11-15T02:30:00Z")}), NOW), {"buffer": 0.1, "pace": 0.2, "status": "measured"})
         self.assertEqual(helper.measure(stream({"monthly": window(50, 2678400)}), NOW)["pace"], 0.96875)
 
-    def test_comparative_session_pace_keeps_low_buffer(self):
+    def test_session_pool_orders_after_non_session_even_at_higher_pace(self):
         config = manifest([route("own", pool="session"), route("other")], "session")
-        for own, other, expected in [(60, 45, "own"), (60, 60, "other"), (45, 60, "other"), (20, 10, "own"), (20.01, 10, "own")]:
-            with self.subTest(own=own, other=other):
-                result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-outside": stream({"5h": window(other, 18000, "2026-11-15T02:30:00Z")}), "reader-session": stream({"5h": window(own, 18000, "2026-11-15T02:30:00Z")})})
-                self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)
-        # Own pace leads despite the tighter buffer.
-        for remaining, expected in [(20, "own"), (20.01, "own")]:
-            result, _ = self.run_plan(config, context(names=("own", "other")), outputs={"reader-session": stream({"monthly": window(60), "5h": window(remaining, 18000, "2026-11-15T00:30:00Z")})})
-            self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], expected)
+        outputs = {
+            "reader-outside": stream({"5h": window(50, 18000, "2026-11-15T02:30:00Z")}),
+            "reader-session": stream({"5h": window(65, 18000, "2026-11-15T02:30:00Z")}),
+        }
+        result, _ = self.run_plan(config, context(names=("own", "other")), outputs=outputs)
+        self.assertGreater(result["pools"]["session"]["pace"], result["pools"]["outside"]["pace"])
+        self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], "other")
 
-    def test_session_pool_uses_name_on_measured_tie(self):
+    def test_session_pool_drains_last_on_measured_tie(self):
         config = manifest([route("alpha", pool="session"), route("zulu")], "session")
         result, _ = self.run_plan(config, context(names=("alpha", "zulu")))
-        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("alpha", 0.9375), ("zulu", 0.9375)])
+        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("zulu", 0.9375), ("alpha", 0.9375)])
 
     def test_unmeasured_session_keeps_fit_only_candidate(self):
         # Unknown pace sorts behind measured pace without removing the session route.
@@ -1262,7 +1274,7 @@ class Routing(unittest.TestCase):
         for outside in (stream({"5h": window(reset=None)}), stream()):
             with self.subTest(outside=outside):
                 result, _ = self.run_plan(config, context(names=("alpha", "zulu")), outputs={"reader-outside": outside, "reader-session": stream({"5h": window(reset=None)})})
-                self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], ["alpha", "zulu"] if outside != stream() else ["zulu", "alpha"])
+                self.assertEqual([item["launch"]["family"] for item in result["roles"]["writer"]["candidates"]], ["zulu", "alpha"])
                 self.assertEqual(result["roles"]["writer"]["exclusions"], [])
 
     def test_idle_unscoped_window_preserves_used_weekly_pace(self):
@@ -1349,7 +1361,7 @@ class Routing(unittest.TestCase):
         self.assertEqual([(item["pool"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("session", 0.9375), ("outside", 0.2)])
 
     def test_scoped_pace_ranking_and_session_comparison(self):
-        # Wrong: session identity overrides the family-scoped pace ordering.
+        # Wrong: session pool order overrides normal pace groups or family scopes.
         config = manifest([route("fable", pool="session"), route("sol")], "session")
         outputs = {"reader-outside": stream({"7d": window(30, 604800, "2026-11-18T12:00:00Z")}), "reader-session": stream({"7d": window(52, 604800, "2026-11-18T12:00:00Z"), "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z")})}
         result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
@@ -1358,7 +1370,7 @@ class Routing(unittest.TestCase):
         # Scoped pace still limits its family independently of session identity.
         outputs["reader-outside"] = stream({"7d": window(10, 604800, "2026-11-18T12:00:00Z")})
         result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
-        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("fable", 0.34), ("sol", 0.2)])
+        self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.2), ("fable", 0.34)])
         # The same family pace also ranks ordinary non-session candidates.
         config["sessionPool"] = None
         result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
@@ -1502,7 +1514,7 @@ class Routing(unittest.TestCase):
             for role in roles:
                 self.assertEqual(bool(result["roles"][role]["candidates"]), tier in ("strong", "frontier"))
                 if tier in ("small", "mid"):
-                    self.assertEqual(result["roles"][role]["error"], "never step down a tier; report a loop failure.")
+                    self.assertEqual(result["roles"][role]["error"], "every route is hard-filtered and the caller cannot run itself; never step down a tier.")
         self.assertEqual([error["path"] for error in self.request_errors(launch_context=context(), roles=("unknown",))], ["argv.role[0]"])
         result, _ = self.run_plan(launch_context=context(names=()))
         self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
@@ -1569,7 +1581,7 @@ class Routing(unittest.TestCase):
             self.assertIn({"family": "fast", "reason": "below role tier floor", "runtime": "codex"}, result["roles"]["planner"]["exclusions"])
         config["routes"] = [route("fast", "mid")]
         result, _ = self.run_plan(config, context(("planner",), ("fast",)), ("planner",))
-        self.assertEqual(result["roles"]["planner"]["error"], "never step down a tier; report a loop failure.")
+        self.assertEqual(result["roles"]["planner"]["error"], "every route is hard-filtered and the caller cannot run itself; never step down a tier.")
 
     def test_plan_role_qualified_launch_mutations(self):
         # Wrong: transcript substring match, trusting saved candidates, stale context.
@@ -1834,7 +1846,7 @@ class Routing(unittest.TestCase):
             (root / "context.json").write_text(json.dumps(ctx))
             proc = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(proc.returncode, 1)
-            self.assertIn("never step down a tier; report a loop failure.", proc.stderr)
+            self.assertIn("every route is hard-filtered and the caller cannot run itself; never step down a tier.", proc.stderr)
 
 
 if __name__ == "__main__":

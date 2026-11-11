@@ -172,7 +172,7 @@
       sessionPool = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum (builtins.attrNames portable.pools));
         default = null;
-        description = "Registered budget spent by this runtime's session; null warns that the buffer rule cannot be certified. Set the actual pool for proxied runtimes.";
+        description = "The session pool sorts after non-session pools in its pace group, joins the below-low-water group when its minimum unscoped remaining share is at or below 20%, and is removed only when exhausted.";
       };
       models = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
