@@ -19,7 +19,7 @@
     kiro.cli.enable = true;
     programs.delegate-routing = {
       enable = true;
-      # The package ships no Kimchi families, so the scenario declares one.
+      # The scenario selects a custom Kimchi family.
       families.served.flash = {
         maker = "fixture";
         match = "test-flash-*";
@@ -1637,6 +1637,88 @@
       && result.config.ai.programs.delegate-routing.families.anthropic.opus.maker == null
       && (change {ai.programs.delegate-routing.families.anthropic.opus.maker = "custom-maker";}).config.ai.programs.delegate-routing.families.anthropic.opus.maker == "custom-maker"
       && lib.all makerOptionFails ["" " " 1]);
+    # Wrong: GLM metadata stays fixture-only, its maker is lost, or the shared
+    # pool misses a runtime selected by family name or overrides a consumer.
+    "module-delegate-routing-${name}-zhipu-presets" = mkTest "delegate-routing-${name}-zhipu-presets" (let
+      expected = {
+        glm = {
+          avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
+          defaultEffort = "high";
+          effort = "low, high or max; high default, max for judging";
+          match = "glm-[0-9]*.[0-9]";
+          tier = "strong";
+          useFor = "planning, spec writing, judging; hard multi-file coding";
+        };
+        glm-flash = {
+          avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
+          defaultEffort = null;
+          effort = "token-hungry thinking; keep the default effort";
+          match = "glm-*-flash";
+          tier = "mid";
+          useFor = "code to a spec; the writer in a writer-judge loop with glm; image or document input";
+        };
+      };
+      settings = {
+        pools.zai-budget.window = goPoolWindow;
+        runtimes = {
+          claude.models = [{vendors = ["zhipu"];}];
+          codex.models = [{families = ["glm"];}];
+          kimchi.models = [{families = ["glm-flash"];}];
+          kiro.models = [{vendors = ["zhipu"];}];
+        };
+        zai.pool = "zai-budget";
+      };
+      bound = change {ai.programs.delegate-routing = settings;};
+      families = bound.config.ai.programs.delegate-routing.families;
+      view = import ../lib/routing-view.nix (routingArgs
+        // {
+          inherit families;
+          extraRuntimes = ["codex"];
+          manualExternalDelegates = ["kimchi"];
+          models = lib.mapAttrs (_: runtime: runtime.models) bound.config.ai.programs.delegate-routing.runtimes;
+          pools = bound.config.ai.programs.delegate-routing.pools;
+          resolvedAgentFiles = {};
+        });
+      overridden = change {
+        ai.programs.delegate-routing = lib.recursiveUpdate settings {
+          families.zhipu.glm.pools.claude = null;
+          families.zhipu.glm-flash.pools.codex = "other-budget";
+          pools.other-budget.window = goPoolWindow;
+        };
+      };
+      unbound = change {ai.programs.delegate-routing = settings // {zai.pool = null;};};
+    in
+      passes bound
+      && lib.all (family:
+        lib.getAttrs (builtins.attrNames expected.${family}) families.zhipu.${family} == expected.${family}) ["glm" "glm-flash"]
+      && lib.all (family:
+        family.pools
+        == {
+          claude = "zai-budget";
+          codex = "zai-budget";
+          kimchi = "zai-budget";
+          kiro = "zai-budget";
+        }) (builtins.attrValues families.zhipu)
+      && view.familyMakers.glm == "zhipu"
+      && view.familyMakers.glm-flash == "zhipu"
+      && builtins.length (view.routes ++ view.manualRoutes) == 4
+      && lib.all (route: route.pool == "zai-budget" && route.family.maker == "zhipu") (view.routes ++ view.manualRoutes)
+      && passes overridden
+      && overridden.config.ai.programs.delegate-routing.families.zhipu.glm.pools.claude == null
+      && overridden.config.ai.programs.delegate-routing.families.zhipu.glm-flash.pools.codex == "other-budget"
+      && lib.all (family: !(family.pools ? kiro)) (builtins.attrValues
+        (change {
+          ai.programs.delegate-routing = lib.recursiveUpdate settings {
+            runtimes.kiro.models = [{vendors = ["anthropic"];}];
+          };
+        }).config.ai.programs.delegate-routing.families.zhipu)
+      && passes unbound
+      && lib.all (family: family.pools == {}) (builtins.attrValues unbound.config.ai.programs.delegate-routing.families.zhipu)
+      && poolFailsWith (change {ai.programs.delegate-routing.zai.pool = "missing-zai-budget";})
+      "ai.programs.delegate-routing.zai.pool: unknown pool `missing-zai-budget`"
+      && (import ../lib/opencode-go.nix {inherit lib;}).families."go-deepseek-v4.1-flash".effort
+      == "high; low for mechanical tasks; max only after a task-specific check; never cap output tokens small (returns empty)"
+      && !(lib.any (family: lib.hasPrefix "glm-" family.match) (builtins.attrValues families.opencode-go)));
     "module-delegate-routing-${name}-opencode-go-pool" = mkTest "delegate-routing-${name}-opencode-go-pool" (let
       expectedBindings = lib.genAttrs ["claude" "codex" "kiro"] (_: "go-budget");
       settings = {

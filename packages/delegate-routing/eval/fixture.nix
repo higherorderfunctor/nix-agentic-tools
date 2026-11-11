@@ -10,7 +10,7 @@
   ai.kiro.cli.workflows.enable = lib.mkDefault true;
   ai.programs.delegate-routing = {
     enable = true;
-    # The package ships no Kimchi-served families.
+    # Additional Kimchi-served families beside the shipped Zhipu presets.
     families = {
       deepseek.deepseek-flash = {
         avoidFor = "review, building code, correctness judgment; knowledge-heavy questions";
@@ -53,23 +53,6 @@
         match = "nemotron-*-ultra*";
         tier = "small";
         useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
-      };
-      zhipu = lib.mapAttrs (_: family:
-        family // {pools = lib.genAttrs ["claude" "codex" "kimchi"] (_: "zai-coding");}) {
-        glm = {
-          avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
-          effort = "low, high or max; high default, max for judging";
-          match = "glm-[0-9]*.[0-9]";
-          tier = "strong";
-          useFor = "planning, spec writing, judging; hard multi-file coding";
-        };
-        glm-flash = {
-          avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
-          effort = "token-hungry thinking; keep the default effort";
-          match = "glm-*-flash";
-          tier = "mid";
-          useFor = "code to a spec; image or document input";
-        };
       };
     };
     pools = {
@@ -140,5 +123,6 @@
         models = [{families = ["haiku" "opus" "sonnet"];}];
       };
     };
+    zai.pool = "zai-coding";
   };
 }

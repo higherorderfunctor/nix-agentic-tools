@@ -468,6 +468,7 @@ in {
         programParity "delegate-routing" {
           enable = "boolean";
           families = "attribute set of attribute set of (submodule)";
+          lowWaterMark = "signed integer or floating point number";
           opencodeGo.plan = ''null or one of "go", "go-plus", "go-teams"'';
           opencodeGo.pool = "null or string";
           pools = "attribute set of (submodule)";
@@ -475,6 +476,7 @@ in {
           routing = "attribute set of (submodule)";
           skill = "submodule";
           workflows = "attribute set of (submodule)";
+          zai.pool = "null or string";
         } ["claude" "codex" "kimchi" "kiro"]
         && programParity "peer-communication" {enable = "boolean";} harnessNames
         && programParity "stacked-workflows" {enable = "boolean";} harnessNames

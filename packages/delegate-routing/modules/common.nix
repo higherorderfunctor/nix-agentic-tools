@@ -16,6 +16,17 @@
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
   opencodeGo = import ../lib/opencode-go.nix {inherit lib;};
+  presetPoolBindings = vendor: families: pool:
+    lib.mkIf (pool != null) {
+      ${vendor} =
+        lib.mapAttrs (_: _: {
+          pools = lib.genAttrs (lib.filter (runtime:
+            lib.any (family: family.vendor == vendor)
+            (select portable.families models.${runtime}))
+          supportedRuntimes) (_: lib.mkDefault pool);
+        })
+        families;
+    };
   inherit (familyFunctions) select;
   entryDefaults = import ../lib/entries.nix {inherit lib;};
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
@@ -359,6 +370,11 @@ in {
       runtimes =
         lib.genAttrs supportedRuntimes (runtime:
           runtimeOptions runtime // reminderProgram.module.options.ai.programs.delegate-routing.runtimes.${runtime});
+      zai.pool = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Registered budget pool bound to every Zhipu preset on runtimes selecting that vendor. Set it to a registered pool key, for example \"zai-coding\". Null leaves preset pools unbound; explicit per-family runtime bindings override this default.";
+      };
     };
 
   # Emit one portable enable option and skills/rules for each supported runtime.
@@ -430,18 +446,8 @@ in {
                 lib.mapAttrs (name: _: {pool = lib.mkDefault (opencodeGo.poolHint portable.opencodeGo.plan portable.families.${opencodeGo.vendor}.${name}.match);})
                 opencodeGo.families;
             })
-            (lib.mkIf (portable.opencodeGo.pool != null) {
-              ${opencodeGo.vendor} =
-                lib.mapAttrs (_: _: {
-                  pools =
-                    lib.genAttrs (lib.filter (runtime:
-                      lib.any (family: family.vendor == opencodeGo.vendor)
-                      (select portable.families models.${runtime}))
-                    supportedRuntimes)
-                    (_: lib.mkDefault portable.opencodeGo.pool);
-                })
-                opencodeGo.families;
-            })
+            (presetPoolBindings opencodeGo.vendor opencodeGo.families portable.opencodeGo.pool)
+            (presetPoolBindings "zhipu" defaults.families.zhipu portable.zai.pool)
           ];
           routing = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.routing;
           skill = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.skill;
@@ -517,6 +523,10 @@ in {
         {
           assertion = portable.opencodeGo.plan == null || portable.opencodeGo.pool == null || builtins.hasAttr portable.opencodeGo.pool portable.pools;
           message = "ai.programs.delegate-routing.opencodeGo.pool: unknown pool `${toString portable.opencodeGo.pool}`; set it to a registered pool key, e.g. \"opencode-go\", declared under ai.programs.delegate-routing.pools.";
+        }
+        {
+          assertion = portable.zai.pool == null || builtins.hasAttr portable.zai.pool portable.pools;
+          message = "ai.programs.delegate-routing.zai.pool: unknown pool `${toString portable.zai.pool}`; set it to a registered pool key, e.g. \"zai-coding\", declared under ai.programs.delegate-routing.pools.";
         }
       ]
       ++ lib.concatMap (family:

@@ -74,7 +74,7 @@
     "go-deepseek-v4.1-flash" = {
       avoidFor = "sole correctness judge; hardest autonomous tasks without review";
       defaultEffort = "high";
-      effort = "high; low for mechanical tasks; max only after a task-specific check";
+      effort = "high; low for mechanical tasks; max only after a task-specific check; never cap output tokens small (returns empty)";
       maker = "deepseek";
       match = "deepseek-v4.1-flash";
       tier = "strong";
