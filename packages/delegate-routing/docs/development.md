@@ -1,28 +1,10 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-09 — shared avoid/exclude fallback and
-> all-technique machine defaults preserve floors, session gates and intentional
-> null omission; failure warnings and the fallback notice reach stderr; advisory
-> notes stay JSON-only; the renderer consumes the private shared routing view
-> for launch reaches and registered readers; Plan saves bounded units,
-> role-qualified launches and verbatim-rubric briefs, and check-plan validates
-> them against fresh helper output; planner has a strong/frontier floor; the
-> packaged non-launching helper consumes the same view and runtime sessionPool
-> binding, rejects incomplete Reader envelopes, and keeps runtime-specific
-> commands in skills so shared router rules remain byte-identical; Pool drain
-> and Review use the helper as the canonical decision and retain named launch
-> fallbacks; per-runtime mode evidence below leaves automatic detection unknown;
-> routing ships an always-on "Pool drain" entry and a "Tune these rules" entry,
-> the Review step holds the one review rule, the Work and review workflow builds
-> a branch as units each reviewed by one check before the next starts (all three
-> checks at the branch-level review when the PR goes ready), the usage helpers
-> share one schema with UTC reset times, portable pools resolve usage readers
-> and label family reaches on both backends, proxy-accounted-usage reads a
-> Manager+ accounted monthly budget, and the always-on stub names the source for
-> steering its rules; OpenCode Go joins z.ai as an API-key pool found by base
-> URL, with opt-in Go preset families. Packaged-helper checks execute every
-> runtime’s delivered helper on both backends and reject null sessionPool
-> manifests.
+> **Last verified:** 2026-11-11 — manifest-owned routes and catalog effort
+> support, producer-maker ladder with signed effort offsets, low-water and pool
+> preference ordering, session drains last, pool-ordered low-effort pickers,
+> required routed-family makers and Zhipu presets match the current helper.
+> Local prose checks do not establish live harness compliance.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -144,8 +126,8 @@ each technique on one line (kind, modes, pins, runs-own-subagents, command and
 notes), including the introspection commands and manual-only delegates. Family
 selection has one mechanism: the helper's output, which the caller reruns before
 every launch. The Routing section's Choose execution step gives three paths,
-each valid for every runtime because observed tools and configuration decide
-availability:
+each valid for every runtime because the manifest supplies routes and the caller
+binds a returned technique available in its session:
 
 - native subagents only: the orchestrator invokes the helper, then binds the
   returned fixed technique, model and effort;
@@ -211,11 +193,31 @@ capability tier, task and effort guidance, an optional orchestration mark
 live-model pattern; an optional per-target `example`, shaped like `pools`, names
 the family's concrete current id for one harness, and that harness's launch
 route shows it instead of the pattern. Package fields use `mkDefault`, so
-consumers can override a field or add a family. `lib/families.nix` carries the
-package families without concrete model versions or Kimchi-served vendors, so a
-launch route without a generated agent file instructs the reader to take the
-highest id matching the pattern. Consumers selecting Kimchi models declare the
-corresponding vendor families in their delegate-routing configuration.
+consumers can override a field or add a family. `lib/families.nix` carries
+Anthropic, OpenAI and Zhipu presets. A route without a concrete Nix pin needs a
+matching local catalog id; the helper currently reads a local catalog only for
+Codex. Consumers selecting Kimchi models declare the corresponding vendor
+families in their delegate-routing configuration.
+
+A routed model line requires `maker`: explicit values win; Anthropic, OpenAI and
+Zhipu groups supply their vendor name when it is null. Other selected automatic
+or manual families without a maker fail evaluation with the option path. Unused
+custom families may omit it. Go presets declare their real maker; Iceman uses
+`iceman` rather than an undisclosed identity shared with another model. Runtime,
+provider and budget do not establish maker identity.
+
+The package ships `families.zhipu.glm` (strong, `glm-[0-9]*.[0-9]`, high
+default; low/high/max guidance, max for judging) and `families.zhipu.glm-flash`
+(mid, `glm-*-flash`, no configured effort levels). GLM suits planning, specs,
+judging and hard multi-file coding, but is text-only and cannot disable thinking
+for quick lookups. Flash suits code to a spec, a writer loop with GLM, and
+image/document input; its guidance says keep the default effort and discourages
+edits near untested code, flaky tasks and hard reasoning. `zai.pool` binds all
+Zhipu presets on every selecting runtime to one registered pool, like
+`opencodeGo.pool`; null leaves them unbound and explicit per-family runtime
+bindings win. Unknown pool keys fail evaluation. Go GLM catalog entries remain
+excluded because CPA refuses them on Go. Go DeepSeek V4.1 Flash's guidance says
+never cap output tokens small because it returns empty.
 
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
 catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
@@ -266,12 +268,12 @@ Manual-only wins if a target occurs in both lists. Selected families appear once
 per tier, each reach naming its harness, the technique that pins both model and
 effort, the id spelling it takes and any bound pool.
 
-Resolve concrete models at launch time: inspect the runtime's live list, compare
-version segments to find the highest version matching the family pattern, and
-use that runtime's spelling. Claude's Agent tool names a generated agent file
-through `subagent_type` to pin a full id; plain calls without a file take
-aliases such as `opus`. Workflow `agent()` takes full model ids from configured
-model-picker rows, including ids published by the operator's proxy routes.
+The helper resolves concrete models from Nix pins or its supported local model
+catalog, using the target runtime's spelling. Unresolved routes are dropped with
+a JSON reason. Claude's Agent tool names a generated agent file through
+`subagent_type` to pin a full id; plain calls without a file take aliases such
+as `opus`. Workflow `agent()` takes full model ids from configured model-picker
+rows, including ids published by the operator's proxy routes.
 
 `runtimes.<runtime>.techniques` is a keyed set of workflow, subagent, external,
 introspect and usage nodes. Delegate nodes describe model and effort pinning,
@@ -327,11 +329,11 @@ technique in its Launch route. Files and routes share the resolved set.
 It supplies every technique's default and remains consumer-overridable; Sol uses
 medium, Go Kimi K3.1 Pro max, and families without levels null. Go Crouton Alpha
 Free uses a provisional medium package choice, not a published recommendation;
-consumers can override it. Configure custom
-`families.zhipu.glm.defaultEffort = "high"`; no glm preset is shipped. Null
-omits the generated file's `effort:` line. Agent files pin only efforts Claude's
-agent-file format accepts; otherwise they leave effort to the launch call. A
-non-null role effort overrides the family default. The shared frontmatter
+consumers can override it. The shipped `families.zhipu.glm.defaultEffort` is
+high. Null omits the generated file's `effort:` line. Agent files pin only
+efforts Claude's agent-file format accepts; otherwise they leave effort to the
+launch call. A role effort is a signed step offset from the family default;
+checking roles derive it from producer launch efforts. The shared frontmatter
 renderer writes the pins and a fixed delegate body.
 
 There is no separate file enable option. Set
@@ -415,62 +417,75 @@ mechanical, planner, second-check and writer. The routing policy lives in
 
 The closed launch context supplies a bounded nonempty `taskSummary`, optional
 nullable `proposerFamily`, required `nonInteractive`, compact `roles` and
-observed `techniques`. Each role accepts only optional `effort`, `avoid` and
-`exclude`; family qualification essays are refused. A known proposer is an exact
-configured family; an unknown non-null name is refused before Readers. Absent or
-null identity skips the picker and warns while preserving tier/pool fallback.
+optional `caller`. Each role accepts `producers`, `exclude` and `effort`.
+Producers name their model line as `family` and actual launch `effort` (null
+when omitted). A checking role derives its offset from producers and cannot also
+set `effort`; other roles accept a signed step offset such as `+1` or `-1`, or
+null. Exclude accepts configured model-line or maker names. Optional caller
+identity attests current `family`, concrete `model` and actual `effort` for the
+self last resort. A known proposer is an exact configured family; an unknown
+non-null name is refused before Readers. Absent/null identity skips the picker
+and warns while preserving tier/pool ranking. Routes come from the manifest;
+caller techniques and qualification essays are refused.
 
 The helper validates the whole request before any Reader or picker runs and
 reports every problem at once, schema-style:
-`{"path": "launchContext.roles.writer.effort", "message": "unknown effort; allowed: minimal, low, ..."}`.
-Paths cover `argv` (arguments, including unknown `--role` values),
-`launchContext` (allowed keys, role names, `roles.<role>.effort` checked against
-the manifest's `effortLevels` (observed technique efforts are unrestricted;
-off-scale values such as `ultra` or `off` are ignored), configured family names
-for `proposerFamily`, `avoid` and `exclude`, the `taskSummary` byte limit, a
-required `nonInteractive`, technique evidence by index) and `manifest`. A
-`manifest.` error is marked as a configuration fault, not caller-fixable.
-Malformed JSON reports `launchContext` or `manifest` with the file, line and
-column. On any error the helper prints
-`{"status": "invalid-request", "errors": [...]}` on stdout, one
-`delegate-routing-plan: <path>: <message>` line per error on stderr, and
+`{"path": "launchContext.roles.writer.effort", "message": "must be a signed step offset such as +1 or -1, or null"}`.
+Paths cover `argv`, `launchContext` and `manifest`: allowed keys and roles,
+signed offsets, producer efforts resolved against model support, configured
+family/maker exclusions, proposer/caller identity, the summary byte limit and
+required `nonInteractive`. Off-scale catalog efforts are ignored when
+intersecting supported levels with the package scale. A `manifest.` error is a
+configuration fault. Malformed JSON names its file, line and column. On error
+stdout contains `{"status": "invalid-request", "errors": [...]}`, stderr has one
+`delegate-routing-plan: <path>: <message>` line per error, and the helper
 exits 2.
 
-When several observed models match one family's pattern, the helper launches the
-highest version by the numeric rule generated agent files use (6.10 over 6.9;
-the last listed wins a tie), so callers can pass every model their introspection
-lists.
+Every enabled launch route on the calling runtime and its automatic
+`extraRuntimes` comes from the generated manifest. Manual-only runtimes remain
+manual. The concrete id comes first from a generated-agent or family-example Nix
+pin, otherwise from the highest numeric-version visible matching local catalog
+entry (6.10 over 6.9; last listed wins a tie). Codex reads
+`${CODEX_HOME:-$HOME/.codex}/models_cache.json` entries with visibility `list`
+and efforts from `supported_reasoning_levels`. A listed pin keeps its exact id
+but uses catalog effort support; an absent pin retains Nix-declared support and
+`launch.effortSource` names that fallback. Unresolved routes are dropped with a
+reason in JSON. The same family on two runtimes remains one candidate per route,
+allowing the orchestrator to group roles by runtime.
 
 ```json
 {
-  "taskSummary": "review a bounded source change",
-  "proposerFamily": "opus",
   "nonInteractive": false,
-  "roles": { "first-check": { "avoid": ["sol"], "exclude": ["opus"] } },
-  "techniques": [
-    {
-      "efforts": ["high", "medium"],
-      "model": "gpt-6.1-sol",
-      "runtime": "codex",
-      "technique": "spawn_agent"
+  "proposerFamily": "opus",
+  "roles": {
+    "first-check": {
+      "exclude": ["openai"],
+      "producers": [{ "effort": "medium", "family": "opus" }]
     }
-  ]
+  },
+  "taskSummary": "review a bounded source change"
 }
 ```
 
-`runtimes.<runtime>.picker.entries` is an ordered list of explicit
-`{technique, model, effort}` tuples. Claude defaults to `claude -p` / the sonnet
-family's model (the resolved id of the generated sonnet agent file, which
-honours an `example.claude` override) / medium, Codex to `codex exec` /
-`gpt-6.1-sol` / medium (Sol, never Luna); Kimchi and Kiro default to empty
-lists. An inherited entry is omitted when its model has no selected family/reach
-or resolved id, or its known launch technique is disabled or unavailable;
-explicit entries keep their literal model and retain strict validation. Module
-and direct-builder defaults use the same routing-view resolver, including
-builder overrides. The view resolves exact models against configured family
-patterns and refuses duplicate tuples, unresolved models, invalid efforts or
-techniques without enabled external reach, model/effort pinning and a nonempty
-picker command. Direct `mkSkill` callers receive the same manifest field.
+`runtimes.<runtime>.picker.entries` accepts explicit
+`{technique, model, effort}` records. Only the package's own Sonnet default
+names a family, which the module resolves to a concrete model before building
+the view. Claude defaults to `claude -p` / Sonnet and Codex to `codex exec` /
+Sol, both at low effort; Kimchi and Kiro default to empty lists. Consumers may
+add entries on other pools. Entries are tried by the same low-water, session,
+preference, pace and name pool order as candidates, using scoped pace too,
+rather than list position. Two entries sharing one pool fail evaluation naming
+both, including two unbound entries. Inherited defaults with unavailable
+selected reach/model/technique are omitted; explicit unresolved entries fail.
+Each resolved entry needs one concrete configured model family, an enabled
+external one-shot technique, model/effort pins and a nonempty picker command.
+Direct `mkSkill` callers receive resolved model entries through the same view.
+
+The Codex picker passes its entry effort through `model_reasoning_effort` (low
+by default), uses the short helper-written `model_instructions_file`, and sets
+`model_verbosity=low` and `project_doc_max_bytes=0`. Claude sets
+`MAX_THINKING_TOKENS=0` and uses its entry effort through `--effort` (low by
+default). Both retain their existing tool-free controls.
 
 Technique-owned `pickerCommand` templates carry enforceable tool removal;
 `toolFree` defaults false and is true only with source or offline provider
@@ -498,47 +513,65 @@ request from one shared builder. The fake-provider test needs the real `codex`
 binary and the shipped command in `CODEX_PICKER_COMMAND`, so it skips in the Nix
 sandbox; the catalog and warning tests always run.
 
-Readers and hard eligibility run before judgment. A picker runs when its family
-is not the proposer, its pool and scopes allow it, and the first word of its
-command is on PATH; the caller does not list it among observed techniques, since
-the helper launches it itself. With no eligible family in any role there is
-nothing to judge and no model call. The bounded one-shot picker sees only
-eligible role/family guidance and task context. It returns strict keep/exclude
-decisions with exact coverage and safe provenance; only kept families enter pool
-ranking. Commands are technique data, never duplicated in Python. Prompt/output
-limits are 65536 bytes, timeout 90 seconds; transient execution failures retry
-once after two seconds, malformed results advance without retry. Duplicate JSON
-keys, non-finite values, invalid Unicode, extra fields/documents and incomplete
-coverage are refused, as is a run that exits without writing its output file.
-Template values are substituted in one pass, so a value never rewrites a later
-token. Event streams and stderr are discarded. The helper's authorized picker
-subprocess may run with `nonInteractive: true`.
+Readers and hard eligibility run before judgment. A picker runs when its pool
+and scopes allow it and the first word of its command is on PATH. It may use the
+proposer model line: this fresh tool-free one-shot only keeps or drops
+candidates. The helper launches it from manifest entries. With no eligible
+family in any role there is nothing to judge and no model call. The bounded
+one-shot picker sees only eligible role/family guidance and task context. It
+returns strict keep/exclude decisions with exact coverage and safe provenance;
+only kept families enter pool ranking. Commands are technique data, never
+duplicated in Python. Prompt/output limits are 65536 bytes, timeout 90 seconds;
+transient execution failures retry once after two seconds, malformed results
+advance without retry. Duplicate JSON keys, non-finite values, invalid Unicode,
+extra fields/documents and incomplete coverage are refused, as is a run that
+exits without writing its output file. Template values are substituted in one
+pass, so a value never rewrites a later token. Event streams and stderr are
+discarded. The helper's authorized picker subprocess may run with
+`nonInteractive: true`.
 
-When identity is absent/null, no entry is runnable, or all entries fail, report
-exactly
+When eligible candidates exist but identity is absent/null, no entry is
+runnable, or all entries fail, report
 `WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user.`
-(followed by ` Unavailable: <reason>.` for each entry the helper could not build
-from local state, such as a Codex model missing from its models cache) and use
-hard-eligible tier/pool routes. Picker failure alone does not erase routes.
+followed by ` Unavailable: <reason>.` suffixes. Reasons cover unknown proposer
+identity, no entries, tool-free/PATH/pool/scope refusals, local preparation and
+per-attempt failures. Use the hard-eligible tier/pool routes; picker failure
+alone does not erase them.
 
-Observed `efforts: []` always means launch without effort, regardless of role
-request, family default or avoidance. JSON keeps effort null; canonical lines
-omit its token and launchers omit the argument, flag or pin.
+Effort uses each model line's supported levels ordered by the package scale. A
+checking role inherits the largest producer offset from its own default; a
+producer's own line gets one extra step. Clamp at supported endpoints. A role
+checking nobody uses its signed offset, defaulting to zero. An empty resolved
+support list means launch without effort: JSON keeps effort null, canonical
+lines omit its token, and launchers omit the argument, flag or pin. See
+[Size the work](../fragments/size-the-work.md) for the offset example.
 
-With Sol's medium default, the example produces this fallback specification:
+After hard filters and picker fit, the ladder sorts by maker relation to all
+producers (different maker, same maker different line, same line), then pool
+order. Pools with unknown pace, pace below `lowWaterMark` (default 0.5), or a
+session unscoped buffer at or below 0.2 sort after other pools. Otherwise
+session pools sort after non-session pools in the same group. Higher consumer
+`pools.<name>.preference` (default 0) then higher effective pace then
+family/runtime name break ties. Preference applies only after maker relation,
+the low-water grouping and session ordering. Unknown session buffer warns
+without excluding the route; exhaustion still excludes it.
 
-```text
-role=first-check runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high
-```
+The helper returns the top three candidates, spreading across pools where
+possible, plus a retained producer-line or caller-line last resort, without
+duplicating a top-three candidate. An attested caller can supply
+`action=continue-self` when no delegate last resort remains. Every last resort
+retains hard filters: caller exclusions, role/producer tier floors, pool
+failures/exhaustion, scoped refusals and picker fit. No qualified route means
+every route is hard-filtered and the caller cannot run itself. JSON retains
+named alternatives, invocation guidance and generated-agent records; manual-only
+routes are separate. Non-interactive or unknown mode forbids external worker
+routes; native subagents and self preserve the recursion floor.
 
-The candidate's `launch.fallback` is
-`{"kind": "avoided-family", "launchEffort": "high", "resolvedEffort": "medium"}`;
-only a fallback first pick produces a notice, once per role, naming its family
-and launch effort and asking the caller to report it to the user. These lines
-are specifications for native tools, not shell commands. JSON also retains named
-alternatives, invocation guidance and generated-agent records; manual-only
-routes are separately labelled. `nonInteractive: true` excludes external
-techniques; absent mode evidence leaves them unresolved.
+Review staffing follows these pool-ranked choices across runtimes. Each external
+runtime gets one orchestrator delegate running its roles through native
+subagents; the session launches roles on its own runtime natively. A
+producer-line last resort still needs a fresh evaluator under the review
+workflow's independence rule; continuing self is not an independent review.
 
 Only configured Reader commands and verified tool-free picker commands reach
 subprocess execution. Identical commands share one read and retry; full strict
@@ -556,11 +589,11 @@ pool and matching scoped paces. Remaining shares must be finite numbers in
 [0,100], excluding booleans. Used windows require a UTC reset and retain the
 strict reset-duration bound; reported calendar-month durations remain intact.
 Idle windows bypass reset validation; all-idle pools use pace 1.0 and full
-buffer. Scoped `status` is ignored because inactive has unknown meaning. Ties
-sort non-session pools first, then family/runtime deterministically.
+buffer. Scoped `status` is ignored because inactive has unknown meaning. The
+ladder above determines ordering after effective pace is computed.
 
 JSON goes to stdout and canonical lines to stderr. JSON includes all warnings;
-stderr includes failure warnings and the fallback notice; advisory notes stay
+stderr includes failure warnings and the picker warning; advisory notes stay
 JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
 the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
@@ -582,9 +615,9 @@ and ranking; synthetic cases verify Reader failures. CI passes the fixture store
 path explicitly in `delegate-routing-plan-runtime`. Eight backend/runtime
 delivery fixtures check the rendered helper command, runtime/session-pool
 identity in the skill, and policy prose for Reader completeness, the session
-buffer and shared avoided-family fallback. Reader collection, ranking and buffer
-behavior are tested against the source Python helper with synthetic manifests.
-The
+buffer ordering and producer/caller last resort. Reader collection, ranking and
+buffer behavior are tested against the source Python helper with synthetic
+manifests. The
 `module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
 checks read each backend’s delivered `SKILL.md` for that runtime, follow its
 rendered command to the packaged wrapper and manifest, and run that wrapper with
@@ -785,10 +818,10 @@ The resolved Work and review workflow's Plan step (`fragments/plan-work.md`)
 defines the saved JSON fields and the prepared brief contract. Before
 task-source investigation, an orchestrator runs its own runtime's helper for
 `planner`, selects a fitted pinned candidate and passes the task, paths, saved
-rubric and resolved routing/workflow context. No reachable qualified planner
-after shared avoided-family fallback is a loop failure. An assigned worker
-executing an approved bounded unit does not recursively invoke a planner for it.
-New scope requires replanning the affected portion.
+rubric and resolved routing/workflow context. No qualified planner is a loop
+failure only when every route is hard-filtered and the caller cannot run itself.
+An assigned worker executing an approved bounded unit does not recursively
+invoke a planner for it. New scope requires replanning the affected portion.
 
 The planner saves `task`, originating launch `runtime`, the complete captured
 helper JSON as `snapshot`, `rubric`, `units` and `waves` in the
@@ -813,8 +846,8 @@ Invoke the same rendered executable with
 host/user cap; the ceiling is ten. This operation collects fresh Readers and
 validates the saved choices against that current role-qualified helper output,
 not an allowlist embedded in the plan. It checks launching runtime, candidate
-and pinned line together, including current fallback metadata and intentional
-null effort, dependency existence/cycles/order, disjoint exact normalized writer
+and pinned line together, including effort-source metadata and intentional null
+effort, dependency existence/cycles/order, disjoint exact normalized writer
 paths, wave bounds and rubric bytes. A successful exit includes
 `validation.status = "valid"` in the returned JSON. Unknown/unresolved launches,
 automatic use of a manual-only route and invalid artifacts fail without an

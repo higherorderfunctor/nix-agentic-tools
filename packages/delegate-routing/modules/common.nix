@@ -306,7 +306,7 @@ in {
             preference = lib.mkOption {
               type = lib.types.int;
               default = 0;
-              description = "Higher values rank first among candidate pools on the same side of lowWaterMark; equal values use pace then name.";
+              description = "Higher values rank first among candidate pools in the same maker step, low-water group and session position; equal values use pace then name.";
             };
             usage = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {

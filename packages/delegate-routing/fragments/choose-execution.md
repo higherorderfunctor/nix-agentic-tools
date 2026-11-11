@@ -38,10 +38,11 @@ use separate worktrees when they need different bases.
 
 Choose the launch path by what this session shows it can do, never by runtime
 name. Observed tools and configuration decide availability: use a technique only
-when it is in your tool list or its command is on PATH. Report what you observed
-in the helper's launch context. Every launch fixes technique, model and effort
-from one helper line, bound exactly. Before dispatch, rerun the helper before
-every launch (each subagent call or new workflow).
+when it is in your tool list or its command is on PATH. Routes come from the
+generated manifest; bind only a returned technique available in this session.
+Every launch fixes technique, model and effort from one helper line, bound
+exactly. Before dispatch, rerun the helper before every launch (each subagent
+call or new workflow).
 
 - **Native subagents only:** you invoke the helper, then bind the returned fixed
   technique, model and effort in each subagent call.
@@ -64,11 +65,11 @@ orchestrator.
 
 Use another vendor's harness for a model this runtime can reach only when that
 harness runs the whole multi-step job itself: hand the entire job to one
-delegate there that can run its own subagents, such as one that orchestrates a
-three-check review with another vendor's model. A model no technique of this
-runtime reaches takes the helper's external line for one delegate, a single
-cross-vendor reviewer included. If no runtime can, an interactive orchestrator
-runs the steps from this session:
+delegate there that runs its own subagents. For review, split roles across
+runtimes by the helper's pool-ranked choices as the Review step requires. A
+model no technique of this runtime reaches takes the helper's external line for
+one delegate, a single cross-vendor reviewer included. If no runtime can, an
+interactive orchestrator runs the steps from this session:
 
 1. Use this session's workflow tool, if it has one.
 2. Otherwise run the steps yourself: launch each external worker, wait for it,

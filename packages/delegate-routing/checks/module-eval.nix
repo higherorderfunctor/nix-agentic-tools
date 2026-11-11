@@ -816,21 +816,21 @@
         "run the Reader of every registered pool"
         "worst-window pace"
         "a monthly pool is paced against its month, not the week"
-        "minimum remaining share across applicable windows is strictly more than a fifth"
-        "every other fitting measured pool is behind or level in pace"
-        "unknown session identity cannot certify it"
-        "With no selectable measured candidate, use fit alone"
+        "session pool when its unscoped remaining share is at or below one fifth"
+        "Otherwise the session pool sorts after every non-session pool in that group"
+        "Session buffer uncertainty warns; it does not exclude a route"
+        "Unmeasured candidates carry explicit budget/session uncertainty"
         "unreachable for this invocation; they never supply fit-only routes"
         "Valid remaining shares survive bad pace"
-        "JSON includes all warnings; stderr includes failure warnings and the fallback notice; advisory notes stay JSON-only."
+        "JSON includes all warnings; stderr includes failure warnings and the picker warning; advisory notes stay JSON-only."
         "Never treat exhaustion as unmeasured"
         "Aim for every pool to reach its reset near empty"
         "Do not report pool numbers unless asked"
-        "Try the shared avoided-family fallback before reporting a loop failure"
-        "never step down a tier"
-        "avoid never removes a route by itself"
-        "measured preference applies within each partition"
-        "Session pace still compares all otherwise fitting measured candidates"
+        "Report no qualified route only when every route is hard-filtered and the caller cannot run itself"
+        "a checker never runs below any producer's tier"
+        "maker names and removes every matching route"
+        "Next come higher `pools.<name>.preference` (default 0), higher effective pace"
+        "the same maker on a different model line, then a producer's own line"
         "excluded by caller"
       ]
       && !(lib.hasInfix "remaining share divided by" stub)
@@ -841,26 +841,26 @@
         sessionDelivery.config.ai.${runtime}.rules.delegate-routing-router.text
         == sessionDelivery.config.ai.claude.rules.delegate-routing-router.text
         && lib.hasInfix "/bin/delegate-routing-plan --role <role> --launch-context <json-path>" text
-        && (hasProse "It enforces the strong/frontier floor before pool ranking" text || throw "missing ${runtime} review floor")
-        && hasProse "Try the shared avoided-family fallback before reporting a loop failure" text
+        && (hasProse "strong/frontier and producer tier floors before ladder ranking" text || throw "missing ${runtime} review floor")
+        && hasProse "Report no qualified route only when every route is hard-filtered and the caller cannot run itself" text
         && lib.all (needle: hasProse needle text) [
           "never step down a tier"
-          "Resolve each candidate's base effort from a non-null role override"
+          "For a role checking nobody, `effort` is a signed step offset"
           "defaultEffort"
           "minimal < low < medium < high < xhigh < max"
-          "Observed `efforts: []` explicitly certifies omission support"
-          "resolvedEffort"
-          "launchEffort"
-          "A role whose first pick is a fallback prints"
-          "WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user."
+          "An empty resolved support list means launch without effort"
+          "The same model line gets one extra step"
+          "Clamp to the supported endpoints"
+          "Picker entries run in pool order; the proposer model line is allowed"
+          "Unavailable: <reason>."
           "Failed Readers and dropped windows print warnings ending \"Report this failure to the user.\""
           "fresh separate agents with neutral briefs"
           "After a failed launch, rerun"
         ]
         && lib.all (launch: hasProse launch text || throw "missing ${runtime} review fallback: ${launch}") [
           "runs its own subagents"
-          "tools that pin model and effort"
-          "a subagent call, a workflow agent call or an external launcher"
+          "Bind a line's technique, model and effort exactly in your launch tool"
+          "Routes come from the generated manifest; bind only a returned technique available in this session."
         ])
       runtimes
     );
@@ -2185,7 +2185,7 @@
       # units remain subject to the opening three-check rule, or the
       # branch-level review loses its ready/earlier sizing.
       && hasProse "A unit is a bounded change with one reader and one verification" claude
-      && hasProse "Each unit is reviewed by one fresh separate check whose role avoids the writer family, using the shared fallback when needed, before the next unit starts." claude
+      && hasProse "Each unit is reviewed by one fresh separate check whose role names the writer and its actual launch effort as a producer, using the ladder last resort when needed, before the next unit starts." claude
       && hasProse "the fix's diff plus what it touches, one check, never the whole branch again." claude
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
@@ -2250,16 +2250,16 @@
           "rerun the helper before every launch (each subagent call or new workflow)"
           "A static workflow's picks stay fixed for that run and the next launch reruns the helper."
           "A saved plan is not permission to skip the helper"
-          "An unknown non-null proposer is refused; missing or null proposer identity skips the picker."
-          "An unknown or headless context cannot certify an external launch."
-          "Get exact configured family names from the helper's invalid-request errors, which list the allowed names"
-          "returned candidates' `launch.family`; on Claude, generated agent file names are the family names."
-          "Pass every model the introspection lists and its supported efforts as observed techniques"
+          "An unknown non-null proposer is refused; missing or null identity skips the picker."
+          "Unknown or headless context forbids external worker routes, including the last resort"
+          "Get exact configured family and maker names from the helper's invalid-request errors, which list allowed names"
+          "returned launch records and manifest metadata; on Claude, generated agent file names are the family names."
+          "Never supply family essays or a techniques list: routes come from the generated manifest."
           "required `nonInteractive` (true, false or null)"
-          "Off-scale observed efforts such as ultra or off are ignored."
+          "a listed pin uses catalog efforts, otherwise Nix-declared efforts remain"
           "Unavailable: <reason>."
           "listing every problem and allowed values"
-          "Each candidate in the helper's JSON stdout carries `launch` with `guidance` (command, modelArg, notes) and `agent`."
+          "Each delegate candidate in the helper's JSON stdout carries `launch` with `guidance` (command, modelArg, notes) and `agent`; a last resort with `action` `continue-self` carries only action, runtime, family, model and effort."
         ];
         # Native binding notes and facts the orchestrator needs, as list lines
         # (no table): each runtime's own notes, introspection and pins.
