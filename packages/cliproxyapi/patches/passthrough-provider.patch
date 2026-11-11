@@ -1,9 +1,9 @@
-CLIProxyAPI: add validated JSON passthrough configuration and config auths.
+CLIProxyAPI: add JSON passthrough through credential selection and usage.
 
-Keep passthrough groups independent of chat compatibility, preserve grouped v8
-settings through the loader/extractor predicate, synthesize keyed auths, resolve
-aliases by group identity/index and expose management auth indexes. The route
-consumer is supplied in the same PR; this config/auth portion is not standalone.
+Keep validated grouped configuration, keyed synthesis, alias resolution and
+management indexes independent of chat compatibility. Add a raw client route,
+executor and internal-only model registration using native selection, cooldown
+and per-client usage reporting. Isolate both route and executor protocols.
 Applied after key-allowlist and zai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
@@ -188,6 +188,287 @@ index 0000000..5e15a1b
 +		t.Fatal("management auth_index selected the wrong credential")
 +	}
 +}
+diff --git a/internal/api/server_passthrough_test.go b/internal/api/server_passthrough_test.go
+new file mode 100644
+index 0000000..e6133d5
+--- /dev/null
++++ b/internal/api/server_passthrough_test.go
+@@ -0,0 +1,255 @@
++package api
++
++import (
++	"context"
++	"encoding/json"
++	"io"
++	"net"
++	"net/http"
++	"net/http/httptest"
++	"reflect"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/gin-gonic/gin"
++	management "github.com/router-for-me/CLIProxyAPI/v8/internal/api/handlers/management"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/redisqueue"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/watcher/synthesizer"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++	sdkconfig "github.com/router-for-me/CLIProxyAPI/v8/sdk/config"
++)
++
++// These are production-shaped default-port URLs. DialContext connects them to
++// httptest's random bound ports without changing Host, authority or URL path.
++// This exercises HTTP routing/transport, but cannot prove actual port-80 binding.
++func TestPassthroughRouteConductorUsage(t *testing.T) {
++	var mu sync.Mutex
++	var calls []string
++	response := " {\n \"model\":\"final-model\", \"answers\":[], \"usage\":{\"input_tokens\":7,\"output_tokens\":3} }\n"
++	raw := " {\n \"model\" : \"decision\", \"state\": {\"model\":\"nested\"}, \"questions\": [] }\n"
++	upstream := func(w http.ResponseWriter, r *http.Request) {
++		body, err := io.ReadAll(r.Body)
++		if err != nil {
++			t.Error(err)
++			return
++		}
++		if strings.Contains(r.Host, ":") {
++			t.Errorf("default-port Host includes port: %q", r.Host)
++		}
++		if r.Header.Get("Content-Type") != "application/json" {
++			t.Error("missing JSON content type")
++		}
++		key := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
++		model := map[string]string{"/inference/free": "free-model", "/inference/paid": "paid-model", "/inference/final": "final-model"}[r.URL.Path]
++		want := strings.Replace(raw, `"decision"`, `"`+model+`"`, 1)
++		if string(body) != want {
++			t.Errorf("changed request bytes: %q, want %q", body, want)
++		}
++		mu.Lock()
++		calls = append(calls, key)
++		mu.Unlock()
++		switch key {
++		case "free-a":
++			w.Header().Set("Retry-After", "120")
++			w.WriteHeader(429)
++		case "free-b":
++			w.WriteHeader(404)
++		case "paid":
++			w.WriteHeader(503)
++		case "final":
++			_, _ = io.WriteString(w, response)
++		default:
++			t.Error("unexpected upstream key")
++			w.WriteHeader(401)
++		}
++	}
++	first := httptest.NewServer(http.HandlerFunc(upstream))
++	defer first.Close()
++	second := httptest.NewServer(http.HandlerFunc(upstream))
++	defer second.Close()
++	dialer := &net.Dialer{}
++	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
++		target := strings.TrimPrefix(first.URL, "http://")
++		if address == "second.example:80" {
++			target = strings.TrimPrefix(second.URL, "http://")
++		} else if address != "first.example:80" {
++			t.Errorf("unexpected destination %s", address)
++		}
++		return dialer.DialContext(ctx, network, target)
++	}}
++	defer transport.CloseIdleConnections()
++	zero, cooling := 0, false
++	cfg := &config.Config{SDKConfig: sdkconfig.SDKConfig{APIKeys: []string{"client-a", "client-b", "unlisted"}}, Passthrough: []config.Passthrough{
++		{Name: "free", BaseURL: "http://first.example", Path: "/inference/free", Priority: 30, RequestRetry: &zero, DisableCooling: &cooling, APIKeyEntries: []config.PassthroughKey{{APIKey: "free-a"}, {APIKey: "free-b"}}, Models: []config.PassthroughModel{{Name: "free-model", Alias: "decision"}}},
++		{Name: "paid", BaseURL: "http://second.example", Path: "/inference/paid", Priority: 20, RequestRetry: &zero, DisableCooling: &cooling, APIKeyEntries: []config.PassthroughKey{{APIKey: "paid"}}, Models: []config.PassthroughModel{{Name: "paid-model", Alias: "decision"}}},
++		{Name: "final", BaseURL: "http://second.example", Path: "/inference/final", Priority: 10, RequestRetry: &zero, DisableCooling: &cooling, APIKeyEntries: []config.PassthroughKey{{APIKey: "final"}}, Models: []config.PassthroughModel{{Name: "final-model", Alias: "decision"}}},
++	}}
++	for _, key := range []string{"client-a", "client-b"} {
++		cfg.KeyAllowlist = append(cfg.KeyAllowlist, config.KeyAllowlist{APIKey: key, Credentials: []config.KeyAllowlistCredential{{Provider: "passthrough-free", Kind: "apikey"}, {Provider: "passthrough-paid", Kind: "apikey"}, {Provider: "passthrough-final", Kind: "apikey"}}})
++	}
++	server := newTestServerWithConfig(t, cfg)
++	manager := server.handlers.AuthManager
++	manager.SetConfig(cfg)
++	// Zero retry rounds and interval, unlimited alternative credentials. A zero
++	// request-retry never disables trying another eligible credential in-request.
++	manager.SetRetryConfig(0, 0, 0)
++	auths, err := synthesizer.NewConfigSynthesizer().Synthesize(&synthesizer.SynthesisContext{Config: cfg, Now: time.Now(), IDGenerator: synthesizer.NewStableIDGenerator()})
++	if err != nil {
++		t.Fatal(err)
++	}
++	reg := registry.GetGlobalRegistry()
++	for _, auth := range auths {
++		if !strings.HasPrefix(auth.Provider, "passthrough-") {
++			continue
++		}
++		reg.RegisterClient(auth.ID, auth.Provider, []*registry.ModelInfo{{ID: "decision", Type: "passthrough"}})
++		id := auth.ID
++		t.Cleanup(func() { reg.UnregisterClient(id) })
++		manager.RegisterExecutor(executor.NewPassthroughExecutor(auth.Provider, cfg))
++		if _, err := manager.Register(context.Background(), auth); err != nil {
++			t.Fatal(err)
++		}
++	}
++	prevEnabled, prevStatistics := redisqueue.Enabled(), redisqueue.UsageStatisticsEnabled()
++	redisqueue.SetEnabled(false)
++	redisqueue.SetEnabled(true)
++	redisqueue.SetUsageStatisticsEnabled(true)
++	defer func() {
++		redisqueue.SetEnabled(false)
++		redisqueue.SetEnabled(prevEnabled)
++		redisqueue.SetUsageStatisticsEnabled(prevStatistics)
++	}()
++	coreusage.StartDefault(context.Background())
++	request := func(path, key, payload string) *httptest.ResponseRecorder {
++		req := httptest.NewRequest(http.MethodPost, "http://proxy.example"+path, strings.NewReader(payload))
++		req = req.WithContext(context.WithValue(req.Context(), "cliproxy.roundtripper", transport))
++		req.Header.Set("Content-Type", "application/json")
++		if key != "" {
++			req.Header.Set("Authorization", "Bearer "+key)
++		}
++		out := httptest.NewRecorder()
++		server.engine.ServeHTTP(out, req)
++		return out
++	}
++	for _, tc := range []struct {
++		key    string
++		status int
++	}{{"", 401}, {"unlisted", 503}} {
++		out := request("/v1/passthrough", tc.key, raw)
++		if out.Code != tc.status {
++			t.Fatalf("client %q: %d %s", tc.key, out.Code, out.Body.String())
++		}
++	}
++	for _, bad := range []string{`[]`, `{"model":"decision","model":"other"}`, `{"model":"decision","stream":null}`, `{"model":"decision","stream":true}`, `{"model":3}`, `{"model":" "}`} {
++		if out := request("/v1/passthrough", "client-a", bad); out.Code != 400 {
++			t.Fatalf("invalid request: %d %s", out.Code, out.Body.String())
++		}
++	}
++	mu.Lock()
++	before := len(calls)
++	mu.Unlock()
++	if before != 0 {
++		t.Fatal("unauthorized/invalid input reached upstream")
++	}
++	for _, key := range []string{"client-a", "client-b"} {
++		out := request("/v1/passthrough", key, raw)
++		if out.Code != 200 || out.Body.String() != response {
++			t.Fatalf("raw response: %d %q", out.Code, out.Body.String())
++		}
++	}
++	mu.Lock()
++	got := append([]string(nil), calls...)
++	mu.Unlock()
++	if len(got) != 5 || !((got[0] == "free-a" && got[1] == "free-b") || (got[0] == "free-b" && got[1] == "free-a")) || !reflect.DeepEqual(got[2:], []string{"paid", "final", "final"}) {
++		t.Fatalf("priority/failover/cooldown order: %v", got)
++	}
++	for _, auth := range auths {
++		if auth.Provider == "passthrough-free" || auth.Provider == "passthrough-paid" {
++			current, ok := manager.GetByID(auth.ID)
++			if !ok || current.ModelStates["decision"] == nil || current.ModelStates["decision"].NextRetryAfter.IsZero() {
++				t.Errorf("no native cooldown for %s", auth.Provider)
++			}
++		}
++	}
++	// Generic management usage queue must retain two client identities for one
++	// shared alias, and attribute tokens only to their successful attempts.
++	type record struct {
++		APIKey   string `json:"api_key"`
++		Alias    string `json:"alias"`
++		Model    string `json:"model"`
++		Provider string `json:"provider"`
++		Endpoint string `json:"endpoint"`
++		Failed   bool   `json:"failed"`
++		Tokens   struct {
++			Input  int `json:"input_tokens"`
++			Output int `json:"output_tokens"`
++		} `json:"tokens"`
++	}
++	var records []record
++	deadline := time.Now().Add(3 * time.Second)
++	for len(records) < 5 && time.Now().Before(deadline) {
++		w := httptest.NewRecorder()
++		c, _ := gin.CreateTestContext(w)
++		c.Request = httptest.NewRequest("GET", "/usage/queue?count=20", nil)
++		(&management.Handler{}).GetUsageQueue(c)
++		var batch []record
++		if err := json.Unmarshal(w.Body.Bytes(), &batch); err != nil {
++			t.Fatal(err)
++		}
++		records = append(records, batch...)
++		if len(records) < 5 {
++			time.Sleep(10 * time.Millisecond)
++		}
++	}
++	successes := map[string]int{}
++	failures := 0
++	for _, rec := range records {
++		if rec.Alias != "decision" || rec.Endpoint != "POST /v1/passthrough" {
++			t.Fatalf("lost request identity: %+v", rec)
++		}
++		if rec.Failed {
++			failures++
++			if rec.APIKey != "client-a" || rec.Tokens.Input != 0 || rec.Tokens.Output != 0 {
++				t.Fatalf("failure attribution: %+v", rec)
++			}
++			continue
++		}
++		if rec.Provider != "passthrough-final" || rec.Model != "final-model" || rec.Tokens.Input != 7 || rec.Tokens.Output != 3 {
++			t.Fatalf("success attribution: %+v", rec)
++		}
++		successes[rec.APIKey]++
++	}
++	if failures != 3 || !reflect.DeepEqual(successes, map[string]int{"client-a": 1, "client-b": 1}) {
++		t.Fatalf("management records: failures=%d successes=%v count=%d", failures, successes, len(records))
++	}
++	// Every chat path must exclude this provider, even for an allowlisted key.
++	for _, path := range []string{"/v1/chat/completions", "/v1/messages", "/v1/responses"} {
++		if out := request(path, "client-a", raw); out.Code == 200 {
++			t.Errorf("raw provider reachable via %s", path)
++		}
++	}
++	mu.Lock()
++	after := len(calls)
++	mu.Unlock()
++	if after != 5 {
++		t.Fatalf("chat route reached passthrough: %v", calls)
++	}
++	// Internal registration may outlive a credential; that must never bypass
++	// selection when the conductor has no credentials left.
++	for _, a := range auths {
++		manager.Remove(context.Background(), a.ID)
++	}
++	if out := request("/v1/passthrough", "client-a", raw); out.Code == 200 {
++		t.Fatal("executed without credentials")
++	}
++}
++
++// Ensure the fixture really uses the provider executor, not a fake executor
++// which could make a direct HTTP bypass look like conductor failover.
++var _ coreauth.ProviderExecutor = (*executor.PassthroughExecutor)(nil)
+diff --git a/internal/api/server_routes.go b/internal/api/server_routes.go
+index e2b039a..eb72733 100644
+--- a/internal/api/server_routes.go
++++ b/internal/api/server_routes.go
+@@ -30,6 +30,7 @@ import (
+ 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/claude"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/gemini"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/openai"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/passthrough"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
+ 	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
+@@ -71,6 +72,7 @@ func (s *Server) setupRoutes() {
+ 			c.Set(handlers.ModelDetailIDContextKey, strings.TrimPrefix(c.Param("model"), "/"))
+ 			s.unifiedModelsHandler(openaiHandlers, claudeCodeHandlers)(c)
+ 		})
++		v1.POST("/passthrough", (&passthrough.Handler{BaseAPIHandler: s.handlers}).Execute)
+ 		v1.POST("/chat/completions", openaiHandlers.ChatCompletions)
+ 		v1.POST("/completions", openaiHandlers.Completions)
+ 		v1.POST("/images/generations", openaiHandlers.ImagesGenerations)
 diff --git a/internal/config/config.go b/internal/config/config.go
 index dad8d43..b5f59bd 100644
 --- a/internal/config/config.go
@@ -684,6 +965,450 @@ index 0000000..99fbf54
 +		t.Fatal("duplicate normalized group name accepted")
 +	}
 +}
+diff --git a/internal/registry/model_registry.go b/internal/registry/model_registry.go
+index 7f82e7d..92ab9f4 100644
+--- a/internal/registry/model_registry.go
++++ b/internal/registry/model_registry.go
+@@ -1541,6 +1541,35 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
+ 	return available, expiresAt
+ }
+ 
++// publicModelInfo keeps internal passthrough registrations out of catalogs.
++// A shared alias remains public when a chat credential also registers it.
++func publicModelInfo(registration *ModelRegistration) *ModelInfo {
++	if registration == nil {
++		return nil
++	}
++	internal := registration.Info != nil && registration.Info.Type == "passthrough"
++	for provider, count := range registration.Providers {
++		if count > 0 && strings.HasPrefix(provider, "passthrough-") {
++			internal = true
++		}
++	}
++	if !internal {
++		return registration.Info
++	}
++	providers := make([]string, 0, len(registration.InfoByProvider))
++	for provider := range registration.InfoByProvider {
++		providers = append(providers, provider)
++	}
++	sort.Strings(providers)
++	for _, provider := range providers {
++		info := registration.InfoByProvider[provider]
++		if registration.Providers[provider] > 0 && !strings.HasPrefix(provider, "passthrough-") && info != nil && info.Type != "passthrough" {
++			return info
++		}
++	}
++	return nil
++}
++
+ // GetAvailableModelInfos returns cloned metadata for all currently available models.
+ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
+ 	now := time.Now()
+@@ -1550,10 +1579,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
+ 	result := make([]*ModelInfo, 0, len(r.models))
+ 	for _, registration := range r.models {
+ 		available, _ := modelRegistrationAvailability(registration, now)
+-		if !available || registration == nil || registration.Info == nil {
++		info := publicModelInfo(registration)
++		if !available || info == nil {
+ 			continue
+ 		}
+-		result = append(result, cloneModelInfo(registration.Info))
++		result = append(result, cloneModelInfo(info))
+ 	}
+ 	sort.Slice(result, func(i, j int) bool {
+ 		return strings.TrimSpace(result[i].ID) < strings.TrimSpace(result[j].ID)
+@@ -1574,7 +1604,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
+ 			continue
+ 		}
+ 
+-		model := r.convertModelToMap(registration.Info, handlerType)
++		model := r.convertModelToMap(publicModelInfo(registration), handlerType)
+ 		if model != nil {
+ 			models = append(models, model)
+ 		}
+@@ -1628,6 +1658,9 @@ func cloneModelMapValue(value any) any {
+ //   - []*ModelInfo: List of available models for the provider
+ func (r *ModelRegistry) GetAvailableModelsByProvider(provider string) []*ModelInfo {
+ 	provider = strings.ToLower(strings.TrimSpace(provider))
++	if strings.HasPrefix(provider, "passthrough-") {
++		return nil
++	}
+ 	if provider == "" {
+ 		return nil
+ 	}
+diff --git a/internal/registry/model_registry_passthrough_test.go b/internal/registry/model_registry_passthrough_test.go
+new file mode 100644
+index 0000000..20993af
+--- /dev/null
++++ b/internal/registry/model_registry_passthrough_test.go
+@@ -0,0 +1,49 @@
++package registry
++
++import "testing"
++
++// Internal selection needs the private alias. Every public catalog must omit
++// it, including before an allowlist exists, and retain a colliding chat alias.
++func TestPassthroughCatalogIsolation(t *testing.T) {
++	r := GetGlobalRegistry()
++	for _, id := range []string{"passthrough-catalog", "chat-catalog"} {
++		id := id
++		t.Cleanup(func() { r.UnregisterClient(id) })
++	}
++	r.RegisterClient("passthrough-catalog", "passthrough-private", []*ModelInfo{{ID: "private-decision", Type: "passthrough"}, {ID: "shared-decision", Type: "passthrough", OwnedBy: "passthrough-private"}})
++	assertCatalog := func(shared bool) {
++		t.Helper()
++		for _, format := range []string{"openai", "claude", "codex", "gemini"} {
++			found := false
++			for _, model := range r.GetAvailableModels(format) {
++				id, _ := model["id"].(string)
++				name, _ := model["name"].(string)
++				if id == "private-decision" || name == "private-decision" || name == "models/private-decision" {
++					t.Errorf("private alias leaked in %s", format)
++				}
++				if id == "shared-decision" || name == "shared-decision" || name == "models/shared-decision" {
++					found = true
++				}
++			}
++			if shared != found {
++				t.Errorf("shared alias public=%v, want %v in %s", found, shared, format)
++			}
++		}
++		for _, info := range r.GetAvailableModelInfos() {
++			if info.Type == "passthrough" || info.ID == "private-decision" {
++				t.Error("raw info catalog leaked")
++			}
++		}
++		if len(r.GetAvailableModelsByProvider("passthrough-private")) != 0 {
++			t.Error("provider catalog leaked")
++		}
++	}
++	if len(r.GetModelProviders("private-decision")) != 1 {
++		t.Fatal("internal alias unavailable")
++	}
++	assertCatalog(false)
++	r.RegisterClient("chat-catalog", "chat", []*ModelInfo{{ID: "shared-decision", Name: "shared-decision", Type: "openai", OwnedBy: "chat"}})
++	assertCatalog(true)
++	r.UnregisterClient("chat-catalog")
++	assertCatalog(false)
++}
+diff --git a/internal/runtime/executor/passthrough_executor.go b/internal/runtime/executor/passthrough_executor.go
+new file mode 100644
+index 0000000..99eb4bf
+--- /dev/null
++++ b/internal/runtime/executor/passthrough_executor.go
+@@ -0,0 +1,168 @@
++package executor
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"errors"
++	"io"
++	"net/http"
++	"strconv"
++	"strings"
++	"time"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
++)
++
++// PassthroughExecutor submits one raw JSON attempt; the conductor owns retries,
++// credential selection and cooldown. It never invokes a chat translator.
++type PassthroughExecutor struct {
++	cfg      *config.Config
++	provider string
++}
++
++func NewPassthroughExecutor(provider string, cfg *config.Config) *PassthroughExecutor {
++	return &PassthroughExecutor{cfg: cfg, provider: provider}
++}
++func (e *PassthroughExecutor) Identifier() string { return e.provider }
++func (e *PassthroughExecutor) RequestToFormat(coreexecutor.Request, coreexecutor.Options) translator.Format {
++	return translator.FromString(coreexecutor.PassthroughProtocol)
++}
++
++// Reject chat entry and exit protocols even if a caller bypasses route filtering.
++func (e *PassthroughExecutor) Execute(ctx context.Context, auth *coreauth.Auth, req coreexecutor.Request, opts coreexecutor.Options) (resp coreexecutor.Response, err error) {
++	if opts.Stream || opts.SourceFormat.String() != coreexecutor.PassthroughProtocol || coreexecutor.ResponseFormatOrSource(opts).String() != coreexecutor.PassthroughProtocol {
++		return resp, passthroughError{code: http.StatusBadRequest, message: "passthrough protocol required"}
++	}
++	if auth == nil {
++		return resp, passthroughError{code: http.StatusUnauthorized, message: "missing passthrough credential"}
++	}
++	group := e.cfg.PassthroughGroup(auth.Provider, auth.Attributes["config_index"])
++	if group == nil || auth.Provider != e.provider {
++		return resp, passthroughError{code: http.StatusUnauthorized, message: "passthrough group removed"}
++	}
++	_, payload, err := coreexecutor.PassthroughBody(req.Payload, req.Model)
++	if err != nil {
++		return resp, passthroughError{code: http.StatusBadRequest, message: err.Error()}
++	}
++	ctx = helps.EnsureSessionContext(ctx, opts, req.Payload)
++	reporter := helps.NewExecutorUsageReporter(ctx, e, req.Model, auth)
++	defer reporter.TrackFailure(ctx, &err)
++	url := strings.TrimRight(group.BaseURL, "/") + "/" + strings.TrimLeft(group.Path, "/")
++	upstream, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
++	if err != nil {
++		return resp, errors.New("invalid passthrough request")
++	}
++	upstream.Header.Set("Content-Type", "application/json")
++	upstream.Header.Set("Accept", "application/json")
++	if strings.TrimSpace(auth.Attributes["api_key"]) == "" {
++		return resp, passthroughError{code: http.StatusUnauthorized, message: "missing passthrough API key"}
++	}
++	upstream.Header.Set("Authorization", "Bearer "+auth.Attributes["api_key"])
++	client := helps.NewProxyAwareHTTPClient(ctx, e.cfg, auth, 0)
++	// Redirects can move a secret-bearing raw body to another authority. The
++	// configured destination is the only supported target, including on 307/308.
++	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
++	response, err := client.Do(upstream)
++	if err != nil {
++		if ctx.Err() != nil {
++			return resp, ctx.Err()
++		}
++		return resp, errors.New("passthrough upstream request failed")
++	}
++	defer response.Body.Close()
++	body, err := io.ReadAll(response.Body)
++	if err != nil {
++		return resp, err
++	}
++	if response.StatusCode < 200 || response.StatusCode >= 300 {
++		return resp, passthroughError{code: response.StatusCode, message: string(body), retryAfter: passthroughRetryAfter(response.Header)}
++	}
++	detail, err := passthroughUsage(body)
++	if err != nil {
++		return resp, passthroughError{code: http.StatusBadGateway, message: err.Error()}
++	}
++	reporter.Publish(ctx, detail)
++	return coreexecutor.Response{Payload: body, Headers: response.Header.Clone()}, nil
++}
++
++// Missing usage is valid for JSON endpoints; present counters must be integral
++// and nonnegative so malformed upstream accounting cannot be published.
++func passthroughUsage(body []byte) (usage.Detail, error) {
++	var object map[string]json.RawMessage
++	var detail usage.Detail
++	bad := errors.New("invalid passthrough usage")
++	if json.Unmarshal(body, &object) != nil || object == nil {
++		return detail, bad
++	}
++	raw, exists := object["usage"]
++	if !exists {
++		return detail, nil
++	}
++	var counters map[string]json.RawMessage
++	if json.Unmarshal(raw, &counters) != nil || counters == nil {
++		return detail, bad
++	}
++	for _, counter := range []struct {
++		name   string
++		target *int64
++	}{{"input_tokens", &detail.InputTokens}, {"output_tokens", &detail.OutputTokens}} {
++		if value, ok := counters[counter.name]; ok {
++			if string(value) == "null" || json.Unmarshal(value, counter.target) != nil || *counter.target < 0 {
++				return usage.Detail{}, bad
++			}
++		}
++	}
++	if detail.InputTokens > int64(^uint64(0)>>1)-detail.OutputTokens {
++		return usage.Detail{}, bad
++	}
++	detail.TotalTokens = detail.InputTokens + detail.OutputTokens
++	return detail, nil
++}
++
++type passthroughError struct {
++	code       int
++	message    string
++	retryAfter *time.Duration
++}
++
++func (e passthroughError) Error() string              { return e.message }
++func (e passthroughError) StatusCode() int            { return e.code }
++func (e passthroughError) RetryAfter() *time.Duration { return e.retryAfter }
++
++func passthroughRetryAfter(headers http.Header) *time.Duration {
++	raw := headers.Get("Retry-After")
++	if seconds, err := strconv.ParseInt(raw, 10, 32); err == nil && seconds >= 0 {
++		duration := time.Duration(seconds) * time.Second
++		return &duration
++	}
++	if date, err := http.ParseTime(raw); err == nil {
++		duration := time.Until(date)
++		if duration < 0 {
++			duration = 0
++		}
++		return &duration
++	}
++	return nil
++}
++
++func (e *PassthroughExecutor) ExecuteStream(context.Context, *coreauth.Auth, coreexecutor.Request, coreexecutor.Options) (*coreexecutor.StreamResult, error) {
++	return nil, passthroughError{code: http.StatusBadRequest, message: "passthrough streaming is unsupported"}
++}
++func (e *PassthroughExecutor) CountTokens(context.Context, *coreauth.Auth, coreexecutor.Request, coreexecutor.Options) (coreexecutor.Response, error) {
++	return coreexecutor.Response{}, passthroughError{code: http.StatusBadRequest, message: "passthrough token counting is unsupported"}
++}
++func (e *PassthroughExecutor) Refresh(_ context.Context, auth *coreauth.Auth) (*coreauth.Auth, error) {
++	return auth, nil
++}
++
++// Management api-call already owns arbitrary authenticated HTTP requests. This
++// executor accepts only the configured JSON endpoint through Execute.
++func (e *PassthroughExecutor) HttpRequest(context.Context, *coreauth.Auth, *http.Request) (*http.Response, error) {
++	return nil, errors.New("use management api-call for passthrough HTTP requests")
++}
+diff --git a/internal/runtime/executor/passthrough_executor_test.go b/internal/runtime/executor/passthrough_executor_test.go
+new file mode 100644
+index 0000000..fa5ef36
+--- /dev/null
++++ b/internal/runtime/executor/passthrough_executor_test.go
+@@ -0,0 +1,136 @@
++package executor
++
++import (
++	"context"
++	"errors"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++	"time"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
++)
++
++func TestPassthroughExecutorProtocolAndCancellation(t *testing.T) {
++	entered := make(chan struct{})
++	canceled := make(chan struct{})
++	release := make(chan struct{})
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		// Drain the POST body so HTTP/1 disconnect detection can observe cancellation.
++		if _, err := io.Copy(io.Discard, r.Body); err != nil {
++			t.Errorf("read request body: %v", err)
++			return
++		}
++		close(entered)
++		select {
++		case <-r.Context().Done():
++			close(canceled)
++		case <-release:
++		}
++	}))
++	t.Cleanup(func() {
++		close(release)
++		server.Close()
++	})
++	cfg := &config.Config{Passthrough: []config.Passthrough{{Name: "test", BaseURL: server.URL, Path: "/decision"}}}
++	auth := &coreauth.Auth{Provider: "passthrough-test", Attributes: map[string]string{"api_key": "key", "config_index": "0"}}
++	e := NewPassthroughExecutor(auth.Provider, cfg)
++	req := coreexecutor.Request{Model: "upstream", Payload: []byte(`{"model":"alias"}`)}
++	options := coreexecutor.Options{SourceFormat: translator.FromString(coreexecutor.PassthroughProtocol)}
++	for _, protocol := range []string{"claude", "openai", "openai-response", ""} {
++		wrong := options
++		wrong.SourceFormat = translator.FromString(protocol)
++		if _, err := e.Execute(context.Background(), auth, req, wrong); err == nil {
++			t.Errorf("accepted chat entry %q", protocol)
++		}
++		wrong = options
++		wrong.ResponseFormat = translator.FromString("openai")
++		if _, err := e.Execute(context.Background(), auth, req, wrong); err == nil {
++			t.Error("accepted chat exit")
++		}
++	}
++	if _, err := e.ExecuteStream(context.Background(), auth, req, options); err == nil {
++		t.Error("accepted streaming")
++	}
++	if _, err := e.CountTokens(context.Background(), auth, req, options); err == nil {
++		t.Error("accepted counting")
++	}
++	missing := auth.Clone()
++	missing.Attributes["api_key"] = ""
++	if _, err := e.Execute(context.Background(), missing, req, options); err == nil {
++		t.Error("accepted missing upstream key")
++	}
++	select {
++	case <-entered:
++		t.Fatal("refused execution reached upstream")
++	default:
++	}
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	done := make(chan error, 1)
++	go func() { _, err := e.Execute(ctx, auth, req, options); done <- err }()
++	select {
++	case <-entered:
++	case <-time.After(3 * time.Second):
++		t.Fatal("upstream not entered")
++	}
++	cancel()
++	select {
++	case err := <-done:
++		if !errors.Is(err, context.Canceled) {
++			t.Fatalf("cancellation: %v", err)
++		}
++	case <-time.After(3 * time.Second):
++		t.Fatal("execution did not cancel")
++	}
++	select {
++	case <-canceled:
++	case <-time.After(3 * time.Second):
++		t.Fatal("upstream context did not cancel")
++	}
++}
++
++func TestPassthroughBodyAndUsage(t *testing.T) {
++	raw := []byte(" {\n \"model\" : \"alias\", \"state\":{\"model\":\"nested\"},\"x\":1e2 } ")
++	want := " {\n \"model\" : \"upstream\", \"state\":{\"model\":\"nested\"},\"x\":1e2 } "
++	model, out, err := coreexecutor.PassthroughBody(raw, "upstream")
++	if err != nil || model != "alias" || string(out) != want {
++		t.Fatalf("raw rewrite: %q %q %v", model, out, err)
++	}
++	_, same, err := coreexecutor.PassthroughBody(raw, "alias")
++	if err != nil || string(same) != string(raw) {
++		t.Fatal("unchanged model modified bytes")
++	}
++	for _, bad := range []string{`null`, `[]`, `{"model":"a","model":"b"}`, `{"model":null}`, `{"model":"a"} {}`, `{"model":"decision","stream":null}`, `{"model":"a","stream":true}`, `{"model":"a","stream":"false"}`} {
++		if _, _, err := coreexecutor.PassthroughBody([]byte(bad), "x"); err == nil {
++			t.Errorf("accepted %s", bad)
++		}
++	}
++	for _, tc := range []struct {
++		body          string
++		input, output int64
++		bad           bool
++	}{
++		{`{"answers":[]}`, 0, 0, false},
++		{`{"usage":{"input_tokens":7,"output_tokens":3}}`, 7, 3, false},
++		{`{"usage":{"input_tokens":-1}}`, 0, 0, true},
++		{`{"usage":{"output_tokens":1.5}}`, 0, 0, true},
++		{`{"usage":{"input_tokens":null}}`, 0, 0, true},
++		{`{"usage":{"input_tokens":"1"}}`, 0, 0, true},
++		{`{"usage":{"input_tokens":9223372036854775807,"output_tokens":1}}`, 0, 0, true},
++		{`{"usage":null}`, 0, 0, true},
++	} {
++		detail, err := passthroughUsage([]byte(tc.body))
++		if (err != nil) != tc.bad || (!tc.bad && (detail.InputTokens != tc.input || detail.OutputTokens != tc.output || detail.TotalTokens != tc.input+tc.output)) {
++			t.Errorf("usage %s: %+v %v", tc.body, detail, err)
++		}
++	}
++	retry := passthroughRetryAfter(http.Header{"Retry-After": []string{"120"}})
++	if retry == nil || *retry != 120*time.Second {
++		t.Fatal("lost Retry-After")
++	}
++}
 diff --git a/internal/watcher/synthesizer/config.go b/internal/watcher/synthesizer/config.go
 index fef5d8b..1117bb7 100644
 --- a/internal/watcher/synthesizer/config.go
@@ -904,6 +1629,185 @@ index 0000000..fa13e1b
 +		t.Fatal("stale config index resolved another group")
 +	}
 +}
+diff --git a/sdk/api/handlers/handlers_execution.go b/sdk/api/handlers/handlers_execution.go
+index dff03be..160fbeb 100644
+--- a/sdk/api/handlers/handlers_execution.go
++++ b/sdk/api/handlers/handlers_execution.go
+@@ -10,6 +10,7 @@ import (
+ 
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/clienterror"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
+ 	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
+ 	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
+@@ -56,7 +57,14 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+ 	if routeDecision.ExecutorPluginID != "" {
+ 		return h.executeWithPluginExecutor(ctx, entryProtocol, responseProtocol, modelName, originalRequestedModel, rawJSON, alt, routeDecision.ExecutorPluginID, execOptions)
+ 	}
+-	providers, normalizedModel, errMsg := h.providersForExecution(modelName, originalRequestedModel, allowImageModel, routeDecision, execOptions)
++	var providers []string
++	var normalizedModel string
++	var errMsg *interfaces.ErrorMessage
++	if entryProtocol == coreexecutor.PassthroughProtocol {
++		providers, normalizedModel = registry.GetGlobalRegistry().GetModelProviders(modelName), modelName
++	} else {
++		providers, normalizedModel, errMsg = h.providersForExecution(modelName, originalRequestedModel, allowImageModel, routeDecision, execOptions)
++	}
+ 	if errMsg != nil {
+ 		return nil, nil, errMsg
+ 	}
+@@ -101,7 +109,16 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+ 	opts.Metadata = reqMeta
+ 	ctx = enrichContextWithSessionHierarchy(ctx, opts.Headers, req.Payload, opts.Metadata)
+ 	var interceptErr *interfaces.ErrorMessage
+-	req, opts, interceptErr = h.applyRequestInterceptorsBeforeAuth(ctx, entryProtocol, originalRequestedModel, lifecycle.requestID(), req, opts, execOptions.SkipInterceptorPluginID)
++	if entryProtocol == coreexecutor.PassthroughProtocol {
++		// Raw JSON has no translator or plugin body transformation contract.
++		opts.RequestAfterAuthInterceptor = func(_ context.Context, request coreexecutor.RequestAfterAuthInterceptRequest) coreexecutor.RequestAfterAuthInterceptResponse {
++			response := coreexecutor.RequestAfterAuthInterceptResponse{}
++			afterAuthCapture.record(request, response)
++			return response
++		}
++	} else {
++		req, opts, interceptErr = h.applyRequestInterceptorsBeforeAuth(ctx, entryProtocol, originalRequestedModel, lifecycle.requestID(), req, opts, execOptions.SkipInterceptorPluginID)
++	}
+ 	if interceptErr != nil {
+ 		lifecycle.completeError(ctx, interceptErr)
+ 		return nil, nil, interceptErr
+@@ -119,7 +136,10 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+ 	rawResponseHeaders := cloneHeader(resp.Headers)
+ 	passthroughHeaders := executionPassthroughHeaders(h.CurrentConfig(), execOptions.InternalSource)
+ 	responseHeaders := downstreamHeadersFromExecutor(rawResponseHeaders, passthroughHeaders)
+-	body, responseHeaders := h.applyResponseInterceptors(ctx, lifecycle.requestID(), responseProtocol, normalizedModel, originalRequestedModel, executedOpts, rawResponseHeaders, responseHeaders, executedOpts.OriginalRequest, executedReq.Payload, resp.Payload, http.StatusOK, execOptions.SkipInterceptorPluginID, passthroughHeaders)
++	body := resp.Payload
++	if entryProtocol != coreexecutor.PassthroughProtocol {
++		body, responseHeaders = h.applyResponseInterceptors(ctx, lifecycle.requestID(), responseProtocol, normalizedModel, originalRequestedModel, executedOpts, rawResponseHeaders, responseHeaders, executedOpts.OriginalRequest, executedReq.Payload, resp.Payload, http.StatusOK, execOptions.SkipInterceptorPluginID, passthroughHeaders)
++	}
+ 	lifecycle.complete(pluginapi.RequestCompletionSucceeded, http.StatusOK, nil)
+ 	return body, responseHeaders, nil
+ }
+diff --git a/sdk/api/handlers/handlers_passthrough_test.go b/sdk/api/handlers/handlers_passthrough_test.go
+new file mode 100644
+index 0000000..f14a1cd
+--- /dev/null
++++ b/sdk/api/handlers/handlers_passthrough_test.go
+@@ -0,0 +1,40 @@
++package handlers
++
++import (
++	"context"
++	"reflect"
++	"testing"
++
++	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
++)
++
++type passthroughRouterTrap struct{ calls int }
++
++func (r *passthroughRouterTrap) HasModelRouters() bool { return true }
++func (r *passthroughRouterTrap) RouteModel(context.Context, pluginapi.ModelRouteRequest) (pluginapi.ModelRouteResponse, bool) {
++	r.calls++
++	return pluginapi.ModelRouteResponse{Handled: true, TargetKind: pluginapi.ModelRouteTargetProvider, Target: "chat", TargetModel: "redirected"}, true
++}
++
++// Raw requests cannot be redirected to a chat provider, even when their alias
++// collides with a configured router target. Chat entries exclude all raw groups.
++func TestPassthroughProtocolRouting(t *testing.T) {
++	router := &passthroughRouterTrap{}
++	h := &BaseAPIHandler{ModelRouterHost: router}
++	decision := h.applyModelRouter(context.Background(), coreexecutor.PassthroughProtocol, "decision", []byte(`{"model":"decision"}`), false, modelExecutionOptions{})
++	if router.calls != 0 || decision != (modelRouteDecision{}) {
++		t.Fatal("raw route invoked model router")
++	}
++	providers := []string{"chat", "passthrough-free", "gemini-interactions", "passthrough-paid"}
++	if got := adjustExecutionProvidersForEntryProtocol(coreexecutor.PassthroughProtocol, providers); !reflect.DeepEqual(got, []string{"passthrough-free", "passthrough-paid"}) {
++		t.Fatalf("raw providers=%v", got)
++	}
++	for _, entry := range []string{"claude", "gemini", "interactions", "openai", "openai-response", "openai-image", "openai-speech"} {
++		for _, provider := range adjustExecutionProvidersForEntryProtocol(entry, providers) {
++			if provider == "passthrough-free" || provider == "passthrough-paid" {
++				t.Errorf("%s can select raw provider", entry)
++			}
++		}
++	}
++}
+diff --git a/sdk/api/handlers/handlers_routing.go b/sdk/api/handlers/handlers_routing.go
+index 671aa51..d967c88 100644
+--- a/sdk/api/handlers/handlers_routing.go
++++ b/sdk/api/handlers/handlers_routing.go
+@@ -58,6 +58,14 @@ func preferExecutionProvider(providers []string, preferred string) []string {
+ }
+ 
+ func adjustExecutionProvidersForEntryProtocol(entryProtocol string, providers []string) []string {
++	filtered := make([]string, 0, len(providers))
++	for _, provider := range providers {
++		if strings.HasPrefix(strings.ToLower(provider), "passthrough-") == (entryProtocol == coreexecutor.PassthroughProtocol) {
++			filtered = append(filtered, provider)
++		}
++	}
++	providers = filtered
++
+ 	if entryProtocol == Interactions {
+ 		return preferExecutionProvider(providers, GeminiInteractions)
+ 	}
+@@ -361,6 +369,9 @@ func modelRoutersEnabled(host PluginModelRouterHost, skipPluginID string) bool {
+ 
+ func (h *BaseAPIHandler) applyModelRouter(ctx context.Context, handlerType, modelName string, rawJSON []byte, stream bool, execOptions modelExecutionOptions) modelRouteDecision {
+ 	var decision modelRouteDecision
++	if handlerType == coreexecutor.PassthroughProtocol {
++		return decision
++	}
+ 	host := h.modelRouterHost()
+ 	if host == nil || !modelRoutersEnabled(host, execOptions.SkipRouterPluginID) {
+ 		return decision
+diff --git a/sdk/api/handlers/passthrough/passthrough_handlers.go b/sdk/api/handlers/passthrough/passthrough_handlers.go
+new file mode 100644
+index 0000000..8e938d7
+--- /dev/null
++++ b/sdk/api/handlers/passthrough/passthrough_handlers.go
+@@ -0,0 +1,40 @@
++package passthrough
++
++import (
++	"io"
++	"net/http"
++
++	"github.com/gin-gonic/gin"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers"
++	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++)
++
++// Handler uses the same access context and conductor plumbing as other routes.
++type Handler struct{ *handlers.BaseAPIHandler }
++
++// Models satisfies the shared context interface without publishing a catalog.
++func (h *Handler) Models() []map[string]any { return nil }
++func (h *Handler) HandlerType() string      { return coreexecutor.PassthroughProtocol }
++func (h *Handler) Execute(c *gin.Context) {
++	body, err := io.ReadAll(c.Request.Body)
++	if err != nil {
++		h.WriteErrorResponse(c, &interfaces.ErrorMessage{StatusCode: http.StatusBadRequest, Error: err})
++		return
++	}
++	model, _, err := coreexecutor.PassthroughBody(body, "")
++	if err != nil {
++		h.WriteErrorResponse(c, &interfaces.ErrorMessage{StatusCode: http.StatusBadRequest, Error: err})
++		return
++	}
++	ctx, cancel := h.GetContextWithCancel(h, c, c.Request.Context())
++	defer cancel()
++	response, headers, failure := h.ExecuteWithAuthManager(ctx, h.HandlerType(), model, body, "")
++	if failure != nil {
++		h.WriteErrorResponse(c, failure)
++		cancel(failure.Error)
++		return
++	}
++	handlers.WriteUpstreamHeaders(c.Writer.Header(), headers)
++	c.Data(http.StatusOK, "application/json", response)
++}
 diff --git a/sdk/cliproxy/auth/conductor_models.go b/sdk/cliproxy/auth/conductor_models.go
 index dd5ab10..0f2d36d 100644
 --- a/sdk/cliproxy/auth/conductor_models.go
@@ -928,3 +1832,241 @@ index dd5ab10..0f2d36d 100644
  		switch provider {
  		case "gemini":
  			if entry := resolveGeminiAPIKeyConfig(cfg, auth); entry != nil {
+diff --git a/sdk/cliproxy/executor/passthrough.go b/sdk/cliproxy/executor/passthrough.go
+new file mode 100644
+index 0000000..27fb560
+--- /dev/null
++++ b/sdk/cliproxy/executor/passthrough.go
+@@ -0,0 +1,68 @@
++package executor
++
++import (
++	"bytes"
++	"encoding/json"
++	"errors"
++	"io"
++	"strings"
++)
++
++// PassthroughProtocol isolates raw JSON from every translated chat protocol.
++const PassthroughProtocol = "passthrough"
++
++// PassthroughBody validates the client object and optionally replaces only its
++// top-level model value. Duplicate model keys and streaming cannot be executed
++// unambiguously; nested model fields and all other bytes are preserved.
++func PassthroughBody(body []byte, upstream string) (string, []byte, error) {
++	bad := errors.New("passthrough requires a JSON object with one nonempty string model and no streaming")
++	d := json.NewDecoder(bytes.NewReader(body))
++	token, err := d.Token()
++	if err != nil || token != json.Delim('{') {
++		return "", nil, bad
++	}
++	model, start, end, seen := "", 0, 0, false
++	for d.More() {
++		key, err := d.Token()
++		if err != nil {
++			return "", nil, bad
++		}
++		before := int(d.InputOffset())
++		var value json.RawMessage
++		if d.Decode(&value) != nil {
++			return "", nil, bad
++		}
++		switch key {
++		case "model":
++			if seen || json.Unmarshal(value, &model) != nil || strings.TrimSpace(model) == "" {
++				return "", nil, bad
++			}
++			seen = true
++			start = before
++			for start < len(body) && (body[start] == ':' || body[start] == ' ' || body[start] == '\n' || body[start] == '\t' || body[start] == '\r') {
++				start++
++			}
++			end = int(d.InputOffset())
++		case "stream":
++			var stream *bool
++			if json.Unmarshal(value, &stream) != nil || stream == nil || *stream {
++				return "", nil, bad
++			}
++		}
++	}
++	if _, err = d.Token(); err != nil || !seen {
++		return "", nil, bad
++	}
++	if _, err = d.Token(); err != io.EOF {
++		return "", nil, bad
++	}
++	if upstream == "" || model == upstream {
++		return model, append([]byte(nil), body...), nil
++	}
++	replacement, _ := json.Marshal(upstream)
++	out := make([]byte, 0, len(body)+len(replacement))
++	out = append(out, body[:start]...)
++	out = append(out, replacement...)
++	out = append(out, body[end:]...)
++	return model, out, nil
++}
+diff --git a/sdk/cliproxy/service_executors.go b/sdk/cliproxy/service_executors.go
+index c83c246..cdd8053 100644
+--- a/sdk/cliproxy/service_executors.go
++++ b/sdk/cliproxy/service_executors.go
+@@ -194,6 +194,14 @@ func (s *Service) registerAvailableExecutors(ctx context.Context, opts executorR
+ 	if ctx.Err() != nil {
+ 		return
+ 	}
++	// Retire removed/disabled groups during config rebinding, before any
++	// compatibility fallback can claim their internal provider identifiers.
++	cfg := s.currentConfig()
++	for _, auth := range s.coreManager.List() {
++		if strings.HasPrefix(auth.Provider, "passthrough-") && cfg.PassthroughGroup(auth.Provider, auth.Attributes["config_index"]) == nil {
++			s.coreManager.UnregisterExecutor(auth.Provider)
++		}
++	}
+ 	// Keep all Service-owned executor registration paths here so native, Home,
+ 	// auth-derived, and plugin executors stay in the same binding order.
+ 	if opts.includeBaseline {
+@@ -284,6 +292,14 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
+ 	if a.Disabled {
+ 		return
+ 	}
++	if strings.HasPrefix(a.Provider, "passthrough-") {
++		if cfg.PassthroughGroup(a.Provider, a.Attributes["config_index"]) == nil {
++			s.coreManager.UnregisterExecutor(a.Provider)
++			return
++		}
++		s.coreManager.RegisterExecutor(executor.NewPassthroughExecutor(a.Provider, cfg))
++		return
++	}
+ 	if compatProviderKey, _, isCompat := openAICompatInfoFromAuth(a); isCompat {
+ 		if compatProviderKey == "" {
+ 			compatProviderKey = strings.ToLower(strings.TrimSpace(a.Provider))
+diff --git a/sdk/cliproxy/service_models.go b/sdk/cliproxy/service_models.go
+index 7daa6ed..ea88c73 100644
+--- a/sdk/cliproxy/service_models.go
++++ b/sdk/cliproxy/service_models.go
+@@ -57,6 +57,23 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
+ 			return true
+ 		}
+ 	}
++	// Internal registrations are required for conductor eligibility, but their
++	// type is excluded from public catalog projections even without an allowlist.
++	if strings.HasPrefix(a.Provider, "passthrough-") {
++		group := cfg.PassthroughGroup(a.Provider, a.Attributes["config_index"])
++		if group == nil {
++			return s.unregisterModelsForAuthFenced(a, fence)
++		}
++		models := make([]*ModelInfo, 0, len(group.Models))
++		for _, model := range group.Models {
++			id := model.Alias
++			if id == "" {
++				id = model.Name
++			}
++			models = append(models, &ModelInfo{ID: id, Object: "model", OwnedBy: a.Provider, Type: "passthrough"})
++		}
++		return s.registerResolvedModelsForAuthFenced(a, fence, a.Provider, models)
++	}
+ 	authKind := a.AuthKind()
+ 	// Unregister legacy client ID (if present) to avoid double counting
+ 	if a.Runtime != nil {
+diff --git a/sdk/cliproxy/service_passthrough_test.go b/sdk/cliproxy/service_passthrough_test.go
+new file mode 100644
+index 0000000..116bace
+--- /dev/null
++++ b/sdk/cliproxy/service_passthrough_test.go
+@@ -0,0 +1,96 @@
++package cliproxy
++
++import (
++	"context"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++
++	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
++	runtimeexecutor "github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
++)
++
++// Config synthesis is the production caller of executor and model registration.
++// Reload must replace both the endpoint and aliases; removal retires models and
++// the old executor instead of falling through to compatibility execution.
++func TestPassthroughServiceReloadRemoval(t *testing.T) {
++	var path, body string
++	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		path = r.URL.Path
++		data, _ := io.ReadAll(r.Body)
++		body = string(data)
++		_, _ = io.WriteString(w, `{"answers":[]}`)
++	}))
++	defer upstream.Close()
++	cfg := &config.Config{Passthrough: []internalconfig.Passthrough{{Name: "reload", BaseURL: upstream.URL, Path: "/old", APIKeyEntries: []internalconfig.PassthroughKey{{APIKey: "key"}}, Models: []internalconfig.PassthroughModel{{Name: "old-model", Alias: "old-alias"}}}}}
++	manager := coreauth.NewManager(nil, nil, nil)
++	manager.SetConfig(cfg)
++	manager.SetRetryConfig(0, 0, 0)
++	service := &Service{cfg: cfg, coreManager: manager}
++	service.registerConfigAPIKeyAuths(context.Background(), cfg)
++	auths := manager.List()
++	if len(auths) != 1 {
++		t.Fatalf("auths=%d", len(auths))
++	}
++	id := auths[0].ID
++	reg := registry.GetGlobalRegistry()
++	t.Cleanup(func() { reg.UnregisterClient(id) })
++	e, ok := manager.Executor("passthrough-reload")
++	if !ok {
++		t.Fatal("missing executor")
++	}
++	if _, ok := e.(*runtimeexecutor.PassthroughExecutor); !ok {
++		t.Fatalf("compatibility fallback: %T", e)
++	}
++	opts := coreexecutor.Options{SourceFormat: translator.FromString(coreexecutor.PassthroughProtocol)}
++	if _, err := manager.Execute(context.Background(), []string{"passthrough-reload"}, coreexecutor.Request{Model: "old-alias", Payload: []byte(`{"model":"old-alias"}`)}, opts); err != nil {
++		t.Fatal(err)
++	}
++	if path != "/old" || body != `{"model":"old-model"}` {
++		t.Fatalf("old route: %s %s", path, body)
++	}
++	next := *cfg
++	next.Passthrough = append([]internalconfig.Passthrough(nil), cfg.Passthrough...)
++	next.Passthrough[0].Path = "/new"
++	next.Passthrough[0].Models = []internalconfig.PassthroughModel{{Name: "new-model", Alias: "new-alias"}}
++	service.cfgMu.Lock()
++	service.cfg = &next
++	service.cfgMu.Unlock()
++	manager.SetConfig(&next)
++	service.registerConfigAPIKeyAuths(context.Background(), &next)
++	if models := reg.GetModelsForClient(id); len(models) != 1 || models[0].ID != "new-alias" {
++		t.Fatalf("stale registry: %+v", models)
++	}
++	if len(reg.GetModelProviders("old-alias")) != 0 {
++		t.Fatal("old alias survived reload")
++	}
++	if _, err := manager.Execute(context.Background(), []string{"passthrough-reload"}, coreexecutor.Request{Model: "new-alias", Payload: []byte(`{"model":"new-alias"}`)}, opts); err != nil {
++		t.Fatal(err)
++	}
++	if path != "/new" || body != `{"model":"new-model"}` {
++		t.Fatalf("stale endpoint/model: %s %s", path, body)
++	}
++	removed := &config.Config{}
++	service.cfgMu.Lock()
++	service.cfg = removed
++	service.cfgMu.Unlock()
++	manager.SetConfig(removed)
++	service.registerAvailableExecutors(context.Background(), executorRegistrationOptions{auths: manager.List(), forceReplaceAuths: true})
++	service.applyCoreAuthRemoval(context.Background(), id)
++	service.registerConfigAPIKeyAuths(context.Background(), removed)
++	if len(reg.GetModelProviders("new-alias")) != 0 {
++		t.Fatal("removed models remain selectable")
++	}
++	if _, ok := manager.Executor("passthrough-reload"); ok {
++		t.Fatal("removed executor retained")
++	}
++	if len(manager.List()) != 0 {
++		t.Fatal("removed config credential retained")
++	}
++}

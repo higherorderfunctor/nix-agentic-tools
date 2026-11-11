@@ -1,10 +1,11 @@
 # JSON passthrough upstreams
 
+<!-- cspell:words httptest -->
+
 Passthrough groups serve non-chat JSON APIs independently of OpenAI
-compatibility. The same PR supplies `POST /v1/passthrough` and its consumer; the
-config/auth portion alone is not a deployable feature. Keep the PR draft until
-the route, conductor integration and measured settings extraction pass CI
-together.
+compatibility. `POST /v1/passthrough` uses the auth conductor for credential
+selection and execution. Keep the PR draft until the route, conductor
+integration and measured settings extraction pass CI together.
 
 ```yaml
 config-version: 8
@@ -40,11 +41,12 @@ credential. Invalid groups fail both management parsing and optional startup
 loading.
 
 The route accepts a JSON object containing `model: "decision"`; it rejects
-streaming. The route consumer in this PR forwards the original JSON bytes,
+streaming. Duplicate top-level model keys, empty models and non-boolean
+streaming flags are refused. The executor forwards the original JSON bytes,
 rewriting only the top-level model value when an alias selects a different
 upstream model. Responses remain unchanged. Envelope options (`unwrap`,
 `usage-path`, `error-in-200`) are a separate extension and are not declared by
-this config/auth implementation.
+the core route.
 
 Client access uses CPA's existing client-key middleware. Allowlist rules grant a
 specific internal provider and `kind: apikey`, optionally narrowed by credential
@@ -66,6 +68,13 @@ allowlist; a file-backed API key does not inherit this grant. Higher group
 priority wins among eligible credentials. `request-retry`, `disable-cooling` and
 `request-scoped-errors` use native semantics; the route consumer uses the auth
 conductor for in-request failover and cooldown rather than another retry loop.
+In particular, `request-retry: 0` disables additional retry rounds; it still
+permits selection of another eligible credential within the request. The route
+fixture uses `SetRetryConfig(0, 0, 0)` (zero rounds, zero wait, unlimited
+alternative credentials), group `request-retry: 0`, and
+`disable-cooling: false`. It exercises priorities 30/20/10, two free credentials
+returning 429 and 404, a paid credential returning 503, then a final successful
+credential. The next client request skips the cooled credentials.
 
 Synthesis includes the group path, models and policy in a change fingerprint. A
 path change preserves credential identity and replaces stale auth attributes;
@@ -74,9 +83,40 @@ disabling a group removes its synthesized auths. Management's
 `auth_index`, usable with management `api-call` and `$TOKEN$` substitution. Auth
 indexes are projection metadata and are not accepted credential settings.
 
+Models are registered internally for conductor eligibility, but excluded from
+all public registry catalog projections even when no allowlist exists. An alias
+also registered by a chat credential remains visible with that chat metadata.
+Provider filtering works in both directions: the passthrough route selects only
+raw groups, and chat, messages, responses and other protocols exclude them. The
+executor also rejects chat entry or exit protocols, streaming and token
+counting. The raw route bypasses model routers and plugin body transformations,
+preserving the existing request context, access identity, lifecycle and
+selected-auth capture.
+
+Plain responses retain their bytes. A top-level `usage` object may contain
+nonnegative integer `input_tokens` and `output_tokens`; missing usage records
+zero tokens. Present malformed counters fail as 502. Native usage reporting
+preserves the original requested alias, selected upstream model and
+authenticated client key. The fixture reads the generic management usage queue
+for two different client keys sharing one alias; failed attempts carry zero
+tokens.
+
+Local mock upstreams use `httptest` random bound ports. The HTTP transport dials
+those ports while retaining production-shaped default-port URLs and Host headers
+without a port. This exercises path joining, Host routing, auth headers and
+exact request/response bytes; it does not prove privileged port binding or live
+upstream behavior. Reload tests replace paths and aliases and retire removed
+groups' models and executors.
+
+The core config, auth, executor, route and internal registration must land
+together to provide a usable endpoint. Their combined code and documentation
+exceed the usual size target; splitting declarations would postpone their first
+consumer. Envelope handling and Nix lowering have independent seams and follow
+separately.
+
 The carried `patches/passthrough-provider.patch` applies after `key-allowlist`
 and `zai-tool-shims` with zero fuzz. `cliproxyapi-passthrough` runs its config,
-synthesis/alias/allowlist and management tests through the shared Go CI check.
-`cliproxyapi-extracted` and `cliproxyapi-settings` gate measured schema and
-rendered settings. Regenerate extracted facts remotely on the draft PR before
-readiness.
+synthesis/alias/allowlist, management, executor, handler, registry and conductor
+tests through the shared Go CI check. `cliproxyapi-extracted` and
+`cliproxyapi-settings` gate measured schema and rendered settings. Regenerate
+extracted facts remotely on the draft PR before readiness.
