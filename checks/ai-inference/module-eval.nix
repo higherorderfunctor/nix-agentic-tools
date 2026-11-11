@@ -311,7 +311,7 @@ in {
             });
           go = apiKey: withCredentials {go = goCredential apiKey;};
           result = go {};
-          blocksOf = evaluated: family: lib.filter (entry: entry.name == "go") (rendered evaluated).api-keys.${family};
+          blocksOf = evaluated: family: lib.filter (entry: entry.name == "go") ((rendered evaluated).api-keys.${family} or []);
           modelsIn = evaluated: family: lib.concatMap (block: map (model: model.name) block.models) (blocksOf evaluated family);
           block = family: lib.head (blocksOf result family);
           overridden = go {
