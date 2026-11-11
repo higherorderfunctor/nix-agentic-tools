@@ -635,10 +635,12 @@
             tier = "strong";
           };
           pools = lib.mkForce {
-            ${sessionPools.${runtime}}.preference = 7;
-            ${sessionPools.${runtime}}.usage = {
-              inherit runtime;
-              technique = "fixture-reader";
+            ${sessionPools.${runtime}} = {
+              preference = 7;
+              usage = {
+                inherit runtime;
+                technique = "fixture-reader";
+              };
             };
           };
           runtimes.${runtime} = {
@@ -1011,8 +1013,8 @@
       && routingView.lowWaterMark == 0.5
       && poolResult.config.ai.programs.delegate-routing.pools.measured.preference == 0
       && (import ../lib/routing-view.nix (routingArgs // {lowWaterMark = 0.25;})).lowWaterMark == 0.25
-      && evaluationFails (change {ai.programs.delegate-routing.lowWaterMark = -1;})
-      && evaluationFails (poolChange {pools.measured.preference = 1.5;})
+      && !(builtins.tryEval (change {ai.programs.delegate-routing.lowWaterMark = -1;}).config.ai.programs.delegate-routing.lowWaterMark).success
+      && !(builtins.tryEval (poolChange {pools.measured.preference = 1.5;}).config.ai.programs.delegate-routing.pools.measured.preference).success
     );
     "module-delegate-routing-${name}-routing-view" = mkTest "delegate-routing-${name}-routing-view" (
       let
@@ -1220,7 +1222,7 @@
         && programOff.config.ai.claude.agents == {}
         && runtimeOff.config.ai.claude.agents == {}
         && off.config.ai.claude.agents == {}
-        && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" (readSkill off "claude")
+        && lib.hasInfix "claude: `Workflow` with full model id `claude-opus-" (readSkill off "claude")
         && missing.config.ai.claude.agents == {}
         && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `test-flash-*`" (readSkill missing "claude")
         && lib.hasInfix "model: \"glm-5.3\"" picker.config.ai.claude.agents.glm
@@ -1318,7 +1320,7 @@
     "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
       poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown pool `missing`"
       && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown: `unknown` is not a runtime"
-      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`; via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" (readSkill (fixedPoolChange {families.anthropic.opus.pools.claude = null;}) "claude")
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id `test-opus-5-10`, else `claude -p` with full model id `test-opus-5-10`; via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" (readSkill (fixedPoolChange {families.anthropic.opus.pools.claude = null;}) "claude")
     );
     "module-delegate-routing-${name}-pools-empty" = mkTest "delegate-routing-${name}-pools-empty" (
       result.config.ai.programs.delegate-routing.pools
@@ -1377,7 +1379,7 @@
         && lib.hasInfix "| configured | none | configured: 12.500000 units per month, resets day 28; current use unknown | |" text
         && lib.hasInfix "| measured | `read-pool --current` | measured | SHARED \\| BUDGET DESCRIPTION |" text
         && lib.hasInfix "**pool-reader (usage):** `read-pool --current`" text
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" text
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id `test-opus-5-10`, else `claude -p` with full model id `test-opus-5-10` (pool measured); via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" text
         && lib.hasInfix "- opus (anthropic) `test-opus-*`: `kiro-cli chat` with model_id the highest id matching `test-opus-*` (pool measured)" text
         && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `test-opus-*`, else `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" (readSkill poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
@@ -1415,7 +1417,7 @@
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
       passes result
       && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]
-      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`" nativeClaude
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id `test-opus-5-10`, else `claude -p` with full model id `test-opus-5-10`" nativeClaude
       && !(lib.hasInfix "(openai)" nativeClaude)
       && lib.all (family: lib.hasInfix "${family} (openai)" claude) ["astra" "luna" "sol" "terra"]
       && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-sol`" claude
@@ -1455,16 +1457,16 @@
           };
         };
       in
-        lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`" nativeClaude
+        lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id `test-opus-5-10`, else `claude -p` with full model id `test-opus-5-10`" nativeClaude
         && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `gpt-*-astra`, else `codex exec` with slug the highest id matching `gpt-*-astra`" codex
         && !(lib.hasInfix "claude: `Agent`" nativeClaude)
         && lib.hasInfix "via codex: `codex exec` with slug the highest id matching `gpt-*-astra`" claude
         && !(lib.hasInfix "via codex: `spawn_agent`" claude)
         && lib.hasInfix "kiro: `kiro-cli chat` with model_id the highest id matching `claude-opus-*`" kiro
         && lib.hasInfix "kimchi: `Agent` with `--list-models` id the highest id matching `test-flash-*`" kimchi
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p` with full model id the highest id matching `test-opus-*`" noWorkflow
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p` with full model id `test-opus-5-10`" noWorkflow
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-4.6`, else `Workflow` with full model id `claude-opus-4.6`" withExample
-        && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`" withExample)
+        && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id `test-opus-5-10`" withExample)
         && lib.hasInfix "glm (zhipu) `glm-*`" glm
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`, else `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
         && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
@@ -2333,7 +2335,10 @@
       let
         overridden = change {
           ai.programs.delegate-routing = {
-            runtimes.claude.skill.phrases."Model pattern".text = "newest `{match}`";
+            runtimes.claude = {
+              models = [{families = ["flash"];}];
+              skill.phrases."Model pattern".text = "newest `{match}`";
+            };
           };
         };
         text = readSkill (changeOn shipped {
@@ -2353,7 +2358,7 @@
         && lib.hasInfix "## manual-only external delegates" afterCustom
         && !(lib.hasInfix "## Routing helper" afterCustom)
         && lib.hasInfix "### claude technique notes" afterCustom
-        && lib.hasInfix "newest `claude-opus-*`" (readSkill overridden "claude")
+        && lib.hasInfix "newest `test-flash-*`" (readSkill overridden "claude")
         && lib.hasInfix "the highest id matching" (readSkill overridden "codex")
         && !(lib.hasInfix "newest `" (readSkill overridden "codex"))
     );
@@ -2462,9 +2467,9 @@ in {
         };
       in
         mkTest "delegate-routing-builder-override" (
-          lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, or `claude -p`" overridden.text
+          lib.hasInfix ", or `claude -p` with full model id `claude-opus-" overridden.text
           && !(lib.hasInfix ", else `claude -p`" overridden.text)
-          && lib.hasInfix "`Workflow` with full model id the highest id matching `claude-opus-*`, else `claude -p`" base.text
+          && lib.hasInfix ", else `claude -p` with full model id `claude-opus-" base.text
           && plain.text == content.passthru.skills.claude.text
           && !(lib.hasInfix "| Family" plain.text)
           && lib.hasInfix "generated agent file pinning `claude-opus-" base.text
