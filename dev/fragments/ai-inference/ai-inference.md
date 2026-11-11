@@ -1,12 +1,13 @@
 ## ai.settings.inference: selecting an inference endpoint for AI harnesses
 
-> **Last verified:** 2026-11-07 — carries the architecture decision for
+> **Last verified:** 2026-11-11 — carries the architecture decision for
 > inference selection; proxy owners register instances in
 > `ai.internal.inferenceInstances`, with or without named clients; set root
 > fields copy down by priority and are withdrawn for a runtime selecting the
 > other form; the selected instance's backend picks the one lowering a runtime
 > runs, and a runtime without it fails an assertion. Upstream credentials are in
-> `packages/cliproxyapi/docs/cliproxyapi-providers.md`.
+> `packages/cliproxyapi/docs/cliproxyapi-providers.md`; a client's routed
+> credentials never include CPA passthrough routes.
 
 ### Architecture decisions
 
@@ -71,7 +72,10 @@ by name alone. The owner also claims each name in `ai.claims.inference-instance`
 fail evaluation through the claims registry. The registry is internal: a root
 option would count as a consumer surface and fan out. CLIProxyAPI's instance
 entries and client routes are described in
-`packages/cliproxyapi/docs/cliproxyapi-client-keys.md`.
+`packages/cliproxyapi/docs/cliproxyapi-client-keys.md`. A client's routed
+credentials list only chat-protocol credentials a harness can call: CLIProxyAPI
+leaves passthrough routes (non-chat JSON upstreams) out of `clients`, while the
+client key keeps its CPA allowlist rules for them.
 
 ### Selection and the resolved endpoint
 

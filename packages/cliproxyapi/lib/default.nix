@@ -3,6 +3,8 @@
 # The facts are read as the committed file; never pass the package's
 # `passthru.extracted` here, which is import-from-derivation.
 {lib, ...}: let
+  providers = import ./providers.nix {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
   refinements = let
     # Durations are strings CLIProxyAPI parses with time.ParseDuration at
     # load, refusing the config when one fails: credentials.in-flight's in
@@ -35,6 +37,10 @@
     };
   in {
     "access.key-allowlist[].credentials[].base-urls" = narrowing;
+    "access.key-allowlist[].credentials[].base-urls[]" = {
+      type = "string";
+      refine = {types, ...}: redact.types.maybeRedacted types.str;
+    };
     "access.key-allowlist[].credentials[].ids" = narrowing;
     # The allowlist patch matches a rule only when its kind normalizes to a
     # credential kind (sdk/cliproxy/auth/key_allowlist.go, through
@@ -42,6 +48,14 @@
     "access.key-allowlist[].credentials[].kind" = {
       type = "string";
       refine = {types, ...}: types.enum ["apikey" "oauth"];
+    };
+    "api-keys.passthrough[].base-url" = {
+      type = "string";
+      refine = _: providers.passthroughBaseUrlType;
+    };
+    "api-keys.passthrough[].path" = {
+      type = "string";
+      refine = _: providers.passthroughPathType;
     };
     "client.codex.web-search-result-cache.ttl" = duration;
     # The v8 loader refuses any other value (internal/config/config_v8.go,
@@ -62,8 +76,7 @@
 in {
   cliproxyapi = {
     # Named upstream API-key providers (./providers.nix).
-    providers = import ./providers.nix {inherit lib;};
-    inherit refinements;
+    inherit providers refinements;
     inherit (generated) report sample;
     # settings → { content; secrets; }: config.yaml as JSON text, each secret
     # a `{$CLIPROXYAPI_<PATH>}` placeholder.

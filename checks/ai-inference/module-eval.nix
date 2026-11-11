@@ -224,6 +224,7 @@ in {
                   base-url = "https://chat.example/v4";
                   models = null;
                 };
+                passthrough = null;
                 responses = null;
               };
               codexShellArgCleanup = true;

@@ -97,6 +97,49 @@
         then lower
         else prefix + lower;
     };
+    passthrough = {
+      family = "passthrough";
+      fields = ["error-in-200" "path" "unwrap" "usage-path"];
+      modelObjects = true;
+      options = {
+        error-in-200 = mkOption {
+          type = types.nullOr (types.submodule {
+            options = {
+              equals = mkOption {
+                type = types.bool;
+                description = "Boolean that marks an upstream error.";
+              };
+              path = mkOption {
+                type = objectPathType;
+                description = "Object-key path of the error boolean.";
+              };
+              status = mkOption {
+                type = types.enum [429 500 502 503 504];
+                description = "Retryable failure status.";
+              };
+            };
+          });
+          default = null;
+          description = "Recognize a failure in an HTTP 200 response.";
+        };
+        path = mkOption {
+          type = passthroughPathType;
+          description = "Upstream path, optionally containing redact references.";
+        };
+        unwrap = mkOption {
+          type = types.nullOr objectPathType;
+          default = null;
+          description = "Object-key path of the result object to return.";
+        };
+        usage-path = mkOption {
+          type = types.nullOr objectPathType;
+          default = null;
+          description = "Object-key path of usage in the original response; unset uses usage.";
+        };
+      };
+      provider = name: "passthrough-" + lib.toLower name;
+      urlType = passthroughBaseUrlType;
+    };
     # The codex executor's cloaking dresses requests as the Codex CLI for
     # ChatGPT's backend; a third-party Responses endpoint wants them as sent.
     responses = {
@@ -114,6 +157,27 @@
   # no-op, so a vendor's refusal sees the name CPA serves. The interior is free.
   modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
+  objectPathType = types.strMatching "[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*";
+  passthroughBaseUrlType = redact.types.maybeRedacted (types.strMatching "https?://[^/?#@[:space:]]+(/[^?#[:space:]]*)?");
+  # Refuse URL/network-path references; rooted upstream paths are supported.
+  passthroughPathType = redact.types.maybeRedacted (types.addCheck types.nonEmptyStr (path:
+    !lib.hasPrefix "//" path
+    && builtins.match "[A-Za-z][A-Za-z0-9+.-]*:.*" path == null
+    && builtins.match ".*[?#[:space:]].*" path == null));
+  passthroughModelType = types.submodule {
+    options = {
+      alias = mkOption {
+        type = types.nullOr modelType;
+        default = null;
+        description = "Client-facing model alias.";
+      };
+      name = mkOption {
+        type = modelType;
+        description = "Upstream model name.";
+      };
+    };
+  };
+
   apiKeyType = types.submodule {
     options = {
       apis = mkOption {
@@ -121,18 +185,24 @@
           options = lib.mapAttrs (api: entry:
             mkOption {
               type = types.nullOr (types.submodule {
-                options = {
-                  base-url = mkOption {
-                    type = baseUrlType;
-                    description = "The upstream base URL for this API.";
-                  };
-                  models = mkOption {
-                    type = types.nullOr (types.nonEmptyListOf modelType);
-                    default = null;
-                    example = ["glm-5.3"];
-                    description = "Models served on this API, replacing the credential's `models`.";
-                  };
-                };
+                options =
+                  {
+                    base-url = mkOption {
+                      type = entry.urlType or baseUrlType;
+                      description = "The upstream base URL for this API.";
+                    };
+                    models = mkOption ({
+                        type =
+                          if entry.modelObjects or false
+                          then types.nonEmptyListOf passthroughModelType
+                          else types.nullOr (types.nonEmptyListOf modelType);
+                        description = "Models served on this API. Passthrough requires name/alias objects here; other APIs can use the credential's models.";
+                      }
+                      // lib.optionalAttrs (!(entry.modelObjects or false)) {
+                        default = null;
+                      });
+                  }
+                  // (entry.options or {});
               });
               default = null;
               description = "Serve ${api} through `api-keys.${entry.family}`.";
@@ -155,7 +225,7 @@
         type = types.nullOr (types.nonEmptyListOf modelType);
         default = null;
         example = ["glm-5.3"];
-        description = "Models served on each API that sets no `models` of its own. Every served API needs one of the two.";
+        description = "Models served on chat, Anthropic or Responses when that API sets no models of its own. Passthrough requires its own model objects.";
       };
       priority = mkOption {
         type = types.nullOr types.int;
@@ -173,7 +243,10 @@
   served = provider: lib.filterAttrs (_: value: value != null) provider.apis;
   # The models one served API offers; null when neither level declares any,
   # which ../modules/instances.nix refuses.
-  modelsOf = provider: api: lib.defaultTo provider.models provider.apis.${api}.models;
+  modelsOf = provider: api:
+    if apis.${api}.modelObjects or false
+    then provider.apis.${api}.models
+    else lib.defaultTo provider.models provider.apis.${api}.models;
 
   # One upstream credential's blocks: { <family> = [block]; }. `headers` are
   # its vendor's, already references; CPA applies a group's headers to each
@@ -185,8 +258,12 @@
             inherit name;
             inherit (value) base-url;
             keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
-            models = map (model: {name = model;}) (lib.defaultTo [] (modelsOf provider api));
+            models = map (model:
+              if apis.${api}.modelObjects or false
+              then lib.filterAttrs (_: value: value != null) model
+              else {name = model;}) (lib.defaultTo [] (modelsOf provider api));
           }
+          // lib.filterAttrs (_: field: field != null) (lib.getAttrs (apis.${api}.fields or []) value)
           // lib.optionalAttrs (headers != {}) {inherit headers;}
           // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;}
           // lib.optionalAttrs (api == "anthropic" && provider.toolAliases != {}) {tool-aliases = provider.toolAliases;}
@@ -296,6 +373,7 @@
     else if !(lib.elem api available)
     then {problem = "${path}: upstream credential `${choice.credential}` does not serve API `${api}`.";}
     else {
+      inherit api;
       models = lib.defaultTo [] (modelsOf credential.apiKey api);
       rule = rule choice.credential credential.apiKey api;
     };
@@ -312,6 +390,7 @@
       '';
     }));
 in {
+  inherit passthroughBaseUrlType passthroughPathType;
   inherit apiKeys apis clientKeyType credentialType literalHeader modelsOf opencodeGo route rule served vendors;
   lower = pkgs: credentials:
     lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:
