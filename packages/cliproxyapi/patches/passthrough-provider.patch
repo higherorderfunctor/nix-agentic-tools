@@ -1,15 +1,245 @@
-CLIProxyAPI: share the existing compatibility grouped-family decision.
+CLIProxyAPI: add validated JSON passthrough configuration and config auths.
 
-Loading, serialization and settings extraction use one predicate while retaining
-all current compatibility fields and behavior. No provider family is added.
+Keep passthrough groups independent of chat compatibility, preserve grouped v8
+settings through the loader/extractor predicate, synthesize keyed auths, resolve
+aliases by group identity/index and expose management auth indexes. The route
+consumer is supplied in the same PR; this config/auth portion is not standalone.
 Applied after key-allowlist and zai-tool-shims with --fuzz=0.
-Rationale: packages/cliproxyapi/docs/cliproxyapi-extraction.md.
+Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
+diff --git a/config.example.yaml b/config.example.yaml
+index dc3e483..5fcca03 100644
+--- a/config.example.yaml
++++ b/config.example.yaml
+@@ -946,6 +946,16 @@ upstream:
+ #
+ #   # OpenAI compatibility providers
+ #
++#   passthrough:
++#     - name: decision
++#       base-url: https://upstream.example
++#       path: /inference/v1/decision
++#       priority: 30
++#       request-retry: 0
++#       disable-cooling: false
++#       models: [{name: upstream-model, alias: decision}]
++#       keys: [{api-key: your-upstream-key}]
++#
+ #   openai-compatibility:
+ #     - name: "openrouter" # The name of the provider; it will be used in the user agent and other places.
+ #       disabled: false # optional: set to true to disable this provider without removing it
+diff --git a/internal/api/handlers/management/config_auth_index.go b/internal/api/handlers/management/config_auth_index.go
+index 8f393a3..bfac327 100644
+--- a/internal/api/handlers/management/config_auth_index.go
++++ b/internal/api/handlers/management/config_auth_index.go
+@@ -451,6 +451,26 @@ func (h *Handler) injectV8APIKeyAuthIndexesLocked(root *yaml.Node, data []byte)
+ 			continue
+ 		}
+ 
++		if providerName == "passthrough" {
++			for groupIndex, group := range groupsNode.Content {
++				stripAPIKeysAuthIndexesFromGroup(group)
++				keys := configV8Node(group, []string{"keys"})
++				if keys == nil || keys.Kind != yaml.SequenceNode {
++					continue
++				}
++				for _, a := range auths {
++					if cfg.PassthroughGroup(a.Provider, a.Attributes["config_index"]) == nil || a.Attributes["config_index"] != strconv.Itoa(groupIndex) {
++						continue
++					}
++					keyIndex, err := strconv.Atoi(a.Attributes["key_index"])
++					if err == nil && keyIndex >= 0 && keyIndex < len(keys.Content) {
++						setMapScalar(keys.Content[keyIndex], "auth_index", resolveAuthIndex(a))
++					}
++				}
++			}
++			continue
++		}
++
+ 		if providerName == "openai-compatibility" {
+ 			validGroupIdx := 0
+ 			for _, group := range groupsNode.Content {
+diff --git a/internal/api/handlers/management/config_passthrough_test.go b/internal/api/handlers/management/config_passthrough_test.go
+new file mode 100644
+index 0000000..5e15a1b
+--- /dev/null
++++ b/internal/api/handlers/management/config_passthrough_test.go
+@@ -0,0 +1,123 @@
++package management
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"testing"
++	"time"
++
++	"github.com/gin-gonic/gin"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/watcher/synthesizer"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	"gopkg.in/yaml.v3"
++)
++
++// GET projects a distinct live index for every group/key; the emitted index
++// then resolves the same credential through management api-call's $TOKEN$ path.
++func TestPassthroughManagementAuthIndex(t *testing.T) {
++	gin.SetMode(gin.TestMode)
++	raw := []byte(`config-version: 8
++api-keys:
++  passthrough:
++    - name: disabled
++      disabled: true
++      base-url: https://upstream.example
++      path: /decision
++      models: [{name: model}]
++      keys: [{api-key: ignored, auth_index: stale}]
++    - name: free
++      base-url: https://upstream.example
++      path: /decision
++      models: [{name: model}]
++      keys: [{api-key: shared}, {api-key: second}]
++    - name: paid
++      base-url: https://upstream.example
++      path: /paid
++      models: [{name: model}]
++      keys: [{api-key: shared}]
++`)
++	cfg, err := config.ParseConfigBytes(raw)
++	if err != nil {
++		t.Fatal(err)
++	}
++	file := filepath.Join(t.TempDir(), "config.yaml")
++	if err := os.WriteFile(file, raw, 0600); err != nil {
++		t.Fatal(err)
++	}
++	auths, err := synthesizer.NewConfigSynthesizer().Synthesize(&synthesizer.SynthesisContext{Config: cfg, Now: time.Now(), IDGenerator: synthesizer.NewStableIDGenerator()})
++	if err != nil {
++		t.Fatal(err)
++	}
++	manager := coreauth.NewManager(nil, nil, nil)
++	for _, a := range auths {
++		if _, err := manager.Register(context.Background(), a); err != nil {
++			t.Fatal(err)
++		}
++	}
++	h := &Handler{cfg: cfg, configFilePath: file, authManager: manager}
++	router := gin.New()
++	router.GET("/v8/management/config/*path", h.ConfigV8)
++	router.POST("/v0/management/api-call", h.APICall)
++	response := httptest.NewRecorder()
++	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v8/management/config/api-keys/passthrough", nil))
++	if response.Code != http.StatusOK {
++		t.Fatalf("GET status %d", response.Code)
++	}
++	var groups []struct {
++		Keys []struct {
++			AuthIndex string `yaml:"auth_index"`
++		} `yaml:"keys"`
++	}
++	if err := yaml.Unmarshal(response.Body.Bytes(), &groups); err != nil {
++		t.Fatal(err)
++	}
++	if len(groups) != 3 || len(groups[1].Keys) != 2 || len(groups[2].Keys) != 1 {
++		t.Fatal("group/key projection changed")
++	}
++	if groups[0].Keys[0].AuthIndex != "" {
++		t.Fatal("disabled group exposed stale auth index")
++	}
++	seen := map[string]bool{}
++	for _, group := range groups[1:] {
++		for _, key := range group.Keys {
++			if key.AuthIndex == "" || seen[key.AuthIndex] {
++				t.Fatal("missing or colliding auth index")
++			}
++			seen[key.AuthIndex] = true
++		}
++	}
++	for _, a := range manager.List() {
++		if !seen[a.Index] {
++			t.Fatal("projection does not expose live auth index")
++		}
++	}
++	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if r.Header.Get("Authorization") != "Bearer second" {
++			w.WriteHeader(http.StatusUnauthorized)
++			return
++		}
++		w.WriteHeader(http.StatusNoContent)
++	}))
++	defer upstream.Close()
++	body, err := json.Marshal(map[string]any{"auth_index": groups[1].Keys[1].AuthIndex, "method": "POST", "url": upstream.URL, "header": map[string]string{"Authorization": "Bearer $TOKEN$"}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	response = httptest.NewRecorder()
++	req := httptest.NewRequest(http.MethodPost, "/v0/management/api-call", bytes.NewReader(body))
++	req.Header.Set("Content-Type", "application/json")
++	router.ServeHTTP(response, req)
++	var result apiCallResponse
++	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
++		t.Fatal(err)
++	}
++	if response.Code != http.StatusOK || result.StatusCode != http.StatusNoContent {
++		t.Fatal("management auth_index selected the wrong credential")
++	}
++}
+diff --git a/internal/config/config.go b/internal/config/config.go
+index dad8d43..b5f59bd 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -193,6 +193,9 @@ type Config struct {
+ 	// OpenAICompatibility defines OpenAI API compatibility configurations for external providers.
+ 	OpenAICompatibility []OpenAICompatibility `yaml:"openai-compatibility" json:"openai-compatibility"`
+ 
++	// Passthrough defines keyed groups for the JSON passthrough route.
++	Passthrough []Passthrough `yaml:"passthrough" json:"passthrough"`
++
+ 	// VertexCompatAPIKey defines Vertex AI-compatible API key configurations for third-party providers.
+ 	// Used for services that use Vertex AI-style paths but with simple API key authentication.
+ 	VertexCompatAPIKey []VertexCompatKey `yaml:"vertex-api-key" json:"vertex-api-key"`
+diff --git a/internal/config/config_load.go b/internal/config/config_load.go
+index b6764ef..4fa49b4 100644
+--- a/internal/config/config_load.go
++++ b/internal/config/config_load.go
+@@ -178,6 +178,10 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
+ 		return cfg, nil
+ 	}
+ 
++	if errValidate := validatePassthroughYAML(data); errValidate != nil {
++		return nil, errValidate
++	}
++
+ 	if errValidate := validateCredentialWeightYAML(data); errValidate != nil {
+ 		if optional {
+ 			cfgOptional := &Config{CredentialInFlight: DefaultCredentialInFlightConfig()}
+@@ -242,6 +246,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
+ 	if errValidate := cfg.ValidateClaudeToolAliases(); errValidate != nil {
+ 		return nil, errValidate
+ 	}
++	if errValidate := cfg.ValidatePassthrough(); errValidate != nil {
++		return nil, errValidate
++	}
+ 	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
+ 		return nil, errValidate
+ 	}
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 377673f..3d74bbb 100644
+index 377673f..a45ae25 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -381,6 +381,13 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
+@@ -69,6 +69,7 @@ var v8KeyFamilies = []configPath{
+ 	{"vertex-api-key", "vertex"}, {"codex-api-key", "codex"},
+ 	{"claude-api-key", "claude"}, {"xai-api-key", "xai"}, {"meta-api-key", "meta"},
+ 	{"openai-compatibility", "openai-compatibility"},
++	{"passthrough", "passthrough"},
+ }
+ 
+ func buildV8Paths() []configPath {
+@@ -381,6 +382,13 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
  	return root, nil
  }
  
@@ -17,13 +247,13 @@ index 377673f..3d74bbb 100644
 +// provider groups. Loading, serialization and extraction preserve those structs
 +// and rename api-key-entries to keys instead of synthesizing groups per key.
 +func isV8GroupedFamily(provider string) bool {
-+	return provider == "openai-compatibility"
++	return provider == "openai-compatibility" || provider == "passthrough"
 +}
 +
  // isV8GroupKeyField is shared with the settings extractor: a field accepted
  // on a provider group must also appear in that group's generated schema.
  func isV8GroupKeyField(provider, field string) bool {
-@@ -412,7 +419,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -412,7 +420,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  		if err := validateWeightSequenceNode(keys, "api-keys."+provider+".keys"); err != nil {
  			return nil, err
  		}
@@ -32,7 +262,7 @@ index 377673f..3d74bbb 100644
  			item := deepCopyNode(group)
  			deleteYAMLPath(item, "keys")
  			deleteYAMLPath(item, "auth_index")
-@@ -492,7 +499,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+@@ -492,7 +500,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
  	out := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
  	for index, entry := range keys.Content {
  		group := deepCopyNode(entry)
@@ -113,3 +343,588 @@ index 0000000..d9e9061
 +		t.Fatal("compatibility serialization changed the v8 grouped shape")
 +	}
 +}
+diff --git a/internal/config/parse.go b/internal/config/parse.go
+index 130eea0..c1e07fe 100644
+--- a/internal/config/parse.go
++++ b/internal/config/parse.go
+@@ -16,6 +16,10 @@ func ParseConfigBytes(data []byte) (*Config, error) {
+ 		return nil, fmt.Errorf("config payload is empty")
+ 	}
+ 
++	if errValidate := validatePassthroughYAML(data); errValidate != nil {
++		return nil, errValidate
++	}
++
+ 	if errValidate := validateCredentialWeightYAML(data); errValidate != nil {
+ 		return nil, errValidate
+ 	}
+@@ -61,6 +65,9 @@ func ParseConfigBytes(data []byte) (*Config, error) {
+ 	if errValidate := cfg.ValidateClaudeToolAliases(); errValidate != nil {
+ 		return nil, errValidate
+ 	}
++	if errValidate := cfg.ValidatePassthrough(); errValidate != nil {
++		return nil, errValidate
++	}
+ 	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
+ 		return nil, errValidate
+ 	}
+diff --git a/internal/config/passthrough.go b/internal/config/passthrough.go
+new file mode 100644
+index 0000000..943ea5e
+--- /dev/null
++++ b/internal/config/passthrough.go
+@@ -0,0 +1,147 @@
++package config
++
++import (
++	"fmt"
++	"net/url"
++	"strconv"
++	"strings"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Passthrough configures one keyed JSON upstream, independently of chat providers.
++type Passthrough struct {
++	// APIKeyEntries contains at least one nonempty upstream credential.
++	APIKeyEntries []PassthroughKey `yaml:"api-key-entries" json:"api-key-entries"`
++	// BaseURL is an HTTP(S) base without userinfo, query or fragment.
++	BaseURL string `yaml:"base-url" json:"base-url"`
++	// DisableCooling overrides the global cooling policy when present.
++	DisableCooling *bool `yaml:"disable-cooling,omitempty" json:"disable-cooling,omitempty"`
++	// Disabled prevents synthesis while preserving the group's configuration.
++	Disabled bool `yaml:"disabled,omitempty" json:"disabled,omitempty"`
++	// Models maps client aliases to upstream model names.
++	Models []PassthroughModel `yaml:"models" json:"models"`
++	// Name identifies a group, case-insensitively, even when groups share a URL.
++	Name string `yaml:"name" json:"name"`
++	// Path is a relative or rooted upstream path without authority, query or fragment.
++	Path string `yaml:"path" json:"path"`
++	// Priority prefers higher values among eligible credentials.
++	Priority int `yaml:"priority,omitempty" json:"priority,omitempty"`
++	// RequestRetry overrides retry rounds; nil or negative inherits the global value.
++	RequestRetry *int `yaml:"request-retry,omitempty" json:"request-retry,omitempty"`
++	// RequestScopedErrors uses native upstream error classification rules.
++	RequestScopedErrors []RequestScopedErrorRule `yaml:"request-scoped-errors,omitempty" json:"request-scoped-errors,omitempty"`
++}
++
++// PassthroughKey supplies Bearer authentication for one group credential.
++type PassthroughKey struct {
++	APIKey string `yaml:"api-key" json:"api-key"`
++}
++
++// PassthroughModel exposes only an upstream name and an optional client alias.
++type PassthroughModel struct {
++	Alias string `yaml:"alias,omitempty" json:"alias,omitempty"`
++	Name  string `yaml:"name" json:"name"`
++}
++
++// GetForceMapping keeps upstream responses unchanged; aliases rewrite only requests.
++func (m PassthroughModel) GetForceMapping() bool { return false }
++
++func (m PassthroughModel) GetAlias() string { return m.Alias }
++func (m PassthroughModel) GetName() string  { return m.Name }
++
++// ProviderKey always prefixes the normalized group name, including an existing prefix.
++func (g Passthrough) ProviderKey() string {
++	return "passthrough-" + strings.ToLower(strings.TrimSpace(g.Name))
++}
++
++// PassthroughGroup binds an auth's index to its identity, never the first shared URL.
++func (cfg *Config) PassthroughGroup(provider, index string) *Passthrough {
++	i, err := strconv.Atoi(index)
++	if cfg == nil || err != nil || i < 0 || i >= len(cfg.Passthrough) {
++		return nil
++	}
++	g := &cfg.Passthrough[i]
++	if g.Disabled || g.ProviderKey() != provider {
++		return nil
++	}
++	return g
++}
++
++// ValidatePassthrough rejects unusable groups without including resolved secrets in errors.
++func (cfg *Config) ValidatePassthrough() error {
++	seen := map[string]bool{}
++	for i := range cfg.Passthrough {
++		g := &cfg.Passthrough[i]
++		bad := func(field string) error { return fmt.Errorf("api-keys.passthrough[%d].%s: invalid value", i, field) }
++		g.Name = strings.TrimSpace(g.Name)
++		if g.Name == "" || seen[g.ProviderKey()] {
++			return bad("name")
++		}
++		seen[g.ProviderKey()] = true
++		base, err := url.Parse(g.BaseURL)
++		if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Hostname() == "" || base.User != nil || base.RawQuery != "" || base.ForceQuery || base.Fragment != "" || strings.ContainsAny(g.BaseURL, "?#") {
++			return bad("base-url")
++		}
++		path, err := url.Parse(g.Path)
++		// Absolute URLs and network-path references can replace the configured authority.
++		if err != nil || strings.TrimSpace(g.Path) == "" || path.IsAbs() || path.Host != "" || strings.HasPrefix(g.Path, "//") || path.RawQuery != "" || path.ForceQuery || path.Fragment != "" || strings.ContainsAny(g.Path, "?#") {
++			return bad("path")
++		}
++		if len(g.APIKeyEntries) == 0 {
++			return bad("keys")
++		}
++		for j := range g.APIKeyEntries {
++			g.APIKeyEntries[j].APIKey = strings.TrimSpace(g.APIKeyEntries[j].APIKey)
++			if g.APIKeyEntries[j].APIKey == "" {
++				return bad(fmt.Sprintf("keys[%d].api-key", j))
++			}
++		}
++		if len(g.Models) == 0 {
++			return bad("models")
++		}
++		for j := range g.Models {
++			g.Models[j].Name = strings.TrimSpace(g.Models[j].Name)
++			g.Models[j].Alias = strings.TrimSpace(g.Models[j].Alias)
++			if g.Models[j].Name == "" {
++				return bad(fmt.Sprintf("models[%d].name", j))
++			}
++		}
++	}
++	return nil
++}
++
++// Check this family before optional loading can suppress YAML/type errors. Other
++// decode errors keep the loader's existing policy; a decodable family fails closed.
++func validatePassthroughYAML(data []byte) error {
++	var doc yaml.Node
++	if yaml.Unmarshal(data, &doc) != nil || len(doc.Content) == 0 {
++		return nil
++	}
++	root := doc.Content[0]
++	// Leave invalid/cyclic aliases and duplicate keys to the ordinary loader.
++	// Decode before expanding aliases and merges into the nodes expandV8Groups needs.
++	var shape map[string]any
++	if err := root.Decode(&shape); err != nil {
++		return nil
++	}
++	root = expandConfigAliases(root)
++	groups := yamlPath(root, "api-keys.passthrough")
++	if groups == nil {
++		groups = yamlPath(root, "passthrough")
++	} else {
++		expanded, err := expandV8Groups(groups, "passthrough")
++		if err != nil {
++			return fmt.Errorf("api-keys.passthrough: invalid groups or keys")
++		}
++		groups = expanded
++	}
++	if groups == nil {
++		return nil
++	}
++	var cfg Config
++	if err := groups.Decode(&cfg.Passthrough); err != nil {
++		return fmt.Errorf("api-keys.passthrough: invalid group field type")
++	}
++	return cfg.ValidatePassthrough()
++}
+diff --git a/internal/config/passthrough_test.go b/internal/config/passthrough_test.go
+new file mode 100644
+index 0000000..99fbf54
+--- /dev/null
++++ b/internal/config/passthrough_test.go
+@@ -0,0 +1,157 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"reflect"
++	"strings"
++	"testing"
++
++	"gopkg.in/yaml.v3"
++)
++
++const passthroughConfig = `config-version: 8
++api-keys:
++  passthrough:
++    - name: primary
++      base-url: https://upstream.example/base
++      path: /inference/v1/decision
++      priority: 30
++      request-retry: 0
++      disable-cooling: false
++      request-scoped-errors: [{status: 429}]
++      models: [{name: upstream-model, alias: decision}]
++      keys: [{api-key: first}, {api-key: second}]
++`
++
++// Losing group-only fields, flattening credentials or failing to rename keys
++// breaks this roundtrip through both real load boundaries and v8 serialization.
++func TestPassthroughV8RoundTrip(t *testing.T) {
++	cfg, err := ParseConfigBytes([]byte(passthroughConfig))
++	if err != nil {
++		t.Fatal(err)
++	}
++	g := cfg.Passthrough[0]
++	if g.Name != "primary" || g.BaseURL != "https://upstream.example/base" || g.Path != "/inference/v1/decision" || g.Priority != 30 || g.RequestRetry == nil || *g.RequestRetry != 0 || g.DisableCooling == nil || *g.DisableCooling || len(g.RequestScopedErrors) != 1 || len(g.APIKeyEntries) != 2 || g.APIKeyEntries[1].APIKey != "second" || g.Models[0].Alias != "decision" {
++		t.Fatal("v8 group fields were dropped")
++	}
++	raw, err := yaml.Marshal(cfg)
++	if err != nil {
++		t.Fatal(err)
++	}
++	again, err := ParseConfigBytes(raw)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !reflect.DeepEqual(cfg.Passthrough, again.Passthrough) {
++		t.Fatal("serialized group changed")
++	}
++	file := filepath.Join(t.TempDir(), "config.yaml")
++	if err := os.WriteFile(file, []byte(passthroughConfig), 0600); err != nil {
++		t.Fatal(err)
++	}
++	loaded, err := LoadConfigOptional(file, true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !reflect.DeepEqual(cfg.Passthrough, loaded.Passthrough) {
++		t.Fatal("startup load disagrees with parse")
++	}
++	if (Passthrough{Name: " Passthrough-Primary "}).ProviderKey() != "passthrough-passthrough-primary" {
++		t.Fatal("prefix must always be added")
++	}
++}
++
++// Aliases and merge keys must have the same meaning at both load boundaries.
++func TestPassthroughAliasesAndMergeKeys(t *testing.T) {
++	cases := []struct{ name, definitions, group string }{
++		{"aliased group", "shared: &group {name: primary, base-url: 'https://upstream.example/base', path: /inference/v1/decision, models: [{name: upstream-model, alias: decision}], keys: [{api-key: first}, {api-key: second}]}\n", "    - *group\n"},
++		{"aliased keys", "shared: &keys [{api-key: first}, {api-key: second}]\n", "    - {name: primary, base-url: 'https://upstream.example/base', path: /inference/v1/decision, models: [{name: upstream-model, alias: decision}], keys: *keys}\n"},
++		{"merged group", "shared: &group {base-url: 'https://upstream.example/base', path: /inference/v1/decision, models: [{name: upstream-model, alias: decision}], keys: [{api-key: first}, {api-key: second}]}\n", "    - {<<: *group, name: primary}\n"},
++	}
++	want := []Passthrough{{
++		Name: "primary", BaseURL: "https://upstream.example/base", Path: "/inference/v1/decision",
++		APIKeyEntries: []PassthroughKey{{APIKey: "first"}, {APIKey: "second"}},
++		Models:        []PassthroughModel{{Name: "upstream-model", Alias: "decision"}},
++	}}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			data := []byte("config-version: 8\n" + tc.definitions + "api-keys:\n  passthrough:\n" + tc.group)
++			file := filepath.Join(t.TempDir(), "config.yaml")
++			if err := os.WriteFile(file, data, 0600); err != nil {
++				t.Fatal(err)
++			}
++			for _, load := range []func() (*Config, error){func() (*Config, error) { return ParseConfigBytes(data) }, func() (*Config, error) { return LoadConfigOptional(file, true) }} {
++				cfg, err := load()
++				if err != nil {
++					t.Fatal(err)
++				}
++				if !reflect.DeepEqual(cfg.Passthrough, want) {
++					t.Fatalf("expanded groups = %#v, want %#v", cfg.Passthrough, want)
++				}
++			}
++		})
++	}
++}
++
++// Optional loading suppresses unrelated YAML decode errors and returns an empty config.
++func TestPassthroughOptionalLoadUnrelatedMalformedYAML(t *testing.T) {
++	file := filepath.Join(t.TempDir(), "config.yaml")
++	if err := os.WriteFile(file, []byte("host: localhost\nhost: localhost\n"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	cfg, err := LoadConfigOptional(file, true)
++	if err != nil {
++		t.Fatalf("optional loading must suppress unrelated decode errors: %v", err)
++	}
++	if cfg == nil || cfg.Host != "" || len(cfg.Passthrough) != 0 {
++		t.Fatalf("optional loading must return an empty config, got %#v", cfg)
++	}
++}
++
++// Every refusal reaches optional startup loading as well as management parsing;
++// diagnostics must never reveal the supplied URL, path or credential.
++func TestPassthroughRejectsInvalidConfig(t *testing.T) {
++	cases := []struct{ name, old, replacement, field string }{
++		{"absolute path", "/inference/v1/decision", "https://private.invalid/sensitive", "path"},
++		{"blank key", "api-key: first", "api-key: ' '", "keys[0].api-key"},
++		{"empty keys", "keys: [{api-key: first}, {api-key: second}]", "keys: []", "keys"},
++		{"empty models", "models: [{name: upstream-model, alias: decision}]", "models: []", "models"},
++		{"empty name", "name: primary", "name: ''", "name"},
++		{"fragment", "/inference/v1/decision", "/sensitive#private", "path"},
++		{"model name", "name: upstream-model", "name: ''", "models[0].name"},
++		{"network path", "/inference/v1/decision", "//private.invalid/sensitive", "path"},
++		{"non HTTP", "https://upstream.example/base", "ftp://private.invalid/sensitive", "base-url"},
++		{"query", "https://upstream.example/base", "https://private.invalid/?sensitive", "base-url"},
++		{"relative base", "https://upstream.example/base", "/sensitive", "base-url"},
++		{"typed key", "api-key: first", "api-key: {}", "group field type"},
++		{"userinfo", "https://upstream.example/base", "https://sensitive@private.invalid", "base-url"},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			data := []byte(strings.Replace(passthroughConfig, tc.old, tc.replacement, 1))
++			file := filepath.Join(t.TempDir(), "config.yaml")
++			if err := os.WriteFile(file, data, 0600); err != nil {
++				t.Fatal(err)
++			}
++			for _, load := range []func() (*Config, error){func() (*Config, error) { return ParseConfigBytes(data) }, func() (*Config, error) { return LoadConfigOptional(file, true) }} {
++				_, err := load()
++				if err == nil || !strings.Contains(err.Error(), tc.field) {
++					t.Fatalf("expected field refusal %s, got %v", tc.field, err)
++				}
++				if strings.Contains(err.Error(), "sensitive") || strings.Contains(err.Error(), "private.invalid") {
++					t.Fatal("diagnostic leaked supplied value")
++				}
++			}
++		})
++	}
++	duplicate := passthroughConfig + `    - name: PRIMARY
++      base-url: https://other.example
++      path: /decision
++      models: [{name: model}]
++      keys: [{api-key: third}]
++`
++	if _, err := ParseConfigBytes([]byte(duplicate)); err == nil || !strings.Contains(err.Error(), "[1].name") {
++		t.Fatal("duplicate normalized group name accepted")
++	}
++}
+diff --git a/internal/watcher/synthesizer/config.go b/internal/watcher/synthesizer/config.go
+index fef5d8b..1117bb7 100644
+--- a/internal/watcher/synthesizer/config.go
++++ b/internal/watcher/synthesizer/config.go
+@@ -96,6 +96,11 @@ func (s *ConfigSynthesizer) Synthesize(ctx *SynthesisContext) ([]*coreauth.Auth,
+ 		return nil, fmt.Errorf("synthesize config API key auths: %w", errValidate)
+ 	}
+ 
++	if errValidate := ctx.Config.ValidatePassthrough(); errValidate != nil {
++		return nil, errValidate
++	}
++	out = append(out, s.synthesizePassthrough(ctx)...)
++
+ 	// Gemini API Keys
+ 	out = append(out, s.synthesizeGeminiKeys(ctx)...)
+ 	// Native Interactions API Keys
+diff --git a/internal/watcher/synthesizer/passthrough.go b/internal/watcher/synthesizer/passthrough.go
+new file mode 100644
+index 0000000..371c760
+--- /dev/null
++++ b/internal/watcher/synthesizer/passthrough.go
+@@ -0,0 +1,52 @@
++package synthesizer
++
++import (
++	"crypto/sha256"
++	"encoding/hex"
++	"encoding/json"
++	"fmt"
++	"strconv"
++
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++)
++
++func (s *ConfigSynthesizer) synthesizePassthrough(ctx *SynthesisContext) []*coreauth.Auth {
++	var out []*coreauth.Auth
++	for i, group := range ctx.Config.Passthrough {
++		if group.Disabled {
++			continue
++		}
++		provider := group.ProviderKey()
++		// The watcher compares attributes. Path, models and policy changes must replace
++		// the old auth even though its credential identity stays stable across reloads.
++		keys := group.APIKeyEntries
++		group.APIKeyEntries = nil
++		raw, _ := json.Marshal(group)
++		hash := sha256.Sum256(raw)
++		for j, key := range keys {
++			id, token := ctx.IDGenerator.Next(provider, key.APIKey, group.BaseURL)
++			attrs := map[string]string{
++				"api_key":          key.APIKey,
++				"base_url":         group.BaseURL,
++				"config_hash":      hex.EncodeToString(hash[:]),
++				"config_index":     strconv.Itoa(i),
++				"key_index":        strconv.Itoa(j),
++				"passthrough_path": group.Path,
++				"priority":         strconv.Itoa(group.Priority),
++				"provider_key":     provider,
++				"source":           fmt.Sprintf("config:%s[%s]", provider, token),
++			}
++			metadata := map[string]any{}
++			if group.DisableCooling != nil {
++				metadata["disable_cooling"] = *group.DisableCooling
++			}
++			addRequestRetryToMetadata(group.RequestRetry, metadata)
++			addRequestScopedErrorsToMetadata(group.RequestScopedErrors, metadata)
++			out = append(out, &coreauth.Auth{
++				ID: id, Provider: provider, Label: group.Name, Status: coreauth.StatusActive,
++				Attributes: attrs, Metadata: metadata, CreatedAt: ctx.Now, UpdatedAt: ctx.Now,
++			})
++		}
++	}
++	return out
++}
+diff --git a/internal/watcher/synthesizer/passthrough_test.go b/internal/watcher/synthesizer/passthrough_test.go
+new file mode 100644
+index 0000000..fa13e1b
+--- /dev/null
++++ b/internal/watcher/synthesizer/passthrough_test.go
+@@ -0,0 +1,140 @@
++package synthesizer
++
++import (
++	"context"
++	"errors"
++	"net/http"
++	"testing"
++	"time"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++)
++
++func passthroughGroups() *config.Config {
++	return &config.Config{Passthrough: []config.Passthrough{
++		{Name: "free", BaseURL: "https://upstream.example", Path: "/decision", Priority: 30, APIKeyEntries: []config.PassthroughKey{{APIKey: "shared"}, {APIKey: "other"}}, Models: []config.PassthroughModel{{Name: "free-upstream", Alias: "decision"}}},
++		{Name: "paid", BaseURL: "https://upstream.example", Path: "/paid", APIKeyEntries: []config.PassthroughKey{{APIKey: "shared"}}, Models: []config.PassthroughModel{{Name: "paid-upstream", Alias: "decision"}}},
++	}}
++}
++
++func passthroughAuths(t *testing.T, cfg *config.Config) []*coreauth.Auth {
++	t.Helper()
++	auths, err := NewConfigSynthesizer().Synthesize(&SynthesisContext{Config: cfg, Now: time.Unix(1, 0), IDGenerator: NewStableIDGenerator()})
++	if err != nil {
++		t.Fatal(err)
++	}
++	return auths
++}
++
++// Group and credential both contribute to identity. Reloading a path preserves
++// identity but changes attributes, and disabling a group removes its auths.
++func TestPassthroughSynthesisReload(t *testing.T) {
++	cfg := passthroughGroups()
++	zero, cooling := 0, false
++	cfg.Passthrough[0].RequestRetry = &zero
++	cfg.Passthrough[0].DisableCooling = &cooling
++	first := passthroughAuths(t, cfg)
++	if len(first) != 3 || first[0].ID == first[1].ID || first[0].ID == first[2].ID {
++		t.Fatal("group/key identities collide")
++	}
++	if first[0].Provider != "passthrough-free" || first[0].Attributes["priority"] != "30" || first[0].Metadata["request_retry"] != 0 || first[0].Metadata["disable_cooling"] != false {
++		t.Fatal("group policy not synthesized")
++	}
++	for _, a := range first {
++		if !coreauth.IsConfigAPIKeyAuth(a) || a.AuthKind() != coreauth.AuthKindAPIKey {
++			t.Fatal("config credential misclassified")
++		}
++	}
++	cfg.Passthrough[0].Path = "/changed"
++	second := passthroughAuths(t, cfg)
++	if first[0].ID != second[0].ID || first[0].Attributes["config_hash"] == second[0].Attributes["config_hash"] || second[0].Attributes["passthrough_path"] != "/changed" {
++		t.Fatal("reload retains stale path")
++	}
++	cfg.Passthrough[0].Disabled = true
++	remaining := passthroughAuths(t, cfg)
++	if len(remaining) != 1 || remaining[0].ID != first[2].ID || remaining[0].Attributes["config_index"] != "1" {
++		t.Fatal("disabled group synthesized or shifted identity")
++	}
++}
++
++type passthroughAliasExecutor struct{ provider string }
++
++func (e passthroughAliasExecutor) Identifier() string { return e.provider }
++func (e passthroughAliasExecutor) Execute(_ context.Context, _ *coreauth.Auth, req executor.Request, _ executor.Options) (executor.Response, error) {
++	return executor.Response{Payload: []byte(req.Model)}, nil
++}
++func (e passthroughAliasExecutor) ExecuteStream(context.Context, *coreauth.Auth, executor.Request, executor.Options) (*executor.StreamResult, error) {
++	return nil, errors.New("unused")
++}
++func (e passthroughAliasExecutor) Refresh(_ context.Context, a *coreauth.Auth) (*coreauth.Auth, error) {
++	return a, nil
++}
++func (e passthroughAliasExecutor) CountTokens(context.Context, *coreauth.Auth, executor.Request, executor.Options) (executor.Response, error) {
++	return executor.Response{}, errors.New("unused")
++}
++func (e passthroughAliasExecutor) HttpRequest(context.Context, *coreauth.Auth, *http.Request) (*http.Response, error) {
++	return nil, errors.New("unused")
++}
++
++// Use real synthesized auths in the conductor: a shared URL/key must not resolve
++// the paid alias from the free group. A file-sourced fake apikey gets no grant.
++func TestPassthroughAliasAndAllowlist(t *testing.T) {
++	cfg := passthroughGroups()
++	cfg.KeyAllowlist = []config.KeyAllowlist{
++		{APIKey: "free-client", Credentials: []config.KeyAllowlistCredential{{Provider: "passthrough-free", Kind: "apikey"}}},
++		{APIKey: "paid-client", Credentials: []config.KeyAllowlistCredential{{Provider: "passthrough-paid", Kind: "apikey"}}},
++	}
++	manager := coreauth.NewManager(nil, nil, nil)
++	manager.SetConfig(cfg)
++	manager.SetRetryConfig(0, 0, 0)
++	reg := registry.GetGlobalRegistry()
++	for _, a := range passthroughAuths(t, cfg) {
++		reg.RegisterClient(a.ID, a.Provider, []*registry.ModelInfo{{ID: "decision"}})
++		id := a.ID
++		t.Cleanup(func() { reg.UnregisterClient(id) })
++		manager.RegisterExecutor(passthroughAliasExecutor{a.Provider})
++		if _, err := manager.Register(context.Background(), a); err != nil {
++			t.Fatal(err)
++		}
++	}
++	for _, tc := range []struct{ key, provider, want string }{
++		{"free-client", "passthrough-free", "free-upstream"},
++		{"paid-client", "passthrough-paid", "paid-upstream"},
++		{"unknown", "passthrough-free", ""},
++		{"free-client", "passthrough-paid", ""},
++	} {
++		t.Run(tc.key+"/"+tc.provider, func(t *testing.T) {
++			response, err := manager.Execute(usage.WithAPIKey(context.Background(), tc.key), []string{tc.provider}, executor.Request{Model: "decision"}, executor.Options{})
++			if tc.want == "" {
++				if err == nil {
++					t.Fatal("ungranted client selected a credential")
++				}
++				return
++			}
++			if err != nil || string(response.Payload) != tc.want {
++				t.Fatalf("alias result %q, error %v; want %q", response.Payload, err, tc.want)
++			}
++		})
++	}
++	fake := &coreauth.Auth{ID: "passthrough-file-fake", Provider: "passthrough-free", Attributes: map[string]string{"api_key": "fake", "source": "file:fake"}, Status: coreauth.StatusActive}
++	fakeManager := coreauth.NewManager(nil, nil, nil)
++	fakeManager.SetConfig(cfg)
++	fakeManager.RegisterExecutor(passthroughAliasExecutor{fake.Provider})
++	reg.RegisterClient(fake.ID, fake.Provider, []*registry.ModelInfo{{ID: "decision"}})
++	t.Cleanup(func() { reg.UnregisterClient(fake.ID) })
++	if _, err := fakeManager.Register(context.Background(), fake); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := fakeManager.Execute(usage.WithAPIKey(context.Background(), "free-client"), []string{fake.Provider}, executor.Request{Model: "decision"}, executor.Options{}); err == nil {
++		t.Fatal("file API key matched config-only allowlist")
++	}
++	// Reordered config must not bind an old index to another group's models.
++	cfg.Passthrough[0], cfg.Passthrough[1] = cfg.Passthrough[1], cfg.Passthrough[0]
++	if cfg.PassthroughGroup("passthrough-free", "0") != nil {
++		t.Fatal("stale config index resolved another group")
++	}
++}
+diff --git a/sdk/cliproxy/auth/conductor_models.go b/sdk/cliproxy/auth/conductor_models.go
+index dd5ab10..0f2d36d 100644
+--- a/sdk/cliproxy/auth/conductor_models.go
++++ b/sdk/cliproxy/auth/conductor_models.go
+@@ -456,6 +456,9 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
+ 		return nil
+ 	}
+ 	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
++	if group := cfg.PassthroughGroup(provider, auth.Attributes["config_index"]); group != nil {
++		return asModelAliasEntries(group.Models)
++	}
+ 	var models []modelAliasEntry
+ 	switch provider {
+ 	case "gemini":
+@@ -617,6 +620,9 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
+ 
+ 		byAlias := make(map[string]string)
+ 		provider := strings.ToLower(strings.TrimSpace(auth.Provider))
++		if group := cfg.PassthroughGroup(provider, auth.Attributes["config_index"]); group != nil {
++			compileAPIKeyModelAliasForModels(byAlias, group.Models)
++		}
+ 		switch provider {
+ 		case "gemini":
+ 			if entry := resolveGeminiAPIKeyConfig(cfg, auth); entry != nil {

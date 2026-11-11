@@ -73,18 +73,18 @@ An upstream key family becomes `api-keys.<family>[]` groups holding `name` and
 the extractor, including Claude's provider-specific `tool-aliases` map. This
 keeps accepted group fields in the generated settings type without another field
 list. `isV8GroupedFamily` supplies the grouped-family decision to v8 loading,
-serialization and extraction. OpenAI compatibility is its only grouped family:
-it keeps its group struct with `api-key-entries` renamed to `keys`. The v8 group
-loader does not read `auth-index`, so those fields are omitted.
+serialization and extraction. OpenAI compatibility and passthrough keep their
+group structs with `api-key-entries` renamed to `keys`. The v8 group loader does
+not read `auth-index`, so those fields are omitted.
 
 ## Measured data
 
 The package's `passthru.extracted` is `lib/extracted`'s `goTestExtract`: it
 copies `package.src`, the `applyPatches` tree, so the facts include what the
-carried allowlist and tool-shim patches add to the config schema. It also copies
-the package's `goModules`, installs the extractor test beside the shared
-`lib/extracted/go/nat_shared_test.go` (node types, the field walk, the output)
-and runs it with the package's Go toolchain. `GOPROXY=off`,
+carried allowlist, tool-shim and passthrough patches add to the config schema.
+It also copies the package's `goModules`, installs the extractor test beside the
+shared `lib/extracted/go/nat_shared_test.go` (node types, the field walk, the
+output) and runs it with the package's Go toolchain. `GOPROXY=off`,
 `GOFLAGS=-mod=vendor` and `GOTOOLCHAIN=local` keep extraction offline. The
 YAML-specific typing (durations, `yaml.Node`, decoder probes) stays here.
 
@@ -113,6 +113,10 @@ The raw has one `config` tree. `extracted/facts.json` declares it as an opaque
 configuration shape is host-independent. Shared `lib/extracted` owns loading,
 platform carrying and regeneration. The reconciliation reader consumes the
 declared object directly.
+
+`patches/passthrough-provider.patch` adds the passthrough family. Its group
+fields and nested keys are measured through the same extractor. See
+[passthrough configuration](cliproxyapi-passthrough.md).
 
 ## Hand annotations
 
