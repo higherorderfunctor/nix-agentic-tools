@@ -110,7 +110,7 @@ class Routing(unittest.TestCase):
         self.assertEqual([x["launch"]["family"] for x in result["roles"]["writer"]["candidates"]], ["sol"])
         self.assertEqual([x["launch"]["family"] for x in result["roles"]["judge"]["candidates"]], ["other"])
         self.assertEqual(result["picker"]["provenance"], {"runtime": "codex", "technique": "one-shot", "family": "sol", "model": "gpt-6.1-sol", "effort": "medium"})
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_picker_hard_gates_and_avoid_partition_are_prompt_data(self):
         # Wrong: excluded, unreachable, exhausted or scoped-refused families reach
@@ -139,7 +139,8 @@ class Routing(unittest.TestCase):
             config["pickerEntries"] = [original]
             with self.subTest(identity=identity), patch.object(helper, "run_picker", side_effect=AssertionError("unavailable picker ran")):
                 result, _ = self.run_plan(config, ctx)
-                self.assertIn(helper.PICKER_WARNING, result["warnings"])
+                reason = "proposer family is unknown" if identity is None else "gpt-6.1-sol (one-shot): picker family equals proposer family sol"
+                self.assertIn(helper.PICKER_WARNING + f" Unavailable: {reason}.", result["warnings"])
                 self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
 
     def test_unknown_non_null_proposer_is_rejected_before_readers(self):
@@ -148,6 +149,87 @@ class Routing(unittest.TestCase):
         config, ctx = self.picker_fixture()
         ctx["proposerFamily"] = "not-configured"
         self.assertEqual(self.request_errors(config, ctx), [{"path": "launchContext.proposerFamily", "message": "unknown family name; allowed: dormant, manual, sol"}])
+
+    def test_picker_proposer_skip_names_its_reason(self):
+        # Wrong: the sole picker matches the proposer and leaves a bare warning.
+        config, ctx = self.picker_fixture()
+        ctx["proposerFamily"] = "sol"
+        with patch.object(helper, "run_picker", side_effect=AssertionError("self-picker ran")):
+            result, _ = self.run_plan(config, ctx)
+        self.assertIn("WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user. Unavailable: gpt-6.1-sol (one-shot): picker family equals proposer family sol.", result["warnings"])
+
+    def test_picker_failed_subprocess_names_both_attempts(self):
+        # Wrong: both subprocess failures are swallowed, or private stderr leaks.
+        config, ctx = self.picker_fixture()
+        with patch.object(helper, "run_picker", side_effect=subprocess.CalledProcessError(7, "secret-command", stderr="private")) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_count, 2)
+        self.assertIn("WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user. Unavailable: gpt-6.1-sol (one-shot): attempt 1: picker exited 7; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker exited 7; no retries left.", result["warnings"])
+        self.assertNotIn("private", json.dumps(result))
+        self.assertNotIn("secret-command", json.dumps(result))
+
+    def test_picker_empty_entries_names_its_reason(self):
+        # Wrong: an empty manifest picker list produces an unexplained fallback.
+        config, ctx = self.picker_fixture()
+        config["pickerEntries"] = []
+        result, _ = self.run_plan(config, ctx)
+        self.assertIn("WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user. Unavailable: no configured picker entries.", result["warnings"])
+
+    def test_picker_refusals_retain_the_first_reason(self):
+        # Wrong: a skipped entry loses its reason, or a later guard replaces it.
+        config, ctx = self.picker_fixture()
+        entry = config["pickerEntries"][0]
+        cases = [
+            ({"toolFree": False}, {}, set(), "picker is not tool-free"),
+            ({}, {}, {("outside", "sol")}, "picker family has an invalid scoped window"),
+            ({"command": "no-such-delegate-binary --private"}, {}, set(), "picker executable is not on PATH"),
+            ({}, {"outside": {"status": "unreachable"}}, set(), "Reader unreachable for this invocation"),
+        ]
+        for change, pools, invalid, expected in cases:
+            with self.subTest(reason=expected):
+                self.assertEqual(helper.picker_runnable(entry | change, config, ctx, pools, {}, invalid), expected)
+
+    def test_picker_failure_categories_are_safe_and_distinct(self):
+        # Wrong: a retry loses its timeout/exit category, or malformed decisions
+        # and generic exceptions leak command text or private output.
+        config, ctx = self.picker_fixture()
+        cases = [
+            ([subprocess.TimeoutExpired("private", 90), subprocess.CalledProcessError(7, "private")], "attempt 1: picker timed out; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker exited 7; no retries left"),
+            ([OSError("private"), OSError("private")], "attempt 1: picker execution failed; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker execution failed; no retries left"),
+            ([subprocess.SubprocessError("private"), subprocess.SubprocessError("private")], "attempt 1: picker execution failed; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker execution failed; no retries left"),
+            ([b"private invalid JSON"], "invalid picker decisions"),
+            ([TypeError("private")], "invalid picker decisions"),
+            ([b"\xff"], "invalid picker decisions"),
+        ]
+        for failures, expected in cases:
+            with self.subTest(reason=expected), patch.object(helper, "run_picker", side_effect=failures) as picker:
+                result, _ = self.run_plan(config, ctx)
+                self.assertEqual(picker.call_count, len(failures))
+                self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6.1-sol (one-shot): {expected}.", result["warnings"])
+                self.assertNotIn("private", json.dumps(result))
+
+    def test_picker_output_failures_name_the_bound_or_missing_file(self):
+        # Wrong: the runner's safe prompt/output diagnostics vanish in pick.
+        config, ctx = self.picker_fixture()
+        for command, limit, expected in [("true", "PICKER_OUTPUT_LIMIT", "picker wrote no output"), ("printf xx > <output-file>", "PICKER_OUTPUT_LIMIT", "picker output limit"), ("true", "PICKER_PROMPT_LIMIT", "picker prompt limit")]:
+            entry = config["pickerEntries"][0] | {"command": command}
+            with self.subTest(reason=expected), patch.object(helper, limit, 1):
+                with self.assertRaises(ValueError) as caught:
+                    helper.run_picker(entry, {}, SHELL)
+                with patch.object(helper, "run_picker", side_effect=caught.exception) as picker:
+                    result, _ = self.run_plan(config, ctx)
+                picker.assert_called_once()
+                self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6.1-sol (one-shot): {expected}.", result["warnings"])
+
+    def test_picker_reasons_are_unique_printable_and_bounded(self):
+        # Wrong: repeated entries duplicate reasons, or local-state text forges
+        # stderr lines or creates an unbounded diagnostic.
+        config, ctx = self.picker_fixture()
+        config["pickerEntries"] *= 2
+        for reason, expected in [("cache\nFORGED\x1b", "cache\\nFORGED\\x1b"), ("x" * 2048, "x" * 1024)]:
+            with self.subTest(reason=expected[:20]), patch.object(helper, "run_picker", side_effect=helper.PickerUnavailable(reason)):
+                result, _ = self.run_plan(config, ctx)
+                self.assertEqual([w for w in result["warnings"] if w.startswith(helper.PICKER_WARNING)], [helper.PICKER_WARNING + f" Unavailable: {expected}."])
 
     def test_picker_reach_and_pool_gates_allow_headless_internal_call(self):
         # Wrong: worker headless policy forbids the authorized internal picker;
@@ -186,7 +268,7 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "run_picker", side_effect=OSError("private")) as picker:
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(picker.call_count, 4)
-        self.assertEqual(result["warnings"].count(helper.PICKER_WARNING), 1)
+        self.assertEqual([w for w in result["warnings"] if w.startswith(helper.PICKER_WARNING)], [helper.PICKER_WARNING + " Unavailable: gpt-6.1-sol (one-shot): attempt 1: picker execution failed; retrying. Unavailable: gpt-6.1-sol (one-shot): attempt 2: picker execution failed; no retries left."])
         self.assertNotIn("private", json.dumps(result))
 
     def test_picker_strict_pair_coverage_and_all_excluded(self):
@@ -202,7 +284,7 @@ class Routing(unittest.TestCase):
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(result["roles"]["writer"]["candidates"], [])
         self.assertIn("error", result["roles"]["writer"])
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_closed_context_refuses_essays_before_readers(self):
         # Wrong: old family qualification essays survive the schema boundary.
@@ -440,7 +522,7 @@ class Routing(unittest.TestCase):
                 with patch.object(helper, "collect", return_value={name: {"status": "unmeasured"} for name in ("hidden", "outside", "session")}):
                     result = helper.plan(config, ctx, ("writer",), NOW, SHELL)
                 self.assertEqual(result["picker"]["decisions"], [{"decision": "keep", "family": "sol", "reason": "bounded role fit", "role": "writer"}])
-                self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+                self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_cli_invalid_request_is_json_on_stdout_and_exit_two(self):
         # Wrong: schema errors surface as a traceback or bare stderr text, run a
@@ -538,11 +620,11 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(picker.call_count, 1)
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
         config["pickerEntries"][0]["command"] = "no-such-delegate-binary --flag"
         with patch.object(helper, "run_picker", side_effect=AssertionError("absent executable ran")):
             result, _ = self.run_plan(config, ctx)
-        self.assertIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertIn(helper.PICKER_WARNING + " Unavailable: gpt-6.1-sol (one-shot): picker executable is not on PATH.", result["warnings"])
 
     def codex_home(self, models=None):
         """A scratch CODEX_HOME seeded from the fixture cache, with OPENAI* and CODEX* variables scrubbed."""
@@ -631,7 +713,7 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "run_picker", side_effect=AssertionError("empty catalog judged")):
             result, _ = self.run_plan(config, ctx, ("judge",))
         self.assertEqual(result["roles"]["judge"]["candidates"], [])
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_highest_version_among_observed_models_for_one_family(self):
         # Wrong: several observed models matching one pattern exclude the family,
@@ -1004,12 +1086,12 @@ class Routing(unittest.TestCase):
     def test_dropped_window_warning_reports_failure_to_user(self):
         # Wrong: a dropped window warning omits the user-report instruction.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": window(50, 0, None)})})
-        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
+        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:") and not w.startswith(helper.PICKER_WARNING)], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
 
     def test_window_warning_cannot_forge_stderr_lines(self):
         # Wrong: Reader-controlled window names inject extra stderr lines.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h\nFORGED\x1b": window(50, 0, None)})})
-        warnings = [w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING]
+        warnings = [w for w in result["warnings"] if w.startswith("WARNING:") and not w.startswith(helper.PICKER_WARNING)]
         self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
         self.assertEqual(len(warnings[0].splitlines()), 1)
 
@@ -1085,7 +1167,7 @@ class Routing(unittest.TestCase):
             self.assertIn("provider-vendor identity is provisional; trial/maker independence remain caller assessments", result["warnings"])
             self.assertEqual([(item["launch"]["family"], item["pace"]) for item in result["roles"]["writer"]["candidates"]], [("sol", 0.9375)])
             self.assertNotIn("matches no configured family", proc.stderr)
-            self.assertEqual(proc.stderr.splitlines(), [helper.PICKER_WARNING] + [item["line"] for item in result["roles"]["writer"]["candidates"]])
+            self.assertEqual(proc.stderr.splitlines(), [helper.PICKER_WARNING + " Unavailable: proposer family is unknown."] + [item["line"] for item in result["roles"]["writer"]["candidates"]])
 
     def test_cli_degradation_uses_json_warnings(self):
         # Wrong: advisory notes precede failures, failures are silent, or all-failed returns success.
