@@ -161,9 +161,15 @@
               type = lib.types.enum vocabulary.effortLevels;
               description = "Pinned picker effort.";
             };
+            family = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum names);
+              default = null;
+              description = "Configured family resolved to its concrete route model; set exactly one of family or model.";
+            };
             model = lib.mkOption {
-              type = lib.types.nonEmptyStr;
-              description = "Explicit concrete model id resolved to one configured family.";
+              type = lib.types.nullOr lib.types.nonEmptyStr;
+              default = null;
+              description = "Explicit concrete model id resolved to one configured family; set exactly one of family or model.";
             };
             technique = lib.mkOption {
               type = lib.types.nonEmptyStr;
@@ -281,7 +287,7 @@ in {
       };
       lowWaterMark = lib.mkOption {
         type = lib.types.addCheck lib.types.number (value: value >= 0);
-        default = 0.5;
+        default = vocabulary.lowWaterMark;
         description = "Candidate pools below this remaining-budget pace rank after other pools, before applying pool preference. Unmeasured pools rank with below-mark pools.";
       };
       opencodeGo.plan = lib.mkOption {

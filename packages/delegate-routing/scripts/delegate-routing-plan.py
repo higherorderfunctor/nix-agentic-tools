@@ -172,12 +172,14 @@ def picker_catalog(manifest, eligible_by_role):
     catalog = []
     for role, eligible in eligible_by_role.items():
         seen = set()
-        for item in eligible:
+        # A delegate launch carries the effort the picker judges; a continue-self
+        # record does not, so delegates come first for each family.
+        for item in sorted(eligible, key=lambda item: item["launch"].get("action") == "continue-self"):
             family = next(route["family"] for route in manifest["routes"] if route["family"]["name"] == item["launch"]["family"] and route["target"] == item["launch"]["runtime"])
             if family["name"] in seen:
                 continue
             seen.add(family["name"])
-            catalog.append({key: family[key] for key in ("name", "tier", "useFor", "avoidFor", "defaultEffort")} | {"role": role, "effectiveEffort": item["launch"]["effort"]})
+            catalog.append({key: family[key] for key in ("name", "tier", "useFor", "avoidFor", "defaultEffort")} | {"role": role, "effectiveEffort": item["launch"].get("effort")})
     return catalog
 
 
@@ -186,7 +188,7 @@ def effective_pace(family_paces, pool, key):
     return family_paces.get(key, pool.get("pace"))
 
 
-def picker_runnable(entry, manifest, context, pools, family_paces, invalid_families):
+def picker_runnable(entry, pools, family_paces, invalid_families):
     """Return the first refusal reason, or None when the picker can run."""
     if not entry["toolFree"]:
         return "picker is not tool-free"
@@ -216,7 +218,7 @@ def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, inva
         return pool_order({"launch": entry, "pace": pace, "pool": entry["pool"]}, manifest, pools)
     for entry in sorted(manifest["pickerEntries"], key=order):
         identity = f"{entry['model']} ({entry['technique']})"
-        refusal = picker_runnable(entry, manifest, context, pools, family_paces, invalid_families)
+        refusal = picker_runnable(entry, pools, family_paces, invalid_families)
         if refusal is not None:
             reasons.append(f"{identity}: {refusal}")
             continue
@@ -531,7 +533,7 @@ def ladder(eligible, producers, context, manifest, pools):
         return 2 if name in names else int(manifest["familyMakers"][name] in makers)
     ranked = sorted(eligible, key=lambda item: (relation(item), *pool_order(item, manifest, pools)))
     delegates = [item for item in ranked if item["launch"].get("action") != "continue-self"]
-    caller = context.get("caller", {}).get("family", context.get("proposerFamily"))
+    caller = context.get("proposerFamily")
     fallback = next((item for name_set in (names, {caller}) for item in delegates if item["launch"]["family"] in name_set), None)
     if fallback is None:
         fallback = next((item for item in ranked if item["launch"].get("action") == "continue-self"), None)
@@ -699,7 +701,7 @@ def request_errors(manifest, context, roles):
         return errors
     families = sorted(name_lists["familyNames"]) if "familyNames" in name_lists else None
     efforts = name_lists.get("effortLevels")
-    closed("launchContext", context, {"caller", "nonInteractive", "proposerFamily", "roles", "taskSummary"})
+    closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary"})
     summary = context.get("taskSummary")
     try:
         summary_valid = isinstance(summary, str) and summary.strip() and len(summary.encode("utf-8")) <= TASK_SUMMARY_LIMIT
@@ -749,24 +751,7 @@ def request_errors(manifest, context, roles):
             if producers and request.get("effort") is not None:
                 refuse(f"{path}.effort", "checking roles take their offset from producers")
             closed(path, request, {"effort", "exclude", "producers"})
-    caller = context.get("caller")
-    if "caller" in context:
-        if not isinstance(caller, dict):
-            refuse("launchContext.caller", "must attest current family, model and effort")
-        else:
-            closed("launchContext.caller", caller, {"effort", "family", "model"})
-            if families is not None:
-                named("launchContext.caller.family", caller.get("family"), families, "family name")
-            text("launchContext.caller.model", caller.get("model"))
-            if "effort" not in caller or (caller["effort"] is not None and efforts is not None and caller["effort"] not in efforts):
-                refuse("launchContext.caller.effort", "must attest the current effort, or null when omitted")
-            if not errors and caller_route(manifest, caller) is None:
-                refuse("launchContext.caller", "current model must match its configured family on this runtime")
     return errors
-
-
-def caller_route(manifest, caller):
-    return next((route for route in manifest["routes"] + manifest["manualRoutes"] if route["target"] == manifest["runtime"] and route["family"]["name"] == caller["family"] and any(model_matches(caller["model"], technique["model"]) for technique in route["techniques"])), None)
 
 
 def plan(manifest, context, roles, now, shell, run=run_reader):
@@ -796,6 +781,8 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
         warnings.append("session pool unknown; buffer rule cannot be certified")
     elif pools[session]["status"] != "measured" or pools[session].get("buffer") is None:
         warnings.append("session buffer unknown; buffer rule cannot be certified")
+    if context.get("proposerFamily") is None:
+        warnings.append("proposer family unknown; self last resort unavailable")
     result = {"automaticRuntimes": manifest["runtimes"], "manualOnly": manifest["manualRoutes"], "pools": pools, "roles": {}, "runtime": manifest["runtime"], "sessionPool": session, "snapshot": now.isoformat(), "warnings": warnings}
     eligible_by_role, excluded_by_role, producers_by_role = {}, {}, {}
     for role in roles:
@@ -814,21 +801,18 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             if family["tier"] not in ROLE_TIERS[role] or TIERS.index(family["tier"]) < floor:
                 excluded.append(record | {"reason": "below role tier floor"})
                 continue
+            if (route["pool"], family["name"]) in invalid_families:
+                excluded.append(record | {"reason": "model-scoped window invalid"})
+                continue
+            pace = effective_pace(family_paces, pools.get(route["pool"], {}), (route["pool"], family["name"]))
+            # Continuing the calling model needs no external launch or invented
+            # model/effort attestation, but retains its route's hard filters.
+            if family["name"] == context.get("proposerFamily") and route["target"] == manifest["runtime"]:
+                candidates.append({"alternatives": [], "launch": record | {"action": "continue-self"}, "pace": pace, "pool": route["pool"], "tier": family["tier"]})
             alternatives, unresolved = launch(route, context, offset, any(producer["name"] == family["name"] for producer, step in producers), manifest["effortLevels"], manifest["runtime"])
             excluded.extend(record | item for item in unresolved)
             if alternatives:
-                if (route["pool"], family["name"]) in invalid_families:
-                    excluded.append(record | {"reason": "model-scoped window invalid"})
-                    continue
-                pace = effective_pace(family_paces, pools.get(route["pool"], {}), (route["pool"], family["name"]))
                 candidates.append({"alternatives": alternatives[1:], "launch": alternatives[0], "pace": pace, "pool": route["pool"], "tier": family["tier"]})
-        caller = context.get("caller")
-        if caller is not None:
-            family = caller_route(manifest, caller)["family"]
-            if family["tier"] in ROLE_TIERS[role] and TIERS.index(family["tier"]) >= floor and not any(value in request.get("exclude", []) for value in (family["name"], family["maker"])):
-                pace = effective_pace(family_paces, pools.get(session, {}), (session, family["name"]))
-                if (session, family["name"]) not in invalid_families:
-                    candidates.append({"alternatives": [], "launch": caller | {"action": "continue-self", "runtime": manifest["runtime"]}, "pace": pace, "pool": session, "tier": family["tier"]})
         eligible = []
         for item in candidates:
             pool = pools.get(item["pool"], {})

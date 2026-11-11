@@ -56,24 +56,24 @@ reach its reset near empty. Do not report pool numbers unless asked.
 
 Return the top three candidates, spreading across pools where possible, plus a
 retained producer's own model line or else the caller's model line as last
-resort, without duplicating a top-three candidate. An optional `caller` record
-attests the current `family`, concrete `model` and actual `effort` so the helper
-can retain `action=continue-self` when needed. The last resort keeps hard
-filters and the recursion floor: non-interactive or external delegates get
-native routes or themselves. Report no qualified route only when every route is
-hard-filtered and the caller cannot run itself; retain exclusions and report the
-loop failure with empty candidates and a non-zero exit. Unmeasured candidates
-carry explicit budget/session uncertainty.
+resort, without duplicating a top-three candidate. `proposerFamily` names the
+calling model line for `action=continue-self`, preserving its known route pool;
+absent/null identity disables self-continuation and warns in JSON. The last
+resort keeps hard filters and the recursion floor: non-interactive or external
+delegates get native routes or themselves. Report no qualified route only when
+every route is hard-filtered and the caller cannot run itself; retain exclusions
+and report the loop failure with empty candidates and a non-zero exit.
+Unmeasured candidates carry explicit budget/session uncertainty.
 
 Tier and pace do not establish role fit, trial eligibility, live availability or
 cross-maker independence. Supply `taskSummary`, nullable `proposerFamily`,
-`nonInteractive`, compact role requests and optional caller identity. Routes
-come from the manifest's enabled calling-runtime and automatic extra-runtime
-reaches; manual-only runtimes stay manual. The helper resolves a concrete Nix
-pin first, else the highest matching visible local catalog version. Codex uses
-its local models cache; a listed pin uses that entry's supported efforts,
-otherwise its Nix-declared efforts are retained and `launch.effortSource` names
-the fallback. Unresolved routes are dropped with a JSON reason.
+`nonInteractive` and compact role requests. Routes come from the manifest's
+enabled calling-runtime and automatic extra-runtime reaches; manual-only
+runtimes stay manual. The helper resolves a concrete Nix pin first, else the
+highest matching visible local catalog version. Codex uses its local models
+cache; a listed pin uses that entry's supported efforts, otherwise its
+Nix-declared efforts are retained and `launch.effortSource` names the fallback.
+Unresolved routes are dropped with a JSON reason.
 
 A refused request exits 2 with every problem as `{"path", "message"}` records in
 a stdout `invalid-request` document and runs no Reader or picker; fix the named
