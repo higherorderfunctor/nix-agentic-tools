@@ -1754,6 +1754,79 @@
       "description": "SupportPromptCacheKey enables derived prompt_cache_key injection for supported requests.",
       "type": "bool"
     },
+    "api-keys.passthrough": {
+      "description": "Passthrough defines keyed groups for the JSON passthrough route.",
+      "type": "list"
+    },
+    "api-keys.passthrough[]": { "type": "object" },
+    "api-keys.passthrough[].base-url": {
+      "description": "BaseURL is an HTTP(S) base without userinfo, query or fragment.",
+      "type": "string"
+    },
+    "api-keys.passthrough[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy when present.",
+      "type": "bool"
+    },
+    "api-keys.passthrough[].disabled": {
+      "description": "Disabled prevents synthesis while preserving the group's configuration.",
+      "type": "bool"
+    },
+    "api-keys.passthrough[].keys": {
+      "description": "APIKeyEntries contains at least one nonempty upstream credential.",
+      "type": "list"
+    },
+    "api-keys.passthrough[].keys[]": { "type": "object" },
+    "api-keys.passthrough[].keys[].api-key": { "type": "string" },
+    "api-keys.passthrough[].models": {
+      "description": "Models maps client aliases to upstream model names.",
+      "type": "list"
+    },
+    "api-keys.passthrough[].models[]": { "type": "object" },
+    "api-keys.passthrough[].models[].alias": { "type": "string" },
+    "api-keys.passthrough[].models[].name": { "type": "string" },
+    "api-keys.passthrough[].name": {
+      "description": "Name identifies a group, case-insensitively, even when groups share a URL.",
+      "type": "string"
+    },
+    "api-keys.passthrough[].path": {
+      "description": "Path is a relative or rooted upstream path without authority, query or fragment.",
+      "type": "string"
+    },
+    "api-keys.passthrough[].priority": {
+      "description": "Priority prefers higher values among eligible credentials.",
+      "type": "int"
+    },
+    "api-keys.passthrough[].request-retry": {
+      "description": "RequestRetry overrides retry rounds; nil or negative inherits the global value.",
+      "type": "int"
+    },
+    "api-keys.passthrough[].request-scoped-errors": {
+      "description": "RequestScopedErrors uses native upstream error classification rules.",
+      "type": "list"
+    },
+    "api-keys.passthrough[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.passthrough[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.passthrough[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.passthrough[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.passthrough[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.passthrough[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.passthrough[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
     "api-keys.vertex": {
       "description": "VertexCompatAPIKey defines Vertex AI-compatible API key configurations for third-party providers.\nUsed for services that use Vertex AI-style paths but with simple API key authentication.",
       "type": "list"
