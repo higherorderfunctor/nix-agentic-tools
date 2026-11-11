@@ -43,8 +43,8 @@ in {
       pickerCommand = {
         command =
           builtins.replaceStrings
-          ["<id>" ''"<prompt>"'']
-          ["<model>" ''--tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>'']
+          ["claude -p" "<id>" ''"<prompt>"'']
+          ["env MAX_THINKING_TOKENS=0 claude -p" "<model>" ''--tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>'']
           claudeCommand;
         toolFree = true;
       };
@@ -79,7 +79,7 @@ in {
         command =
           builtins.replaceStrings
           ["<slug>" "<level>" "<out>.md" "--json"]
-          ["<model>" "<effort>" "<output-file>" ''-c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only -c 'approval_policy="never"' --json'']
+          ["<model>" "<effort>" "<output-file>" ''-c model_catalog_json=<catalog-file> -c model_instructions_file=<instructions-file> -c model_verbosity=low -c project_doc_max_bytes=0 -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only -c 'approval_policy="never"' --json'']
           codexCommand;
         toolFree = true;
       };

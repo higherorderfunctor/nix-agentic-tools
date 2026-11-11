@@ -742,7 +742,7 @@
         direct_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", direct_wrapper.read_text())[1]).read_text())
         assert direct_manifest["lowWaterMark"] == 0.5
         assert direct_manifest["effortLevels"] == manifest["effortLevels"]
-        assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "medium", "codex")]
+        assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "low", "codex")]
         assert direct_manifest["pickerEntries"][0]["toolFree"] is True
         # Wrong: direct-builder selector overrides retain an unreachable inherited picker.
         opus_skill = Path(os.environ["opusOnlyDirectSkillPath"]).read_text()
@@ -910,7 +910,7 @@
         == 1
         && lib.hasPrefix "claude-sonnet-" sonnetEntry.model
         && lib.hasInfix "model: \"${sonnetEntry.model}\"" result.config.ai.claude.agents.sonnet
-        && sonnetEntry.effort == "medium"
+        && sonnetEntry.effort == "low"
         && sonnetEntry.technique == "claude -p"
         # Wrong: pinning a literal id instead of the family's highest resolved
         # one, or keeping an entry when the family resolves to nothing.
@@ -922,7 +922,7 @@
         && settings.codex.picker.entries
         == [
           {
-            effort = "medium";
+            effort = "low";
             model = "gpt-6.1-sol";
             technique = "codex exec";
           }
@@ -970,9 +970,12 @@
         && (lib.last cross).toolFree
         # Exact literals reject broken pins or suppressing auth/provider settings
         # instead of overlaying native hook disable with tool controls intact.
-        && (lib.head cross).command == ''claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>''
-        && (lib.last cross).command == ''codex exec --model <model> --config 'model_reasoning_effort="<effort>"' -c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only -c 'approval_policy="never"' --json --output-last-message <output-file> - < <prompt-file>''
+        && (lib.head cross).command == ''env MAX_THINKING_TOKENS=0 claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>''
+        && (lib.last cross).command == ''codex exec --model <model> --config 'model_reasoning_effort="<effort>"' -c model_catalog_json=<catalog-file> -c model_instructions_file=<instructions-file> -c model_verbosity=low -c project_doc_max_bytes=0 -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only -c 'approval_policy="never"' --json --output-last-message <output-file> - < <prompt-file>''
+        # Wrong: distinct models/efforts on one pool silently form an ordered fallback.
         && refused [entry entry]
+        && refused [entry (entry // {effort = "low";})]
+        && refused [entry (entry // {model = "test-opus-5-9";})]
         && refused [(entry // {model = "unknown";})]
         && refused [(entry // {technique = "Workflow";})]
         && refused [(entry // {effort = "invented";})]

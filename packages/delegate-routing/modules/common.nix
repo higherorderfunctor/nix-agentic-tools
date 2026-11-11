@@ -167,7 +167,7 @@
             inherit (portable) families pools;
             inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
           }).pickerEntries;
-        description = "Ordered one-shot model pickers. Empty or unproven tool removal warns and uses tier/pool fallback. Exact tuples must be unique.";
+        description = "One-shot model pickers, tried in pool order like candidates. Empty or unproven tool removal warns and uses tier/pool fallback. Two entries on one pool fail evaluation.";
       };
       sessionPool = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum (builtins.attrNames portable.pools));

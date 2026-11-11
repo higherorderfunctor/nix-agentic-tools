@@ -289,22 +289,22 @@ class Routing(unittest.TestCase):
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["family"], "sol")
 
     def test_picker_order_skip_identity_and_loud_fallback(self):
-        # Wrong: unknown identity is invented, self-picker runs, a command that is
+        # Wrong: unknown identity is invented, a command that is
         # not on PATH runs, or an unproven no-tools promise is treated as removal.
         config, ctx = self.picker_fixture()
         original = config["pickerEntries"][0]
-        config["pickerEntries"] = [dict(original, toolFree=False), dict(original, command="no-such-delegate-binary --flag"), dict(original, family="dormant"), original]
+        config["pickerEntries"] = [dict(original, toolFree=False), dict(original, command="no-such-delegate-binary --flag"), original]
         with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(picker.call_args.args[0], original)
         self.assertEqual(picker.call_count, 1)
         self.assertIn("picker", result)
-        for identity in (None, "sol"):
+        for identity in (None,):
             ctx["proposerFamily"] = identity
             config["pickerEntries"] = [original]
             with self.subTest(identity=identity), patch.object(helper, "run_picker", side_effect=AssertionError("unavailable picker ran")):
                 result, _ = self.run_plan(config, ctx)
-                reason = "proposer family is unknown" if identity is None else "gpt-6.1-sol (one-shot): picker family equals proposer family sol"
+                reason = "proposer family is unknown"
                 self.assertIn(helper.PICKER_WARNING + f" Unavailable: {reason}.", result["warnings"])
                 self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
 
@@ -315,13 +315,47 @@ class Routing(unittest.TestCase):
         ctx["proposerFamily"] = "not-configured"
         self.assertEqual(self.request_errors(config, ctx), [{"path": "launchContext.proposerFamily", "message": "unknown family name; allowed: dormant, manual, sol"}])
 
-    def test_picker_proposer_skip_names_its_reason(self):
-        # Wrong: the sole picker matches the proposer and leaves a bare warning.
+    def test_picker_may_judge_its_proposers_model_line(self):
+        # Wrong: the default Sol picker is skipped whenever Sol proposes work.
         config, ctx = self.picker_fixture()
         ctx["proposerFamily"] = "sol"
-        with patch.object(helper, "run_picker", side_effect=AssertionError("self-picker ran")):
+        with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
             result, _ = self.run_plan(config, ctx)
-        self.assertIn("WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user. Unavailable: gpt-6.1-sol (one-shot): picker family equals proposer family sol.", result["warnings"])
+        picker.assert_called_once()
+        self.assertEqual(result["picker"]["provenance"]["family"], "sol")
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
+
+    def test_picker_entries_use_candidate_pool_order(self):
+        # Wrong: list position wins over low-water, preference, pace or name;
+        # scoped pace is ignored, or pickers drift from the session-pool order.
+        config, ctx = self.picker_fixture()
+        original = config["pickerEntries"][0]
+        config["pickerEntries"] = [original | {"pool": pool, "family": family, "model": family} for pool, family in (("outside", "z"), ("session", "a"))]
+        cases = [
+            ({"outside": 0.4, "session": 0.6}, (10, 0), None, {}, "a"),
+            ({"outside": 0.9, "session": 0.6}, (0, 1), None, {}, "a"),
+            ({"outside": 0.6, "session": 0.9}, (0, 0), None, {}, "a"),
+            ({"outside": 0.6, "session": 0.6}, (0, 0), None, {}, "a"),
+            ({"outside": 0.9, "session": 0.6}, (0, 0), None, {("outside", "z"): 0.3}, "a"),
+            ({"outside": 0.6, "session": 0.9}, (0, 0), "session", {}, "z"),
+        ]
+        for paces, preferences, session, scoped, expected in cases:
+            with self.subTest(paces=paces, preferences=preferences, session=session, scoped=scoped):
+                config["sessionPool"] = session
+                for reader, preference in zip(config["readers"], preferences):
+                    reader["pool"] = {"preference": preference}
+                pools = {pool: {"buffer": 0.5, "pace": pace} for pool, pace in paces.items()}
+                with patch.object(helper, "run_picker", return_value=b'{"decisions":[],"schemaVersion":1}') as picker:
+                    result = helper.pick(config, ctx, [], {"writer": []}, pools, scoped, set(), SHELL, [])
+                picker.assert_called_once()
+                self.assertEqual(result["provenance"]["model"], expected)
+
+    def test_picker_writes_and_cleans_short_instructions(self):
+        # Wrong: the new placeholder is passed literally or the file outlives the call.
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "printf '%s\\n' <instructions-file> > <output-file>; cat <instructions-file> >> <output-file>"}
+        raw = helper.run_picker(entry, {}, SHELL).decode().splitlines()
+        self.assertEqual(raw[1:], ["Return JSON only. No tools."])
+        self.assertFalse(Path(raw[0]).exists())
 
     def test_picker_failed_subprocess_names_both_attempts(self):
         # Wrong: both subprocess failures are swallowed, or private stderr leaks.
@@ -865,12 +899,17 @@ class Routing(unittest.TestCase):
         self.addCleanup(server.shutdown)
         provider = ['model_provider="probe"', 'model_providers.probe.name="Probe"', f'model_providers.probe.base_url="http://127.0.0.1:{server.server_port}/v1"', 'model_providers.probe.wire_api="responses"', "model_providers.probe.requires_openai_auth=false", "model_providers.probe.supports_websockets=false"]
         command = os.environ["CODEX_PICKER_COMMAND"].replace("codex exec", "codex exec " + " ".join(f"-c {shlex.quote(item)}" for item in provider), 1)
-        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": command}
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": command, "effort": "low"}
         with self.codex_home():
             raw = helper.run_picker(entry, {}, SHELL)
         self.assertEqual(raw.decode(), reply)
         self.assertEqual(len(requests), 1)
         self.assertNotIn("tools", requests[0])
+        # Codex sends the instructions file as developer messages, not a top-level field.
+        developer = [item for item in requests[0]["input"] if item.get("role") == "developer"]
+        self.assertIn("Return JSON only. No tools.", json.dumps(developer))
+        self.assertEqual(requests[0]["reasoning"]["effort"], "low")
+        self.assertEqual(requests[0]["text"]["verbosity"], "low")
         self.assertEqual([item for item in requests[0]["input"] if item.get("type") == "additional_tools" or "tool" in item.get("type", "")], [])
 
     def test_picker_is_not_called_without_an_eligible_family(self):

@@ -136,30 +136,34 @@ in {
       if entry ? family
       then lib.optional (agentSet ? ${entry.family}) (removeAttrs entry ["family"] // {model = agentSet.${entry.family}.id;})
       else [entry];
+    entries =
+      if picker == null
+      then
+        # Inherited defaults outside the selected reach are omitted; explicit
+        # entries use the same resolver and refuse an unresolved model.
+        builtins.filter (entry: entry != null) (map resolvePickerEntry
+          (lib.concatMap inheritFamilyModel
+            (import ./defaults.nix {
+              inherit lib;
+              claudeUsageScript = null;
+              codexUsageScript = null;
+            }).picker.${
+              runtime
+            }.entries))
+      else
+        map (entry: let
+          resolved = resolvePickerEntry entry;
+        in
+          if resolved == null
+          then throw "ai.programs.delegate-routing.runtimes.${runtime}.picker.entries: require one configured concrete model family, enabled external one-shot technique, model/effort pins and non-empty picker command"
+          else resolved)
+        picker.entries;
+    samePool = entry: builtins.filter (other: other.pool == entry.pool) entries;
+    duplicate = lib.findFirst (entry: builtins.length (samePool entry) > 1) null entries;
   in
-    if picker == null
-    then
-      # Inherited defaults may be outside the selected model/reach or have a
-      # disabled technique. Explicit entries use this same resolver but refuse.
-      builtins.filter (entry: entry != null) (map resolvePickerEntry
-        (lib.concatMap inheritFamilyModel
-          (import ./defaults.nix {
-            inherit lib;
-            claudeUsageScript = null;
-            codexUsageScript = null;
-          }).picker.${
-            runtime
-          }.entries))
-    else if !lib.allUnique picker.entries
-    then throw "ai.programs.delegate-routing.runtimes.${runtime}.picker.entries: duplicate technique/model/effort tuple"
-    else
-      map (entry: let
-        resolved = resolvePickerEntry entry;
-      in
-        if resolved == null
-        then throw "ai.programs.delegate-routing.runtimes.${runtime}.picker.entries: require one configured concrete model family, enabled external one-shot technique, model/effort pins and non-empty picker command"
-        else resolved)
-      picker.entries;
+    if duplicate != null
+    then throw "ai.programs.delegate-routing.runtimes.${runtime}.picker.entries: duplicate pool ${builtins.toJSON duplicate.pool}: ${lib.concatMapStringsSep ", " (entry: "${entry.model} (${entry.technique}, ${entry.effort})") (samePool duplicate)}"
+    else entries;
   familyNames = map (family: family.name) (selection.flatten families);
   inherit routes;
   manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);

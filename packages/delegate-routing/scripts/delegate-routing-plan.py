@@ -131,12 +131,14 @@ def run_picker(entry, payload, shell):
     with tempfile.TemporaryDirectory(prefix="delegate-routing-picker-") as directory:
         prompt_path, output_path = Path(directory) / "prompt.json", Path(directory) / "result.json"
         prompt_path.write_bytes(prompt)
+        instructions_path = Path(directory) / "instructions.txt"
+        instructions_path.write_text("Return JSON only. No tools.\n")
         cwd, env = None, None
         if "<catalog-file>" in entry["command"]:
             codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").resolve()
             write_picker_catalog(Path(directory) / "catalog.json", entry["model"], codex_home)
             cwd, env = directory, os.environ | {"CODEX_HOME": str(codex_home)}
-        values = {"<catalog-file>": str(Path(directory) / "catalog.json"), "<effort>": entry["effort"], "<model>": entry["model"], "<output-file>": str(output_path), "<prompt-file>": str(prompt_path)}
+        values = {"<catalog-file>": str(Path(directory) / "catalog.json"), "<effort>": entry["effort"], "<instructions-file>": str(instructions_path), "<model>": entry["model"], "<output-file>": str(output_path), "<prompt-file>": str(prompt_path)}
         # One pass: a substituted value is never scanned for a later token.
         command = re.sub("|".join(map(re.escape, values)), lambda token: shlex.quote(values[token.group()]), entry["command"])
         argv = [shell, "-euETo", "pipefail", "-c", "shopt -s inherit_errexit 2>/dev/null || :\n" + command]
@@ -179,12 +181,15 @@ def picker_catalog(manifest, eligible_by_role):
     return catalog
 
 
+def effective_pace(family_paces, pool, key):
+    """A family's scoped pace when its pool reports one, else the pool's own pace."""
+    return family_paces.get(key, pool.get("pace"))
+
+
 def picker_runnable(entry, manifest, context, pools, family_paces, invalid_families):
     """Return the first refusal reason, or None when the picker can run."""
     if not entry["toolFree"]:
         return "picker is not tool-free"
-    if entry["family"] == context["proposerFamily"]:
-        return f"picker family equals proposer family {entry['family']}"
     key = (entry["pool"], entry["family"])
     if key in invalid_families:
         return "picker family has an invalid scoped window"
@@ -194,7 +199,7 @@ def picker_runnable(entry, manifest, context, pools, family_paces, invalid_famil
     if shutil.which(executable) is None:
         return "picker executable is not on PATH"
     pool = pools.get(entry["pool"], {})
-    return pool_refusal(pool, family_paces.get(key, pool.get("pace")))
+    return pool_refusal(pool, effective_pace(family_paces, pool, key))
 
 
 def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, invalid_families, shell, reasons):
@@ -205,7 +210,11 @@ def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, inva
         reasons.append("no configured picker entries")
         return None
     payload = {"taskSummary": context["taskSummary"], "nonInteractive": context["nonInteractive"], "roles": {role: context["roles"].get(role, {}) for role in eligible_by_role}, "families": catalog}
-    for entry in manifest["pickerEntries"]:
+    def order(entry):
+        pool = pools.get(entry["pool"], {})
+        pace = effective_pace(family_paces, pool, (entry["pool"], entry["family"]))
+        return pool_order({"launch": entry, "pace": pace, "pool": entry["pool"]}, manifest, pools)
+    for entry in sorted(manifest["pickerEntries"], key=order):
         identity = f"{entry['model']} ({entry['technique']})"
         refusal = picker_runnable(entry, manifest, context, pools, family_paces, invalid_families)
         if refusal is not None:
@@ -814,13 +823,13 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
                 if (route["pool"], family["name"]) in invalid_families:
                     excluded.append(record | {"reason": "model-scoped window invalid"})
                     continue
-                pace = family_paces.get((route["pool"], family["name"]), pools.get(route["pool"], {}).get("pace"))
+                pace = effective_pace(family_paces, pools.get(route["pool"], {}), (route["pool"], family["name"]))
                 candidates.append({"alternatives": alternatives[1:], "launch": alternatives[0], "pace": pace, "pool": route["pool"], "tier": family["tier"]})
         caller = context.get("caller")
         if caller is not None:
             family = caller_route(manifest, caller)["family"]
             if family["tier"] in ROLE_TIERS[role] and TIERS.index(family["tier"]) >= floor and not any(value in request.get("exclude", []) for value in (family["name"], family["maker"])):
-                pace = family_paces.get((session, family["name"]), pools.get(session, {}).get("pace"))
+                pace = effective_pace(family_paces, pools.get(session, {}), (session, family["name"]))
                 if (session, family["name"]) not in invalid_families:
                     candidates.append({"alternatives": [], "launch": caller | {"action": "continue-self", "runtime": manifest["runtime"]}, "pace": pace, "pool": session, "tier": family["tier"]})
         eligible = []
