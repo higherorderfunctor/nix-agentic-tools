@@ -1,6 +1,6 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-30 — 933 config nodes, including the patched
+> **Last verified:** 2026-11-10 — 933 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
 > `lib/extracted/options.nix`, with refinements and module assertions on the
 > allowlist; the clean render passes native v8 validation and loads through CPA
@@ -10,10 +10,10 @@
 > a secret file, and derives named client keys' `access.api-keys` and
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
-> official documentation; `vendor = "opencode-go"` places each pinned OpenCode
-> Go catalog model on its native API and refuses claude-_, glm-_ and gpt-*
-> models. Named API-key credentials accept an optional integer priority, omitted
-> when unset.
+> official documentation; `vendor = "opencode-go"` places every pinned OpenCode
+> Go catalog model on its native API, and credentials of different vendors
+> serving one model id fail evaluation. Named API-key credentials accept an
+> optional integer priority, omitted when unset.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -82,13 +82,20 @@ catalog model goes in `apis.<api>.models` of its one native API, `messages` on
 `anthropic`, `chat-completions` on `chat`, `responses` on `responses`, and
 Gemini's `generate-content`, which has no API here, on `chat`. CPA translates
 every other protocol. Base URLs are the catalog's per API; the Anthropic one
-drops its trailing `/v1`, which CPA's claude executor appends. `claude-*`,
-`glm-*` and `gpt-*` models are left out of the defaults, and a credential of
-this vendor that serves one on any API fails evaluation: subscriptions already
-routed through CPA serve them (Claude OAuth, z.ai as `vendor = "z-ai"`, Codex
-OAuth), so OpenCode would only duplicate them. The Responses API keeps Grok and
-Muse Spark. `toolAliases` and `codexShellArgCleanup` stay off. An API override
-replaces that API's whole default, so restate its `base-url`; the flake's
+drops its trailing `/v1`, which CPA's claude executor appends. Defaults include
+the full extracted catalog, including `claude-*`, `glm-*` and `gpt-*`. If
+credentials of different vendors serve the same model id, evaluation fails,
+naming the model and credentials. Same-vendor duplicates evaluate, on distinct
+base URLs (one shared URL is refused separately): CPA round-robins available
+credentials of one provider for a requested model by default for the claude and
+codex families; chat-family credentials are separate compatibility providers
+named after the credential, so CPA resolves their shared model id across
+providers (CPA 8.0.64, `sdk/cliproxy/auth/selector.go:28-38` and
+`internal/config/config_types.go:532-535`), subject to priority and cooldown
+(`cliproxyapi-providers.md`). Consumers whose other credentials serve those
+families trim the Go credential's `apiKey.models` or per-API model lists.
+`toolAliases` and `codexShellArgCleanup` stay off. An API override replaces that
+API's whole default, so restate its `base-url`; the flake's
 `lib.cliproxyapi.providers.vendors.opencode-go.apis` holds the defaults to start
 from. Go refuses a request without a session header, so the vendor sets
 `x-opencode-session` to CPA's own session ID (`$CPA-SESSION-ID`) on every API.

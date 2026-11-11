@@ -58,6 +58,28 @@ backend: {
     # API-key names become CPA compatibility provider identities.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
+  overlappingModels = name: instance: let
+    # OAuth credentials declare no models and stay outside this check.
+    registrations = lib.concatLists (lib.mapAttrsToList (credentialName: credential:
+      map (model: {
+        inherit credentialName model;
+        inherit (credential) vendor;
+      }) (lib.unique (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api))
+          (builtins.attrNames (providersLib.served credential.apiKey)))))
+    (lib.filterAttrs (_: credential: credential.apiKey != null) instance.credentials));
+    byModel = lib.groupBy (entry: entry.model) registrations;
+    collisions = lib.filterAttrs (_: entries: lib.length (lib.unique (map (entry: entry.vendor) entries)) > 1) byModel;
+    describe = entry: "`${entry.credentialName}` (vendor ${
+      if entry.vendor == null
+      then "no vendor"
+      else "`${entry.vendor}`"
+    })";
+  in
+    lib.mapAttrsToList (model: entries: {
+      assertion = false;
+      message = "ai.cliproxyapi.instances.${name}: model `${model}` is served by credentials of different vendors: ${lib.concatMapStringsSep ", " describe entries}. Remove the model from one credential's apiKey.models or apiKey.apis.<api>.models.";
+    })
+    collisions;
   # Every instance is a selectable proxy (lib/ai/inference); a selected client
   # carries its key and its routed credentials, with the API-key models of each
   # route's resolved API, in route order. The claim keeps the name unique
@@ -223,18 +245,7 @@ in {
               message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.models or apiKey.apis.${api}.models; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
             }) (builtins.attrNames (providersLib.served apiKey)))
           (providersLib.apiKeys instance))
-          # A vendor that refuses some models refuses them on every served API,
-          # whether its defaults or a definition put them there.
-          ++ lib.concatLists (lib.mapAttrsToList (credentialName: credential: let
-              vendor = providersLib.vendors.${credential.vendor};
-              refused = lib.filter vendor.refuses (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api)) (builtins.attrNames (providersLib.served credential.apiKey)));
-            in [
-              {
-                assertion = refused == [];
-                message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}: vendor `${credential.vendor}` refuses models ${lib.concatMapStringsSep ", " (model: "`${model}`") (lib.unique refused)}. ${vendor.refusal}";
-              }
-            ])
-            (lib.filterAttrs (_: credential: credential.vendor != null && credential.apiKey != null && providersLib.vendors.${credential.vendor} ? refuses) instance.credentials))
+          ++ overlappingModels name instance
           ++ lib.concatLists (lib.mapAttrsToList (clientName: client:
             map (choice: let
               result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;

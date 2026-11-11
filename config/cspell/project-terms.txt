@@ -580,6 +580,7 @@ upgrader
 uppercased
 usebruno
 userns
+vendorless
 virtualisation
 vllm
 wbits

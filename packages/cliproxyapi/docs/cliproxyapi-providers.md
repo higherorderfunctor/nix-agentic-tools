@@ -82,8 +82,17 @@ Built-in `vendor = "z-ai"` defaults
 repairing measured tool-name and empty-justification failures. Explicit
 `toolAliases = {};` and `codexShellArgCleanup = false;` disable those defaults;
 other vendors omit both settings unless requested. `vendor = "opencode-go"`
-places each OpenCode Go model on its native API and refuses `claude-*`, `glm-*`
-and `gpt-*` models (`cliproxyapi-settings.md`, Instances). Its blocks send
+places the full extracted catalog on each model's native API, including
+`claude-*`, `glm-*` and `gpt-*`. Different-vendor overlap fails evaluation,
+naming the model and credentials. Same-vendor duplicates evaluate, on distinct
+base URLs (one shared URL is refused separately): CPA round-robins available
+credentials of one provider for the requested model by default for the claude
+and codex families; chat-family credentials are separate compatibility providers
+named after the credential, so CPA resolves their shared model id across
+providers (CPA 8.0.64, `sdk/cliproxy/auth/selector.go:28-38` and
+`internal/config/config_types.go:532-535`), subject to the priority and cooldown
+rules above. Consumers whose other credentials serve those families trim the Go
+credential's `apiKey.models` or `apiKey.apis.<api>.models`. Its blocks send
 `x-opencode-session = "$CPA-SESSION-ID"`, which Go requires and CPA expands to
 its session identifier; the header type is secret, so the literal reaches the
 config through a store command reference.

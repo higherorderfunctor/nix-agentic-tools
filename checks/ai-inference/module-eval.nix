@@ -150,6 +150,8 @@ in {
       vendor = facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "zAi";
       problems = lib.concatMap (backend: let
         ai = instanceChange {
+          # This vendor-default fixture isolates z.ai from the vendorless chat catalog.
+          credentials.chat.apiKey.models = lib.mkForce ["chat-only"];
           credentials.zai = lib.mkForce {
             vendor = "z-ai";
             apiKey.key = apiKey.key;
@@ -285,12 +287,13 @@ in {
       };
       problems =
         lib.concatMap (backend: let
-          go = apiKey:
+          goCredential = apiKey: {
+            vendor = "opencode-go";
+            apiKey = {key = clientKey "opencode-go";} // apiKey;
+          };
+          withCredentials = credentials:
             evaluate backend (instanceChange {
-              credentials.go = {
-                vendor = "opencode-go";
-                apiKey = {key = clientKey "opencode-go";} // apiKey;
-              };
+              credentials = lib.mkForce credentials;
               clientKeys = {
                 personal.routes = lib.mkForce [
                   {
@@ -306,6 +309,7 @@ in {
                 ];
               };
             });
+          go = apiKey: withCredentials {go = goCredential apiKey;};
           result = go {};
           blocksOf = evaluated: family: lib.filter (entry: entry.name == "go") (rendered evaluated).api-keys.${family};
           modelsIn = evaluated: family: lib.concatMap (block: map (model: model.name) block.models) (blocksOf evaluated family);
@@ -319,9 +323,53 @@ in {
               responses = null;
             };
           };
-          refusedModel = model: failsWith ["credentials.go: vendor `opencode-go` refuses models `${model}`" "Claude OAuth, z.ai and Codex OAuth credentials serve them"];
+          zAiCredential = {
+            vendor = "z-ai";
+            apiKey = {
+              key = clientKey "z-ai";
+              models = ["glm-5.3"];
+            };
+          };
+          differentVendor = withCredentials {
+            go = goCredential {};
+            zai = zAiCredential;
+          };
+          vendorless = withCredentials {
+            custom.apiKey = {
+              apis.anthropic.base-url = "https://custom.example/anthropic";
+              key = clientKey "custom";
+              models = ["claude-haiku-5-5"];
+            };
+            go = goCredential {};
+          };
+          sameVendor = withCredentials {
+            go = goCredential {};
+            # Keep default models; distinct URLs preserve the shared-URL guard.
+            second = goCredential {
+              apis = lib.mapAttrs (api: defaults: defaults // {base-url = "https://second.example/${api}";}) vendor.apis;
+            };
+          };
+          operator = withCredentials {
+            go = goCredential {
+              apis = {
+                anthropic = {
+                  base-url = urls.anthropic;
+                  models = ["minimax-m3" "qwen3.8-max"];
+                };
+                chat = {
+                  base-url = urls.chat;
+                  models = ["deepseek-v4-pro" "kimi-k3"];
+                };
+                responses = {
+                  base-url = urls.responses;
+                  models = ["grok-4.7" "muse-spark-1.3-contributor"];
+                };
+              };
+            };
+            zai = zAiCredential;
+          };
           allPlaced = lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"];
-          # CPA trims model names, so a padded Claude id is refused at the type.
+          # Pin modelType's printable edges for ids the overlap check compares.
           rejectsPadded = model:
             !(builtins.tryEval (builtins.deepSeq
               (go {
@@ -340,35 +388,31 @@ in {
               && lib.all (model: lib.elem model (modelsIn result "codex")) ["grok-4.7" "muse-spark-1.3-contributor"]
               && !(lib.elem "kimi-k3" (modelsIn result "claude" ++ modelsIn result "codex"));
             "generate-content on chat" = catalog.gemini-4-argon.api ? generate-content && lib.elem "gemini-4-argon" (modelsIn result "openai-compatibility");
-            "every other catalog model placed once" = lib.sort lib.lessThan allPlaced == builtins.filter (id: !(vendor.refuses id)) (builtins.attrNames catalog);
-            "defaults leave refused families out" =
-              lib.all (id: catalog ? ${id} && vendor.refuses id && !(lib.elem id allPlaced)) ["claude-haiku-5-5" "glm-5.3" "gpt-6-luna"]
-              && !(lib.any (id: lib.any (prefix: lib.hasPrefix prefix id) ["claude-" "glm-" "gpt-"]) allPlaced);
-            "Claude added to an API refused" = refusedModel "claude-haiku-5-5" (go {
-              apis.anthropic = {
-                base-url = urls.anthropic;
-                models = ["claude-haiku-5-5" "qwen3.8-max"];
-              };
-            });
-            "Claude through credential models refused" = refusedModel "claude-haiku-5-5" (go {
-              apis.responses = {
-                base-url = urls.responses;
-                models = null;
-              };
-              models = ["claude-haiku-5-5"];
-            });
-            "GLM added to an API refused" = refusedModel "glm-5.3" (go {
-              apis.chat = {
-                base-url = urls.chat;
-                models = ["glm-5.3" "kimi-k3"];
-              };
-            });
-            "GPT added to an API refused" = refusedModel "gpt-6-luna" (go {
-              apis.responses = {
-                base-url = urls.responses;
-                models = ["gpt-6-luna" "grok-4.7"];
-              };
-            });
+            # Placement and overlap-message rows are red on the PR 1 tip: filtered ids and no overlap assertion.
+            "every catalog model placed once" = lib.length allPlaced == 30 && lib.sort lib.lessThan allPlaced == builtins.attrNames catalog;
+            "subscription families placed by default" =
+              lib.elem "claude-haiku-5-5" (modelsIn result "claude")
+              && lib.all (model: lib.elem model (modelsIn result "openai-compatibility")) ["glm-5.2" "glm-5.3" "glm-5.3-flash"]
+              && lib.all (model: lib.elem model (modelsIn result "codex")) ["gpt-5.6-luna" "gpt-6-luna"];
+            "different vendors overlap refused" =
+              failsWith [
+                "ai.cliproxyapi.instances.clients: model `glm-5.3`"
+                "`go` (vendor `opencode-go`)"
+                "`zai` (vendor `z-ai`)"
+                "Remove the model from one credential's apiKey.models or apiKey.apis.<api>.models."
+              ]
+              differentVendor;
+            "operator model overrides accepted" = failedMessages operator == [];
+            "same vendor duplicates accepted" = failedMessages sameVendor == [];
+            "vendorless overlap refused" =
+              failsWith [
+                "ai.cliproxyapi.instances.clients: model `claude-haiku-5-5`"
+                "`custom` (vendor no vendor)"
+                "`go` (vendor `opencode-go`)"
+                "Remove the model from one credential's apiKey.models or apiKey.apis.<api>.models."
+              ]
+              vendorless;
+            "vendorless pair accepted" = failedMessages (evaluate backend {}) == [];
             "Claude id with leading space refused" = rejectsPadded " claude-haiku-5-5";
             "Claude id with no-break space refused" = rejectsPadded "claude-haiku-5-5 ";
             "interior Unicode model name accepted" = let

@@ -16,13 +16,7 @@
       messages = "anthropic";
       responses = "responses";
     };
-    # Subscriptions the operator already routes through CPA serve these
-    # families: Claude OAuth (claude-*), z.ai, shipped here as
-    # `vendor = "z-ai"` (glm-*), and Codex OAuth (gpt-*). OpenCode would only
-    # duplicate them, so the defaults leave them out and
-    # ../modules/instances.nix refuses any a definition adds.
-    refuses = model: lib.any (prefix: lib.hasPrefix prefix (lib.toLower model)) ["claude-" "glm-" "gpt-"];
-    catalog = lib.filterAttrs (id: _: !(refuses id)) models;
+    catalog = models;
     placed = lib.mapAttrsToList (id: entry: let
       natives = builtins.attrNames entry.api;
       native = lib.head natives;
@@ -66,8 +60,6 @@
     # identifier (internal/util/header_helpers.go).
     headers.x-opencode-session = "$CPA-SESSION-ID";
     models = null;
-    refusal = "OpenCode Go may not serve claude-*, glm-* or gpt-* models; the Claude OAuth, z.ai and Codex OAuth credentials serve them.";
-    inherit refuses;
     toolAliases = {};
   };
   vendors = {
@@ -111,7 +103,8 @@
   baseUrlType = types.strMatching "https?://[!-~]+";
   # CPA trims model names before registering them
   # (sdk/cliproxy/service_models.go); printable-ASCII edges make that trim a
-  # no-op, so a vendor's refusal sees the name CPA serves. The interior is free.
+  # no-op, so ids compared across credentials for overlap equal the ids CPA
+  # serves. The interior is free.
   modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
   apiKeyType = types.submodule {
@@ -228,7 +221,7 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without claude-*, glm-* or gpt-* models, which it refuses, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places the full extracted OpenCode Go catalog on each model's native API, including claude-*, glm-* and gpt-*. Credentials of different vendors may not serve the same model id (checked in the instance module). It sends x-opencode-session = \"$CPA-SESSION-ID\". Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {
