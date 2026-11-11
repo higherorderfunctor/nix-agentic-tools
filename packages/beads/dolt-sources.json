@@ -1,9 +1,9 @@
 {
-  "version": "2.7.2",
+  "version": "2.7.3",
   "src": {
-    "url": "https://github.com/dolthub/dolt/archive/v2.7.2.tar.gz",
-    "hash": "sha256-HC1Yhoy4lRkrhZmZ19UfqqWJRb/ewjrdXr5+l8/TXSk="
+    "url": "https://github.com/dolthub/dolt/archive/v2.7.3.tar.gz",
+    "hash": "sha256-r1lQHngJdoCkK3ZILsKvkN4n1IyrDtGUmv0TbsgEMXU="
   },
   "goFloor": "1.27.3",
-  "vendorHash": "sha256-yfXeQK26N0qu50CEo67j6Cz7ixOi9pG0Pi8Qit6P4rU="
+  "vendorHash": "sha256-/oOXX1EpStBFQOY78Eb57CUYDYIdgB0GakwHfPuBm+w="
 }
