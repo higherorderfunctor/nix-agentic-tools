@@ -75,6 +75,14 @@
       else {
         inherit agent name node;
         model = {
+          # Pins carry known effort support even without a live catalog. Claude's
+          # current release supplies its levels; other pins certify the default.
+          efforts =
+            if (family.defaultEffort or null) == null
+            then []
+            else if target == "claude"
+            then agentFiles.facts.effortLevels
+            else [family.defaultEffort];
           isPattern = lib.trim id == "";
           value =
             if lib.trim id != ""

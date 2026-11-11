@@ -757,7 +757,6 @@
             "proposerFamily": "sol",
             "nonInteractive": True,
             "roles": {"writer": {"effort": None}},
-            "techniques": [{"efforts": ["high"], "model": "fixture-model", "runtime": runtime, "technique": technique}],
         }))
 
         def check(executable):
@@ -1055,12 +1054,14 @@
         ]
         && agent.model
         == {
+          efforts = ["low" "medium" "high" "xhigh"];
           isPattern = false;
           value = "proxy-opus-123";
         }
         && agent.agent.family.defaultEffort == "high"
         && (builtins.head (lib.last routingView.routes).techniques).model
         == {
+          efforts = [];
           isPattern = true;
           value = "test-flash-*";
         }

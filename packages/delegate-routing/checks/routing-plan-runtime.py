@@ -37,7 +37,7 @@ def stream(windows=None):
 
 
 def technique(name="spawn_agent", kind="subagent", model="gpt-6.1-sol", pattern=False, agent=None):
-    return {"agent": agent, "model": {"isPattern": pattern, "value": model}, "name": name, "node": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "kind": kind, "modelArg": "slug", "notes": "caller binds task/output paths"}}
+    return {"agent": agent, "model": {"efforts": ["high"], "isPattern": pattern, "value": model}, "name": name, "node": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "kind": kind, "modelArg": "slug", "notes": "caller binds task/output paths"}}
 
 
 def route(name="sol", tier="strong", pool="outside", target="codex", techniques=None, default="high", maker="openai"):
@@ -49,8 +49,8 @@ def manifest(routes=None, session=None):
     return {"effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "familyMakers": family_makers, "familyNames": sorted(family_makers), "lowWaterMark": 0.5, "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
-def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort=None):
-    return {"taskSummary": "bounded source change", "nonInteractive": non_interactive, "roles": {role: {"effort": effort} for role in roles}, "techniques": techniques or [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}]}
+def context(roles=("writer",), names=("sol",), non_interactive=False, effort=None):
+    return {"taskSummary": "bounded source change", "nonInteractive": non_interactive, "roles": {role: {"effort": effort} for role in roles}}
 
 
 def picker_child_exited(child):
@@ -63,6 +63,12 @@ def picker_child_exited(child):
 
 
 class Routing(unittest.TestCase):
+    def setUp(self):
+        # Route tests use only explicit pins or fixture catalogs, never the user's cache.
+        cache = self.codex_home([])
+        cache.start()
+        self.addCleanup(cache.stop)
+
     def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None, now=NOW):
         calls = []
         def reader(argv, **kwargs):
@@ -97,14 +103,78 @@ class Routing(unittest.TestCase):
         return json.dumps({"decisions": [{"decision": decision, "family": family, "reason": "bounded role fit", "role": role} for role, family, decision in items], "schemaVersion": 1}).encode()
 
     def ladder_fixture(self, rows, role="first-check", producers=()):
-        # Each row declares a concrete model and its observed supported levels.
+        # Each row declares a Nix pin and its supported levels.
         routes = [route(name, tier=tier, pool=pool, default=default, maker=maker, techniques=[technique(model=name)]) for name, maker, tier, pool, default, levels in rows]
         config = manifest(routes) | {"lowWaterMark": 0.5}
         config["readers"] = [{"command": "reader-" + pool, "name": pool, "pool": {"preference": 0}} for pool in sorted({row[3] for row in rows if row[3] is not None})]
-        ctx = context((role,), effort=None, techniques=[{"efforts": levels, "model": name, "runtime": "codex", "technique": "spawn_agent"} for name, maker, tier, pool, default, levels in rows])
+        for node, row in zip(routes, rows):
+            node["techniques"][0]["model"]["efforts"] = row[5]
+        ctx = context((role,), effort=None)
         if producers:
             ctx["roles"][role]["producers"] = list(producers)
         return config, ctx
+
+    def test_routes_from_manifest_and_highest_visible_cache_models(self):
+        # Wrong: a Claude caller must observe Codex tools before these routes exist.
+        config = manifest([
+            route("sol", target="codex", techniques=[technique("codex exec", "external", "gpt-*-sol", True)], default="medium"),
+            route("astra", target="codex", techniques=[technique("codex exec", "external", "gpt-*-astra", True)], default="high"),
+        ]) | {"runtime": "claude", "runtimes": ["claude", "codex"]}
+        models = [
+            {"slug": "gpt-6.9-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "high"}]},
+            {"slug": "gpt-6.10-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "low"}, {"effort": "medium"}, {"effort": "high"}]},
+            {"slug": "gpt-7-sol", "visibility": "hide", "supported_reasoning_levels": [{"effort": "max"}]},
+            {"slug": "gpt-6-astra", "visibility": "list", "supported_reasoning_levels": [{"effort": "high"}, {"effort": "max"}]},
+        ]
+        ctx = context(effort="+1")
+        with self.codex_home(models):
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual([(item["launch"]["family"], item["launch"]["model"], item["launch"]["effort"]) for item in result["roles"]["writer"]["candidates"]], [
+            ("astra", "gpt-6-astra", "max"), ("sol", "gpt-6.10-sol", "high"),
+        ])
+        ctx["nonInteractive"] = True
+        with self.codex_home(models):
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+
+    def test_nix_pin_model_and_efforts_beat_catalog(self):
+        config = manifest()
+        config["routes"][0]["techniques"][0]["model"]["efforts"] = ["low", "high", "max"]
+        models = [
+            {"slug": "gpt-6.1-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "high"}]},
+            {"slug": "gpt-7-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "high"}]},
+        ]
+        with self.codex_home(models):
+            result, _ = self.run_plan(config, context(effort="+1"))
+        self.assertEqual([(item["launch"]["model"], item["launch"]["effort"]) for item in result["roles"]["writer"]["candidates"]], [("gpt-6.1-sol", "max")])
+
+    def test_headless_caller_never_gets_another_runtime_native_route(self):
+        # Wrong: checking only kind=external lets a malformed cross-runtime native route through.
+        config = manifest([route(target="claude")])
+        result, _ = self.run_plan(config, context(non_interactive=True))
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertEqual(result["roles"]["writer"]["exclusions"], [{"family": "sol", "runtime": "claude", "reason": "external delegate forbidden in headless context", "technique": "spawn_agent"}])
+
+    def test_unresolvable_manifest_route_has_json_reason(self):
+        config = manifest([route(techniques=[technique(model="missing-*", pattern=True)])])
+        ctx = context()
+        with self.codex_home([]):
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertEqual(result["roles"]["writer"]["exclusions"], [{"family": "sol", "runtime": "codex", "technique": "spawn_agent", "reason": "no concrete model in Nix pin or codex local model list"}])
+
+    def test_caller_techniques_refused_before_readers(self):
+        ctx = context() | {"techniques": []}
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.techniques", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary"}])
+
+    def test_same_pool_family_keeps_both_runtime_routes(self):
+        config = manifest([
+            route("glm", target="claude", maker="zhipu", techniques=[technique("claude -p", "external", "glm-5.3")]),
+            route("glm", target="codex", maker="zhipu", techniques=[technique(model="glm-5.3")]),
+        ]) | {"runtimes": ["codex", "claude"]}
+        ctx = context()
+        result, _ = self.run_plan(config, ctx)
+        self.assertEqual([(item["launch"]["family"], item["launch"]["runtime"], item["pool"]) for item in result["roles"]["writer"]["candidates"]], [("glm", "claude", "outside"), ("glm", "codex", "outside")])
 
     def test_ladder_maker_relation_precedes_pool_order(self):
         # Wrong: family-only avoid lets a second line from the same maker lead.
@@ -131,7 +201,7 @@ class Routing(unittest.TestCase):
                 ctx["roles"]["writer"]["effort"] = offset
                 result, _ = self.run_plan(config, ctx)
                 self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["effort"], expected)
-        ctx["techniques"][0]["efforts"] = []
+        config["routes"][0]["techniques"][0]["model"]["efforts"] = []
         result, _ = self.run_plan(config, ctx)
         self.assertIsNone(result["roles"]["writer"]["candidates"][0]["launch"]["effort"])
 
@@ -163,8 +233,9 @@ class Routing(unittest.TestCase):
         config, ctx = self.ladder_fixture(rows, producers=[{"family": "producer", "effort": "high"}])
         config["runtimes"].append("claude")
         config["routes"][-1]["target"] = "claude"
+        levels = config["routes"][-1]["techniques"][0]["model"]["efforts"]
         config["routes"][-1]["techniques"] = [technique(name="claude -p", kind="external", model="producer")]
-        ctx["techniques"][-1].update(runtime="claude", technique="claude -p")
+        config["routes"][-1]["techniques"][0]["model"]["efforts"] = levels
         for headless, expected in [(False, ["a", "b", "c", "producer"]), (True, ["a", "b", "c"])]:
             with self.subTest(headless=headless):
                 ctx["nonInteractive"] = headless
@@ -496,12 +567,12 @@ class Routing(unittest.TestCase):
                 self.assertEqual(self.request_errors(launch_context=ctx), [{"path": f"launchContext.roles.writer.{key}", "message": "unknown key; allowed: effort, exclude, producers"}])
         ctx = context()
         ctx["essay"] = "unused"
-        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.essay", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary, techniques"}])
+        self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.essay", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary"}])
 
     def test_request_errors_list_every_problem_with_paths(self):
         # Wrong: the first fault hides the rest, a misspelled effort becomes a silent
         # loop failure after Readers, or an absent nonInteractive crashes late.
-        ctx = {"taskSummary": " ", "proposerFamily": "sool", "roles": {"writer": {"effort": "hihg", "avoid": ["sol", "nope"], "exclude": "sol", "fit": 1}, "wizard": {}}, "techniques": [{"runtime": "codex", "technique": "x", "model": "", "efforts": ["high", "hihg"]}, "bare"], "extra": 1}
+        ctx = {"taskSummary": " ", "proposerFamily": "sool", "roles": {"writer": {"effort": "hihg", "avoid": ["sol", "nope"], "exclude": "sol", "fit": 1}, "wizard": {}}, "extra": 1}
         config = manifest(session="undeclared")
         config["routes"][0]["pool"] = "ghost"
         names = "dormant, manual, sol"
@@ -510,12 +581,10 @@ class Routing(unittest.TestCase):
             {"path": "argv.role[1]", "message": "unknown role; allowed: finder, first-check, investigator, judge, mechanical, planner, second-check, writer"},
             {"path": "manifest.sessionPool", "message": configuration + "unregistered pool undeclared; registered: hidden, outside, session"},
             {"path": "manifest.routes[0].pool", "message": configuration + "unregistered pool ghost; registered: hidden, outside, session"},
-            {"path": "launchContext.extra", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary, techniques"},
+            {"path": "launchContext.extra", "message": "unknown key; allowed: caller, nonInteractive, proposerFamily, roles, taskSummary"},
             {"path": "launchContext.taskSummary", "message": "must be a non-empty UTF-8 string of at most 65536 bytes"},
             {"path": "launchContext.nonInteractive", "message": "required; true, false or null"},
             {"path": "launchContext.proposerFamily", "message": f"unknown family name; allowed: {names}"},
-            {"path": "launchContext.techniques[0].model", "message": "must be a non-empty string"},
-            {"path": "launchContext.techniques[1]", "message": "must be an object"},
             {"path": "launchContext.roles.writer.exclude", "message": "must be a list of family names or makers"},
             {"path": "launchContext.roles.writer.effort", "message": "must be a signed step offset such as +1 or -1, or null"},
             {"path": "launchContext.roles.writer.avoid", "message": "unknown key; allowed: effort, exclude, producers"},
@@ -529,12 +598,13 @@ class Routing(unittest.TestCase):
             ctx = context() | {key: value}
             self.assertEqual(len(self.request_errors(launch_context=ctx)), 1)
 
-    def test_off_scale_observed_efforts_are_accepted_but_role_requests_are_not(self):
+    def test_off_scale_catalog_efforts_are_accepted_but_role_requests_are_not(self):
         # Wrong: Codex introspection that lists `ultra` (or Kimchi `off`) refuses a
         # valid caller; or a role request for `ultra` slips through to a silent loop failure.
         ctx = context()
-        ctx["techniques"][0]["efforts"] = ["high", "ultra", "off"]
-        result, _ = self.run_plan(manifest(), ctx)
+        config = manifest()
+        config["routes"][0]["techniques"][0]["model"]["efforts"] = ["high", "ultra", "off"]
+        result, _ = self.run_plan(config, ctx)
         self.assertEqual([item["launch"]["effort"] for item in result["roles"]["writer"]["candidates"]], ["high"])
         ctx = context(effort="ultra")
         self.assertEqual(self.request_errors(launch_context=ctx), [{"path": "launchContext.roles.writer.effort", "message": "must be a signed step offset such as +1 or -1, or null"}])
@@ -604,7 +674,7 @@ class Routing(unittest.TestCase):
             config["readers"] = {"name": "outside"}
             self.assertEqual(refused(config), ["manifest.readers"])
             (root / "context.json").write_text(json.dumps({"taskSummary": "ok"}))
-            self.assertEqual(refused(manifest(), ["--now", "garbage"]), ["launchContext.nonInteractive", "launchContext.techniques", "launchContext.roles", "argv.--now"])
+            self.assertEqual(refused(manifest(), ["--now", "garbage"]), ["launchContext.nonInteractive", "launchContext.roles", "argv.--now"])
 
     def test_cli_manifest_name_lists_are_configuration_faults(self):
         # Wrong: scalar or mixed-type name lists crash sorting/membership checks
@@ -816,7 +886,7 @@ class Routing(unittest.TestCase):
         # Wrong: the picker is skipped because the caller did not list its own
         # technique, or runs although its executable is absent.
         config, ctx = self.picker_fixture()
-        self.assertEqual([item["technique"] for item in ctx["techniques"]], ["spawn_agent"])
+        self.assertNotIn("techniques", ctx)
         with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(picker.call_count, 1)
@@ -833,7 +903,8 @@ class Routing(unittest.TestCase):
         cache = json.loads(CODEX_CACHE.read_text())
         cache["models"] = cache["models"] if models is None else models
         (Path(directory.name) / "models_cache.json").write_text(json.dumps(cache))
-        scrubbed = {key: value for key, value in os.environ.items() if not key.startswith(("CODEX", "OPENAI"))}
+        # CODEX_PICKER_COMMAND is this suite's own switch for the real-codex test, not Codex state.
+        scrubbed = {key: value for key, value in os.environ.items() if key == "CODEX_PICKER_COMMAND" or not key.startswith(("CODEX", "OPENAI"))}
         return patch.dict(os.environ, scrubbed | {"CODEX_HOME": directory.name}, clear=True)
 
     def test_codex_picker_catalog_is_the_picked_model_with_every_tool_removed(self):
@@ -920,13 +991,12 @@ class Routing(unittest.TestCase):
         self.assertEqual(result["roles"]["judge"]["candidates"], [])
         self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
-    def test_highest_version_among_observed_models_for_one_family(self):
-        # Wrong: several observed models matching one pattern exclude the family,
-        # or compare as strings (6.9 over 6.10) instead of version numbers.
+    def test_highest_version_among_catalog_models_for_one_family(self):
+        # Wrong: matching cache ids compare as strings (6.9 over 6.10).
         config = manifest([route(techniques=[technique(model="gpt-*-sol", pattern=True)])])
-        observed = lambda model: {"efforts": ["high"], "model": model, "runtime": "codex", "technique": "spawn_agent"}
-        ctx = context(techniques=[observed("gpt-6.9-sol"), observed("gpt-6.10-sol"), observed("gpt-6.1-sol"), observed("gpt-7-luna")])
-        result, _ = self.run_plan(config, ctx)
+        models = [{"slug": model, "visibility": "list", "supported_reasoning_levels": [{"effort": "high"}]} for model in ("gpt-6.9-sol", "gpt-6.10-sol", "gpt-6.1-sol", "gpt-7-luna")]
+        with self.codex_home(models):
+            result, _ = self.run_plan(config, context())
         self.assertEqual([c["launch"]["model"] for c in result["roles"]["writer"]["candidates"]], ["gpt-6.10-sol"])
         self.assertEqual(result["roles"]["writer"]["exclusions"], [])
 
@@ -990,7 +1060,7 @@ class Routing(unittest.TestCase):
                 ctx = context((role,), ("sol", "other"))
                 ctx["roles"][role].update(lists)
                 result, _ = self.run_plan(config, ctx, (role,))
-                self.assertEqual([c["launch"]["family"] for c in result["roles"][role]["candidates"]], ["other", "sol"])
+                self.assertEqual([c["launch"]["family"] for c in result["roles"][role]["candidates"]], ["other", "sol", "sol"])
             ctx["roles"][role].update({"exclude": ["sol", "sol"]})
             excluded_config = deepcopy(config)
             excluded_config["routes"][0]["family"]["tier"] = "invalid"
@@ -1560,37 +1630,32 @@ class Routing(unittest.TestCase):
 
     def test_generated_agent_workflow_external_and_unresolved(self):
         agent = {"family": {"defaultEffort": "high", "name": "sol"}, "id": "gpt-6.1-sol"}
-        techniques = [technique("Agent with generated agent file", agent=agent), technique("Workflow", "workflow"), technique("claude -p", "external")]
-        evidence = [{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "claude", "technique": name} for name in ("Agent with generated agent file", "Workflow", "claude -p")]
-        config = manifest([route(target="claude", techniques=techniques, default="high")])
-        result, _ = self.run_plan(config, context(techniques=evidence, effort=None))
+        nodes = [technique("Agent with generated agent file", agent=agent), technique("Workflow", "workflow"), technique("claude -p", "external")]
+        config = manifest([route(target="claude", techniques=nodes, default="high")]) | {"runtime": "claude", "runtimes": ["claude"]}
+        result, _ = self.run_plan(config, context())
         candidate = result["roles"]["writer"]["candidates"][0]
         self.assertEqual(candidate["line"], "role=writer runtime=claude family=sol technique=Agent with generated agent file model=gpt-6.1-sol effort=high")
         self.assertEqual(candidate["launch"]["agent"]["id"], "gpt-6.1-sol")
-        for name, headless in [("Workflow", False), ("claude -p", False), ("claude -p", True), ("claude -p", None)]:
-            result, _ = self.run_plan(config, context(techniques=[e for e in evidence if e["technique"] == name], non_interactive=headless))
+        for node, headless in [(nodes[1], False), (nodes[2], False), (nodes[2], True), (nodes[2], None)]:
+            config["routes"][0]["techniques"] = [node]
+            result, _ = self.run_plan(config, context(non_interactive=headless))
             candidates = result["roles"]["writer"]["candidates"]
             self.assertEqual(bool(candidates), headless is False)
             if candidates:
-                self.assertEqual(candidates[0]["line"], f"role=writer runtime=claude family=sol technique={name} model=gpt-6.1-sol effort=high")
-        for field, value in [("model", "invented"), ("efforts", ["low"]), ("technique", "absent")]:
-            ctx = context()
-            ctx["techniques"][0][field] = value
-            result, _ = self.run_plan(launch_context=ctx)
-            self.assertEqual(result["roles"]["writer"]["candidates"], [])
-        config = manifest([route(techniques=[technique(model="gpt-*-sol", pattern=True)], default=None)])
-        result, _ = self.run_plan(config, context(effort=None))
-        self.assertEqual(result["roles"]["writer"]["candidates"], [])
-        config["routes"][0]["family"]["defaultEffort"] = "high"
+                self.assertEqual(candidates[0]["line"], f"role=writer runtime=claude family=sol technique={node['name']} model=gpt-6.1-sol effort=high")
+        config = manifest([route(default=None)])
         result, _ = self.run_plan(config, context())
-        self.assertEqual(result["roles"]["writer"]["candidates"][0]["launch"]["model"], "gpt-6.1-sol")
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        config["routes"][0]["techniques"][0]["model"]["efforts"] = []
+        result, _ = self.run_plan(config, context())
+        self.assertIsNone(result["roles"]["writer"]["candidates"][0]["launch"]["effort"])
 
     def test_validation_before_readers_and_real_timeout(self):
         self.assertEqual([error["path"] for error in self.request_errors(manifest(session="undeclared"))], ["manifest.sessionPool"])
         self.assertEqual([error["path"] for error in self.request_errors(manifest([route(pool="undeclared")]))], ["manifest.routes[0].pool"])
-        ctx = context()
-        ctx["techniques"][0]["efforts"] = "high"
-        self.assertEqual([error["path"] for error in self.request_errors(launch_context=ctx)], ["launchContext.techniques[0].efforts"])
+        config = manifest()
+        config["routes"][0]["techniques"][0]["model"]["efforts"] = "high"
+        self.assertEqual([error["path"] for error in self.request_errors(config)], ["manifest.routes[0].techniques[0].model.efforts"])
         with patch.object(helper, "READER_TIMEOUT", 0.02), patch("time.sleep"):
             measured = helper.collect([{"command": "while :; do :; done", "name": "stuck"}], NOW, SHELL)
         self.assertEqual(measured["stuck"]["status"], "unreachable")
@@ -1614,7 +1679,7 @@ class Routing(unittest.TestCase):
         config = manifest([route("fast", "mid", "session"), route("design", "frontier")])
         for node in (technique(), technique("Workflow", "workflow")):
             config["routes"][1]["techniques"] = [node]
-            ctx = context(("planner",), ("design", "fast"), techniques=[{"efforts": ["high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": node["name"]}], non_interactive=True)
+            ctx = context(("planner",), ("design", "fast"), non_interactive=True)
             result, _ = self.run_plan(config, ctx, ("planner",), outputs={"reader-session": stream({"monthly": window(99)})})
             self.assertEqual(result["roles"]["planner"]["candidates"][0]["launch"]["family"], "design")
             self.assertIn({"family": "fast", "reason": "below role tier floor", "runtime": "codex"}, result["roles"]["planner"]["exclusions"])
@@ -1661,8 +1726,10 @@ class Routing(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "absent from current helper output"):
                 helper.check_plan(changed, current, root)
             # A new context or budget decision, not the old plan's snapshot, wins.
-            for ctx, outputs in ((context(roles, techniques=[{"efforts": ["low", "high"], "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}], effort="-1"), None), (context(roles), {"reader-outside": stream({"monthly": window(0)})})):
-                changed, _ = self.run_plan(launch_context=ctx, roles=roles, outputs=outputs)
+            config = manifest()
+            config["routes"][0]["techniques"][0]["model"]["efforts"] = ["low", "high"]
+            for ctx, outputs in ((context(roles, effort="-1"), None), (context(roles), {"reader-outside": stream({"monthly": window(0)})})):
+                changed, _ = self.run_plan(config, launch_context=ctx, roles=roles, outputs=outputs)
                 with self.assertRaisesRegex(ValueError, "absent from current helper output"):
                     helper.check_plan(artifact, changed, root)
             config = manifest([route(pool=None)])

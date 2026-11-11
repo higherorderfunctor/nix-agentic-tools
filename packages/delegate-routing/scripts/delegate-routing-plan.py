@@ -436,11 +436,19 @@ def model_version(model):
     return tuple(int(part) for part in re.findall(r"[0-9]+", model))
 
 
-def observed(route, technique, context):
+def resolve_model(route, technique):
+    """Nix pins win; otherwise resolve the highest visible id from the harness catalog."""
     model = technique["model"]
-    evidence = [item for item in context["techniques"] if item["runtime"] == route["target"] and item["technique"] == technique["name"] and model_matches(item["model"], model)]
-    # Equal versions keep the last observation, as agent-files.nix resolveId does.
-    return max(reversed(evidence), key=lambda item: model_version(item["model"]), default=None)
+    if not model["isPattern"]:
+        return {"model": model["value"], "efforts": model["efforts"]} if model_matches(model["value"], model) else None
+    entries = []
+    if route["target"] == "codex":
+        cache = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
+        try:
+            entries = [{"model": item["slug"], "efforts": [level["effort"] for level in item["supported_reasoning_levels"]]} for item in strict_json(cache.read_bytes())["models"] if item.get("visibility") == "list" and model_matches(item["slug"], model)]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            entries = []
+    return max(reversed(entries), key=lambda item: model_version(item["model"]), default=None)
 
 
 def model_matches(value, model):
@@ -451,12 +459,12 @@ def effort_levels(evidence, scale):
     return [level for level in scale if level in evidence["efforts"]]
 
 
-def producer_details(manifest, context, producer):
+def producer_details(manifest, producer):
     for route in manifest["routes"] + manifest["manualRoutes"]:
         if route["family"]["name"] != producer["family"]:
             continue
         for technique in route["techniques"]:
-            evidence = observed(route, technique, context)
+            evidence = resolve_model(route, technique)
             if evidence is None:
                 continue
             levels = effort_levels(evidence, manifest["effortLevels"])
@@ -468,17 +476,17 @@ def producer_details(manifest, context, producer):
     return None
 
 
-def launch(route, context, offset, same_line, scale):
+def launch(route, context, offset, same_line, scale, runtime):
     alternatives, exclusions = [], []
     for technique in route["techniques"]:
         name, node = technique["name"], technique["node"]
         reason = None
-        if node["kind"] == "external" and context.get("nonInteractive") is not False:
+        if (route["target"] != runtime or node["kind"] == "external") and context.get("nonInteractive") is not False:
             reason = "external delegate forbidden in headless context" if context.get("nonInteractive") is True else "non-interactive status unresolved for external delegate"
-        evidence = observed(route, technique, context)
+        evidence = resolve_model(route, technique)
         effort = route["family"]["defaultEffort"]
         if reason is None and evidence is None:
-            reason = "concrete model/available technique unresolved"
+            reason = f"no concrete model in Nix pin or {route['target']} local model list"
         if reason is None:
             levels = effort_levels(evidence, scale)
             if evidence["efforts"] == []:
@@ -594,7 +602,7 @@ def request_errors(manifest, context, roles):
             refuse(path, f"{CONFIGURATION_FAULT}must have type {' or '.join(kind.__name__ for kind in schema)}")
 
     family_shape = {"avoidFor": (str,), "defaultEffort": (str, type(None)), "maker": (str,), "name": (str,), "tier": (str,), "useFor": (str,)}
-    technique_shape = {"agent": (dict, type(None)), "model": {"isPattern": (bool,), "value": (str,)}, "name": (str,), "node": {"command": (str, type(None)), "kind": (str,), "modelArg": (str,), "notes": (str,)}}
+    technique_shape = {"agent": (dict, type(None)), "model": {"efforts": [(str,)], "isPattern": (bool,), "value": (str,)}, "name": (str,), "node": {"command": (str, type(None)), "kind": (str,), "modelArg": (str,), "notes": (str,)}}
     route_shape = {"family": family_shape, "target": (str,), "techniques": [technique_shape]}
     picker_shape = {"command": (str,), "effort": (str,), "family": (str,), "model": (str,), "pool": (str, type(None)), "runtime": (str,), "technique": (str,), "toolFree": (bool,)}
 
@@ -689,7 +697,7 @@ def request_errors(manifest, context, roles):
         return errors
     families = sorted(name_lists["familyNames"]) if "familyNames" in name_lists else None
     efforts = name_lists.get("effortLevels")
-    closed("launchContext", context, {"caller", "nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
+    closed("launchContext", context, {"caller", "nonInteractive", "proposerFamily", "roles", "taskSummary"})
     summary = context.get("taskSummary")
     try:
         summary_valid = isinstance(summary, str) and summary.strip() and len(summary.encode("utf-8")) <= TASK_SUMMARY_LIMIT
@@ -702,19 +710,6 @@ def request_errors(manifest, context, roles):
     proposer = context.get("proposerFamily")
     if families is not None and proposer is not None and (not isinstance(proposer, str) or proposer not in families):
         refuse("launchContext.proposerFamily", f"unknown family name; allowed: {allowed(families)}")
-    observed = context.get("techniques")
-    if not isinstance(observed, list):
-        refuse("launchContext.techniques", "required; a list of observed techniques")
-    for index, evidence in enumerate(observed if isinstance(observed, list) else []):
-        path = f"launchContext.techniques[{index}]"
-        if not isinstance(evidence, dict):
-            refuse(path, "must be an object")
-            continue
-        closed(path, evidence, {"efforts", "model", "runtime", "technique"})
-        for key in ("model", "runtime", "technique"):
-            text(f"{path}.{key}", evidence.get(key))
-        if not isinstance(evidence.get("efforts"), list):
-            refuse(f"{path}.efforts", "required; a list of efforts, [] when effort is omitted")
     requests = context.get("roles")
     if not isinstance(requests, dict):
         refuse("launchContext.roles", "required; an object keyed by role")
@@ -747,8 +742,8 @@ def request_errors(manifest, context, roles):
                     named(f"{at}.family", producer.get("family"), families, "family name")
                 if "effort" not in producer or (producer["effort"] is not None and efforts is not None and producer["effort"] not in efforts):
                     refuse(f"{at}.effort", "must name the producer's supported launch effort, or null when omitted")
-                if not errors and producer_details(manifest, context, producer) is None:
-                    refuse(at, "producer default, tier and supported launch effort must resolve from configured routes and observed techniques")
+                if not errors and producer_details(manifest, producer) is None:
+                    refuse(at, "producer default, tier and supported launch effort must resolve from configured routes and local model lists")
             if producers and request.get("effort") is not None:
                 refuse(f"{path}.effort", "checking roles take their offset from producers")
             closed(path, request, {"effort", "exclude", "producers"})
@@ -803,7 +798,7 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     eligible_by_role, excluded_by_role, producers_by_role = {}, {}, {}
     for role in roles:
         request = context["roles"].get(role, {})
-        producers = [producer_details(manifest, context, producer) for producer in request.get("producers", [])]
+        producers = [producer_details(manifest, producer) for producer in request.get("producers", [])]
         producers_by_role[role] = producers
         floor = max((TIERS.index(family["tier"]) for family, offset in producers), default=0)
         offset = max((offset for family, offset in producers), default=int(request.get("effort") or "+0"))
@@ -817,7 +812,7 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
             if family["tier"] not in ROLE_TIERS[role] or TIERS.index(family["tier"]) < floor:
                 excluded.append(record | {"reason": "below role tier floor"})
                 continue
-            alternatives, unresolved = launch(route, context, offset, any(producer["name"] == family["name"] for producer, step in producers), manifest["effortLevels"])
+            alternatives, unresolved = launch(route, context, offset, any(producer["name"] == family["name"] for producer, step in producers), manifest["effortLevels"], manifest["runtime"])
             excluded.extend(record | item for item in unresolved)
             if alternatives:
                 if (route["pool"], family["name"]) in invalid_families:
