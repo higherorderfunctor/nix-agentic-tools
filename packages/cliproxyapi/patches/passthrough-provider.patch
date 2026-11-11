@@ -1,0 +1,141 @@
+CLIProxyAPI: share the existing compatibility grouped-family decision.
+
+Loading, serialization and settings extraction use one predicate while retaining
+all current compatibility fields and behavior. No provider family is added.
+Applied after key-allowlist and zai-tool-shims with --fuzz=0.
+Rationale: packages/cliproxyapi/docs/cliproxyapi-extraction.md.
+
+diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
+index 377673f..3d74bbb 100644
+--- a/internal/config/config_v8.go
++++ b/internal/config/config_v8.go
+@@ -381,6 +381,13 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
+ 	return root, nil
+ }
+ 
++// isV8GroupedFamily identifies families whose legacy entries already contain
++// provider groups. Loading, serialization and extraction preserve those structs
++// and rename api-key-entries to keys instead of synthesizing groups per key.
++func isV8GroupedFamily(provider string) bool {
++	return provider == "openai-compatibility"
++}
++
+ // isV8GroupKeyField is shared with the settings extractor: a field accepted
+ // on a provider group must also appear in that group's generated schema.
+ func isV8GroupKeyField(provider, field string) bool {
+@@ -412,7 +419,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+ 		if err := validateWeightSequenceNode(keys, "api-keys."+provider+".keys"); err != nil {
+ 			return nil, err
+ 		}
+-		if provider == "openai-compatibility" {
++		if isV8GroupedFamily(provider) {
+ 			item := deepCopyNode(group)
+ 			deleteYAMLPath(item, "keys")
+ 			deleteYAMLPath(item, "auth_index")
+@@ -492,7 +499,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+ 	out := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+ 	for index, entry := range keys.Content {
+ 		group := deepCopyNode(entry)
+-		if provider == "openai-compatibility" {
++		if isV8GroupedFamily(provider) {
+ 			entries := yamlPath(group, "api-key-entries")
+ 			if entries == nil {
+ 				entries = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+diff --git a/internal/config/config_v8_grouped_family_test.go b/internal/config/config_v8_grouped_family_test.go
+new file mode 100644
+index 0000000..0e1e063
+--- /dev/null
++++ b/internal/config/config_v8_grouped_family_test.go
+@@ -0,0 +1,92 @@
++package config
++
++import (
++	"testing"
++
++	"gopkg.in/yaml.v3"
++)
++
++// A flattened-key implementation loses compatibility-only group fields or
++// splits a group's credentials. Compare both transformations with an explicit
++// legacy shape, including a keyless group and distinct groups sharing a URL.
++func TestV8GroupedFamilyRoundTrip(t *testing.T) {
++	const grouped = `
++- name: primary
++  base-url: https://upstream.example/v1
++  codex-shell-arg-cleanup: true
++  headers: {X-Group: primary}
++  models: [{name: upstream, alias: client}]
++  priority: 30
++  request-retry: 0
++  keys:
++    - api-key: first
++      proxy-url: http://proxy.example
++      weight: 2
++    - api-key: second
++- name: secondary
++  base-url: https://upstream.example/v1
++  keys: []
++`
++	const legacy = `
++- name: primary
++  base-url: https://upstream.example/v1
++  codex-shell-arg-cleanup: true
++  headers: {X-Group: primary}
++  models: [{name: upstream, alias: client}]
++  priority: 30
++  request-retry: 0
++  api-key-entries:
++    - api-key: first
++      proxy-url: http://proxy.example
++      weight: 2
++    - api-key: second
++- name: secondary
++  base-url: https://upstream.example/v1
++  api-key-entries: []
++`
++	decode := func(raw string) *yaml.Node {
++		t.Helper()
++		var doc yaml.Node
++		if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
++			t.Fatal(err)
++		}
++		return doc.Content[0]
++	}
++	expanded, err := expandV8Groups(decode(grouped), "openai-compatibility")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !nodesStructurallyEqual(expanded, decode(legacy)) {
++		t.Fatal("compatibility loading changed the legacy grouped shape")
++	}
++	serialized := groupLegacyKeys(decode(legacy), "openai-compatibility")
++	if !nodesStructurallyEqual(serialized, decode(grouped)) {
++		t.Fatal("compatibility serialization changed the v8 grouped shape")
++	}
++}
++
++// Refuse treating any existing flat-key family (or an unknown name) as a
++// pre-grouped struct; only compatibility has api-key-entries today.
++func TestV8GroupedFamilyPredicate(t *testing.T) {
++	for _, tc := range []struct {
++		provider string
++		want     bool
++	}{
++		{"", false},
++		{"claude", false},
++		{"codex", false},
++		{"gemini", false},
++		{"interactions", false},
++		{"meta", false},
++		{"openai-compatibility", true},
++		{"unknown", false},
++		{"vertex", false},
++		{"xai", false},
++	} {
++		t.Run(tc.provider, func(t *testing.T) {
++			if got := isV8GroupedFamily(tc.provider); got != tc.want {
++				t.Fatalf("grouped family = %v, want %v", got, tc.want)
++			}
++		})
++	}
++}

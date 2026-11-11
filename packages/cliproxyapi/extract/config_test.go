@@ -2,8 +2,8 @@
 // Copied into a copy of CLIProxyAPI's internal/config by lib/extracted's
 // goTestExtract; it is not part of CLIProxyAPI. In-package, so it reads the v8
 // layout from CPA's own tables (v8Paths, v8StructPaths, v8KeyFamilies,
-// isV8GroupKeyField, v8AllowedRoots) instead of restating them. The node type
-// vocabulary, field walk and output come from
+// isV8GroupedFamily, isV8GroupKeyField, v8AllowedRoots) instead of restating
+// them. The node type vocabulary, field walk and output come from
 // lib/extracted/go/nat_shared_test.go.
 //
 // TestNatExtract writes the v8 configuration tree to $NAT_EXTRACT_OUT: one
@@ -217,7 +217,7 @@ func (x *natExtractor) family(field reflect.StructField, owner reflect.Type, cur
 	authIndex := func(tag string) bool { return tag == "auth-index" || tag == "auth_index" }
 	x.emit(base, natNode{Description: x.doc(owner, field.Name), Type: "list"})
 	x.emit(base+"[]", natNode{Type: "object"})
-	if current == "openai-compatibility" {
+	if isV8GroupedFamily(current) {
 		x.walk(elem, base+"[]", "", func(path string, node natNode) {
 			if path != base+"[]" {
 				x.emit(path, node)

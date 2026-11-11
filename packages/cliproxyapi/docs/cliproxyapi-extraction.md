@@ -72,9 +72,10 @@ An upstream key family becomes `api-keys.<family>[]` groups holding `name` and
 `keys`; `isV8GroupKeyField` supplies the group fields to both CPA's loader and
 the extractor, including Claude's provider-specific `tool-aliases` map. This
 keeps accepted group fields in the generated settings type without another field
-list. OpenAI compatibility keeps its group struct with `api-key-entries` renamed
-to `keys`. The v8 group loader does not read `auth-index`, so those fields are
-omitted.
+list. `isV8GroupedFamily` supplies the grouped-family decision to v8 loading,
+serialization and extraction. OpenAI compatibility is its only grouped family:
+it keeps its group struct with `api-key-entries` renamed to `keys`. The v8 group
+loader does not read `auth-index`, so those fields are omitted.
 
 ## Measured data
 
@@ -113,6 +114,10 @@ configuration shape is host-independent. Shared `lib/extracted` owns loading,
 platform carrying and regeneration. The reconciliation reader consumes the
 declared object directly.
 
+The third patch, `patches/passthrough-provider.patch`, currently only extracts
+the shared grouped-family predicate and adds roundtrip tests. It introduces no
+config fields or provider family.
+
 ## Hand annotations
 
 `extract/annotations.json` supplies reasons for credential-bearing config paths.
@@ -134,3 +139,13 @@ and checks annotation reconciliation. Regenerate from the repository root:
 ```bash
 nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate
 ```
+
+`cliproxyapi-grouped-family` checks compatibility loading and serialization
+against explicit grouped/legacy fixtures and compares the freshly extracted
+compatibility subtree with the committed measurement, including descriptions and
+template comments. It rejects splitting compatibility groups into flat keys,
+applying grouped behavior to another existing family, and extraction that
+disagrees with the loader. The full `cliproxyapi-extracted` and
+`cliproxyapi-settings` checks still gate schema drift and settings rendering.
+For this refactor, CI must confirm unchanged measured schema; regenerate through
+the draft PR extraction workflow and accept only genuinely measured changes.

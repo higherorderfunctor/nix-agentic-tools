@@ -32,6 +32,7 @@
         patches = [
           ../../../../patches/key-allowlist.patch
           ../../../../patches/zai-tool-shims.patch
+          ../../../../patches/passthrough-provider.patch
         ];
         # A CPA release that changes the patched context fails here, loudly.
         patchFlags = ["-p1" "--fuzz=0"];
