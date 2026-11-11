@@ -109,6 +109,13 @@
       "description": "SensitiveWords is a list of words to obfuscate with zero-width characters.\nThis can help bypass certain content filters.",
       "type": "list"
     },
+    "api-keys.claude[].keys[].cloak.sensitive-words-replace": {
+      "description": "SensitiveWordsReplace maps sensitive words or phrases to literal replacements.",
+      "type": "map"
+    },
+    "api-keys.claude[].keys[].cloak.sensitive-words-replace.<name>": {
+      "type": "string"
+    },
     "api-keys.claude[].keys[].cloak.sensitive-words[]": { "type": "string" },
     "api-keys.claude[].keys[].cloak.strict-mode": {
       "description": "StrictMode controls how caller system prompts are handled when cloaking.\n- false (default): legacy-model whitelist uses a user reminder; all other models use a mid-conversation system message\n- true: strip caller system prompts and keep only the Claude Code billing and identity blocks",
@@ -2461,7 +2468,7 @@
     },
     "oauth.providers.antigravity.antigravity-credits": {
       "description": "AntigravityCredits enables credits-based last-resort fallback for Claude models.\nWhen all free-tier auths are exhausted (429/503), the conductor retries with\nan auth that has available Google One AI credits.",
-      "template": "Use credits as a last resort after free-tier Claude quota is exhausted.",
+      "template": "\"You are Codex, an agent based on GPT-5.\": \"You are a helpful coding assistant.\"\nUse credits as a last resort after free-tier Claude quota is exhausted.",
       "type": "bool"
     },
     "oauth.providers.antigravity.connection-pool": {
@@ -2481,8 +2488,15 @@
       "type": "int"
     },
     "oauth.providers.antigravity.sensitive-words": {
-      "description": "SensitiveWords is a list of words to obfuscate with zero-width characters in system instructions.",
+      "description": "SensitiveWords is a list of words to obfuscate with invisible combining grapheme joiners in system instructions.",
       "type": "list"
+    },
+    "oauth.providers.antigravity.sensitive-words-replace": {
+      "description": "SensitiveWordsReplace maps sensitive words or phrases to literal replacements in system instructions.",
+      "type": "map"
+    },
+    "oauth.providers.antigravity.sensitive-words-replace.<name>": {
+      "type": "string"
     },
     "oauth.providers.antigravity.sensitive-words[]": { "type": "string" },
     "oauth.providers.antigravity.signature-bypass-strict": { "type": "bool" },
@@ -2552,6 +2566,13 @@
     "oauth.providers.devin.sensitive-words": {
       "description": "SensitiveWords is a list of words to obfuscate with zero-width characters in system prompts and messages.",
       "type": "list"
+    },
+    "oauth.providers.devin.sensitive-words-replace": {
+      "description": "SensitiveWordsReplace maps sensitive words or phrases to literal replacements in system prompts.",
+      "type": "map"
+    },
+    "oauth.providers.devin.sensitive-words-replace.<name>": {
+      "type": "string"
     },
     "oauth.providers.devin.sensitive-words[]": { "type": "string" },
     "oauth.request-scoped-errors": {
@@ -3274,6 +3295,11 @@
     "upstream.claude.model-level-cooling": {
       "description": "ModelLevelCooling scopes Claude quota cooldowns to the requested model\nrather than cooling down the entire credential across all sibling models.",
       "template": "When true, scope quota cooldowns to the requested model rather than cooling down\nthe entire credential across all sibling models. Default is false.",
+      "type": "bool"
+    },
+    "upstream.claude.server-side-fallback": {
+      "description": "ServerSideFallback opts cloaked Claude requests into Anthropic server-side\nrefusal fallback injection (claude-opus-5-5 -> claude-opus-4-8 and\nclaude-fable-5-1 -> claude-opus-5) when the request body does not already\nspecify fallbacks. Default false leaves cross-model fallbacks omitted unless\nexplicitly configured by the caller or payload rules.",
+      "template": "When true, inject Anthropic server-side refusal fallbacks on cloaked Claude requests\nwhen the request body does not already specify fallbacks (claude-opus-5-5 -> claude-opus-4-8,\nclaude-fable-5-1 -> claude-opus-5). Default false never opts requests into cross-model\nfallback unless the caller or requests.payload rules explicitly provide fallbacks.\nWhen fallback occurs, translated OpenAI Chat Completions and Responses payloads report\nthe actual serving model and attach structured fallback metadata (choices[0].delta.fallback /\nchoices[0].message.fallback and fallbacks for Chat; response.fallback and response.fallbacks\nfor Responses).",
       "type": "bool"
     },
     "upstream.claude.session-date-pin-days": {
