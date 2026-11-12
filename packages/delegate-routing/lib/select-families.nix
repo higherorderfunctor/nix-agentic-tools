@@ -8,8 +8,6 @@
     manualExternalDelegates,
   }:
     [runtime] ++ lib.subtractLists manualExternalDelegates (lib.unique extraRuntimes);
-  candidates = families: models: runtimes:
-    lib.unique (lib.concatMap (runtime: select families models.${runtime}) runtimes);
   flatten = families:
     lib.concatMap
     (vendor: lib.mapAttrsToList (name: family: family // {inherit name vendor;}) families.${vendor})
@@ -32,7 +30,7 @@
         selectors)
       (flatten families));
 in {
-  inherit automatic candidates flatten select;
+  inherit automatic flatten select;
 
   # Rendered skills and acceptance inventory share this view. An explicit
   # technique enable cannot advertise a workflow the CLI config disables.
@@ -61,6 +59,12 @@ in {
       settings.techniques)
     config.ai.programs.delegate-routing.runtimes;
 
-  # Package families omit bindings; module families also admit explicit null.
-  poolFor = family: target: family.pools.${target} or null;
+  # Named budgets must come from the checked serving graph. Unbound family
+  # guidance remains usable by the standalone skill without inventing a budget.
+  poolFor = catalog: family: target: model:
+    if catalog != null && catalog.runtimes ? ${target}
+    then catalog.poolFor target model
+    else if (family.pools.${target} or null) != null
+    then throw "delegate-routing: pass an evaluated aiModule.catalog graph for bound family ${family.name} on ${target}."
+    else null;
 }

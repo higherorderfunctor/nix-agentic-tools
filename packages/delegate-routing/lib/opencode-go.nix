@@ -3,8 +3,8 @@
 # pinned catalog. Every tier is a provisional routing judgment from the
 # per-model research; none was measured on the operator's Go workload.
 {lib}: let
-  facts = import ../../../lib/extracted/facts.nix {inherit lib;};
-  fact = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
+  catalogLib = import ../../ai-module/lib/catalog/resolve.nix {inherit lib;};
+  fact = catalogLib.opencodeGo;
   inherit ((import ../../cliproxyapi/lib/providers.nix {inherit lib;}).vendors.opencode-go) refuses;
   vendor = "opencode-go";
   # Catalog ids a Go credential may serve; the Claude OAuth credential owns the rest.

@@ -16,6 +16,8 @@ backend: {
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
   instancesLib = import ../../ai-module/lib/instances.nix {inherit lib;};
   providersLib = cliproxyapi.providers;
+  graph = config.ai.catalog.resolved;
+  projected = name: instance: providersLib.project graph name instance;
   # A named client key also written by hand could widen its allowlist rules.
   handWritten = name: instance: let
     clients = lib.mapAttrsToList (clientName: client: client // {option = "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}";}) instance.clientKeys;
@@ -37,7 +39,7 @@ backend: {
   printable = text: text != "" && builtins.match "[!-~]" text != null;
   edgesPrintable = url: url == "" || (printable (builtins.substring 0 1 url) && printable (builtins.substring (builtins.stringLength url - 1) 1 url));
   baseUrlOf = block: lib.defaultTo "" (block.base-url or null);
-  harnessApis = definition: builtins.attrNames (lib.filterAttrs (api: _: providersLib.apis.${api}.harnessApi) (providersLib.served definition));
+  inherit (providersLib) harnessApis;
   sharedBaseUrls = name: instance: let
     families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (harnessApis definition)) (builtins.attrValues (providersLib.apiKeys instance)));
     blocksOf = family: lib.defaultTo [] (instance.settings.api-keys.${family} or null);
@@ -63,7 +65,9 @@ backend: {
   # route's resolved API, in route order. The claim keeps the name unique
   # across proxy owners.
   inferenceInstances =
-    lib.mapAttrs (name: instance: {
+    lib.mapAttrs (name: raw: let
+      instance = projected name raw;
+    in {
       backend = "cliproxyapi";
       clients =
         lib.mapAttrs (clientName: client: {
@@ -92,8 +96,14 @@ in {
         + lib.optionalString (!instance.fetchModelCatalogs) " --local-model";
       inherit backend;
       defaultPort = 8317;
-      derived = {instance, ...}: {
-        api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower pkgs instance.credentials);
+      derived = {
+        instance,
+        name,
+        ...
+      }: let
+        serving = projected name instance;
+      in {
+        api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower pkgs serving.credentials);
         access = lib.mkIf (instance.clientKeys != {}) {
           api-keys = map (client: client.key) (builtins.attrValues instance.clientKeys);
           key-allowlist =
@@ -101,7 +111,7 @@ in {
               api-key = client.key;
               credentials = lib.concatMap (choice: lib.toList ((providersLib.route instance "clientKeys.${clientName}.routes" choice).rule or [])) client.routes;
             })
-            instance.clientKeys;
+            serving.clientKeys;
         };
         # Without this the daemon downloads its control panel from GitHub at
         # start and every 3 hours after.

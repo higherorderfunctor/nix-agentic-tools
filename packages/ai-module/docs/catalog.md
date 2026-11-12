@@ -1,0 +1,131 @@
+# Shared model catalog and runtime reach
+
+`ai.catalog` describes model identities, budgets and runtime reach. Both Home
+Manager and devenv import its option module through
+`ai-module/modules/common.nix`. The checked `ai.catalog.resolved` graph supplies
+CPA client credential grants and delegate-routing's model and pool projection.
+External delegates use the destination runtime's reach; pools are never combined
+with the caller's.
+
+## Identity and offers
+
+`models.<id>` contains `maker`, exact `aliases.<provider>` spellings and a
+`source` reference. Native Claude/Codex identities and CPA's Go/z.ai facts are
+loaded by the shared owner. Go's `canonical_id` namespace identifies its maker;
+`owned_by` is the serving vendor and is not used as a maker. Missing maker
+evidence remains null. A finite model with an unknown maker cannot be combined
+with an OAuth catalog because absence of overlap cannot be established. Declare
+its identity with evidence or omit that finite offer.
+
+`iceman-contributor-free` has the distinct maker identity `iceman`. Its upstream
+maker is undisclosed; this identity does not attribute it to another vendor. The
+fact is preserved from
+`dcaf19f9:packages/delegate-routing/lib/opencode-go.nix:132`. The aggregate
+exercises the full extracted Go offer set after the operator's Anthropic, OpenAI
+and Zhipu exclusions, including iceman, through all three native CPA API
+families.
+
+`providers.<provider>.maker` identifies the maker belonging to an open provider
+catalog. Defaults map CPA's `claude` catalog to `anthropic` and `codex` to
+`openai`. Provider names and makers remain separate identities. Two provider
+names declaring the same maker describe the same open set for overlap checking.
+
+Each `pools.<pool>` describes one budget:
+
+- `credentials.<name> = { auth; binding; }` identifies an existing local
+  `instance/credential` binding; it holds no secret value. Several credentials
+  can spend the same budget.
+- `models` lists finite API-key offers, canonicalized before comparison.
+- `providerCatalogs` lists open OAuth offers, including models registered after
+  evaluation. It is not a finite snapshot or an OAuth model allowlist.
+
+Existing CPA credentials supply their actual offers automatically. A named
+credential defaults to its `instance/credential` budget identity; declaring its
+binding under a catalog pool gives that budget a shared name. Explicit model
+fields add offers; they cannot hide what a bound CPA credential really serves.
+Narrow an API-key offer through its existing `apiKey.models` or per-API model
+declaration. OAuth cannot be narrowed this way.
+
+CPA's predicate `clientKeyAllowlist.allows(clientKey, auth)` checks provider,
+credential kind, account, ID and base URL, but takes no requested model
+(`packages/cliproxyapi/patches/key-allowlist.patch:1025–1040`). Its model
+listing then checks the live registry (`1071–1097`). The hot-registration test
+(`1468–1500`) retains the original credential grant when a matching login
+appears. These are why the graph represents OAuth as an open catalog.
+`oauth.excluded-models` is provider-global, so it cannot express different model
+grants for two budgets on the same provider.
+
+## Reach and refusal
+
+`runtimes.<runtime>.pools` replaces reach inferred from existing client routes
+and family budget bindings. CPA clients selected through `settings.inference`
+use that runtime's graph; an unselected named client is checked independently as
+`cliproxyapi:<instance>/<client>`. Two runtimes sharing one client key must have
+identical reach, because CPA sees the same principal. Existing route order and
+API choices are preserved for retained credentials. The graph uses CPA's
+existing route resolver to compute each runtime's effective finite offers: a
+selected chat API does not expose models served only by that credential's
+Anthropic API. Pool records retain the full offer inventory; `modelsFor` and
+`poolFor` apply this runtime restriction.
+
+Evaluation refuses:
+
+- Two finite pools offering the same canonical model, including exact aliases
+  and the same upstream provider.
+- A finite model whose maker belongs to a reachable OAuth provider catalog on
+  another pool.
+- Two pools offering the same open OAuth provider catalog.
+
+Multiple credentials on one budget pass. Different runtimes may reach the same
+model from different budgets. Unknown model/pool/provider references and
+ambiguous aliases fail before consumption.
+
+Diagnostics sort runtime, model and pool IDs. They retain the shared error
+template and append a reason:
+
+```text
+ai.catalog: runtime "codex" offers model "gpt-6.1-sol" from multiple pools: codex, opencode-go. Select one pool for this model in this runtime. Reason: finite offer intersects an open OAuth catalog.
+```
+
+Two open catalogs use `provider-catalog:<provider>` in the model position. This
+is a diagnostic marker for the whole open set, not an invented model ID. The
+reason states that the same open provider catalog is reachable through multiple
+budgets. Future models do not escape the check: catalog membership is
+maker-based, and the open/open check does not need a currently observed model.
+
+## Consumers and manual use
+
+CPA keeps its protocol validation, secret delivery and OAuth account matching.
+Its API-key model aliases render canonical request IDs. Routing retains family
+fit, tier and effort guidance, but uses reachable catalog models for concrete
+launch pins and the shared graph for pool identity. Standalone unbound family
+guidance remains available; a direct routing builder with named budget bindings
+must receive an evaluated graph.
+
+```nix
+let
+  catalog = nat.lib.aiModule.catalog { inherit lib; };
+  graph = catalog.resolve {
+    models = catalog.defaults.models;
+    pools = {
+      codex.providerCatalogs = [ "codex" ];
+      go.models = [ "deepseek-v4-pro" ];
+    };
+    runtimes.codex.pools = [ "codex" "go" ];
+  };
+in content.mkSkill { catalog = graph; runtime = "codex"; }
+```
+
+No reset, credit, cost or usage policy is declared by this catalog.
+
+The older CPA Go-prefix refusal remains in place for configurations outside
+named client routing. The graph does not infer billing identities from
+hand-written low-level CPA blocks or unrestricted client keys. Removing that
+broader legacy restriction requires covering those inputs; the shared check
+already covers named-client OAuth/finite overlaps by identity rather than
+prefix.
+
+`ai-catalog-runtime-reach` evaluates the graph, CPA grants and routing
+manifest/prose together on both backends. Its literal diagnostic and grant
+expectations reject credential-kind exemptions, instance-wide overlap,
+alias-only string comparisons, and consumers that ignore the graph.

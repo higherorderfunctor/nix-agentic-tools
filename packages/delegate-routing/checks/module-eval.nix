@@ -476,6 +476,10 @@
     # (the stray id sorts above every family id under either compare).
     fixedScenario = lib.recursiveUpdate scenario {
       ai = {
+        catalog.models = lib.genAttrs fixedCatalogModels (_: {
+          maker = "anthropic";
+          source = "synthetic routing version-order fixture";
+        });
         internal.inferenceInstances.test = catalogInstance fixedCatalogModels;
         claude.settings.inference = {
           instance = "test";
@@ -561,6 +565,7 @@
     in {
       inherit lib;
       inherit (portable) families pools;
+      catalog = routingFixture.config.ai.catalog.resolved;
       inherit (portable.runtimes.claude) extraRuntimes manualExternalDelegates;
       models = lib.mapAttrs (_: settings: settings.models) portable.runtimes;
       runtime = "claude";
@@ -621,47 +626,53 @@
     };
     packagedHelperDelivery = runtime:
       change {
-        ai.kiro.cli.workflows.enable = true;
-        ai.programs.delegate-routing = {
-          families.fixture.packaged = {
-            defaultEffort = "high";
-            example.${runtime} = "fixture-model";
-            match = "fixture-model";
-            pools.${runtime} = sessionPools.${runtime};
-            tier = "strong";
+        ai = {
+          catalog.models.fixture-model = {
+            maker = "fixture";
+            source = "synthetic packaged-helper fixture";
           };
-          pools = lib.mkForce {
-            ${sessionPools.${runtime}}.usage = {
-              inherit runtime;
-              technique = "fixture-reader";
+          kiro.cli.workflows.enable = true;
+          programs.delegate-routing = {
+            families.fixture.packaged = {
+              defaultEffort = "high";
+              example.${runtime} = "fixture-model";
+              match = "fixture-model";
+              pools.${runtime} = sessionPools.${runtime};
+              tier = "strong";
             };
-          };
-          runtimes.${runtime} = {
-            extraRuntimes = lib.mkForce [];
-            manualExternalDelegates = lib.mkForce [];
-            models = lib.mkForce [{vendors = ["fixture"];}];
-            picker.entries = lib.mkForce [
-              {
-                effort = "medium";
-                model = "fixture-model";
-                technique = "fixture-picker";
-              }
-            ];
-            techniques.fixture-picker = {
-              command = "fixture-one-shot";
-              kind = "external";
-              modelArg = "model id";
-              pinsEffort = true;
-              pinsModel = true;
-              pickerCommand = {
-                command = ''printf '%s' '{"decisions":[{"decision":"keep","family":"packaged","reason":"fixture role fit","role":"writer"}],"schemaVersion":1}' > <output-file>'';
-                toolFree = true;
+            pools = lib.mkForce {
+              ${sessionPools.${runtime}}.usage = {
+                inherit runtime;
+                technique = "fixture-reader";
               };
             };
-            sessionPool = sessionPools.${runtime};
-            techniques.fixture-reader = {
-              command = "${pkgs.coreutils}/bin/cat ${readerOutput}";
-              kind = "usage";
+            runtimes.${runtime} = {
+              extraRuntimes = lib.mkForce [];
+              manualExternalDelegates = lib.mkForce [];
+              models = lib.mkForce [{vendors = ["fixture"];}];
+              picker.entries = lib.mkForce [
+                {
+                  effort = "medium";
+                  model = "fixture-model";
+                  technique = "fixture-picker";
+                }
+              ];
+              techniques.fixture-picker = {
+                command = "fixture-one-shot";
+                kind = "external";
+                modelArg = "model id";
+                pinsEffort = true;
+                pinsModel = true;
+                pickerCommand = {
+                  command = ''printf '%s' '{"decisions":[{"decision":"keep","family":"packaged","reason":"fixture role fit","role":"writer"}],"schemaVersion":1}' > <output-file>'';
+                  toolFree = true;
+                };
+              };
+              sessionPool = sessionPools.${runtime};
+              techniques.fixture-reader = {
+                command = "${pkgs.coreutils}/bin/cat ${readerOutput}";
+                kind = "usage";
+              };
             };
           };
         };
@@ -984,10 +995,10 @@
           routingView.routes;
         resolved = import ../lib/routing-view.nix (routingArgs
           // {
-            # A caller's explicit resolution must beat the supplied record.
+            # Preserve a caller's explicit pin within the evaluated reach.
             resolvedAgentFiles.opus = {
               family.defaultEffort = "high";
-              id = "proxy-opus-123";
+              id = "test-opus-5-2";
             };
           });
         agent = builtins.head (builtins.head resolved.routes).techniques;
@@ -1010,12 +1021,6 @@
             target = "codex";
             techniques = ["codex exec"];
           }
-          {
-            family = "flash";
-            pool = null;
-            target = "claude";
-            techniques = ["claude -p"];
-          }
         ]
         && routingView.manualRoutes != []
         && lib.all (route: route.target == "kiro") routingView.manualRoutes
@@ -1037,15 +1042,24 @@
         && agent.model
         == {
           isPattern = false;
-          value = "proxy-opus-123";
+          value = "test-opus-5-2";
         }
         && agent.agent.family.defaultEffort == "high"
+        && !(builtins.tryEval (builtins.deepSeq
+          (import ../lib/routing-view.nix (routingArgs
+            // {
+              resolvedAgentFiles.opus = {
+                family.defaultEffort = "high";
+                id = "outside-catalog";
+              };
+            })).routes
+          true)).success
         && (builtins.head (lib.last routingView.routes).techniques).model
         == {
-          isPattern = true;
-          value = "test-flash-*";
+          isPattern = false;
+          value = "test-opus-5-10";
         }
-        && lib.hasInfix "claude: `claude -p` with full model id the highest id matching `test-flash-*`" text
+        && !(lib.hasInfix "test-flash-*" text)
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p`" text
         && !(lib.hasInfix "`Workflow`" text)
         && !(lib.hasInfix "via kiro:" text)
@@ -1255,7 +1269,7 @@
     "module-delegate-routing-${name}-pools-bindings" = mkTest "delegate-routing-${name}-pools-bindings" (
       poolFailsWith (poolChange {families.anthropic.opus.pools.claude = "missing";}) "families.anthropic.opus.pools.claude: unknown pool `missing`"
       && poolFailsWith (poolChange {families.anthropic.opus.pools.unknown = null;}) "families.anthropic.opus.pools.unknown: `unknown` is not a runtime"
-      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`; via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" (readSkill (fixedPoolChange {families.anthropic.opus.pools.claude = null;}) "claude")
+      && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*`; via codex: `codex exec` with slug `test-opus-5-10` (pool configured)" (readSkill (fixedPoolChange {families.anthropic.opus.pools.claude = null;}) "claude")
     );
     "module-delegate-routing-${name}-pools-empty" = mkTest "delegate-routing-${name}-pools-empty" (
       result.config.ai.programs.delegate-routing.pools
@@ -1314,9 +1328,9 @@
         && lib.hasInfix "| configured | none | configured: 12.500000 units per month, resets day 28; current use unknown | |" text
         && lib.hasInfix "| measured | `read-pool --current` | measured | SHARED \\| BUDGET DESCRIPTION |" text
         && lib.hasInfix "**pool-reader (usage):** `read-pool --current`" text
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`, else `claude -p` with full model id the highest id matching `test-opus-*` (pool measured); via codex: `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" text
-        && lib.hasInfix "- opus (anthropic) `test-opus-*`: `kiro-cli chat` with model_id the highest id matching `test-opus-*` (pool measured)" text
-        && lib.hasInfix "codex: `spawn_agent` with slug the highest id matching `test-opus-*`, else `codex exec` with slug the highest id matching `test-opus-*` (pool configured)" (readSkill poolResult "codex")
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id `test-opus-5-10`, else `claude -p` with full model id `test-opus-5-10` (pool measured); via codex: `codex exec` with slug `test-opus-5-10` (pool configured)" text
+        && lib.hasInfix "- opus (anthropic) `test-opus-*`: `kiro-cli chat` with model_id `test-opus-5-10` (pool measured)" text
+        && lib.hasInfix "codex: `spawn_agent` with slug `test-opus-5-10`, else `codex exec` with slug `test-opus-5-10` (pool configured)" (readSkill poolResult "codex")
         && builtins.length (lib.splitString "## Pools" (builtins.head (lib.splitString "### frontier" poolSkill))) == 2
         && withoutHelperPath (readSkill (fixedPoolChange {pools.measured.window = window;}) "claude") == withoutHelperPath poolSkill
         && ruleText poolResult == stub
@@ -2253,7 +2267,7 @@ in {
           runtime = "claude";
           skill = withFamilies content.passthru.skill;
           families = lib.recursiveUpdate content.passthru.families {
-            anthropic.opus.example.claude = "proxy-opus-123";
+            anthropic.opus.example.claude = "test-opus-5-2";
           };
         };
       in
@@ -2264,7 +2278,7 @@ in {
           && plain.text == content.passthru.skills.claude.text
           && !(lib.hasInfix "| Family" plain.text)
           && lib.hasInfix "generated agent file pinning `claude-opus-" base.text
-          && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `proxy-opus-123`, else `Workflow` with full model id `proxy-opus-123`, else `claude -p` with full model id `proxy-opus-123`" fallback.text
+          && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-2`, else `Workflow` with full model id `test-opus-5-2`, else `claude -p` with full model id `test-opus-5-2`" fallback.text
         );
       # tryEval cannot expose the diagnostic; evaluate the resolver in a subprocess.
       module-delegate-routing-cycle-message = let
