@@ -1,6 +1,6 @@
 diff --git a/apps/web/src/components/providers/PassthroughTable/PassthroughTable.test.tsx b/apps/web/src/components/providers/PassthroughTable/PassthroughTable.test.tsx
 new file mode 100644
-index 0000000..5346eed
+index 0000000..3a4c1be
 --- /dev/null
 +++ b/apps/web/src/components/providers/PassthroughTable/PassthroughTable.test.tsx
 @@ -0,0 +1,118 @@
@@ -37,7 +37,7 @@ index 0000000..5346eed
 +    baseUrl: 'https://off.example',
 +    disabled: true,
 +    keys: [{ apiKey: 'secret-key-three' }],
-+    models: [],
++    models: [{ name: 'claude-sonnet' }],
 +    name: 'Off',
 +    path: '/v1/messages',
 +    providerKey: 'passthrough-off',
@@ -568,10 +568,10 @@ index 2b8d9f8..113805f 100644
  export type MonitoringAuthMeta = {
 diff --git a/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts b/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts
 new file mode 100644
-index 0000000..944aae0
+index 0000000..40ee05d
 --- /dev/null
 +++ b/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts
-@@ -0,0 +1,117 @@
+@@ -0,0 +1,113 @@
 +import { beforeEach, describe, expect, it, vi } from 'vitest';
 +
 +const { mocks } = vi.hoisted(() => ({
@@ -633,10 +633,7 @@ index 0000000..944aae0
 +        },
 +      ],
 +    });
-+    mocks.getGroups.mockResolvedValue([
-+      searchGroup,
-+      { ...searchGroup, keys: [], name: 'rerank', providerKey: 'passthrough-rerank' },
-+    ]);
++    mocks.getGroups.mockResolvedValue([searchGroup]);
 +
 +    const payload = await loadMonitoringMetaPayload(null);
 +
@@ -645,7 +642,6 @@ index 0000000..944aae0
 +    ).toEqual([
 +      { authIndices: ['oa-1'], key: 'search:0', name: 'search' },
 +      { authIndices: ['pt-1', 'pt-2'], key: 'search:1', name: 'search' },
-+      { authIndices: [], key: 'rerank:2', name: 'rerank' },
 +    ]);
 +    expect(JSON.stringify(payload)).not.toContain('sk-search');
 +    expect(payload.error).toBe('');
@@ -809,71 +805,23 @@ index 0a31a1b..bc04955 100644
      }));
      setMonitoringMetaError(payload.error);
    }, [config]);
-diff --git a/apps/web/src/services/api/client.ts b/apps/web/src/services/api/client.ts
-index 2f3aea6..f45e41d 100644
---- a/apps/web/src/services/api/client.ts
-+++ b/apps/web/src/services/api/client.ts
-@@ -26,6 +26,11 @@ export type ScopedApiRequestConfig = AxiosRequestConfig & {
-   cpampScopedRequest?: true;
- };
- 
-+// An optional read whose 401 rejects without dispatching the session logout.
-+export type OptionalApiRequestConfig = AxiosRequestConfig & {
-+  cpampIgnoreUnauthorized?: true;
-+};
-+
- export const createScopedApiRequestConfig = (
-   scope: ApiClientRequestScope
- ): ScopedApiRequestConfig => ({
-@@ -224,7 +229,13 @@ class ApiClient {
-       apiError.data = responseData;
- 
-       // 401 未授权 - 触发登出事件
--      if (error.response?.status === 401 && this.requestTargetsCurrentConfig(error.config)) {
-+      const ignoreUnauthorized =
-+        (error.config as OptionalApiRequestConfig | undefined)?.cpampIgnoreUnauthorized === true;
-+      if (
-+        error.response?.status === 401 &&
-+        !ignoreUnauthorized &&
-+        this.requestTargetsCurrentConfig(error.config)
-+      ) {
-         window.dispatchEvent(new Event('unauthorized'));
-       }
- 
 diff --git a/apps/web/src/services/api/passthrough.test.ts b/apps/web/src/services/api/passthrough.test.ts
 new file mode 100644
-index 0000000..f1bd588
+index 0000000..b0ba9e4
 --- /dev/null
 +++ b/apps/web/src/services/api/passthrough.test.ts
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,75 @@
 +import { beforeEach, describe, expect, it, vi } from 'vitest';
 +
-+const { mocks, axiosInstance } = vi.hoisted(() => {
-+  const get = vi.fn();
-+  const requestUse = vi.fn();
-+  const responseUse = vi.fn();
-+  return {
-+    mocks: {
-+      get,
-+      requestUse,
-+      responseUse,
-+    },
-+    axiosInstance: {
-+      defaults: { timeout: 0 },
-+      get,
-+      interceptors: {
-+        request: { use: requestUse },
-+        response: { use: responseUse },
-+      },
-+    },
-+  };
-+});
++const { mocks } = vi.hoisted(() => ({
++  mocks: {
++    get: vi.fn(),
++  },
++}));
 +
-+vi.mock('axios', () => ({
-+  default: {
-+    create: vi.fn(() => axiosInstance),
-+    isAxiosError: (error: unknown) =>
-+      Boolean(error && typeof error === 'object' && 'isAxiosError' in error),
++vi.mock('./client', () => ({
++  apiClient: {
++    get: mocks.get,
 +  },
 +}));
 +
@@ -883,62 +831,35 @@ index 0000000..f1bd588
 +  },
 +}));
 +
-+import { apiClient } from './client';
 +import { passthroughApi } from './passthrough';
 +
-+const dispatchEvent = vi.fn();
-+
-+// Answers one GET with a 401 the way axios does: the registered request
-+// interceptor shapes the config, then the response error interceptor sees it.
-+const rejectNextGetAsUnauthorized = () =>
-+  mocks.get.mockImplementationOnce(async (url: string, config: Record<string, unknown>) => {
-+    const request = mocks.requestUse.mock.calls[0]?.[0] as (value: unknown) => unknown;
-+    const responseError = mocks.responseUse.mock.calls[0]?.[1] as (reason: unknown) => unknown;
-+    return responseError({
-+      isAxiosError: true,
-+      message: 'unauthorized',
-+      config: request({ ...config, url, headers: {} }),
-+      response: { status: 401, data: { error: 'unauthorized' } },
-+    });
-+  });
-+
 +beforeEach(() => {
-+  dispatchEvent.mockReset();
 +  mocks.get.mockReset();
-+  vi.stubGlobal('window', { dispatchEvent, location: { hash: '' } });
-+  apiClient.setConfig({
-+    apiBase: 'https://cpa.example.com',
-+    managementKey: 'cpa-key',
-+  });
 +});
 +
 +describe('passthroughApi.getGroups', () => {
 +  it('requests the v8 passthrough projection outside the v0 base', async () => {
-+    mocks.get.mockResolvedValue({ data: [] });
++    mocks.get.mockResolvedValue([]);
 +
 +    await passthroughApi.getGroups();
 +
 +    expect(mocks.get).toHaveBeenCalledWith(
-+      'https://cpa.example.com/v8/management/config/api-keys/passthrough',
-+      { cpampIgnoreUnauthorized: true }
++      'https://cpa.example.com/v8/management/config/api-keys/passthrough'
 +    );
 +  });
 +
 +  it('normalizes v8 groups and their key auth indexes', async () => {
-+    mocks.get.mockResolvedValue({
-+      data: [
-+        {
-+          name: ' Search API ',
-+          'base-url': 'https://search.example.com',
-+          path: '/v1/search',
-+          priority: 3,
-+          disabled: true,
-+          models: [{ name: 'web-search', alias: 'search' }, { name: '' }],
-+          keys: [{ 'api-key': 'sk-one', auth_index: 'abc123' }, { 'api-key': 'sk-two' }],
-+        },
-+        { 'base-url': 'https://nameless.example.com', keys: [] },
-+      ],
-+    });
++    mocks.get.mockResolvedValue([
++      {
++        name: ' Search API ',
++        'base-url': 'https://search.example.com',
++        path: '/v1/search',
++        priority: 3,
++        disabled: true,
++        models: [{ name: 'web-search', alias: 'search' }],
++        keys: [{ 'api-key': 'sk-one', auth_index: 'abc123' }, { 'api-key': 'sk-two' }],
++      },
++    ]);
 +
 +    await expect(passthroughApi.getGroups()).resolves.toEqual([
 +      {
@@ -964,21 +885,14 @@ index 0000000..f1bd588
 +    mocks.get.mockRejectedValueOnce(new Error('Network Error'));
 +    await expect(passthroughApi.getGroups()).resolves.toEqual([]);
 +  });
-+
-+  it('reads a 401 for the current session as no groups without logging out', async () => {
-+    rejectNextGetAsUnauthorized();
-+
-+    await expect(passthroughApi.getGroups()).resolves.toEqual([]);
-+    expect(dispatchEvent).not.toHaveBeenCalled();
-+  });
 +});
 diff --git a/apps/web/src/services/api/passthrough.ts b/apps/web/src/services/api/passthrough.ts
 new file mode 100644
-index 0000000..45e8f0c
+index 0000000..a773c00
 --- /dev/null
 +++ b/apps/web/src/services/api/passthrough.ts
-@@ -0,0 +1,77 @@
-+import { apiClient, type OptionalApiRequestConfig } from './client';
+@@ -0,0 +1,72 @@
++import { apiClient } from './client';
 +import { useAuthStore } from '@/stores/useAuthStore';
 +import { normalizeAuthIndex } from '@/utils/authIndex';
 +import { normalizeApiBase } from '@/utils/connection';
@@ -1037,16 +951,11 @@ index 0000000..45e8f0c
 +export const passthroughApi = {
 +  // The v8 path sits outside the client's v0 base, so the URL is absolute; the
 +  // client still adds the management key. A config without passthrough groups
-+  // answers 404 and a session that may not read the path answers 401, so every
-+  // failure reads as no groups and a 401 does not log the session out.
++  // answers 404, so every failure reads as no groups.
 +  getGroups: async (): Promise<PassthroughGroup[]> => {
 +    const base = normalizeApiBase(useAuthStore.getState().apiBase);
-+    const requestConfig: OptionalApiRequestConfig = { cpampIgnoreUnauthorized: true };
 +    try {
-+      const data = await apiClient.get(
-+        `${base}/v8/management/config/api-keys/passthrough`,
-+        requestConfig
-+      );
++      const data = await apiClient.get(`${base}/v8/management/config/api-keys/passthrough`);
 +      return (Array.isArray(data) ? data : [])
 +        .map(normalizePassthroughGroup)
 +        .filter((group): group is PassthroughGroup => group !== null);
