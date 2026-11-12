@@ -1827,6 +1827,14 @@
       "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
       "type": "int"
     },
+    "api-keys.passthrough[].unwrap": {
+      "description": "Unwrap selects a nested response object and returns its original JSON span.",
+      "type": "string"
+    },
+    "api-keys.passthrough[].usage-path": {
+      "description": "UsagePath selects usage in the original envelope; omission defaults to usage.",
+      "type": "string"
+    },
     "api-keys.vertex": {
       "description": "VertexCompatAPIKey defines Vertex AI-compatible API key configurations for third-party providers.\nUsed for services that use Vertex AI-style paths but with simple API key authentication.",
       "type": "list"

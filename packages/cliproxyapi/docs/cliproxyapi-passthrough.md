@@ -16,6 +16,8 @@ api-keys:
       priority: 30
       request-retry: 0
       disable-cooling: false
+      unwrap: result
+      usage-path: result.usage
       models:
         - name: upstream-model
           alias: decision
@@ -45,7 +47,27 @@ The route accepts a JSON object containing `model: "decision"`; it rejects
 streaming, empty models and non-boolean streaming flags. The executor rewrites
 the top-level `model` with CPA's `helps.SetStringIfDifferent` when an alias
 selects a different upstream model; the rest of the request is forwarded as
-sent.
+sent. Without `unwrap`, responses are returned unchanged. With `unwrap`, the
+selected object is returned as its original JSON span.
+
+Envelope options apply per group, so one alias can fail over between plain and
+wrapped APIs. `unwrap` and `usage-path` are nonempty dot-separated object-key
+paths whose segments start with a letter or `_` and contain letters, digits, `_`
+and `-`; arrays, wildcards and query syntax are refused. `usage-path` defaults
+to top-level `usage` and always refers to the original response, before unwrap.
+An explicitly configured missing usage path fails as 502; missing default usage
+records zero tokens. An unwrap selecting anything other than an object,
+malformed JSON and malformed present usage counters fail as 502. HTTP non-2xx
+failures keep their status without envelope parsing.
+
+For example, a plain System One-shaped response is
+`{"model":"upstream-model","answers":[],"usage":{"input_tokens":7,"output_tokens":3}}`.
+A Cloudflare-shaped response wraps that same object in `result`, alongside
+`success`, `errors` and `messages`; its group sets `unwrap: result` and
+`usage-path: result.usage`. Cloudflare reports failures, including an exhausted
+free allocation (HTTP 429), as non-2xx statuses, which native failover handles.
+These shapes are exercised using generic fixture identifiers; no vendor-specific
+executor is involved.
 
 Client access uses CPA's existing client-key middleware. Allowlist rules grant a
 specific internal provider and `kind: apikey`, optionally narrowed by credential
@@ -90,18 +112,23 @@ counting. The raw route bypasses model routers and plugin body transformations,
 preserving the existing request context, access identity, lifecycle and
 selected-auth capture.
 
-Responses retain their bytes. A top-level `usage` object may contain nonnegative
-integer `input_tokens` and `output_tokens`; missing usage records zero tokens.
-Present malformed counters fail as 502. Native usage reporting preserves the
-original requested alias, selected upstream model and authenticated client key.
-The fixture reads the generic management usage queue for two different client
-keys sharing one alias; failed attempts carry zero tokens.
+Responses without unwrap retain their bytes. The selected `usage` object may
+contain nonnegative integer `input_tokens` and `output_tokens`; missing default
+usage records zero tokens. Present malformed counters fail as 502. Native usage
+reporting preserves the original requested alias, selected upstream model and
+authenticated client key. The fixture reads the generic management usage queue
+for two different client keys sharing one alias; failed attempts carry zero
+tokens.
 
 Local mock upstreams use `httptest` random bound ports. The HTTP transport dials
 those ports while retaining production-shaped default-port URLs and Host headers
 without a port. This exercises path joining, Host routing, auth headers and
 exact request/response bytes; it does not prove privileged port binding or live
-upstream behavior.
+upstream behavior. An envelope fixture retries from a plain 429 group through a
+wrapped credential that also returns 429 to another credential on the same
+alias; a second request skips both cooled credentials. Each attempt rewrites the
+model from the original client body and publishes one native usage record, with
+tokens only on success.
 
 The carried `patches/passthrough-provider.patch` applies after `key-allowlist`
 and `zai-tool-shims` with zero fuzz. `cliproxyapi-passthrough` runs its config,
