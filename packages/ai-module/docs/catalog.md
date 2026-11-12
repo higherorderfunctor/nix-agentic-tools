@@ -18,8 +18,12 @@ own extracted facts and contribute ordinary module definitions. CPA contributes
 OpenCode Go and z.ai through `packages/cliproxyapi/modules/catalog.nix`; its
 per-vendor files own namespace normalization, aliases and evidence. OpenCode
 Go's `zhipuai` namespace becomes `zhipu`. The undisclosed iceman identity stays
-separate; no other maker is inferred. Native provider contributions belong to
-their respective owners and are not supplied by core.
+separate; no other maker is inferred. claude-code contributes its extracted
+Anthropic models and the `claude` provider (every `anthropic` model) through
+`packages/claude-code/modules/catalog.nix`; chatgpt-codex contributes its
+extracted OpenAI model slugs and the `codex` provider (every `openai` model)
+through `packages/chatgpt-codex/modules/catalog.nix`. Both are imported whether
+or not their runtime is enabled. Core supplies no provider or model itself.
 
 Owner contributions use `mkDefault` on each field. Equal-priority evidence and
 alias lists concatenate; compare them as sets. Identical maker defaults agree,
