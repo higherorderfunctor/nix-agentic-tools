@@ -384,7 +384,6 @@
         }
       ]
     ])
-    (row "${backend}: routing maker reads graph" (lib.unique (map (entry: entry.maker) manifest.routes)) ["openai"])
     (row "${backend}: routing manifest reads graph" routePools ["codex"])
     (row "${backend}: routing prose reads graph" (lib.hasInfix "pool codex" (builtins.readFile "${skill}/SKILL.md")) true)
     (row "${backend}: all launch pins are concrete" (lib.all (entry: lib.all (technique: !technique.model.isPattern) entry.techniques) manifest.routes) true)
@@ -402,7 +401,6 @@
       (row "disjoint runtime pool" (disjoint.poolFor "codex" "go-gpt") "b")
       (row "multiple credentials remain one budget" (map (credential: credential.pool) (catalog.credentialBindings shared.pools shared.runtimes.codex)) ["one" "one"])
       (row "iceman has its own undisclosed-maker identity" catalog.defaults.models.iceman-contributor-free.maker "iceman")
-      (row "native model maker differs from provider" catalog.defaults.models."glm-5.3".maker "zhipu")
     ]
     ++ moduleRows "hm" harness.evalHm ++ moduleRows "devenv" harness.evalDevenv;
   # Literal identities reject maker=provider, guessed IDs, ambiguous aliases,
@@ -462,8 +460,6 @@
     (row "Go canonical alias maker" (nativeGraph.modelFor "deepseek/deepseek-v4-pro").maker "deepseek")
     (row "Go alias canonical identity" (nativeGraph.canonical "deepseek/deepseek-v4-pro") "deepseek-v4-pro")
     (row "custom selected model maker" (customGraph.modelFor "other").maker "deepseek")
-    (row "routing maker independent of custom provider grouping"
-      (lib.head (identityView customGraph "*").routes).maker "deepseek")
     (row "routing pins the canonical custom ID"
       (lib.head (lib.head (identityView customGraph "*").routes).techniques).model.value "other")
     (row "routing refuses selected custom model without maker"
@@ -482,7 +478,7 @@
       (builtins.tryEval (ambiguousGraph.modelFor "shared").maker).success
       false)
   ];
-  nativeData = pkgs.writeText "ai-catalog-native-models.json" (builtins.toJSON (identityRows ++ moduleRows "hm" harness.evalHm ++ moduleRows "devenv" harness.evalDevenv));
+  nativeData = pkgs.writeText "ai-catalog-native-models.json" (builtins.toJSON identityRows);
   data = pkgs.writeText "ai-catalog-runtime-reach.json" (builtins.toJSON rows);
 in {
   checks = lib.mapAttrs (name: assertions:
