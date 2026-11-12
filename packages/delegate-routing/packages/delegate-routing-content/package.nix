@@ -26,6 +26,17 @@
     proxy-accounted-usage = mkUsageScript "proxy-accounted-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/proxy-accounted-usage.sh];
     zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/zai-usage.sh];
   };
+  mkObservation = args: let
+    manifests = import ../../lib/pacing.nix {inherit lib;} args;
+    manifest = pkgs.writeText "delegate-routing-observations.json" (builtins.toJSON manifests);
+  in
+    (import ../../../../lib/strict-shell-application.nix pkgs) {
+      name = "delegate-routing-observe";
+      passthru = {inherit manifest;};
+      text = ''
+        exec ${pkgs.python3}/bin/python3 -I ${../../scripts}/pacing-list.py "$@" --default-manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
+      '';
+    };
   rawDefaults = import ../../lib/defaults.nix {
     inherit lib;
     claudeUsageScript = lib.getExe usageScripts.claude-usage;
@@ -130,14 +141,19 @@ in
   pkgs.runCommand "delegate-routing-content" {
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
-      inherit mkSkill mkUsageScript render skills usageScripts;
+      inherit mkObservation mkSkill mkUsageScript render skills usageScripts;
       inherit (defaults) families models techniques routing skill workflows;
     };
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    mkdir -p "$out/fragments" "$out/skills"
+    mkdir -p "$out/bin" "$out/fragments" "$out/skills"
+    cp ${lib.getExe (mkObservation {
+      catalog.runtimes = {};
+      poolDefinitions = {};
+      techniques = {};
+    })} "$out/bin/delegate-routing-observe"
     cp ${../../fragments/load-delegate-routing.md} "$out/fragments/load-delegate-routing.md"
     ${lib.concatMapStringsSep "\n" (runtime: "cp -r ${skills.${runtime}} \"$out/skills/${runtime}\"") (builtins.attrNames skills)}
   ''

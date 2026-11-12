@@ -130,6 +130,12 @@
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
     };
+  observationCommand = defaults.passthru.mkObservation {
+    catalog = config.ai.catalog.resolved;
+    poolDefinitions = config.ai.catalog.pools;
+    inherit techniques;
+    budgets = portable.pools;
+  };
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
   names = lib.unique (map (family: family.name) flattenedFamilies);
@@ -368,6 +374,15 @@ in {
           inherit (resolved runtime) workflows;
         };
     })
+    {
+      config =
+        lib.setAttrByPath (
+          if backend == "hm"
+          then ["home" "packages"]
+          else ["packages"]
+        )
+        (lib.optional (lib.any sourceEnabled supportedRuntimes) observationCommand);
+    }
   ];
 
   config = {
