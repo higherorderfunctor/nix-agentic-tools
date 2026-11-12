@@ -477,12 +477,16 @@ class CachixPushFilterTest(unittest.TestCase):
                     self.assertIn("pushFilter: kiro-cli|codeql\n", step + "\n", workflow.name)
         self.assertGreater(steps, 0)
 
-    def test_devenv_update_lane_does_not_push(self):
-        # The devenv lane's shell-entry check realizes the patched Kiro inside
-        # the shell's closure, which pushFilter does not cover (2026-10-17).
+    def test_proprietary_kiro_update_lanes_do_not_push(self):
+        # The devenv shell and catalog updater realize proprietary Kiro inside
+        # dependencies that unfiltered roots can pull into a push closure.
         workflow = Path(__file__).parents[2] / ".github/workflows/update.yml"
         step = workflow.read_text().split("uses: cachix/cachix-action@", 1)[1].split("\n      - ", 1)[0]
-        self.assertIn("skipPush: ${{ matrix.name == 'devenv' }}\n", step + "\n")
+        normalized = " ".join(step.split())
+        self.assertIn(
+            "skipPush: ${{ matrix.name == 'devenv' || matrix.name == 'kiro-model-catalog' }}",
+            normalized,
+        )
 
 
 class CacheAssertionTest(unittest.TestCase):

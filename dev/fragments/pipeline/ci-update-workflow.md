@@ -47,15 +47,17 @@ can mutate the prepared branch. After successful package verification, the
 (`devenv --no-tui shell true`); failure holds the bump back. This runs inside
 the existing preparation deadline. The shell's closure holds the patched Kiro,
 which `pushFilter` does not catch inside a closure, so the `devenv` lane sets
-`skipPush`. A writable update may open with failing build checks; an incomplete
-update is held back and its existing PR is preserved. A worker whose build
-verification failed still publishes and arms auto-merge, uploads its receipt,
-and then fails in `Fail on failed build verification`
-(`update-matrix.py verdict`) with an `::error::` naming the target, failed
-attributes and PR -- when that PR is new or its patch changed. A PR that already
-proposed the same patch, and a branch that is not the bot's own last push, are
-skips: a `::notice::`, and the lane stays green. The required checks keep
-auto-merge from landing a red PR.
+`skipPush`. The `kiro-model-catalog` lane runs the unwrapped CLI for its
+authenticated refresh and uses the same boundary because an unfiltered updater
+root can pull Kiro dependencies into its push closure. A writable update may
+open with failing build checks; an incomplete update is held back and its
+existing PR is preserved. A worker whose build verification failed still
+publishes and arms auto-merge, uploads its receipt, and then fails in
+`Fail on failed build verification` (`update-matrix.py verdict`) with an
+`::error::` naming the target, failed attributes and PR -- when that PR is new
+or its patch changed. A PR that already proposed the same patch, and a branch
+that is not the bot's own last push, are skips: a `::notice::`, and the lane
+stays green. The required checks keep auto-merge from landing a red PR.
 
 `update-matrix.py` requires a normal target return and exactly one final report
 before permitting publication. An early rev/source commit alone proves nothing:

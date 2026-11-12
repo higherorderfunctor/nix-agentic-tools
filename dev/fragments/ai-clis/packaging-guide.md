@@ -157,15 +157,16 @@ days later, so `ci.yml` provably was not the source. That incident involved two
 workflow paths holding `CACHIX_AUTH_TOKEN`, only one of which was covered. The
 current token-bearing producers all need the filter:
 
-| job                           | builds patched?                     | pushes?                  |
-| ----------------------------- | ----------------------------------- | ------------------------ |
-| `ci.yml` build-packages       | no — `ci-packages.py` exclusions    | token → **`pushFilter`** |
-| `ci.yml` publish-hestia       | no — builds `ciHestia` only         | token → **`pushFilter`** |
-| `ci.yml` test                 | no                                  | no token                 |
-| `extracted-facts.yml` produce | owner extraction closures           | token → **`pushFilter`** |
-| `kiro-patched`                | when scoped                         | no token                 |
-| `update.yml` devenv           | no — committed Kiro opt-in disabled | token → **`skipPush`**   |
-| `update.yml` inputs           | **yes — `verify_all_packages`**     | token → **`pushFilter`** |
+| job                             | builds patched?                     | pushes?                  |
+| ------------------------------- | ----------------------------------- | ------------------------ |
+| `ci.yml` build-packages         | no — `ci-packages.py` exclusions    | token → **`pushFilter`** |
+| `ci.yml` publish-hestia         | no — builds `ciHestia` only         | token → **`pushFilter`** |
+| `ci.yml` test                   | no                                  | no token                 |
+| `extracted-facts.yml` produce   | owner extraction closures           | token → **`pushFilter`** |
+| `kiro-patched`                  | when scoped                         | no token                 |
+| `update.yml` devenv             | no — committed Kiro opt-in disabled | token → **`skipPush`**   |
+| `update.yml` inputs             | **yes — `verify_all_packages`**     | token → **`pushFilter`** |
+| `update.yml` kiro-model-catalog | no — updater runs unwrapped Kiro    | token → **`skipPush`**   |
 
 `ci-packages.py` removes its `EXCLUDED` names before partitioning the native
 package set into two shards per system and emits a positive `--select`
@@ -185,9 +186,11 @@ Building Kiro there is deliberate and stays: `postInstallCheck` runs
 and the owned payload sets `doInstallCheck` so the phase really executes. The
 fix is therefore at the PUSH, not the build — `pushFilter: kiro-cli|codeql` on
 every `cachix-action` step that holds the token (`ci.yml` publish-hestia and
-build-packages, and the `update.yml` update step every lane shares). One
-spelling, copied identically: Actions cannot share an action input across
-workflows, and `test-ci-packages.py` fails if any credentialed step lacks it.
+build-packages, and the `update.yml` update step). One spelling, copied
+identically: Actions cannot share an action input across workflows, and
+`test-ci-packages.py` fails if any credentialed step lacks it. The lanes whose
+commands realize Kiro as a dependency rather than as a filtered root — `devenv`
+and `kiro-model-catalog` — additionally set `skipPush`.
 
 **The generalizable lesson: `cachix-action` with a token runs a watch-store
 daemon that pushes every path realized in the job.** Reasoning about which
@@ -207,13 +210,14 @@ Supporting properties:
 - **It is not a guarantee on its own**: "paths may still be pushed if they are
   part of another path's closure". The committed devenv package lists contain no
   `kiro-cli` entry with or without `CI=1`; contributors opt into Kiro in ignored
-  `devenv.local.nix`. The devenv lane keeps `skipPush`, pinned by
-  `test-ci-packages.py`, because on 2026-10-17 its shell-entry check published a
-  patched closure through the then-enabled shell (sweep `39032289943`), caught
-  by the tripwire below. The package shards and the other update lanes build the
-  patched output only as its own `kiro-cli-…` root, and every layer inside it
-  matches the regex — a property of the current graph that fails silently. The
-  tripwire below is the actual guarantee.
+  `devenv.local.nix`. The `devenv` and `kiro-model-catalog` lanes keep
+  `skipPush`, pinned by `test-ci-packages.py`; the former's shell-entry check
+  published a patched closure through the then-enabled shell on 2026-10-17
+  (sweep `39032289943`), and the latter's updater executes the unwrapped CLI.
+  The package shards and the other update lanes build the patched output only as
+  its own `kiro-cli-…` root, and every layer inside it matches the regex — a
+  property of the current graph that fails silently. The tripwire below is the
+  actual guarantee.
 - **Patched derivations are RENAMED so a leak is self-identifying.** Both
   variants used to be `kiro-cli-unwrapped-<version>`, differing only by store
   hash, which is exactly why one sat unnoticed in a cache listing. The patched
