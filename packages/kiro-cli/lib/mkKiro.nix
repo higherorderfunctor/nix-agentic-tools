@@ -1212,7 +1212,7 @@ in
             ${openKeys.allowlistSyntax}
           '';
         };
-        backgroundExecution.enable = lib.mkEnableOption "background execution; rebind cli.native.settings.chat.keybindings.moveToBackground globally when needed";
+        backgroundExecution.enable = lib.mkEnableOption "background execution";
         inherit (cliOptions.options) chat;
         codeToSpec.enable = lib.mkEnableOption "Code-to-Spec Explore and analysis tools (devenv also needs global chat.enableC2s)";
         extraPackages = lib.mkOption {
