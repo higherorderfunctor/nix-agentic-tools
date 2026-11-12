@@ -8,10 +8,10 @@ Applied after key-allowlist and zai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
 diff --git a/config.example.yaml b/config.example.yaml
-index dc3e483..5fcca03 100644
+index baaafca..297becd 100644
 --- a/config.example.yaml
 +++ b/config.example.yaml
-@@ -946,6 +946,16 @@ upstream:
+@@ -963,6 +963,16 @@ upstream:
  #
  #   # OpenAI compatibility providers
  #
@@ -479,7 +479,7 @@ index dad8d43..b5f59bd 100644
  	// Used for services that use Vertex AI-style paths but with simple API key authentication.
  	VertexCompatAPIKey []VertexCompatKey `yaml:"vertex-api-key" json:"vertex-api-key"`
 diff --git a/internal/config/config_load.go b/internal/config/config_load.go
-index b6764ef..4fa49b4 100644
+index 10c7a69..e6a0a4d 100644
 --- a/internal/config/config_load.go
 +++ b/internal/config/config_load.go
 @@ -178,6 +178,10 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
@@ -620,7 +620,7 @@ index 0000000..d9e9061
 +	}
 +}
 diff --git a/internal/config/parse.go b/internal/config/parse.go
-index 130eea0..c1e07fe 100644
+index d251b0f..516bf15 100644
 --- a/internal/config/parse.go
 +++ b/internal/config/parse.go
 @@ -16,6 +16,10 @@ func ParseConfigBytes(data []byte) (*Config, error) {
@@ -987,10 +987,10 @@ index 0000000..1eab4a5
 +	}
 +}
 diff --git a/internal/registry/model_registry.go b/internal/registry/model_registry.go
-index 7f82e7d..c98802e 100644
+index f02e53f..33eeb96 100644
 --- a/internal/registry/model_registry.go
 +++ b/internal/registry/model_registry.go
-@@ -1541,6 +1541,43 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
+@@ -1634,6 +1634,43 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
  	return available, expiresAt
  }
  
@@ -1033,8 +1033,8 @@ index 7f82e7d..c98802e 100644
 +
  // GetAvailableModelInfos returns cloned metadata for all currently available models.
  func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
- 	now := time.Now()
-@@ -1550,10 +1587,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
+ 	now := r.now()
+@@ -1643,10 +1680,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
  	result := make([]*ModelInfo, 0, len(r.models))
  	for _, registration := range r.models {
  		available, _ := modelRegistrationAvailability(registration, now)
@@ -1048,7 +1048,7 @@ index 7f82e7d..c98802e 100644
  	}
  	sort.Slice(result, func(i, j int) bool {
  		return strings.TrimSpace(result[i].ID) < strings.TrimSpace(result[j].ID)
-@@ -1574,7 +1612,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
+@@ -1667,7 +1705,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
  			continue
  		}
  
@@ -1057,7 +1057,7 @@ index 7f82e7d..c98802e 100644
  		if model != nil {
  			models = append(models, model)
  		}
-@@ -1628,6 +1666,9 @@ func cloneModelMapValue(value any) any {
+@@ -1721,6 +1759,9 @@ func cloneModelMapValue(value any) any {
  //   - []*ModelInfo: List of available models for the provider
  func (r *ModelRegistry) GetAvailableModelsByProvider(provider string) []*ModelInfo {
  	provider = strings.ToLower(strings.TrimSpace(provider))
@@ -1777,10 +1777,10 @@ index 0000000..2c3f9af
 +	c.Data(http.StatusOK, "application/json", response)
 +}
 diff --git a/sdk/cliproxy/auth/conductor_models.go b/sdk/cliproxy/auth/conductor_models.go
-index dd5ab10..0f2d36d 100644
+index d0d3f49..d973f34 100644
 --- a/sdk/cliproxy/auth/conductor_models.go
 +++ b/sdk/cliproxy/auth/conductor_models.go
-@@ -456,6 +456,9 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
+@@ -516,6 +516,9 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
  		return nil
  	}
  	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
@@ -1790,7 +1790,7 @@ index dd5ab10..0f2d36d 100644
  	var models []modelAliasEntry
  	switch provider {
  	case "gemini":
-@@ -617,6 +620,9 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
+@@ -677,6 +680,9 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
  
  		byAlias := make(map[string]string)
  		provider := strings.ToLower(strings.TrimSpace(auth.Provider))
