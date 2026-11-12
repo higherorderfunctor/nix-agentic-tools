@@ -82,6 +82,18 @@ own CPA extracted facts. The public `lib/providers.nix` entry point keeps the
 protocol types, credential lowering and route resolution; its callable
 `opencodeGo` export also accepts synthetic catalogs for the existing checks.
 
+The vendor files also contribute static identities and full offers to
+`ai.catalog` through `modules/catalog.nix`. The catalog core does not import
+CPA. Instance credential construction consumes the merged provider model lists
+and identities; URLs, native API metadata, headers and tool behavior remain
+local to CPA. Standalone library callers use the same constructor with
+vendor-owned catalog defaults. A normal
+`ai.catalog.providers.z-ai.models = [...]` or
+`ai.catalog.providers.opencode-go.models = [...]` definition replaces the
+vendor's offered list and changes rendered credential defaults. Go identity
+aliases select known extracted transport metadata. The full Go catalog remains
+visible even though its existing credential prefix exclusions still apply.
+
 Built-in `vendor = "z-ai"` defaults
 `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` for Anthropic and
 `apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,

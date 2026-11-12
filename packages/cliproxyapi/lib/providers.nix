@@ -1,8 +1,11 @@
 # One API → CPA credential-family table for named upstream API-key credentials.
-{lib}: let
+{
+  lib,
+  catalog ? null,
+}: let
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
-  inherit (import ./vendors {inherit lib;}) opencodeGo vendors;
+  inherit (import ./vendors {inherit lib catalog;}) opencodeGo vendors;
 
   # CPA's OpenAICompatibleProviderKey preserves one exact name and one prefix.
   # Provider names are ASCII (../modules/instances.nix), so toLower agrees.

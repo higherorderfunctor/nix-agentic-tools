@@ -598,5 +598,6 @@ zdiff
 zebrafish
 zereight
 zhipu
+zhipuai
 zstd
 gnupatch

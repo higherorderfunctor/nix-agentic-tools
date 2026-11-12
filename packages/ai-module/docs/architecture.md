@@ -65,3 +65,18 @@
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
+
+## Static catalog
+
+- **Owners contribute identities and offers.** `ai.catalog.models` holds maker,
+  provider aliases and evidence lists; `ai.catalog.providers` declares either a
+  finite list or a maker-wide offer. Core imports only its types and generic
+  libraries. Each owner loads its own facts and defaults individual fields, so
+  evidence merges and contradictory makers fail. Adding an owner or provider
+  never requires a core import. See `packages/ai-module/docs/catalog.md`.
+- **CPA reads the merged catalog for credential defaults.** Vendor facts flow
+  through static contributions into the merged catalog, then into CPA's existing
+  provider constructor. Transport metadata stays with CPA, and standalone
+  callers use the same constructor with vendor-owned defaults. Static
+  contributions read neither merged catalog configuration nor credentials.
+  Credentials, pools, routing and overlap policy are outside the catalog.

@@ -15,7 +15,10 @@ backend: {
 }: let
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
   instancesLib = import ../../ai-module/lib/instances.nix {inherit lib;};
-  providersLib = cliproxyapi.providers;
+  providersLib = import ../lib/providers.nix {
+    inherit lib;
+    catalog = config.ai.catalog;
+  };
   # A named client key also written by hand could widen its allowlist rules.
   handWritten = name: instance: let
     clients = lib.mapAttrsToList (clientName: client: client // {option = "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}";}) instance.clientKeys;
@@ -84,6 +87,7 @@ backend: {
     config.ai.cliproxyapi.instances;
 in {
   imports = [
+    ./catalog.nix
     (instancesLib.module {
       # `--local-model` is the only switch for the model catalog fetches: it
       # selects the embedded catalogs, and no setting selects the embedded catalogs.
