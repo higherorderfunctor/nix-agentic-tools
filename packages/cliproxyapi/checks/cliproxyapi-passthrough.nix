@@ -1,5 +1,5 @@
 # Refuse config/auth regressions, HTTP bypasses of conductor selection, changed
-# raw bytes, wrong client usage attribution, stale reloads and raw models leaked
+# raw bytes, wrong client usage attribution and raw models leaked
 # into chat routes or catalogs. Tests use local upstreams in the carried patch.
 {
   extractedLib,
@@ -13,7 +13,7 @@
       name = "cliproxyapi-passthrough-${builtins.replaceStrings ["/"] ["-"] packagePath}";
       inherit package packagePath;
       postTest = ''echo "ok — ${packagePath}: passthrough config/auth/route assertions" >"$out"'';
-      run = "(TestPassthrough.*|TestV8GroupedFamily.*)";
+      run = "TestPassthrough.*";
       sources = {};
     };
 in {

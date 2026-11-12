@@ -75,9 +75,7 @@ alternative credentials), group `request-retry: 0`, and
 returning 429 and 404, a paid credential returning 503, then a final successful
 credential. The next client request skips the cooled credentials.
 
-Synthesis includes the group path, models and policy in a change fingerprint. A
-path change preserves credential identity and replaces stale auth attributes;
-disabling a group removes its synthesized auths. Management's
+Disabling a group removes its synthesized auths. Management's
 `/v8/management/config/api-keys/passthrough` projection exposes each live key's
 `auth_index`, usable with management `api-call` and `$TOKEN$` substitution. Auth
 indexes are projection metadata and are not accepted credential settings.
@@ -103,8 +101,7 @@ Local mock upstreams use `httptest` random bound ports. The HTTP transport dials
 those ports while retaining production-shaped default-port URLs and Host headers
 without a port. This exercises path joining, Host routing, auth headers and
 exact request/response bytes; it does not prove privileged port binding or live
-upstream behavior. Reload tests replace paths and aliases and retire removed
-groups' models and executors.
+upstream behavior.
 
 The carried `patches/passthrough-provider.patch` applies after `key-allowlist`
 and `zai-tool-shims` with zero fuzz. `cliproxyapi-passthrough` runs its config,
