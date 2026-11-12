@@ -10,14 +10,14 @@ in {
       default = {};
       description = "Static canonical identities contributed by owners and user definitions.";
     };
-    providers = lib.mkOption {
-      type = lib.types.attrsOf types.provider;
+    vendors = lib.mkOption {
+      type = lib.types.attrsOf types.vendor;
       default = {};
       # Validate at the option boundary after merging: separate definitions must not supply both kinds.
       apply = lib.mapAttrs (name: offer:
         if (offer.models != null) != (offer.maker != null)
         then offer
-        else throw "ai.catalog.providers.${name}: declare exactly one of models or maker.");
+        else throw "ai.catalog.vendors.${name}: declare exactly one of models or maker.");
       description = "Static offers: a finite model list or every model of one maker.";
     };
   };

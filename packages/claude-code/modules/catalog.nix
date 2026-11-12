@@ -4,13 +4,13 @@
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   # The facts contract validates the set before genAttrs consumes its identifiers.
   ids = facts.get (facts.load {dir = ../extracted;}).aggregate "models";
-  # Extraction supplies exact ids, with no additional provider alias spellings.
+  # Extraction supplies exact ids, with no additional vendor alias spellings.
   contribution = {
     models = lib.genAttrs ids (_: {
       maker = "anthropic";
       source = ["claude-code:models"];
     });
-    providers.claude.maker = "anthropic";
+    vendors.claude.maker = "anthropic";
   };
 in {
   # Leaf defaults merge CPA evidence and allow ordinary user field overrides.

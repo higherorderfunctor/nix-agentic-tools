@@ -45,13 +45,13 @@
             };
           }
         ]).config.ai.catalog;
-      providerOverride =
+      vendorOverride =
         (evaluate [
           base
           {
-            ai.catalog.providers.codex.maker = "configured-maker";
+            ai.catalog.vendors.codex.maker = "configured-maker";
           }
-        ]).config.ai.catalog.providers.codex;
+        ]).config.ai.catalog.vendors.codex;
       cases = {
         "discarded extracted ids or enable-gated facts" = lib.all (id:
           builtins.hasAttr id catalog.models
@@ -63,17 +63,10 @@
           (lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id)
           && lib.elem "cliproxyapi:opencodeGo.models.${id}" catalog.models.${id}.source)
         overlap;
-        "provider default cannot be overridden" = providerOverride.maker == "configured-maker" && providerOverride.models == null;
-        "provider narrowed to extracted inventory" =
-          catalog.providers.codex
-          == {
-            maker = "openai";
-            models = null;
-          };
         "user addition lost or maker-wide offer narrowed" =
           configured.models.catalog-test-added.maker
           == "openai"
-          && configured.providers.codex
+          && configured.vendors.codex
           == {
             maker = "openai";
             models = null;
@@ -83,6 +76,13 @@
           == "configured-maker"
           && configured.models.${chosen}.source == ["configured evidence"]
           && configured.models.${chosen}.aliases.codex == ["configured-alias"];
+        "vendor default cannot be overridden" = vendorOverride.maker == "configured-maker" && vendorOverride.models == null;
+        "vendor narrowed to extracted inventory" =
+          catalog.vendors.codex
+          == {
+            maker = "openai";
+            models = null;
+          };
       };
       failures = builtins.attrNames (lib.filterAttrs (_: ok: !ok) cases);
     in

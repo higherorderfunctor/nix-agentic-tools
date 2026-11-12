@@ -31,7 +31,7 @@
   # Full offers are static even while credential defaults retain prefix exclusions.
   catalog = {
     models = identities;
-    providers.opencode-go.models = builtins.attrNames extracted;
+    vendors.opencode-go.models = builtins.attrNames extracted;
   };
   # OpenCode Go serves each catalog model on one native API. Each lands on
   # that API only, so CPA translates every other protocol itself. A function
@@ -107,7 +107,7 @@ in {
       if upstream == null
       then throw "cliproxyapi opencode-go: catalog model `${id}` has no extracted transport metadata."
       else lib.nameValuePair upstream extracted.${upstream})
-    merged.providers.opencode-go.models));
+    merged.vendors.opencode-go.models));
   # Static definitions are read by modules/catalog.nix and standalone construction.
   inherit catalog;
   # module-eval.nix supplies synthetic catalogs to exercise placement refusals.

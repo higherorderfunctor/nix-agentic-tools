@@ -11,7 +11,7 @@
       maker = "zhipu";
       source = ["cliproxyapi:zAi.models"];
     });
-    providers.z-ai.models = extracted.models;
+    vendors.z-ai.models = extracted.models;
   };
 in {
   # Static contributions do not depend on the consumer's merged configuration.
@@ -25,7 +25,7 @@ in {
         aliases = merged.models.${id}.aliases.z-ai or [];
       in
         lib.findFirst (name: lib.elem name extracted.models) id ([id] ++ aliases))
-      merged.providers.z-ai.models;
+      merged.vendors.z-ai.models;
       toolAliases.ToolSearch = "ToolSearch_";
     };
 }

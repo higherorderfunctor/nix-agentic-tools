@@ -1,4 +1,4 @@
-# Static model identities and provider offers, so owners share typed facts without routing policy.
+# Static model identities and vendor offers, so owners share typed facts without routing policy.
 {lib}: let
   # Use ordinary module fields so independent owners merge at each leaf.
   inherit (lib) mkOption types;
@@ -11,12 +11,12 @@ in {
       aliases = mkOption {
         type = types.attrsOf names;
         default = {};
-        description = "Exact provider spellings of this canonical model.";
+        description = "Exact vendor spellings of this canonical model.";
       };
       maker = mkOption {
         type = types.nullOr types.nonEmptyStr;
         default = null;
-        description = "Model maker, independently of its serving provider; null is unknown.";
+        description = "Model maker, independently of its serving vendor; null is unknown.";
       };
       source = mkOption {
         type = types.nonEmptyListOf types.nonEmptyStr;
@@ -25,7 +25,7 @@ in {
     };
   };
   # The enclosing option checks the merged offer kind, including split definitions.
-  provider = types.submodule {
+  vendor = types.submodule {
     options = {
       maker = mkOption {
         type = types.nullOr types.nonEmptyStr;
@@ -35,7 +35,7 @@ in {
       models = mkOption {
         type = types.nullOr names;
         default = null;
-        description = "Finite canonical model ids served by this provider; exclusive with maker.";
+        description = "Finite canonical model ids served by this vendor; exclusive with maker.";
       };
     };
   };

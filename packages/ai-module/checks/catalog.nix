@@ -16,7 +16,7 @@
         maker = lib.mkDefault "maker";
         source = lib.mkDefault [evidence];
       };
-      providers.vendor.models = lib.mkDefault ["shared"];
+      vendors.vendor.models = lib.mkDefault ["shared"];
     };
   };
   # This is the ordinary cross-owner merge with no registry or precedence assignment.
@@ -32,12 +32,12 @@
         ai.catalog = {
           models.extra.source = ["configured"];
           models.shared.maker = "replacement";
-          providers.vendor.models = ["extra"];
-          providers.wide.maker = "replacement";
+          vendors.vendor.models = ["extra"];
+          vendors.wide.maker = "replacement";
         };
       }
     ]);
-  # Invalid values cover each field and both ambiguous and absent provider offer kinds.
+  # Invalid values cover each field and both ambiguous and absent vendor offer kinds.
   malformed = [
     {
       models.x = {
@@ -54,11 +54,11 @@
     {models.x.source = "scalar";}
     {models.x.source = [];}
     {models.x.source = [""];}
-    {providers.x.models = [1];}
-    {providers.x.maker = 1;}
-    {providers.x = {};}
+    {vendors.x.models = [1];}
+    {vendors.x.maker = 1;}
+    {vendors.x = {};}
     {
-      providers.x = {
+      vendors.x = {
         maker = "maker";
         models = [];
       };
@@ -71,14 +71,14 @@
     "core imports an owner, extraction or resolver" = lib.all (word: !(lib.hasInfix word coreText)) ["chatgpt-codex" "claude-code" "cliproxyapi" "delegate-routing" "extracted/" "resolve.nix"];
     "default aliases or evidence replaced instead of merged" = sorted merged.models.shared.aliases.vendor == ["first" "second"] && sorted merged.models.shared.source == ["owner-a:evidence" "owner-b:different-evidence"];
     "default maker conflict hidden" = refuses (owners ++ [{ai.catalog.models.shared.maker = lib.mkDefault "contradiction";}]);
-    "finite unknown maker rejected or ordinary overrides ignored" = overridden.models.extra.maker == null && overridden.models.shared.maker == "replacement" && overridden.providers.vendor.models == ["extra"] && overridden.providers.wide.maker == "replacement";
+    "finite unknown maker rejected or ordinary overrides ignored" = overridden.models.extra.maker == null && overridden.models.shared.maker == "replacement" && overridden.vendors.vendor.models == ["extra"] && overridden.vendors.wide.maker == "replacement";
     "invalid fields or offer kinds accepted" = lib.all (catalog: refuses [{ai.catalog = catalog;}]) malformed;
     "non-static options accepted" = lib.all (name: refuses [{ai.catalog.${name} = {};}]) ["clientRoutes" "credentials" "pools" "resolved" "runtimeModels" "runtimes"];
-    "offer kinds combined across definitions" = refuses [{ai.catalog.providers.x.models = [];} {ai.catalog.providers.x.maker = "maker";}];
-    "provider billing or Reader accepted" = lib.all (field:
+    "offer kinds combined across definitions" = refuses [{ai.catalog.vendors.x.models = [];} {ai.catalog.vendors.x.maker = "maker";}];
+    "vendor billing or Reader accepted" = lib.all (field:
       refuses [
         {
-          ai.catalog.providers.x = {
+          ai.catalog.vendors.x = {
             models = [];
             ${field} = "unused";
           };

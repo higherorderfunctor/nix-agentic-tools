@@ -44,15 +44,13 @@
     harness.mkTest "claude-code-catalog-${backend}" (let
       catalogs = map (enable: (evaluate [{ai.claude.enable = enable;}]).config.ai.catalog) [false true];
       changed = (evaluate [configured]).config.ai.catalog;
-      providerOverride = (evaluate [{ai.catalog.providers.claude.maker = "configured-maker";}]).config.ai.catalog;
+      vendorOverride = (evaluate [{ai.catalog.vendors.claude.maker = "configured-maker";}]).config.ai.catalog;
       cases = {
         "aggregate set misread or owner ids discarded" = builtins.isList ids && sorted (builtins.attrNames isolated.models) == sorted ids;
         "invented native aliases" = lib.all (id: isolated.models.${id}.aliases == {}) ids;
         "missing backend import or enable-gated facts" = lib.all (catalog:
           lib.all (id: catalog.models ? ${id} && catalog.models.${id}.maker == "anthropic" && lib.elem "claude-code:models" catalog.models.${id}.source) ids)
         catalogs;
-        "provider leaf override blocked by owner priority" = providerOverride.providers.claude.maker == "configured-maker";
-        "provider offer is finite or runtime-gated" = lib.all (catalog: catalog.providers.claude.maker == "anthropic" && catalog.providers.claude.models == null) catalogs;
         "shared CPA identity or evidence overwritten" = lib.all (catalog:
           lib.all (id: let
             identity = catalog.models.${id};
@@ -61,8 +59,10 @@
             && sorted identity.aliases.opencode-go == lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id)
           (lib.filter (id: go ? ${id}) ids))
         catalogs;
-        "user addition lost or maker-wide offer narrowed" = changed.models.catalog-test-added.maker == "anthropic" && changed.models.catalog-test-added.source == ["configured addition"] && changed.providers.claude.maker == "anthropic" && changed.providers.claude.models == null;
+        "user addition lost or maker-wide offer narrowed" = changed.models.catalog-test-added.maker == "anthropic" && changed.models.catalog-test-added.source == ["configured addition"] && changed.vendors.claude.maker == "anthropic" && changed.vendors.claude.models == null;
         "user leaf override blocked by owner priority" = changed.models.${chosen}.maker == "configured-maker" && changed.models.${chosen}.source == ["configured evidence"] && changed.models.${chosen}.aliases.claude == ["configured-spelling"];
+        "vendor leaf override blocked by owner priority" = vendorOverride.vendors.claude.maker == "configured-maker";
+        "vendor offer is finite or runtime-gated" = lib.all (catalog: catalog.vendors.claude.maker == "anthropic" && catalog.vendors.claude.models == null) catalogs;
       };
       failures = builtins.attrNames (lib.filterAttrs (_: ok: !ok) cases);
     in

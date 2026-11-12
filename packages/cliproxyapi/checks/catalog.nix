@@ -84,7 +84,7 @@
       narrowed = render (evaluate [
         fixture
         {
-          ai.catalog.providers = {
+          ai.catalog.vendors = {
             opencode-go.models = [chosen];
             z-ai.models = [chosenZai];
           };
@@ -101,7 +101,7 @@
               };
               source = ["configured identity"];
             };
-            providers = {
+            vendors = {
               opencode-go.models = ["configured"];
               z-ai.models = ["configured"];
             };
@@ -111,7 +111,7 @@
       full = render (evaluate [
         fixture
         {
-          ai.catalog.providers = {
+          ai.catalog.vendors = {
             opencode-go.models = builtins.attrNames go;
             z-ai.models = zai.models;
           };
@@ -123,7 +123,7 @@
       cases = {
         "configured finite lists ignored" = offers narrowed "opencode-go" == expectedNarrowGo && offers narrowed "z-ai" == lib.genAttrs (builtins.attrNames zai.apis) (_: [chosenZai]);
         "configured identity aliases ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "z-ai" == lib.genAttrs (builtins.attrNames zai.apis) (_: [chosenZai]);
-        "dropped extracted offer" = sorted catalog.providers.opencode-go.models == builtins.attrNames go && sorted catalog.providers.z-ai.models == sorted zai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zai.models);
+        "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.z-ai.models == sorted zai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zai.models);
         # Full catalog lists retain filtered rendering until the prefix refusal is removed.
         "explicit full lists lose eligible rendered models" = offers full "opencode-go" == lib.mapAttrs (_: sorted) expectedGo && offers full "z-ai" == expectedZai;
         "lost alias or missing/wrong maker" =
