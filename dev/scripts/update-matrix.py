@@ -397,6 +397,9 @@ def verification_verdict(prepared, published_pr, skip):
     and at most its base moved. The next sweep re-reads the branch, so a red
     lane here would only repeat what is already known.
     """
+    # Authentication failures must surface on the first sweep, after receipts.
+    if prepared["name"] == "kiro-model-catalog" and prepared.get("status") == "HELD BACK":
+        return "error", ["kiro-model-catalog: authenticated catalog refresh failed; committed suggestions and any existing PR were preserved."]
     failed = prepared.get("verifyFailed")
     if not failed:
         return None

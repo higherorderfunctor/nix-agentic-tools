@@ -8,18 +8,18 @@
 
 `packages/docs/cliproxyapi-z-ai-docs/package.nix` pins three official Markdown
 documents through `webDocsLib.mkSnapshot`, shared with `kimchi-docs` and
-`kiro-model-catalog`. Its explicit URL-to-path mapping produces a recursively
-hashed snapshot. The `cliproxyapi-z-ai-docs` update target fetches the mutable
-URLs on every sweep, keeps pins unchanged when the bytes match, and validates
-changed pages with `extract/z-ai.py` before publishing the content and NAR
-hashes. `extract/z-ai.py` parses the overview's chat API table, Claude Code's
-JSON environment example, and the quick start's Python AST for the two base
-URLs. Featured/Text Models tables require a known chat reference on every model
-row, accepting relative paths or absolute links on `https://docs.z.ai` only;
-image, tool and agent sections are explicitly excluded. Unknown sections or
-references, missing tables, ambiguous URLs, malformed tier bullets, or a tier
-pointing outside the catalog fail extraction. The fixtures exclude prose-only
-model mentions and image models.
+`slack-mcp`. Its explicit URL-to-path mapping produces a recursively hashed
+snapshot. The `cliproxyapi-z-ai-docs` update target fetches the mutable URLs on
+every sweep, keeps pins unchanged when the bytes match, and validates changed
+pages with `extract/z-ai.py` before publishing the content and NAR hashes.
+`extract/z-ai.py` parses the overview's chat API table, Claude Code's JSON
+environment example, and the quick start's Python AST for the two base URLs.
+Featured/Text Models tables require a known chat reference on every model row,
+accepting relative paths or absolute links on `https://docs.z.ai` only; image,
+tool and agent sections are explicitly excluded. Unknown sections or references,
+missing tables, ambiguous URLs, malformed tier bullets, or a tier pointing
+outside the catalog fail extraction. The fixtures exclude prose-only model
+mentions and image models.
 
 The Claude Code page's explicitly labeled default tier bullets are parsed as
 prose (the regex tier: no executable mapping or structured source exists). Later

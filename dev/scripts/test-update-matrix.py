@@ -32,6 +32,13 @@ class MatrixTest(unittest.TestCase):
         update_job = workflow.split("\n  update:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
         self.assertNotIn("\n    permissions:", update_job)
 
+    def test_catalog_key_is_scoped_to_only_its_preparation_step(self):
+        workflow = WORKFLOW.read_text()
+        prepare = workflow.split("      - name: Prepare dependency branch\n", 1)[1].split("      - name:", 1)[0]
+        self.assertEqual(workflow.count("secrets.KIRO_API_KEY"), 1)
+        self.assertIn("matrix.name == 'kiro-model-catalog' && secrets.KIRO_API_KEY || ''", " ".join(prepare.split()))
+        self.assertNotIn("pull_request:", workflow)
+
     def test_discovery_and_subset(self):
         lock = {"root": "root", "nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}}}
         targets = {"demo": {"flags": ["--use-update-script"], "git": None}}
@@ -120,6 +127,13 @@ class MatrixTest(unittest.TestCase):
         self.assertIn("a, b", lines[1])
         self.assertIn("https://example.test/pull/7", lines[2])
         self.assertIn("none", matrix.verification_verdict({"name": "nixpkgs", "verifyFailed": ["a"]}, "", "")[1][2])
+
+    def test_catalog_auth_failure_is_red_on_first_hold_back_even_for_preserved_pr(self):
+        for skip in ("", "non-bot commits"):
+            level, lines = matrix.verification_verdict({"name": "kiro-model-catalog", "status": "HELD BACK"}, "", skip)
+            self.assertEqual(level, "error")
+            self.assertIn("authenticated catalog refresh failed", lines[0])
+        self.assertIsNone(matrix.verification_verdict({"name": "other", "status": "HELD BACK"}, "", ""))
 
     def test_verdict_skips_a_preserved_lane_even_after_publication(self):
         # A human took the branch over, possibly after this run published it.

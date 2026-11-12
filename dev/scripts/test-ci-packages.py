@@ -40,8 +40,11 @@ class ExtractedSelectionTest(unittest.TestCase):
         cls.base = cls.evaluate()
 
     @classmethod
-    def evaluate(cls):
-        result = subprocess.run(["nix", "eval", "--json", f"path:{cls.root}#ciExtractedFacts.x86_64-linux.kimchi"],
+    def evaluate(cls, attribute="ciExtractedFacts.x86_64-linux.kimchi", apply=None):
+        command = ["nix", "eval", "--json", f"path:{cls.root}#{attribute}"]
+        if apply:
+            command.extend(["--apply", apply])
+        result = subprocess.run(command,
                                 capture_output=True, text=True, check=True, timeout=300)
         return json.loads(result.stdout)
 
@@ -61,6 +64,29 @@ class ExtractedSelectionTest(unittest.TestCase):
         with mock.patch.object(extracted, "derivations", side_effect=[{"kimchi": head}, {"kimchi": self.base}]):
             with mock.patch.object(extracted.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)):
                 self.assertEqual(extracted.plan(self.root, "x86_64-linux", "pull_request", "base"), expected)
+
+    def test_only_extraction_producers_are_scheduled(self):
+        owners = self.evaluate("ciExtractedFacts.x86_64-linux", "builtins.attrNames")
+        self.assertEqual(owners, [
+            "chatgpt-codex", "claude-code", "cliproxyapi", "cpa-manager-plus",
+            "git-absorb", "git-branchless", "git-revise", "glab", "kimchi",
+            "kiro-cli", "semble", "slack-mcp",
+        ])
+        self.assertEqual(extracted.derivations(self.root, "x86_64-linux", names_only=True), owners)
+
+    def test_missing_producer_check_fails_and_fallback_keeps_producer(self):
+        path = self.root / "packages/kimchi/checks.nix"
+        original = path.read_text()
+        try:
+            path.write_text(original.replace("    ./checks/kimchi-extracted.nix\n", ""))
+            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                self.evaluate()
+            self.assertIn("kimchi-extracted", failure.exception.stderr)
+            owners = extracted.derivations(self.root, "x86_64-linux", names_only=True)
+            self.assertIn("kimchi", owners)
+            self.assertNotIn("kiro-model-catalog", owners)
+        finally:
+            path.write_text(original)
 
     def test_generator_inputs_select_kimchi(self):
         for path in (
@@ -378,12 +404,15 @@ export -f git nix
                         self.assertEqual(extracted.derivations(root, system, base=base, names_only=names_only), {})
                     command = run.call_args.args[0]
                     if names_only and system == "x86_64-linux":
-                        self.assertEqual(command[-2:], ["--file", "checks/extracted/owners.nix"])
+                        self.assertIn("--impure", command)
+                        self.assertEqual(command[-1], ".#ciPackages.x86_64-linux")
+                        self.assertIn("packages.${name}.passthru ? extracted", command[-2])
+                        self.assertIn("import ./checks/extracted/owners.nix", command[-2])
                         self.assertFalse(any("#ciExtractedFacts" in argument for argument in command))
                     else:
                         flake = "git+file:///fixture?rev=base" if base else "."
                         self.assertEqual(command[-1], f"{flake}#ciExtractedFacts.{system}")
-                    self.assertEqual("builtins.attrNames" in command, names_only)
+                    self.assertEqual(any("builtins.attrNames" in argument for argument in command), names_only)
 
     def test_producer_orders_linux_before_darwin_without_package_success_gate(self):
         workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text()

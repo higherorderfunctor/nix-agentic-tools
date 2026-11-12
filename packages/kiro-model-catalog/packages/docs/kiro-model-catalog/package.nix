@@ -1,53 +1,36 @@
 {
+  extractedLib,
   pkgs,
   repoPath,
-  webDocsLib,
   ...
 }: let
   inherit (pkgs) lib;
-  snapshotDate = "2026-11-10";
-  contentHash = "sha256-FxczUb4DSP98NHCc/fKrCY9roHCrdGTCUugp/mAT1Fk=";
-  hash = "sha256-BgGpUHr0ySLdj717P0NyVi4LejKeFTkOJuEwv+xO0s0=";
-  snapshot = (webDocsLib {inherit pkgs;}).mkSnapshot {
-    name = "kiro-model-documentation";
-    inherit contentHash hash snapshotDate;
-    pin = repoPath ./package.nix;
-    sources = [
-      {
-        url = "https://kiro.dev/docs/models.md";
-        path = "models.md";
-      }
-    ];
-    validate = ''
-      ${pkgs.python3}/bin/python3 ${../../../extract/models.py} "$1/models.md" > /dev/null
+  extracted = extractedLib {inherit pkgs;};
+  facts = extracted.load {dir = ../../../extracted;};
+  updater = import ../../../../../lib/strict-shell-application.nix pkgs {
+    name = "update-kiro-model-catalog";
+    text = ''
+      exec ${pkgs.python3}/bin/python3 ${../../../extract/catalog.py} \
+        ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli \
+        ${lib.escapeShellArg (repoPath ../../../extracted + "/extracted.json")}
     '';
-    meta = {
-      description = "Pinned Kiro public model documentation";
-      homepage = "https://kiro.dev/docs/models/";
-      license = lib.licenses.unfree;
-      platforms = lib.platforms.unix;
-    };
   };
 in
-  pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
-    pname = "kiro-model-catalog";
-    version = snapshotDate;
-    src = snapshot;
-    nativeBuildInputs = [pkgs.python3];
-    phases = ["buildPhase"];
-    buildPhase = ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      python3 ${../../../extract/models.py} "$src/models.md" > "$out"
-    '';
-    passthru = {
-      extracted = finalAttrs.finalPackage;
-      inherit (snapshot) updateScript;
-    };
-    meta = {
-      description = "Kiro model slug suggestions from an independently pinned public catalog";
-      homepage = "https://kiro.dev/docs/models/";
-      license = lib.licenses.unfree;
-      platforms = lib.platforms.unix;
-    };
-  })
+  assert facts.failures == [];
+    pkgs.stdenvNoCC.mkDerivation {
+      pname = "kiro-model-catalog";
+      version = "1";
+      phases = ["buildPhase"];
+      buildPhase = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        cp ${pkgs.writeText "kiro-models.json" (builtins.toJSON {models = extracted.get facts.aggregate "models";})} "$out"
+      '';
+      passthru.updateScript = lib.getExe updater;
+      meta = {
+        description = "Kiro model suggestions from the authenticated CLI catalog";
+        homepage = "https://kiro.dev/docs/models/";
+        license = lib.licenses.unfree;
+        platforms = lib.platforms.unix;
+      };
+    }

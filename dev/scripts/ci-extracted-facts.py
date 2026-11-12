@@ -11,12 +11,19 @@ import sys
 def derivations(root, system, base=None, names_only=False):
     flake = f"git+{root.as_uri()}?rev={base}" if base else "."
     command = ["timeout", "300", "nix", "eval", "--json"]
-    if names_only:
-        command.extend(["--apply", "builtins.attrNames"])
     if names_only and system == "x86_64-linux":
-        # A broken Linux owner check must not prevent recovering its name.
-        command.extend(["--file", "checks/extracted/owners.nix"])
+        # Recover producers without forcing their possibly broken owner checks.
+        # The local owner map needs the same file access as the former --file read.
+        command.extend([
+            "--impure",
+            "--apply",
+            'packages: builtins.filter (name: packages.${name}.passthru ? extracted) '
+            '(builtins.attrNames (import ./checks/extracted/owners.nix))',
+            f"{flake}#ciPackages.{system}",
+        ])
     else:
+        if names_only:
+            command.extend(["--apply", "builtins.attrNames"])
         command.append(f"{flake}#ciExtractedFacts.{system}")
     result = subprocess.run(
         command,
