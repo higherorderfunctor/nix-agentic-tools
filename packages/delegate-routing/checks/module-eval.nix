@@ -1007,8 +1007,6 @@
         && routingView.effortLevels == ["minimal" "low" "medium" "high" "xhigh" "max"]
         && lib.all (route: route.family.defaultEffort == "medium") (lib.filter (route: route.family.name == "opus") routingView.routes)
         && routingView.runtimes == ["claude" "codex"]
-        && map (route: route.maker) routingView.routes == ["anthropic" "anthropic"]
-        && map (route: route.maker) routingView.manualRoutes == ["anthropic"]
         && routes
         == [
           {

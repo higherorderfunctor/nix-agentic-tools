@@ -105,26 +105,9 @@
               else family.match;
           };
         };
-    launches = map technique names;
   in {
     inherit target;
     family = {defaultEffort = null;} // family;
-    # The selected family is associated with concrete model identities without
-    # treating its provider grouping as the maker.
-    maker = let
-      ids = lib.unique (lib.filter (id: id != null)
-        (map (technique:
-          if technique.model.isPattern
-          then null
-          else technique.model.value)
-        launches));
-      makers = lib.unique (map (id: (modelIdentity id).maker) ids);
-    in
-      if makers == []
-      then null
-      else if lib.length makers == 1
-      then lib.head makers
-      else throw "delegate-routing: selected family ${family.name} spans multiple model makers.";
     pool = selection.poolFor catalog family target (resolvedModel family target);
     techniques =
       if names == []
@@ -134,7 +117,7 @@
           then "; from another harness it must be an external technique, otherwise ${target} must not be reached"
           else ""
         }"
-      else launches;
+      else map technique names;
   };
   routes = lib.concatMap (family:
     map (reach family) (builtins.filter (target: builtins.elem family (selected target)) runtimes))

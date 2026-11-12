@@ -118,13 +118,12 @@ in content.mkSkill { catalog = graph; runtime = "codex"; }
 ```
 
 `resolved.modelFor <id-or-alias>` returns the checked model identity for a
-concrete selection. Routing reads its maker for each launch and emits it
-separately from the configured family provider group in the manifest. A selected
-custom model must declare `ai.catalog.models.<id>.maker`, including on
-finite-only pools; a missing maker fails rather than inheriting the billing
-provider's name. Unselected offers with unknown makers remain available for
-inspection, subject to the OAuth overlap refusal above. Unbound pattern guidance
-has no concrete model or maker claim.
+concrete selection. Routing validates the maker of each concrete launch against
+that catalog identity. A selected custom model must declare
+`ai.catalog.models.<id>.maker`, including on finite-only pools; a missing maker
+fails rather than inheriting the billing provider's name. Unselected offers with
+unknown makers remain available for inspection, subject to the OAuth overlap
+refusal above. Unbound pattern guidance has no concrete model or maker claim.
 
 Native family selectors remain associations used by routing, not ranks.
 Claude/Codex groupings and the GLM/GLM Flash identities use pinned extracted
@@ -146,6 +145,5 @@ expectations reject credential-kind exemptions, instance-wide overlap,
 alias-only string comparisons, and consumers that ignore the graph.
 
 `ai-catalog-native-models` checks literal native, Go and GLM identities, alias
-resolution, selected custom-maker refusal and both backend consumers. It rejects
-maker/provider conflation, invented concrete IDs and fit metadata in identity
-records.
+resolution and selected custom-maker refusal. It rejects maker/provider
+conflation, invented concrete IDs and fit metadata in identity records.
