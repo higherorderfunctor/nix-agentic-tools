@@ -151,9 +151,8 @@ applies after `default-theme.patch` with `--fuzz=0` and changes neither
 - `services/api/passthrough.ts` reads CPA's existing admin-only
   `GET /v8/management/config/api-keys/passthrough` projection, which carries a
   live `auth_index` per key. Upstream keys are used only to count keys and look
-  up request status; they are never rendered. A missing projection, an error or
-  a 401 yields no groups, and that one request never logs the session out
-  (`cpampIgnoreUnauthorized` in `services/api/client.ts`).
+  up request status; they are never rendered. A missing projection or an error
+  yields no groups.
 - `loadMonitoringMetaPayload` adds one monitoring channel per group, keyed by
   its keys' `auth_index`, so the monitoring, usage analytics and dashboard views
   label passthrough requests by group name. `mergeRefreshedChannels` keeps the
