@@ -139,7 +139,7 @@
       else [(route name)])
     names;
   # All extracted Go offers travel through their native CPA APIs. Exclusions
-  # use shared maker identities, independently of the legacy prefix refusal.
+  # use shared maker identities, without a package-wide maker exclusion.
   operator.ai = {
     catalog = {
       pools = {
@@ -478,11 +478,110 @@
       (builtins.tryEval (ambiguousGraph.modelFor "shared").maker).success
       false)
   ];
+  providerLib = import ../../cliproxyapi/lib/providers.nix {inherit lib;};
+  fullProvider = providerLib.vendors.opencode-go;
+  # Hand-written additions to the existing operator-selected inventory. These
+  # offers must remain available to a consumer without the operator's overlaps.
+  expectedFullGoModels = lib.sort builtins.lessThan (expectedGoModels
+    ++ [
+      "claude-haiku-5-5"
+      "glm-5.2"
+      "glm-5.3"
+      "glm-5.3-flash"
+      "gpt-5.6-luna"
+      "gpt-6-luna"
+    ]);
+  fullGoRows = backend: evaluate: let
+    cfg =
+      (evaluate {
+        ai = {
+          catalog = {
+            pools.go.credentials.subscription = {
+              auth = "apiKey";
+              binding = "full/go";
+            };
+            runtimes.claude.pools = ["go"];
+          };
+          cliproxyapi.instances.full = {
+            credentials.go = {
+              vendor = "opencode-go";
+              apiKey.key = secret "full-go";
+            };
+            clientKeys.client = {
+              key = secret "full-client";
+              routes = map (api: {
+                credential = "go";
+                inherit api;
+              }) ["anthropic" "chat" "responses"];
+            };
+          };
+        };
+      }).config;
+    graph = cfg.ai.catalog.resolved;
+    rendered = lib.concatLists (lib.filter builtins.isList (builtins.attrValues cfg.ai.cliproxyapi.instances.full.settings.api-keys));
+    # The same production routing view used by mkSkill, one exact family per
+    # offer so no highest-version selector hides a dropped canonical model.
+    view = import ../../delegate-routing/lib/routing-view.nix {
+      inherit lib;
+      catalog = graph;
+      runtime = "claude";
+      families.go = lib.genAttrs expectedFullGoModels (id: {
+        match = id;
+        tier = "strong";
+        example = {};
+      });
+      models.claude = [{vendors = ["go"];}];
+      picker.entries = [];
+      techniques.claude.fixture = {
+        enable = true;
+        kind = "subagent";
+        launchRoute = true;
+        modelArg = "--model";
+        pinsEffort = true;
+        pinsModel = true;
+      };
+    };
+  in [
+    (row "${backend}: full Go defaults pass module assertions" (map (entry: entry.message) (lib.filter (entry: !entry.assertion) cfg.assertions)) [])
+    (row "${backend}: full Go defaults pass shared overlap evaluation" graph.errors [])
+    (row "${backend}: CPA full Go inventory"
+      (lib.sort builtins.lessThan (lib.concatMap (block: map (entry: entry.name) block.models) rendered))
+      expectedFullGoModels)
+    (row "${backend}: shared graph full Go inventory" graph.pools.go.models expectedFullGoModels)
+    (row "${backend}: routing full Go canonical pins"
+      (lib.sort builtins.lessThan (map (route: (lib.head route.techniques).model.value) view.routes))
+      expectedFullGoModels)
+    (row "${backend}: routing full Go budget identities" (lib.unique (map (route: route.pool) view.routes)) ["go"])
+  ];
+  providerRows =
+    [
+      (row "full Go inventory includes native guidance makers"
+        (lib.sort builtins.lessThan (lib.concatMap (api: api.models) (builtins.attrValues fullProvider.apis)))
+        expectedFullGoModels)
+      (row "every extracted Go canonical alias resolves to its offer"
+        (map (id: nativeGraph.canonical (catalog.opencodeGo.models.${id}.canonical_id or id)) expectedFullGoModels)
+        expectedFullGoModels)
+      (row "Go messages native placement" fullProvider.apis.anthropic.models ["claude-haiku-5-5" "minimax-m3" "qwen3.7-plus" "qwen3.8-flash" "qwen3.8-max"])
+      (row "Go Responses native placement" fullProvider.apis.responses.models ["gpt-5.6-luna" "gpt-6-luna" "grok-4.7" "muse-spark-1.2-contributor" "muse-spark-1.3-contributor"])
+      (row "Go messages base URL removes executor suffix" fullProvider.apis.anthropic.base-url "https://opencode.ai/inference/go/anthropic")
+      (row "every extracted Go offer has its evidence-backed maker"
+        (map (id: (nativeGraph.modelFor id).maker) expectedFullGoModels)
+        ["reflection" "anthropic" "deepseek" "deepseek" "google" "zhipu" "zhipu" "zhipu" "openai" "openai" "xai" "tencent" "tencent" "tencent" "iceman" "moonshot" "moonshot" "moonshot" "meituan" "meituan" "xiaomi" "xiaomi" "minimax" "minimax" "meta" "meta" "alibaba" "alibaba" "alibaba" "stepfun"])
+      (row "Go provider namespace is not its model maker" (nativeGraph.modelFor "moonshotai/kimi-k3").maker "moonshot")
+      (row "Go versioned provider alias resolves exactly" (nativeGraph.canonical "deepseek/deepseek-v4.1-flash-1017") "deepseek-v4.1-flash")
+      (row "Go unknown canonical alias refused"
+        (builtins.tryEval (nativeGraph.canonical "moonshotai/kimi-unknown")).success
+        false)
+      (row "Go native maker identities"
+        (map (id: (nativeGraph.modelFor id).maker) ["claude-haiku-5-5" "glm-5.3" "gpt-6-luna"]) ["anthropic" "zhipu" "openai"])
+    ]
+    ++ fullGoRows "hm" harness.evalHm ++ fullGoRows "devenv" harness.evalDevenv;
+  providerData = pkgs.writeText "ai-catalog-provider-offers.json" (builtins.toJSON providerRows);
   nativeData = pkgs.writeText "ai-catalog-native-models.json" (builtins.toJSON identityRows);
   data = pkgs.writeText "ai-catalog-runtime-reach.json" (builtins.toJSON rows);
 in {
   checks = lib.mapAttrs (name: assertions:
-    pkgs.runCommand name {nativeBuildInputs = [pkgs.python3];} ''
+    pkgs.runCommand name {nativeBuildInputs = [pkgs.python3] ++ lib.optional (name == "ai-catalog-provider-offers") pkgs.nix;} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       python3 -I - ${assertions} > "$out" <<'PYTHON'
@@ -494,9 +593,24 @@ in {
           print("PASS:", row["name"])
       print("PASS:", len(rows), "labelled catalog assertions")
       PYTHON
+      ${lib.optionalString (name == "ai-catalog-provider-offers") ''
+        # tryEval alone could accept an unrelated evaluation failure. Require
+        # the shared resolver's literal unknown-alias error as well.
+        if nix-instantiate --eval --strict --store dummy:// --expr '
+          let catalog = import ${../lib/catalog/resolve.nix} {
+            lib = import ${pkgs.path}/lib;
+          }; in (catalog.resolve { models = {}; providers = {}; }).canonical "moonshotai/kimi-unknown"
+        ' > "$TMPDIR/alias.out" 2> "$TMPDIR/alias.err"; then
+          echo "FAIL: unknown canonical alias accepted" >&2
+          exit 1
+        fi
+        ${pkgs.gnugrep}/bin/grep -F 'ai.catalog: unknown model "moonshotai/kimi-unknown".' "$TMPDIR/alias.err"
+        echo 'PASS: literal unknown canonical alias diagnostic' >> "$out"
+      ''}
       cat "$out"
     '') {
     ai-catalog-native-models = nativeData;
+    ai-catalog-provider-offers = providerData;
     ai-catalog-runtime-reach = data;
   };
 }

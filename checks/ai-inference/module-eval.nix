@@ -286,8 +286,8 @@ in {
       };
       problems =
         lib.concatMap (backend: let
-          go = apiKey:
-            evaluate backend (instanceChange {
+          goConfig = apiKey:
+            instanceChange {
               credentials.go = {
                 vendor = "opencode-go";
                 apiKey = {key = clientKey "opencode-go";} // apiKey;
@@ -306,8 +306,18 @@ in {
                   }
                 ];
               };
-            });
+            };
+          go = apiKey: evaluate backend (goConfig apiKey);
           result = go {};
+          overlapping = evaluate backend (lib.recursiveUpdate (goConfig {}) (instanceChange {
+            clientKeys.personal.routes = lib.mkForce [
+              (route "personal")
+              {
+                api = "anthropic";
+                credential = "go";
+              }
+            ];
+          }));
           blocksOf = evaluated: family: lib.filter (entry: entry.name == "go") (rendered evaluated).api-keys.${family};
           modelsIn = evaluated: family: lib.concatMap (block: map (model: model.name) block.models) (blocksOf evaluated family);
           block = family: lib.head (blocksOf result family);
@@ -320,7 +330,6 @@ in {
               responses = null;
             };
           };
-          refusedModel = model: failsWith ["credentials.go: vendor `opencode-go` refuses models `${model}`" "Claude OAuth, z.ai and Codex OAuth credentials serve them"];
           allPlaced = lib.concatMap (modelsIn result) ["claude" "codex" "openai-compatibility"];
           # CPA trims model names, so a padded Claude id is refused at the type.
           rejectsPadded = model:
@@ -341,35 +350,46 @@ in {
               && lib.all (model: lib.elem model (modelsIn result "codex")) ["grok-4.7" "muse-spark-1.3-contributor"]
               && !(lib.elem "kimi-k3" (modelsIn result "claude" ++ modelsIn result "codex"));
             "generate-content on chat" = catalog.gemini-4-argon.api ? generate-content && lib.elem "gemini-4-argon" (modelsIn result "openai-compatibility");
-            "every other catalog model placed once" = lib.sort lib.lessThan allPlaced == builtins.filter (id: !(vendor.refuses id)) (builtins.attrNames catalog);
-            "defaults leave refused families out" =
-              lib.all (id: catalog ? ${id} && vendor.refuses id && !(lib.elem id allPlaced)) ["claude-haiku-5-5" "glm-5.3" "gpt-6-luna"]
-              && !(lib.any (id: lib.any (prefix: lib.hasPrefix prefix id) ["claude-" "glm-" "gpt-"]) allPlaced);
-            "Claude added to an API refused" = refusedModel "claude-haiku-5-5" (go {
-              apis.anthropic = {
-                base-url = urls.anthropic;
-                models = ["claude-haiku-5-5" "qwen3.8-max"];
-              };
-            });
-            "Claude through credential models refused" = refusedModel "claude-haiku-5-5" (go {
-              apis.responses = {
-                base-url = urls.responses;
-                models = null;
-              };
-              models = ["claude-haiku-5-5"];
-            });
-            "GLM added to an API refused" = refusedModel "glm-5.3" (go {
-              apis.chat = {
-                base-url = urls.chat;
-                models = ["glm-5.3" "kimi-k3"];
-              };
-            });
-            "GPT added to an API refused" = refusedModel "gpt-6-luna" (go {
-              apis.responses = {
-                base-url = urls.responses;
-                models = ["gpt-6-luna" "grok-4.7"];
-              };
-            });
+            "every extracted catalog model placed once" =
+              lib.sort lib.lessThan allPlaced
+              == [
+                "beam-free"
+                "claude-haiku-5-5"
+                "deepseek-v4-pro"
+                "deepseek-v4.1-flash"
+                "gemini-4-argon"
+                "glm-5.2"
+                "glm-5.3"
+                "glm-5.3-flash"
+                "gpt-5.6-luna"
+                "gpt-6-luna"
+                "grok-4.7"
+                "hy3"
+                "hy4"
+                "hy4-preview"
+                "iceman-contributor-free"
+                "kimi-k2.7-code"
+                "kimi-k3"
+                "kimi-k3.1-pro"
+                "longcat-2.0"
+                "longcat-2.5-free"
+                "mimo-v2.6-flash"
+                "mimo-v2.6-pro"
+                "minimax-m3"
+                "minimax-m3.1-flash"
+                "muse-spark-1.2-contributor"
+                "muse-spark-1.3-contributor"
+                "qwen3.7-plus"
+                "qwen3.8-flash"
+                "qwen3.8-max"
+                "step-5-preview"
+              ];
+            "OAuth beside Go fails shared runtime overlap" =
+              overlapping.config.ai.catalog.resolved.errors
+              == [
+                ''ai.catalog: runtime "claude" offers model "claude-haiku-5-5" from multiple pools: clients/go, clients/personal. Select one pool for this model in this runtime. Reason: finite offer intersects an open OAuth catalog.''
+              ];
+            "OAuth beside Go refuses checked projection" = !(builtins.tryEval (builtins.deepSeq overlapping.config.ai.catalog.resolved.pools true)).success;
             "Claude id with leading space refused" = rejectsPadded " claude-haiku-5-5";
             "Claude id with no-break space refused" = rejectsPadded "claude-haiku-5-5 ";
             "interior Unicode model name accepted" = let

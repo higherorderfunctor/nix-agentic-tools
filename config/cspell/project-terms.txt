@@ -324,6 +324,7 @@ mcpconfig
 mcps
 mdbook
 mdformat
+meituan
 memoizer
 memsize
 mergetool
@@ -342,6 +343,7 @@ moderations
 modfmt
 moff
 mojibake
+moonshotai
 mountpoint
 mpim
 mtimes
@@ -500,6 +502,7 @@ statix
 statusline
 stdenv
 steerchild
+stepfun
 stopword
 streamable
 strerror

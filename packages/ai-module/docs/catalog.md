@@ -12,11 +12,12 @@ with the caller's.
 `models.<id>` contains `maker`, exact `aliases.<provider>` spellings and a
 `source` reference. Native Claude/Codex identities and CPA's Go/z.ai facts are
 loaded once by `lib/catalog/models.nix`; the resolver and both consumers use
-that owner. Go's `canonical_id` namespace identifies its maker; `owned_by` is
-the serving vendor and is not used as a maker. Missing maker evidence remains
-null. A finite model with an unknown maker cannot be combined with an OAuth
-catalog because absence of overlap cannot be established. Declare its identity
-with evidence or omit that finite offer.
+that owner. Go maker facts map extracted IDs to makers; provider namespaces such
+as `moonshotai` remain aliases for the `moonshot` maker. `owned_by` identifies
+the serving vendor. Missing maker evidence remains null. A finite model with an
+unknown maker cannot be combined with an OAuth catalog because absence of
+overlap cannot be established. Declare its identity with evidence or omit that
+finite offer.
 
 `iceman-contributor-free` has the distinct maker identity `iceman`. Its upstream
 maker is undisclosed; this identity does not attribute it to another vendor. The
@@ -132,12 +133,15 @@ tier and effort guidance stays with delegate-routing.
 
 No reset, credit, cost or usage policy is declared by this catalog.
 
-The older CPA Go-prefix refusal remains in place for configurations outside
-named client routing. The graph does not infer billing identities from
-hand-written low-level CPA blocks or unrestricted client keys. Removing that
-broader legacy restriction requires covering those inputs; the shared check
-already covers named-client OAuth/finite overlaps by identity rather than
-prefix.
+CPA's Go preset exposes every extracted offer, including Claude, GLM and GPT.
+Consumers narrow those offers with their existing per-API model declarations;
+the package imposes no maker exclusions. Shared runtime overlap evaluation then
+checks the selected offers alongside OAuth catalogs. Go's research-preset
+ownership check remains a guidance check, independent of pool overlap.
+
+`ai-catalog-provider-offers` checks the full provider inventory and maker
+aliases, native API placement, operator exclusions and canonical CPA/routing
+parity on both backends. Unknown canonical aliases fail at the shared resolver.
 
 `ai-catalog-runtime-reach` evaluates the graph, CPA grants and routing
 manifest/prose together on both backends. Its literal diagnostic and grant
