@@ -46,7 +46,8 @@ credential defaults to its `instance/credential` budget identity; declaring its
 binding under a catalog pool gives that budget a shared name. Explicit model
 fields add offers; they cannot hide what a bound CPA credential really serves.
 Narrow an API-key offer through its existing `apiKey.models` or per-API model
-declaration. OAuth cannot be narrowed this way.
+declaration; for a vendor whose per-API defaults list models, such as OpenCode
+Go, only the per-API form narrows it. OAuth cannot be narrowed this way.
 
 CPA's predicate `clientKeyAllowlist.allows(clientKey, auth)` checks provider,
 credential kind, account, ID and base URL, but takes no requested model
