@@ -3,27 +3,27 @@ family by hand from prose. Role fit and trial eligibility are separate from
 budget and effort. Quality versus spend is consumer policy; there is no
 universal cheapest model or model-before-effort ordering.
 
-Resolve each candidate's base effort from a non-null role override, otherwise
-its machine `defaultEffort`, for every technique. Consumers can override the
-existing `families.<vendor>.<family>.defaultEffort` option. Sol defaults to
-medium and Go Kimi K3.1 Pro to max; a configured glm can set high (no glm preset
-is shipped). Prose guidance is not a runtime default lookup.
+Resolve effort from the model line's machine `defaultEffort` on its supported
+levels, ordered by the package scale
+`minimal < low < medium < high < xhigh < max`. Consumers can override
+`families.<vendor>.<family>.defaultEffort`; Sol defaults to medium, GLM to high
+and Go Kimi K3.1 Pro to max. Prose guidance is not a runtime default lookup.
 
-The fixed package scale is `minimal < low < medium < high < xhigh < max`.
-Observed `efforts` is an unordered support set. An avoided-family fallback
-advances the resolved base to the next supported setting, including when the
-base came from an explicit override; at the highest supported setting it stays
-unchanged. Unsupported overrides are refused, never silently lowered. State the
-resolved and launch efforts and disclose fallback metadata.
+For a role checking nobody, `effort` is a signed step offset such as `+1` or
+`-1`, or null for the default. For a checking role, supply `producers` with each
+model line's `family` and actual launch `effort`. The helper computes each
+producer's offset from its own default, takes the largest, and applies it to the
+checker's default. The same model line gets one extra step. Clamp to the
+supported endpoints. For example, Opus at its medium default selects GLM at its
+high default; Opus at high (+1) selects GLM at max.
 
-Observed `efforts: []` explicitly certifies omission support: every candidate
-launches without effort, regardless of its role request, family default or
-avoidance. It does not mean unknown support. Keep JSON effort null and omit the
-actual tool argument, CLI flag and frontmatter pin. Never pass the strings
-`None` or `null`. A technique requiring an effort value is unavailable for that
-candidate. Otherwise set model and resolved launch effort explicitly whenever
-the tool allows it. Unpinned inheritance is unsized unless the delegate's known
-launch values match the canonical selection.
+Routes and supported effort levels come from the generated manifest and local
+model catalog. An empty resolved support list means launch without effort: keep
+JSON effort null and omit the actual tool argument, CLI flag and frontmatter
+pin. Never pass the strings `None` or `null`. A technique requiring an effort
+value is unavailable for that candidate. Otherwise bind the helper's model and
+launch effort exactly. Unpinned inheritance is unsized unless the delegate's
+known launch values match the canonical selection.
 
 When "Orchestrator session" is enabled, follow its handoff order even for a
 quick look or review. When that entry is disabled, these rules apply instead:
@@ -37,5 +37,5 @@ Name each role's model and effort in one line in the launch message to the user,
 or in the report to the orchestrator when non-interactive, so it can be
 overridden.
 
-Applying a reviewer's located list is mid-tier work at medium effort. Keep top
-tiers for finding, judging and design.
+Applying a reviewer's located list is mid-tier work at the selected model line's
+default effort. Keep top tiers for finding, judging and design.

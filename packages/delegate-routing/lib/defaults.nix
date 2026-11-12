@@ -6,7 +6,7 @@
   picker = {
     claude.entries = [
       {
-        effort = "medium";
+        effort = "low";
         # Names the family; routing-view takes the model from its resolved id.
         family = "sonnet";
         technique = "claude -p";
@@ -14,7 +14,7 @@
     ];
     codex.entries = [
       {
-        effort = "medium";
+        effort = "low";
         model = "gpt-6.1-sol";
         technique = "codex exec";
       }

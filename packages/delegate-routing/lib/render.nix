@@ -100,7 +100,7 @@
           "Avoid for" = family: family.avoidFor;
           "Effort (delegate)" = family: family.effort;
           Family = familyLabel;
-          Launch = family: lib.concatMapStringsSep "; " reach (builtins.filter (route: route.family == family) view.routes);
+          Launch = family: lib.concatMapStringsSep "; " reach (builtins.filter (route: route.family.name == family.name) view.routes);
           Orchestration = family: family.orchestration or "";
           Pool = family: family.pool or "";
           "Use for" = family: family.useFor;

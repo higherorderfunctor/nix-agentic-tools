@@ -3,11 +3,12 @@ a quick fact from named documents, as substantive. Prepare the rubric from the
 task goal as preflight; this does not authorize task-source investigation.
 Before that investigation, use this runtime's rendered helper with
 `--role planner --launch-context <json-path>` with taskSummary, nullable
-proposerFamily, nonInteractive, compact role requests and observed techniques to
-select a reachable, fitted strong/frontier planner, trying shared avoided-family
-fallback before declaring no qualified route. Pin its model and effort from a
-canonical candidate, pass the task, source paths, saved rubric and the resolved
-routing/workflow context. Use a native subagent or workflow when
+proposerFamily, nonInteractive and compact role requests with effort offsets to
+select a reachable, fitted strong/frontier planner from manifest routes. Use the
+ladder last resort before declaring no qualified route: every route must be
+hard-filtered and the caller unable to run itself. Pin its model and effort from
+a canonical candidate, pass the task, source paths, saved rubric and the
+resolved routing/workflow context. Use a native subagent or workflow when
 non-interactive; if no qualified pinned planner is reachable, report a loop
 failure rather than doing the design in the orchestrator. A worker assigned an
 approved bounded unit does not recursively plan that assignment. Replan only the
@@ -73,7 +74,7 @@ Read the returned exclusions and warnings. An all-pools-unmeasured fit-only
 decision remains possible with explicit budget/session uncertainty; an
 unresolved model, unsupported effort or technique never becomes an approved
 launch. Intentional null effort is resolved: preserve JSON null and omit the
-actual effort argument, flag or pin. Preserve canonical fallback metadata with
+actual effort argument, flag or pin. Preserve the canonical launch record with
 each selected launch; current candidate equality validates it without worker
 binding. Manual-only routes stay outside automatic approval; handle an explicit
 user request separately under its authorization.

@@ -72,4 +72,21 @@
       useFor = "bounded implementation on established patterns; very long reads over 200k tokens";
     };
   };
+  zhipu = {
+    glm = {
+      avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
+      defaultEffort = "high";
+      effort = "low, high or max; high default, max for judging";
+      match = "glm-[0-9]*.[0-9]";
+      tier = "strong";
+      useFor = "planning, spec writing, judging; hard multi-file coding";
+    };
+    glm-flash = {
+      avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
+      effort = "token-hungry thinking; keep the default effort";
+      match = "glm-*-flash";
+      tier = "mid";
+      useFor = "code to a spec; the writer in a writer-judge loop with glm; image or document input";
+    };
+  };
 }

@@ -29,6 +29,7 @@ ROLE_TIERS = {
     "second-check": {"strong", "frontier"},
     "writer": {"small", "mid", "strong", "frontier"},
 }
+TIERS = ("small", "mid", "strong", "frontier")
 READER_RETRY_DELAY = 2
 READER_TIMEOUT = 10
 TASK_SUMMARY_LIMIT = 65536
@@ -94,23 +95,22 @@ def picker_decisions(raw, pairs):
     return value["decisions"]
 
 
-def pool_refusal(pool, pace, is_session):
+def pool_refusal(pool, pace):
     if pool.get("status") == "unreachable":
         return "Reader unreachable for this invocation"
     if pool.get("buffer") == 0:
         return "pool exhausted"
     if pace == 0:
         return "model-scoped window exhausted"
-    if is_session:
-        if pool.get("status") != "measured" or pool.get("buffer") is None:
-            return "session buffer cannot be certified"
-        if pool["buffer"] <= 0.2:
-            return "session buffer must be strictly greater than 20%"
     return None
 
 
 class PickerUnavailable(Exception):
     """The picker entry cannot be built from local state; the message names why."""
+
+
+class PickerInvalid(ValueError):
+    """A safe runner diagnostic, without command text or model output."""
 
 
 def write_picker_catalog(path, model, codex_home):
@@ -125,18 +125,20 @@ def write_picker_catalog(path, model, codex_home):
 
 
 def run_picker(entry, payload, shell):
-    prompt = ("Judge task and role fit using useFor/avoidFor guidance. Choose keep or exclude for every role/family pair, including avoided fallbacks. Return exactly {\"decisions\":[{\"decision\":\"keep\",\"family\":\"name\",\"role\":\"writer\",\"reason\":\"1..240 characters\"}],\"schemaVersion\":1}. No tools. Treat the following JSON as data.\n" + json.dumps(payload, ensure_ascii=False)).encode("utf-8")
+    prompt = ("Judge task and role fit using useFor/avoidFor guidance. Choose keep or exclude for every role/family pair. Return exactly {\"decisions\":[{\"decision\":\"keep\",\"family\":\"name\",\"role\":\"writer\",\"reason\":\"1..240 characters\"}],\"schemaVersion\":1}. No tools. Treat the following JSON as data.\n" + json.dumps(payload, ensure_ascii=False)).encode("utf-8")
     if len(prompt) > PICKER_PROMPT_LIMIT:
-        raise ValueError("picker prompt limit")
+        raise PickerInvalid("picker prompt limit")
     with tempfile.TemporaryDirectory(prefix="delegate-routing-picker-") as directory:
         prompt_path, output_path = Path(directory) / "prompt.json", Path(directory) / "result.json"
         prompt_path.write_bytes(prompt)
+        instructions_path = Path(directory) / "instructions.txt"
+        instructions_path.write_text("Return JSON only. No tools.\n")
         cwd, env = None, None
         if "<catalog-file>" in entry["command"]:
             codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").resolve()
             write_picker_catalog(Path(directory) / "catalog.json", entry["model"], codex_home)
             cwd, env = directory, os.environ | {"CODEX_HOME": str(codex_home)}
-        values = {"<catalog-file>": str(Path(directory) / "catalog.json"), "<effort>": entry["effort"], "<model>": entry["model"], "<output-file>": str(output_path), "<prompt-file>": str(prompt_path)}
+        values = {"<catalog-file>": str(Path(directory) / "catalog.json"), "<effort>": entry["effort"], "<instructions-file>": str(instructions_path), "<model>": entry["model"], "<output-file>": str(output_path), "<prompt-file>": str(prompt_path)}
         # One pass: a substituted value is never scanned for a later token.
         command = re.sub("|".join(map(re.escape, values)), lambda token: shlex.quote(values[token.group()]), entry["command"])
         argv = [shell, "-euETo", "pipefail", "-c", "shopt -s inherit_errexit 2>/dev/null || :\n" + command]
@@ -148,7 +150,7 @@ def run_picker(entry, payload, shell):
                 if output_path.exists() and output_path.stat().st_size > PICKER_OUTPUT_LIMIT:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
-                    raise ValueError("picker output limit")
+                    raise PickerInvalid("picker output limit")
                 if time.monotonic() >= deadline:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
@@ -157,11 +159,11 @@ def run_picker(entry, payload, shell):
             if process.returncode:
                 raise subprocess.CalledProcessError(process.returncode, argv)
         if not output_path.is_file():
-            raise ValueError("picker wrote no output")
+            raise PickerInvalid("picker wrote no output")
         with output_path.open("rb") as handle:
             raw = handle.read(PICKER_OUTPUT_LIMIT + 1)
         if len(raw) > PICKER_OUTPUT_LIMIT:
-            raise ValueError("picker output limit")
+            raise PickerInvalid("picker output limit")
         return raw
 
 
@@ -170,38 +172,55 @@ def picker_catalog(manifest, eligible_by_role):
     catalog = []
     for role, eligible in eligible_by_role.items():
         seen = set()
-        for item in eligible:
+        # A delegate launch carries the effort the picker judges; a continue-self
+        # record does not, so delegates come first for each family.
+        for item in sorted(eligible, key=lambda item: item["launch"].get("action") == "continue-self"):
             family = next(route["family"] for route in manifest["routes"] if route["family"]["name"] == item["launch"]["family"] and route["target"] == item["launch"]["runtime"])
             if family["name"] in seen:
                 continue
             seen.add(family["name"])
-            catalog.append({key: family[key] for key in ("name", "tier", "useFor", "avoidFor", "defaultEffort")} | {"role": role, "avoided": "fallback" in item["launch"], "effectiveEffort": item["launch"]["effort"]})
+            catalog.append({key: family[key] for key in ("name", "tier", "useFor", "avoidFor", "defaultEffort")} | {"role": role, "effectiveEffort": item["launch"].get("effort")})
     return catalog
 
 
-def picker_runnable(entry, manifest, context, pools, family_paces, invalid_families):
-    """The picker's own family must be untried, tool-free, in budget and its executable on PATH."""
+def effective_pace(family_paces, pool, key):
+    """A family's scoped pace when its pool reports one, else the pool's own pace."""
+    return family_paces.get(key, pool.get("pace"))
+
+
+def picker_runnable(entry, pools, family_paces, invalid_families):
+    """Return the first refusal reason, or None when the picker can run."""
+    if not entry["toolFree"]:
+        return "picker is not tool-free"
     key = (entry["pool"], entry["family"])
-    pool = pools.get(entry["pool"], {})
-    is_session = entry["pool"] is not None and entry["pool"] == manifest["sessionPool"]
+    if key in invalid_families:
+        return "picker family has an invalid scoped window"
     # Picker commands begin with their executable's bare name; the helper runs the
     # command itself, so a missing binary is knowable here without caller evidence.
     executable = entry["command"].split(maxsplit=1)[0]
-    return (
-        entry["toolFree"]
-        and entry["family"] != context["proposerFamily"]
-        and key not in invalid_families
-        and shutil.which(executable) is not None
-        and pool_refusal(pool, family_paces.get(key, pool.get("pace")), is_session) is None
-    )
+    if shutil.which(executable) is None:
+        return "picker executable is not on PATH"
+    pool = pools.get(entry["pool"], {})
+    return pool_refusal(pool, effective_pace(family_paces, pool, key))
 
 
 def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, invalid_families, shell, reasons):
     if context.get("proposerFamily") is None:
+        reasons.append("proposer family is unknown")
+        return None
+    if not manifest["pickerEntries"]:
+        reasons.append("no configured picker entries")
         return None
     payload = {"taskSummary": context["taskSummary"], "nonInteractive": context["nonInteractive"], "roles": {role: context["roles"].get(role, {}) for role in eligible_by_role}, "families": catalog}
-    for entry in manifest["pickerEntries"]:
-        if not picker_runnable(entry, manifest, context, pools, family_paces, invalid_families):
+    def order(entry):
+        pool = pools.get(entry["pool"], {})
+        pace = effective_pace(family_paces, pool, (entry["pool"], entry["family"]))
+        return pool_order({"launch": entry, "pace": pace, "pool": entry["pool"]}, manifest, pools)
+    for entry in sorted(manifest["pickerEntries"], key=order):
+        identity = f"{entry['model']} ({entry['technique']})"
+        refusal = picker_runnable(entry, pools, family_paces, invalid_families)
+        if refusal is not None:
+            reasons.append(f"{identity}: {refusal}")
             continue
         for attempt in range(2):
             try:
@@ -209,12 +228,21 @@ def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, inva
                 return {"decisions": decisions, "provenance": {key: entry[key] for key in ("effort", "family", "model", "runtime", "technique")}}
             except PickerUnavailable as error:
                 reasons.append(str(error))
-            except (OSError, subprocess.SubprocessError):
+            except (OSError, subprocess.SubprocessError) as error:
+                outcome = "picker execution failed"
+                if isinstance(error, subprocess.CalledProcessError):
+                    outcome = f"picker exited {error.returncode}"
+                elif isinstance(error, subprocess.TimeoutExpired):
+                    outcome = "picker timed out"
+                retry = "retrying" if attempt == 0 else "no retries left"
+                reasons.append(f"{identity}: attempt {attempt + 1}: {outcome}; {retry}")
                 if attempt == 0:
                     time.sleep(PICKER_RETRY_DELAY)
                     continue
+            except PickerInvalid as error:
+                reasons.append(f"{identity}: {error}")
             except (TypeError, ValueError, UnicodeError):
-                pass
+                reasons.append(f"{identity}: invalid picker decisions")
             break
     return None
 
@@ -380,8 +408,12 @@ def collect(readers, now, shell, run=run_reader):
     return results
 
 
+def printable(message):
+    return "".join(char if char.isprintable() else ascii(char)[1:-1] for char in message)
+
+
 def warning(message, *, failure=True):
-    message = "".join(char if char.isprintable() else ascii(char)[1:-1] for char in message)
+    message = printable(message)
     report = "Report this failure to the user." if failure else "Report this to the user."
     return f"WARNING: {message}. {report}"
 
@@ -406,50 +438,117 @@ def model_version(model):
     return tuple(int(part) for part in re.findall(r"[0-9]+", model))
 
 
-def launch(route, context, requested, avoided, scale):
+def resolve_model(route, technique):
+    """Keep pinned ids; prefer catalog efforts, resolving patterns to the highest visible id."""
+    model = technique["model"]
+    entries = []
+    if route["target"] == "codex":
+        cache = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
+        try:
+            entries = [{"effortSource": "codex local model list", "efforts": [level["effort"] for level in item["supported_reasoning_levels"]], "model": item["slug"]} for item in strict_json(cache.read_bytes())["models"] if item.get("visibility") == "list" and model_matches(item["slug"], model)]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            entries = []
+    resolved = max(reversed(entries), key=lambda item: model_version(item["model"]), default=None)
+    if resolved is None and not model["isPattern"] and model_matches(model["value"], model):
+        return {"effortSource": f"Nix declaration: pinned id absent from {route['target']} local model list", "efforts": model["efforts"], "model": model["value"]}
+    return resolved
+
+
+def model_matches(value, model):
+    return not any(c in value for c in "*?[") and (fnmatch.fnmatchcase(value, model["value"]) if model["isPattern"] else value == model["value"])
+
+
+def effort_levels(evidence, scale):
+    return [level for level in scale if level in evidence["efforts"]]
+
+
+def producer_details(manifest, producer):
+    for route in manifest["routes"] + manifest["manualRoutes"]:
+        if route["family"]["name"] != producer["family"]:
+            continue
+        for technique in route["techniques"]:
+            evidence = resolve_model(route, technique)
+            if evidence is None:
+                continue
+            levels = effort_levels(evidence, manifest["effortLevels"])
+            default, effort = route["family"]["defaultEffort"], producer["effort"]
+            if evidence["efforts"] == [] and effort is None:
+                return route["family"], 0
+            if default in levels and effort in levels:
+                return route["family"], levels.index(effort) - levels.index(default)
+    return None
+
+
+def launch(route, context, offset, same_line, scale, runtime):
     alternatives, exclusions = [], []
     for technique in route["techniques"]:
         name, node = technique["name"], technique["node"]
         reason = None
-        if node["kind"] == "external" and context.get("nonInteractive") is not False:
+        if (route["target"] != runtime or node["kind"] == "external") and context.get("nonInteractive") is not False:
             reason = "external delegate forbidden in headless context" if context.get("nonInteractive") is True else "non-interactive status unresolved for external delegate"
-        evidence = [item for item in context["techniques"] if item["runtime"] == route["target"] and item["technique"] == name]
-        model = technique["model"]
-        evidence = [item for item in evidence if not any(c in item["model"] for c in "*?[") and (fnmatch.fnmatchcase(item["model"], model["value"]) if model["isPattern"] else item["model"] == model["value"])]
-        # Several observed models may match one family; the highest version wins and
-        # equal versions keep the last listed, as lib/agent-files.nix resolveId does.
-        newest = max(reversed(evidence), key=lambda item: model_version(item["model"]), default=None)
-        evidence = [] if newest is None else [newest]
-        agent = technique["agent"]
-        resolved = requested if requested is not None else route["family"]["defaultEffort"]
-        effort = resolved
-        if reason is None and not evidence:
-            reason = "concrete model/available technique unresolved"
-        if reason is None and evidence[0]["efforts"] == []:
-            effort = None
-        if reason is None and (
-            (effort is None and evidence[0]["efforts"] != [])
-            or (effort is not None and effort not in evidence[0]["efforts"])
-        ):
-            reason = "requested/default effort unresolved or unsupported"
+        evidence = resolve_model(route, technique)
+        effort = route["family"]["defaultEffort"]
+        if reason is None and evidence is None:
+            reason = f"no concrete model in Nix pin or {route['target']} local model list"
+        if reason is None:
+            levels = effort_levels(evidence, scale)
+            if evidence["efforts"] == []:
+                effort = None
+            elif effort not in levels:
+                reason = "default effort unresolved or unsupported"
+            else:
+                effort = levels[max(0, min(len(levels) - 1, levels.index(effort) + offset + same_line))]
         if reason:
             exclusions.append({"reason": reason, "technique": name})
             continue
-        if avoided and effort is not None:
-            supported = [value for value in scale if value in evidence[0]["efforts"] and scale.index(value) > scale.index(resolved)]
-            effort = next(iter(supported), resolved)
         alternatives.append({
-            "agent": agent,
+            "agent": technique["agent"],
             "effort": effort,
+            "effortSource": evidence["effortSource"],
             "family": route["family"]["name"],
             "guidance": {key: node[key] for key in ("command", "modelArg", "notes")},
-            "model": evidence[0]["model"],
+            "model": evidence["model"],
             "runtime": route["target"],
             "technique": name,
         })
-        if avoided:
-            alternatives[-1]["fallback"] = {"kind": "avoided-family", "launchEffort": effort, "resolvedEffort": resolved}
     return alternatives, exclusions
+
+
+def pool_order(item, manifest, pools):
+    preference = next((reader.get("pool", {}).get("preference", 0) for reader in manifest["readers"] if reader["name"] == item["pool"]), 0)
+    pace = item["pace"]
+    is_session = manifest["sessionPool"] is not None and item["pool"] == manifest["sessionPool"]
+    buffer = pools.get(item["pool"], {}).get("buffer")
+    low_buffer = is_session and buffer is not None and buffer <= 0.2
+    below_low_water = pace is None or pace < manifest["lowWaterMark"] or low_buffer
+    drain_last = is_session and not low_buffer
+    return (below_low_water, drain_last, -preference, -(pace or 0), item["launch"]["family"], item["launch"]["runtime"])
+
+
+def ladder(eligible, producers, context, manifest, pools):
+    names = {family["name"] for family, offset in producers}
+    makers = {family["maker"] for family, offset in producers}
+    def relation(item):
+        name = item["launch"]["family"]
+        return 2 if name in names else int(manifest["familyMakers"][name] in makers)
+    ranked = sorted(eligible, key=lambda item: (relation(item), *pool_order(item, manifest, pools)))
+    delegates = [item for item in ranked if item["launch"].get("action") != "continue-self"]
+    caller = context.get("proposerFamily")
+    fallback = next((item for name_set in (names, {caller}) for item in delegates if item["launch"]["family"] in name_set), None)
+    if fallback is None:
+        fallback = next((item for item in ranked if item["launch"].get("action") == "continue-self"), None)
+    selected, seen = [], set()
+    for item in delegates:
+        if item["pool"] not in seen:
+            selected.append(item)
+            seen.add(item["pool"])
+        if len(selected) == 3:
+            break
+    selected.extend(item for item in delegates if item not in selected and len(selected) < 3)
+    # A retained producer/caller already in the top three needs no duplicate.
+    if fallback is not None and fallback not in selected:
+        selected.append(fallback)
+    return selected
 
 
 class InvalidRequest(ValueError):
@@ -460,12 +559,12 @@ class InvalidRequest(ValueError):
         self.errors = errors
 
 
-MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
+MANIFEST_KEYS = ("effortLevels", "familyMakers", "familyNames", "lowWaterMark", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
 
 
 def request_errors(manifest, context, roles):
     """Collect every refusal in argv roles, manifest and launch context; a context needs its manifest."""
-    errors, name_lists = [], {}
+    errors, name_lists, makers = [], {}, {}
 
     def refuse(path, message):
         errors.append({"path": path, "message": message})
@@ -506,8 +605,8 @@ def request_errors(manifest, context, roles):
         elif type(node) not in schema:
             refuse(path, f"{CONFIGURATION_FAULT}must have type {' or '.join(kind.__name__ for kind in schema)}")
 
-    family_shape = {"avoidFor": (str,), "defaultEffort": (str, type(None)), "name": (str,), "tier": (str,), "useFor": (str,)}
-    technique_shape = {"agent": (dict, type(None)), "model": {"isPattern": (bool,), "value": (str,)}, "name": (str,), "node": {"command": (str, type(None)), "kind": (str,), "modelArg": (str,), "notes": (str,)}}
+    family_shape = {"avoidFor": (str,), "defaultEffort": (str, type(None)), "maker": (str,), "name": (str,), "tier": (str,), "useFor": (str,)}
+    technique_shape = {"agent": (dict, type(None)), "model": {"efforts": [(str,)], "isPattern": (bool,), "value": (str,)}, "name": (str,), "node": {"command": (str, type(None)), "kind": (str,), "modelArg": (str,), "notes": (str,)}}
     route_shape = {"family": family_shape, "target": (str,), "techniques": [technique_shape]}
     picker_shape = {"command": (str,), "effort": (str,), "family": (str,), "model": (str,), "pool": (str, type(None)), "runtime": (str,), "technique": (str,), "toolFree": (bool,)}
 
@@ -523,6 +622,9 @@ def request_errors(manifest, context, roles):
             refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}required key is missing")
         if missing:
             return errors
+        low_water = manifest["lowWaterMark"]
+        if type(low_water) not in (int, float) or not math.isfinite(low_water) or low_water < 0:
+            refuse("manifest.lowWaterMark", f"{CONFIGURATION_FAULT}must be a finite nonnegative number")
         readers = manifest["readers"]
         if not isinstance(readers, list):
             refuse("manifest.readers", f"{CONFIGURATION_FAULT}must be a list")
@@ -535,6 +637,9 @@ def request_errors(manifest, context, roles):
                 refuse(f"manifest.readers[{index}].command", f"{CONFIGURATION_FAULT}required key is missing; null marks a pool with no reader")
             if not isinstance(reader.get("name"), str) or not reader["name"].strip():
                 refuse(f"manifest.readers[{index}].name", f"{CONFIGURATION_FAULT}must be a non-empty string")
+            preference = reader.get("pool", {}).get("preference", 0) if isinstance(reader.get("pool", {}), dict) else None
+            if type(preference) is not int:
+                refuse(f"manifest.readers[{index}].pool.preference", f"{CONFIGURATION_FAULT}must be an integer")
         if errors and any(error["path"].startswith("manifest.readers") for error in errors):
             return errors
         pool_names = sorted(reader["name"] for reader in manifest["readers"])
@@ -549,6 +654,18 @@ def request_errors(manifest, context, roles):
                 refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}must be a list of strings")
             else:
                 name_lists[key] = values
+        configured = name_lists.get("familyNames")
+        shape("manifest.familyMakers", manifest["familyMakers"], {name: (str, type(None)) for name in (configured or [])})
+        if isinstance(manifest["familyMakers"], dict):
+            for name, maker in manifest["familyMakers"].items():
+                path = f"manifest.familyMakers.{name}"
+                if configured is not None and name not in configured:
+                    refuse(path, f"{CONFIGURATION_FAULT}unknown family name; allowed: {allowed(sorted(configured))}")
+                elif isinstance(maker, str):
+                    if not maker.strip():
+                        refuse(path, f"{CONFIGURATION_FAULT}must be a non-empty string")
+                    else:
+                        makers[name] = maker
         for kind in ("routes", "manualRoutes"):
             if not isinstance(manifest[kind], list):
                 refuse(f"manifest.{kind}", f"{CONFIGURATION_FAULT}must be a list")
@@ -563,6 +680,12 @@ def request_errors(manifest, context, roles):
                 elif route["pool"] is not None and route["pool"] not in pool_names:
                     refuse(f"{path}.pool", pool_fault % route["pool"])
                 shape(path, route, route_shape)
+                family = route.get("family")
+                if isinstance(family, dict) and isinstance(family.get("maker"), str):
+                    if not family["maker"].strip():
+                        refuse(f"{path}.family.maker", f"{CONFIGURATION_FAULT}must be a non-empty string")
+                    elif isinstance(family.get("name"), str) and family["name"] in makers and family["maker"] != makers[family["name"]]:
+                        refuse(f"{path}.family.maker", f"{CONFIGURATION_FAULT}must match manifest.familyMakers.{family['name']}")
         shape("manifest.pickerEntries", manifest["pickerEntries"], [picker_shape])
         for index, entry in enumerate(manifest["pickerEntries"] if isinstance(manifest["pickerEntries"], list) else []):
             if not isinstance(entry, dict):
@@ -578,7 +701,7 @@ def request_errors(manifest, context, roles):
         return errors
     families = sorted(name_lists["familyNames"]) if "familyNames" in name_lists else None
     efforts = name_lists.get("effortLevels")
-    closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
+    closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary"})
     summary = context.get("taskSummary")
     try:
         summary_valid = isinstance(summary, str) and summary.strip() and len(summary.encode("utf-8")) <= TASK_SUMMARY_LIMIT
@@ -591,19 +714,6 @@ def request_errors(manifest, context, roles):
     proposer = context.get("proposerFamily")
     if families is not None and proposer is not None and (not isinstance(proposer, str) or proposer not in families):
         refuse("launchContext.proposerFamily", f"unknown family name; allowed: {allowed(families)}")
-    observed = context.get("techniques")
-    if not isinstance(observed, list):
-        refuse("launchContext.techniques", "required; a list of observed techniques")
-    for index, evidence in enumerate(observed if isinstance(observed, list) else []):
-        path = f"launchContext.techniques[{index}]"
-        if not isinstance(evidence, dict):
-            refuse(path, "must be an object")
-            continue
-        closed(path, evidence, {"efforts", "model", "runtime", "technique"})
-        for key in ("model", "runtime", "technique"):
-            text(f"{path}.{key}", evidence.get(key))
-        if not isinstance(evidence.get("efforts"), list):
-            refuse(f"{path}.efforts", "required; a list of efforts, [] when effort is omitted")
     requests = context.get("roles")
     if not isinstance(requests, dict):
         refuse("launchContext.roles", "required; an object keyed by role")
@@ -614,17 +724,33 @@ def request_errors(manifest, context, roles):
         elif not isinstance(request, dict):
             refuse(path, "must be an object")
         else:
-            for field in ("avoid", "exclude"):
-                if field not in request:
+            if "exclude" in request:
+                names = sorted(set(families) | set(makers.values())) if families is not None else None
+                if not isinstance(request["exclude"], list):
+                    refuse(f"{path}.exclude", "must be a list of family names or makers")
+                for position, name in enumerate(request["exclude"] if isinstance(request["exclude"], list) else []):
+                    if names is not None:
+                        named(f"{path}.exclude[{position}]", name, names, "family name or maker")
+            if request.get("effort") is not None and (not isinstance(request["effort"], str) or re.fullmatch(r"[+-][0-9]{1,3}", request["effort"]) is None):
+                refuse(f"{path}.effort", "must be a signed step offset such as +1 or -1, or null")
+            producers = request.get("producers", [])
+            if not isinstance(producers, list):
+                refuse(f"{path}.producers", "must be a list of producer family/effort records")
+            for position, producer in enumerate(producers if isinstance(producers, list) else []):
+                at = f"{path}.producers[{position}]"
+                if not isinstance(producer, dict):
+                    refuse(at, "must be a producer family/effort record")
                     continue
-                if not isinstance(request[field], list):
-                    refuse(f"{path}.{field}", "must be a list of family names")
-                for position, name in enumerate(request[field] if isinstance(request[field], list) else []):
-                    if families is not None:
-                        named(f"{path}.{field}[{position}]", name, families, "family name")
-            if efforts is not None and request.get("effort") is not None:
-                named(f"{path}.effort", request["effort"], efforts, "effort")
-            closed(path, request, {"avoid", "effort", "exclude"})
+                closed(at, producer, {"effort", "family"})
+                if families is not None:
+                    named(f"{at}.family", producer.get("family"), families, "family name")
+                if "effort" not in producer or (producer["effort"] is not None and efforts is not None and producer["effort"] not in efforts):
+                    refuse(f"{at}.effort", "must name the producer's supported launch effort, or null when omitted")
+                if not errors and producer_details(manifest, producer) is None:
+                    refuse(at, "producer default, tier and supported launch effort must resolve from configured routes and local model lists")
+            if producers and request.get("effort") is not None:
+                refuse(f"{path}.effort", "checking roles take their offset from producers")
+            closed(path, request, {"effort", "exclude", "producers"})
     return errors
 
 
@@ -636,10 +762,10 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     pools = collect(manifest["readers"], now, shell, run)
     warnings = ["provider-vendor identity is provisional; trial/maker independence remain caller assessments"] + pool_diagnostics(manifest["readers"], pools)
     # A Reader scope matches an exact family name in that pool, not a model glob.
-    # Include manual routes so warnings describe configuration, not availability.
+    # Known names span all runtimes; limits stay keyed by pool and family.
+    families = set(manifest["familyNames"])
     family_paces, invalid_families = {}, set()
     for name, pool in pools.items():
-        families = {route["family"]["name"] for route in manifest["routes"] + manifest["manualRoutes"] if route["pool"] == name}
         for window, pace in pool.get("scopedPaces", {}).items():
             scope = window.split(":", 1)[1]
             error = pool.get("scopedErrors", {}).get(window)
@@ -655,33 +781,42 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
         warnings.append("session pool unknown; buffer rule cannot be certified")
     elif pools[session]["status"] != "measured" or pools[session].get("buffer") is None:
         warnings.append("session buffer unknown; buffer rule cannot be certified")
+    if context.get("proposerFamily") is None:
+        warnings.append("proposer family unknown; self last resort unavailable")
     result = {"automaticRuntimes": manifest["runtimes"], "manualOnly": manifest["manualRoutes"], "pools": pools, "roles": {}, "runtime": manifest["runtime"], "sessionPool": session, "snapshot": now.isoformat(), "warnings": warnings}
-    eligible_by_role, excluded_by_role = {}, {}
+    eligible_by_role, excluded_by_role, producers_by_role = {}, {}, {}
     for role in roles:
         request = context["roles"].get(role, {})
+        producers = [producer_details(manifest, producer) for producer in request.get("producers", [])]
+        producers_by_role[role] = producers
+        floor = max((TIERS.index(family["tier"]) for family, offset in producers), default=0)
+        offset = max((offset for family, offset in producers), default=int(request.get("effort") or "+0"))
         candidates, excluded = [], []
         for route in manifest["routes"]:
             family = route["family"]
             record = {"family": family["name"], "runtime": route["target"]}
-            if family["name"] in request.get("exclude", []):
+            if any(value in request.get("exclude", []) for value in (family["name"], family["maker"])):
                 excluded.append(record | {"reason": "excluded by caller"})
                 continue
-            avoided = family["name"] in request.get("avoid", [])
-            if family["tier"] not in ROLE_TIERS[role]:
+            if family["tier"] not in ROLE_TIERS[role] or TIERS.index(family["tier"]) < floor:
                 excluded.append(record | {"reason": "below role tier floor"})
                 continue
-            alternatives, unresolved = launch(route, context, request.get("effort"), avoided, manifest["effortLevels"])
+            if (route["pool"], family["name"]) in invalid_families:
+                excluded.append(record | {"reason": "model-scoped window invalid"})
+                continue
+            pace = effective_pace(family_paces, pools.get(route["pool"], {}), (route["pool"], family["name"]))
+            # Continuing the calling model needs no external launch or invented
+            # model/effort attestation, but retains its route's hard filters.
+            if family["name"] == context.get("proposerFamily") and route["target"] == manifest["runtime"]:
+                candidates.append({"alternatives": [], "launch": record | {"action": "continue-self"}, "pace": pace, "pool": route["pool"], "tier": family["tier"]})
+            alternatives, unresolved = launch(route, context, offset, any(producer["name"] == family["name"] for producer, step in producers), manifest["effortLevels"], manifest["runtime"])
             excluded.extend(record | item for item in unresolved)
             if alternatives:
-                if (route["pool"], family["name"]) in invalid_families:
-                    excluded.append(record | {"reason": "model-scoped window invalid"})
-                    continue
-                pace = family_paces.get((route["pool"], family["name"]), pools.get(route["pool"], {}).get("pace"))
                 candidates.append({"alternatives": alternatives[1:], "launch": alternatives[0], "pace": pace, "pool": route["pool"], "tier": family["tier"]})
         eligible = []
         for item in candidates:
             pool = pools.get(item["pool"], {})
-            reason = pool_refusal(pool, item["pace"], session is not None and item["pool"] == session)
+            reason = pool_refusal(pool, item["pace"])
             if reason:
                 excluded.append({"family": item["launch"]["family"], "reason": reason, "runtime": item["launch"]["runtime"]})
             else:
@@ -694,7 +829,7 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     if judgment is not None:
         result["picker"] = judgment
     elif catalog:
-        warnings.append(PICKER_WARNING + "".join(f" Unavailable: {reason}." for reason in reasons))
+        warnings.append(PICKER_WARNING + "".join(f" Unavailable: {reason}." for reason in dict.fromkeys(printable(reason)[:1024] for reason in reasons)))
     for role in roles:
         eligible, excluded = eligible_by_role[role], excluded_by_role[role]
         if judgment is not None:
@@ -706,33 +841,14 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
                 else:
                     excluded.append({"family": item["launch"]["family"], "runtime": item["launch"]["runtime"], "reason": "excluded by model picker"})
             eligible = kept
-        measured = [item for item in eligible if pools.get(item["pool"], {}).get("status") == "measured"]
-        session_behind = [item for item in measured if session is not None and item["pool"] == session and any(other["pace"] > item["pace"] for other in measured if other["pool"] != session)]
-        selectable_measured = [item for item in measured if item not in session_behind]
-        usable = []
-        for item in eligible:
-            reason = None
-            partition_measured = [other for other in selectable_measured if ("fallback" in other["launch"]) == ("fallback" in item["launch"])]
-            if item in session_behind:
-                reason = "another fitting pool is ahead of session pace"
-            elif partition_measured and item not in partition_measured:
-                reason = "unmeasured pool excluded while measured candidates exist"
-            if reason:
-                excluded.append({"family": item["launch"]["family"], "reason": reason, "runtime": item["launch"]["runtime"]})
-            else:
-                item["budget"] = "measured" if item in measured else "fit-only; budget and session buffer unknown"
-                usable.append(item)
-        usable.sort(key=lambda item: ("fallback" in item["launch"], -(item["pace"] or 0), item["pool"] == session, item["launch"]["family"], item["launch"]["runtime"]))
+        usable = ladder(eligible, producers_by_role[role], context, manifest, pools)
         for item in usable:
+            item["budget"] = "measured" if pools.get(item["pool"], {}).get("status") == "measured" else "fit-only; budget and session buffer unknown"
             spec = item["launch"]
-            item["line"] = " ".join(f"{key}={value}" for key, value in (("role", role), ("runtime", spec["runtime"]), ("family", spec["family"]), ("technique", spec["technique"]), ("model", spec["model"]), ("effort", spec["effort"])) if value is not None)
-        if usable and "fallback" in usable[0]["launch"]:
-            spec = usable[0]["launch"]
-            effort = spec["effort"] if spec["effort"] is not None else "omitted intentionally"
-            warnings.append(warning(f"{role}: no non-avoided candidate; using fallback {spec['family']} at effort {effort}", failure=False))
+            item["line"] = " ".join(f"{key}={value}" for key, value in (("role", role), *((key, spec.get(key)) for key in ("action", "runtime", "family", "technique", "model", "effort"))) if value is not None)
         result["roles"][role] = {"candidates": usable, "exclusions": excluded}
         if not usable:
-            result["roles"][role]["error"] = "never step down a tier; report a loop failure."
+            result["roles"][role]["error"] = "every route is hard-filtered and the caller cannot run itself; never step down a tier."
     return result
 
 
@@ -803,6 +919,8 @@ def check_plan(artifact, current, directory, max_concurrency=10):
             raise ValueError(f"{identity}: one worker and a first-check review barrier required")
         for record in launches:
             role = record["role"]
+            if record["candidate"].get("action") == "continue-self":
+                raise ValueError(f"{identity}: continue-self is not an executable delegate launch")
             if record["runtime"] != current["runtime"]:
                 raise ValueError(f"{identity}: launch runtime requires its own helper validation")
             candidates = current["roles"].get(role, {}).get("candidates", [])

@@ -1098,24 +1098,27 @@ ai.programs.delegate-routing.runtimes.claude = {
 };
 ```
 
-Portable `families.<vendor>.<family>` records describe tiers, task and effort
-guidance, machine `defaultEffort` for every technique, and live-model patterns.
-Override any field or add a family. A non-null role effort overrides that
-default before shared fallback; null defaults mean no effort levels and require
-observed `efforts: []` to certify omission of the actual effort argument, flag
-or pin. The fixed package scale is
-`minimal < low < medium < high < xhigh < max`; observed support is unordered.
-Sol defaults to medium and Go Kimi K3.1 Pro to max; configure
-`families.zhipu.glm.defaultEffort = "high"` for a custom glm (no preset is
-shipped). Go Crouton Alpha Free's medium is a provisional package choice.
-Quality versus spend remains consumer policy. Each runtime's `models` is a list
-of selectors over `vendors`, `tiers` and `families`: selectors are alternatives,
-and every non-empty field in one selector must match. Selector enums come from
-configured families; tier selectors accept only tiers used by those families.
-Claude defaults to Anthropic and Codex to OpenAI. Kimchi and Kiro require an
-explicit selection when their runtime and delegate-routing program are enabled.
-The package ships no families for Kimchi-served vendors; declare them under
-`families` before selecting them.
+Portable `families.<vendor>.<family>` records describe tiers, required
+routed-family makers, task and effort guidance, machine `defaultEffort` and
+live-model patterns. Override any field or add a family. Anthropic, OpenAI and
+Zhipu lines inherit their maker from the vendor group; other selected lines must
+declare it. Role effort is a signed step offset from each model line's default
+on its supported levels, clamped at the endpoints. Checking roles name producer
+model lines and actual launch efforts, inherit the largest producer offset and
+add one step on the same line. The package scale is
+`minimal < low < medium < high < xhigh < max`; an empty resolved effort list
+omits the effort argument, flag or pin. Sol defaults to medium, GLM to high and
+Go Kimi K3.1 Pro to max. Shipped Zhipu presets are strong `glm` and mid
+`glm-flash`; set `zai.pool` to bind them on all selecting runtimes, with
+explicit per-family bindings taking precedence. Go excludes GLM ids. Go Crouton
+Alpha Free's medium is provisional. Quality versus spend remains consumer
+policy. Each runtime's `models` is a list of selectors over `vendors`, `tiers`
+and `families`: selectors are alternatives, and every non-empty field in one
+selector must match. Selector enums come from configured families; tier
+selectors accept only tiers used by those families. Claude defaults to Anthropic
+and Codex to OpenAI. Kimchi and Kiro require an explicit selection when their
+runtime and delegate-routing program are enabled. Declare any additional
+Kimchi-served vendor families under `families` before selecting them.
 
 Enable every runtime named in `extraRuntimes` or `manualExternalDelegates` with
 `ai.<runtime>.enable`; disabled targets fail evaluation. Manual-only entries
@@ -1144,39 +1147,20 @@ text definitions conflict. Disable an inherited entry with `enable = false`.
 
 Runtime `techniques` describe workflows, subagents, external launches, model
 introspection and usage. Override a node's fields or disable it with
-`enable = false`. Pick the highest-version model matching a family's pattern
-from the live runtime list, using its own spelling. Usage commands come from the
-existing technique catalog. Both Home Manager and devenv expose the same
-options.
+`enable = false`. The helper resolves concrete Nix pins first, otherwise the
+highest matching visible local catalog version; it currently reads a local
+catalog only for Codex. Unresolved routes carry a JSON reason. Usage commands
+come from the existing technique catalog. Both Home Manager and devenv expose
+the same options.
 
-The skill renders an absolute non-launching `delegate-routing-plan` command, its
-runtime and session pool; the always-on router stays runtime-neutral for shared
-AGENTS.md targets. Pass `--role writer --launch-context <json-path>` with
-caller-observed techniques, concrete model/effort support and qualified family
-evidence. The helper collects all registered Readers once, ranks worst-window
-pace and enforces the strong/frontier review floor. Configure
-`runtimes.<runtime>.sessionPool` with the actual registered pool key (for
-example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
-warns that the session buffer cannot be certified. With no pools it reports
-fit-only budget uncertainty. Output is JSON plus canonical routing
-specifications; the command never launches delegates. Pool drain and Review use
-this helper as the canonical decision, retaining role fit/trial checks. All
-roles accept unordered exact-family `avoid` and `exclude` lists: exclude removes
-routes with "excluded by caller" and wins overlap; avoid never removes a route
-by itself. Non-avoided routes precede avoided ones, with measured preference
-within each partition and session pace compared globally. Avoided routes retain
-disclosed fallback metadata and advance their resolved base to the next
-supported effort, keeping the top unchanged or intentional null. Try shared
-fallback before reporting no qualified route; never lower floors. Reviewers
-avoid the writer family; cut judges avoid writer and proposer families, using
-fresh separate evaluators. After a failed delegate launch rerun with that family
-in the role's exclude list, retaining other evidence. Unknown
-interactive/headless status never blocks Reader collection or tier/pace policy;
-external launches remain unresolved until the caller supplies mode evidence. See
-the
+The skill renders the absolute `delegate-routing-plan` command. Supply
+`taskSummary`, nullable `proposerFamily`, `nonInteractive` and compact `roles`
+through `--launch-context <json-path>` and repeat `--role` for each role.
+Configure runtime reaches with `runtimes.<runtime>.extraRuntimes`, session
+identity with `sessionPool`, picker entries with `picker.entries`, and pool
+ordering with `lowWaterMark` and `pools.<name>.preference`. See the
 [helper contract](packages/delegate-routing/docs/development.md#deterministic-routing-helper)
-for the launch-context schema, conservative unknown handling and per-runtime
-mode-discovery evidence.
+for input shapes, selection policy and launch binding.
 
 Work and review runs Rubric → Subtractive → Plan → Work → Describe → Review →
 Loop. Rubric preparation is task-goal preflight; substantive task-source
@@ -1185,11 +1169,11 @@ except for an approved bounded worker assignment. The planner saves units,
 dependencies, disjoint waves and prepared worker/reviewer briefs containing the
 full rubric verbatim. Before launch, pass `--check-plan <plan.json>` with
 current launch context and all planned roles to the rendered helper; it checks
-fresh canonical role/runtime/candidate/pinned line including fallback metadata
-and intentional null effort, wave/dependency shape and rubric bytes against a
-fresh Reader decision. Use `--max-concurrency <n>` for a host/user cap below
-ten. The orchestrator enforces review/commit barriers; offline validation makes
-no live compliance claim. See the
+fresh canonical role/runtime/candidate/pinned line including effort-source
+metadata and intentional null effort, wave/dependency shape and rubric bytes
+against a fresh Reader decision. Use `--max-concurrency <n>` for a host/user cap
+below ten. The orchestrator enforces review/commit barriers; offline validation
+makes no live compliance claim. See the
 [saved-plan contract and policy ledger](packages/delegate-routing/docs/development.md#saved-plans-and-prepared-briefs).
 
 #### Per-turn reminder

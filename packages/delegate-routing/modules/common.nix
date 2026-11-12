@@ -16,6 +16,17 @@
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
   opencodeGo = import ../lib/opencode-go.nix {inherit lib;};
+  presetPoolBindings = vendor: families: pool:
+    lib.mkIf (pool != null) {
+      ${vendor} =
+        lib.mapAttrs (_: _: {
+          pools = lib.genAttrs (lib.filter (runtime:
+            lib.any (family: family.vendor == vendor)
+            (select portable.families models.${runtime}))
+          supportedRuntimes) (_: lib.mkDefault pool);
+        })
+        families;
+    };
   inherit (familyFunctions) select;
   entryDefaults = import ../lib/entries.nix {inherit lib;};
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
@@ -121,7 +132,7 @@
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
       inherit runtime models techniques resolvedAgentFiles;
-      inherit (portable) families pools;
+      inherit (portable) families lowWaterMark pools;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
     };
@@ -150,9 +161,15 @@
               type = lib.types.enum vocabulary.effortLevels;
               description = "Pinned picker effort.";
             };
+            family = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum names);
+              default = null;
+              description = "Configured family resolved to its concrete route model; set exactly one of family or model.";
+            };
             model = lib.mkOption {
-              type = lib.types.nonEmptyStr;
-              description = "Explicit concrete model id resolved to one configured family.";
+              type = lib.types.nullOr lib.types.nonEmptyStr;
+              default = null;
+              description = "Explicit concrete model id resolved to one configured family; set exactly one of family or model.";
             };
             technique = lib.mkOption {
               type = lib.types.nonEmptyStr;
@@ -167,12 +184,12 @@
             inherit (portable) families pools;
             inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
           }).pickerEntries;
-        description = "Ordered one-shot model pickers. Empty or unproven tool removal warns and uses tier/pool fallback. Exact tuples must be unique.";
+        description = "One-shot model pickers, tried in pool order like candidates. Empty or unproven tool removal warns and uses tier/pool fallback. Two entries on one pool fail evaluation.";
       };
       sessionPool = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum (builtins.attrNames portable.pools));
         default = null;
-        description = "Registered budget spent by this runtime's session; null warns that the buffer rule cannot be certified. Set the actual pool for proxied runtimes.";
+        description = "The session pool sorts after non-session pools in its pace group, joins the below-low-water group when its minimum unscoped remaining share is at or below 20%, and is removed only when exhausted.";
       };
       models = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
@@ -230,6 +247,11 @@ in {
               default = {};
               description = "Concrete current model id by target harness, shaped like pools; that harness's launch route names it in place of the match pattern, and a target with no entry names the pattern instead.";
             };
+            maker = lib.mkOption {
+              type = lib.types.nullOr (lib.types.addCheck lib.types.str (value: lib.trim value != ""));
+              default = null;
+              description = "Model maker for review independence. Null takes the vendor group for anthropic, openai and zhipu and fails evaluation for any other selected family. Provider, runtime and budget are separate identities.";
+            };
             match = lib.mkOption {
               type = lib.types.str;
               description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
@@ -263,6 +285,11 @@ in {
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
       };
+      lowWaterMark = lib.mkOption {
+        type = lib.types.addCheck lib.types.number (value: value >= 0);
+        default = vocabulary.lowWaterMark;
+        description = "Candidate pools below this remaining-budget pace rank after other pools, before applying pool preference. Unmeasured pools rank with below-mark pools.";
+      };
       opencodeGo.plan = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum opencodeGo.plans);
         default = null;
@@ -281,6 +308,11 @@ in {
               type = lib.types.str;
               default = "";
               description = "Budget description shown in consumer {pools} table entries.";
+            };
+            preference = lib.mkOption {
+              type = lib.types.int;
+              default = 0;
+              description = "Higher values rank first among candidate pools in the same maker step, low-water group and session position; equal values use pace then name.";
             };
             usage = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {
@@ -344,6 +376,11 @@ in {
       runtimes =
         lib.genAttrs supportedRuntimes (runtime:
           runtimeOptions runtime // reminderProgram.module.options.ai.programs.delegate-routing.runtimes.${runtime});
+      zai.pool = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Registered budget pool bound to every Zhipu preset on runtimes selecting that vendor. Set it to a registered pool key, for example \"zai-coding\". Null leaves preset pools unbound; explicit per-family runtime bindings override this default.";
+      };
     };
 
   # Emit one portable enable option and skills/rules for each supported runtime.
@@ -415,18 +452,8 @@ in {
                 lib.mapAttrs (name: _: {pool = lib.mkDefault (opencodeGo.poolHint portable.opencodeGo.plan portable.families.${opencodeGo.vendor}.${name}.match);})
                 opencodeGo.families;
             })
-            (lib.mkIf (portable.opencodeGo.pool != null) {
-              ${opencodeGo.vendor} =
-                lib.mapAttrs (_: _: {
-                  pools =
-                    lib.genAttrs (lib.filter (runtime:
-                      lib.any (family: family.vendor == opencodeGo.vendor)
-                      (select portable.families models.${runtime}))
-                    supportedRuntimes)
-                    (_: lib.mkDefault portable.opencodeGo.pool);
-                })
-                opencodeGo.families;
-            })
+            (presetPoolBindings opencodeGo.vendor opencodeGo.families portable.opencodeGo.pool)
+            (presetPoolBindings "zhipu" defaults.families.zhipu portable.zai.pool)
           ];
           routing = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.routing;
           skill = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.skill;
@@ -502,6 +529,10 @@ in {
         {
           assertion = portable.opencodeGo.plan == null || portable.opencodeGo.pool == null || builtins.hasAttr portable.opencodeGo.pool portable.pools;
           message = "ai.programs.delegate-routing.opencodeGo.pool: unknown pool `${toString portable.opencodeGo.pool}`; set it to a registered pool key, e.g. \"opencode-go\", declared under ai.programs.delegate-routing.pools.";
+        }
+        {
+          assertion = portable.zai.pool == null || builtins.hasAttr portable.zai.pool portable.pools;
+          message = "ai.programs.delegate-routing.zai.pool: unknown pool `${toString portable.zai.pool}`; set it to a registered pool key, e.g. \"zai-coding\", declared under ai.programs.delegate-routing.pools.";
         }
       ]
       ++ lib.concatMap (family:

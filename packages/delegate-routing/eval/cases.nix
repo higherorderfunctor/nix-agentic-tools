@@ -114,10 +114,15 @@
       runtime = "claude";
       switches.ai.programs.delegate-routing = {
         routing."Orchestrator session".enable = lib.mkForce true;
-        runtimes.claude = {
-          extraRuntimes = lib.mkForce [];
-          manualExternalDelegates = lib.mkForce [];
-          techniques."claude -p".enable = false;
+        runtimes = {
+          claude = {
+            extraRuntimes = lib.mkForce [];
+            manualExternalDelegates = lib.mkForce [];
+            techniques."claude -p".enable = false;
+          };
+          # This case exercises native Claude workflows only; Codex must not
+          # reach the external Claude technique disabled above.
+          codex.extraRuntimes = lib.mkForce [];
         };
       };
       task = "Investigate normalization in `task_source.py` and design a case-sensitivity setting. Preserve current behavior by default and describe the setting's contract and a validation plan.";
