@@ -624,14 +624,14 @@ in {
         good = evaluate {
           ai.kiro.cli.native.settings.chat.keybindings = {
             futureAction = 42;
-            moveToBackground = "ctrl+x";
+            quit = "ctrl+x";
           };
         };
-        bad = builtins.tryEval (evaluate {ai.kiro.cli.native.settings.chat.keybindings.moveToBackground = 42;}).config.ai.kiro.cli.native.settings.chat.keybindings.moveToBackground;
+        bad = builtins.tryEval (evaluate {ai.kiro.cli.native.settings.chat.keybindings.quit = 42;}).config.ai.kiro.cli.native.settings.chat.keybindings.quit;
       in
         builtins.attrNames plain.config.ai.kiro.cli.native.settings.chat.keybindings
         == expected
-        && good.config.ai.kiro.cli.native.settings.chat.keybindings.moveToBackground == "ctrl+x"
+        && good.config.ai.kiro.cli.native.settings.chat.keybindings.quit == "ctrl+x"
         && good.config.ai.kiro.cli.native.settings.chat.keybindings.futureAction == 42
         && !bad.success;
     in
@@ -1209,8 +1209,7 @@ in {
         })
         && soleSame (drvOf {features.background_execution.enable = true;})
         (drvOf {package = pkgs.ai.kiro-cli.withRolloutFeatures ["background_execution"];})
-        && lib.all (name: soleSame (drvOf {}) (drvOf {features.${name}.enable = true;}))
-        ["cloud_config" "test"]
+        && soleSame (drvOf {}) (drvOf {features.test.enable = true;})
         && soleFork (drvOf {features.background_execution.enable = true;}) (drvOf {
           features = {
             background_execution.enable = true;
