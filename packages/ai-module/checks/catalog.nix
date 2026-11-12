@@ -359,6 +359,7 @@
         }
       ]
     ])
+    (row "${backend}: routing maker reads graph" (lib.unique (map (entry: entry.maker) manifest.routes)) ["openai"])
     (row "${backend}: routing manifest reads graph" routePools ["codex"])
     (row "${backend}: routing prose reads graph" (lib.hasInfix "pool codex" (builtins.readFile "${skill}/SKILL.md")) true)
     (row "${backend}: all launch pins are concrete" (lib.all (entry: lib.all (technique: !technique.model.isPattern) entry.techniques) manifest.routes) true)
@@ -379,20 +380,102 @@
       (row "native model maker differs from provider" catalog.defaults.models."glm-5.3".maker "zhipu")
     ]
     ++ moduleRows "hm" harness.evalHm ++ moduleRows "devenv" harness.evalDevenv;
+  # Literal identities reject maker=provider, guessed IDs, ambiguous aliases,
+  # and a selected custom model silently retaining an unknown maker.
+  nativeGraph = catalog.resolve {};
+  customGraph = resolve {
+    pools.custom.models = ["other"];
+    runtimes.claude.pools = ["custom"];
+  };
+  unknownGraph = catalog.resolve {
+    models.custom = model null;
+    pools.custom.models = ["custom"];
+    runtimes.claude.pools = ["custom"];
+  };
+  ambiguousGraph = catalog.resolve {
+    models = {
+      first = (model "openai") // {aliases.go = ["shared"];};
+      second = (model "anthropic") // {aliases.go = ["shared"];};
+    };
+  };
+  identityView = graph: match:
+    import ../../delegate-routing/lib/routing-view.nix {
+      inherit lib;
+      catalog = graph;
+      runtime = "claude";
+      families.provider.custom = {
+        inherit match;
+        tier = "strong";
+        example = {};
+      };
+      models.claude = [{families = ["custom"];}];
+      picker.entries = [];
+      techniques.claude.fixture = {
+        enable = true;
+        kind = "subagent";
+        launchRoute = true;
+        modelArg = "--model";
+        pinsEffort = true;
+        pinsModel = true;
+      };
+    };
+  glmGraph = catalog.resolve {
+    pools.zai.models = ["glm-5.3" "glm-5.3-flash"];
+    runtimes.claude.pools = ["zai"];
+  };
+  scopedModel = pattern: (lib.head (lib.head (identityView glmGraph pattern).routes).techniques).model.value;
+  identityRows = [
+    (row "native Claude maker" (nativeGraph.modelFor "claude-opus-4-6").maker "anthropic")
+    (row "native Codex maker" (nativeGraph.modelFor "gpt-6.1-sol").maker "openai")
+    (row "GLM maker independent of z.ai billing" (nativeGraph.modelFor "glm-5.3").maker "zhipu")
+    # Selectors are the identity-only portion of dcaf19f9 families.nix:81,88;
+    # adding their fit/tier/effort presets is deliberately outside this catalog.
+    (row "GLM scope excludes Flash" (scopedModel "glm-[0-9]*.[0-9]") "glm-5.3")
+    (row "GLM Flash scope selects exact pinned ID" (scopedModel "glm-*-flash") "glm-5.3-flash")
+    (row "GLM Flash maker" (nativeGraph.modelFor "glm-5.3-flash").maker "zhipu")
+    (row "Go maker independent of serving provider" (nativeGraph.modelFor "deepseek-v4-pro").maker "deepseek")
+    (row "Go canonical alias maker" (nativeGraph.modelFor "deepseek/deepseek-v4-pro").maker "deepseek")
+    (row "Go alias canonical identity" (nativeGraph.canonical "deepseek/deepseek-v4-pro") "deepseek-v4-pro")
+    (row "custom selected model maker" (customGraph.modelFor "other").maker "deepseek")
+    (row "routing maker independent of custom provider grouping"
+      (lib.head (identityView customGraph "*").routes).maker "deepseek")
+    (row "routing pins the canonical custom ID"
+      (lib.head (lib.head (identityView customGraph "*").routes).techniques).model.value "other")
+    (row "routing refuses selected custom model without maker"
+      (builtins.tryEval (builtins.deepSeq (identityView unknownGraph "*").routes true)).success
+      false)
+    (row "identity records contain no fit or effort policy"
+      (builtins.attrNames (nativeGraph.modelFor "gpt-6.1-sol")) ["aliases" "maker" "source"])
+    (row "unselected unknown maker retains its offer" (unknownGraph.modelsFor "claude") ["custom"])
+    (row "selected custom model requires maker"
+      (builtins.tryEval (unknownGraph.modelFor "custom").maker).success
+      false)
+    (row "concrete IDs are never guessed"
+      (builtins.tryEval (nativeGraph.canonical "gpt-999-sol")).success
+      false)
+    (row "ambiguous identity aliases refused"
+      (builtins.tryEval (ambiguousGraph.modelFor "shared").maker).success
+      false)
+  ];
+  nativeData = pkgs.writeText "ai-catalog-native-models.json" (builtins.toJSON (identityRows ++ moduleRows "hm" harness.evalHm ++ moduleRows "devenv" harness.evalDevenv));
   data = pkgs.writeText "ai-catalog-runtime-reach.json" (builtins.toJSON rows);
 in {
-  checks.ai-catalog-runtime-reach = pkgs.runCommand "ai-catalog-runtime-reach" {nativeBuildInputs = [pkgs.python3];} ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    python3 -I - ${data} > "$out" <<'PYTHON'
-    import json, sys
-    rows = json.load(open(sys.argv[1]))
-    assert rows, "empty catalog check"
-    for row in rows:
-        assert row["actual"] == row["expected"], row
-        print("PASS:", row["name"])
-    print("PASS:", len(rows), "labelled catalog assertions")
-    PYTHON
-    cat "$out"
-  '';
+  checks = lib.mapAttrs (name: assertions:
+    pkgs.runCommand name {nativeBuildInputs = [pkgs.python3];} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      python3 -I - ${assertions} > "$out" <<'PYTHON'
+      import json, sys
+      rows = json.load(open(sys.argv[1]))
+      assert rows, "empty catalog check"
+      for row in rows:
+          assert row["actual"] == row["expected"], row
+          print("PASS:", row["name"])
+      print("PASS:", len(rows), "labelled catalog assertions")
+      PYTHON
+      cat "$out"
+    '') {
+    ai-catalog-native-models = nativeData;
+    ai-catalog-runtime-reach = data;
+  };
 }

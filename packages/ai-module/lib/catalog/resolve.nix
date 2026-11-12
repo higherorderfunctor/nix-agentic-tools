@@ -1,50 +1,6 @@
 # The shared serving relation. No fit, prices, usage or launch policy lives here.
 {lib}: let
-  facts = import ../../../../lib/extracted/facts.nix {inherit lib;};
-  cpa = facts.get (facts.load {dir = ../../../cliproxyapi/extracted;}).aggregate;
-  claude = facts.get (facts.load {dir = ../../../claude-code/extracted;}).aggregate "models";
-  codex = facts.get (facts.load {dir = ../../../chatgpt-codex/extracted;}).aggregate "models";
-  opencodeGo = cpa "opencodeGo";
-  zAi = cpa "zAi";
-  identity = maker: source: {
-    inherit maker source;
-    aliases = {};
-  };
-  native = maker: source: ids: lib.genAttrs ids (_: identity maker source);
-  # An undisclosed maker keeps its own identity, never a guessed vendor.
-  goMakerFacts.iceman-contributor-free = {
-    maker = "iceman";
-    source = "dcaf19f9:packages/delegate-routing/lib/opencode-go.nix:132";
-  };
-  # canonical_id carries the maker namespace; owned_by is the serving vendor.
-  goModels = lib.mapAttrs (id: model: let
-    canonical = model.canonical_id or null;
-    namespace =
-      if canonical == null
-      then null
-      else lib.head (lib.splitString "/" canonical);
-  in
-    (identity (
-      if namespace == "zhipuai"
-      then "zhipu"
-      else namespace
-    ) "cliproxyapi:opencodeGo.models.${id}")
-    // (goMakerFacts.${id} or {})
-    // {
-      aliases.opencode-go = lib.optional (canonical != null) canonical;
-    })
-  opencodeGo.models;
-  defaults = {
-    models =
-      native "anthropic" "claude-code:models" claude
-      // native "openai" "chatgpt-codex:models" (map (model: model.slug) codex)
-      // native "zhipu" "cliproxyapi:zAi.models" zAi.models
-      // goModels;
-    providers = {
-      claude.maker = "anthropic";
-      codex.maker = "openai";
-    };
-  };
+  inherit (import ./models.nix {inherit lib;}) defaults opencodeGo zAi;
   sorted = values: lib.sort builtins.lessThan (lib.unique values);
   credentialBindings = pools: reachable:
     lib.unique (lib.concatMap (pool:
@@ -135,6 +91,16 @@
       else throw (lib.concatStringsSep "\n" errors);
   in {
     inherit canonical errors;
+    # Routing must identify a concrete selected custom model even when no
+    # OAuth pool is present. Unknown makers remain valid as unselected offers.
+    modelFor = name: let
+      id = canonical name;
+    in
+      builtins.seq checked (
+        if maker id == null
+        then throw "ai.catalog: selected model ${builtins.toJSON id} has no maker; declare its identity."
+        else models.${id}
+      );
     pools = builtins.deepSeq (map (entry: canonical entry.alias) spellings) (builtins.seq checked normalized);
     runtimes = builtins.seq checked reach;
     modelsFor = runtime: builtins.seq checked (lib.filter (id: lib.any (pool: offers runtime pool id) (reach.${runtime} or [])) (builtins.attrNames models));

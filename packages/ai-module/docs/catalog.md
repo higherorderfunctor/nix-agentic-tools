@@ -11,11 +11,12 @@ with the caller's.
 
 `models.<id>` contains `maker`, exact `aliases.<provider>` spellings and a
 `source` reference. Native Claude/Codex identities and CPA's Go/z.ai facts are
-loaded by the shared owner. Go's `canonical_id` namespace identifies its maker;
-`owned_by` is the serving vendor and is not used as a maker. Missing maker
-evidence remains null. A finite model with an unknown maker cannot be combined
-with an OAuth catalog because absence of overlap cannot be established. Declare
-its identity with evidence or omit that finite offer.
+loaded once by `lib/catalog/models.nix`; the resolver and both consumers use
+that owner. Go's `canonical_id` namespace identifies its maker; `owned_by` is
+the serving vendor and is not used as a maker. Missing maker evidence remains
+null. A finite model with an unknown maker cannot be combined with an OAuth
+catalog because absence of overlap cannot be established. Declare its identity
+with evidence or omit that finite offer.
 
 `iceman-contributor-free` has the distinct maker identity `iceman`. Its upstream
 maker is undisclosed; this identity does not attribute it to another vendor. The
@@ -116,6 +117,20 @@ let
 in content.mkSkill { catalog = graph; runtime = "codex"; }
 ```
 
+`resolved.modelFor <id-or-alias>` returns the checked model identity for a
+concrete selection. Routing reads its maker for each launch and emits it
+separately from the configured family provider group in the manifest. A selected
+custom model must declare `ai.catalog.models.<id>.maker`, including on
+finite-only pools; a missing maker fails rather than inheriting the billing
+provider's name. Unselected offers with unknown makers remain available for
+inspection, subject to the OAuth overlap refusal above. Unbound pattern guidance
+has no concrete model or maker claim.
+
+Native family selectors remain associations used by routing, not ranks.
+Claude/Codex groupings and the GLM/GLM Flash identities use pinned extracted
+IDs; no live catalog discovery or guessed concrete IDs are added. Existing fit,
+tier and effort guidance stays with delegate-routing.
+
 No reset, credit, cost or usage policy is declared by this catalog.
 
 The older CPA Go-prefix refusal remains in place for configurations outside
@@ -129,3 +144,8 @@ prefix.
 manifest/prose together on both backends. Its literal diagnostic and grant
 expectations reject credential-kind exemptions, instance-wide overlap,
 alias-only string comparisons, and consumers that ignore the graph.
+
+`ai-catalog-native-models` checks literal native, Go and GLM identities, alias
+resolution, selected custom-maker refusal and both backend consumers. It rejects
+maker/provider conflation, invented concrete IDs and fit metadata in identity
+records.
