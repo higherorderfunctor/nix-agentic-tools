@@ -9,6 +9,20 @@
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
   checks = {
+    # Rejects capped/idle shortcuts, paced rolling gates, backing-gated weights,
+    # discarded zero routes and reference dependence on production arithmetic.
+    delegate-routing-allowance-ranking =
+      pkgs.runCommand "delegate-routing-allowance-ranking" {
+        nativeBuildInputs = [pkgs.python3];
+        inherit (config.checks.delegate-routing-observation-command) manifest;
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export ALLOWANCE_TEST_ROOT="$TMPDIR"
+        python3 -I ${./checks/pacing}/test_allowance.py ${./scripts} "$manifest"
+        touch "$out"
+      '';
+
     # Validates every case and renders its fixture and launch plan with no
     # harness on PATH and no login: the suite's --dry-run, nothing launched.
     delegate-routing-eval-structure =
@@ -75,6 +89,10 @@ in {
       observationArgs = {
         inherit catalog;
         poolDefinitions = definitions;
+        pacing.pools = {
+          claude.weight = 0.5;
+          codex.weight = 1.5;
+        };
         techniques.codex =
           lib.mapAttrs (pool: _: {
             command = "fake-reader ${pool}";
@@ -120,6 +138,9 @@ in {
                 };
             };
         };
+        negative-weight = refuses {pacing.pools.codex.weight = -1;};
+        retired-policy = refuses {pacing.pools.codex.resetPolicy = "use";};
+        unknown-weight-pool = refuses {pacing.pools.absent.weight = 1;};
         wrong-billing-kind = refuses {poolDefinitions = definitions // {codex = definitions.codex // {usage.subscription = definitions.codex.usage.subscription // {adapter = "anthropic-spend";};};};};
         zero-api-budget = refuses {
           budgets.anthropic-api.window = {
@@ -128,6 +149,7 @@ in {
             unit = "USD";
           };
         };
+        zero-weight = refuses {pacing.pools.codex.weight = 0;};
       };
     in
       assert lib.all (name: rejections.${name} || throw "observation registration accepted ${name}") (builtins.attrNames rejections);

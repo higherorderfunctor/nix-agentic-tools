@@ -1,4 +1,4 @@
-# Allowance observation inspection
+# Allowance ranking preview
 
 Run the standalone inspection CLI with a saved snapshot and an explicit UTC
 clock:
@@ -12,7 +12,7 @@ python3 -I packages/delegate-routing/scripts/pacing-list.py \
 The content package installs `bin/delegate-routing-observe`. Home Manager and
 devenv install the configured command when a delegate-routing runtime is
 enabled; manual callers use
-`content.mkObservation { catalog; poolDefinitions; techniques; budgets; }`.
+`content.mkObservation { catalog; poolDefinitions; techniques; budgets; pacing; }`.
 `catalog` is the checked shared graph, and `poolDefinitions` is the same
 `ai.catalog.pools` map, joined by its pool IDs. `techniques` is the existing
 effective runtime technique registry; `budgets` is the existing delegate-routing
@@ -38,17 +38,20 @@ and supplies its existing Reader's `--limit`, `--reset-day`, `--time-zone UTC`
 and `--pool` arguments from that same budget and shared pool ID. `--now-ms`
 comes from the explicit inspection clock. These appended arguments are
 authoritative, so an older value in a registered command cannot drift from
-normalization. No new pricing, thresholds or policy options are introduced.
-Independent legacy Reader registration for the same observed pool is refused;
-the existing fit helper remains separate. Multiple allowance billing kinds in
-one pool are refused until their observation semantics are delivered.
+normalization. No new pricing or thresholds are introduced. Independent legacy
+Reader registration for the same observed pool is refused; the existing fit
+helper remains separate. Multiple allowance billing kinds in one pool are
+refused until their observation semantics are delivered.
 
 `--snapshot` bypasses the packaged manifest and executes no Reader. The command
 emits `capability: allowance-preview`, normalized limit observations and safe
-diagnostics. It does not produce a ranked operator list. It does not select
-models. Bank capacity, reset recommendations, credit availability and costs
-remain incomplete; those observations remain null. The existing routing helper
-is unchanged.
+diagnostics. When the snapshot includes catalog `routes`, it also emits the
+complete ranked ordinary-allowance `entries`. Reader-only captures have no route
+identities and remain observation-only. Collection always uses the checked
+catalog routes. This allowance-only preview cannot substitute for the final
+operator list and does not select models. Bank capacity, reset recommendations,
+credit availability and costs remain incomplete; those observations remain null.
+The existing routing helper is unchanged.
 
 The snapshot contains `runtime`, `pools` and `readers`. Each local billing pool
 declares `readerPool` (the Reader's provider/account pool label) and `limits`.
@@ -104,3 +107,40 @@ binding, all five full envelopes, shared-command deduplication, the explicit
 clock, safe failures and offline snapshot behavior. Its delivery checks execute
 both backend commands and the manual content package command. Tests use fake
 executables and isolated empty home directories; no provider transport runs.
+
+## Ordinary allowance ranking
+
+`pacing.py` owns pure `rank(snapshot, policy)`, consumed directly by the CLI
+after normalization. It reads the explicit `asOf` clock and the route's
+registered limit IDs; it calls no Reader, picker or provider. Positive rolling
+gates do not enter the paced minimum. A closed gate or exhausted allowance
+forces zero. Otherwise pace is the minimum
+`remaining / capacity / max(1e-6, (naturalResetAt - asOf) / windowSeconds)`,
+with lexical limit IDs breaking binding ties. Known idle windows are calculated
+normally and pace is never capped.
+
+Set `ai.programs.delegate-routing.pacing.pools.<pool>.weight` to a positive
+number (default 1). Manual callers pass the same `pacing.pools` map to
+`mkObservation`; saved route-bearing snapshots carry its per-pool map as
+`policy`. Unknown pool references and policy keys are refused. Weight applies
+unconditionally: pace 2 gives scores 3 at weight 1.5 and 1 at weight .5, even
+without reset or credit backing. Reset and credit policy fields wait for their
+observation consumers.
+
+Entries sort by descending score, readiness, then pool/model. This preview emits
+only `ready` and `out`; later reset/credit support adds the intervening
+`redeem_required` and `last_resort` states. Every configured route stays
+present. Unknown allowance has null pace, score 0, state `out`, staleness and an
+`uncertain-allowance` diagnostic. A known blocker still proves zero alongside
+unknown evidence. Missing conversion leaves cost and headroom null; a known
+blocker proves headroom 0. Return time is the maximum known future release
+across all blockers, or null when any required time is unknown. Stale measured
+quantities remain annotated, never refilled; elapsed reset times are not future
+return promises.
+
+`delegate-routing-allowance-ranking` compares the independent ordinary reference
+against normalized frozen envelopes and literal expectations: uncapped 84, idle
+2, open gate 1, monthly .2, unconditional weights, zero retention and stable
+pool/model ties. It also checks scope isolation, all-blocker return time and
+byte-identical offline CLI output. Bank capacity, real grants, credit scores and
+costs remain incomplete, and no reset executor is included.

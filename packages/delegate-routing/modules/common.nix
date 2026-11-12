@@ -135,6 +135,7 @@
     poolDefinitions = config.ai.catalog.pools;
     inherit techniques;
     budgets = portable.pools;
+    inherit (portable) pacing;
   };
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
@@ -285,6 +286,17 @@ in {
         type = lib.types.nullOr lib.types.str;
         default = null;
         description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor. Setting opencodeGo.plan alone only supplies pool text; it does not bind a pool. When a plan is set, the module requires this option to name a registered pool and refuses evaluation otherwise.";
+      };
+      pacing.pools = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule {
+          options.weight = lib.mkOption {
+            type = lib.types.numbers.positive;
+            default = 1;
+            description = "Multiplier applied to ordinary allowance pace in the inspection preview.";
+          };
+        });
+        default = {};
+        description = "Allowance weights keyed by shared catalog pool; reset and credit policy are not delivered yet.";
       };
       pools = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {

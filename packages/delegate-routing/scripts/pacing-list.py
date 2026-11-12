@@ -13,6 +13,9 @@ spec = importlib.util.spec_from_file_location("usage_normalize", Path(__file__).
 normalizer = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = normalizer
 spec.loader.exec_module(normalizer)
+spec = importlib.util.spec_from_file_location("pacing", Path(__file__).with_name("pacing.py"))
+pacing = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(pacing)
 
 
 def collect(manifest, now, reader_shell):
@@ -60,8 +63,9 @@ def main():
                 raise ValueError("unknown-runtime")
             snapshot = collect(manifests[args.runtime], now, args.reader_shell)
         result = normalizer.normalize(snapshot, now)
-        if args.snapshot is None:
+        if "routes" in snapshot:
             result["routes"] = snapshot["routes"]
+            result = pacing.rank(result, snapshot.get("policy"))
     except (AttributeError, KeyError, OSError, TypeError, ValueError):
         parser.exit(2, "invalid snapshot, runtime registration or UTC clock\n")
     print(json.dumps(result, allow_nan=False, sort_keys=True, separators=(",", ":")))

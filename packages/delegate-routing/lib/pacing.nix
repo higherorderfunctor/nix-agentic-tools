@@ -4,8 +4,15 @@
   poolDefinitions,
   techniques,
   budgets ? {},
+  pacing ? {pools = {};},
 }: let
   inherit (import ../../ai-module/lib/catalog/types.nix {inherit lib;}) usageAdapters;
+  policies = pacing.pools;
+  invalidPolicy = lib.filter (pool:
+    !(poolDefinitions ? ${pool})
+    || lib.any (key: key != "weight") (builtins.attrNames policies.${pool})
+    || !(builtins.isInt (policies.${pool}.weight or 1) || builtins.isFloat (policies.${pool}.weight or 1))
+    || (policies.${pool}.weight or 1) <= 0) (builtins.attrNames policies);
   registration = runtime: pool: let
     definition = poolDefinitions.${pool} or {};
     usage = definition.usage or {};
@@ -60,17 +67,21 @@
         else adapter.readerPool;
     };
 in
-  lib.mapAttrs (runtime: pools: let
-    registrations = lib.genAttrs pools (registration runtime);
-  in {
-    inherit runtime;
-    pools = registrations;
-    routes = map (model: let
-      pool = catalog.poolFor runtime model;
+  if invalidPolicy != []
+  then throw "delegate-routing pacing: use positive weights for known catalog pools."
+  else
+    lib.mapAttrs (runtime: pools: let
+      registrations = lib.genAttrs pools (registration runtime);
     in {
-      inherit model pool;
-      maker = catalog.makerOf model;
-      limits = builtins.attrNames (lib.filterAttrs (_: limit: lib.elem model limit.models) registrations.${pool}.limits);
-    }) (catalog.modelsFor runtime);
-  })
-  catalog.runtimes
+      inherit runtime;
+      pools = registrations;
+      policy = lib.filterAttrs (pool: _: lib.elem pool pools) policies;
+      routes = map (model: let
+        pool = catalog.poolFor runtime model;
+      in {
+        inherit model pool;
+        maker = catalog.makerOf model;
+        limits = builtins.attrNames (lib.filterAttrs (_: limit: lib.elem model limit.models) registrations.${pool}.limits);
+      }) (catalog.modelsFor runtime);
+    })
+    catalog.runtimes
