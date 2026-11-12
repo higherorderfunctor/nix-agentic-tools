@@ -206,6 +206,19 @@
   };
   row = name: actual: expected: {inherit name actual expected;};
   moduleRows = backend: evaluate: let
+    # Removing the module assertion must fail even if the pure resolver still
+    # reports overlap. Read assertions without forcing a checked projection.
+    overlap =
+      (evaluate {
+        ai.catalog = {
+          models = identityModels;
+          pools = {
+            a.models = ["gpt"];
+            b.models = ["go-gpt"];
+          };
+          runtimes.codex.pools = ["b" "a"];
+        };
+      }).config;
     split =
       (evaluate {
         ai = {
@@ -292,6 +305,9 @@
     (row "${backend}: passthrough grant survives catalog projection"
       (map (entry: entry.provider) (lib.last passthroughCfg.ai.cliproxyapi.instances.main.settings.access.key-allowlist).credentials)
       ["claude" "codex" "claude" "openai-compatible-go" "codex" "openai-compatible-zai" "passthrough-structured"])
+    (row "${backend}: module assertion rejects overlap"
+      (map (entry: entry.message) (lib.filter (entry: !entry.assertion) overlap.assertions))
+      [''ai.catalog: runtime "codex" offers model "gpt" from multiple pools: a, b. Select one pool for this model in this runtime. Reason: duplicate finite offers.''])
     (row "${backend}: selected API avoids false overlap" split.errors [])
     (row "${backend}: selected API owns model" (split.poolFor "cliproxyapi:split/client" "other") "split/b")
     (row "${backend}: operator graph passes" graph.errors [])
@@ -383,7 +399,7 @@
       (row "open catalog maker aliases: exact diagnostic" openAliases.errors [''ai.catalog: runtime "codex" offers model "provider-catalog:codex" from multiple pools: personal, work. Select one pool for this model in this runtime. Reason: the same open OAuth provider catalog is reachable through multiple budgets.''])
       (row "future model: maker comparison without prefix" future.errors [''ai.catalog: runtime "codex" offers model "future-openai" from multiple pools: codex, go. Select one pool for this model in this runtime. Reason: finite offer intersects an open OAuth catalog.''])
       (row "disjoint runtime pool" (disjoint.poolFor "codex" "go-gpt") "b")
-      (row "multiple credentials remain one budget" (map (credential: credential.pool) (shared.credentialsFor "codex")) ["one" "one"])
+      (row "multiple credentials remain one budget" (map (credential: credential.pool) (catalog.credentialBindings shared.pools shared.runtimes.codex)) ["one" "one"])
       (row "iceman has its own undisclosed-maker identity" catalog.defaults.models.iceman-contributor-free.maker "iceman")
       (row "native model maker differs from provider" catalog.defaults.models."glm-5.3".maker "zhipu")
     ]

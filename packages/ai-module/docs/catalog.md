@@ -116,8 +116,7 @@ let
 in content.mkSkill { catalog = graph; runtime = "codex"; }
 ```
 
-`aiModule.catalogTypes` exposes the same option types for manual module
-composition. No reset, credit, cost or usage policy is declared by this catalog.
+No reset, credit, cost or usage policy is declared by this catalog.
 
 The older CPA Go-prefix refusal remains in place for configurations outside
 named client routing. The graph does not infer billing identities from

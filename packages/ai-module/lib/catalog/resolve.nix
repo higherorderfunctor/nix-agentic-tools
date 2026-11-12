@@ -135,8 +135,6 @@
       else throw (lib.concatStringsSep "\n" errors);
   in {
     inherit canonical errors;
-    providers = builtins.seq checked providers;
-    models = builtins.seq checked models;
     pools = builtins.deepSeq (map (entry: canonical entry.alias) spellings) (builtins.seq checked normalized);
     runtimes = builtins.seq checked reach;
     modelsFor = runtime: builtins.seq checked (lib.filter (id: lib.any (pool: offers runtime pool id) (reach.${runtime} or [])) (builtins.attrNames models));
@@ -147,8 +145,6 @@
         if owners == []
         then null
         else lib.head owners);
-    credentialsFor = runtime:
-      builtins.seq checked (credentialBindings normalized (reach.${runtime} or []));
   };
 in {
   inherit credentialBindings defaults opencodeGo resolve zAi;
