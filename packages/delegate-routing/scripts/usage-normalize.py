@@ -80,7 +80,7 @@ def window_observation(identifier, spec, window, observed, now):
         "id": identifier, "capacity": spec.capacity, "unit": spec.unit,
         "role": spec.role, "models": spec.models, "remaining": None,
         "used": None, "windowSeconds": None, "naturalResetAt": None,
-        "enforced": None, "refused": False, "gateOpensAt": None,
+        "enforced": None, "gateOpensAt": None,
         "observedAt": observed, "status": "missing", "readerStatus": None,
     }
     if window is None:

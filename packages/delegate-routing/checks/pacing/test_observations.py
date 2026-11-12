@@ -72,6 +72,17 @@ class Observations(unittest.TestCase):
         self.snapshot["pools"]["z-ai"]["limits"]["rolling"]["role"] = "pace"
         self.assertEqual(self.limit("z-ai", "rolling")["status"], "invalid")
 
+    def test_closed_rolling_gate(self):
+        # Synthetic exhaustion of the saved z.ai envelope with a known release time.
+        window = self.snapshot["readers"]["z-ai"]["data"]["windows"]["5h"]
+        self.assertIsNone(self.limit("z-ai", "rolling")["gateOpensAt"])
+        window.update(remainingPercent=0, usedPercent=100, resetsAt="2026-11-12T03:35:00Z")
+        rolling = self.limit("z-ai", "rolling")
+        self.assertEqual((rolling["remaining"], rolling["used"], rolling["role"], rolling["status"]), (0, 100, "gate", "valid"))
+        self.assertEqual(rolling["gateOpensAt"], 1794454500)
+        self.assertEqual(rolling["naturalResetAt"], 1794454500)
+        self.assertNotIn("refused", rolling)
+
     def test_missing_extras_are_unknown(self):
         del self.snapshot["readers"]["claude"]["data"]["bonuses"]
         pool = self.result()["pools"]["claude"]
