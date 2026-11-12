@@ -72,9 +72,10 @@ An upstream key family becomes `api-keys.<family>[]` groups holding `name` and
 `keys`; `isV8GroupKeyField` supplies the group fields to both CPA's loader and
 the extractor, including Claude's provider-specific `tool-aliases` map. This
 keeps accepted group fields in the generated settings type without another field
-list. OpenAI compatibility keeps its group struct with `api-key-entries` renamed
-to `keys`. The v8 group loader does not read `auth-index`, so those fields are
-omitted.
+list. `isV8GroupedFamily` supplies the grouped-family decision to v8 loading,
+serialization and extraction. OpenAI compatibility is its only grouped family:
+it keeps its group struct with `api-key-entries` renamed to `keys`. The v8 group
+loader does not read `auth-index`, so those fields are omitted.
 
 ## Measured data
 
@@ -134,3 +135,7 @@ and checks annotation reconciliation. Regenerate from the repository root:
 ```bash
 nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate
 ```
+
+`cliproxyapi-grouped-family` checks compatibility loading and serialization
+against explicit grouped and legacy fixtures, so a grouped-family change cannot
+split compatibility groups into flat keys or drop group-only fields.
