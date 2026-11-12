@@ -339,22 +339,103 @@ index 9a5ea7d..b649281 100644
  export { ProviderToolbar } from './ProviderToolbar';
  export { ProviderDetailDrawer } from './ProviderDetailDrawer';
 diff --git a/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx b/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx
-index 4a71d45..d70f90c 100644
+index 4a71d45..8fe13a6 100644
 --- a/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx
 +++ b/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx
-@@ -67,6 +67,10 @@ vi.mock('@/services/api', () => ({
+@@ -1,5 +1,6 @@
+ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+ import { beforeEach, describe, expect, it, vi } from 'vitest';
++import type { PassthroughGroup } from '@/services/api/passthrough';
+ import type { CoolingPolicy, GeminiKeyConfig, ProviderKeyConfig } from '@/types';
+ 
+ const mocks = vi.hoisted(() => ({
+@@ -22,6 +23,8 @@ const mocks = vi.hoisted(() => ({
+   getVertexConfigs: vi.fn(),
+   getMetaConfigs: vi.fn(),
+   getOpenAIProviders: vi.fn(),
++  getPassthroughGroups: vi.fn(async (): Promise<PassthroughGroup[]> => []),
++  PassthroughTable: vi.fn(() => null),
+   showNotification: vi.fn(),
+   showConfirmation: vi.fn(),
+   cacheValid: true,
+@@ -67,6 +70,10 @@ vi.mock('@/services/api', () => ({
    },
  }));
  
 +vi.mock('@/services/api/passthrough', () => ({
-+  passthroughApi: { getGroups: async () => [] },
++  passthroughApi: { getGroups: mocks.getPassthroughGroups },
 +}));
 +
  vi.mock('@/components/providers', async () => {
    const policyFromOverride = (value: boolean | null | undefined): CoolingPolicy =>
      value === true ? 'disabled' : value === false ? 'enabled' : 'inherit';
+@@ -127,6 +134,7 @@ vi.mock('@/components/providers', async () => {
+       vertex: 'Vertex',
+       openai: 'OpenAI',
+     },
++    PassthroughTable: mocks.PassthroughTable,
+     ProviderToolbar: () => null,
+     ProviderTable: ({
+       rows,
+@@ -479,3 +487,56 @@ describe('AiProvidersPage current-layer config refresh', () => {
+     act(() => renderer.unmount());
+   });
+ });
++
++describe('AiProvidersPage All tab', () => {
++  const zai: PassthroughGroup = {
++    baseUrl: 'https://zai.example/api',
++    disabled: false,
++    keys: [{ apiKey: 'secret-key-one', authIndex: 'a1' }],
++    models: [{ name: 'glm-4.6' }],
++    name: 'Zai',
++    path: '/v1/chat/completions',
++    providerKey: 'passthrough-zai',
++  };
++
++  beforeEach(() => {
++    vi.clearAllMocks();
++    mocks.cacheValid = true;
++    mocks.transitionLayer = null;
++    mocks.config = {
++      geminiApiKeys: [{ apiKey: 'gemini-key' }],
++      interactionsApiKeys: [],
++      codexApiKeys: [],
++      xaiApiKeys: [],
++      metaApiKeys: [],
++      claudeApiKeys: [],
++      vertexApiKeys: [],
++      openaiCompatibility: [],
++    };
++    mocks.fetchConfig.mockImplementation(async () => mocks.config);
++    mocks.getVertexConfigs.mockImplementation(async () => mocks.config.vertexApiKeys);
++    mocks.getOpenAIProviders.mockResolvedValue([]);
++    mocks.getPassthroughGroups.mockResolvedValueOnce([zai]);
++  });
++
++  it('lists passthrough groups read-only below the editable rows and counts them', async () => {
++    let renderer!: ReactTestRenderer;
++    await act(async () => {
++      renderer = create(<AiProvidersPage />);
++    });
++    await flush();
++
++    const toolbar = renderer.root.find((node) => node.props.kindCounts !== undefined);
++    expect(toolbar.props.kindCounts.all).toBe(2);
++    const table = renderer.root.findByType(mocks.PassthroughTable);
++    expect(table.props.groups).toEqual([zai]);
++    // The read-only table takes no handler, so no edit, delete, toggle or check reaches a group.
++    expect(Object.keys(table.props).sort()).toEqual([
++      'emptyState',
++      'groups',
++      'loading',
++      'usageByProvider',
++    ]);
++    act(() => renderer.unmount());
++  });
++});
 diff --git a/apps/web/src/features/aiProviders/AiProvidersPage.tsx b/apps/web/src/features/aiProviders/AiProvidersPage.tsx
-index e243992..90b6dbe 100644
+index e243992..45839c1 100644
 --- a/apps/web/src/features/aiProviders/AiProvidersPage.tsx
 +++ b/apps/web/src/features/aiProviders/AiProvidersPage.tsx
 @@ -7,6 +7,7 @@ import {
@@ -411,6 +492,15 @@ index e243992..90b6dbe 100644
      } catch (err: unknown) {
        const message = getErrorMessage(err) || t('notification.refresh_failed');
        setError(message);
+@@ -324,7 +333,7 @@ export function AiProvidersPage() {
+ 
+   const kindCounts = useMemo(() => {
+     const counts: Record<ProviderKindFilter, number> = {
+-      all: rows.length,
++      all: rows.length + passthroughGroups.length,
+       gemini: 0,
+       interactions: 0,
+       codex: 0,
 @@ -333,12 +342,13 @@ export function AiProvidersPage() {
        claude: 0,
        vertex: 0,
@@ -438,7 +528,7 @@ index e243992..90b6dbe 100644
        // 当前类型尚无配置：直接给“添加该类型配置”入口，避免“清除筛选”死胡同
        <EmptyState
          title={t('ai_providers.kind_empty_title', { name: PROVIDER_KIND_LABELS[kindFilter] })}
-@@ -1619,19 +1632,28 @@ export function AiProvidersPage() {
+@@ -1619,19 +1632,21 @@ export function AiProvidersPage() {
            />
  
            <Card>
@@ -455,14 +545,7 @@ index e243992..90b6dbe 100644
 -              onToggle={handleRowToggle}
 -              onPriorityChange={handleRowPriorityChange}
 -            />
-+            {kindFilter === 'passthrough' ? (
-+              <PassthroughTable
-+                groups={passthroughGroups}
-+                usageByProvider={usageByProvider}
-+                loading={loading}
-+                emptyState={emptyState}
-+              />
-+            ) : (
++            {kindFilter !== 'passthrough' && (
 +              <ProviderTable
 +                rows={pagedRows}
 +                loading={loading}
@@ -480,6 +563,23 @@ index e243992..90b6dbe 100644
              {visibleRows.length > 0 &&
                (visibleRows.length > PROVIDER_TABLE_DEFAULT_PAGE_SIZE ||
                  pageSize !== PROVIDER_TABLE_DEFAULT_PAGE_SIZE) && (
+@@ -1681,6 +1696,16 @@ export function AiProvidersPage() {
+                   </div>
+                 </div>
+               )}
++            {/* The All tab also lists passthrough groups, read-only, below the editable rows. */}
++            {(kindFilter === 'passthrough' ||
++              (kindFilter === 'all' && passthroughGroups.length > 0)) && (
++              <PassthroughTable
++                groups={passthroughGroups}
++                usageByProvider={usageByProvider}
++                loading={loading}
++                emptyState={emptyState}
++              />
++            )}
+           </Card>
+         </div>
+       </div>
 diff --git a/apps/web/src/features/dashboard/DashboardPage.tsx b/apps/web/src/features/dashboard/DashboardPage.tsx
 index 4e26470..fb463de 100644
 --- a/apps/web/src/features/dashboard/DashboardPage.tsx

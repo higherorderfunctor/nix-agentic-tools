@@ -158,10 +158,11 @@ applies after `default-theme.patch` with `--fuzz=0` and changes neither
   label passthrough requests by group name. `mergeRefreshedChannels` keeps the
   shown OpenAI compatibility channels when that fetch fails during a refresh and
   still applies fresh passthrough channels.
-- The AI Providers page has a passthrough tab with its own table: name, base URL
-  and path, models, priority, key count, enabled state and recent requests. It
-  has no edit, delete, toggle or health-check control, and the `All` tab does
-  not list groups.
+- The AI Providers page lists the groups read-only in their own table, on the
+  passthrough tab and below the editable providers on the `All` tab, whose count
+  includes them: name, base URL and path, models, priority, key count, enabled
+  state and recent requests. Where other rows have actions, a group shows
+  "Managed by Nix"; no edit, delete, toggle or health-check control reaches it.
 
 The recipe's check phase runs the patch's tests and the upstream tests it
 changes.
