@@ -75,6 +75,7 @@ aristocratos
 arxanas
 attrset
 attrsets
+autobuild
 autologin
 autoresearch
 autosquash
@@ -143,6 +144,8 @@ creds
 customisation
 datamodels
 dataurl
+dbscheme
+dbstats
 deadnix
 decompressobj
 dedented
@@ -362,6 +365,7 @@ nixbuild
 nixd
 nixos
 nixpkgs
+nixql
 nobuiltin
 nodev
 noescape
@@ -403,6 +407,7 @@ pasteable
 patchability
 pdsolve
 peaceiris
+peekable
 pids
 pipelock
 pipewrench
@@ -422,6 +427,8 @@ pythonnousersite
 qiiiiii
 qlpack
 qlpacks
+qltest
+qltests
 qwen
 rawfile
 rcodesign
@@ -528,6 +535,7 @@ timespec
 tllm
 tmpfs
 toctou
+tokeninfo
 toolsets
 tostring
 traceparent
@@ -539,6 +547,7 @@ tsgolint
 tummychow
 turbofish
 typebox
+typesizes
 udevadm
 ufcs
 ugrep
