@@ -1,6 +1,6 @@
 {
   "capturedAt": "2026-11-10T00:08:41Z",
-  "normalization": "Only account.auth_index and account.name replaced with stable synthetic strings; all other fields preserved.",
+  "normalization": "Sanitized window observations are unchanged. Inventory schema migration: Claude cap headroom removed; source-shaped synthetic prepaid lots (USD10.89 promotional and USD250 purchased) and weekly/Fable grants supplement the old capture. Codex count is remaining with unit=resets; funding=unknown, scope=null and usable=true are synthetic eligibility assumptions, not newly captured evidence. Account symbols are anonymous.",
   "readers": {
     "anthropic-api": {
       "account": {
@@ -29,13 +29,45 @@
       },
       "balances": [
         {
+          "expiresAt": "2030-03-17T17:46:40Z",
+          "funding": "promotional",
+          "kind": "usage_credit",
+          "remaining": 10.89,
+          "scope": null,
+          "unit": "USD"
+        },
+        {
           "expiresAt": null,
-          "kind": "extra_usage",
-          "remaining": 100,
+          "funding": "purchased",
+          "kind": "usage_credit",
+          "remaining": 250,
+          "scope": null,
           "unit": "USD"
         }
       ],
-      "bonuses": [],
+      "bonuses": [
+        {
+          "expiresAt": "2030-03-17T17:46:40Z",
+          "funding": "promotional",
+          "handle": "fixture-weekly-grant",
+          "kind": "rate_limit_reset",
+          "remaining": 1,
+          "scope": ["7d"],
+          "unit": "resets",
+          "usable": true
+        },
+        {
+          "expiresAt": null,
+          "funding": "promotional",
+          "handle": "fixture-fable-grant",
+          "kind": "rate_limit_reset",
+          "remaining": 2,
+          "scope": ["7d:fable"],
+          "unit": "resets",
+          "usable": false
+        }
+      ],
+      "missingExtras": [],
       "pool": "claude",
       "windows": {
         "7d": {
@@ -63,23 +95,34 @@
       "balances": [
         {
           "expiresAt": null,
+          "funding": "unknown",
           "kind": "credits",
           "remaining": 62500.0,
+          "scope": null,
           "unit": "credits"
         }
       ],
       "bonuses": [
         {
-          "count": 1,
           "expiresAt": "2026-11-30T20:20:39Z",
-          "kind": "rate_limit_reset"
+          "funding": "unknown",
+          "kind": "rate_limit_reset",
+          "remaining": 1,
+          "scope": null,
+          "unit": "resets",
+          "usable": true
         },
         {
-          "count": 1,
           "expiresAt": "2026-12-01T22:50:26Z",
-          "kind": "rate_limit_reset"
+          "funding": "unknown",
+          "kind": "rate_limit_reset",
+          "remaining": 1,
+          "scope": null,
+          "unit": "resets",
+          "usable": true
         }
       ],
+      "missingExtras": [],
       "pool": "codex",
       "windows": {
         "7d": {

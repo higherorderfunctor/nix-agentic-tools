@@ -4,7 +4,7 @@
 }: let
   claudeCommand = ''claude -p --model <id> --effort <effort> "<prompt>"'';
   codexCommand = ''codex exec --model <slug> --config 'model_reasoning_effort="<level>"' --json --output-last-message <out>.md - < <prompt-file>'';
-  usageNotes = "prints the usage schema: windows{usedPercent,remainingPercent,resetsAt,status,windowSeconds}, balances, bonuses";
+  usageNotes = "prints the usage schema: windows{usedPercent,remainingPercent,resetsAt,status,windowSeconds}, actual credit lots in balances{remaining,unit,funding,scope,expiresAt}, reset grants in bonuses{remaining,unit,funding,scope,usable,expiresAt} (Claude handle retained), and missingExtras diagnostics; spend cap headroom is not a wallet";
 in {
   claude = {
     Agent = {

@@ -82,25 +82,30 @@ than 3600 seconds or beyond their natural reset are stale; they are never
 assumed refilled. Positive rolling gates may retain a null release time.
 
 `readerMetadata` preserves bonus and balance arrays for inspection; absent
-arrays remain null. These projections do not establish real credit lots,
-cap/spend completeness or grant eligibility. In particular, Claude's
-`extra_usage` remainder is not proof of a wallet balance. Natural weekly reset
-instants are preserved; no reset effect is inferred.
+arrays remain null. Corrected Readers report actual credit lots and reset
+grants, including their amounts, funding, targets, expiry and usability; Claude
+grants retain opaque handles. Spend cap headroom is never a wallet balance.
+Preview retains this inventory for inspection without inferring cap/spend
+completeness or applying reset effects. Natural weekly reset instants are
+preserved.
 
 Failed captures retain a machine-readable diagnostic `reason` and numeric
-`exitStatus`. A structured stdout `diagnostic` (inside `data` or decoded from
-`stdout`) with `reason: unpriced-models` and nonnegative integer `count`
-preserves that count: the operator can explain how many models lack a price in
-CPA Manager. Otherwise failure uses `exit-nonzero`; Safe `refused`, `timeout`
-and `invalid-json` codes are also recognized. Reader stderr and arbitrary reason
-strings are never copied.
+`exitStatus`. A flat stdout document `{"reason":"unpriced-models","count":1}`
+(inside `data` or decoded from `stdout`), with exactly those fields and a
+positive integer `count`, preserves that count: the operator can explain how
+many models lack a price in CPA Manager. Otherwise failure uses `exit-nonzero`;
+safe `refused`, `timeout` and `invalid-json` codes are also recognized. Reader
+stderr and arbitrary reason strings are never copied.
 
 The offline check `delegate-routing-observation-normalize` runs labelled
 assertions over all five sanitized production capture shapes, explicit clocks,
 scoped inactive limits, missing extras and failed Readers. The fixture uses fake
 command names and stable anonymous account symbols; production quantities and
-statuses are preserved. CLI output remains diagnostic preview data, without a
-stable complete-list schema promise.
+statuses are preserved. Inventory additions are explicitly labelled
+source-shaped synthetic fixtures: Claude lots and grants replace the rejected
+cap remainder; Codex reset lots use `remaining`, native `unit`, whole-pool
+`scope` and explicit synthetic eligibility. CLI output remains diagnostic
+preview data, without a stable complete-list schema promise.
 
 The offline `delegate-routing-observation-command` check exercises catalog
 binding, all five full envelopes, shared-command deduplication, the explicit

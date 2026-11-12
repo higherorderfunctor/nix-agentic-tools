@@ -181,7 +181,6 @@ class UsageTests(unittest.TestCase):
                         if failure == "malformed":
                             response = {}
                     elif body["url"].endswith("/rate-limit-reset-credits"):
-
                         if owner.reset_failure == "transport":
                             self.close_connection = True
                             return
@@ -874,6 +873,20 @@ print({json.dumps(json.dumps(ZAI))})
             {"kind": "rate_limit_reset", "funding": "promotional", "remaining": 3,
              "unit": "resets", "expiresAt": "2030-03-17T17:46:40Z", "scope": ["5h", "7d"],
              "usable": True, "handle": "full-grant"}])
+        # Wrong: an absent or null grant expiry fails otherwise valid usage.
+        for absent in [False, True]:
+            with self.subTest(absent_expiry=absent):
+                grant = body["cedar_ember"]["grants"][0]
+                if absent:
+                    del grant["ends_at"]
+                else:
+                    grant["ends_at"] = None
+                result = project(body=body)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["bonuses"], [
+                    {"kind": "rate_limit_reset", "funding": "promotional", "remaining": 3,
+                     "unit": "resets", "expiresAt": None, "scope": ["5h", "7d"],
+                     "usable": True, "handle": "full-grant"}])
         for key, bad in [("remaining_amount_minor_units", True), ("remaining_amount_minor_units", -1), ("currency", "EUR"), ("expires_at", "invalid")]:
             lots = copy.deepcopy(prepaid)
             lots["promo_tranches"][0][key] = bad

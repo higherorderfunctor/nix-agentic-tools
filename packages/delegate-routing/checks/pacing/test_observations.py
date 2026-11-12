@@ -35,14 +35,24 @@ class Observations(unittest.TestCase):
         self.assertEqual(len(self.snapshot["readers"]), 5)
         for capture in self.snapshot["readers"].values():
             self.assertEqual(set(capture), {"command", "data", "exit", "finishedAt", "startedAt", "stderrBytes"})
-            self.assertEqual(set(capture["data"]), {"account", "balances", "bonuses", "pool", "windows"})
+            self.assertEqual(set(capture["data"]), {"account", "balances", "bonuses", "pool", "windows"} | ({"missingExtras"} if capture["data"]["pool"] in {"claude", "codex"} else set()))
         codex = self.limit("codex", "weekly")
         self.assertEqual((codex["capacity"], codex["remaining"], codex["used"], codex["windowSeconds"]), (100, 49, 51, 604800))
         self.assertEqual(codex["naturalResetAt"], 1794491425)
         self.assertEqual(codex["observedAt"], 1794447287)
         metadata = self.result()["pools"]["codex"]["readerMetadata"]
-        self.assertEqual(metadata["balances"], [{"expiresAt": None, "kind": "credits", "remaining": 62500.0, "unit": "credits"}])
-        self.assertEqual(metadata["bonuses"], [{"count": 1, "expiresAt": "2026-11-30T20:20:39Z", "kind": "rate_limit_reset"}, {"count": 1, "expiresAt": "2026-12-01T22:50:26Z", "kind": "rate_limit_reset"}])
+        self.assertEqual(metadata["balances"], [{"expiresAt": None, "funding": "unknown", "kind": "credits", "remaining": 62500.0, "scope": None, "unit": "credits"}])
+        self.assertEqual(metadata["bonuses"], [{"expiresAt": "2026-11-30T20:20:39Z", "funding": "unknown", "kind": "rate_limit_reset", "remaining": 1, "scope": None, "unit": "resets", "usable": True}, {"expiresAt": "2026-12-01T22:50:26Z", "funding": "unknown", "kind": "rate_limit_reset", "remaining": 1, "scope": None, "unit": "resets", "usable": True}])
+
+    def test_true_inventory_metadata(self):
+        # Wrong: cap headroom is a wallet or grant identity/scope is discarded.
+        metadata = self.result()["pools"]["claude"]["readerMetadata"]
+        self.assertEqual(metadata["balances"], [
+            {"expiresAt": "2030-03-17T17:46:40Z", "funding": "promotional", "kind": "usage_credit", "remaining": 10.89, "scope": None, "unit": "USD"},
+            {"expiresAt": None, "funding": "purchased", "kind": "usage_credit", "remaining": 250, "scope": None, "unit": "USD"}])
+        self.assertEqual(metadata["bonuses"], [
+            {"expiresAt": "2030-03-17T17:46:40Z", "funding": "promotional", "handle": "fixture-weekly-grant", "kind": "rate_limit_reset", "remaining": 1, "scope": ["7d"], "unit": "resets", "usable": True},
+            {"expiresAt": None, "funding": "promotional", "handle": "fixture-fable-grant", "kind": "rate_limit_reset", "remaining": 2, "scope": ["7d:fable"], "unit": "resets", "usable": False}])
 
     def test_api_native_usd_and_billing_pool(self):
         api = self.limit("anthropic-api", "monthly")
@@ -88,20 +98,31 @@ class Observations(unittest.TestCase):
 
     def test_missing_extras_are_unknown(self):
         del self.snapshot["readers"]["claude"]["data"]["bonuses"]
+        del self.snapshot["readers"]["claude"]["data"]["balances"]
         pool = self.result()["pools"]["claude"]
         self.assertIsNone(pool["readerMetadata"]["bonuses"])
         self.assertIsNone(pool["resets"])
         self.assertIsNone(pool["credits"])
-        self.assertEqual(pool["readerMetadata"]["balances"][0]["remaining"], 100)
+        self.assertIsNone(pool["readerMetadata"]["balances"])
         self.assertEqual(self.limit("claude", "weekly")["remaining"], 74)
 
     def test_failed_readers_safe_reasons(self):
         capture = self.snapshot["readers"]["anthropic-api"]
-        capture.update(exit=1, data={"diagnostic": {"reason": "unpriced-models", "count": 3}}, stderr="private text must not escape")
+        capture.update(exit=1, command="proxy-accounted-usage", data={"reason": "unpriced-models", "count": 1}, stderr="private text must not escape")
         diagnostics = self.result()["diagnostics"]
-        self.assertIn({"pool": "anthropic-api", "reason": "unpriced-models", "count": 3, "exitStatus": 1}, diagnostics)
+        self.assertIn({"pool": "anthropic-api", "reason": "unpriced-models", "count": 1, "exitStatus": 1}, diagnostics)
         capture["stdout"] = json.dumps(capture.pop("data"))
-        self.assertIn({"pool": "anthropic-api", "reason": "unpriced-models", "count": 3, "exitStatus": 1}, self.result()["diagnostics"])
+        self.assertIn({"pool": "anthropic-api", "reason": "unpriced-models", "count": 1, "exitStatus": 1}, self.result()["diagnostics"])
+        # Wrong: a wrapped diagnostic, extra model name or invalid count is trusted.
+        for payload in [{"diagnostic": {"reason": "unpriced-models", "count": 1}},
+                        {"reason": "unpriced-models", "count": True},
+                        {"reason": "unpriced-models", "count": 0},
+                        {"reason": "unpriced-models", "count": 1, "model": "private-model"},
+                        {"reason": []}]:
+            with self.subTest(payload=payload):
+                capture["stdout"] = json.dumps(payload)
+                self.assertIn({"pool": "anthropic-api", "reason": "exit-nonzero", "exitStatus": 1}, self.result()["diagnostics"])
+                self.assertNotIn("private-model", json.dumps(self.result()))
         capture["stdout"] = ""
         self.assertIn({"pool": "anthropic-api", "reason": "exit-nonzero", "exitStatus": 1}, self.result()["diagnostics"])
         self.assertNotIn("private text", json.dumps(self.result()))

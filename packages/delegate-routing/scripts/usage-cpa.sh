@@ -143,7 +143,7 @@ usage_project() {
                     elif $name == "5h" then .five_hour != null
                     else any(.limits[]?; .kind == "weekly_scoped" and .scope.model.display_name == "Fable") end)]
               | unique | select(length > 0)
-              | reset_bonus($grant.resets_left; ($grant.ends_at | utc); "promotional"; .; $grant.usable_now) + {handle: $grant.id}]
+              | reset_bonus($grant.resets_left; $grant.ends_at; "promotional"; .; $grant.usable_now) + {handle: $grant.id}]
           }
       elif $vendor == "codex" then
         (.rate_limit // .rateLimits // error("codex usage")) as $limits

@@ -34,9 +34,9 @@ def collect(manifest, now, reader_shell):
                 )
                 capture = {"exit": process.returncode, "stdout": process.stdout.decode("utf-8", errors="replace")}
             except subprocess.TimeoutExpired:
-                capture = {"exit": 124, "data": {"diagnostic": {"reason": "timeout"}}}
+                capture = {"exit": 124, "data": {"reason": "timeout"}}
             except OSError:
-                capture = {"exit": 127, "data": {"diagnostic": {"reason": "refused"}}}
+                capture = {"exit": 127, "data": {"reason": "refused"}}
             captures[command] = {**capture, "finishedAt": now}
         readers[pool] = captures[command]
     return {**manifest, "readers": readers}

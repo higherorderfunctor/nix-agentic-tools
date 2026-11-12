@@ -145,19 +145,22 @@ def normalize(snapshot, now):
                 if isinstance(exit_status, bool) or not isinstance(exit_status, int):
                     raise ValueError("invalid-exit-status")
                 if exit_status != 0:
-                    # Only structured safe codes and numeric detail are carried.
+                    # Failed Readers emit a flat safe diagnostic, never an envelope.
+                    reason, detail = "exit-nonzero", {"exitStatus": exit_status}
                     try:
-                        payload = stdout_document(capture)
+                        failure = stdout_document(capture)
                     except ValueError:
-                        payload = None
-                    failure = payload.get("diagnostic", {}) if isinstance(payload, dict) else {}
-                    if not isinstance(failure, dict):
-                        failure = {}
-                    reason = failure.get("reason")
-                    reason = reason if reason in {"invalid-json", "refused", "timeout", "unpriced-models"} else "exit-nonzero"
-                    detail = {"exitStatus": exit_status}
-                    if isinstance(failure.get("count"), int) and not isinstance(failure["count"], bool) and failure["count"] >= 0:
-                        detail["count"] = failure["count"]
+                        pass  # Keep the observed exit failure when stdout is malformed.
+                    else:
+                        if isinstance(failure, dict):
+                            if (set(failure) == {"count", "reason"}
+                                    and failure["reason"] == "unpriced-models"
+                                    and type(failure["count"]) is int and failure["count"] > 0):
+                                reason = "unpriced-models"
+                                detail["count"] = failure["count"]
+                            elif (set(failure) == {"reason"} and isinstance(failure["reason"], str)
+                                    and failure["reason"] in {"invalid-json", "refused", "timeout"}):
+                                reason = failure["reason"]
                     diagnostic(pool, reason, **detail)
                 else:
                     document = envelope(capture)
@@ -180,7 +183,7 @@ def normalize(snapshot, now):
         pools[pool] = {
             "limits": observations,
             "readerMetadata": {field: document.get(field) if document else None for field in ("balances", "bonuses")},
-            # Installed projections do not establish real lots, cap or eligibility.
+            # Inventory metadata is preserved; allowance preview does not apply it.
             "credits": None, "resets": None,
         }
     return {"asOf": now, "capability": "allowance-preview", "diagnostics": diagnostics, "pools": pools, "runtime": snapshot["runtime"]}
