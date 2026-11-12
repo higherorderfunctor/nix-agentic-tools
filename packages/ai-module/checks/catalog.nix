@@ -448,6 +448,18 @@
   };
   scopedModel = pattern: (lib.head (lib.head (identityView glmGraph pattern).routes).techniques).model.value;
   identityRows = [
+    (row "maker accessor reads known model" (nativeGraph.makerOf "gpt-6.1-sol") "openai")
+    (row "maker accessor resolves provider alias" (nativeGraph.makerOf "deepseek/deepseek-v4-pro") "deepseek")
+    (row "maker accessor retains unknown offered maker" (unknownGraph.makerOf "custom") null)
+    (row "selected custom model requires maker"
+      (builtins.tryEval (unknownGraph.modelFor "custom").maker).success
+      false)
+    (row "maker accessor refuses unregistered model"
+      (builtins.tryEval (nativeGraph.makerOf "gpt-999-sol")).success
+      false)
+    (row "maker accessor refuses overlapping budgets"
+      (builtins.tryEval (mixed.makerOf "gpt")).success
+      false)
     (row "native Claude maker" (nativeGraph.modelFor "claude-opus-4-6").maker "anthropic")
     (row "native Codex maker" (nativeGraph.modelFor "gpt-6.1-sol").maker "openai")
     (row "GLM maker independent of z.ai billing" (nativeGraph.modelFor "glm-5.3").maker "zhipu")
@@ -468,9 +480,6 @@
     (row "identity records contain no fit or effort policy"
       (builtins.attrNames (nativeGraph.modelFor "gpt-6.1-sol")) ["aliases" "maker" "source"])
     (row "unselected unknown maker retains its offer" (unknownGraph.modelsFor "claude") ["custom"])
-    (row "selected custom model requires maker"
-      (builtins.tryEval (unknownGraph.modelFor "custom").maker).success
-      false)
     (row "concrete IDs are never guessed"
       (builtins.tryEval (nativeGraph.canonical "gpt-999-sol")).success
       false)

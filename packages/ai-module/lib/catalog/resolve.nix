@@ -89,18 +89,19 @@
       if errors == []
       then true
       else throw (lib.concatStringsSep "\n" errors);
+    # Inspection may retain a declared model with unknown maker evidence;
+    # invalid references and graph conflicts still fail at the shared boundary.
+    makerOf = name: builtins.seq checked (maker (canonical name));
   in {
-    inherit canonical errors;
+    inherit canonical errors makerOf;
     # Routing must identify a concrete selected custom model even when no
     # OAuth pool is present. Unknown makers remain valid as unselected offers.
     modelFor = name: let
       id = canonical name;
     in
-      builtins.seq checked (
-        if maker id == null
-        then throw "ai.catalog: selected model ${builtins.toJSON id} has no maker; declare its identity."
-        else models.${id}
-      );
+      if makerOf id == null
+      then throw "ai.catalog: selected model ${builtins.toJSON id} has no maker; declare its identity."
+      else models.${id};
     pools = builtins.deepSeq (map (entry: canonical entry.alias) spellings) (builtins.seq checked normalized);
     runtimes = builtins.seq checked reach;
     modelsFor = runtime: builtins.seq checked (lib.filter (id: lib.any (pool: offers runtime pool id) (reach.${runtime} or [])) (builtins.attrNames models));

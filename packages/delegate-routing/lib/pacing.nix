@@ -67,15 +67,9 @@ in
     pools = registrations;
     routes = map (model: let
       pool = catalog.poolFor runtime model;
-      # Reach is already checked. Unlike launch selection, observations retain
-      # offered models whose maker is unknown instead of refusing them.
-      identity = builtins.tryEval (catalog.modelFor model).maker;
     in {
       inherit model pool;
-      maker =
-        if identity.success
-        then identity.value
-        else null;
+      maker = catalog.makerOf model;
       limits = builtins.attrNames (lib.filterAttrs (_: limit: lib.elem model limit.models) registrations.${pool}.limits);
     }) (catalog.modelsFor runtime);
   })
