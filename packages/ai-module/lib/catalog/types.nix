@@ -26,6 +26,22 @@ in {
       })) {} "Credentials spending this one budget.";
       models = option names [] "Finite API-key offers, resolved to canonical identities.";
       providerCatalogs = option names [] "Open OAuth provider catalogs, including future registered models.";
+      usage = option (types.attrsOf (types.submodule {
+        options = {
+          adapter = mkOption {
+            type = types.enum ["anthropic-spend" "claude-subscription" "codex-subscription" "opencode-go" "zai"];
+            description = "Existing Reader observation adapter for this billing kind.";
+          };
+          runtime = mkOption {
+            type = types.enum ["claude" "codex" "kimchi" "kiro"];
+            description = "Runtime owning the registered usage technique.";
+          };
+          technique = mkOption {
+            type = types.nonEmptyStr;
+            description = "Enabled usage technique key; transport remains at its existing owner.";
+          };
+        };
+      })) {} "One adapter and runtime-qualified technique per allowance billing kind, keyed by subscription or metered.";
     };
   };
   provider = types.submodule {

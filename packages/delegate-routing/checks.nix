@@ -1,4 +1,5 @@
 {
+  config,
   harness,
   lib,
   pkgs,
@@ -24,6 +25,127 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
+    # Rejects independent pool registrations, duplicate Reader calls, live
+    # credential use, provider-as-pool joins and missing delivery backends.
+    delegate-routing-observation-command = let
+      fixture = builtins.fromJSON (builtins.readFile ./checks/pacing/reader-snapshots.json);
+      bindings = {
+        anthropic-api = {
+          adapter = "anthropic-spend";
+          kind = "metered";
+        };
+        claude = {
+          adapter = "claude-subscription";
+          kind = "subscription";
+        };
+        codex = {
+          adapter = "codex-subscription";
+          kind = "subscription";
+        };
+        opencode-go = {
+          adapter = "opencode-go";
+          kind = "subscription";
+        };
+        z-ai = {
+          adapter = "zai";
+          kind = "subscription";
+        };
+      };
+      definitions =
+        lib.mapAttrs (pool: binding: {
+          credentials.${binding.kind} = {
+            auth = "apiKey";
+            binding = "fixture-${pool}";
+          };
+          models = lib.unique (lib.concatMap (limit: limit.models) (builtins.attrValues fixture.pools.${pool}.limits));
+          usage.${binding.kind} = {
+            inherit (binding) adapter;
+            runtime = "codex";
+            technique = pool;
+          };
+        })
+        bindings;
+      catalog = (import ../ai-module/lib/catalog/resolve.nix {inherit lib;}).resolve {
+        pools = definitions;
+        runtimes = {
+          inspection.pools = ["anthropic-api" "codex" "opencode-go" "z-ai"];
+          subscription.pools = ["claude"];
+        };
+      };
+      observationArgs = {
+        inherit catalog;
+        poolDefinitions = definitions;
+        techniques.codex =
+          lib.mapAttrs (pool: _: {
+            command = "fake-reader ${pool}";
+            enable = true;
+            kind = "usage";
+          })
+          bindings;
+        budgets.anthropic-api.window = {
+          limit = 200;
+          resetDay = 1;
+          unit = "USD";
+        };
+      };
+      project = args: import ./lib/pacing.nix {inherit lib;} args;
+      manifests = project observationArgs;
+      refuses = overrides: !(builtins.tryEval (builtins.deepSeq (project (observationArgs // overrides)) true)).success;
+      rejections = {
+        disabled-technique = refuses {
+          techniques.codex = lib.genAttrs (builtins.attrNames bindings) (_: {
+            command = "fake-reader";
+            enable = false;
+            kind = "usage";
+          });
+        };
+        duplicate-registration = refuses {
+          budgets.codex.usage = {
+            runtime = "codex";
+            technique = "codex";
+          };
+        };
+        missing-api-budget = refuses {budgets = {};};
+        missing-association = refuses {poolDefinitions = definitions // {codex = definitions.codex // {usage = {};};};};
+        missing-credential-kind = refuses {poolDefinitions = definitions // {codex = definitions.codex // {credentials = {};};};};
+        multiple-billing-kinds = refuses {
+          poolDefinitions =
+            definitions
+            // {
+              codex =
+                definitions.codex
+                // {
+                  credentials = definitions.codex.credentials // {metered = definitions.codex.credentials.subscription;};
+                  usage = definitions.codex.usage // {metered = definitions.codex.usage.subscription;};
+                };
+            };
+        };
+        wrong-billing-kind = refuses {poolDefinitions = definitions // {codex = definitions.codex // {usage.subscription = definitions.codex.usage.subscription // {adapter = "anthropic-spend";};};};};
+        zero-api-budget = refuses {
+          budgets.anthropic-api.window = {
+            limit = 0;
+            resetDay = 1;
+            unit = "USD";
+          };
+        };
+      };
+    in
+      assert lib.all (name: rejections.${name} || throw "observation registration accepted ${name}") (builtins.attrNames rejections);
+        pkgs.runCommand "delegate-routing-observation-command" {
+          nativeBuildInputs = [pkgs.bash pkgs.python3];
+          refused = lib.concatStringsSep ", " (builtins.attrNames rejections);
+          manifest = pkgs.writeText "observation-fixture.json" (builtins.toJSON manifests);
+          deliveryDevenv = config.checks.module-delegate-routing-devenv-observation-command;
+          deliveryHm = config.checks.module-delegate-routing-hm-observation-command;
+        } ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          echo "PASS: catalog registration refuses $refused"
+          export OBSERVATION_TEST_ROOT="$TMPDIR"
+          python3 -I ${./checks/pacing}/test_observation_command.py ${./scripts} "$manifest"
+          echo "PASS: HM and devenv observation delivery dependencies built: $deliveryHm $deliveryDevenv"
+          touch "$out"
+        '';
     # Rejects simplified captures, implicit clocks, guessed scopes/enforcement
     # and absent extras presented as measured zero.
     delegate-routing-observation-normalize =

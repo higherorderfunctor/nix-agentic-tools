@@ -580,6 +580,45 @@
         };
       };
     };
+    observationEnvelope =
+      pkgs.writeText "observation-codex.json" (builtins.toJSON
+        (builtins.fromJSON (builtins.readFile ./pacing/reader-snapshots.json)).readers.codex.data);
+    observationReader = pkgs.writeShellScript "fake-observation-reader" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${pkgs.coreutils}/bin/cat ${observationEnvelope}
+    '';
+    observationDelivery = change {
+      ai = {
+        catalog = {
+          pools.inspection = {
+            credentials.subscription = {
+              auth = "oauth";
+              binding = "fixture-observation";
+            };
+            models = ["gpt-6.1-sol"];
+            usage.subscription = {
+              adapter = "codex-subscription";
+              runtime = "codex";
+              technique = "inspection";
+            };
+          };
+          runtimes.codex.pools = ["inspection"];
+        };
+        programs.delegate-routing.runtimes.codex.techniques.inspection = {
+          command = toString observationReader;
+          kind = "usage";
+        };
+      };
+    };
+    observationPackage =
+      lib.findFirst (package: lib.getName package == "delegate-routing-observe")
+      (throw "missing ${name} observation package")
+      (
+        if name == "hm"
+        then observationDelivery.config.home.packages
+        else observationDelivery.config.packages
+      );
     routingView = import ../lib/routing-view.nix routingArgs;
     sessionPools = {
       claude = "claude";
@@ -800,6 +839,34 @@
         ${pkgs.coreutils}/bin/touch "$out"
       '';
   in {
+    "module-delegate-routing-${name}-observation-command" =
+      pkgs.runCommand "delegate-routing-${name}-observation-command" {
+        nativeBuildInputs = [pkgs.python3];
+        command = lib.getExe observationPackage;
+        manual = "${result.config.ai.internal.roots.delegate-routing-content}/bin/delegate-routing-observe";
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        python3 -I - "$command" "$manual" ${./pacing/reader-snapshots.json} <<'PYTHON'
+        import json
+        import subprocess
+        import sys
+
+        command, manual, fixture = sys.argv[1:]
+        clock = ["--now", "2026-11-12T01:35:00Z"]
+        result = json.loads(subprocess.check_output([command, "--runtime", "codex", *clock]))
+        assert result["capability"] == "allowance-preview"
+        assert list(result["pools"]) == ["inspection"], result
+        assert result["routes"] == [{"model": "gpt-6.1-sol", "maker": "openai", "pool": "inspection", "limits": ["weekly"]}], result
+        limit = result["pools"]["inspection"]["limits"][0]
+        assert (limit["remaining"], limit["windowSeconds"], limit["observedAt"]) == (49, 604800, 1794447300), limit
+        print("PASS: ${name} installed command uses shared runtime reach and billing pool")
+        snapshot = ["--snapshot", fixture, *clock]
+        assert subprocess.check_output([command, *snapshot]) == subprocess.check_output([manual, *snapshot])
+        print("PASS: ${name} and manual content package have identical offline preview output")
+        PYTHON
+        touch "$out"
+      '';
     "module-delegate-routing-${name}-claude-packaged-helper" = packagedHelperCheck "claude";
     "module-delegate-routing-${name}-codex-packaged-helper" = packagedHelperCheck "codex";
     "module-delegate-routing-${name}-kimchi-packaged-helper" = packagedHelperCheck "kimchi";
