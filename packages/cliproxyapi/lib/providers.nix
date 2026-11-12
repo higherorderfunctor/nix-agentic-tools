@@ -2,8 +2,7 @@
 {lib}: let
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
-  facts = import ../../../lib/extracted/facts.nix {inherit lib;};
-  fact = facts.get (facts.load {dir = ../extracted;}).aggregate;
+  catalogLib = import ../../ai-module/lib/catalog/resolve.nix {inherit lib;};
   # OpenCode Go serves each catalog model on one native API. Each lands on
   # that API only, so CPA translates every other protocol itself. A function
   # of the catalog (`opencodeGo.models`) so checks can feed it malformed ones.
@@ -71,9 +70,9 @@
     toolAliases = {};
   };
   vendors = {
-    opencode-go = opencodeGo (fact "opencodeGo").models;
+    opencode-go = opencodeGo catalogLib.opencodeGo.models;
     z-ai =
-      fact "zAi"
+      catalogLib.zAi
       // {
         codexShellArgCleanup = true;
         toolAliases.ToolSearch = "ToolSearch_";
@@ -185,7 +184,11 @@
             inherit name;
             inherit (value) base-url;
             keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
-            models = map (model: {name = model;}) (lib.defaultTo [] (modelsOf provider api));
+            models = map (model:
+              {name = model;}
+              // lib.optionalAttrs
+              ((provider.catalogAliases.${model} or model) != model)
+              {alias = provider.catalogAliases.${model};}) (lib.defaultTo [] (modelsOf provider api));
           }
           // lib.optionalAttrs (headers != {}) {inherit headers;}
           // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;}
@@ -285,6 +288,7 @@
       if choice.api != null
       then {problem = "${path}: OAuth credential `${choice.credential}` does not select an API; remove api.";}
       else {
+        models = [];
         rule = {
           provider = credential.oauth.vendor;
           kind = "oauth";
@@ -296,7 +300,7 @@
     else if !(lib.elem api available)
     then {problem = "${path}: upstream credential `${choice.credential}` does not serve API `${api}`.";}
     else {
-      models = lib.defaultTo [] (modelsOf credential.apiKey api);
+      models = map (model: credential.apiKey.catalogAliases.${model} or model) (lib.defaultTo [] (modelsOf credential.apiKey api));
       rule = rule choice.credential credential.apiKey api;
     };
   # CPA marks every upstream header secret (extract/annotations.json), so a
@@ -313,6 +317,31 @@
     }));
 in {
   inherit apiKeys apis clientKeyType credentialType literalHeader modelsOf opencodeGo route rule served vendors;
+  # Protocol choices stay on the existing routes; the shared graph supplies
+  # which credentials the client can reach, for API keys and OAuth alike.
+  project = graph: name: instance:
+    instance
+    // {
+      clientKeys = lib.mapAttrs (client: entry:
+        entry
+        // {
+          routes = graph.clientRoutes name client;
+        })
+      instance.clientKeys;
+      credentials = lib.mapAttrs (_: credential:
+        credential
+        // {
+          apiKey =
+            if credential.apiKey == null
+            then null
+            else
+              credential.apiKey
+              // {
+                catalogAliases = lib.genAttrs (lib.unique (lib.concatMap (api: lib.defaultTo [] (modelsOf credential.apiKey api)) (builtins.attrNames (served credential.apiKey)))) graph.canonical;
+              };
+        })
+      instance.credentials;
+    };
   lower = pkgs: credentials:
     lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:
       blocks (lib.mapAttrs (_: literalHeader pkgs) (

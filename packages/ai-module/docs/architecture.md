@@ -65,3 +65,19 @@
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
+
+## Model catalogs and budget reach
+
+- **The shared catalog owns serving identity and runtime reach.**
+  `lib/catalog/resolve.nix` resolves canonical model aliases and rejects
+  overlapping budgets once; `modules/catalog.nix`, imported by the existing
+  common module, composes credential delivery and family budget bindings into
+  that graph. CPA renders client grants and routing renders launches from the
+  checked result. The manual `aiModule.catalog` export uses the same resolver.
+  Fit guidance, usage collection and pacing stay with their existing owners.
+- **OAuth offers are open provider catalogs.** CPA grants credentials rather
+  than individual OAuth models. An OAuth pool therefore offers its provider's
+  whole catalog, including later registrations; API-key offers remain finite.
+  Overlap compares canonical identities and catalog makers, never model-name
+  prefixes. See `packages/ai-module/docs/catalog.md` for the representation and
+  diagnostics.

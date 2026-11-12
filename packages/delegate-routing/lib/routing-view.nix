@@ -1,6 +1,7 @@
 # Normalized launch reaches and registered readers, independent of skill prose.
 {
   lib,
+  catalog ? null,
   runtime,
   families,
   models,
@@ -14,8 +15,34 @@
   selection = import ./select-families.nix {inherit lib;};
   inherit (import ./vocabulary.nix) delegateKinds effortLevels;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
-  selected = target: selection.select families models.${target};
-  candidates = selection.candidates families models runtimes;
+  graphModels = target:
+    if catalog == null
+    then null
+    else catalog.modelsFor target;
+  resolvedModel = family: target: let
+    ids = graphModels target;
+    resolved =
+      if ids == null
+      then {}
+      else
+        agentFiles.resolve ids [
+          (family // {example.claude = family.example.${target} or "";})
+        ];
+    id =
+      if target == "claude" && resolvedAgentFiles != null && resolvedAgentFiles ? ${family.name}
+      then resolvedAgentFiles.${family.name}.id
+      else if resolved ? ${family.name}
+      then resolved.${family.name}.id
+      else null;
+  in
+    if catalog != null && catalog.runtimes ? ${target} && id != null && !lib.elem id ids
+    then throw "delegate-routing: model ${id} is not reachable in catalog runtime ${target}."
+    else id;
+  selected = target:
+    lib.filter (family:
+      catalog == null || !(catalog.runtimes ? ${target}) || resolvedModel family target != null)
+    (selection.select families models.${target});
+  candidates = lib.unique (lib.concatMap selected runtimes);
   agentFiles = import ./agent-files.nix {inherit lib;};
   agentSet =
     if resolvedAgentFiles != null
@@ -49,7 +76,9 @@
         then agentSet.${family.name}
         else null;
       id =
-        if agent != null
+        if catalog != null && catalog.runtimes ? ${target}
+        then resolvedModel family target
+        else if agent != null
         then agent.id
         else family.example.${target} or "";
     in
@@ -70,7 +99,7 @@
   in {
     inherit target;
     family = {defaultEffort = null;} // family;
-    pool = selection.poolFor family target;
+    pool = selection.poolFor catalog family target (resolvedModel family target);
     techniques =
       if names == []
       then

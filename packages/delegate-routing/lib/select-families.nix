@@ -61,6 +61,12 @@ in {
       settings.techniques)
     config.ai.programs.delegate-routing.runtimes;
 
-  # Package families omit bindings; module families also admit explicit null.
-  poolFor = family: target: family.pools.${target} or null;
+  # Named budgets must come from the checked serving graph. Unbound family
+  # guidance remains usable by the standalone skill without inventing a budget.
+  poolFor = catalog: family: target: model:
+    if catalog != null && catalog.runtimes ? ${target}
+    then catalog.poolFor target model
+    else if (family.pools.${target} or null) != null
+    then throw "delegate-routing: pass an evaluated aiModule.catalog graph for bound family ${family.name} on ${target}."
+    else null;
 }
