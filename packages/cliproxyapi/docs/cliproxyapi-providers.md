@@ -76,6 +76,12 @@ lower priority than an HTTP-only credential. Existing session affinity can keep
 using a bound credential after a higher-priority one recovers. Per-client
 routing order/fallback and account prefixes are deferred.
 
+Built-in vendor definitions live in `packages/cliproxyapi/lib/vendors/`, with
+one file per vendor and an explicit `default.nix` index. Each vendor reads its
+own CPA extracted facts. The public `lib/providers.nix` entry point keeps the
+protocol types, credential lowering and route resolution; its callable
+`opencodeGo` export also accepts synthetic catalogs for the existing checks.
+
 Built-in `vendor = "z-ai"` defaults
 `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` for Anthropic and
 `apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,
