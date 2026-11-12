@@ -842,7 +842,7 @@ index 2f3aea6..f45e41d 100644
  
 diff --git a/apps/web/src/services/api/passthrough.test.ts b/apps/web/src/services/api/passthrough.test.ts
 new file mode 100644
-index 0000000..e3e9146
+index 0000000..f1bd588
 --- /dev/null
 +++ b/apps/web/src/services/api/passthrough.test.ts
 @@ -0,0 +1,126 @@
@@ -905,7 +905,7 @@ index 0000000..e3e9146
 +beforeEach(() => {
 +  dispatchEvent.mockReset();
 +  mocks.get.mockReset();
-+  vi.stubGlobal('window', { dispatchEvent });
++  vi.stubGlobal('window', { dispatchEvent, location: { hash: '' } });
 +  apiClient.setConfig({
 +    apiBase: 'https://cpa.example.com',
 +    managementKey: 'cpa-key',
