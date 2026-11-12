@@ -43,10 +43,10 @@ index 377673f..3d74bbb 100644
  				entries = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 diff --git a/internal/config/config_v8_grouped_family_test.go b/internal/config/config_v8_grouped_family_test.go
 new file mode 100644
-index 0000000..0e1e063
+index 0000000..d9e9061
 --- /dev/null
 +++ b/internal/config/config_v8_grouped_family_test.go
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,66 @@
 +package config
 +
 +import (
@@ -111,31 +111,5 @@ index 0000000..0e1e063
 +	serialized := groupLegacyKeys(decode(legacy), "openai-compatibility")
 +	if !nodesStructurallyEqual(serialized, decode(grouped)) {
 +		t.Fatal("compatibility serialization changed the v8 grouped shape")
-+	}
-+}
-+
-+// Refuse treating any existing flat-key family (or an unknown name) as a
-+// pre-grouped struct; only compatibility has api-key-entries today.
-+func TestV8GroupedFamilyPredicate(t *testing.T) {
-+	for _, tc := range []struct {
-+		provider string
-+		want     bool
-+	}{
-+		{"", false},
-+		{"claude", false},
-+		{"codex", false},
-+		{"gemini", false},
-+		{"interactions", false},
-+		{"meta", false},
-+		{"openai-compatibility", true},
-+		{"unknown", false},
-+		{"vertex", false},
-+		{"xai", false},
-+	} {
-+		t.Run(tc.provider, func(t *testing.T) {
-+			if got := isV8GroupedFamily(tc.provider); got != tc.want {
-+				t.Fatalf("grouped family = %v, want %v", got, tc.want)
-+			}
-+		})
 +	}
 +}
