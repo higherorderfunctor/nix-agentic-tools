@@ -5,38 +5,32 @@ import json
 import re
 from pathlib import Path
 
-# Kiro 2.22.1's unauthenticated _kiro/workflow/listRecipes contains this
-# additional ID in feature-pipeline and semantic-review-multi-model. It does
-# not establish that the public Fable 5.1 display and Fable 5 are aliases.
-ADDITIONAL_IDS = {"claude-fable-5.1": ["claude-fable-5"]}
-MODEL_SHAPE = re.compile(
-    r"auto|claude-[a-z]+-\d+(?:\.\d+)*|gpt-\d+(?:\.\d+)*(?:-[a-z]+)?|"
-    r"deepseek-\d+(?:\.\d+)*|glm-\d+(?:\.\d+)*|kimi-k\d+(?:\.\d+)*|"
-    r"minimax-m\d+(?:\.\d+)*|qwen\d+-coder-[a-z0-9]+"
-)
-
 
 def model_ids(names):
-    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+    if not isinstance(names, list):
         raise ValueError("expected model display names")
     ids = []
     for name in names:
+        if not isinstance(name, str) or not name:
+            raise ValueError("expected nonempty model display names")
+        # Decoded display text has no executable or AST representation. Match
+        # only its typography; provider names and version semantics are data.
         value = name.lower().replace(" ", "-")
-        # The documented 4.0 label uses the CLI's original 4 ID.
-        if value == "claude-sonnet-4.0":
-            value = "claude-sonnet-4"
-        if not MODEL_SHAPE.fullmatch(value):
-            raise ValueError(f"unrecognized model name {name!r}; review its CLI spelling")
+        if not re.fullmatch(r"[a-z0-9]+(?:[-.][a-z0-9]+)*", value) or re.search(
+            r"(?<!\d)\.|\.(?!\d)", value
+        ):
+            raise ValueError(f"invalid model display name {name!r}")
         ids.append(value)
     if len(ids) != len(set(ids)):
         raise ValueError("duplicate or colliding model names")
     if "auto" not in ids or len(ids) < 2:
         raise ValueError("expected Auto and concrete models in the public catalog")
-    additional = {extra for value in ids for extra in ADDITIONAL_IDS.get(value, [])}
-    return sorted(set(ids) | additional)
+    return sorted(ids)
 
 
 def capture(document):
+    # This source is prose, not code or structured data. Bound the one table
+    # before reading cells; a global name regex would collect unrelated prose.
     sections = re.findall(
         r"(?ms)^## Quick comparison\s*\n(.*?)(?=^## |\Z)", document
     )
@@ -51,17 +45,18 @@ def capture(document):
             rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
         elif rows:
             ended = True
-    if len(rows) < 3 or rows[0][0] != "Model":
+    if len(rows) < 3 or rows[0].count("Model") != 1:
         raise ValueError("missing model comparison table")
     if len(rows[1]) != len(rows[0]) or not all(
         re.fullmatch(r":?-+:?", cell) for cell in rows[1]
     ):
         raise ValueError("malformed model table header")
+    model_column = rows[0].index("Model")
     names = []
     for row in rows[2:]:
         if len(row) != len(rows[0]):
             raise ValueError("malformed model table row")
-        name = re.sub(r"<sup>[^<]*</sup>$", "", row[0]).strip()
+        name = re.sub(r"<sup>[^<]*</sup>$", "", row[model_column]).strip()
         if name.startswith("**") and name.endswith("**"):
             name = name[2:-2]
         names.append(name)
