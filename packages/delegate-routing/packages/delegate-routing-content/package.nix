@@ -32,7 +32,6 @@
   in
     (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-observe";
-      passthru = {inherit manifest;};
       text = ''
         exec ${pkgs.python3}/bin/python3 -I ${../../scripts}/pacing-list.py "$@" --default-manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
       '';

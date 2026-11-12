@@ -605,6 +605,22 @@
           };
           runtimes.codex.pools = ["inspection"];
         };
+        cliproxyapi.instances.unknown = {
+          clientKeys.reader = {
+            key = redact.file "/run/secrets/unused-client";
+            routes = [
+              {
+                api = "chat";
+                credential = "offer";
+              }
+            ];
+          };
+          credentials.offer.apiKey = {
+            apis.chat.base-url = "https://unused.invalid/v1";
+            key = redact.file "/run/secrets/unused-offer";
+            models = ["uncatalogued-offer"];
+          };
+        };
         programs.delegate-routing.runtimes.codex.techniques.inspection = {
           command = toString observationReader;
           kind = "usage";
@@ -861,6 +877,11 @@
         limit = result["pools"]["inspection"]["limits"][0]
         assert (limit["remaining"], limit["windowSeconds"], limit["observedAt"]) == (49, 604800, 1794447300), limit
         print("PASS: ${name} installed command uses shared runtime reach and billing pool")
+        unknown = json.loads(subprocess.check_output([command, "--runtime", "cliproxyapi:unknown/reader", *clock]))
+        assert unknown["routes"] == [{"model": "uncatalogued-offer", "maker": None, "pool": "unknown/offer", "limits": []}], unknown
+        assert unknown["pools"] == {"unknown/offer": {"limits": [], "readerMetadata": {"balances": None, "bonuses": None}, "credits": None, "resets": None}}, unknown
+        assert unknown["diagnostics"] == [{"pool": "unknown/offer", "reason": "missing-capture"}], unknown
+        print("PASS: ${name} source-enabled module retains unknown-maker CPA offer with maker null")
         snapshot = ["--snapshot", fixture, *clock]
         assert subprocess.check_output([command, *snapshot]) == subprocess.check_output([manual, *snapshot])
         print("PASS: ${name} and manual content package have identical offline preview output")

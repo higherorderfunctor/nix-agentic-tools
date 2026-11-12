@@ -1,8 +1,75 @@
 {lib}: let
   inherit (lib) mkOption types;
+  # Shared observation presets and the allowed adapter names have one owner.
+  usageAdapters = {
+    anthropic-spend = {
+      kind = "metered";
+      readerPool = null;
+      windows.monthly = {
+        role = "pace";
+        window = "monthly";
+      };
+    };
+    claude-subscription = {
+      kind = "subscription";
+      readerPool = "claude";
+      windows = {
+        fable = {
+          modelPrefix = "claude-fable-";
+          role = "pace";
+          window = "7d:fable";
+        };
+        weekly = {
+          role = "pace";
+          window = "7d";
+        };
+      };
+    };
+    codex-subscription = {
+      kind = "subscription";
+      readerPool = "codex";
+      windows.weekly = {
+        role = "pace";
+        window = "7d";
+      };
+    };
+    opencode-go = {
+      kind = "subscription";
+      readerPool = "opencode";
+      windows = {
+        monthly = {
+          role = "pace";
+          window = "monthly";
+        };
+        rolling = {
+          role = "gate";
+          window = "5h";
+        };
+        weekly = {
+          role = "pace";
+          window = "7d";
+        };
+      };
+    };
+    zai = {
+      kind = "subscription";
+      readerPool = "zai";
+      windows = {
+        rolling = {
+          role = "gate";
+          window = "5h";
+        };
+        weekly = {
+          role = "pace";
+          window = "7d";
+        };
+      };
+    };
+  };
   names = types.listOf types.nonEmptyStr;
   option = type: default: description: mkOption {inherit type default description;};
 in {
+  inherit usageAdapters;
   model = types.submodule {
     options = {
       aliases = option (types.attrsOf names) {} "Exact provider spellings of this canonical model.";
@@ -29,7 +96,7 @@ in {
       usage = option (types.attrsOf (types.submodule {
         options = {
           adapter = mkOption {
-            type = types.enum ["anthropic-spend" "claude-subscription" "codex-subscription" "opencode-go" "zai"];
+            type = types.enum (builtins.attrNames usageAdapters);
             description = "Existing Reader observation adapter for this billing kind.";
           };
           runtime = mkOption {

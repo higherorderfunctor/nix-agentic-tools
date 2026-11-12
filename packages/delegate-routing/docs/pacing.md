@@ -28,7 +28,8 @@ technique key; it does not identify the spending pool. The shared graph supplies
 runtime reach and canonical model scope. Each unique command is called once,
 with a 30-second timeout; safe failure diagnostics retain its pool. Reader
 implementations are unchanged. Collected output includes `routes` with canonical
-model, maker, billing pool and applicable limit IDs.
+model, maker, billing pool and applicable limit IDs. An offered model whose
+maker is unknown retains `maker: null`.
 
 Provider presets supply the exact upstream window keys and gate/pace roles.
 Claude's Fable window applies only to reachable canonical Fable models. The API

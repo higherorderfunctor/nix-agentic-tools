@@ -5,43 +5,7 @@
   techniques,
   budgets ? {},
 }: let
-  adapters = {
-    anthropic-spend = {
-      kind = "metered";
-      readerPool = null;
-      windows = {monthly = ["monthly" "pace"];};
-    };
-    claude-subscription = {
-      kind = "subscription";
-      readerPool = "claude";
-      windows = {
-        fable = ["7d:fable" "pace"];
-        weekly = ["7d" "pace"];
-      };
-    };
-    codex-subscription = {
-      kind = "subscription";
-      readerPool = "codex";
-      windows.weekly = ["7d" "pace"];
-    };
-    opencode-go = {
-      kind = "subscription";
-      readerPool = "opencode";
-      windows = {
-        monthly = ["monthly" "pace"];
-        rolling = ["5h" "gate"];
-        weekly = ["7d" "pace"];
-      };
-    };
-    zai = {
-      kind = "subscription";
-      readerPool = "zai";
-      windows = {
-        rolling = ["5h" "gate"];
-        weekly = ["7d" "pace"];
-      };
-    };
-  };
+  inherit (import ../../ai-module/lib/catalog/types.nix {inherit lib;}) usageAdapters;
   registration = runtime: pool: let
     definition = poolDefinitions.${pool} or {};
     usage = definition.usage or {};
@@ -49,28 +13,24 @@
     credentialKinds = lib.filter (kind: lib.elem kind ["metered" "subscription"]) (builtins.attrNames (definition.credentials or {}));
     kind = lib.head kinds;
     binding = usage.${kind};
-    adapter = adapters.${binding.adapter} or (throw "ai.catalog.pools.${pool}.usage: unknown observation adapter.");
+    adapter = usageAdapters.${binding.adapter} or (throw "ai.catalog.pools.${pool}.usage: unknown observation adapter.");
     node = techniques.${binding.runtime}.${binding.technique} or null;
     budget = budgets.${pool}.window or null;
     metered = kind == "metered";
     models = lib.filter (model: catalog.poolFor runtime model == pool) (catalog.modelsFor runtime);
-    scopedModels = id:
-      if id == "fable"
-      then lib.filter (lib.hasPrefix "claude-fable-") models
-      else models;
-    limits = lib.mapAttrs (id: window: {
+    scopedModels = spec: lib.filter (model: !(spec ? modelPrefix) || lib.hasPrefix spec.modelPrefix model) models;
+    limits = lib.mapAttrs (_: spec: {
+      inherit (spec) role window;
       capacity =
         if metered
         then budget.limit
         else 100;
-      models = scopedModels id;
-      role = lib.elemAt window 1;
+      models = scopedModels spec;
       unit =
         if metered
         then "USD"
         else "percentagePoint";
-      window = lib.head window;
-    }) (lib.filterAttrs (id: _: scopedModels id != []) adapter.windows);
+    }) (lib.filterAttrs (_: spec: scopedModels spec != []) adapter.windows);
     path = "ai.catalog.pools.${pool}.usage";
   in
     if kinds != credentialKinds
@@ -107,9 +67,15 @@ in
     pools = registrations;
     routes = map (model: let
       pool = catalog.poolFor runtime model;
+      # Reach is already checked. Unlike launch selection, observations retain
+      # offered models whose maker is unknown instead of refusing them.
+      identity = builtins.tryEval (catalog.modelFor model).maker;
     in {
       inherit model pool;
-      inherit (catalog.modelFor model) maker;
+      maker =
+        if identity.success
+        then identity.value
+        else null;
       limits = builtins.attrNames (lib.filterAttrs (_: limit: lib.elem model limit.models) registrations.${pool}.limits);
     }) (catalog.modelsFor runtime);
   })
