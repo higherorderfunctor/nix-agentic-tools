@@ -17,10 +17,13 @@
     ai = import ../../../../lib/ai {lib = extLib;};
     hm = prev.hm or {dag = import ../../../../lib/hm-dag.nix {lib = extLib;};};
   });
+  # Keep the transformed module body and arguments while adding static facts.
+  transformed =
+    (extLib.ai.app.hmTransform (import ../../lib/mkClaude.nix {
+      lib = extLib;
+      # This flake's build unless the overlay is applied (ai.internal.packages).
+      pkgs = pkgs // {ai = config.ai.internal.packages;};
+    }))
+    args;
 in
-  (extLib.ai.app.hmTransform (import ../../lib/mkClaude.nix {
-    lib = extLib;
-    # This flake's build unless the overlay is applied (ai.internal.packages).
-    pkgs = pkgs // {ai = config.ai.internal.packages;};
-  }))
-  args
+  transformed // {imports = (transformed.imports or []) ++ [../catalog.nix];}
