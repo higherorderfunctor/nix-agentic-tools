@@ -54,4 +54,6 @@ def rank(snapshot, policy=None):
             "stale": stale, "usage_state": "ready" if value and not uncertain else "out",
         })
     answer.sort(key=lambda row: (-row["score"], {"ready": 0, "out": 3}[row["usage_state"]], row["pool"], row["model"]))
-    return dict(snapshot, diagnostics=notes, entries=answer)
+    routes = [{**row, "limits": sorted(set(row["limits"]))} for row in snapshot["routes"]]
+    routes.sort(key=lambda row: (row["pool"], row["model"]))
+    return dict(snapshot, diagnostics=notes, entries=answer, routes=routes)

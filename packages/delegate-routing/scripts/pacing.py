@@ -19,13 +19,17 @@ def rank(snapshot, policy=None):
         weights[pool] = weight
     now = snapshot["asOf"]
     entries, diagnostics = [], list(snapshot["diagnostics"])
-    for route in sorted(snapshot["routes"], key=lambda r: (r["pool"], r["model"])):
+    routes = sorted(
+        ({**route, "limits": sorted(set(route["limits"]))} for route in snapshot["routes"]),
+        key=lambda route: (route["pool"], route["model"]),
+    )
+    for route in routes:
         pool = route["pool"]
         limits = {item["id"]: item for item in snapshot["pools"][pool]["limits"]}
         # A saved route may not escape its registered canonical model scope.
         if set(route["limits"]) != {key for key, item in limits.items() if route["model"] in item["models"]}:
             raise ValueError("invalid-route-limit")
-        drawn = [limits[key] for key in sorted(set(route["limits"])) if limits[key]["enforced"] is not False]
+        drawn = [limits[key] for key in route["limits"] if limits[key]["enforced"] is not False]
         paced, blocked, unknown = [], [], []
         stale = False
         for limit in drawn:
@@ -44,6 +48,7 @@ def rank(snapshot, policy=None):
         base, binding = min(paced, default=(None, None))
         pace, available = base, None
         if blocked:
+            # A known blocker proves zero even alongside unknown evidence.
             pace, binding = 0.0, min(key for key, _ in blocked)
             times = [time for _, time in blocked]
             if all(time is not None and time > now for time in times):
@@ -60,9 +65,6 @@ def rank(snapshot, policy=None):
             if drawn or not any(item.get("pool") == pool and item["reason"] == "missing-capture" for item in snapshot["diagnostics"]):
                 diagnostics.append({"pool": pool, "model": route["model"], "reason": "uncertain-allowance", "limits": unknown})
         state = "ready" if pace is not None and pace > 0 and not unknown else "out"
-        if unknown:
-            # A known blocker still proves zero; otherwise pace is unmeasured.
-            pace = 0.0 if blocked else None
         entries.append({
             "available_at": available, "base_pace": None if unknown else base,
             "binding_limit": binding, "cost": None, "expiring": None,
@@ -74,4 +76,4 @@ def rank(snapshot, policy=None):
     # Only ready/out occur in this allowance preview; credit/reset states wait
     # for their observations and production consumer.
     entries.sort(key=lambda entry: (-entry["score"], entry["usage_state"] != "ready", entry["pool"], entry["model"]))
-    return {**snapshot, "entries": entries, "diagnostics": diagnostics}
+    return {**snapshot, "routes": routes, "entries": entries, "diagnostics": diagnostics}

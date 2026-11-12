@@ -144,3 +144,15 @@ against normalized frozen envelopes and literal expectations: uncapped 84, idle
 pool/model ties. It also checks scope isolation, all-blocker return time and
 byte-identical offline CLI output. Bank capacity, real grants, credit scores and
 costs remain incomplete, and no reset executor is included.
+
+The `delegate-routing-allowance-output` check verifies the delivered output
+contract through the standalone script, Home Manager, devenv and manual content
+package. It rejects dropped zero routes, unknown observations presented as
+exhaustion, earliest-blocker return times and unstable route ordering. Saved
+route-bearing snapshots emit canonical pool/model route order and sorted limit
+IDs as well as ranked entries; input route order does not change JSON bytes.
+Missing-capture diagnostics remain pool-level when no limits are registered;
+registered unknown limits identify the affected model and limits. A known
+blocker alongside an unknown limit preserves zero pace and the known binding
+limit, but cannot promise a return time. CLI help and JSON both identify the
+allowance preview; null credits/resets do not establish full bank readiness.

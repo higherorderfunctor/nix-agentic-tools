@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect allowance observations; bank, reset, credit and cost support is incomplete."""
+"""Inspect allowance-preview observations and every configured reachable route."""
 
 import argparse
 import importlib.util
@@ -43,7 +43,11 @@ def collect(manifest, now, reader_shell):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Diagnostic preview only: bank, reset, credit and cost support is incomplete. "
+        "This command does not select models or redeem resets.",
+    )
     sources = parser.add_mutually_exclusive_group(required=False)
     sources.add_argument("--snapshot", type=Path, help="Offline saved captures; no Reader is executed")
     sources.add_argument("--manifest", type=Path, help="Catalog-bound registrations")

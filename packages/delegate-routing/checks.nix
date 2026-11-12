@@ -9,6 +9,22 @@
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
   checks = {
+    # Rejects dropped zero/unknown routes, earliest-blocker return times,
+    # unstable JSON and a preview advertised as complete bank/credit readiness.
+    delegate-routing-allowance-output =
+      pkgs.runCommand "delegate-routing-allowance-output" {
+        nativeBuildInputs = [pkgs.python3];
+        commandDevenv = config.checks.module-delegate-routing-devenv-observation-command.command;
+        commandHm = config.checks.module-delegate-routing-hm-observation-command.command;
+        manual = config.checks.module-delegate-routing-hm-observation-command.manual;
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export ALLOWANCE_TEST_ROOT="$TMPDIR"
+        python3 -I ${./checks/pacing}/test_allowance_output.py ${./scripts} "$commandDevenv" "$commandHm" "$manual"
+        touch "$out"
+      '';
+
     # Rejects capped/idle shortcuts, paced rolling gates, backing-gated weights,
     # discarded zero routes and reference dependence on production arithmetic.
     delegate-routing-allowance-ranking =
