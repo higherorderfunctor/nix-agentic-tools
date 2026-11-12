@@ -821,7 +821,7 @@ index 0000000..aeb6732
 +}
 diff --git a/internal/config/passthrough_test.go b/internal/config/passthrough_test.go
 new file mode 100644
-index 0000000..b380536
+index 0000000..bd7dd71
 --- /dev/null
 +++ b/internal/config/passthrough_test.go
 @@ -0,0 +1,208 @@
@@ -1002,7 +1002,7 @@ index 0000000..b380536
 +		{"non HTTP", "https://upstream.example/base", "ftp://private.invalid/sensitive", "base-url"},
 +		{"query", "https://upstream.example/base", "https://private.invalid/?sensitive", "base-url"},
 +		{"relative base", "https://upstream.example/base", "/sensitive", "base-url"},
-+		{"typed key", "api-key: first", "api-key: {}", "group field type"},
++		{"typed key", "api-key: first", "api-key: {}", "unknown or invalid field"},
 +		{"userinfo", "https://upstream.example/base", "https://sensitive@private.invalid", "base-url"},
 +	}
 +	for _, tc := range cases {
