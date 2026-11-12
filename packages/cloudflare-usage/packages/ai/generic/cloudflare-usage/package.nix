@@ -1,14 +1,11 @@
-{pkgs, ...}: let
-  source = ../../../../src/cloudflare-usage.py;
-in
-  import ../../../../../../lib/strict-shell-application.nix pkgs {
-    name = "cloudflare-usage";
-    passthru = {inherit source;};
-    text = ''
-      exec ${pkgs.python3}/bin/python3 ${source} "$@"
-    '';
-    meta = {
+{pkgs, ...}:
+(pkgs.delegate-routing-content.mkUsageScript "cloudflare-usage"
+  [pkgs.curl pkgs.jq pkgs.python3]
+  [../../../../src/cloudflare-usage.sh]).overrideAttrs (old: {
+  meta =
+    (old.meta or {})
+    // {
       description = "Read daily Cloudflare Workers AI neurons through CPA";
       mainProgram = "cloudflare-usage";
     };
-  }
+})

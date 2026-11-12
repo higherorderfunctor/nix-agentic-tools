@@ -102,6 +102,7 @@ class UsageTests(unittest.TestCase):
         self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zai": ZAI})
         self.resets = copy.deepcopy(CODEX_RESETS)
         self.reset_failure = None
+        self.management_redirect = None
         self.management_status = 200
         self.envelope = None
         self.raw = None
@@ -124,6 +125,11 @@ class UsageTests(unittest.TestCase):
                 size = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(size)) if size else None
                 owner.requests.append((self.command, self.path, dict(self.headers), body))
+                if owner.management_redirect:
+                    self.send_response(302)
+                    self.send_header("Location", owner.management_redirect)
+                    self.end_headers()
+                    return
                 if self.path == "/status":
                     response = owner.status_body
                 elif self.path == "/v0/management/monitoring/analytics":
@@ -148,7 +154,7 @@ class UsageTests(unittest.TestCase):
                         if owner.reset_failure == "malformed":
                             response = {}
                     else:
-                        vendor = ("zai" if "api.z.ai" in body["url"] else "opencode" if "opencode.ai" in body["url"]
+                        vendor = ("cloudflare" if "api.cloudflare.com" in body["url"] else "zai" if "api.z.ai" in body["url"] else "opencode" if "opencode.ai" in body["url"]
                                   else "claude" if "anthropic.com" in body["url"] else "codex")
                         response = owner.envelope or {"status_code": 200, "body": json.dumps(owner.usage[vendor])}
                 else:
@@ -178,7 +184,7 @@ class UsageTests(unittest.TestCase):
 
     def run_helper(self, vendor, cpa=True, route=None, **overrides):
         env = self.env.copy()
-        routed = vendor in ("opencode", "zai")
+        routed = vendor in ("cloudflare", "opencode", "zai")
         route = route or ("claude" if routed else vendor)
         if cpa:
             env.update({f"DELEGATE_USAGE_CPA_{route.upper()}_URL": self.url,
@@ -208,7 +214,7 @@ class UsageTests(unittest.TestCase):
             self.assertEqual(set(window), {"usedPercent", "remainingPercent", "resetsAt", "status", "windowSeconds"})
             self.assertIsInstance(window["windowSeconds"], (int, float))
             seconds = window["windowSeconds"]
-            self.assertEqual(name.split(":", 1)[0], {18000: "5h", 604800: "7d"}.get(seconds, "monthly" if 2419200 <= seconds <= 2678400 else f"{seconds}s"))
+            self.assertEqual(name.split(":", 1)[0], "daily" if vendor == "cloudflare" else {18000: "5h", 604800: "7d"}.get(seconds, "monthly" if 2419200 <= seconds <= 2678400 else f"{seconds}s"))
             if vendor == "claude":
                 self.assertEqual(seconds, 18000 if name == "5h" else 604800)
             self.assertIsInstance(window["usedPercent"], (int, float))
