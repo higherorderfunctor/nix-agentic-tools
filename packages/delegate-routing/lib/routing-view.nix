@@ -91,6 +91,8 @@
       if lib.trim node.modelArg == ""
       then throw "ai.programs.delegate-routing.runtimes.${target}.techniques.${lib.strings.escapeNixIdentifier name}.modelArg: name the model value spelling for techniques that pin model and effort"
       else
+        # Forcing the maker refuses a concrete launch model the shared catalog
+        # declares no maker for; a pattern-only launch has no id to check.
         builtins.seq (
           if lib.trim id == ""
           then null
