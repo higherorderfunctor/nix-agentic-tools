@@ -218,23 +218,23 @@ highest id matching the pattern. Consumers selecting Kimchi models declare the
 corresponding vendor families in their delegate-routing configuration.
 
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
-catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
-(`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
-get no preset. They come from per-model research, and every tier is provisional:
-whenever a consumer `{families}` block renders an `opencode-go` family, one line
-under the tables says so. Each family is named `go-` plus the exact Go id,
-except `go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research
-found share a role. The `go-` prefix keeps them apart from hand-written families
-such as `kimi-k3`. Presets render only when a runtime selects them, for example
-`models = [{vendors = ["opencode-go"];}]`; a tier-only selector picks them up
-like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
-field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
-fact: the list-price dollars that empty the account's monthly pool, so a lower
-limit weighs more. The skill always shows a Pool column, empty when a family has
-no pool text, alongside each reach’s registered pool label. Set
-`opencodeGo.pool = "<pool>"` to bind every generated preset to that registered
-pool on each runtime that selects the `opencode-go` vendor. Setting
-`opencodeGo.plan` alone does not bind a pool. When a plan is set without
+catalog that CPA's `opencode-go` vendor serves; ids whose shared-catalog maker
+is Anthropic, OpenAI or Zhipu get no preset, because the native families own
+their guidance. They come from per-model research, and every tier is
+provisional: whenever a consumer `{families}` block renders an `opencode-go`
+family, one line under the tables says so. Each family is named `go-` plus the
+exact Go id, except `go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which
+the research found share a role. The `go-` prefix keeps them apart from
+hand-written families such as `kimi-k3`. Presets render only when a runtime
+selects them, for example `models = [{vendors = ["opencode-go"];}]`; a tier-only
+selector picks them up like any other vendor's. Setting `opencodeGo.plan` fills
+each preset's `pool` field from the plan's documented monthly limit in the
+cliproxyapi `opencodeGo` fact: the list-price dollars that empty the account's
+monthly pool, so a lower limit weighs more. The skill always shows a Pool
+column, empty when a family has no pool text, alongside each reach’s registered
+pool label. Set `opencodeGo.pool = "<pool>"` to bind every generated preset to
+that registered pool on each runtime that selects the `opencode-go` vendor.
+Setting `opencodeGo.plan` alone does not bind a pool. When a plan is set without
 `opencodeGo.pool`, the module refuses evaluation: the Go preset families would
 have no pool and rank on fit only. Set it to a registered pool key, for example
 `"opencode-go"`; an unregistered key also fails evaluation. Hand-written family
