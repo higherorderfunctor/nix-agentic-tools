@@ -317,10 +317,12 @@ devenv. Ordinary consumer agent entries override these files. The filename and
 frontmatter `name` are the family name, unique across vendors.
 
 For families selected by `runtimes.claude.models`, `example.claude` wins;
-otherwise the highest matching id comes from Claude's extracted catalog plus the
-configured inference lowering's published picker rows. Version segments compare
-numerically. An unresolved family gets no file and skips the generated agent
-technique in its Launch route. Files and routes share the resolved set.
+otherwise the highest matching id comes from the shared catalog's models
+reachable on Claude. Without catalog runtime reach, resolution uses Claude's
+extracted catalog plus the inference lowering's published picker rows. Version
+segments compare numerically. An unresolved family gets no file and skips the
+generated agent technique in its Launch route. Files and routes share the
+resolved set.
 
 `families.<vendor>.<family>.defaultEffort` uses the package scale
 `minimal < low < medium < high < xhigh < max`, shared with the helper manifest.
