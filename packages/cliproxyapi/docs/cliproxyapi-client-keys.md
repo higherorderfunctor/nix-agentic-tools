@@ -43,9 +43,9 @@ of another client stays allowed, but once named client keys set the allowlist,
 that key needs its own hand-written entry.
 
 A route selecting `api = "passthrough"` grants the named JSON group through
-`passthrough-<lowercase-name>`, `kind = "apikey"` and its base URL reference.
-The API may be omitted when it is the credential's sole API. Groups sharing a
-base URL remain separate grants. The client key and rules stay available for
+`passthrough-<lowercase-name>`, `kind = "apikey"` and its literal base URL. The
+API may be omitted when it is the credential's sole API. Groups sharing a base
+URL remain separate grants. The client key and rules stay available for
 `POST /v1/passthrough`, while the entire route is omitted from harness inference
 credentials and model lists. See `cliproxyapi-passthrough.md` for the named Nix
-shape, envelope options and secret URL references.
+shape, envelope options and secret path references.

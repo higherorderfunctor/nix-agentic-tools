@@ -37,10 +37,6 @@
     };
   in {
     "access.key-allowlist[].credentials[].base-urls" = narrowing;
-    "access.key-allowlist[].credentials[].base-urls[]" = {
-      type = "string";
-      refine = {types, ...}: redact.types.maybeRedacted types.str;
-    };
     "access.key-allowlist[].credentials[].ids" = narrowing;
     # The allowlist patch matches a rule only when its kind normalizes to a
     # credential kind (sdk/cliproxy/auth/key_allowlist.go, through
@@ -49,13 +45,9 @@
       type = "string";
       refine = {types, ...}: types.enum ["apikey" "oauth"];
     };
-    "api-keys.passthrough[].base-url" = {
-      type = "string";
-      refine = _: providers.passthroughBaseUrlType;
-    };
     "api-keys.passthrough[].path" = {
       type = "string";
-      refine = _: providers.passthroughPathType;
+      refine = {types, ...}: redact.types.maybeRedacted types.nonEmptyStr;
     };
     "client.codex.web-search-result-cache.ttl" = duration;
     # The v8 loader refuses any other value (internal/config/config_v8.go,

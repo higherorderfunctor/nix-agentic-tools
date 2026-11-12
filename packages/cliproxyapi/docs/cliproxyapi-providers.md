@@ -157,11 +157,12 @@ harness asks. Values remain outside generated store files and evaluation output.
 
 The additional `passthrough` API serves non-chat JSON upstreams through
 `POST /v1/passthrough`. It requires per-API `models = [{ name; alias?; }]`;
-credential-wide string models do not apply. Its `base-url` and required `path`
-accept redact references, and optional `unwrap` and `usage-path` configure
-response envelopes. The same table lowers these fields and the credential's
-priority. Names always receive the `passthrough-` prefix after lowercasing. Nix
-refuses lowercase-name duplicates between named credentials; shared URLs are
-allowed for these groups. Passthrough routes are excluded from normalized
-harness credentials while their client keys and CPA rules remain. The complete
-Nix example is in `cliproxyapi-passthrough.md`.
+credential-wide string models do not apply. Its `base-url` uses the existing
+HTTP(S) URL type; required `path` accepts a nonempty string or redact reference.
+Optional `unwrap` and `usage-path` are nonempty strings configuring response
+envelopes. CPA validates resolved values and group-name uniqueness at load. The
+same table lowers these fields and the credential's priority. Names always
+receive the `passthrough-` prefix after lowercasing; shared URLs are allowed for
+these groups. Passthrough routes are excluded from normalized harness
+credentials while their client keys and CPA rules remain. The complete Nix
+example is in `cliproxyapi-passthrough.md`.

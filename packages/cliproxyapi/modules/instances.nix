@@ -55,14 +55,6 @@ backend: {
         "ai.cliproxyapi.instances.${name}.credentials.${provider}.apiKey.apis.${api}.base-url `${url}` is also the base URL of another settings.api-keys.${family} block, which the provider's allowlist rule would reach too. Give each block its own base URL.")
       (harnessApis definition))
     (providersLib.apiKeys instance))
-    # Group identities are case-insensitive; named credentials are ASCII.
-    ++ lib.concatLists (lib.mapAttrsToList (api: entry: let
-      names = builtins.attrNames (lib.filterAttrs (_: definition: definition.apis.${api} != null) (providersLib.apiKeys instance));
-      normalized = map lib.toLower names;
-    in
-      lib.optional (!entry.harnessApi && lib.length normalized != lib.length (lib.unique normalized))
-      "ai.cliproxyapi.instances.${name}.credentials: duplicate names after lowercase normalization for API `${api}`.")
-    providersLib.apis)
     # API-key names become CPA compatibility provider identities.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));

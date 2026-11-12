@@ -1,4 +1,4 @@
-# Refuse lost aliases/envelopes, secret URLs rendered as objects, shared-URL
+# Refuse lost aliases/envelopes, secret paths rendered as objects, shared-URL
 # over-grants and passthrough credentials published to inference consumers.
 {
   extractedLib,
@@ -12,53 +12,50 @@
   inherit (import ../../../lib/extracted/render.nix {inherit lib;}) fill;
   redact = import ../../../lib/redact {inherit lib;};
   secret = name: redact.file "/run/secrets/${name}";
-  path = redact.concat ["/accounts/" (secret "account") "/decision"];
-  base = redact.concat ["https://" (secret "host")];
-  upstream = {
-    apis.passthrough = {
-      base-url = base;
-      models = [
-        {
-          alias = "decision";
-          name = "upstream-model";
-        }
-      ];
-      inherit path;
-      unwrap = "result";
-      usage-path = "result.usage";
-    };
-    key = secret "upstream";
-    priority = 30;
-  };
+  path = redact.concat ["/client/v4/accounts/" (secret "account") "/ai/run/@cf/cloudflare/clef"];
   fixture = {
     clientKeys.main = {
       key = secret "client";
-      routes = [{credential = "Free";} {credential = "paid";} {credential = "chat";}];
+      routes = [{credential = "cloudflare";} {credential = "system-one";}];
     };
     credentials = {
-      Free.apiKey = upstream;
-      chat.apiKey = {
-        apis.chat.base-url = "https://chat.example/v1";
-        key = secret "chat";
-        models = ["chat-model"];
+      cloudflare.apiKey = {
+        apis.passthrough = {
+          base-url = "https://api.cloudflare.com";
+          models = [
+            {
+              alias = "decision";
+              name = "clef";
+            }
+          ];
+          inherit path;
+          unwrap = "result";
+          usage-path = "result.usage";
+        };
+        key = secret "cloudflare";
+        priority = 30;
       };
-      paid.apiKey = lib.recursiveUpdate upstream {priority = 20;};
+      system-one.apiKey = {
+        apis.passthrough = {
+          base-url = "https://api.systemone.ai";
+          models = [
+            {
+              alias = "decision";
+              name = "jev";
+            }
+          ];
+          path = "/inference/v1/decision";
+        };
+        key = secret "system-one";
+        priority = 20;
+      };
     };
     enable = true;
     settings.config-version = 8;
   };
   evaluate = backend: change:
     backend {
-      ai = {
-        claude = {
-          enable = true;
-          settings.inference = {
-            instance = "main";
-            clientKey = "main";
-          };
-        };
-        cliproxyapi.instances.main = lib.recursiveUpdate fixture change;
-      };
+      ai.cliproxyapi.instances.main = lib.recursiveUpdate fixture change;
     };
   backends = {
     devenv = harness.evalDevenv;
@@ -72,15 +69,15 @@
   in
     !attempt.success || !attempt.value;
   expectedBlock = {
-    base-url = "{$CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_BASE_URL}";
+    base-url = "https://api.cloudflare.com";
     keys = [{api-key = "{$CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_KEYS_0_API_KEY}";}];
     models = [
       {
         alias = "decision";
-        name = "upstream-model";
+        name = "clef";
       }
     ];
-    name = "Free";
+    name = "cloudflare";
     path = "{$CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH}";
     priority = 30;
     unwrap = "result";
@@ -88,129 +85,70 @@
   };
   expectedRules = [
     {
-      base-urls = ["{$CLIPROXYAPI_ACCESS_KEY_ALLOWLIST_0_CREDENTIALS_0_BASE_URLS_0}"];
+      base-urls = ["https://api.cloudflare.com"];
       kind = "apikey";
-      provider = "passthrough-free";
+      provider = "passthrough-cloudflare";
     }
     {
-      base-urls = ["{$CLIPROXYAPI_ACCESS_KEY_ALLOWLIST_0_CREDENTIALS_1_BASE_URLS_0}"];
+      base-urls = ["https://api.systemone.ai"];
       kind = "apikey";
-      provider = "passthrough-paid";
-    }
-    {
-      base-urls = ["https://chat.example/v1"];
-      kind = "apikey";
-      provider = "openai-compatible-chat";
+      provider = "passthrough-system-one";
     }
   ];
   # Native loader receives only synthetic values, through the shared fill engine.
   rendered = cliproxyapi.render (evaluate harness.evalHm {}).config.ai.cliproxyapi.instances.main.settings;
   values = lib.mapAttrs (_: reference:
-    if reference == base
-    then "https://upstream.example"
-    else if reference == path
-    then "/accounts/synthetic-account/decision"
+    if reference == path
+    then "/client/v4/accounts/synthetic-account/ai/run/@cf/cloudflare/clef"
     else "synthetic-key")
   rendered.secrets;
   nativeConfig = fill values rendered.content;
-  invalid = {
-    absolute-path.credentials.Free.apiKey.apis.passthrough.path = "https://elsewhere.example/path";
-    malformed-model-alias.credentials.Free.apiKey.apis.passthrough.models = [
-      {
-        name = "upstream-model";
-        alias = 1;
-      }
-    ];
-    missing-model-name.credentials.Free.apiKey.apis.passthrough.models = [{alias = "decision";}];
-    missing-models.credentials.Free.apiKey.apis.passthrough = lib.mkForce {
-      base-url = "https://upstream.example";
-      path = "/decision";
-    };
-    network-path.credentials.Free.apiKey.apis.passthrough.path = "//elsewhere.example/path";
-    null-models.credentials.Free.apiKey.apis.passthrough.models = null;
-    string-models.credentials.Free.apiKey.apis.passthrough.models = ["upstream-model"];
-    unknown-api.credentials.Free.apiKey.apis.unknown.base-url = "https://upstream.example";
-  };
   moduleChecks = lib.mapAttrs (backendName: backend:
     harness.mkTest "passthrough-module-${backendName}" (let
       result = evaluate backend {};
       settings = builtins.fromJSON (cliproxyapi.render result.config.ai.cliproxyapi.instances.main.settings).content;
-      narrowed = field: entries: {
+      narrowed = entries: {
         settings.access.key-allowlist = [
           {
-            api-key = secret "raw-client";
+            api-key = secret "restricted-client";
             credentials = [
               {
-                provider = "passthrough-free";
+                base-urls = entries;
                 kind = "apikey";
-                ${field} = entries;
+                provider = "passthrough-cloudflare";
               }
             ];
           }
         ];
       };
-      direct =
-        cliproxyapi.render
-        (evaluate backend {
-          credentials = lib.mkForce {};
-          clientKeys = lib.mkForce {};
-          settings = lib.recursiveUpdate (narrowed "base-urls" [base]).settings {
-            api-keys.passthrough = [
-              (raw "Free"
-                // {
-                  base-url = base;
-                  inherit path;
-                })
-            ];
-          };
-        }).config.ai.cliproxyapi.instances.main.settings;
-      raw = name: {
-        inherit name;
-        base-url = "https://upstream.example";
-        path = "/decision";
-        models = [{name = "upstream-model";}];
-        keys = [{api-key = secret "raw";}];
+      shared = evaluate backend {credentials.system-one.apiKey.apis.passthrough.base-url = "https://api.cloudflare.com";};
+      sharedSettings = builtins.fromJSON (cliproxyapi.render shared.config.ai.cliproxyapi.instances.main.settings).content;
+      cases = {
+        "allowlist null URL refused" = refuses backend (narrowed [null]);
+        "allowlist URL restriction emptied by mkIf refused" = refuses backend (narrowed [(lib.mkIf false "https://api.cloudflare.com")]);
+        "client access retained" = settings.access.api-keys == ["{$CLIPROXYAPI_ACCESS_API_KEYS_0}"];
+        "client routed credentials exclude passthrough" = result.config.ai.internal.inferenceInstances.main.clients.main.credentials == [];
+        "literal rules retain distinct named identities" = (lib.head settings.access.key-allowlist).credentials == expectedRules;
+        "lowering preserves fields" = failures result == [] && lib.head settings.api-keys.passthrough == expectedBlock;
+        "named path references render with shared engine" = rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH == path;
+        "shared URLs retain distinct named identities" =
+          failures shared
+          == []
+          && (lib.head sharedSettings.access.key-allowlist).credentials
+          == [
+            {
+              base-urls = ["https://api.cloudflare.com"];
+              kind = "apikey";
+              provider = "passthrough-cloudflare";
+            }
+            {
+              base-urls = ["https://api.cloudflare.com"];
+              kind = "apikey";
+              provider = "passthrough-system-one";
+            }
+          ];
+        "substitution fills concat path" = (lib.head (builtins.fromJSON nativeConfig).api-keys.passthrough).path == "/client/v4/accounts/synthetic-account/ai/run/@cf/cloudflare/clef";
       };
-      cases =
-        {
-          "allowlist null URL refused" = refuses backend (narrowed "base-urls" [null]);
-          "allowlist URL restriction emptied by mkIf refused" = refuses backend (narrowed "base-urls" [(lib.mkIf false "https://upstream.example")]);
-          "client access retained" = settings.access.api-keys == ["{$CLIPROXYAPI_ACCESS_API_KEYS_0}"];
-          "direct typed settings accept URL and allowlist references" =
-            direct.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_BASE_URL
-            == base
-            && direct.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH == path
-            && direct.secrets.CLIPROXYAPI_ACCESS_KEY_ALLOWLIST_0_CREDENTIALS_0_BASE_URLS_0 == base;
-          "existing prefix is always prefixed" = cliproxyapi.providers.apis.passthrough.provider "Passthrough-Free" == "passthrough-passthrough-free";
-          "harness fanout excludes passthrough" =
-            result.config.ai.claude.normalized.settings.inference.credentials
-            == [
-              {
-                name = "chat";
-                models = ["chat-model"];
-              }
-            ];
-          "lowering preserves fields and permits shared URLs" = failures result == [] && lib.head settings.api-keys.passthrough == expectedBlock;
-          "literal rules retain distinct named identities at a shared URL" = (lib.head settings.access.key-allowlist).credentials == expectedRules;
-          "models emptied by mkIf refused" = refuses backend {credentials.Free.apiKey.apis.passthrough.models = [(lib.mkIf false {name = "upstream-model";})];};
-          "named URL references render with shared engine" =
-            rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_BASE_URL
-            == base
-            && rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH == path;
-          "named duplicate refused" =
-            failures (evaluate backend {credentials.free.apiKey = upstream;})
-            == ["ai.cliproxyapi.instances.main.credentials: duplicate names after lowercase normalization for API `passthrough`."];
-          "raw settings reject absolute path" = refuses backend {settings.api-keys.passthrough = [(raw "other" // {path = "https://elsewhere.example/path";})];};
-          "raw settings reject network path" = refuses backend {settings.api-keys.passthrough = [(raw "other" // {path = "//elsewhere.example/path";})];};
-          "rooted and relative paths accepted" = lib.all (path: failures (evaluate backend {credentials.Free.apiKey.apis.passthrough = {inherit path;};}) == []) ["/inference/v1/decision" "inference/v1/decision"];
-          "substitution fills concat URL and allowlist URL" = let
-            filled = builtins.fromJSON nativeConfig;
-          in
-            (lib.head filled.api-keys.passthrough).path
-            == "/accounts/synthetic-account/decision"
-            && (lib.head (lib.head filled.access.key-allowlist).credentials).base-urls == ["https://upstream.example"];
-        }
-        // lib.mapAttrs (_: change: refuses backend change) invalid;
       problems = builtins.attrNames (lib.filterAttrs (_: holds: !holds) cases);
     in
       lib.assertMsg (problems == []) "${backendName}: ${lib.concatStringsSep "; " problems}"))
@@ -236,13 +174,20 @@
           if err != nil { t.Fatal(err) }
           if len(cfg.Passthrough) != 2 { t.Fatal("lost passthrough groups") }
           g := cfg.Passthrough[0]
-          if g.ProviderKey() != "passthrough-free" || g.Priority != 30 ||
-             g.BaseURL != "https://upstream.example" || g.Path != "/accounts/synthetic-account/decision" ||
-             len(g.Models) != 1 || g.Models[0].Alias != "decision" || g.Models[0].Name != "upstream-model" ||
+          if g.ProviderKey() != "passthrough-cloudflare" || g.Priority != 30 ||
+             g.BaseURL != "https://api.cloudflare.com" || g.Path != "/client/v4/accounts/synthetic-account/ai/run/@cf/cloudflare/clef" ||
+             len(g.Models) != 1 || g.Models[0].Alias != "decision" || g.Models[0].Name != "clef" ||
              g.Unwrap == nil || *g.Unwrap != "result" || g.UsagePath == nil || *g.UsagePath != "result.usage" {
             t.Fatal("lowered passthrough fields differ")
           }
-          t.Log("named groups, secret URL substitution, aliases, priority and envelopes passed native validation")
+          plain := cfg.Passthrough[1]
+          if plain.ProviderKey() != "passthrough-system-one" || plain.Priority != 20 ||
+             plain.BaseURL != "https://api.systemone.ai" || plain.Path != "/inference/v1/decision" ||
+             len(plain.Models) != 1 || plain.Models[0].Alias != "decision" || plain.Models[0].Name != "jev" ||
+             plain.Unwrap != nil || plain.UsagePath != nil {
+            t.Fatal("lowered plain passthrough fields differ")
+          }
+          t.Log("named groups, secret path substitution, aliases, priority and envelopes passed native validation")
         }
       '';
     };

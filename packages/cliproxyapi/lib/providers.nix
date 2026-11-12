@@ -109,22 +109,21 @@
       modelObjects = true;
       options = {
         path = mkOption {
-          type = passthroughPathType;
+          type = redact.types.maybeRedacted types.nonEmptyStr;
           description = "Upstream path, optionally containing redact references.";
         };
         unwrap = mkOption {
-          type = types.nullOr objectPathType;
+          type = types.nullOr types.nonEmptyStr;
           default = null;
           description = "Object-key path of the result object to return.";
         };
         usage-path = mkOption {
-          type = types.nullOr objectPathType;
+          type = types.nullOr types.nonEmptyStr;
           default = null;
           description = "Object-key path of usage in the original response; unset uses usage.";
         };
       };
       provider = name: "passthrough-" + lib.toLower name;
-      urlType = passthroughBaseUrlType;
     };
     # The codex executor's cloaking dresses requests as the Codex CLI for
     # ChatGPT's backend; a third-party Responses endpoint wants them as sent.
@@ -143,13 +142,6 @@
   # no-op, so a vendor's refusal sees the name CPA serves. The interior is free.
   modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
-  objectPathType = types.strMatching "[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*";
-  passthroughBaseUrlType = redact.types.maybeRedacted (types.strMatching "https?://[^/?#@[:space:]]+(/[^?#[:space:]]*)?");
-  # Refuse URL/network-path references; rooted upstream paths are supported.
-  passthroughPathType = redact.types.maybeRedacted (types.addCheck types.nonEmptyStr (path:
-    !lib.hasPrefix "//" path
-    && builtins.match "[A-Za-z][A-Za-z0-9+.-]*:.*" path == null
-    && builtins.match ".*[?#[:space:]].*" path == null));
   passthroughModelType = types.submodule {
     options = {
       alias = mkOption {
@@ -174,7 +166,7 @@
                 options =
                   {
                     base-url = mkOption {
-                      type = entry.urlType or baseUrlType;
+                      type = baseUrlType;
                       description = "The upstream base URL for this API.";
                     };
                     models = mkOption ({
@@ -376,7 +368,6 @@
       '';
     }));
 in {
-  inherit passthroughBaseUrlType passthroughPathType;
   inherit apiKeys apis clientKeyType credentialType literalHeader modelsOf opencodeGo route rule served vendors;
   lower = pkgs: credentials:
     lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:

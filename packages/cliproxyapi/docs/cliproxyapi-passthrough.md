@@ -166,21 +166,18 @@ clientKeys.decisions = {
 };
 ```
 
-`base-url` and `path` accept literal public values or redact references,
-including concatenations. Supply secret account identifiers through references.
-Direct typed `settings.api-keys.passthrough` supports the same URL references,
-and allowlist `base-urls` elements accept them while retaining nonempty-list and
-null refusal. The shared secrets engine resolves references at service start; no
-secret value is read during evaluation. CPA validates resolved URLs and paths
-without printing them. Literal paths reject absolute URLs and `//` references
-and permit rooted components such as `/inference/v1/decision`.
+`base-url` uses the existing HTTP(S) URL type. `path` accepts a nonempty string
+or a redact reference, including concatenations; supply secret account
+identifiers through references. Optional `unwrap` and `usage-path` take nonempty
+strings. The shared secrets engine resolves path references at service start; no
+secret value is read during evaluation. CPA validates the resolved URL, path and
+envelope-path grammar without printing supplied values.
 
 Named rules use `provider = "passthrough-<lowercase-name>"`, `kind = "apikey"`
-and the selected base URL reference. Free and paid groups may share that URL;
-their distinct names keep each rule scoped to its group. Nix checks lowercase
-name collisions between named credentials. CPA checks all group names at
-startup, including raw settings blocks. Existing families retain their
-shared-base-URL refusal.
+and the selected literal base URL. Free and paid groups may share that URL;
+their distinct names keep each rule scoped to its group. CPA checks group-name
+uniqueness at load. Existing families retain their shared-base-URL refusal.
+Allowlist URL restrictions retain their nonempty-list and null refusal.
 
 Passthrough routes retain their client key and CPA allowlist rules but
 contribute no credential to `inferenceInstances` or a harness's normalized
@@ -188,7 +185,10 @@ credentials or model picker. A client can use the same key directly with
 `POST /v1/passthrough`. No vendor defaults, delegate-routing families or model
 lists are added.
 
-`cliproxyapi-passthrough-module` covers both module backends, literal lowering,
-secret URL render/substitution, path refusal, model shape, normalized
-duplicates, nonempty merged lists and inference fanout. It also loads a
-synthetic rendered config through CPA in CI.
+`cliproxyapi-passthrough-module` covers both module backends with one instance,
+a System One plain-response group, a Cloudflare wrapped-response group and one
+client key. It checks literal URL lowering, secret account-path
+render/substitution, aliases, priorities, allowlist isolation at shared URLs,
+retained client access, null and merged-empty URL restriction refusal, and
+exclusion from routed inference credentials. CI loads the rendered config
+through CPA's native validators with synthetic keys and an account identifier.
