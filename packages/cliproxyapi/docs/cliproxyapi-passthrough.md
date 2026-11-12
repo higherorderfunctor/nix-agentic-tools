@@ -52,13 +52,13 @@ selected object is returned as its original JSON span.
 
 Envelope options apply per group, so one alias can fail over between plain and
 wrapped APIs. `unwrap` and `usage-path` are nonempty dot-separated object-key
-paths (letters, digits, `_` and `-`); arrays, wildcards and query syntax are
-refused. `usage-path` defaults to top-level `usage` and always refers to the
-original response, before unwrap. An explicitly configured missing usage path
-fails as 502; missing default usage records zero tokens. An unwrap selecting
-anything other than an object, malformed JSON and malformed present usage
-counters fail as 502. HTTP non-2xx failures keep their status without envelope
-parsing.
+paths whose segments start with a letter or `_` and contain letters, digits, `_`
+and `-`; arrays, wildcards and query syntax are refused. `usage-path` defaults
+to top-level `usage` and always refers to the original response, before unwrap.
+An explicitly configured missing usage path fails as 502; missing default usage
+records zero tokens. An unwrap selecting anything other than an object,
+malformed JSON and malformed present usage counters fail as 502. HTTP non-2xx
+failures keep their status without envelope parsing.
 
 For example, a plain System One-shaped response is
 `{"model":"upstream-model","answers":[],"usage":{"input_tokens":7,"output_tokens":3}}`.
