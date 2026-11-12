@@ -209,7 +209,7 @@ func natV8(legacy string) (string, bool) {
 
 // An upstream key family: v8 lists groups that carry `name`, `base-url` and
 // provider group fields from isV8GroupKeyField, each holding `keys`.
-// openai-compatibility keeps its own group struct and lists its
+// openai-compatibility and passthrough keep their own group structs and list
 // `api-key-entries` as `keys`. Neither layout reads `auth-index`.
 func (x *natExtractor) family(field reflect.StructField, owner reflect.Type, current string) {
 	base := "api-keys." + current
