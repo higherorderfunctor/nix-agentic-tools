@@ -24,7 +24,10 @@
         ${lib.getExe pkgs.npm-lockfile-fix} "$out/package-lock.json"
       '';
     };
-    patches = [../../../../patches/default-theme.patch];
+    patches = [
+      ../../../../patches/default-theme.patch
+      ../../../../patches/passthrough-view.patch
+    ];
     # A release that moves the patched context fails here, loudly.
     patchFlags = ["-p1" "--fuzz=0"];
   };
@@ -45,14 +48,22 @@
     npmDepsFetcherVersion = 2;
     npmDepsHash = sources.npmDepsHash or lib.fakeHash;
     env.VERSION = version;
-    # The patch's store test; upstream's full suite has a date-dependent
-    # failure (DemoPage.test.tsx) on 1.14.7.
+    # The patches' own tests and the upstream tests they change; upstream's full
+    # suite has a date-dependent failure (DemoPage.test.tsx) on 1.14.7.
     doCheck = true;
     checkPhase = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       runHook preCheck
-      npm --workspace apps/web exec -- vitest run src/stores/useThemeStore.test.ts
+      npm --workspace apps/web exec -- vitest run \
+        src/components/providers/PassthroughTable/PassthroughTable.test.tsx \
+        src/features/aiProviders/AiProvidersPage.test.tsx \
+        src/features/monitoring/hooks/useMonitoringData.requests.test.tsx \
+        src/features/monitoring/services/monitoringMetaService.test.ts \
+        src/features/pageRefresh.test.tsx \
+        src/features/usage-analytics/useUsageAnalytics.test.tsx \
+        src/services/api/passthrough.test.ts \
+        src/stores/useThemeStore.test.ts
       runHook postCheck
     '';
     installPhase = ''
