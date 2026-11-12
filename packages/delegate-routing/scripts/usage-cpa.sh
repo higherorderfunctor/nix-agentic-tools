@@ -13,6 +13,7 @@ declare -rA delegate_usage_api_keys=(
 )
 
 # All usage techniques and the runtime fixtures read this common schema.
+# shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
   jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" '
     def utc:

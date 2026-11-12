@@ -10,6 +10,7 @@ jq -en --arg limit "${CLOUDFLARE_DAILY_NEURONS_LIMIT:-}" '
 # One UTC snapshot determines both the query date and next midnight.
 delegate_cloudflare_day=$(jq -cn 'now | floor / 86400 | floor | . * 86400')
 
+# shellcheck disable=SC2329 # usage_cpa calls it by name.
 cloudflare_request() {
   jq -c --rawfile account "$CLOUDFLARE_ACCOUNT_ID_FILE" --argjson day "$delegate_cloudflare_day" '
     {auth_index: .auth_index, method: "POST",
@@ -20,6 +21,7 @@ cloudflare_request() {
   ' 2>/dev/null
 }
 
+# shellcheck disable=SC2329 # usage_cpa calls it by name.
 cloudflare_project() {
   local normalized
   normalized=$(jq -ce --rawfile account "$CLOUDFLARE_ACCOUNT_ID_FILE" \
