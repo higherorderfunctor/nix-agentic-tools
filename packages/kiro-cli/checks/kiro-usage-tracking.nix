@@ -17,14 +17,7 @@
       ln -s ${fake} "$out/bin/$name"
     done
   '';
-  # The service selects its mitmproxy through `ai.internal.packages`
-  # (pkgs.ai.generic.mitmproxy), so the fake and the rejected Python 3.13 one
-  # are injected there. A module that fell back to plain `pkgs.mitmproxy` would
-  # read this flake's real build: the fake would never reach the service
-  # command, and both `rejectedWith` cases below would pass vacuously.
-  withMitmproxy = m:
-    pkgs // {ai = pkgs.ai // {generic = pkgs.ai.generic // {mitmproxy = m;};};};
-  testPkgs = withMitmproxy package;
+  testPkgs = pkgs // {mitmproxy = package;};
   configuration = {
     ai.kiro = {
       cli = {
@@ -78,7 +71,7 @@ in {
       && !(disabled.config.ai.services ? kiro-usage)
       && !(disabled.config.env ? HTTPS_PROXY)
       && rejected {ai.kiro.cli.package = null;}
-      && rejectedWith (withMitmproxy pkgs.python313Packages.mitmproxy)
+      && rejectedWith (testPkgs // {mitmproxy = pkgs.python313Packages.mitmproxy;})
       && rejectedWith (testPkgs // {python3 = pkgs.python313;})
       && rejected {ai.environmentVariables.HTTPS_PROXY = "http://another:1234";}
       && rejected {ai.kiro.cli.environmentVariables.NODE_EXTRA_CA_CERTS = "/another.pem";}

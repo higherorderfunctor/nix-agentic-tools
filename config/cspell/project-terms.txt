@@ -170,7 +170,6 @@ dunder
 earendil
 edolstra
 elicitations
-emudhra
 endgroup
 endswith
 envproxy
@@ -194,7 +193,6 @@ fastmcp
 fblog
 fcli
 fetchgit
-fetchpatch
 fetchurl
 fetchzip
 fhsenv
