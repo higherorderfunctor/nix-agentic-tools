@@ -37,9 +37,9 @@ backend: {
   printable = text: text != "" && builtins.match "[!-~]" text != null;
   edgesPrintable = url: url == "" || (printable (builtins.substring 0 1 url) && printable (builtins.substring (builtins.stringLength url - 1) 1 url));
   baseUrlOf = block: lib.defaultTo "" (block.base-url or null);
+  harnessApis = definition: builtins.attrNames (lib.filterAttrs (api: _: providersLib.apis.${api}.harnessApi) (providersLib.served definition));
   sharedBaseUrls = name: instance: let
-    served = definition: builtins.attrNames (providersLib.served definition);
-    families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (lib.remove "passthrough" (served definition))) (builtins.attrValues (providersLib.apiKeys instance)));
+    families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (harnessApis definition)) (builtins.attrValues (providersLib.apiKeys instance)));
     blocksOf = family: lib.defaultTo [] (instance.settings.api-keys.${family} or null);
   in
     lib.concatMap (family:
@@ -53,22 +53,16 @@ backend: {
       in
         lib.optional (lib.count (block: baseUrlOf block == url) (blocksOf family) > 1)
         "ai.cliproxyapi.instances.${name}.credentials.${provider}.apiKey.apis.${api}.base-url `${url}` is also the base URL of another settings.api-keys.${family} block, which the provider's allowlist rule would reach too. Give each block its own base URL.")
-      (lib.remove "passthrough" (served definition)))
+      (harnessApis definition))
     (providersLib.apiKeys instance))
-    # Passthrough groups intentionally share URLs; only normalized names collide.
-    ++ (let
-      groups = lib.filter (block: block != null) (blocksOf "passthrough");
-      normalized = map (block: lib.toLower (lib.trim (lib.defaultTo "" block.name))) groups;
+    # Group identities are case-insensitive; named credentials are ASCII.
+    ++ lib.concatLists (lib.mapAttrsToList (api: entry: let
+      names = builtins.attrNames (lib.filterAttrs (_: definition: definition.apis.${api} != null) (providersLib.apiKeys instance));
+      normalized = map lib.toLower names;
     in
-      # Nix cannot reproduce Go's Unicode trimming and case folding, and its
-      # trim keeps \v and \f, which Go strips. Refuse anything but printable
-      # ASCII before comparing named credentials and raw groups.
-      lib.concatLists (lib.imap0 (index: block:
-        lib.optional (block != null && builtins.match "[ -~]*" (lib.defaultTo "" block.name) == null)
-        "ai.cliproxyapi.instances.${name}.settings.api-keys.passthrough[${toString index}].name: group names must contain only printable ASCII characters so Nix and CPA normalize them identically.")
-      (blocksOf "passthrough"))
-      ++ lib.optional (lib.length normalized != lib.length (lib.unique normalized))
-      "ai.cliproxyapi.instances.${name}.settings.api-keys.passthrough: duplicate group names after trimming and lowercase normalization, including named credentials and raw blocks.")
+      lib.optional (!entry.harnessApi && lib.length normalized != lib.length (lib.unique normalized))
+      "ai.cliproxyapi.instances.${name}.credentials: duplicate names after lowercase normalization for API `${api}`.")
+    providersLib.apis)
     # API-key names become CPA compatibility provider identities.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
@@ -82,14 +76,14 @@ backend: {
       clients =
         lib.mapAttrs (clientName: client: {
           inherit (client) key;
-          credentials =
-            map (route: {
-              name = route.credential;
-              models = (providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" route).models or [];
-            }) (builtins.filter (route:
-              builtins.hasAttr route.credential instance.credentials
-              && ((providersLib.route instance "clientKeys.${clientName}.routes" route).api or null) != "passthrough")
-            client.routes);
+          credentials = lib.concatMap (choice: let
+            result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;
+          in
+            lib.optional (builtins.hasAttr choice.credential instance.credentials && (!(result ? api) || providersLib.apis.${result.api}.harnessApi)) {
+              name = choice.credential;
+              models = result.models or [];
+            })
+          client.routes;
         })
         instance.clientKeys;
       inherit (instance) enable;
@@ -238,14 +232,14 @@ in {
           ++ lib.concatLists (lib.mapAttrsToList (credentialName: apiKey:
             map (api: {
               assertion = !(lib.elem (providersLib.modelsOf apiKey api) [null []]);
-              message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.apis.${api}.models${lib.optionalString (api != "passthrough") " or apiKey.models"}; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
+              message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.apis.${api}.models${lib.optionalString (!providersLib.apis.${api}.modelObjects) " or apiKey.models"}; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
             }) (builtins.attrNames (providersLib.served apiKey)))
           (providersLib.apiKeys instance))
           # A vendor that refuses some models refuses them on every served API,
           # whether its defaults or a definition put them there.
           ++ lib.concatLists (lib.mapAttrsToList (credentialName: credential: let
               vendor = providersLib.vendors.${credential.vendor};
-              refused = lib.filter vendor.refuses (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api)) (lib.remove "passthrough" (builtins.attrNames (providersLib.served credential.apiKey))));
+              refused = lib.filter vendor.refuses (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api)) (harnessApis credential.apiKey));
             in [
               {
                 assertion = refused == [];
