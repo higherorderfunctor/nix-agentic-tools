@@ -98,6 +98,25 @@ select known extracted transport metadata. The full extracted Go catalog
 supplies credential defaults; explicit API and model overrides select what a
 consumer serves.
 
+Set `excludeMakers` on an individual API-key credential to keep it off models
+served by other subscriptions, while retaining the vendor's evolving defaults:
+
+```nix
+ai.cliproxyapi.instances.main.credentials.go = {
+  vendor = "opencode-go";
+  apiKey.key = redact.file "/run/secrets/opencode-go";
+  excludeMakers = ["anthropic" "openai" "zhipu"];
+};
+```
+
+Exclusions filter every API's effective models, including explicit model lists
+and vendor-scoped catalog aliases. An API with no remaining models is removed;
+routes must select an API that remains. Models with null or absent catalog
+makers remain available. Unknown maker names and nonempty exclusions on OAuth
+credentials are refused with the credential name. The default `[]` leaves the
+credential unchanged. Rendering, client model inventories and `exclusive`
+comparisons all consume the filtered offers.
+
 Built-in `vendor = "z-ai"` defaults
 `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` for Anthropic and
 `apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,

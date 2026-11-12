@@ -131,6 +131,7 @@ in {
         };
         credentials = lib.mkOption {
           type = lib.types.attrsOf providersLib.credentialType;
+          apply = lib.mapAttrs providersLib.normalizeCredential;
           default = {};
           description = "Declare each upstream credential once by name, as OAuth or API key.";
         };

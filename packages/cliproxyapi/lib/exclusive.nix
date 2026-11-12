@@ -6,43 +6,12 @@
 }: let
   # Stable sets deduplicate repeated routes and model spellings in diagnostics.
   sorted = values: lib.sort builtins.lessThan (lib.unique values);
-  # Exact canonical ids win; scoped aliases never borrow another vendor's spelling.
-  canonical = vendor: spelling: let
-    matches = builtins.attrNames (lib.filterAttrs (_: model:
-      lib.elem spelling (
-        if vendor == null
-        then lib.concatLists (builtins.attrValues model.aliases)
-        else model.aliases.${vendor} or []
-      ))
-    catalog.models);
-  in
-    if catalog.models ? ${spelling}
-    then {
-      id = spelling;
-      errors = [];
-    }
-    # An undeclared finite spelling still has an identity, but no inferred maker.
-    else if matches == []
-    then {
-      id = spelling;
-      errors = [];
-    }
-    else if lib.length matches == 1
-    then {
-      id = lib.head matches;
-      errors = [];
-    }
-    # Never choose the first ambiguous alias, including for unscoped custom vendors.
-    else {
-      id = spelling;
-      errors = ["ambiguous model alias `${spelling}`: ${lib.concatStringsSep ", " matches}; use a canonical catalog id."];
-    };
   # OAuth membership uses the vendor's maker, not its CPA provider name.
   offers = instance: name: routes: let
     credential = instance.credentials.${name};
     inherit (credential) oauth;
     maker = catalog.vendors.${oauth.vendor}.maker or null;
-    finite = map (canonical credential.vendor) (sorted (lib.concatMap (route: route.models) routes));
+    finite = map (providers.canonical credential.vendor) (sorted (lib.concatMap (route: route.models) routes));
   in
     if oauth != null
     then {

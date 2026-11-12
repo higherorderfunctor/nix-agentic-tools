@@ -134,6 +134,16 @@
         };
       };
     };
+    "excluded overlap still compared" = {
+      instance = change {
+        credentials.left =
+          (finite "left" ["fixture-a" "fixture-b"])
+          // {
+            excludeMakers = ["fixture-maker-a"];
+            exclusive = true;
+          };
+      };
+    };
     "finite alias compared as raw string" = {
       instance = change {credentials.left = (finite "left" ["fixture-alias"]) // {exclusive = true;};};
       fragments = overlap;
