@@ -129,7 +129,8 @@
   baseUrlType = types.strMatching "https?://[!-~]+";
   # CPA trims model names before registering them
   # (sdk/cliproxy/service_models.go); printable-ASCII edges make that trim a
-  # no-op, so a vendor's refusal sees the name CPA serves. The interior is free.
+  # no-op, so the shared catalog's offers name the model CPA serves. The
+  # interior is free.
   modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
   passthroughModelType = types.submodule {
