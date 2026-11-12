@@ -37,9 +37,9 @@ backend: {
   printable = text: text != "" && builtins.match "[!-~]" text != null;
   edgesPrintable = url: url == "" || (printable (builtins.substring 0 1 url) && printable (builtins.substring (builtins.stringLength url - 1) 1 url));
   baseUrlOf = block: lib.defaultTo "" (block.base-url or null);
+  harnessApis = definition: builtins.attrNames (lib.filterAttrs (api: _: providersLib.apis.${api}.harnessApi) (providersLib.served definition));
   sharedBaseUrls = name: instance: let
-    served = definition: builtins.attrNames (providersLib.served definition);
-    families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (served definition)) (builtins.attrValues (providersLib.apiKeys instance)));
+    families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (harnessApis definition)) (builtins.attrValues (providersLib.apiKeys instance)));
     blocksOf = family: lib.defaultTo [] (instance.settings.api-keys.${family} or null);
   in
     lib.concatMap (family:
@@ -53,7 +53,7 @@ backend: {
       in
         lib.optional (lib.count (block: baseUrlOf block == url) (blocksOf family) > 1)
         "ai.cliproxyapi.instances.${name}.credentials.${provider}.apiKey.apis.${api}.base-url `${url}` is also the base URL of another settings.api-keys.${family} block, which the provider's allowlist rule would reach too. Give each block its own base URL.")
-      (served definition))
+      (harnessApis definition))
     (providersLib.apiKeys instance))
     # API-key names become CPA compatibility provider identities.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
@@ -68,10 +68,14 @@ backend: {
       clients =
         lib.mapAttrs (clientName: client: {
           inherit (client) key;
-          credentials = map (route: {
-            name = route.credential;
-            models = (providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" route).models or [];
-          }) (builtins.filter (route: builtins.hasAttr route.credential instance.credentials) client.routes);
+          credentials = lib.concatMap (choice: let
+            result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;
+          in
+            lib.optional (builtins.hasAttr choice.credential instance.credentials && (!(result ? api) || providersLib.apis.${result.api}.harnessApi)) {
+              name = choice.credential;
+              models = result.models or [];
+            })
+          client.routes;
         })
         instance.clientKeys;
       inherit (instance) enable;
@@ -220,14 +224,14 @@ in {
           ++ lib.concatLists (lib.mapAttrsToList (credentialName: apiKey:
             map (api: {
               assertion = !(lib.elem (providersLib.modelsOf apiKey api) [null []]);
-              message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.models or apiKey.apis.${api}.models; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
+              message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.apis.${api}.models${lib.optionalString (!providersLib.apis.${api}.modelObjects) " or apiKey.models"}; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
             }) (builtins.attrNames (providersLib.served apiKey)))
           (providersLib.apiKeys instance))
           # A vendor that refuses some models refuses them on every served API,
           # whether its defaults or a definition put them there.
           ++ lib.concatLists (lib.mapAttrsToList (credentialName: credential: let
               vendor = providersLib.vendors.${credential.vendor};
-              refused = lib.filter vendor.refuses (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api)) (builtins.attrNames (providersLib.served credential.apiKey)));
+              refused = lib.filter vendor.refuses (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api)) (harnessApis credential.apiKey));
             in [
               {
                 assertion = refused == [];

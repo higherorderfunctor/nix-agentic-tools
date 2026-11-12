@@ -214,3 +214,15 @@ through their evaluated Home Manager instance units with runtime dummy secret
 files, polls both health endpoints, and checks both listeners are on loopback.
 It exists only on Linux. The stand-in instance check separately pins argv,
 working directory and state-directory modes.
+
+## Passthrough path references
+
+The measured `api-keys.passthrough` settings also support named credentials
+(`cliproxyapi-passthrough.md`). The `path` refinement accepts a nonempty string
+or a redact reference, including concatenations for secret account identifiers.
+Named `base-url` uses the existing HTTP(S) URL type; `unwrap` and `usage-path`
+take nonempty strings. CPA validates the resolved values and group-name
+uniqueness at load, with field-only diagnostics. Allowlist URL restrictions
+retain nonempty-list and null refusal. Both module backends use the existing
+renderer and service secrets engine. Passthrough models and credentials are
+excluded from harness inference projections.
