@@ -1,9 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-11-06 — updates run only as CI's per-target matrix,
-> and package lanes never build; hashes come from the update tooling; fixture
-> flake locks under `checks/<concern>/flake.lock` are a third target kind,
-> `update-lock.sh`; input verification skips the CodeQL engines.
+> **Last verified:** 2026-11-11 — version-specific fixes stay with the bot bump;
+> fixes that apply on main go in a separate PR against main.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -347,6 +345,21 @@ bot's own comments. The comment says the branch changed since the bot last
 updated it, so the bot leaves it alone until the branch is deleted; merging
 deletes it. Lag, a missing activity row and another bot push get the notice
 alone. There are no re-read loops: at four sweeps a day the next sweep gets it.
+
+**Where a fix for a red update PR goes depends on which versions need it.** Put
+a fix that only makes sense for the new upstream version on the existing
+`update/*` branch with the bump, as a human/LLM commit. Rejudging Kimchi
+surface-judgment evidence for that release, or changing a fixture because that
+release removed a setting or option, belongs there. The resulting `bot_owns`
+freeze is expected.
+
+Put a fix that applies to current and future versions in a separate PR against
+`main`: for example, enhancing an extractor with a generic version pattern
+rather than a literal new model name, or correcting a bug on main that no
+earlier version happened to hit. Do not copy the bump into a superseding PR:
+that duplicates the bot's PR. Do not put version-specific fixes on main: they
+encode behavior its pin does not have, such as dropping test coverage for an
+option main still ships.
 
 Red is only for a NEW PR or a changed patch whose verification failed, and for
 genuine errors: origin unreadable by `git ls-remote`, malformed metadata, an
