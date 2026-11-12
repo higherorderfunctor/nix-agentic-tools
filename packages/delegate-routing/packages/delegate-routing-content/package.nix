@@ -128,7 +128,7 @@ in
   pkgs.runCommand "delegate-routing-content" {
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
-      inherit mkSkill render skills usageScripts;
+      inherit mkSkill mkUsageScript render skills usageScripts;
       inherit (defaults) families models techniques routing skill workflows;
     };
   } ''

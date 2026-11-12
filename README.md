@@ -307,6 +307,7 @@ Temporarily unclassified supporting packages live in the split-ready
 | `bun` | JavaScript runtime, bundler, transpiler and package manager |
 | `catppuccin-btop` | Catppuccin theme files for btop |
 | `cliproxyapi` | OpenAI-compatible proxy for AI CLI subscriptions and APIs |
+| `cloudflare-usage` | Daily Cloudflare Workers AI neurons usage through CPA |
 | `cpa-manager-plus` | CPA Manager Plus dashboard and management server |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |
