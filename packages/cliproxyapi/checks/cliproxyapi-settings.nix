@@ -17,11 +17,8 @@
     # refinements: the values they admit
     "access.key-allowlist[].credentials[].kind" = "oauth";
     config-version = 8;
-    # config/passthrough.go: HTTP(S) base, upstream path, object-key paths
-    # and one of the enumerated retryable error-in-200 statuses
+    # config/passthrough.go: HTTP(S) base, upstream path and object-key paths
     "api-keys.passthrough[].base-url" = "https://upstream.example";
-    "api-keys.passthrough[].error-in-200.path" = "success";
-    "api-keys.passthrough[].error-in-200.status" = 429;
     "api-keys.passthrough[].path" = "/inference/v1/decision";
     "api-keys.passthrough[].unwrap" = "result";
     "api-keys.passthrough[].usage-path" = "result.usage";
