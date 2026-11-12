@@ -16,7 +16,6 @@ api-keys:
       priority: 30
       request-retry: 0
       disable-cooling: false
-      error-in-200: { path: success, equals: false, status: 429 }
       unwrap: result
       usage-path: result.usage
       models:
