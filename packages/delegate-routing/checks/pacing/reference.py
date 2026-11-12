@@ -1,9 +1,9 @@
-"""Independent ordinary subset of the reviewed normalized reference.
+"""Independent reference for ordinary allowance ranking.
 
-Ported from the saved reference's active/cutoff/rank contract. Uses native
-amount per second divided by sustainable capacity per second, not production
-arithmetic. Weights apply without the donor's obsolete backing predicate.
-No production imports; grants, credits and costs are deliberately absent.
+Recomputes active limits, cutoffs and rank with its own arithmetic: native
+amount per second divided by sustainable capacity per second, a different
+expression from scripts/pacing.py. Pool weights always apply. No production
+imports; grants, credits and costs are deliberately absent.
 """
 
 
