@@ -73,7 +73,7 @@ class DocumentationSnapshot(unittest.TestCase):
 
     def test_fetch_or_owner_parser_failure_preserves_pin(self):
         original = self.pin.read_bytes()
-        for fetch in (lambda _: b"<html>login</html>", lambda _: b"## Quick comparison\n| Model | Context |\n| --- | --- |\n| Auto | 1M |\n| Mystery 99 | 1M |\n"):
+        for fetch in (lambda _: b"<html>login</html>", lambda _: b"## Quick comparison\n| Model | Context |\n| --- | --- |\n| Auto | 1M |\n| Mystery 99 |\n"):
             with self.assertRaises(subprocess.CalledProcessError):
                 snapshot.update(kiro, self.pin, nix, "2099-01-01", fetch)
             self.assertEqual(self.pin.read_bytes(), original)
