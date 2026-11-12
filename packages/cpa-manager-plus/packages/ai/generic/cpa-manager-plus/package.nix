@@ -48,7 +48,7 @@
     npmDepsFetcherVersion = 2;
     npmDepsHash = sources.npmDepsHash or lib.fakeHash;
     env.VERSION = version;
-    # The patches' own tests and the upstream tests they change; upstream's full
+    # The patches' own tests and the upstream test they extend; upstream's full
     # suite has a date-dependent failure (DemoPage.test.tsx) on 1.14.7.
     doCheck = true;
     checkPhase = ''
@@ -58,10 +58,7 @@
       npm --workspace apps/web exec -- vitest run \
         src/components/providers/PassthroughTable/PassthroughTable.test.tsx \
         src/features/aiProviders/AiProvidersPage.test.tsx \
-        src/features/monitoring/hooks/useMonitoringData.requests.test.tsx \
         src/features/monitoring/services/monitoringMetaService.test.ts \
-        src/features/pageRefresh.test.tsx \
-        src/features/usage-analytics/useUsageAnalytics.test.tsx \
         src/services/api/passthrough.test.ts \
         src/stores/useThemeStore.test.ts
       runHook postCheck

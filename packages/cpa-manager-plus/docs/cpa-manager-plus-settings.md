@@ -155,14 +155,12 @@ applies after `default-theme.patch` with `--fuzz=0` and changes neither
   yields no groups.
 - `loadMonitoringMetaPayload` adds one monitoring channel per group, keyed by
   its keys' `auth_index`, so the monitoring, usage analytics and dashboard views
-  label passthrough requests by group name. `mergeRefreshedChannels` keeps the
-  shown OpenAI compatibility channels when that fetch fails during a refresh and
-  still applies fresh passthrough channels.
+  label passthrough requests by group name.
 - The AI Providers page lists the groups read-only in their own table, on the
   passthrough tab and below the editable providers on the `All` tab, whose count
   includes them: name, base URL and path, models, priority, key count, enabled
   state and recent requests. Where other rows have actions, a group shows
   "Managed by Nix"; no edit, delete, toggle or health-check control reaches it.
 
-The recipe's check phase runs the patch's tests and the upstream tests it
-changes.
+The recipe's check phase runs the patch's tests and the upstream test it
+extends.

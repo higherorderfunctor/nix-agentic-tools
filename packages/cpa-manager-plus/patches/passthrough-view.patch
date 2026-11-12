@@ -580,98 +580,12 @@ index e243992..45839c1 100644
            </Card>
          </div>
        </div>
-diff --git a/apps/web/src/features/dashboard/DashboardPage.tsx b/apps/web/src/features/dashboard/DashboardPage.tsx
-index 4e26470..fb463de 100644
---- a/apps/web/src/features/dashboard/DashboardPage.tsx
-+++ b/apps/web/src/features/dashboard/DashboardPage.tsx
-@@ -19,7 +19,10 @@ import {
- } from '@/services/api/usageService';
- import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
- import { usePanelFeatureAvailability } from '@/hooks/usePanelFeatureAvailability';
--import { loadMonitoringMetaPayload } from '@/features/monitoring/services/monitoringMetaService';
-+import {
-+  loadMonitoringMetaPayload,
-+  mergeRefreshedChannels,
-+} from '@/features/monitoring/services/monitoringMetaService';
- import { buildMonitoringAuthMetaMap } from '@/features/monitoring/model/authMeta';
- import { buildAuthFileMapFromMeta } from '@/features/monitoring/model/sourceDisplay';
- import type { MonitoringChannelMeta } from '@/features/monitoring/model/types';
-@@ -385,7 +388,11 @@ function DashboardPageContent({ useApiBaseAsCpaBase }: { useApiBaseAsCpaBase: bo
-         metaResult.status === 'fulfilled' && metaResult.value.authFilesLoaded
-           ? metaResult.value.authFiles
-           : current.authFiles,
--      channels: nextChannels ?? current.channels,
-+      channels:
-+        nextChannels ??
-+        (metaResult.status === 'fulfilled'
-+          ? mergeRefreshedChannels(current.channels, metaResult.value)
-+          : current.channels),
-       apiKeyAliases:
-         aliasesResult.status === 'fulfilled' && Array.isArray(aliasesResult.value.items)
-           ? aliasesResult.value.items
-diff --git a/apps/web/src/features/monitoring/hooks/useMonitoringData.requests.test.tsx b/apps/web/src/features/monitoring/hooks/useMonitoringData.requests.test.tsx
-index 4674f8d..44a5ba0 100644
---- a/apps/web/src/features/monitoring/hooks/useMonitoringData.requests.test.tsx
-+++ b/apps/web/src/features/monitoring/hooks/useMonitoringData.requests.test.tsx
-@@ -10,8 +10,11 @@ const { loadMonitoringMetaPayloadMock, useMonitoringAnalyticsMock } = vi.hoisted
-   useMonitoringAnalyticsMock: vi.fn(),
- }));
- 
--vi.mock('../services/monitoringMetaService', () => ({
-+vi.mock('../services/monitoringMetaService', async (importOriginal) => ({
-   loadMonitoringMetaPayload: loadMonitoringMetaPayloadMock,
-+  mergeRefreshedChannels: (
-+    await importOriginal<typeof import('../services/monitoringMetaService')>()
-+  ).mergeRefreshedChannels,
- }));
- 
- vi.mock('./useMonitoringAnalytics', () => ({
-diff --git a/apps/web/src/features/monitoring/hooks/useMonitoringData.ts b/apps/web/src/features/monitoring/hooks/useMonitoringData.ts
-index 67d0faf..b43cb83 100644
---- a/apps/web/src/features/monitoring/hooks/useMonitoringData.ts
-+++ b/apps/web/src/features/monitoring/hooks/useMonitoringData.ts
-@@ -61,7 +61,10 @@ import type {
-   UseMonitoringDataReturn,
- } from '../model/types';
- import type { MonitoringMetaPayload } from '../model/types';
--import { loadMonitoringMetaPayload } from '../services/monitoringMetaService';
-+import {
-+  loadMonitoringMetaPayload,
-+  mergeRefreshedChannels,
-+} from '../services/monitoringMetaService';
- import { useMonitoringAnalytics } from './useMonitoringAnalytics';
- 
- export type {
-@@ -393,7 +396,9 @@ export function useMonitoringData({
-       const replaceAuthFiles = payload.authFilesLoaded || !authFilesLoadedRef.current;
-       const replaceChannels = payload.channelsLoaded || !channelsLoadedRef.current;
-       if (replaceAuthFiles) setAuthFiles(payload.authFiles);
--      if (replaceChannels) setChannels(payload.channels);
-+      setChannels((current) =>
-+        replaceChannels ? payload.channels : mergeRefreshedChannels(current, payload)
-+      );
-       if (payload.authFilesLoaded) authFilesLoadedRef.current = true;
-       if (payload.channelsLoaded) channelsLoadedRef.current = true;
-       setAuthFilesLoaded(authFilesLoadedRef.current);
-diff --git a/apps/web/src/features/monitoring/model/types.ts b/apps/web/src/features/monitoring/model/types.ts
-index 2b8d9f8..113805f 100644
---- a/apps/web/src/features/monitoring/model/types.ts
-+++ b/apps/web/src/features/monitoring/model/types.ts
-@@ -16,6 +16,8 @@ export type MonitoringChannelMeta = {
-   disabled: boolean;
-   authIndices: string[];
-   modelNames: string[];
-+  // Set on channels built from passthrough groups rather than OpenAI providers.
-+  passthrough?: true;
- };
- 
- export type MonitoringAuthMeta = {
 diff --git a/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts b/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts
 new file mode 100644
-index 0000000..40ee05d
+index 0000000..9d89a7d
 --- /dev/null
 +++ b/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,73 @@
 +import { beforeEach, describe, expect, it, vi } from 'vitest';
 +
 +const { mocks } = vi.hoisted(() => ({
@@ -700,15 +614,12 @@ index 0000000..40ee05d
 +  },
 +}));
 +
-+import { loadMonitoringMetaPayload, mergeRefreshedChannels } from './monitoringMetaService';
++import { loadMonitoringMetaPayload } from './monitoringMetaService';
 +
 +const searchGroup = {
 +  baseUrl: 'https://search.example.com',
 +  disabled: false,
-+  keys: [
-+    { apiKey: 'sk-search-one', authIndex: 'pt-1' },
-+    { apiKey: 'sk-search-two', authIndex: 'pt-2' },
-+  ],
++  keys: [{ apiKey: 'sk-search-one', authIndex: 'pt-1' }],
 +  models: [{ name: 'web-search' }],
 +  name: 'search',
 +  path: '/v1/search',
@@ -741,52 +652,15 @@ index 0000000..40ee05d
 +      payload.channels.map(({ authIndices, key, name }) => ({ authIndices, key, name }))
 +    ).toEqual([
 +      { authIndices: ['oa-1'], key: 'search:0', name: 'search' },
-+      { authIndices: ['pt-1', 'pt-2'], key: 'search:1', name: 'search' },
++      { authIndices: ['pt-1'], key: 'search:1', name: 'search' },
 +    ]);
 +    expect(JSON.stringify(payload)).not.toContain('sk-search');
 +    expect(payload.error).toBe('');
 +  });
 +
-+  it('keeps passthrough channels when the OpenAI fetch fails, reporting only that error', async () => {
-+    mocks.get.mockRejectedValue(new Error('openai down'));
-+    mocks.getGroups.mockResolvedValue([searchGroup]);
-+
-+    const payload = await loadMonitoringMetaPayload(null);
-+
-+    expect(payload.channels.map(({ name }) => name)).toEqual(['search']);
-+    expect(payload.channelsLoaded).toBe(false);
-+    expect(payload.error).toBe('openai down');
-+  });
-+});
-+
-+describe('mergeRefreshedChannels', () => {
-+  it('keeps the shown OpenAI channels and takes fresh passthrough channels when only OpenAI fails', async () => {
-+    mocks.get.mockResolvedValueOnce({
-+      'openai-compatibility': [
-+        {
-+          name: 'chat',
-+          'base-url': 'https://openai.example.com',
-+          'api-key-entries': [{ 'api-key': 'sk-openai', auth_index: 'oa-1' }],
-+        },
-+      ],
-+    });
-+    mocks.getGroups.mockResolvedValueOnce([
-+      { ...searchGroup, keys: [{ apiKey: 'sk-rerank', authIndex: 'pt-9' }], name: 'rerank' },
-+    ]);
-+    const shown = (await loadMonitoringMetaPayload(null)).channels;
-+
-+    mocks.get.mockRejectedValueOnce(new Error('openai down'));
-+    mocks.getGroups.mockResolvedValueOnce([searchGroup]);
-+    const refreshed = mergeRefreshedChannels(shown, await loadMonitoringMetaPayload(null));
-+
-+    expect(refreshed.map(({ authIndices, name }) => ({ authIndices, name }))).toEqual([
-+      { authIndices: ['oa-1'], name: 'chat' },
-+      { authIndices: ['pt-1', 'pt-2'], name: 'search' },
-+    ]);
-+  });
 +});
 diff --git a/apps/web/src/features/monitoring/services/monitoringMetaService.ts b/apps/web/src/features/monitoring/services/monitoringMetaService.ts
-index 2ba3129..a96ec9c 100644
+index 2ba3129..3987560 100644
 --- a/apps/web/src/features/monitoring/services/monitoringMetaService.ts
 +++ b/apps/web/src/features/monitoring/services/monitoringMetaService.ts
 @@ -1,5 +1,6 @@
@@ -821,96 +695,19 @@ index 2ba3129..a96ec9c 100644
 +        { ...group, 'api-key-entries': group.keys },
 +        offset + index
 +      );
-+      if (channel) channels.push({ ...channel, passthrough: true });
++      if (channel) channels.push(channel);
 +    });
 +  }
 +
    const error = [authResult, channelResult]
      .filter((result) => result.status === 'rejected')
      .map((result) => (result.status === 'rejected' ? result.reason : null))
-@@ -52,3 +67,17 @@ export const loadMonitoringMetaPayload = async (
- 
-   return { authFiles, authFilesLoaded, channels, channelsLoaded, error };
- };
-+
-+// Applies a refresh to the channels already shown. A failed OpenAI fetch keeps
-+// the shown OpenAI channels; passthrough channels always come from the refresh,
-+// since getGroups reads a failed fetch as no groups.
-+export const mergeRefreshedChannels = (
-+  shown: MonitoringChannelMeta[],
-+  payload: MonitoringMetaPayload
-+): MonitoringChannelMeta[] =>
-+  payload.channelsLoaded
-+    ? payload.channels
-+    : [
-+        ...shown.filter((channel) => !channel.passthrough),
-+        ...payload.channels.filter((channel) => channel.passthrough),
-+      ];
-diff --git a/apps/web/src/features/pageRefresh.test.tsx b/apps/web/src/features/pageRefresh.test.tsx
-index 30aa3df..f2db9b0 100644
---- a/apps/web/src/features/pageRefresh.test.tsx
-+++ b/apps/web/src/features/pageRefresh.test.tsx
-@@ -137,8 +137,11 @@ vi.mock('@/services/api/usageService', () => ({
-     getAccountProcessingPolicy: mocks.policy, updateAccountProcessingPolicy: mocks.updatePolicy,
-   },
- }));
--vi.mock('./monitoring/services/monitoringMetaService', () => ({
-+vi.mock('./monitoring/services/monitoringMetaService', async (importOriginal) => ({
-   loadMonitoringMetaPayload: mocks.meta,
-+  mergeRefreshedChannels: (
-+    await importOriginal<typeof import('./monitoring/services/monitoringMetaService')>()
-+  ).mergeRefreshedChannels,
- }));
- vi.mock('./dashboard/hooks/useDashboardUsageSummary', () => ({
-   useDashboardUsageSummary: () => ({
-diff --git a/apps/web/src/features/usage-analytics/useUsageAnalytics.test.tsx b/apps/web/src/features/usage-analytics/useUsageAnalytics.test.tsx
-index 5c717f3..947be3b 100644
---- a/apps/web/src/features/usage-analytics/useUsageAnalytics.test.tsx
-+++ b/apps/web/src/features/usage-analytics/useUsageAnalytics.test.tsx
-@@ -26,8 +26,11 @@ const monitoringMetaMocks = vi.hoisted(() => ({
-   load: vi.fn(),
- }));
- 
--vi.mock('@/features/monitoring/services/monitoringMetaService', () => ({
-+vi.mock('@/features/monitoring/services/monitoringMetaService', async (importOriginal) => ({
-   loadMonitoringMetaPayload: monitoringMetaMocks.load,
-+  mergeRefreshedChannels: (
-+    await importOriginal<typeof import('@/features/monitoring/services/monitoringMetaService')>()
-+  ).mergeRefreshedChannels,
- }));
- 
- vi.mock('@/stores', () => ({
-diff --git a/apps/web/src/features/usage-analytics/useUsageAnalytics.ts b/apps/web/src/features/usage-analytics/useUsageAnalytics.ts
-index 0a31a1b..bc04955 100644
---- a/apps/web/src/features/usage-analytics/useUsageAnalytics.ts
-+++ b/apps/web/src/features/usage-analytics/useUsageAnalytics.ts
-@@ -6,7 +6,10 @@ import { buildApiKeyDisplayMap } from '@/features/monitoring/model/apiKeys';
- import { buildMonitoringAuthMetaMap } from '@/features/monitoring/model/authMeta';
- import { readString } from '@/features/monitoring/model/base';
- import type { MonitoringChannelMeta } from '@/features/monitoring/model/types';
--import { loadMonitoringMetaPayload } from '@/features/monitoring/services/monitoringMetaService';
-+import {
-+  loadMonitoringMetaPayload,
-+  mergeRefreshedChannels,
-+} from '@/features/monitoring/services/monitoringMetaService';
- import { useConfigStore } from '@/stores';
- import type { AuthFileItem } from '@/types/authFile';
- import type { CredentialInfo } from '@/types/sourceInfo';
-@@ -133,7 +136,7 @@ export function useUsageAnalytics() {
-     const payload = await loadMonitoringMetaPayload(config);
-     setMonitoringMeta((current) => ({
-       authFiles: payload.authFilesLoaded ? payload.authFiles : current.authFiles,
--      channels: payload.channelsLoaded ? payload.channels : current.channels,
-+      channels: mergeRefreshedChannels(current.channels, payload),
-     }));
-     setMonitoringMetaError(payload.error);
-   }, [config]);
 diff --git a/apps/web/src/services/api/passthrough.test.ts b/apps/web/src/services/api/passthrough.test.ts
 new file mode 100644
-index 0000000..b0ba9e4
+index 0000000..0682a7f
 --- /dev/null
 +++ b/apps/web/src/services/api/passthrough.test.ts
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,61 @@
 +import { beforeEach, describe, expect, it, vi } from 'vitest';
 +
 +const { mocks } = vi.hoisted(() => ({
@@ -938,51 +735,37 @@ index 0000000..b0ba9e4
 +});
 +
 +describe('passthroughApi.getGroups', () => {
-+  it('requests the v8 passthrough projection outside the v0 base', async () => {
-+    mocks.get.mockResolvedValue([]);
-+
-+    await passthroughApi.getGroups();
-+
-+    expect(mocks.get).toHaveBeenCalledWith(
-+      'https://cpa.example.com/v8/management/config/api-keys/passthrough'
-+    );
-+  });
-+
-+  it('normalizes v8 groups and their key auth indexes', async () => {
++  it('reads the v8 passthrough projection into groups', async () => {
 +    mocks.get.mockResolvedValue([
 +      {
-+        name: ' Search API ',
-+        'base-url': 'https://search.example.com',
-+        path: '/v1/search',
-+        priority: 3,
-+        disabled: true,
-+        models: [{ name: 'web-search', alias: 'search' }],
-+        keys: [{ 'api-key': 'sk-one', auth_index: 'abc123' }, { 'api-key': 'sk-two' }],
++        name: 'cloudflare-clef',
++        'base-url': 'https://api.cloudflare.com',
++        path: '/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef',
++        priority: 10,
++        models: [{ name: 'clef', alias: 'decision' }],
++        keys: [{ 'api-key': 'cf-key', auth_index: 'abc123' }],
 +      },
 +    ]);
 +
 +    await expect(passthroughApi.getGroups()).resolves.toEqual([
 +      {
-+        baseUrl: 'https://search.example.com',
-+        disabled: true,
-+        keys: [
-+          { apiKey: 'sk-one', authIndex: 'abc123' },
-+          { apiKey: 'sk-two', authIndex: undefined },
-+        ],
-+        models: [{ alias: 'search', name: 'web-search' }],
-+        name: 'Search API',
-+        path: '/v1/search',
-+        priority: 3,
-+        providerKey: 'passthrough-search api',
++        baseUrl: 'https://api.cloudflare.com',
++        disabled: false,
++        keys: [{ apiKey: 'cf-key', authIndex: 'abc123' }],
++        models: [{ alias: 'decision', name: 'clef' }],
++        name: 'cloudflare-clef',
++        path: '/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef',
++        priority: 10,
++        providerKey: 'passthrough-cloudflare-clef',
 +      },
 +    ]);
++    expect(mocks.get).toHaveBeenCalledWith(
++      'https://cpa.example.com/v8/management/config/api-keys/passthrough'
++    );
 +  });
 +
-+  it('reads a 404 or any other failure as no groups', async () => {
-+    mocks.get.mockRejectedValueOnce(Object.assign(new Error('not_found'), { status: 404 }));
-+    await expect(passthroughApi.getGroups()).resolves.toEqual([]);
-+
-+    mocks.get.mockRejectedValueOnce(new Error('Network Error'));
++  it('reads a missing projection as no groups', async () => {
++    mocks.get.mockRejectedValue(Object.assign(new Error('not_found'), { status: 404 }));
 +    await expect(passthroughApi.getGroups()).resolves.toEqual([]);
 +  });
 +});
