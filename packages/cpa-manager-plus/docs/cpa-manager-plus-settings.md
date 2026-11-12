@@ -1,14 +1,16 @@
 # CPA Manager Plus typed settings
 
-> **Last verified:** 2026-10-21 — 28 config.json keys and 32 environment
-> variables give the settings type through `lib/extracted/options.nix`; the
-> render loads through patched Manager Plus 1.14.7's
-> `LoadWithoutCreatingDefault`; `config.defaultTheme` reaches the panel through
-> `/usage-service/info`; `ai.cpa-manager-plus.instances` renders it at start and
-> applies `config.adminKeyFile` through `reset-admin-key` on every start; key
-> files are secret files; evaluation resolves the database from declared paths
-> opened as written, and the run script unsets inherited admin-key and database
-> variables.
+> **Last verified:** 2026-11-11 — `patches/passthrough-view.patch` shows CPA
+> passthrough groups read-only from
+> `/v8/management/config/api-keys/passthrough`; 28 config.json keys and 32
+> environment variables give the settings type through
+> `lib/extracted/options.nix`; the render loads through patched Manager Plus
+> 1.14.7's `LoadWithoutCreatingDefault`; `config.defaultTheme` reaches the panel
+> through `/usage-service/info`; `ai.cpa-manager-plus.instances` renders it at
+> start and applies `config.adminKeyFile` through `reset-admin-key` on every
+> start; key files are secret files; evaluation resolves the database from
+> declared paths opened as written, and the run script unsets inherited
+> admin-key and database variables.
 
 `lib/default.nix` exports
 `cpa-manager-plus.{settingsType, render, report, exclusions, sample}`. One
@@ -137,3 +139,28 @@ theme. `module-service-instances-real-daemons` starts the patched server unset
 and with `dark`, reads `defaultTheme` back from `/usage-service/info`, and finds
 the reader in the served panel. `cpa-manager-plus-settings` runs the patch's
 `TestLoadDefaultTheme`, and the web build runs its `useThemeStore.test.ts`.
+
+## Passthrough view
+
+CPA's passthrough groups
+(`packages/cliproxyapi/docs/cliproxyapi-passthrough.md`) are configured in Nix
+only, so Manager Plus shows them read-only. `patches/passthrough-view.patch`
+applies after `default-theme.patch` with `--fuzz=0` and changes neither
+`package-lock.json` nor `go.mod`.
+
+- `services/api/passthrough.ts` reads CPA's existing admin-only
+  `GET /v8/management/config/api-keys/passthrough` projection, which carries a
+  live `auth_index` per key. Upstream keys are used only to count keys and look
+  up request status; they are never rendered. A missing projection or an error
+  yields no groups.
+- `loadMonitoringMetaPayload` adds one monitoring channel per group, keyed by
+  its keys' `auth_index`, so the monitoring, usage analytics and dashboard views
+  label passthrough requests by group name.
+- The AI Providers page lists the groups read-only in their own table, on the
+  passthrough tab and below the editable providers on the `All` tab, whose count
+  includes them: name, base URL and path, models, priority, key count, enabled
+  state and recent requests. Where other rows have actions, a group shows
+  "Managed by Nix"; no edit, delete, toggle or health-check control reaches it.
+
+The recipe's check phase runs the patch's tests and the upstream test it
+extends.

@@ -1,0 +1,849 @@
+diff --git a/apps/web/src/components/providers/PassthroughTable/PassthroughTable.test.tsx b/apps/web/src/components/providers/PassthroughTable/PassthroughTable.test.tsx
+new file mode 100644
+index 0000000..3a4c1be
+--- /dev/null
++++ b/apps/web/src/components/providers/PassthroughTable/PassthroughTable.test.tsx
+@@ -0,0 +1,118 @@
++import { act } from 'react';
++import { create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
++import { describe, expect, it, vi } from 'vitest';
++import type { PassthroughGroup } from '@/services/api/passthrough';
++import { buildRecentRequestCompositeKey } from '@/utils/recentRequests';
++import { ProviderStatusBar } from '../ProviderStatusBar';
++import type { ProviderRecentUsageMap } from '../utils';
++import { PassthroughTable } from './PassthroughTable';
++
++vi.mock('react-i18next', () => ({
++  useTranslation: () => ({
++    t: (key: string) => key,
++  }),
++}));
++
++const groups: PassthroughGroup[] = [
++  {
++    baseUrl: 'https://zai.example/api',
++    disabled: false,
++    keys: [
++      { apiKey: 'secret-key-one', authIndex: 'a1' },
++      { apiKey: 'secret-key-two', authIndex: 'a2' },
++    ],
++    models: [{ alias: 'glm', name: 'glm-4.6' }, { name: 'glm-4.5' }],
++    name: 'Zai',
++    path: '/v1/chat/completions',
++    priority: 7,
++    providerKey: 'passthrough-zai',
++  },
++  {
++    baseUrl: 'https://off.example',
++    disabled: true,
++    keys: [{ apiKey: 'secret-key-three' }],
++    models: [{ name: 'claude-sonnet' }],
++    name: 'Off',
++    path: '/v1/messages',
++    providerKey: 'passthrough-off',
++  },
++];
++
++const getText = (node: ReactTestInstance): string =>
++  node.children.map((child) => (typeof child === 'string' ? child : getText(child))).join('');
++
++const getRows = (renderer: ReactTestRenderer) =>
++  renderer.root.findAll(
++    (node) => node.type === 'div' && node.props.role === 'row' && node.props['aria-label']
++  );
++
++const render = (usageByProvider: ProviderRecentUsageMap = new Map()) => {
++  let renderer!: ReactTestRenderer;
++  act(() => {
++    renderer = create(
++      <PassthroughTable
++        groups={groups}
++        usageByProvider={usageByProvider}
++        loading={false}
++        emptyState={<span>empty</span>}
++      />
++    );
++  });
++  return renderer;
++};
++
++describe('PassthroughTable', () => {
++  it('shows each group with its URL, path, models, priority, key count and state', () => {
++    const [zai, off] = getRows(render());
++
++    const zaiText = getText(zai);
++    expect(zaiText).toContain('Zai');
++    expect(zaiText).toContain('https://zai.example/api');
++    expect(zaiText).toContain('/v1/chat/completions');
++    expect(zaiText).toContain('ai_providers.openai_keys_count: 2');
++    const zaiCells = zai.findAll((node) => node.type === 'div' && node.props.role === 'cell');
++    expect(getText(zaiCells[4])).toBe('common.priority7');
++    expect(zaiText).toContain('common.enabled');
++    expect(zai.findByProps({ title: 'glm → glm-4.6\nglm-4.5' })).toBeTruthy();
++
++    const offCells = off.findAll((node) => node.type === 'div' && node.props.role === 'cell');
++    expect(getText(offCells[4])).toBe('common.priority—');
++    expect(getText(offCells[6])).toBe('common.disabled');
++  });
++
++  it('offers no control and never renders key text', () => {
++    const renderer = render();
++
++    expect(
++      renderer.root.findAll((node) => ['button', 'input', 'select'].includes(String(node.type)))
++    ).toHaveLength(0);
++    expect(
++      renderer.root.findAll((node) => typeof node.props.onClick === 'function')
++    ).toHaveLength(0);
++    expect(JSON.stringify(renderer.toJSON())).not.toContain('secret-key');
++  });
++
++  it('reads recent requests under the passthrough provider key', () => {
++    const usageByProvider: ProviderRecentUsageMap = new Map([
++      [
++        'passthrough-zai',
++        new Map([
++          [
++            buildRecentRequestCompositeKey('https://zai.example/api', 'secret-key-one'),
++            { success: 4, failed: 1, recentRequests: [] },
++          ],
++          [
++            buildRecentRequestCompositeKey('https://zai.example/api', 'secret-key-two'),
++            { success: 2, failed: 0, recentRequests: [] },
++          ],
++        ]),
++      ],
++    ]);
++    const [zai, off] = getRows(render(usageByProvider));
++
++    expect(getText(zai.findByProps({ title: 'stats.success' }))).toBe(' 6');
++    expect(getText(zai.findByProps({ title: 'stats.failure' }))).toBe(' 1');
++    expect(zai.findAllByType(ProviderStatusBar)).toHaveLength(1);
++    expect(getText(off)).toContain('status_bar.no_requests');
++  });
++});
+diff --git a/apps/web/src/components/providers/PassthroughTable/PassthroughTable.tsx b/apps/web/src/components/providers/PassthroughTable/PassthroughTable.tsx
+new file mode 100644
+index 0000000..d5c0ec9
+--- /dev/null
++++ b/apps/web/src/components/providers/PassthroughTable/PassthroughTable.tsx
+@@ -0,0 +1,144 @@
++import type { ReactNode } from 'react';
++import { useTranslation } from 'react-i18next';
++import { IconCheck, IconX } from '@/components/ui/icons';
++import type { PassthroughGroup } from '@/services/api/passthrough';
++import { ProviderStatusBar } from '../ProviderStatusBar';
++import styles from '../ProviderTable/ProviderTable.module.scss';
++import {
++  getOpenAIProviderRecentStatusData,
++  getOpenAIProviderTotalStats,
++  type ProviderRecentUsageMap,
++} from '../utils';
++
++interface PassthroughTableProps {
++  groups: PassthroughGroup[];
++  usageByProvider: ProviderRecentUsageMap;
++  loading: boolean;
++  emptyState: ReactNode;
++}
++
++// Lists CPA passthrough groups read-only: the config file owns them, so no row
++// offers a control. Keys feed the status lookup only; the row shows their count.
++export function PassthroughTable({
++  groups,
++  usageByProvider,
++  loading,
++  emptyState,
++}: PassthroughTableProps) {
++  const { t } = useTranslation();
++
++  if (loading && groups.length === 0) {
++    return <div className="hint">{t('common.loading')}</div>;
++  }
++
++  if (groups.length === 0) {
++    return <>{emptyState}</>;
++  }
++
++  return (
++    <div className={styles.table} role="table" aria-label={t('ai_providers.table_aria_label')}>
++      <div className={styles.headerRow} role="row">
++        <span role="columnheader">{t('ai_providers.table_col_type')}</span>
++        <span role="columnheader">{t('ai_providers.table_col_identity')}</span>
++        <span role="columnheader">{t('common.base_url')}</span>
++        <span role="columnheader" className={styles.cellModelsHeader}>
++          {t('ai_providers.table_col_models')}
++        </span>
++        <span role="columnheader" className={styles.cellPriorityHeader}>
++          {t('common.priority')}
++        </span>
++        <span role="columnheader" className={styles.cellRecentHeader}>
++          {t('ai_providers.table_col_recent')}
++        </span>
++        <span role="columnheader">{t('ai_providers.config_toggle_label')}</span>
++        <span role="columnheader" className={styles.cellActionsHeader}>
++          {t('ai_providers.table_col_actions')}
++        </span>
++      </div>
++
++      {groups.map((group) => {
++        // CPA records usage under the provider key and each key's base_url|api_key.
++        const usageProvider = {
++          name: group.providerKey,
++          baseUrl: group.baseUrl,
++          apiKeyEntries: group.keys,
++        };
++        const stats = getOpenAIProviderTotalStats(usageProvider, usageByProvider);
++        return (
++          <div
++            key={group.providerKey}
++            role="row"
++            className={`${styles.row} ${group.disabled ? styles.rowDisabled : ''}`}
++            aria-label={`Passthrough ${group.name}`}
++          >
++            <div className={styles.cellType} role="cell">
++              <span className={styles.kindLabel}>Passthrough</span>
++            </div>
++
++            <div className={styles.cellIdentity} role="cell">
++              <div className={styles.identityMain}>
++                <span className={styles.identityLabel} title={group.name}>
++                  {group.name}
++                </span>
++                <span className={styles.identityMeta}>
++                  {t('ai_providers.openai_keys_count')}: {group.keys.length}
++                </span>
++              </div>
++            </div>
++
++            <div className={styles.cellUrl} role="cell" title={group.baseUrl || undefined}>
++              {group.baseUrl || '—'}
++              <div className={styles.identityMeta}>{group.path || '—'}</div>
++            </div>
++
++            <div
++              className={`${styles.cellModels} ${styles.cellNumeric}`}
++              role="cell"
++              title={group.models
++                .map((model) => (model.alias ? `${model.alias} → ${model.name}` : model.name))
++                .join('\n')}
++            >
++              <span className={styles.cellCaption}>{t('ai_providers.table_col_models')}</span>
++              {group.models.length}
++            </div>
++
++            <div className={`${styles.cellPriority} ${styles.cellNumeric}`} role="cell">
++              <span className={styles.cellCaption}>{t('common.priority')}</span>
++              {group.priority ?? '—'}
++            </div>
++
++            <div className={styles.cellRecent} role="cell">
++              {stats.success + stats.failure > 0 ? (
++                <>
++                  <span className={styles.statSuccess} title={t('stats.success')}>
++                    <IconCheck size={12} /> {stats.success}
++                  </span>
++                  <span className={styles.statFailure} title={t('stats.failure')}>
++                    <IconX size={12} /> {stats.failure}
++                  </span>
++                  <div className={styles.recentBarWrap}>
++                    <ProviderStatusBar
++                      statusData={getOpenAIProviderRecentStatusData(usageProvider, usageByProvider)}
++                    />
++                  </div>
++                </>
++              ) : (
++                <span className={styles.noRecent}>{t('status_bar.no_requests')}</span>
++              )}
++            </div>
++
++            <div className={styles.cellToggle} role="cell">
++              {group.disabled ? t('common.disabled') : t('common.enabled')}
++            </div>
++
++            <div className={styles.cellActions} role="cell">
++              <span className={styles.noRecent}>
++                {t('ai_providers.passthrough_managed', { defaultValue: 'Managed by Nix' })}
++              </span>
++            </div>
++          </div>
++        );
++      })}
++    </div>
++  );
++}
+diff --git a/apps/web/src/components/providers/PassthroughTable/index.ts b/apps/web/src/components/providers/PassthroughTable/index.ts
+new file mode 100644
+index 0000000..90e1e5b
+--- /dev/null
++++ b/apps/web/src/components/providers/PassthroughTable/index.ts
+@@ -0,0 +1 @@
++export { PassthroughTable } from './PassthroughTable';
+diff --git a/apps/web/src/components/providers/ProviderTable/sort.ts b/apps/web/src/components/providers/ProviderTable/sort.ts
+index 1929952..7e4e366 100644
+--- a/apps/web/src/components/providers/ProviderTable/sort.ts
++++ b/apps/web/src/components/providers/ProviderTable/sort.ts
+@@ -2,7 +2,8 @@ import type { ProviderKind, ProviderRow } from './rowData';
+ 
+ export type ProviderSortOption = 'priority' | 'name' | 'recent-success';
+ export type ProviderSortDirection = 'asc' | 'desc';
+-export type ProviderKindFilter = ProviderKind | 'all';
++// 'passthrough' selects the read-only passthrough table, so it matches no provider row.
++export type ProviderKindFilter = ProviderKind | 'all' | 'passthrough';
+ 
+ export interface FilterSortProviderRowsOptions {
+   kind?: ProviderKindFilter;
+diff --git a/apps/web/src/components/providers/ProviderToolbar/ProviderToolbar.tsx b/apps/web/src/components/providers/ProviderToolbar/ProviderToolbar.tsx
+index 2f650ef..b4bd4ef 100644
+--- a/apps/web/src/components/providers/ProviderToolbar/ProviderToolbar.tsx
++++ b/apps/web/src/components/providers/ProviderToolbar/ProviderToolbar.tsx
+@@ -112,6 +112,11 @@ export function ProviderToolbar({
+         label: PROVIDER_KIND_LABELS[id],
+         badge: kindCounts[id],
+       })),
++      {
++        id: 'passthrough',
++        label: 'Passthrough',
++        badge: kindCounts.passthrough,
++      },
+     ],
+     [kindCounts, t]
+   );
+@@ -342,7 +347,7 @@ export function ProviderToolbar({
+               onKeyDown={(event) => handleKindTabKeyDown(event, tab.id)}
+             >
+               <span className={styles.kindTabIcon} aria-hidden="true">
+-                {tab.id === 'all' ? (
++                {tab.id === 'all' || tab.id === 'passthrough' ? (
+                   <IconFilterAll size={18} />
+                 ) : (
+                   <img
+@@ -570,7 +575,7 @@ export function ProviderToolbar({
+             disabled={disabled}
+             items={addMenuItems}
+           />
+-        ) : (
++        ) : kind === 'passthrough' ? null : (
+           <Button
+             variant="primary"
+             size="sm"
+diff --git a/apps/web/src/components/providers/index.ts b/apps/web/src/components/providers/index.ts
+index 9a5ea7d..b649281 100644
+--- a/apps/web/src/components/providers/index.ts
++++ b/apps/web/src/components/providers/index.ts
+@@ -1,5 +1,6 @@
+ export { ProviderStatusBar } from './ProviderStatusBar';
+ export { OpenAIKeyTestStatusIndicator } from './OpenAIKeyTestStatusIndicator';
++export { PassthroughTable } from './PassthroughTable';
+ export * from './ProviderTable';
+ export { ProviderToolbar } from './ProviderToolbar';
+ export { ProviderDetailDrawer } from './ProviderDetailDrawer';
+diff --git a/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx b/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx
+index 4a71d45..8fe13a6 100644
+--- a/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx
++++ b/apps/web/src/features/aiProviders/AiProvidersPage.test.tsx
+@@ -1,5 +1,6 @@
+ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+ import { beforeEach, describe, expect, it, vi } from 'vitest';
++import type { PassthroughGroup } from '@/services/api/passthrough';
+ import type { CoolingPolicy, GeminiKeyConfig, ProviderKeyConfig } from '@/types';
+ 
+ const mocks = vi.hoisted(() => ({
+@@ -22,6 +23,8 @@ const mocks = vi.hoisted(() => ({
+   getVertexConfigs: vi.fn(),
+   getMetaConfigs: vi.fn(),
+   getOpenAIProviders: vi.fn(),
++  getPassthroughGroups: vi.fn(async (): Promise<PassthroughGroup[]> => []),
++  PassthroughTable: vi.fn(() => null),
+   showNotification: vi.fn(),
+   showConfirmation: vi.fn(),
+   cacheValid: true,
+@@ -67,6 +70,10 @@ vi.mock('@/services/api', () => ({
+   },
+ }));
+ 
++vi.mock('@/services/api/passthrough', () => ({
++  passthroughApi: { getGroups: mocks.getPassthroughGroups },
++}));
++
+ vi.mock('@/components/providers', async () => {
+   const policyFromOverride = (value: boolean | null | undefined): CoolingPolicy =>
+     value === true ? 'disabled' : value === false ? 'enabled' : 'inherit';
+@@ -127,6 +134,7 @@ vi.mock('@/components/providers', async () => {
+       vertex: 'Vertex',
+       openai: 'OpenAI',
+     },
++    PassthroughTable: mocks.PassthroughTable,
+     ProviderToolbar: () => null,
+     ProviderTable: ({
+       rows,
+@@ -479,3 +487,56 @@ describe('AiProvidersPage current-layer config refresh', () => {
+     act(() => renderer.unmount());
+   });
+ });
++
++describe('AiProvidersPage All tab', () => {
++  const zai: PassthroughGroup = {
++    baseUrl: 'https://zai.example/api',
++    disabled: false,
++    keys: [{ apiKey: 'secret-key-one', authIndex: 'a1' }],
++    models: [{ name: 'glm-4.6' }],
++    name: 'Zai',
++    path: '/v1/chat/completions',
++    providerKey: 'passthrough-zai',
++  };
++
++  beforeEach(() => {
++    vi.clearAllMocks();
++    mocks.cacheValid = true;
++    mocks.transitionLayer = null;
++    mocks.config = {
++      geminiApiKeys: [{ apiKey: 'gemini-key' }],
++      interactionsApiKeys: [],
++      codexApiKeys: [],
++      xaiApiKeys: [],
++      metaApiKeys: [],
++      claudeApiKeys: [],
++      vertexApiKeys: [],
++      openaiCompatibility: [],
++    };
++    mocks.fetchConfig.mockImplementation(async () => mocks.config);
++    mocks.getVertexConfigs.mockImplementation(async () => mocks.config.vertexApiKeys);
++    mocks.getOpenAIProviders.mockResolvedValue([]);
++    mocks.getPassthroughGroups.mockResolvedValueOnce([zai]);
++  });
++
++  it('lists passthrough groups read-only below the editable rows and counts them', async () => {
++    let renderer!: ReactTestRenderer;
++    await act(async () => {
++      renderer = create(<AiProvidersPage />);
++    });
++    await flush();
++
++    const toolbar = renderer.root.find((node) => node.props.kindCounts !== undefined);
++    expect(toolbar.props.kindCounts.all).toBe(2);
++    const table = renderer.root.findByType(mocks.PassthroughTable);
++    expect(table.props.groups).toEqual([zai]);
++    // The read-only table takes no handler, so no edit, delete, toggle or check reaches a group.
++    expect(Object.keys(table.props).sort()).toEqual([
++      'emptyState',
++      'groups',
++      'loading',
++      'usageByProvider',
++    ]);
++    act(() => renderer.unmount());
++  });
++});
+diff --git a/apps/web/src/features/aiProviders/AiProvidersPage.tsx b/apps/web/src/features/aiProviders/AiProvidersPage.tsx
+index e243992..45839c1 100644
+--- a/apps/web/src/features/aiProviders/AiProvidersPage.tsx
++++ b/apps/web/src/features/aiProviders/AiProvidersPage.tsx
+@@ -7,6 +7,7 @@ import {
+   filterAndSortProviderRows,
+   GeminiEditDrawer,
+   OpenAIEditDrawer,
++  PassthroughTable,
+   PROVIDER_KIND_LABELS,
+   ProviderDetailDrawer,
+   ProviderHealthCheckDrawer,
+@@ -32,6 +33,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
+ import { Select } from '@/components/ui/Select';
+ import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
+ import { providersApi } from '@/services/api';
++import { passthroughApi, type PassthroughGroup } from '@/services/api/passthrough';
+ import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
+ import {
+   CloakConfig,
+@@ -92,6 +94,7 @@ export function AiProvidersPage() {
+   const [openaiProviders, setOpenaiProviders] = useState<OpenAIProviderConfig[]>(
+     () => config?.openaiCompatibility || []
+   );
++  const [passthroughGroups, setPassthroughGroups] = useState<PassthroughGroup[]>([]);
+ 
+   const [configSwitchingKey, setConfigSwitchingKey] = useState<string | null>(null);
+   const configMutationLockRef = useRef(createConfigMutationLock());
+@@ -142,11 +145,13 @@ export function AiProvidersPage() {
+     }
+     setError('');
+     try {
+-      const [configResult, vertexResult, openaiResult] = await Promise.allSettled([
+-        fetchConfig(),
+-        providersApi.getVertexConfigs(),
+-        providersApi.getOpenAIProviders(),
+-      ]);
++      const [configResult, vertexResult, openaiResult, passthroughResult] =
++        await Promise.allSettled([
++          fetchConfig(),
++          providersApi.getVertexConfigs(),
++          providersApi.getOpenAIProviders(),
++          passthroughApi.getGroups(),
++        ]);
+ 
+       if (configResult.status !== 'fulfilled') {
+         throw configResult.reason;
+@@ -173,6 +178,10 @@ export function AiProvidersPage() {
+         updateConfigValue('openai-compatibility', openaiResult.value || []);
+         clearCache('openai-compatibility');
+       }
++
++      if (passthroughResult.status === 'fulfilled') {
++        setPassthroughGroups(passthroughResult.value);
++      }
+     } catch (err: unknown) {
+       const message = getErrorMessage(err) || t('notification.refresh_failed');
+       setError(message);
+@@ -324,7 +333,7 @@ export function AiProvidersPage() {
+ 
+   const kindCounts = useMemo(() => {
+     const counts: Record<ProviderKindFilter, number> = {
+-      all: rows.length,
++      all: rows.length + passthroughGroups.length,
+       gemini: 0,
+       interactions: 0,
+       codex: 0,
+@@ -333,12 +342,13 @@ export function AiProvidersPage() {
+       claude: 0,
+       vertex: 0,
+       openai: 0,
++      passthrough: passthroughGroups.length,
+     };
+     rows.forEach((row) => {
+       counts[row.kind] += 1;
+     });
+     return counts;
+-  }, [rows]);
++  }, [passthroughGroups.length, rows]);
+ 
+   const detailRow = useMemo(
+     () => (detailRowKey ? (rows.find((row) => row.key === detailRowKey) ?? null) : null),
+@@ -1565,7 +1575,10 @@ export function AiProvidersPage() {
+   };
+ 
+   const emptyState =
+-    rows.length > 0 && kindFilter !== 'all' && kindCounts[kindFilter] === 0 ? (
++    rows.length > 0 &&
++    kindFilter !== 'all' &&
++    kindFilter !== 'passthrough' &&
++    kindCounts[kindFilter] === 0 ? (
+       // 当前类型尚无配置：直接给“添加该类型配置”入口，避免“清除筛选”死胡同
+       <EmptyState
+         title={t('ai_providers.kind_empty_title', { name: PROVIDER_KIND_LABELS[kindFilter] })}
+@@ -1619,19 +1632,21 @@ export function AiProvidersPage() {
+           />
+ 
+           <Card>
+-            <ProviderTable
+-              rows={pagedRows}
+-              loading={loading}
+-              actionsDisabled={actionsDisabled}
+-              toggleDisabled={actionsDisabled}
+-              resolvedTheme={resolvedTheme}
+-              emptyState={emptyState}
+-              onShowDetail={(row) => setDetailRowKey(row.key)}
+-              onEdit={handleRowEdit}
+-              onDelete={handleRowDelete}
+-              onToggle={handleRowToggle}
+-              onPriorityChange={handleRowPriorityChange}
+-            />
++            {kindFilter !== 'passthrough' && (
++              <ProviderTable
++                rows={pagedRows}
++                loading={loading}
++                actionsDisabled={actionsDisabled}
++                toggleDisabled={actionsDisabled}
++                resolvedTheme={resolvedTheme}
++                emptyState={emptyState}
++                onShowDetail={(row) => setDetailRowKey(row.key)}
++                onEdit={handleRowEdit}
++                onDelete={handleRowDelete}
++                onToggle={handleRowToggle}
++                onPriorityChange={handleRowPriorityChange}
++              />
++            )}
+             {visibleRows.length > 0 &&
+               (visibleRows.length > PROVIDER_TABLE_DEFAULT_PAGE_SIZE ||
+                 pageSize !== PROVIDER_TABLE_DEFAULT_PAGE_SIZE) && (
+@@ -1681,6 +1696,16 @@ export function AiProvidersPage() {
+                   </div>
+                 </div>
+               )}
++            {/* The All tab also lists passthrough groups, read-only, below the editable rows. */}
++            {(kindFilter === 'passthrough' ||
++              (kindFilter === 'all' && passthroughGroups.length > 0)) && (
++              <PassthroughTable
++                groups={passthroughGroups}
++                usageByProvider={usageByProvider}
++                loading={loading}
++                emptyState={emptyState}
++              />
++            )}
+           </Card>
+         </div>
+       </div>
+diff --git a/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts b/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts
+new file mode 100644
+index 0000000..9d89a7d
+--- /dev/null
++++ b/apps/web/src/features/monitoring/services/monitoringMetaService.test.ts
+@@ -0,0 +1,73 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++
++const { mocks } = vi.hoisted(() => ({
++  mocks: {
++    get: vi.fn(),
++    getGroups: vi.fn(),
++    list: vi.fn(),
++  },
++}));
++
++vi.mock('@/services/api/authFiles', () => ({
++  authFilesApi: {
++    list: mocks.list,
++  },
++}));
++
++vi.mock('@/services/api/client', () => ({
++  apiClient: {
++    get: mocks.get,
++  },
++}));
++
++vi.mock('@/services/api/passthrough', () => ({
++  passthroughApi: {
++    getGroups: mocks.getGroups,
++  },
++}));
++
++import { loadMonitoringMetaPayload } from './monitoringMetaService';
++
++const searchGroup = {
++  baseUrl: 'https://search.example.com',
++  disabled: false,
++  keys: [{ apiKey: 'sk-search-one', authIndex: 'pt-1' }],
++  models: [{ name: 'web-search' }],
++  name: 'search',
++  path: '/v1/search',
++  providerKey: 'passthrough-search',
++};
++
++beforeEach(() => {
++  mocks.get.mockReset();
++  mocks.getGroups.mockReset();
++  mocks.list.mockReset();
++  mocks.list.mockResolvedValue({ files: [] });
++});
++
++describe('loadMonitoringMetaPayload passthrough channels', () => {
++  it('appends one channel per passthrough group after the OpenAI channels', async () => {
++    mocks.get.mockResolvedValue({
++      'openai-compatibility': [
++        {
++          name: 'search',
++          'base-url': 'https://openai.example.com',
++          'api-key-entries': [{ 'api-key': 'sk-openai', auth_index: 'oa-1' }],
++        },
++      ],
++    });
++    mocks.getGroups.mockResolvedValue([searchGroup]);
++
++    const payload = await loadMonitoringMetaPayload(null);
++
++    expect(
++      payload.channels.map(({ authIndices, key, name }) => ({ authIndices, key, name }))
++    ).toEqual([
++      { authIndices: ['oa-1'], key: 'search:0', name: 'search' },
++      { authIndices: ['pt-1'], key: 'search:1', name: 'search' },
++    ]);
++    expect(JSON.stringify(payload)).not.toContain('sk-search');
++    expect(payload.error).toBe('');
++  });
++
++});
+diff --git a/apps/web/src/features/monitoring/services/monitoringMetaService.ts b/apps/web/src/features/monitoring/services/monitoringMetaService.ts
+index 2ba3129..3987560 100644
+--- a/apps/web/src/features/monitoring/services/monitoringMetaService.ts
++++ b/apps/web/src/features/monitoring/services/monitoringMetaService.ts
+@@ -1,5 +1,6 @@
+ import { authFilesApi } from '@/services/api/authFiles';
+ import { apiClient } from '@/services/api/client';
++import { passthroughApi } from '@/services/api/passthrough';
+ import type { Config } from '@/types/config';
+ import { extractArrayPayload } from '../model/base';
+ import { normalizeOpenAIChannel } from '../model/authMeta';
+@@ -8,9 +9,10 @@ import type { MonitoringChannelMeta, MonitoringMetaPayload } from '../model/type
+ export const loadMonitoringMetaPayload = async (
+   config: Config | null | undefined
+ ): Promise<MonitoringMetaPayload> => {
+-  const [authResult, channelResult] = await Promise.allSettled([
++  const [authResult, channelResult, passthroughResult] = await Promise.allSettled([
+     authFilesApi.list(),
+     apiClient.get('/openai-compatibility'),
++    passthroughApi.getGroups(),
+   ]);
+ 
+   const authFiles =
+@@ -43,6 +45,19 @@ export const loadMonitoringMetaPayload = async (
+       .filter(Boolean) as MonitoringChannelMeta[];
+   }
+ 
++  // Passthrough groups label their requests by group name through each key's
++  // auth_index. getGroups reads a failed fetch as no groups, so it adds no error.
++  if (passthroughResult.status === 'fulfilled') {
++    const offset = channels.length;
++    passthroughResult.value.forEach((group, index) => {
++      const channel = normalizeOpenAIChannel(
++        { ...group, 'api-key-entries': group.keys },
++        offset + index
++      );
++      if (channel) channels.push(channel);
++    });
++  }
++
+   const error = [authResult, channelResult]
+     .filter((result) => result.status === 'rejected')
+     .map((result) => (result.status === 'rejected' ? result.reason : null))
+diff --git a/apps/web/src/services/api/passthrough.test.ts b/apps/web/src/services/api/passthrough.test.ts
+new file mode 100644
+index 0000000..0682a7f
+--- /dev/null
++++ b/apps/web/src/services/api/passthrough.test.ts
+@@ -0,0 +1,61 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++
++const { mocks } = vi.hoisted(() => ({
++  mocks: {
++    get: vi.fn(),
++  },
++}));
++
++vi.mock('./client', () => ({
++  apiClient: {
++    get: mocks.get,
++  },
++}));
++
++vi.mock('@/stores/useAuthStore', () => ({
++  useAuthStore: {
++    getState: () => ({ apiBase: 'https://cpa.example.com/v0/management' }),
++  },
++}));
++
++import { passthroughApi } from './passthrough';
++
++beforeEach(() => {
++  mocks.get.mockReset();
++});
++
++describe('passthroughApi.getGroups', () => {
++  it('reads the v8 passthrough projection into groups', async () => {
++    mocks.get.mockResolvedValue([
++      {
++        name: 'cloudflare-clef',
++        'base-url': 'https://api.cloudflare.com',
++        path: '/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef',
++        priority: 10,
++        models: [{ name: 'clef', alias: 'decision' }],
++        keys: [{ 'api-key': 'cf-key', auth_index: 'abc123' }],
++      },
++    ]);
++
++    await expect(passthroughApi.getGroups()).resolves.toEqual([
++      {
++        baseUrl: 'https://api.cloudflare.com',
++        disabled: false,
++        keys: [{ apiKey: 'cf-key', authIndex: 'abc123' }],
++        models: [{ alias: 'decision', name: 'clef' }],
++        name: 'cloudflare-clef',
++        path: '/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef',
++        priority: 10,
++        providerKey: 'passthrough-cloudflare-clef',
++      },
++    ]);
++    expect(mocks.get).toHaveBeenCalledWith(
++      'https://cpa.example.com/v8/management/config/api-keys/passthrough'
++    );
++  });
++
++  it('reads a missing projection as no groups', async () => {
++    mocks.get.mockRejectedValue(Object.assign(new Error('not_found'), { status: 404 }));
++    await expect(passthroughApi.getGroups()).resolves.toEqual([]);
++  });
++});
+diff --git a/apps/web/src/services/api/passthrough.ts b/apps/web/src/services/api/passthrough.ts
+new file mode 100644
+index 0000000..a773c00
+--- /dev/null
++++ b/apps/web/src/services/api/passthrough.ts
+@@ -0,0 +1,72 @@
++import { apiClient } from './client';
++import { useAuthStore } from '@/stores/useAuthStore';
++import { normalizeAuthIndex } from '@/utils/authIndex';
++import { normalizeApiBase } from '@/utils/connection';
++import { isRecord } from '@/utils/helpers';
++
++export interface PassthroughKey {
++  apiKey: string;
++  authIndex?: string;
++}
++
++export interface PassthroughModel {
++  alias?: string;
++  name: string;
++}
++
++export interface PassthroughGroup {
++  baseUrl: string;
++  disabled: boolean;
++  keys: PassthroughKey[];
++  models: PassthroughModel[];
++  name: string;
++  path: string;
++  priority?: number;
++  providerKey: string;
++}
++
++const readText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
++
++// Reads one group of CPA's v8 projection, whose keys carry the live auth_index.
++const normalizePassthroughGroup = (value: unknown): PassthroughGroup | null => {
++  if (!isRecord(value)) return null;
++  const name = readText(value.name);
++  if (!name) return null;
++
++  const keys = (Array.isArray(value.keys) ? value.keys : []).filter(isRecord).map((key) => ({
++    apiKey: readText(key['api-key']),
++    authIndex: normalizeAuthIndex(key.auth_index) ?? undefined,
++  }));
++  const models = (Array.isArray(value.models) ? value.models : [])
++    .filter(isRecord)
++    .map((model) => ({ alias: readText(model.alias) || undefined, name: readText(model.name) }))
++    .filter((model) => model.name);
++
++  return {
++    baseUrl: readText(value['base-url']),
++    disabled: value.disabled === true,
++    keys,
++    models,
++    name,
++    path: readText(value.path),
++    priority: typeof value.priority === 'number' ? value.priority : undefined,
++    providerKey: `passthrough-${name.toLowerCase()}`,
++  };
++};
++
++export const passthroughApi = {
++  // The v8 path sits outside the client's v0 base, so the URL is absolute; the
++  // client still adds the management key. A config without passthrough groups
++  // answers 404, so every failure reads as no groups.
++  getGroups: async (): Promise<PassthroughGroup[]> => {
++    const base = normalizeApiBase(useAuthStore.getState().apiBase);
++    try {
++      const data = await apiClient.get(`${base}/v8/management/config/api-keys/passthrough`);
++      return (Array.isArray(data) ? data : [])
++        .map(normalizePassthroughGroup)
++        .filter((group): group is PassthroughGroup => group !== null);
++    } catch {
++      return [];
++    }
++  },
++};
