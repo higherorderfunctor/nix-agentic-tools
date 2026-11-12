@@ -24,8 +24,8 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
-    # Every servable OpenCode Go catalog model belongs to exactly one preset,
-    # and every preset matches a catalog model.
+    # Every model owned by Go research guidance belongs to exactly one preset;
+    # native guidance families do not restrict the shared served-offer inventory.
     delegate-routing-opencode-go-presets = let
       inherit (import ./lib/opencode-go.nix {inherit lib;}) drift;
     in

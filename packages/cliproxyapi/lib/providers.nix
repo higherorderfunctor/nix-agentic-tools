@@ -15,13 +15,6 @@
       messages = "anthropic";
       responses = "responses";
     };
-    # Subscriptions the operator already routes through CPA serve these
-    # families: Claude OAuth (claude-*), z.ai, shipped here as
-    # `vendor = "z-ai"` (glm-*), and Codex OAuth (gpt-*). OpenCode would only
-    # duplicate them, so the defaults leave them out and
-    # ../modules/instances.nix refuses any a definition adds.
-    refuses = model: lib.any (prefix: lib.hasPrefix prefix (lib.toLower model)) ["claude-" "glm-" "gpt-"];
-    catalog = lib.filterAttrs (id: _: !(refuses id)) models;
     placed = lib.mapAttrsToList (id: entry: let
       natives = builtins.attrNames entry.api;
       native = lib.head natives;
@@ -37,7 +30,7 @@
         api = apiOf.${native};
         inherit (entry.api.${native}) base_url;
       })
-    catalog;
+    models;
     onApi = api: lib.filter (model: model.api == api) placed;
     # The base URL comes from the API's own native models; the exception's
     # URL is another protocol's. CPA's claude executor appends
@@ -65,8 +58,6 @@
     # identifier (internal/util/header_helpers.go).
     headers.x-opencode-session = "$CPA-SESSION-ID";
     models = null;
-    refusal = "OpenCode Go may not serve claude-*, glm-* or gpt-* models; the Claude OAuth, z.ai and Codex OAuth credentials serve them.";
-    inherit refuses;
     toolAliases = {};
   };
   vendors = {
@@ -231,7 +222,7 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without claude-*, glm-* or gpt-* models, which it refuses, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places every extracted OpenCode Go offer on its native API and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {

@@ -5,10 +5,12 @@
 {lib}: let
   catalogLib = import ../../ai-module/lib/catalog/resolve.nix {inherit lib;};
   fact = catalogLib.opencodeGo;
-  inherit ((import ../../cliproxyapi/lib/providers.nix {inherit lib;}).vendors.opencode-go) refuses;
   vendor = "opencode-go";
-  # Catalog ids a Go credential may serve; the Claude OAuth credential owns the rest.
-  catalog = lib.filter (id: !(refuses id)) (builtins.attrNames fact.models);
+  # Native families own Anthropic, OpenAI and Zhipu guidance. This inventory
+  # checks only Go's research presets; it never restricts served offers.
+  catalog = builtins.attrNames (lib.filterAttrs (id: _:
+    !lib.elem catalogLib.defaults.models.${id}.maker ["anthropic" "openai" "zhipu"])
+  fact.models);
 
   # Shell-style glob as a full-match POSIX regex: `*`, `?` and `[...]`/`[!...]`.
   globRegex = glob:
