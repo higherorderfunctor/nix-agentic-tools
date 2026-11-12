@@ -24,6 +24,17 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
+    # Rejects simplified captures, implicit clocks, guessed scopes/enforcement
+    # and absent extras presented as measured zero.
+    delegate-routing-observation-normalize =
+      pkgs.runCommand "delegate-routing-observation-normalize" {
+        nativeBuildInputs = [pkgs.python3];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        python3 -I ${./checks/pacing}/test_observations.py ${./scripts}
+        touch "$out"
+      '';
     # Every model owned by Go research guidance belongs to exactly one preset;
     # native guidance families do not restrict the shared served-offer inventory.
     delegate-routing-opencode-go-presets = let
