@@ -190,10 +190,10 @@ index 0000000..5e15a1b
 +}
 diff --git a/internal/api/server_passthrough_test.go b/internal/api/server_passthrough_test.go
 new file mode 100644
-index 0000000..e6133d5
+index 0000000..a47f92e
 --- /dev/null
 +++ b/internal/api/server_passthrough_test.go
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,250 @@
 +package api
 +
 +import (
@@ -216,7 +216,6 @@ index 0000000..e6133d5
 +	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 +	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
 +	"github.com/router-for-me/CLIProxyAPI/v8/internal/watcher/synthesizer"
-+	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 +	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
 +	sdkconfig "github.com/router-for-me/CLIProxyAPI/v8/sdk/config"
 +)
@@ -228,7 +227,7 @@ index 0000000..e6133d5
 +	var mu sync.Mutex
 +	var calls []string
 +	response := " {\n \"model\":\"final-model\", \"answers\":[], \"usage\":{\"input_tokens\":7,\"output_tokens\":3} }\n"
-+	raw := " {\n \"model\" : \"decision\", \"state\": {\"model\":\"nested\"}, \"questions\": [] }\n"
++	raw := " {\n \"model\" : \"decision\", \"state\": {\"model\":\"decision\"}, \"questions\": [], \"stream\": false }\n"
 +	upstream := func(w http.ResponseWriter, r *http.Request) {
 +		body, err := io.ReadAll(r.Body)
 +		if err != nil {
@@ -301,7 +300,7 @@ index 0000000..e6133d5
 +	}
 +	reg := registry.GetGlobalRegistry()
 +	for _, auth := range auths {
-+		if !strings.HasPrefix(auth.Provider, "passthrough-") {
++		if !registry.IsPassthroughProvider(auth.Provider) {
 +			continue
 +		}
 +		reg.RegisterClient(auth.ID, auth.Provider, []*registry.ModelInfo{{ID: "decision", Type: "passthrough"}})
@@ -342,7 +341,7 @@ index 0000000..e6133d5
 +			t.Fatalf("client %q: %d %s", tc.key, out.Code, out.Body.String())
 +		}
 +	}
-+	for _, bad := range []string{`[]`, `{"model":"decision","model":"other"}`, `{"model":"decision","stream":null}`, `{"model":"decision","stream":true}`, `{"model":3}`, `{"model":" "}`} {
++	for _, bad := range []string{``, `null`, `[]`, `{}`, `{"model":`, `{"model":"decision"} {}`, `{"model":null}`, `{"model":3}`, `{"model":""}`, `{"model":" \t"}`, `{"model":"decision","stream":null}`, `{"model":"decision","stream":true}`, `{"model":"decision","stream":"false"}`, `{"model":"decision","stream":0}`} {
 +		if out := request("/v1/passthrough", "client-a", bad); out.Code != 400 {
 +			t.Fatalf("invalid request: %d %s", out.Code, out.Body.String())
 +		}
@@ -445,10 +444,6 @@ index 0000000..e6133d5
 +		t.Fatal("executed without credentials")
 +	}
 +}
-+
-+// Ensure the fixture really uses the provider executor, not a fake executor
-+// which could make a direct HTTP bypass look like conductor failover.
-+var _ coreauth.ProviderExecutor = (*executor.PassthroughExecutor)(nil)
 diff --git a/internal/api/server_routes.go b/internal/api/server_routes.go
 index e2b039a..eb72733 100644
 --- a/internal/api/server_routes.go
@@ -651,18 +646,20 @@ index 130eea0..c1e07fe 100644
  	}
 diff --git a/internal/config/passthrough.go b/internal/config/passthrough.go
 new file mode 100644
-index 0000000..943ea5e
+index 0000000..aeb6732
 --- /dev/null
 +++ b/internal/config/passthrough.go
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,169 @@
 +package config
 +
 +import (
++	"bytes"
 +	"fmt"
 +	"net/url"
 +	"strconv"
 +	"strings"
 +
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 +	"gopkg.in/yaml.v3"
 +)
 +
@@ -709,7 +706,7 @@ index 0000000..943ea5e
 +
 +// ProviderKey always prefixes the normalized group name, including an existing prefix.
 +func (g Passthrough) ProviderKey() string {
-+	return "passthrough-" + strings.ToLower(strings.TrimSpace(g.Name))
++	return registry.PassthroughProviderPrefix + strings.ToLower(strings.TrimSpace(g.Name))
 +}
 +
 +// PassthroughGroup binds an auth's index to its identity, never the first shared URL.
@@ -797,17 +794,37 @@ index 0000000..943ea5e
 +		return nil
 +	}
 +	var cfg Config
-+	if err := groups.Decode(&cfg.Passthrough); err != nil {
++	if groups.Kind != yaml.SequenceNode && groups.Tag != "!!null" {
 +		return fmt.Errorf("api-keys.passthrough: invalid group field type")
++	}
++	for i, group := range groups.Content {
++		// Management projection metadata is not part of the credential schema.
++		if keys := yamlPath(group, "api-key-entries"); keys != nil {
++			for _, key := range keys.Content {
++				deleteYAMLPath(key, "auth_index")
++				deleteYAMLPath(key, "auth-index")
++			}
++		}
++		encoded, err := yaml.Marshal(group)
++		if err != nil {
++			return fmt.Errorf("api-keys.passthrough[%d]: unknown or invalid field", i)
++		}
++		decoder := yaml.NewDecoder(bytes.NewReader(encoded))
++		decoder.KnownFields(true)
++		var g Passthrough
++		if err := decoder.Decode(&g); err != nil {
++			return fmt.Errorf("api-keys.passthrough[%d]: unknown or invalid field", i)
++		}
++		cfg.Passthrough = append(cfg.Passthrough, g)
 +	}
 +	return cfg.ValidatePassthrough()
 +}
 diff --git a/internal/config/passthrough_test.go b/internal/config/passthrough_test.go
 new file mode 100644
-index 0000000..99fbf54
+index 0000000..b380536
 --- /dev/null
 +++ b/internal/config/passthrough_test.go
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,208 @@
 +package config
 +
 +import (
@@ -919,6 +936,57 @@ index 0000000..99fbf54
 +	}
 +}
 +
++func TestPassthroughKnownFields(t *testing.T) {
++	const legacy = `passthrough:
++  - name: primary
++    base-url: https://upstream.example/base
++    path: /inference/v1/decision
++    priority: 30
++    models: [{name: upstream-model, alias: decision}]
++    api-key-entries: [{api-key: first}]
++`
++	second := strings.TrimPrefix(passthroughConfig, "config-version: 8\napi-keys:\n  passthrough:\n")
++	second = strings.Replace(second, "name: primary", "name: secondary", 1)
++	second = strings.Replace(second, "priority: 30", "prority: sensitive", 1)
++	cases := []struct{ name, data, wantErr string }{
++		{"legacy group field", strings.Replace(legacy, "priority: 30", "prority: sensitive", 1), "api-keys.passthrough[0]: unknown or invalid field"},
++		{"legacy key field", strings.Replace(legacy, "api-key: first", "api-key: first, api_key: sensitive", 1), "api-keys.passthrough[0]: unknown or invalid field"},
++		{"legacy key metadata", strings.Replace(legacy, "api-key: first", "api-key: first, auth_index: 0, auth-index: 0", 1), ""},
++		{"legacy model field", strings.Replace(legacy, "alias: decision", "alias: decision, alais: sensitive", 1), "api-keys.passthrough[0]: unknown or invalid field"},
++		{"legacy valid", legacy, ""},
++		{"v8 group field", strings.Replace(passthroughConfig, "priority: 30", "prority: sensitive", 1), "api-keys.passthrough[0]: unknown or invalid field"},
++		{"v8 key field", strings.Replace(passthroughConfig, "api-key: first", "api-key: first, api_key: sensitive", 1), "api-keys.passthrough[0]: unknown or invalid field"},
++		{"v8 key metadata", strings.Replace(passthroughConfig, "api-key: first", "api-key: first, auth_index: 0, auth-index: 0", 1), ""},
++		{"v8 model field", strings.Replace(passthroughConfig, "alias: decision", "alias: decision, alais: sensitive", 1), "api-keys.passthrough[0]: unknown or invalid field"},
++		{"v8 second group field", passthroughConfig + second, "api-keys.passthrough[1]: unknown or invalid field"},
++		{"v8 valid", passthroughConfig, ""},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			data := []byte(tc.data)
++			file := filepath.Join(t.TempDir(), "config.yaml")
++			if err := os.WriteFile(file, data, 0600); err != nil {
++				t.Fatal(err)
++			}
++			for _, load := range []func() (*Config, error){func() (*Config, error) { return ParseConfigBytes(data) }, func() (*Config, error) { return LoadConfigOptional(file, true) }} {
++				cfg, err := load()
++				if tc.wantErr != "" {
++					if err == nil || err.Error() != tc.wantErr {
++						t.Fatalf("error = %v, want %q", err, tc.wantErr)
++					}
++					continue
++				}
++				if err != nil {
++					t.Fatal(err)
++				}
++				if len(cfg.Passthrough) != 1 || cfg.Passthrough[0].Priority != 30 || len(cfg.Passthrough[0].APIKeyEntries) == 0 || cfg.Passthrough[0].APIKeyEntries[0].APIKey != "first" {
++					t.Fatal("valid passthrough group fields were dropped")
++				}
++			}
++		})
++	}
++}
++
 +// Every refusal reaches optional startup loading as well as management parsing;
 +// diagnostics must never reveal the supplied URL, path or credential.
 +func TestPassthroughRejectsInvalidConfig(t *testing.T) {
@@ -966,13 +1034,21 @@ index 0000000..99fbf54
 +	}
 +}
 diff --git a/internal/registry/model_registry.go b/internal/registry/model_registry.go
-index 7f82e7d..92ab9f4 100644
+index 7f82e7d..c98802e 100644
 --- a/internal/registry/model_registry.go
 +++ b/internal/registry/model_registry.go
-@@ -1541,6 +1541,35 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
+@@ -1541,6 +1541,43 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
  	return available, expiresAt
  }
  
++// PassthroughProviderPrefix starts every passthrough group's provider key.
++const PassthroughProviderPrefix = "passthrough-"
++
++// IsPassthroughProvider reports whether a provider key names a passthrough group.
++func IsPassthroughProvider(provider string) bool {
++	return strings.HasPrefix(provider, PassthroughProviderPrefix)
++}
++
 +// publicModelInfo keeps internal passthrough registrations out of catalogs.
 +// A shared alias remains public when a chat credential also registers it.
 +func publicModelInfo(registration *ModelRegistration) *ModelInfo {
@@ -981,7 +1057,7 @@ index 7f82e7d..92ab9f4 100644
 +	}
 +	internal := registration.Info != nil && registration.Info.Type == "passthrough"
 +	for provider, count := range registration.Providers {
-+		if count > 0 && strings.HasPrefix(provider, "passthrough-") {
++		if count > 0 && IsPassthroughProvider(provider) {
 +			internal = true
 +		}
 +	}
@@ -995,7 +1071,7 @@ index 7f82e7d..92ab9f4 100644
 +	sort.Strings(providers)
 +	for _, provider := range providers {
 +		info := registration.InfoByProvider[provider]
-+		if registration.Providers[provider] > 0 && !strings.HasPrefix(provider, "passthrough-") && info != nil && info.Type != "passthrough" {
++		if registration.Providers[provider] > 0 && !IsPassthroughProvider(provider) && info != nil && info.Type != "passthrough" {
 +			return info
 +		}
 +	}
@@ -1005,7 +1081,7 @@ index 7f82e7d..92ab9f4 100644
  // GetAvailableModelInfos returns cloned metadata for all currently available models.
  func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
  	now := time.Now()
-@@ -1550,10 +1579,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
+@@ -1550,10 +1587,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
  	result := make([]*ModelInfo, 0, len(r.models))
  	for _, registration := range r.models {
  		available, _ := modelRegistrationAvailability(registration, now)
@@ -1019,7 +1095,7 @@ index 7f82e7d..92ab9f4 100644
  	}
  	sort.Slice(result, func(i, j int) bool {
  		return strings.TrimSpace(result[i].ID) < strings.TrimSpace(result[j].ID)
-@@ -1574,7 +1604,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
+@@ -1574,7 +1612,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
  			continue
  		}
  
@@ -1028,11 +1104,11 @@ index 7f82e7d..92ab9f4 100644
  		if model != nil {
  			models = append(models, model)
  		}
-@@ -1628,6 +1658,9 @@ func cloneModelMapValue(value any) any {
+@@ -1628,6 +1666,9 @@ func cloneModelMapValue(value any) any {
  //   - []*ModelInfo: List of available models for the provider
  func (r *ModelRegistry) GetAvailableModelsByProvider(provider string) []*ModelInfo {
  	provider = strings.ToLower(strings.TrimSpace(provider))
-+	if strings.HasPrefix(provider, "passthrough-") {
++	if IsPassthroughProvider(provider) {
 +		return nil
 +	}
  	if provider == "" {
@@ -1095,7 +1171,7 @@ index 0000000..20993af
 +}
 diff --git a/internal/runtime/executor/passthrough_executor.go b/internal/runtime/executor/passthrough_executor.go
 new file mode 100644
-index 0000000..99eb4bf
+index 0000000..0a87f9a
 --- /dev/null
 +++ b/internal/runtime/executor/passthrough_executor.go
 @@ -0,0 +1,168 @@
@@ -1147,10 +1223,10 @@ index 0000000..99eb4bf
 +	if group == nil || auth.Provider != e.provider {
 +		return resp, passthroughError{code: http.StatusUnauthorized, message: "passthrough group removed"}
 +	}
-+	_, payload, err := coreexecutor.PassthroughBody(req.Payload, req.Model)
-+	if err != nil {
++	if _, err := coreexecutor.ValidatePassthroughRequest(req.Payload); err != nil {
 +		return resp, passthroughError{code: http.StatusBadRequest, message: err.Error()}
 +	}
++	payload := helps.SetStringIfDifferent(req.Payload, "model", req.Model)
 +	ctx = helps.EnsureSessionContext(ctx, opts, req.Payload)
 +	reporter := helps.NewExecutorUsageReporter(ctx, e, req.Model, auth)
 +	defer reporter.TrackFailure(ctx, &err)
@@ -1269,10 +1345,10 @@ index 0000000..99eb4bf
 +}
 diff --git a/internal/runtime/executor/passthrough_executor_test.go b/internal/runtime/executor/passthrough_executor_test.go
 new file mode 100644
-index 0000000..fa5ef36
+index 0000000..4828d86
 --- /dev/null
 +++ b/internal/runtime/executor/passthrough_executor_test.go
-@@ -0,0 +1,136 @@
+@@ -0,0 +1,130 @@
 +package executor
 +
 +import (
@@ -1334,6 +1410,15 @@ index 0000000..fa5ef36
 +	if _, err := e.CountTokens(context.Background(), auth, req, options); err == nil {
 +		t.Error("accepted counting")
 +	}
++	for _, bad := range []string{``, `null`, `[]`, `{}`, `{"model":`, `{"model":"alias"} {}`, `{"model":null}`, `{"model":3}`, `{"model":""}`, `{"model":" \t"}`, `{"model":"alias","stream":null}`, `{"model":"alias","stream":true}`, `{"model":"alias","stream":"false"}`, `{"model":"alias","stream":0}`} {
++		invalid := req
++		invalid.Payload = []byte(bad)
++		_, err := e.Execute(context.Background(), auth, invalid, options)
++		var status interface{ StatusCode() int }
++		if !errors.As(err, &status) || status.StatusCode() != http.StatusBadRequest {
++			t.Errorf("invalid body %q: %v, want 400", bad, err)
++		}
++	}
 +	missing := auth.Clone()
 +	missing.Attributes["api_key"] = ""
 +	if _, err := e.Execute(context.Background(), missing, req, options); err == nil {
@@ -1369,22 +1454,7 @@ index 0000000..fa5ef36
 +	}
 +}
 +
-+func TestPassthroughBodyAndUsage(t *testing.T) {
-+	raw := []byte(" {\n \"model\" : \"alias\", \"state\":{\"model\":\"nested\"},\"x\":1e2 } ")
-+	want := " {\n \"model\" : \"upstream\", \"state\":{\"model\":\"nested\"},\"x\":1e2 } "
-+	model, out, err := coreexecutor.PassthroughBody(raw, "upstream")
-+	if err != nil || model != "alias" || string(out) != want {
-+		t.Fatalf("raw rewrite: %q %q %v", model, out, err)
-+	}
-+	_, same, err := coreexecutor.PassthroughBody(raw, "alias")
-+	if err != nil || string(same) != string(raw) {
-+		t.Fatal("unchanged model modified bytes")
-+	}
-+	for _, bad := range []string{`null`, `[]`, `{"model":"a","model":"b"}`, `{"model":null}`, `{"model":"a"} {}`, `{"model":"decision","stream":null}`, `{"model":"a","stream":true}`, `{"model":"a","stream":"false"}`} {
-+		if _, _, err := coreexecutor.PassthroughBody([]byte(bad), "x"); err == nil {
-+			t.Errorf("accepted %s", bad)
-+		}
-+	}
++func TestPassthroughUsage(t *testing.T) {
 +	for _, tc := range []struct {
 +		body          string
 +		input, output int64
@@ -1427,10 +1497,10 @@ index fef5d8b..1117bb7 100644
  	// Native Interactions API Keys
 diff --git a/internal/watcher/synthesizer/passthrough.go b/internal/watcher/synthesizer/passthrough.go
 new file mode 100644
-index 0000000..371c760
+index 0000000..b24e72a
 --- /dev/null
 +++ b/internal/watcher/synthesizer/passthrough.go
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,51 @@
 +package synthesizer
 +
 +import (
@@ -1459,15 +1529,14 @@ index 0000000..371c760
 +		for j, key := range keys {
 +			id, token := ctx.IDGenerator.Next(provider, key.APIKey, group.BaseURL)
 +			attrs := map[string]string{
-+				"api_key":          key.APIKey,
-+				"base_url":         group.BaseURL,
-+				"config_hash":      hex.EncodeToString(hash[:]),
-+				"config_index":     strconv.Itoa(i),
-+				"key_index":        strconv.Itoa(j),
-+				"passthrough_path": group.Path,
-+				"priority":         strconv.Itoa(group.Priority),
-+				"provider_key":     provider,
-+				"source":           fmt.Sprintf("config:%s[%s]", provider, token),
++				"api_key":      key.APIKey,
++				"base_url":     group.BaseURL,
++				"config_hash":  hex.EncodeToString(hash[:]),
++				"config_index": strconv.Itoa(i),
++				"key_index":    strconv.Itoa(j),
++				"priority":     strconv.Itoa(group.Priority),
++				"provider_key": provider,
++				"source":       fmt.Sprintf("config:%s[%s]", provider, token),
 +			}
 +			metadata := map[string]any{}
 +			if group.DisableCooling != nil {
@@ -1485,7 +1554,7 @@ index 0000000..371c760
 +}
 diff --git a/internal/watcher/synthesizer/passthrough_test.go b/internal/watcher/synthesizer/passthrough_test.go
 new file mode 100644
-index 0000000..fa13e1b
+index 0000000..3366a5d
 --- /dev/null
 +++ b/internal/watcher/synthesizer/passthrough_test.go
 @@ -0,0 +1,140 @@
@@ -1542,7 +1611,7 @@ index 0000000..fa13e1b
 +	}
 +	cfg.Passthrough[0].Path = "/changed"
 +	second := passthroughAuths(t, cfg)
-+	if first[0].ID != second[0].ID || first[0].Attributes["config_hash"] == second[0].Attributes["config_hash"] || second[0].Attributes["passthrough_path"] != "/changed" {
++	if first[0].ID != second[0].ID || first[0].Attributes["config_hash"] == second[0].Attributes["config_hash"] {
 +		t.Fatal("reload retains stale path")
 +	}
 +	cfg.Passthrough[0].Disabled = true
@@ -1734,16 +1803,24 @@ index 0000000..f14a1cd
 +	}
 +}
 diff --git a/sdk/api/handlers/handlers_routing.go b/sdk/api/handlers/handlers_routing.go
-index 671aa51..d967c88 100644
+index 671aa51..009c50f 100644
 --- a/sdk/api/handlers/handlers_routing.go
 +++ b/sdk/api/handlers/handlers_routing.go
-@@ -58,6 +58,14 @@ func preferExecutionProvider(providers []string, preferred string) []string {
+@@ -10,6 +10,7 @@ import (
+ 
+ 	. "github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
+ 	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
+@@ -58,6 +59,14 @@ func preferExecutionProvider(providers []string, preferred string) []string {
  }
  
  func adjustExecutionProvidersForEntryProtocol(entryProtocol string, providers []string) []string {
 +	filtered := make([]string, 0, len(providers))
 +	for _, provider := range providers {
-+		if strings.HasPrefix(strings.ToLower(provider), "passthrough-") == (entryProtocol == coreexecutor.PassthroughProtocol) {
++		if registry.IsPassthroughProvider(strings.ToLower(provider)) == (entryProtocol == coreexecutor.PassthroughProtocol) {
 +			filtered = append(filtered, provider)
 +		}
 +	}
@@ -1752,7 +1829,7 @@ index 671aa51..d967c88 100644
  	if entryProtocol == Interactions {
  		return preferExecutionProvider(providers, GeminiInteractions)
  	}
-@@ -361,6 +369,9 @@ func modelRoutersEnabled(host PluginModelRouterHost, skipPluginID string) bool {
+@@ -361,6 +370,9 @@ func modelRoutersEnabled(host PluginModelRouterHost, skipPluginID string) bool {
  
  func (h *BaseAPIHandler) applyModelRouter(ctx context.Context, handlerType, modelName string, rawJSON []byte, stream bool, execOptions modelExecutionOptions) modelRouteDecision {
  	var decision modelRouteDecision
@@ -1764,7 +1841,7 @@ index 671aa51..d967c88 100644
  		return decision
 diff --git a/sdk/api/handlers/passthrough/passthrough_handlers.go b/sdk/api/handlers/passthrough/passthrough_handlers.go
 new file mode 100644
-index 0000000..8e938d7
+index 0000000..2c3f9af
 --- /dev/null
 +++ b/sdk/api/handlers/passthrough/passthrough_handlers.go
 @@ -0,0 +1,40 @@
@@ -1792,7 +1869,7 @@ index 0000000..8e938d7
 +		h.WriteErrorResponse(c, &interfaces.ErrorMessage{StatusCode: http.StatusBadRequest, Error: err})
 +		return
 +	}
-+	model, _, err := coreexecutor.PassthroughBody(body, "")
++	model, err := coreexecutor.ValidatePassthroughRequest(body)
 +	if err != nil {
 +		h.WriteErrorResponse(c, &interfaces.ErrorMessage{StatusCode: http.StatusBadRequest, Error: err})
 +		return
@@ -1834,83 +1911,44 @@ index dd5ab10..0f2d36d 100644
  			if entry := resolveGeminiAPIKeyConfig(cfg, auth); entry != nil {
 diff --git a/sdk/cliproxy/executor/passthrough.go b/sdk/cliproxy/executor/passthrough.go
 new file mode 100644
-index 0000000..27fb560
+index 0000000..b5cd3d0
 --- /dev/null
 +++ b/sdk/cliproxy/executor/passthrough.go
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,21 @@
 +package executor
 +
 +import (
-+	"bytes"
-+	"encoding/json"
 +	"errors"
-+	"io"
 +	"strings"
++
++	"github.com/MoeForge/moego/ojson"
 +)
 +
 +// PassthroughProtocol isolates raw JSON from every translated chat protocol.
 +const PassthroughProtocol = "passthrough"
 +
-+// PassthroughBody validates the client object and optionally replaces only its
-+// top-level model value. Duplicate model keys and streaming cannot be executed
-+// unambiguously; nested model fields and all other bytes are preserved.
-+func PassthroughBody(body []byte, upstream string) (string, []byte, error) {
-+	bad := errors.New("passthrough requires a JSON object with one nonempty string model and no streaming")
-+	d := json.NewDecoder(bytes.NewReader(body))
-+	token, err := d.Token()
-+	if err != nil || token != json.Delim('{') {
-+		return "", nil, bad
++// ValidatePassthroughRequest returns the model of a non-streaming JSON object.
++func ValidatePassthroughRequest(body []byte) (string, error) {
++	root := ojson.ParseBytes(body)
++	model, stream := root.Get("model"), root.Get("stream")
++	if !ojson.ValidBytes(body) || !root.IsObject() || model.Type != ojson.String || strings.TrimSpace(model.String()) == "" || (stream.Exists() && stream.Type != ojson.False) {
++		return "", errors.New("passthrough requires a JSON object with a nonempty string model and no streaming")
 +	}
-+	model, start, end, seen := "", 0, 0, false
-+	for d.More() {
-+		key, err := d.Token()
-+		if err != nil {
-+			return "", nil, bad
-+		}
-+		before := int(d.InputOffset())
-+		var value json.RawMessage
-+		if d.Decode(&value) != nil {
-+			return "", nil, bad
-+		}
-+		switch key {
-+		case "model":
-+			if seen || json.Unmarshal(value, &model) != nil || strings.TrimSpace(model) == "" {
-+				return "", nil, bad
-+			}
-+			seen = true
-+			start = before
-+			for start < len(body) && (body[start] == ':' || body[start] == ' ' || body[start] == '\n' || body[start] == '\t' || body[start] == '\r') {
-+				start++
-+			}
-+			end = int(d.InputOffset())
-+		case "stream":
-+			var stream *bool
-+			if json.Unmarshal(value, &stream) != nil || stream == nil || *stream {
-+				return "", nil, bad
-+			}
-+		}
-+	}
-+	if _, err = d.Token(); err != nil || !seen {
-+		return "", nil, bad
-+	}
-+	if _, err = d.Token(); err != io.EOF {
-+		return "", nil, bad
-+	}
-+	if upstream == "" || model == upstream {
-+		return model, append([]byte(nil), body...), nil
-+	}
-+	replacement, _ := json.Marshal(upstream)
-+	out := make([]byte, 0, len(body)+len(replacement))
-+	out = append(out, body[:start]...)
-+	out = append(out, replacement...)
-+	out = append(out, body[end:]...)
-+	return model, out, nil
++	return model.String(), nil
 +}
 diff --git a/sdk/cliproxy/service_executors.go b/sdk/cliproxy/service_executors.go
-index c83c246..cdd8053 100644
+index c83c246..e8f6f4a 100644
 --- a/sdk/cliproxy/service_executors.go
 +++ b/sdk/cliproxy/service_executors.go
-@@ -194,6 +194,14 @@ func (s *Service) registerAvailableExecutors(ctx context.Context, opts executorR
+@@ -7,6 +7,7 @@ import (
+ 
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
+ 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
+@@ -194,6 +195,14 @@ func (s *Service) registerAvailableExecutors(ctx context.Context, opts executorR
  	if ctx.Err() != nil {
  		return
  	}
@@ -1918,18 +1956,18 @@ index c83c246..cdd8053 100644
 +	// compatibility fallback can claim their internal provider identifiers.
 +	cfg := s.currentConfig()
 +	for _, auth := range s.coreManager.List() {
-+		if strings.HasPrefix(auth.Provider, "passthrough-") && cfg.PassthroughGroup(auth.Provider, auth.Attributes["config_index"]) == nil {
++		if registry.IsPassthroughProvider(auth.Provider) && cfg.PassthroughGroup(auth.Provider, auth.Attributes["config_index"]) == nil {
 +			s.coreManager.UnregisterExecutor(auth.Provider)
 +		}
 +	}
  	// Keep all Service-owned executor registration paths here so native, Home,
  	// auth-derived, and plugin executors stay in the same binding order.
  	if opts.includeBaseline {
-@@ -284,6 +292,14 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
+@@ -284,6 +293,14 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
  	if a.Disabled {
  		return
  	}
-+	if strings.HasPrefix(a.Provider, "passthrough-") {
++	if registry.IsPassthroughProvider(a.Provider) {
 +		if cfg.PassthroughGroup(a.Provider, a.Attributes["config_index"]) == nil {
 +			s.coreManager.UnregisterExecutor(a.Provider)
 +			return
@@ -1941,7 +1979,7 @@ index c83c246..cdd8053 100644
  		if compatProviderKey == "" {
  			compatProviderKey = strings.ToLower(strings.TrimSpace(a.Provider))
 diff --git a/sdk/cliproxy/service_models.go b/sdk/cliproxy/service_models.go
-index 7daa6ed..ea88c73 100644
+index 7daa6ed..42854ea 100644
 --- a/sdk/cliproxy/service_models.go
 +++ b/sdk/cliproxy/service_models.go
 @@ -57,6 +57,23 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
@@ -1950,7 +1988,7 @@ index 7daa6ed..ea88c73 100644
  	}
 +	// Internal registrations are required for conductor eligibility, but their
 +	// type is excluded from public catalog projections even without an allowlist.
-+	if strings.HasPrefix(a.Provider, "passthrough-") {
++	if registry.IsPassthroughProvider(a.Provider) {
 +		group := cfg.PassthroughGroup(a.Provider, a.Attributes["config_index"])
 +		if group == nil {
 +			return s.unregisterModelsForAuthFenced(a, fence)

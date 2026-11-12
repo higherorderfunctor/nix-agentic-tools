@@ -4,8 +4,7 @@
 
 Passthrough groups serve non-chat JSON APIs independently of OpenAI
 compatibility. `POST /v1/passthrough` uses the auth conductor for credential
-selection and execution. Keep the PR draft until the route, conductor
-integration and measured settings extraction pass CI together.
+selection and execution.
 
 ```yaml
 config-version: 8
@@ -32,21 +31,21 @@ provider identity is always `passthrough-<lowercase-name>`, including when the
 supplied name already starts with `passthrough-`. Distinct groups may share a
 base URL and API key; their aliases resolve within the selected group, using its
 config index and identity rather than the first matching URL.
+`registry.IsPassthroughProvider` recognizes passthrough provider keys.
 
 The path may be rooted (`/inference/v1/decision`) or relative. Absolute URLs,
 network-path references (`//host/path`), queries and fragments are refused. The
 base must contain a hostname and no userinfo, query or fragment. Diagnostics
 name the field and group/key index without printing the supplied URL or
 credential. Invalid groups fail both management parsing and optional startup
-loading.
+loading. Unknown fields in a group, key or model entry are refused with
+`api-keys.passthrough[N]: unknown or invalid field`.
 
 The route accepts a JSON object containing `model: "decision"`; it rejects
-streaming. Duplicate top-level model keys, empty models and non-boolean
-streaming flags are refused. The executor forwards the original JSON bytes,
-rewriting only the top-level model value when an alias selects a different
-upstream model. Responses remain unchanged. Envelope options (`unwrap`,
-`usage-path`, `error-in-200`) are a separate extension and are not declared by
-the core route.
+streaming, empty models and non-boolean streaming flags. The executor rewrites
+the top-level `model` with CPA's `helps.SetStringIfDifferent` when an alias
+selects a different upstream model; the rest of the request is forwarded as
+sent.
 
 Client access uses CPA's existing client-key middleware. Allowlist rules grant a
 specific internal provider and `kind: apikey`, optionally narrowed by credential
@@ -93,13 +92,12 @@ counting. The raw route bypasses model routers and plugin body transformations,
 preserving the existing request context, access identity, lifecycle and
 selected-auth capture.
 
-Plain responses retain their bytes. A top-level `usage` object may contain
-nonnegative integer `input_tokens` and `output_tokens`; missing usage records
-zero tokens. Present malformed counters fail as 502. Native usage reporting
-preserves the original requested alias, selected upstream model and
-authenticated client key. The fixture reads the generic management usage queue
-for two different client keys sharing one alias; failed attempts carry zero
-tokens.
+Responses retain their bytes. A top-level `usage` object may contain nonnegative
+integer `input_tokens` and `output_tokens`; missing usage records zero tokens.
+Present malformed counters fail as 502. Native usage reporting preserves the
+original requested alias, selected upstream model and authenticated client key.
+The fixture reads the generic management usage queue for two different client
+keys sharing one alias; failed attempts carry zero tokens.
 
 Local mock upstreams use `httptest` random bound ports. The HTTP transport dials
 those ports while retaining production-shaped default-port URLs and Host headers
@@ -108,15 +106,8 @@ exact request/response bytes; it does not prove privileged port binding or live
 upstream behavior. Reload tests replace paths and aliases and retire removed
 groups' models and executors.
 
-The core config, auth, executor, route and internal registration must land
-together to provide a usable endpoint. Their combined code and documentation
-exceed the usual size target; splitting declarations would postpone their first
-consumer. Envelope handling and Nix lowering have independent seams and follow
-separately.
-
 The carried `patches/passthrough-provider.patch` applies after `key-allowlist`
 and `zai-tool-shims` with zero fuzz. `cliproxyapi-passthrough` runs its config,
 synthesis/alias/allowlist, management, executor, handler, registry and conductor
 tests through the shared Go CI check. `cliproxyapi-extracted` and
-`cliproxyapi-settings` gate measured schema and rendered settings. Regenerate
-extracted facts remotely on the draft PR before readiness.
+`cliproxyapi-settings` gate measured schema and rendered settings.
